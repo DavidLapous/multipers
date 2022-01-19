@@ -1,18 +1,23 @@
+"""!
+@package mma
+@brief Files containing the C++ cythonized functions.
+@author David Loiseaux, Mathieu Carrière
+@copyright Copyright (c) 2022 Inria.
+"""
+
 from cython cimport numeric
 from libcpp.vector cimport vector
 from libcpp.utility cimport pair
-from libcpp.list cimport list as clist
+#from libcpp.list cimport list as clist
 from libcpp cimport bool
 from libcpp cimport int
 from libcpp.string cimport string
-import gudhi
-import matplotlib.pyplot as plt
-from matplotlib.cm import get_cmap
-import sys
-import numpy
+import gudhi as _gd
+import matplotlib.pyplot as _plt
+from matplotlib.cm import get_cmap as _get_cmap
+import sys as _sys
+import numpy as _np
 
-#import numpy as np
-#cimport numpy as np
 from libcpp.vector cimport vector
 
 
@@ -49,8 +54,15 @@ cdef extern from "vineyards_trajectories.h":
 	vector[vector[vector[interval]]] vineyard_alt(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread)
 	#vineyard_alt_dim
 	vector[vector[interval]] vineyard_alt_dim(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, unsigned int dimension, bool threshold, bool multithread)
+cdef extern from "benchmarks.h":
 	#time_vineyard_alt
-	double time_vineyard_alt(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, vector[uint] nlines, bool multithread)
+	double time_vineyard_alt(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread)
+
+	#time_approximation
+	#boundary_matrix &B, const vector<vector<double>> &filters_list, const double precision, const pair<vector<double>, vector<double>> &box, const bool threshold = false,const  bool complete=true, const bool multithread = false
+	double time_approximation(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
+
+cdef extern from "format_python-cpp.h":
 	#list_simplicies_to_sparse_boundary_matrix
 	vector[vector[unsigned int]] list_simplicies_to_sparse_boundary_matrix(vector[vector[unsigned int]] list_simplices)
 	#list_simplices_ls_filtration_to_sparse_boundary_filtration
@@ -58,72 +70,89 @@ cdef extern from "vineyards_trajectories.h":
 
 cdef extern from "approximation.h":
 	# Approximation
-	vector[vector[corner_list]] approximation_vineyards(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool complete, bool multithread, bool verbose)
+	vector[vector[corner_list]] approximation_vineyards(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
 
 
-def approx(B, filters, precision, box = [], threshold=False, complete=True, multithread = False, verbose = False):
-	if box == [] and (type(filters) == numpy.ndarray):
+
+###########################################################################
+
+
+def time_approx(B, filters, precision, box=[], threshold=False,complete=False,multithread=False, verbose=False, keep_order = False):
+	""" Benchmarks the time taken by an approximation call. See \ref approx for parameters documentation.
+	@return  Time took by the c++ part (double).
+	"""
+	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
-	if(type(filters) == numpy.ndarray):
+	if(type(filters) == _np.ndarray):
 		#assert filters.shape[1] == 2
 		filtration = [filters[:,i] for i in range(filters.shape[1])]
 	else:
 		filtration = filters
-	#if dimension <0: # if dimension is not specified we return every dimension
-	if (type(B) == gudhi.simplex_tree.SimplexTree):
-		return approximation_vineyards(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold,complete, multithread, verbose)
-	return approximation_vineyards(B,filtration,precision, box, threshold, complete, multithread, verbose)
+	if (type(B) == _gd.simplex_tree.SimplexTree):
+		return time_approximation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
+	return time_approximation(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
 
-	#if (type(B) == gudhi.simplex_tree.SimplexTree):
-		#return approximation_vineyards(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread)[dimension]
-	#return approximation_vineyards(B,filtration,precision, box, threshold, multithread)[dimension]
+
+def approx(B, filters, precision, box = [], threshold=False, complete=True, multithread = False, verbose = False, keep_order = False):
+	if box == [] and (type(filters) == _np.ndarray):
+		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
+	if box == [] and (type(filters) == list):
+		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
+	if(type(filters) == _np.ndarray):
+		#assert filters.shape[1] == 2
+		filtration = [filters[:,i] for i in range(filters.shape[1])]
+	else:
+		filtration = filters
+	if (type(B) == _gd.simplex_tree.SimplexTree):
+		return approximation_vineyards(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
+	return approximation_vineyards(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
 
 
 
 def ls_boundary_density(list_simplices, points_filtration, to_permute = []):
 	
-	if (type(list_simplices) == gudhi.simplex_tree.SimplexTree):
+	if (type(list_simplices) == _gd.simplex_tree.SimplexTree):
 		boundary, ls_filter = list_simplices_ls_filtration_to_sparse_boundary_filtration(
 			[simplex[0] for simplex in list_simplices.get_simplices()],
 			points_filtration,
 			to_permute)
 	else:
 		boundary, ls_filter = list_simplices_ls_filtration_to_sparse_boundary_filtration(list_simplices, points_filtration, to_permute)
-	return boundary, numpy.array(ls_filter).transpose()
+	return boundary, _np.array(ls_filter).transpose()
 
 
 
-def time_vine_alt(B, filters, precision, box = [], threshold=False, multithread = False, nlines = []):
-	if box == [] and (type(filters) == numpy.ndarray):
+def time_vine_alt(B, filters, precision, box = [], threshold=False, multithread = False):
+	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
-	if(type(filters) == numpy.ndarray):
+	if(type(filters) == _np.ndarray):
 		assert filters.shape[1] == 2
 		filtration = [filters[:,0], filters[:,1]]
 	else:
 		filtration = filters
-	if (type(B) == gudhi.simplex_tree.SimplexTree):
-		return time_vineyard_alt(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, nlines, multithread)
-	return time_vineyard_alt(B,filtration,precision, box, threshold, nlines, multithread)
+	if (type(B) == _gd.simplex_tree.SimplexTree):
+		return time_vineyard_alt(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread)
+	return time_vineyard_alt(B,filtration,precision, box, threshold, multithread)
 
 def vine_alt(B, filters, precision, box = [], dimension = -1, threshold=False, multithread = False):
-	if box == [] and (type(filters) == numpy.ndarray):
+	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
-	if(type(filters) == numpy.ndarray):
+	if(type(filters) == _np.ndarray):
 		assert filters.shape[1] == 2
 		filtration = [filters[:,0], filters[:,1]]
 	else:
 		filtration = filters
 	if dimension ==-1: # if dimension is not specified we return every dimension
-		if (type(B) == gudhi.simplex_tree.SimplexTree):
+		if (type(B) == _gd.simplex_tree.SimplexTree):
 			return vineyard_alt(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread)
 		return vineyard_alt(B,filtration,precision, box, threshold, multithread)
-	if (type(B) == gudhi.simplex_tree.SimplexTree):
+	if (type(B) == _gd.simplex_tree.SimplexTree):
 		return vineyard_alt_dim(simplextree_to_sparse_boundary(B), filtration, precision, box, dimension, threshold, multithread)
 	return vineyard_alt_dim(B,filtration,precision, box, dimension, threshold, multithread)
 
@@ -150,7 +179,7 @@ def simplextree_to_sparse_boundary_python(st, verbose=False):
 	num_simplices = st.num_simplices()
 	boundary = [[] for _ in range(num_simplices)]
 
-	n_simplex_of_dim = numpy.array([0 for _ in range(max_dim+1)])
+	n_simplex_of_dim = _np.array([0 for _ in range(max_dim+1)])
 
 	def get_id(s):
 		s_dim = len(s)-1
@@ -182,29 +211,29 @@ def simplextree_to_boundary(st):
 
 
 def vine_2d_box(simplextree, filters, precision, box=[[0,0],[5,5]]):
-	if(type(filters) == numpy.ndarray):
+	if(type(filters) == _np.ndarray):
 		assert filters.shape[1] == 2
 		filtration = [filters[:,0], filters[:,1]]
 	else:
 		filtration = filters
-	if (type(simplextree) == gudhi.simplex_tree.SimplexTree):
+	if (type(simplextree) == _gd.simplex_tree.SimplexTree):
 		return vineyard_2d(simplextree_to_sparse_boundary(simplextree), filtration, precision, box)
 	return vineyard_2d(simplextree, filtration, precision, box)
-	#return numpy.array([numpy.array(x) for x in temp])
+	#return _np.array([_np.array(x) for x in temp])
 	#return temp
 
 
 def vine_2d(simplextree, filters, basepoint, endpoint, precision):
 	range_ = endpoint - basepoint
-	if (type(simplextree) == gudhi.simplex_tree.SimplexTree):
+	if (type(simplextree) == _gd.simplex_tree.SimplexTree):
 		return vineyard_2d(simplextree_to_sparse_boundary(simplextree), filters, basepoint, range_, precision)
 	return  vineyard_2d(simplextree, filters, basepoint, range_, precision)
-	#return numpy.array([numpy.array(x) for x in temp])
+	#return _np.array([_np.array(x) for x in temp])
 	#return temp
 
 
 def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcodes=False, separated = False, alt = True, multithread = True, save=False, dpi=50):
-	if box == [] and (type(filters) == numpy.ndarray):
+	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
@@ -212,9 +241,9 @@ def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcode
 		temp = vine_alt(matrix, filters, precision, box, dimension = dimension, threshold = True, multithread = False)
 	else:
 		temp = vine_2d_box(matrix, filters, precision, box)[dimension] # dimension -> matching -> line
-	#barcodes = numpy.array([numpy.array([ numpy.array([z for z in y]) for y in x]) for x in temp])
+	#barcodes = _np.array([_np.array([ _np.array([z for z in y]) for y in x]) for x in temp])
 	barcodes = temp
-	cmap = get_cmap("Spectral")
+	cmap = _get_cmap("Spectral")
 	n=len(barcodes)
 	#number_of_trivial_features=0
 	for matching in range(n):
@@ -222,58 +251,93 @@ def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcode
 		for line in range(len(barcodes[matching])):
 			birth = barcodes[matching][line][0]
 			death = barcodes[matching][line][1]
-			if((birth ==[]) or (death == []) or (death == birth) or (birth[0] == sys.float_info.max)):	continue
+			if((birth ==[]) or (death == []) or (death == birth) or (birth[0] == _sys.float_info.max)):	continue
 			trivial = False
-			if(death[0] != sys.float_info.max and death[1] != sys.float_info.max  and birth[0] != sys.float_info.max):
-				plt.plot([birth[0], death[0]], [birth[1],death[1]], c=cmap((matching)/(n)))
+			if(death[0] != _sys.float_info.max and death[1] != _sys.float_info.max  and birth[0] != _sys.float_info.max):
+				_plt.plot([birth[0], death[0]], [birth[1],death[1]], c=cmap((matching)/(n)))
 		if(not(trivial)):
-			plt.xlim(box[0][0], box[1][0])
-			plt.ylim(box[0][1], box[1][1])
+			_plt.xlim(box[0][0], box[1][0])
+			_plt.ylim(box[0][1], box[1][1])
 		#if trivial:
 			#number_of_trivial_features+=1
 		if separated and not(trivial) :
-			plt.show()
-	if(save):	plt.savefig(save, dpi=dpi)
-	plt.show()
+			_plt.show()
+	if(save):	_plt.savefig(save, dpi=dpi)
+	_plt.show()
 	if(return_barcodes):
 		return barcodes
 
 
 
 
-from matplotlib.patches import Rectangle
-
-
+from matplotlib.patches import Rectangle as _Rectangle
 """
 Defines a rectangle patch in the format {z | x  ≤ z ≤ y} with color and alpha
 """
 def _rectangle(x,y,color, alpha):
-	return Rectangle(x, max(y[0]-x[0],0),max(y[1]-x[1],0), color=color, alpha=alpha)
+	return _Rectangle(x, max(y[0]-x[0],0),max(y[1]-x[1],0), color=color, alpha=alpha)
 
-def plot_approx_2d(B, filters, precision, box = [], dimension=0, return_corners=False, separated=False, multithread = False, complete=True, alpha=1, verbose = False, save=False, dpi=50):
-	if box == [] and (type(filters) == numpy.ndarray):
+
+
+
+def _d_inf(a,b):
+	if type(a) != _np.ndarray or type(b) != _np.ndarray:
+		a = _np.array(a)
+		b = _np.array(b)
+	return _np.min(_np.abs(b-a))
+
+
+def plot_approx_2d(B, filters, precision, box = [], dimension=0, return_corners=False, separated=False, min_interleaving = 0, multithread = False, complete=True, alpha=1, verbose = False, save=False, dpi=50, keep_order=False, shapely = True):
+	try:
+		from shapely.geometry import box as _rectangle_box
+		from shapely.ops import unary_union
+	except ModuleNotFoundError:
+		print("Fallbacking to matplotlib instead of shapely.")
+		shapely = False
+	if alpha >= 1:
+		shapely = False # Not sure which one is quicker in that case.
+	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
 
-	corners = approx(B,filters,precision,box=box,threshold=1, multithread = multithread, complete = complete, verbose = verbose)[dimension]
-	cmap = get_cmap("Spectral")
-	_, ax = plt.subplots()
-	ax.set(xlim=[box[0][0],box[1][0]],ylim=[box[0][1],box[1][1]])
+	corners = approx(B,filters,precision,box=box,threshold=1, multithread = multithread, complete = complete, verbose = verbose, keep_order = keep_order)[dimension]
+	cmap = _get_cmap("Spectral")
+	if not(separated):
+		_, ax = _plt.subplots()
+		ax.set(xlim=[box[0][0],box[1][0]],ylim=[box[0][1],box[1][1]])
 	n_summands = len(corners)
 
 	for i in range(n_summands):
+		trivial_summand = True
+		list_of_rect = []
 		for birth in corners[i][0]:
 			for death in corners[i][1]:
-				ax.add_patch(_rectangle(birth,death,cmap(i/n_summands),alpha))
-		if separated:
-			if i < n_summands -1:
-				plt.show()
-				fig,ax= plt.subplots()
+				if death[1]>birth[1] and death[0]>birth[0]:
+					if trivial_summand and _d_inf(birth,death)>min_interleaving:
+						trivial_summand = False
+					if shapely:
+						list_of_rect.append(_rectangle_box(birth[0], birth[1], death[0],death[1]))
+					else:
+						list_of_rect.append(_rectangle(birth,death,cmap(i/n_summands),alpha))
+		if not(trivial_summand):
+			if separated:
+				fig,ax= _plt.subplots()
 				ax.set(xlim=[box[0][0],box[1][0]],ylim=[box[0][1],box[1][1]])
+			if shapely:
+				summand_shape = unary_union(list_of_rect)
+				xs,ys=summand_shape.exterior.xy
+				ax.fill(xs,ys,alpha=alpha, fc=cmap(i/n_summands), ec='None')
+			else:
+				for rectangle in list_of_rect:
+					ax.add_patch(rectangle)
+			if separated:
+				_plt.show()
+
 	if save:
-		plt.savefig(save, dpi=dpi)
-	plt.show()
+		_plt.savefig(save, dpi=dpi)
+	if not(separated):
+		_plt.show()
 	if return_corners:
 		return corners
 

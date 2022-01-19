@@ -3,7 +3,7 @@
  * @author David Loiseaux
  * @brief This file contains the functions related to trajectories of barcodes via vineyards.
  * 
- * @copyright Copyright (c) 2021 Inria
+ * @copyright Copyright (c) 2022 Inria
  * 
  */
 #ifndef VINEYARDS_TRAJECTORIES_H_INCLUDED
@@ -118,12 +118,12 @@ vector<barcode> vineyard_trajectory(vector<vector<double>> &filters_list,const b
  */
 void line_to_filter(const vector<double>& line_basepoint, const vector<vector<double>>& filter_list, vector<double>& new_filter, bool ignore_last = false){
 	const bool verbose = false;
-	if(verbose) {
+	if constexpr (verbose) {
 		disp_vect(line_basepoint);
 	}
 	uint dimension = line_basepoint.size()+1 - ignore_last;
 	uint number_of_simplices = filter_list[0].size();
-	assert(filter_list.size() == dimension);
+// 	assert(filter_list.size() == dimension);
 // 	#pragma omp parallel for simd
 	vector<double> relative_filtration_value(dimension);
 	for(uint i=0; i< number_of_simplices; i++){
@@ -135,7 +135,7 @@ void line_to_filter(const vector<double>& line_basepoint, const vector<vector<do
 
 		new_filter[i] = length;
 	}
-	if(verbose) disp_vect(new_filter);
+	if constexpr (verbose) disp_vect(new_filter);
 }
 
 // in dim 2, we only have to specify the coordinate x, allow double instead of vector<double>.

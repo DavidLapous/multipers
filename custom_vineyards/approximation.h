@@ -1,3 +1,11 @@
+/**
+ * @file approximation.h
+ * @author David Loiseaux
+ * @brief Contains the functions related to the approximation of n-modules.
+ * 
+ * @copyright Copyright (c) 2022 Inria
+ * 
+ */
 #ifndef APPROXIMATION_H_INCLUDED
 #define APPROXIMATION_H_INCLUDED
 
@@ -35,70 +43,85 @@ bool is_vector_empty(const vector<T> &v){
 	return v.empty();
 }
 
+
 /**
- * @brief Removes empty vectors of @p list.
+ * @brief Cleans empty entries of a corner list
  *
- * @param list p_list:...
+ * @param list corner list to clean
+ * @param keep_sort If true, will keep the order of the corners, with a computational overhead. Defaults to false.
  */
-void clean(vector<vector<double>> &list){ // TODO better use of erase ...
-// 	remove_if(list.begin(), list.end(), is_vector_empty<double>);
+void clean(vector<vector<double>> &list, const bool keep_order = false){ // WARNING Does permute the output.
 	uint i=0;
-	while(i<list.size()){
-		while(!list.empty() && (*(list.rbegin())).empty())
-			list.pop_back();
-		if(i<list.size() && list[i].empty()){
-			list[i].swap(*(list.rbegin()));
-			list.pop_back();
-		}
-		i++;
-	}
-// 	while(i<list.size()){
-// 		if(list[i].empty())
-// 			list.erase(list.begin()+i);
-// 		else
-// 			i++;
-// 	}
-
-}
-
-
-
-bool is_summand_empty(const corner_list &summand){
-	return (summand.first.empty() || summand.second.empty());
-}
-
-/**
- * @brief Removes empty summands of @p output. WARNING Does permute the output.
- *
- * @param output p_output:...
- */
-void clean(vector<vector<corner_list>> &output){
-	for(uint dim=0; dim<output.size(); dim++){
-// 		remove_if(output[dim].begin(), output[dim].end(), is_summand_empty);
-		uint i =0;
-		while(i < output[dim].size()){
-			while(!output[dim].empty() && is_summand_empty(*output[dim].rbegin()))
-				output[dim].pop_back();
-			if(i >= output[dim].size())
-				break;
-			auto &summand = output[dim][i];
-			if(is_summand_empty(summand)){
-				summand.swap(*output[dim].rbegin());
-				output[dim].pop_back();
+	if (!keep_order){
+		while(i<list.size()){
+			while(!list.empty() && (*(list.rbegin())).empty())
+				list.pop_back();
+			if(i<list.size() && list[i].empty()){
+				list[i].swap(*(list.rbegin()));
+				list.pop_back();
 			}
 			i++;
 		}
 	}
+	else{
+		while(i<list.size()){
+		if(list[i].empty())
+			list.erase(list.begin()+i);
+		else
+			i++;
+		}
+	}
+}
 
-// 	for(uint dim=0; dim< output.size(); dim++){
-// 		uint i=0;
-// 		while(i< output[dim].size()){
-// 			if(output[dim][i].first.empty() && output[dim][i].second.empty())
-// 				output[dim].erase(output[dim].begin()+i);
-// 			else
-// 				i++;
-// 		}
-// 	}
+
+
+/**
+ * @brief Returns true if a summand is empty
+ *
+ * @param summand summand to check.
+ * @return bool
+ */
+bool is_summand_empty(const corner_list &summand){
+	return (summand.first.empty() || summand.second.empty());
+}
+
+
+/**
+ * @brief Remove the empty summands of the output
+ *
+ * @param output p_output:...
+ * @param keep_order p_keep_order:... Defaults to false.
+ */
+void clean(vector<vector<corner_list>> &output, const bool keep_order=false){
+	if(!keep_order)
+		//#pragma omp parallel for
+		for(uint dim=0; dim<output.size(); dim++){
+	// 		remove_if(output[dim].begin(), output[dim].end(), is_summand_empty);
+			uint i =0;
+			while(i < output[dim].size()){
+				while(!output[dim].empty() && is_summand_empty(*output[dim].rbegin()))
+					output[dim].pop_back();
+				if(i >= output[dim].size())
+					break;
+				auto &summand = output[dim][i];
+				if(is_summand_empty(summand)){
+					summand.swap(*output[dim].rbegin());
+					output[dim].pop_back();
+				}
+				i++;
+			}
+		}
+	else
+		//#pragma omp parallel for
+		for(uint dim=0; dim< output.size(); dim++){
+			uint i=0;
+			while(i< output[dim].size()){
+				if(output[dim][i].first.empty() && output[dim][i].second.empty())
+					output[dim].erase(output[dim].begin()+i);
+				else
+					i++;
+			}
+		}
 }
 
 
@@ -124,10 +147,9 @@ void complete_birth(vector<vector<double>> &birth_list, const double precision){
 	for(uint i=0; i< birth_list.size(); i++){
 		for(uint j=i+1; j< birth_list.size(); j++){
 			double d = inf_distance(birth_list[i], birth_list[j]);
-			if (d<=1.1*precision){
+			if (d<precision){
 				factorize_min(birth_list[i], birth_list[j]);
 				birth_list[j].clear();
-				break;
 			}
 		}
 	}
@@ -140,10 +162,9 @@ void complete_death(vector<vector<double>> &death_list, const double precision){
 	for(uint i=0; i< death_list.size(); i++){
 		for(uint j=i+1; j< death_list.size(); j++){
 			double d = inf_distance(death_list[i], death_list[j]);
-			if (d<=1.1*precision){
+			if (d<precision){
 				factorize_max(death_list[i], death_list[j]);
 				death_list[j].clear();
-				break;
 			}
 		}
 	}
@@ -155,7 +176,7 @@ void fill(vector<vector<corner_list>> &output, const double precision){
 		return;
 // 	#pragma omp parallel for
 	for(uint dim = 0; dim < output.size(); dim++){
-		for(uint i =0; i <output[dim].size(); i++){
+		for(uint i =0; i < output[dim].size(); i++){
 			auto &summand = output[dim][i];
 			if(is_summand_empty(summand))
 				continue;
@@ -293,23 +314,45 @@ void add_bar_to_summand(const pair<double,double> &bar, corner_list &summand, co
 	}
 	birth.back() = bar.first;
 	death.back() = bar.second;
-	if(threshold){
-// 		#pragma omp parallel sections
-		{
-			{threshold_down(birth, box, basepoint);}
-// 			#pragma omp section
-			{threshold_up(death, box, basepoint);}
-		}
-		if(is_greater(birth,death))
-			return;
-	}
-// 	#pragma omp parallel sections
-	{
-	{add_birth_to_summand(summand.first, birth);}
-// 	#pragma omp section
-	{add_death_to_summand(summand.second, death);}
-	}
 
+	if (threshold){
+		threshold_down(birth, box, basepoint);
+		threshold_up(death, box, basepoint);
+	}
+	add_birth_to_summand(summand.first, birth);
+	add_death_to_summand(summand.second, death);
+
+	// thread birth_thread([&threshold, &birth, &box, &basepoint, &summand ]{
+	// 	if (threshold)
+	// 		threshold_down(birth, box, basepoint);
+	// 	add_birth_to_summand(summand.first, birth);
+	// });
+	// thread death_thread([&threshold, &death, &box, &basepoint, &summand ]{
+	// 	if(threshold)
+	// 		threshold_up(death, box, basepoint);
+	// 	add_death_to_summand(summand.second, death);
+	// });
+
+	// birth_thread.join();
+	// death_thread.join();
+
+	// // #pragma omp parallel sections num_threads(2)
+	// {
+	// 	// #pragma omp section
+		
+	// 	{
+	// 		if (threshold)
+	// 			threshold_down(birth, box, basepoint);
+	// 		add_birth_to_summand(summand.first, birth);
+			
+	// 	}
+	// 	// #pragma omp section
+	// 	{
+	// 		if(threshold)
+	// 			threshold_up(death, box, basepoint);
+	// 		add_death_to_summand(summand.second, death);
+	// 	}
+	// }
 	return;
 }
 
@@ -343,6 +386,7 @@ void approximation_recursive(vector<vector<corner_list>> &output, VineyardsPersi
 
 	vector<double> birth_container(filters_list.size());
 	vector<double> death_container(filters_list.size());
+
 	for(uint i=0; i<persistence.dgm.size(); i++){
 		auto &bar = persistence.dgm[i].second;
 		corner_list &summand = output[persistence.dgm[i].first][feature];
@@ -383,6 +427,7 @@ void approximation_recursive_higher_dim ( std::vector< std::vector< corner_list 
 		if constexpr(verbose) disp_vect(basepoint);
 		if constexpr(verbose) cout << multithread<< endl;
 		if(multithread){
+			cout << "Multithreading dimension..." << endl;
 			#pragma omp parallel for
 			for(uint i=last+1; i<filters_list.size()-1;i++){
 				if (size[i]-1 == position[i]) continue;
@@ -420,12 +465,6 @@ void approximation_recursive_higher_dim ( std::vector< std::vector< corner_list 
 
 
 
-
-
-
-
-
-
 /**
  * @brief Appproximate any multipersistence module with an interval decomposable module. If this module is interval decomposable, then the matching is controlled by the precision, and exact under specific circumstances (see TODO: cite paper).
  *
@@ -434,14 +473,14 @@ void approximation_recursive_higher_dim ( std::vector< std::vector< corner_list 
  * @param precision p_precision: wanted precision.
  * @param box p_box: Box on which to make the approximation
  * @param threshold p_threshold:... Defaults to false. If set to true, will intersect the computed summands with the box
- * @param complete
+ * @param kee_order : keeps a natural order of summands at a small computational overhead. See \ref clean .
+ * @param complete : gives a more natural output, at a small computational overhead.
  * @param multithread ${p_multithread:...} Defaults to false. WIP, not useful yet.
  * @return std::vector< std::vector< corner_list > >
  */
-vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const vector<vector<double>> &filters_list, const double precision, const pair<vector<double>, vector<double>> &box, const bool threshold = false,const  bool complete=true, const bool multithread = false, const bool verbose = false){
+vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const vector<vector<double>> &filters_list, const double precision, const pair<vector<double>, vector<double>> &box, const bool threshold = false, const bool keep_order = false, const  bool complete=true, const bool multithread = false, const bool verbose = false){
 	// Checks if dimensions are compatibles
 	assert(!filters_list.empty() && "A non trivial filters list is needed !");
-
 	assert(filters_list.size()  == box.first.size() && "Filters and box must be of the same dimension !");
 
 // 	constexpr bool verbose = false; // For debug purposes
@@ -462,7 +501,6 @@ vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const ve
 	vector<double> filter(number_simplices); // container of filters
 
 	vector<uint> size_line(filtration_dimension-1);
-// 	#pragma omp simd
 	for(uint i=0;i<filtration_dimension-1;i++)
 		size_line[i] = (uint)(ceil((abs( (box.second[i] - box.first.back()) - (box.first[i] - box.second.back()) ) / precision)));
 
@@ -472,7 +510,6 @@ vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const ve
 	if (verbose) cout << "Number of lines : " << number_of_line << endl;
 
 	auto basepoint = box.first;
-// 	#pragma omp simd
 	for(uint i=0; i<basepoint.size()-1; i++)
 		basepoint[i] -= box.second.back();
 	basepoint.back() = 0;
@@ -494,7 +531,6 @@ vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const ve
 	for(uint i=0; i< number_of_features; i++){
 		number_of_feature_of_dimension[first_barcode[i].first]++;
 	}
-// 	#pragma omp simd
 	for(uint i=0; i<max_dimension+1;i++){
 		output[i].resize(number_of_feature_of_dimension[i]);
 	}
@@ -507,7 +543,7 @@ vector<vector<corner_list>> approximation_vineyards(boundary_matrix &B, const ve
 
 	elapsed = clock() - elapsed;
 	if (verbose) cout << " Done ! It took "<< ((float)elapsed)/CLOCKS_PER_SEC << " seconds."<<endl;
-	clean(output);
+	clean(output, keep_order);
 	if(complete)
 		fill(output, precision);
 	return output;
