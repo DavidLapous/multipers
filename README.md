@@ -1,4 +1,6 @@
 # Multipersistence modules approximation
+
+**/!\ Warning** This is a clone of [the gitlab repository](https://gitlab.inria.fr/dloiseau/multipers).
 ## Description
 This repository is a python library, with a `C++` backend, for multipersistence modules approximation. 
 It provides a set of functions to compute an approximation and fibered barcodes of a persistence module of any dimension n from a Gudhi simplex tree (python interface) and its n-dimensional filtration, and plot module approximations on a compact rectangle.
