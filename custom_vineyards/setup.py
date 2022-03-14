@@ -35,5 +35,5 @@ setup(
 	author_email="david.loiseaux@inria.fr",
 	url="https://gitlab.inria.fr/dloiseau/multipers",
 	description="Open source library for multipersistence module approximation.",
-	ext_modules=cythonize(extensions, language_level = str(_sys.version_info[0])), include_dirs=['.']
+	ext_modules=cythonize(extensions, language_level = str(_sys.version_info[0])), include_dirs=['.'],
 	)

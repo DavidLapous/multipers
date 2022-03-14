@@ -1,4 +1,4 @@
-from custom_vineyards import *
+from mma import *
 import gudhi as gd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +8,13 @@ from multiprocessing import Pool, Manager, cpu_count
 from sklearn.neighbors import KernelDensity
 from joblib import parallel_backend
 from numpy.polynomial.polynomial import polyfit
+from numpy.linalg import norm
+from random import random, choice, shuffle, seed
+import random
+from math import floor
+from sympy.ntheory import factorint
+from tqdm import tqdm
+
 
 ncores = cpu_count()
 
@@ -36,16 +43,18 @@ def synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_p
 		print("Number of simplices :", simplextree.num_simplices(),"and maximum dimension :", simplextree.dimension(), flush=True)
 	boundary = simplextree_to_sparse_boundary(simplextree)
 	filters = [np.random.uniform(low = 0, high = 1, size =[number_of_points,1]) for _ in range(persistence_dimension)]
-	box = [[0 for _ in range(persistence_dimension)], [2 for _ in range(persistence_dimension)]]
-	precision =  4/ number_of_lines**(1/(persistence_dimension-1))
+
+	precision = 1
+	basepoint = [0 for _ in range(persistence_dimension)]
+	box = nlines_precision_box(number_of_lines, basepoint, precision)
 	if verbose:
 		print("Precision :",precision, flush=True)
 	times = []
 	if parallel_tries:
-		times = Parallel(n_jobs=min(ncores,number_of_tries))(delayed(time_vine_alt)(boundary, filters, precision, box, threshold = False, multithread = 0) for i in range(number_of_tries))
+		times = Parallel(n_jobs=min(ncores,number_of_tries))(delayed(time_approx)(boundary, filters, precision, box, threshold = False, multithread = 0) for i in range(number_of_tries))
 	else:
 		for i in range(number_of_tries):
-			times+=[time_vine_alt(boundary, filters, precision, box, threshold = False, multithread = 0)]
+			times+=[time_approx(boundary, filters, precision, box, threshold = False, multithread = 0)]
 	return np.mean(times), np.std(times) / np.sqrt(number_of_tries), len(boundary)
 
 
@@ -53,13 +62,39 @@ def synthetic_random_benchmark_time(number_of_points, number_of_tries, dimension
 	return synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_points, number_of_lines, persistence_dimension=2, filtration="rips", verbose = True, max_dimension=3)[0]
 
 
-def noisy_annulus(r1=1, r2=2, n=50):
+def noisy_annulus(r1=1, r2=2, n=50, seed=None):
 	set =[]
+	if seed != None : 
+		random.seed(seed)
 	while len(set)<n:
 		x,y=2*r2*random.random()-r2,2*r2*random.random()-r2
 		if r1**2 < x**2 + y**2 < r2**2:
 			set += [[x,y]]
 	return set[:]
+
+
+
+def nlines_precision_box(nlines, basepoint, scale):
+	import math
+	h = scale
+	dim = len(basepoint)
+	basepoint = np.array(basepoint, 'double')
+	factors = factorint(nlines)
+	prime_list=[]
+	for prime in factors:
+		for i in range(factors[prime]):
+			prime_list.append(prime)
+	while len(prime_list)<dim-1:
+		prime_list.append(1)
+	shuffle(prime_list)
+	while len(prime_list)>dim-1:
+		prime_list[choice(range(dim-1))] *= prime_list.pop()
+	deathpoint = basepoint.copy()
+	for i in range(dim-1):
+		deathpoint[i] = basepoint[i] + prime_list[i] * scale - scale/2
+	return [basepoint,deathpoint]
+
+
 
 
 def bifiltration_densisty(simplex_tree, density):
@@ -119,10 +154,55 @@ def density_persistence_benchmark(X, nlines, ntries=10, gaussian_var = 0.3, filt
 	box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	precision = (box[1][1] + box[1][0] - box[0][1] - box[0][0]) / (nlines)
 	if ntries <= 1:
-		return time_vine_alt(boundary, filters, precision, box, threshold = False, multithread = 0), 0, simplex_tree.num_simplices()
+		return time_approx(boundary, filters, precision, box, threshold = False, multithread = 0), 0, simplex_tree.num_simplices()
 	times = Parallel(n_jobs=min(ncores,ntries))(
-		delayed(time_vine_alt)(
+		delayed(time_approx)(
 			boundary, filters, precision, box, threshold = False, multithread = 0
 		) for i in range(ntries))
 	return np.mean(times), np.std(times), simplex_tree.num_simplices()
+
+
+
+def convergence_image(boundary, filters,max_precision, bandwidth, verbose=False, box=[], save=False, show_img = True, num=100, min_precision=1, resolution=[200,200], p=2):
+	baseline = persistence_image_2d(boundary, filters, precision = max_precision,bandwidth=bandwidth, verbose = verbose, plot = show_img, resolution = resolution, save=save)
+	errors = []
+	precisions = np.logspace(np.log10(min_precision),np.log10(max_precision), num)
+	for precision in tqdm(precisions):
+		img = persistence_image_2d(boundary, filters, precision = precision,bandwidth=bandwidth, plot=False, resolution=resolution)
+		error = []
+		for dimension in range(len(baseline)):
+			if p == np.inf:
+				e = np.max(np.abs(img[dimension] - baseline[dimension]))
+			else:
+				e = norm(img[dimension] - baseline[dimension],p)
+			error.append(e)
+		errors.append(error)
+	errors = np.array(errors)
+	fig,ax=plt.subplots()
+	for dimension in range(len(baseline)):
+		plt.plot(precisions,errors[:,dimension], label = f"Dimension {dimension}")
+	# Plot
+	plt.xlabel("Precision")
+	if p == np.inf:
+		plt.ylabel("Infinity norm error")
+	elif p==2:
+		plt.ylabel("Quadratic error")
+	else:
+		plt.ylabel(f"L{p} error")
+	plt.legend()
+	ax.invert_xaxis()
+	ax.set_xscale('log')
+	if save:
+		plt.savefig(save+"_convergence.svg")
+	return errors
+
+
+
+
+
+
+
+
+
+
 

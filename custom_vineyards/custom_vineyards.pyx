@@ -20,61 +20,102 @@ import numpy as _np
 
 from libcpp.vector cimport vector
 
-
-
+###########################################################################
 
 ctypedef vector[pair[int,pair[int,int]]] barcode
 ctypedef vector[pair[int,pair[double,double]]] barcoded
 
-ctypedef vector[vector[int]] boundary_matrix
+ctypedef vector[vector[unsigned int]] boundary_matrix
 
 ctypedef pair[pair[double,double],pair[double,double]] interval_2
 ctypedef pair[vector[double],vector[double]] interval
 
 ctypedef pair[vector[vector[double]], vector[vector[double]]] corner_list
 
-cdef extern from "custom_vineyards.hpp":
-	pair[  pair[ pair[vector[pair[int,pair[int,int]]], vector[pair[int,pair[double,double]]]], vector[int]],  pair[ pair[ pair[vector[vector[int]],pair[vector[int],vector[int]]], pair[vector[vector[int]],pair[vector[int],vector[int]]] ], pair[vector[int],vector[int]] ]  ] lower_star_vineyards_update(vector[vector[int]], vector[double], vector[int], bool, vector[vector[int]], vector[vector[int]], vector[int], vector[pair[int,pair[int,int]]], vector[int], vector[int], vector[int], vector[int], vector[int])
 
-	vector[vector[vector[double]]] vineyards(vector[vector[double]], string, int)
-
-cdef extern from "vineyards_trajectories.h":
-	#vector<vector<vector<interval_2>>> vineyard_2d(boundary_matrix B,pair<vector<double>,vector<double>> filters_list,double precision,pair<pair<double,double>,pair<double,double>> box = {{0,0},{0,0}},bool verbose = true,bool debug = false)
-	vector[vector[vector[interval_2]]] vineyard_2d(boundary_matrix, pair[vector[double], vector[double]], double, interval_2)
-
-	#vector<vector<vector<interval_2>>> vineyard_2d(boundary_matrix B,pair<vector<double>,vector<double>> filters_list,double basepoint, double range, double precision,,bool verbose = true,bool debug = false)
-	vector[vector[vector[interval_2]]] vineyard_2d(boundary_matrix, pair[vector[double], vector[double]], double, double, double)
-
-	#vector<barcoded> compute_vineyard_2d(boundary_matrix B, pair<vector<double>,vector<double>> filters_list, double basepoint, double range, double precision)
-	vector[barcoded] compute_vineyard_2d( boundary_matrix, pair[vector[double], vector[double]], double, double, double)
-
-	vector[vector[barcoded]] vineyard_3d( boundary_matrix, vector[vector[double]], vector[double], pair[double,double], double)
-
+cdef extern from "vineyards_trajectories.h" namespace "Vineyard":
 	#vineyard_alt
-	vector[vector[vector[interval]]] vineyard_alt(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread)
+	vector[vector[vector[interval]]] compute_vineyard_barcode(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread, bool verbose)
 	#vineyard_alt_dim
-	vector[vector[interval]] vineyard_alt_dim(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, unsigned int dimension, bool threshold, bool multithread)
+	vector[vector[interval]] compute_vineyard_barcode_in_dimension(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, unsigned int dimension, bool threshold, bool verbose)
+
+cdef extern from "approximation.h" namespace "Vineyard":
+	# Approximation
+	vector[vector[corner_list]] compute_vineyard_barcode_approximation(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
+
+cdef extern from "images.h":
+	#image_2d_from_boundary_matrix
+	vector[vector[vector[double]]] get_2D_image_from_boundary_matrix(boundary_matrix &B, vector[vector[double]] &filters_list, double precision, pair[vector[double], vector[double]] &box, const double delta, const vector[unsigned int] &resolution, const int dimension, bool complete, bool verbose)
+
 cdef extern from "benchmarks.h":
 	#time_vineyard_alt
-	double time_vineyard_alt(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread)
+	double time_vineyard_barcode_computation(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool multithread, bool verbose)
 
 	#time_approximation
-	#boundary_matrix &B, const vector<vector<double>> &filters_list, const double precision, const pair<vector<double>, vector<double>> &box, const bool threshold = false,const  bool complete=true, const bool multithread = false
-	double time_approximation(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
+	double time_approximated_vineyard_barcode_computation(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
+
+	double time_2D_image_from_boundary_matrix_construction(boundary_matrix &B, vector[vector[double]] &filters_list, double precision, pair[vector[double], vector[double]] &box, const double delta, const vector[unsigned int] &resolution, const unsigned int dimension, bool complete, bool verbose)
 
 cdef extern from "format_python-cpp.h":
 	#list_simplicies_to_sparse_boundary_matrix
-	vector[vector[unsigned int]] list_simplicies_to_sparse_boundary_matrix(vector[vector[unsigned int]] list_simplices)
+	vector[vector[unsigned int]] build_sparse_boundary_matrix_from_simplex_list(vector[vector[unsigned int]] list_simplices)
 	#list_simplices_ls_filtration_to_sparse_boundary_filtration
-	pair[vector[vector[unsigned int]], vector[vector[double]]]  list_simplices_ls_filtration_to_sparse_boundary_filtration(vector[vector[unsigned int]] list_simplices, vector[vector[double]] points_filtration, vector[uint] filters_to_permute)
-
-cdef extern from "approximation.h":
-	# Approximation
-	vector[vector[corner_list]] approximation_vineyards(boundary_matrix B, vector[vector[double]] filters_list, double precision, pair[vector[double], vector[double]] box, bool threshold, bool keep_order, bool complete, bool multithread, bool verbose)
-
-
+	pair[vector[vector[unsigned int]], vector[vector[double]]] build_boundary_matrix_from_simplex_list(vector[vector[unsigned int]] list_simplices, vector[vector[double]] filtrations, vector[unsigned int] filters_to_permute)
 
 ###########################################################################
+
+def time_image_2d(B, filters, precision=-1, box=[], bandwidth=-1, resolution=[100,100], dimension=0, complete=True, verbose = False):
+	if box == [] and (type(filters) == _np.ndarray):
+		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
+	if box == [] and (type(filters) == list):
+		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
+	if(type(filters) == _np.ndarray):
+		#assert filters.shape[1] == 2
+		filtration = [filters[:,i] for i in range(filters.shape[1])]
+	else:
+		filtration = filters
+	if precision <=0.00001:
+		precision = _np.linalg.norm(_np.array(box[0]) - _np.array(box[1]))/100 # This makes around 100-200 lines
+	if bandwidth <= 0.000001:
+		bandwidth = 1/_np.min(_np.array(resolution))
+	if (type(B) == _gd.simplex_tree.SimplexTree):
+		time =	 time_2D_image_from_boundary_matrix_construction(simplextree_to_sparse_boundary(B), filtration, precision, box, bandwidth, resolution, dimension, complete, verbose)
+	else:
+		time =		 time_2D_image_from_boundary_matrix_construction(B, filtration, precision, box, bandwidth, resolution, dimension, complete, verbose)
+
+	return time
+
+def persistence_image_2d(B, filters, precision=-1, box=[], bandwidth=-1, resolution=[100,100], dimension=-1, complete=True, verbose = False, plot = True, save=False):
+	if box == [] and (type(filters) == _np.ndarray):
+		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
+	if box == [] and (type(filters) == list):
+		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
+	if(type(filters) == _np.ndarray):
+		#assert filters.shape[1] == 2
+		filtration = [filters[:,i] for i in range(filters.shape[1])]
+	else:
+		filtration = filters
+	if precision <=0.00001:
+		precision = _np.linalg.norm(_np.array(box[0]) - _np.array(box[1]))/100 # This makes around 100-200 lines
+	if bandwidth <= 0.000001:
+		bandwidth = 1/_np.min(_np.array(resolution))
+	if (type(B) == _gd.simplex_tree.SimplexTree):
+		image_vector =	 _np.array(get_2D_image_from_boundary_matrix(simplextree_to_sparse_boundary(B), filtration, precision, box, bandwidth, resolution, dimension, complete, verbose))
+	else:
+		image_vector =	 _np.array(get_2D_image_from_boundary_matrix(B, filtration, precision, box, bandwidth, resolution, dimension, complete, verbose))
+	## Fixes images
+	i=0
+	for image in image_vector:
+		if(plot or save):
+			_plt.imshow(_np.flip(image.transpose(),0),extent=[box[0][0], box[1][0], box[0][1], box[1][1]], aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1]))
+			_plt.colorbar()
+			if save:
+				_plt.savefig(save+"_H"+str(i)+".png")
+				i+=1
+			_plt.show()
+	if dimension<0:
+		return image_vector
+	return image_vector[0]
 
 
 def time_approx(B, filters, precision, box=[], threshold=False,complete=False,multithread=False, verbose=False, keep_order = False):
@@ -90,10 +131,11 @@ def time_approx(B, filters, precision, box=[], threshold=False,complete=False,mu
 		filtration = [filters[:,i] for i in range(filters.shape[1])]
 	else:
 		filtration = filters
+	if precision <=0.00001:
+		precision = _np.linalg.norm(_np.array(box[0]) - _np.array(box[1]))/100 # This makes around 100-200 lines
 	if (type(B) == _gd.simplex_tree.SimplexTree):
-		return time_approximation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
-	return time_approximation(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
-
+		return time_approximated_vineyard_barcode_computation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
+	return time_approximated_vineyard_barcode_computation(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
 
 def approx(B, filters, precision, box = [], threshold=False, complete=True, multithread = False, verbose = False, keep_order = False):
 	if box == [] and (type(filters) == _np.ndarray):
@@ -105,26 +147,23 @@ def approx(B, filters, precision, box = [], threshold=False, complete=True, mult
 		filtration = [filters[:,i] for i in range(filters.shape[1])]
 	else:
 		filtration = filters
+	if precision <=0.00001:
+		precision = _np.linalg.norm(_np.array(box[0]) - _np.array(box[1]))/100 # This makes around 100-200 lines
 	if (type(B) == _gd.simplex_tree.SimplexTree):
-		return approximation_vineyards(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
-	return approximation_vineyards(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
-
-
+		return compute_vineyard_barcode_approximation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread,verbose)
+	return compute_vineyard_barcode_approximation(B,filtration,precision, box, threshold, keep_order, complete, multithread,verbose)
 
 def ls_boundary_density(list_simplices, points_filtration, to_permute = []):
 	
 	if (type(list_simplices) == _gd.simplex_tree.SimplexTree):
-		boundary, ls_filter = list_simplices_ls_filtration_to_sparse_boundary_filtration(
-			[simplex[0] for simplex in list_simplices.get_simplices()],
-			points_filtration,
+		boundary, ls_filter = build_boundary_matrix_from_simplex_list(
+			[simplex[0] for simplex in list_simplices.get_simplices()],points_filtration,
 			to_permute)
 	else:
-		boundary, ls_filter = list_simplices_ls_filtration_to_sparse_boundary_filtration(list_simplices, points_filtration, to_permute)
+		boundary, ls_filter = build_boundary_matrix_from_simplex_list(list_simplices, points_filtration, to_permute)
 	return boundary, _np.array(ls_filter).transpose()
 
-
-
-def time_vine_alt(B, filters, precision, box = [], threshold=False, multithread = False):
+def time_vine_alt(B, filters, precision, box = [], threshold=False, multithread = False, verbose = False):
 	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
@@ -135,10 +174,10 @@ def time_vine_alt(B, filters, precision, box = [], threshold=False, multithread 
 	else:
 		filtration = filters
 	if (type(B) == _gd.simplex_tree.SimplexTree):
-		return time_vineyard_alt(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread)
-	return time_vineyard_alt(B,filtration,precision, box, threshold, multithread)
+		return time_vineyard_barcode_computation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread, verbose)
+	return time_vineyard_barcode_computation(B,filtration,precision, box, threshold, multithread, verbose)
 
-def vine_alt(B, filters, precision, box = [], dimension = -1, threshold=False, multithread = False):
+def vine_alt(B, filters, precision, box = [], dimension = -1, threshold=False, multithread = False, verbose = False):
 	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
@@ -150,28 +189,14 @@ def vine_alt(B, filters, precision, box = [], dimension = -1, threshold=False, m
 		filtration = filters
 	if dimension ==-1: # if dimension is not specified we return every dimension
 		if (type(B) == _gd.simplex_tree.SimplexTree):
-			return vineyard_alt(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread)
-		return vineyard_alt(B,filtration,precision, box, threshold, multithread)
+			return compute_vineyard_barcode(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, multithread, verbose)
+		return compute_vineyard_barcode(B,filtration,precision, box, threshold, multithread, verbose)
 	if (type(B) == _gd.simplex_tree.SimplexTree):
-		return vineyard_alt_dim(simplextree_to_sparse_boundary(B), filtration, precision, box, dimension, threshold, multithread)
-	return vineyard_alt_dim(B,filtration,precision, box, dimension, threshold, multithread)
-
-
-
-def compute_ls_vineyard_update(structure, filter, dimensions, compute_barcode=True, R=[], U=[], permutation=[], bc=[], bc_inv=[], row_map_R=[], row_map_R_inv=[], row_map_U=[], row_map_U_inv=[]):
-	return lower_star_vineyards_update(structure, filter, dimensions, compute_barcode, R, U, permutation, bc, bc_inv, row_map_R, row_map_R_inv, row_map_U, row_map_U_inv)
-
-def ls_vineyards(filtrations, complex, discard):
-	return vineyards(filtrations, complex, discard)
-
-def compute_2d_vine(matrix, filters, basepoint, range_, precision):
-	return compute_vineyard_2d(matrix,filters,basepoint, range_, precision)
-
-
+		return compute_vineyard_barcode_in_dimension(simplextree_to_sparse_boundary(B), filtration, precision, box, dimension, threshold, verbose)
+	return compute_vineyard_barcode_in_dimension(B,filtration,precision, box, dimension, threshold, verbose)
 
 def simplextree_to_sparse_boundary(st):
-	return list_simplicies_to_sparse_boundary_matrix([simplex[0] for simplex in st.get_simplices()])
-
+	return build_sparse_boundary_matrix_from_simplex_list([simplex[0] for simplex in st.get_simplices()])
 
 def simplextree_to_sparse_boundary_python(st, verbose=False):
 	#we assume here that st has vertex name 0 to n
@@ -202,45 +227,15 @@ def simplextree_to_sparse_boundary_python(st, verbose=False):
 				boundary[simplex_id] += [get_id(simplex_in_boundary[0])]
 	return boundary
 
-
 def simplextree_to_boundary(st):
 	return [[simplex_in_boundary[0] for simplex_in_boundary in st.get_boundaries(simplex[0])] for simplex in st.get_simplices()]
 
-
-
-
-
-def vine_2d_box(simplextree, filters, precision, box=[[0,0],[5,5]]):
-	if(type(filters) == _np.ndarray):
-		assert filters.shape[1] == 2
-		filtration = [filters[:,0], filters[:,1]]
-	else:
-		filtration = filters
-	if (type(simplextree) == _gd.simplex_tree.SimplexTree):
-		return vineyard_2d(simplextree_to_sparse_boundary(simplextree), filtration, precision, box)
-	return vineyard_2d(simplextree, filtration, precision, box)
-	#return _np.array([_np.array(x) for x in temp])
-	#return temp
-
-
-def vine_2d(simplextree, filters, basepoint, endpoint, precision):
-	range_ = endpoint - basepoint
-	if (type(simplextree) == _gd.simplex_tree.SimplexTree):
-		return vineyard_2d(simplextree_to_sparse_boundary(simplextree), filters, basepoint, range_, precision)
-	return  vineyard_2d(simplextree, filters, basepoint, range_, precision)
-	#return _np.array([_np.array(x) for x in temp])
-	#return temp
-
-
-def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcodes=False, separated = False, alt = True, multithread = True, save=False, dpi=50):
+def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcodes=False, separated = False, multithread = True, save=False, dpi=50):
 	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
 		box = [[min(filters[0]), min(filters[1])],[max(filters[0]), max(filters[1])]]
-	if alt:
-		temp = vine_alt(matrix, filters, precision, box, dimension = dimension, threshold = True, multithread = False)
-	else:
-		temp = vine_2d_box(matrix, filters, precision, box)[dimension] # dimension -> matching -> line
+	temp = vine_alt(matrix, filters, precision, box, dimension = dimension, threshold = True, multithread = False)
 	#barcodes = _np.array([_np.array([ _np.array([z for z in y]) for y in x]) for x in temp])
 	barcodes = temp
 	cmap = _get_cmap("Spectral")
@@ -267,9 +262,6 @@ def plot_vine_2d(matrix, filters, precision, box=[], dimension=0, return_barcode
 	if(return_barcodes):
 		return barcodes
 
-
-
-
 from matplotlib.patches import Rectangle as _Rectangle
 """
 Defines a rectangle patch in the format {z | x  ≤ z ≤ y} with color and alpha
@@ -277,15 +269,11 @@ Defines a rectangle patch in the format {z | x  ≤ z ≤ y} with color and al
 def _rectangle(x,y,color, alpha):
 	return _Rectangle(x, max(y[0]-x[0],0),max(y[1]-x[1],0), color=color, alpha=alpha)
 
-
-
-
 def _d_inf(a,b):
 	if type(a) != _np.ndarray or type(b) != _np.ndarray:
 		a = _np.array(a)
 		b = _np.array(b)
 	return _np.min(_np.abs(b-a))
-
 
 def plot_approx_2d(B, filters, precision, box = [], dimension=0, return_corners=False, separated=False, min_interleaving = 0, multithread = False, complete=True, alpha=1, verbose = False, save=False, dpi=50, keep_order=False, shapely = True):
 	try:

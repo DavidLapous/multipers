@@ -1,12 +1,13 @@
 # Multipersistence modules approximation
-This is cloned from [Gitlab](https://gitlab.inria.fr/dloiseau/multipers).
 ## Description
-This repository is a python library, with a `C++` backend, for multipersistence modules approximation.
+This repository is a python library, with a `C++` backend, for multipersistence modules approximation. 
 It provides a set of functions to compute an approximation and fibered barcodes of a persistence module of any dimension n from a Gudhi simplex tree (python interface) and its n-dimensional filtration, and plot module approximations on a compact rectangle.
 
 ### Authors
 [David Loiseaux](http://www-sop.inria.fr/members/David.Loiseaux/) and [Mathieu Carrière](https://mathieucarriere.github.io/website/).
 
+### Contributor
+[Hannah Schreiber](https://github.com/hschreiber)
 
 ### References
 TODO
@@ -53,7 +54,7 @@ import gudhi as gd
 ```
 ### Main functions
 - `approx(simplextree, filtration, precision, box)` computes an interval decomposable approximation of the `n`-persistence module defined by the following `simplextree` and `multifiltration` below, with approximation parameters :
-    -  `simplextree` is a Gudhi simplextree,
+    -  `simplextree` is a Gudhi simplextree, 
     -  `filtration` is the list of filtration values of the simplices, which gets completed as a lower-star filtration if it is not complete,
     -  `precision` is the distance between two lines,
     -  `box` is the support of this computation : each bar along a line which intersects this box will be returned.

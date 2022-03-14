@@ -2,83 +2,96 @@
  * @file debug.h
  * @author David Loiseaux
  * @brief Display functions for debug purposes
- * 
+ *
  * @copyright Copyright (c) 2021 Inria
- * 
+ *
+ * Modifications: Hannah Schreiber
+ *
  */
 
 
 #ifndef DEBUG_H_INCLUDED
 #define DEBUG_H_INCLUDED
 
-#include "dependences.h"
+#include <chrono>
+#include <iostream>
+#include <vector>
+#include <list>
 
+namespace Debug {
 
-void disp(point_2 pt){
-	cout << "(" << pt.first << ", " << pt.second << ")";
-}
+using clk = std::chrono::high_resolution_clock;
+using tp = clk::time_point;
 
-void disp(vector<barcoded> barcodes){
-	for(uint i=0; i< barcodes.size();i++){
-		for(uint j=0; j < barcodes[0].size(); j++ ){
-			cout <<barcodes[i][j].first << "-(" << barcodes[i][j].second.first << ", " << barcodes[i][j].second.second << ") ";
-		}
-		cout << endl;
+const bool debug = false;
 
-	}
-}
+class Timer
+{
+public:
+    Timer() : activated_(false) {}
+    Timer(const std::string &string, bool verbose)
+        : timer_(clk::now()), activated_(verbose)
+    {
+        if(verbose){
+            std::cout << string << std::flush;
+        }
+    }
+    ~Timer(){
+        if (activated_)
+        {
+            std::chrono::duration<double> elapsed =
+                    std::chrono::duration_cast<std::chrono::duration<double>>(
+                            clk::now() - timer_);
+            std::cout << " Done ! It took "<< elapsed.count()
+                      << " seconds." << std::endl;
+        }
+    }
 
-
-template<typename T>
-void disp_vect(vector<T> v){
-	for(uint i=0; i< v.size(); i++){
-		cout << v[i] << " ";
-	}
-	cout <<endl;
-}
-
-template<typename T>
-void disp_vect(list<T> v){
-	while(!v.empty()){
-		cout << v.front() << " ";
-		v.pop_front();
-	}
-	cout <<endl;
-}
-
-template<typename T>
-void disp_vect(vector<pair<T,T>> v){
-	for(uint i=0; i< v.size(); i++){
-		cout << "(" << v[i].first << " " << v[i].second <<")  ";
-	}
-}
-
+private:
+    tp timer_;
+    bool activated_;
+};
 
 template<typename T>
-void disp_vect(vector<vector<T>> v, bool show_small = true){
-	for(uint i=0; i< v.size(); i++){
-		if(v[i].size()<=1 && !show_small) continue;
-		cout << "(";
-		for (uint j=0; j<v[i].size();j++){
-			cout << v[i][j];
-			if(j < v[i].size()-1) cout << " ";
-		}
-		cout << ") ";
-	}
-	cout << endl;
+void disp_vect(std::vector<T> v){
+    for(uint i=0; i< v.size(); i++){
+        std::cout << v[i] << " ";
+    }
+    std::cout << std::endl;
 }
 
 template<typename T>
-void disp_vect2(vector<vector<T>> v){
-	for(uint i=0; i< v.size(); i++){
-		disp_vect(v[i]);
-		cout << endl;
-	}
+void disp_vect(std::list<T> v){
+    while(!v.empty()){
+        std::cout << v.front() << " ";
+        v.pop_front();
+    }
+    std::cout << std::endl;
 }
 
+template<typename T>
+void disp_vect(std::vector<std::pair<T,T> > v){
+    for(uint i=0; i< v.size(); i++){
+        std::cout << "(" << v[i].first << " " << v[i].second <<")  ";
+    }
+}
 
+template<typename T>
+void disp_vect(std::vector<std::vector<T>> v, bool show_small = true){
+    for(uint i = 0; i < v.size(); i++){
+        if(v[i].size() <= 1 && !show_small) continue;
+        std::cout << "(";
+        for (uint j = 0; j < v[i].size(); j++){
+            std::cout << v[i][j];
+            if(j < v[i].size() - 1) std::cout << " ";
+        }
+        std::cout << ") ";
+    }
+    std::cout << std::endl;
+}
 
-
-
+} //namespace Debug
 
 #endif // DEBUG_H_INCLUDED
+
+
