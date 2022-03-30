@@ -1,15 +1,20 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef UTILITIES_H
 #define UTILITIES_H
 
 #include <vector>
+#include <limits>
 
 namespace Vineyard {
-
-enum Matrix_types {
-    VECTOR_MATRIX,
-    RU_MATRIX,
-    CHAIN_MATRIX
-};
 
 const double inf = std::numeric_limits<double>::infinity();
 const double negInf = -1 * inf;

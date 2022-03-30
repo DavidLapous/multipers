@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file format_python-cpp.h
- * @author David Loiseaux
+ * @author David Loiseaux, Hannah Schreiber
  * @brief Functions that change the format of data to communicate between C++ and python.
- * 
- * @copyright Copyright (c) 2021 Inria
- *
- * Modifications: Hannah Schreiber
- * 
  */
 
 #ifndef FORMAT_PYTHON_CPP_H_INCLUDED
@@ -110,20 +114,13 @@ build_boundary_matrix_from_simplex_list(
     // This fills the filtration of the 0-skeleton by points_filtration
     std::vector<filtration_type> filtersList(filtrationDimension, filtration_type(numberOfSimplices, negInf));
     for (unsigned int i = 0; i < filtrationDimension; i++)
-        for(unsigned int j = 0; j < filtrations[i].size(); j++)
-            filtersList[i][j] = filtrations[i][j];
-//    std::vector<filtration_type> filtersList = filtrations;
-//    for (filtration_type& f : filtersList) f.resize(numberOfSimplices, negInf);
+		for (unsigned int j = 0; j < filtrations[i].size(); j++)
+			filtersList[i][j] = filtrations[i][j];
 
     // permute filters the same as simplices
     for(const unsigned int index : indices_of_filtrations_to_order){
         Combinatorics::compose(filtersList[index], p);
     }
-
-//    for (filtration_type& filter : filtersList){
-//         // permute filters the same as simplices
-//        Combinatorics::compose(filter, p);
-//    }
 
     // Dictionary to store simplex ids. simplex [0,2,4] number is
     // simplex_id[024]; that's why we needed to sort first
@@ -151,10 +148,6 @@ build_boundary_matrix_from_simplex_list(
             boundaries[i].push_back(childID);
 
             // this simplex filtration is greater than the childs filtration in the ls case
-//            std::cout << "filtrationDimension: " << filtrationDimension << ", filtersList: " << filtersList.size() << "\n";
-//            for (unsigned int k = 0; k < filtrationDimension; k++)
-//                std::cout << "numberOfSimplices: " << numberOfSimplices << ", filtersList[k]: " << filtersList[k].size() << "\n";
-//            std::cout << "childID: " << childID << "\n";
             for (unsigned int k = 0; k < filtrationDimension; k++)
                 filtersList[k][i] = std::max(filtersList[k][i],
                                              filtersList[k][childID]);

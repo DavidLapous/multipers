@@ -26,6 +26,7 @@ extensions = [Extension('mma',
 							"-std=c++17"
 						  ,'-fopenmp'
 						  ,"-pthread"
+						  ,"-Wall"
 						  ],
 						extra_link_args=['-fopenmp', '-pthread'],
 )]

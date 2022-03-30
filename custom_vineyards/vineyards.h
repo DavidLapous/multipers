@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Mathieu Carrière, David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Rewriting of the Vineyard_persistence class with new matrix data structure.
+ */
 /**
  * @file vineyards.h
- * @author Mathieu Carrière, David Loiseaux
- * @brief Core vineyards functions
- * 
- * @copyright Copyright (c) 2021 Inria
- *
- * Modifications: Hannah Schreiber
- * 
+ * @author Mathieu Carrière, David Loiseaux, Hannah Schreiber
+ * @brief Core vineyards functions.
  */
 
 #ifndef VINEYARDS_H_INCLUDED
@@ -101,7 +105,7 @@ private:
     void _sort_matrix(const boundary_matrix& matrix);
     void _initialize_permutations();
     void _initialize_filter();
-    void _update_old(filtration_type &newFilter);
+//     void _update_old(filtration_type &newFilter);
 };
 
 template<class Vineyard_matrix_type>
@@ -116,8 +120,8 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
       currentToOriginalPositions_(matrix.size()),
       filter_(matrix.size()),
       verbose_(verbose)
-{
-    if (verbose_) std::cout << "Creating matrix ..." << std::flush;
+{   Debug::Timer timer("Creating matrix... ",verbose_);
+//     if (verbose_) std::cout << "Creating matrix ..." << std::flush;
 
     _initialize_filter();
     _sort_matrix(matrix);
@@ -127,7 +131,7 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
         matrix_.print_matrices();
     }
 
-    if (verbose_) std::cout << " Done !" << std::endl;
+//     if (verbose_) std::cout << " Done !" << std::endl;
 }
 
 //assumes filter[i] corresponds to filtration value of matrix[i]
@@ -139,8 +143,8 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
     : currentToOriginalPositions_(matrix.size()),
       filter_(filter),
       verbose_(verbose)
-{
-    if (verbose_) std::cout << "Creating matrix ..." << std::flush;
+{   Debug::Timer timer("Creating matrix... ",verbose_);
+//     if (verbose_) std::cout << "Creating matrix ..." << std::flush;
 
     _sort_matrix(matrix);
 
@@ -149,7 +153,7 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
         matrix_.print_matrices();
     }
 
-    if (verbose_) std::cout << " Done !" << std::endl;
+//     if (verbose_) std::cout << " Done !" << std::endl;
 }
 
 //copy, i.e. assumes matrix sorted
@@ -161,8 +165,8 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
       currentToOriginalPositions_(matrix.size()),
       filter_(matrix.size()),
       verbose_(verbose)
-{
-    if (verbose_) std::cout << "Creating matrix ..." << std::flush;
+{   Debug::Timer timer("Creating matrix... ",verbose_);
+//     if (verbose_) std::cout << "Creating matrix ..." << std::flush;
 
     _initialize_permutations();
     _initialize_filter();
@@ -172,7 +176,7 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
         matrix_.print_matrices();
     }
 
-    if (verbose_) std::cout << " Done !" << std::endl;
+//     if (verbose_) std::cout << " Done !" << std::endl;
 }
 
 //copy, i.e. assumes matrix sorted and filter[i] corresponds to
@@ -186,8 +190,8 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
       currentToOriginalPositions_(matrix.size()),
       filter_(filter),
       verbose_(verbose)
-{
-    if (verbose_) std::cout << "Creating matrix ..." << std::flush;
+{   Debug::Timer timer("Creating matrix... ",verbose_);
+//     if (verbose_) std::cout << "Creating matrix ..." << std::flush;
 
     _initialize_permutations();
 
@@ -196,7 +200,7 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
         matrix_.print_matrices();
     }
 
-    if (verbose_) std::cout << " Done !" << std::endl;
+//     if (verbose_) std::cout << " Done !" << std::endl;
 }
 
 //copy, i.e. assumes matrix sorted and filter[permutation[i]]
@@ -211,15 +215,15 @@ inline Vineyard_persistence<Vineyard_matrix_type>::Vineyard_persistence(
       currentToOriginalPositions_(permutation),
       filter_(filter),
       verbose_(verbose)
-{
-    if (verbose_) std::cout << "Creating matrix ..." << std::flush;
+{   Debug::Timer timer("Creating matrix",verbose_);
+//     if (verbose_) std::cout << "Creating matrix ..." << std::flush;
 
     if constexpr (Debug::debug){
         Debug::disp_vect(filter_);
         matrix_.print_matrices();
     }
 
-    if (verbose_) std::cout << " Done !" << std::endl;
+//     if (verbose_) std::cout << " Done !" << std::endl;
 }
 
 /**
@@ -235,8 +239,6 @@ inline void Vineyard_persistence<Vineyard_matrix_type>::initialize_barcode()
     }
     auto elapsed = clock();
 
-//    matrix_.print_matrices();
-
     matrix_.initialize();
 
     if (verbose_)
@@ -247,12 +249,12 @@ inline void Vineyard_persistence<Vineyard_matrix_type>::initialize_barcode()
     }
 }
 
-template<class Vineyard_matrix_type>
-inline void Vineyard_persistence<Vineyard_matrix_type>::update(
-        filtration_type &newFilter)
-{
-    _update_old(newFilter);
-}
+// template<class Vineyard_matrix_type>
+// inline void Vineyard_persistence<Vineyard_matrix_type>::update(
+//         filtration_type &newFilter)
+// {
+//     _update_old(newFilter);
+// }
 
 /**
  * @brief Gets diagram from RU decomposition.
@@ -263,9 +265,6 @@ inline const diagram_type& Vineyard_persistence<Vineyard_matrix_type>::get_diagr
     const barcode_type& barcode = matrix_.get_current_barcode();
     unsigned int size = barcode.size();
 
-//    std::cout << "nber of simplices: " << matrix_.get_number_of_simplices() << "\n";
-//    std::cout << "size: " << size << "\n";
-
     diagram_.resize(size);
 
     for (unsigned int i = 0; i < size; i++){
@@ -273,15 +272,10 @@ inline const diagram_type& Vineyard_persistence<Vineyard_matrix_type>::get_diagr
         Diagram_point& point = diagram_.at(i);
         point.dim = bar.dim;
         point.birth = _get_current_filtration_value(bar.birth);
-        point.death = (bar.death == -1 ? inf
-                         : _get_current_filtration_value(bar.death));
-
-//        std::cout << "birth: " << point.birth << " " << bar.birth << "\n";
-//        std::cout << "death: " << point.death << " " << bar.death << "\n";
-//        std::cout << "i: " << i << "\n";
-    }
-
-//    std::cout << "end\n";
+		point.death = (bar.death == -1 ?
+						   inf
+						 : _get_current_filtration_value(bar.death));
+	}
 
     return diagram_;
 }
@@ -302,8 +296,6 @@ inline void Vineyard_persistence<Vineyard_matrix_type>::display_filtration()
     for (double filtValue : filter_)
         std::cout << filtValue << " ";
     std::cout << std::endl;
-
-    //matrix_.print_matrices();
 }
 
 template<class Vineyard_matrix_type>
@@ -323,43 +315,56 @@ inline filtration_value_type
 Vineyard_persistence<Vineyard_matrix_type>::_get_current_filtration_value(
         index index)
 {
-//    std::cout << "index: " << index << "\n";
-//    std::cout << "currentToOriginalPositions_: " << currentToOriginalPositions_.at(index) << "\n";
-//    std::cout << "filter: " << filter_.at(currentToOriginalPositions_.at(index)) << "\n";
-
-    return filter_.at(currentToOriginalPositions_.at(index));
+	return filter_.at(currentToOriginalPositions_.at(index));
 }
 
 template<class Vineyard_matrix_type>
 inline void Vineyard_persistence<Vineyard_matrix_type>::_sort_matrix(
         const boundary_matrix &matrix)
 {
-    auto is_strict_less_than = [matrix, this](
+//     auto is_strict_less_than = [&matrix, this](
+//             unsigned int index1, unsigned int index2)
+//     {
+//         if (matrix.at(index1).size() != matrix.at(index2).size())
+//             return matrix.at(index1).size() < matrix.at(index2).size();
+//         return filter_.at(index1) < filter_.at(index2);
+//     };
+    auto is_less_filtration = [this]( // Dimension is already assumed to be sorted
             unsigned int index1, unsigned int index2)
     {
-        if (matrix.at(index1).size() != matrix.at(index2).size())
-            return matrix.at(index1).size() < matrix.at(index2).size();
         return filter_.at(index1) < filter_.at(index2);
     };
 
     permutation_type permutationInv(currentToOriginalPositions_.size());
     _initialize_permutations();
-    std::sort(currentToOriginalPositions_.begin(), currentToOriginalPositions_.end(), is_strict_less_than);
-    for (unsigned int i = 0; i < permutationInv.size(); i++)
+//     {Debug::Timer timer("Sorting matrix ...", verbose_);
+//         std::sort(currentToOriginalPositions_.begin(), currentToOriginalPositions_.end(), is_strict_less_than);
+        unsigned int iterator = 1;
+        while(iterator < matrix.size() ){
+            auto first = iterator-1;
+            while(iterator < matrix.size() && matrix.at(iterator).size() ==  matrix.at(iterator-1).size()){
+                iterator++;
+            }
+            std::sort(currentToOriginalPositions_.begin()+first , currentToOriginalPositions_.begin() + iterator, is_less_filtration );
+            iterator++;
+        }
+//     }
+//     {Debug::Timer timer("Initialisation permutation ...", verbose_);
+        for (unsigned int i = 0; i < permutationInv.size(); i++)
         permutationInv.at(currentToOriginalPositions_.at(i)) = i;
-
+//     }
     boundary_matrix sorted(matrix.size());
-    for (unsigned int i = 0; i < matrix.size(); i++){
-        boundary_type& b = sorted.at(permutationInv.at(i));
-        b = matrix.at(i);
-        for (index& id : b)
-            id = permutationInv.at(id);
-        std::sort(b.begin(), b.end());
-    }
+//     {Debug::Timer timer("Transfering matrix ...", verbose_);
+        for (unsigned int i = 0; i < matrix.size(); i++){
+            boundary_type& b = sorted.at(permutationInv.at(i));
+            b = matrix.at(i);
+            for (index& id : b)
+                id = permutationInv.at(id);
+            std::sort(b.begin(), b.end());
+        }
+//     }
 
     matrix_ = Vineyard_matrix_type(sorted);
-
-//    matrix_.print_matrices();
 }
 
 template<class Vineyard_matrix_type>
@@ -377,11 +382,11 @@ inline void Vineyard_persistence<Vineyard_matrix_type>::_initialize_filter()
 }
 
 template<class Vineyard_matrix_type>
-inline void Vineyard_persistence<Vineyard_matrix_type>::_update_old(
+inline void Vineyard_persistence<Vineyard_matrix_type>::update(
         filtration_type &newFilter)
 {
     int n = matrix_.get_number_of_simplices();
-    filter_ = newFilter;
+    filter_.swap(newFilter);
 
 //    uint k = 0;
 
@@ -395,10 +400,8 @@ inline void Vineyard_persistence<Vineyard_matrix_type>::_update_old(
                     _get_current_filtration_value(j) > _get_current_filtration_value(j + 1))
             {
                 matrix_.vine_swap(j);
-//                std::cout << "before: " << currentToOriginalPositions_[j] << ", " << currentToOriginalPositions_[j + 1] << "\n";
                 std::swap(currentToOriginalPositions_[j],
                           currentToOriginalPositions_[j + 1]);
-//                std::cout << "after: " << currentToOriginalPositions_[j] << ", " << currentToOriginalPositions_[j + 1] << "\n";
                 sorted = false;
 //                if (verbose_) k++;
             }

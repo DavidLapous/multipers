@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file structure_higher_dim_barcode.h
- * @author David Loiseaux
- * @brief Structures to handle higher dimensional persistence=
- * 
- * @copyright Copyright (c) 2021 Inria
- *
- * Modifications: Hannah Schreiber
- * 
+ * @author David Loiseaux, Hannah Schreiber
+ * @brief Structures to handle higher dimensional persistence.
  */
 
 #ifndef STRUCTURE_HIGHER_DIM_BARCODE_H_INCLUDED

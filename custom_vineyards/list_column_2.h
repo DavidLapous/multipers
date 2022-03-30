@@ -1,3 +1,13 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef LISTCOLUMN_H
 #define LISTCOLUMN_H
 
@@ -108,9 +118,6 @@ inline void List_column::clear()
 inline void List_column::clear(unsigned int value)
 {
     erasedValues_.insert(value);
-//    auto it = column_.begin();
-//    while (it != column_.end() && *it != value) it++;
-//    if (it != column_.end()) column_.erase(it);
 }
 
 inline void List_column::reorder(std::vector<index> &valueMap)
@@ -190,10 +197,6 @@ inline void List_column::add(List_column &column)
     }
 
     erasedValues_.clear();
-
-//    std::cout << "target: ";
-//    for (unsigned int v : column_) std::cout << v << " ";
-//    std::cout << "\n\n";
 }
 
 inline List_column &List_column::operator=(List_column other)

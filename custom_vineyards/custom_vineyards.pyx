@@ -112,7 +112,10 @@ def persistence_image_2d(B, filters, precision=-1, box=[], bandwidth=-1, resolut
 			if save:
 				_plt.savefig(save+"_H"+str(i)+".png")
 				i+=1
-			_plt.show()
+			if plot:
+				_plt.show()
+			else:
+				_plt.close()
 	if dimension<0:
 		return image_vector
 	return image_vector[0]
@@ -137,7 +140,7 @@ def time_approx(B, filters, precision, box=[], threshold=False,complete=False,mu
 		return time_approximated_vineyard_barcode_computation(simplextree_to_sparse_boundary(B), filtration, precision, box, threshold, keep_order, complete, multithread, verbose)
 	return time_approximated_vineyard_barcode_computation(B,filtration,precision, box, threshold, keep_order, complete, multithread, verbose)
 
-def approx(B, filters, precision, box = [], threshold=False, complete=True, multithread = False, verbose = False, keep_order = False):
+def approx(B, filters, precision=0.1, box = [], threshold=False, complete=True, multithread = False, verbose = False, keep_order = False):
 	if box == [] and (type(filters) == _np.ndarray):
 		box = [[min(filters[:,0]),min(filters[:,1])],[max(filters[:,0]),max(filters[:,1])]]
 	if box == [] and (type(filters) == list):
@@ -147,6 +150,7 @@ def approx(B, filters, precision, box = [], threshold=False, complete=True, mult
 		filtration = [filters[:,i] for i in range(filters.shape[1])]
 	else:
 		filtration = filters
+	#assert(len(filters[0]) == len(box[0]) and len(filters[0]) == len(box[1]))
 	if precision <=0.00001:
 		precision = _np.linalg.norm(_np.array(box[0]) - _np.array(box[1]))/100 # This makes around 100-200 lines
 	if (type(B) == _gd.simplex_tree.SimplexTree):
@@ -278,6 +282,7 @@ def _d_inf(a,b):
 def plot_approx_2d(B, filters, precision, box = [], dimension=0, return_corners=False, separated=False, min_interleaving = 0, multithread = False, complete=True, alpha=1, verbose = False, save=False, dpi=50, keep_order=False, shapely = True):
 	try:
 		from shapely.geometry import box as _rectangle_box
+		from shapely.geometry import MultiPolygon, Polygon
 		from shapely.ops import unary_union
 	except ModuleNotFoundError:
 		print("Fallbacking to matplotlib instead of shapely.")
@@ -314,8 +319,13 @@ def plot_approx_2d(B, filters, precision, box = [], dimension=0, return_corners=
 				ax.set(xlim=[box[0][0],box[1][0]],ylim=[box[0][1],box[1][1]])
 			if shapely:
 				summand_shape = unary_union(list_of_rect)
-				xs,ys=summand_shape.exterior.xy
-				ax.fill(xs,ys,alpha=alpha, fc=cmap(i/n_summands), ec='None')
+				if type(summand_shape) == Polygon:
+					xs,ys=summand_shape.exterior.xy
+					ax.fill(xs,ys,alpha=alpha, fc=cmap(i/n_summands), ec='None')
+				else:
+					for polygon in list(summand_shape):
+						xs,ys=polygon.exterior.xy
+						ax.fill(xs,ys,alpha=alpha, fc=cmap(i/n_summands), ec='None')
 			else:
 				for rectangle in list_of_rect:
 					ax.add_patch(rectangle)

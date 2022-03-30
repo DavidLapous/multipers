@@ -1,3 +1,13 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef HEAPCOLUMN_H
 #define HEAPCOLUMN_H
 
@@ -125,17 +135,6 @@ inline void Heap_column::clear()
 inline void Heap_column::clear(unsigned int value)
 {
     erasedValues_.insert(value);
-
-//    std::vector<unsigned int> tempCol;
-//    int pivot = _pop_pivot();
-//    while (pivot != -1) {
-//        if (pivot != static_cast<int>(value)) tempCol.push_back(pivot);
-//        pivot = _pop_pivot();
-//    }
-//    column_.swap(tempCol);
-//    std::make_heap(column_.begin(), column_.end());
-
-//    insertsSinceLastPrune_ = 0;
 }
 
 inline void Heap_column::reorder(std::vector<index> &valueMap)

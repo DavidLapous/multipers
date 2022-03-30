@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file images.h
- * @author David Loiseaux
+ * @author David Loiseaux, Hannah Schreiber
  * @brief Functions to generate multipersistence images
- *
- * @copyright Copyright (c) 2022 Inria
- *
- * Modifications: Hannah Schreiber
- *
  */
 
 #ifndef IMAGES_H_INCLUDED
@@ -218,15 +222,14 @@ std::vector<std::vector<std::vector<double> > > get_2D_image_from_boundary_matri
 				verbose);
 	if (dimension < 0){
 		std::vector<std::vector<std::vector<double>>> image_vector(approximation.size());
-// #pragma omp parallel for
-		for(unsigned int i = 0; i < approximation.size(); i++){
+		for (unsigned int i = 0; i < approximation.size(); i++){
 			std::vector<Summand> module(approximation[i].size());
 			for (unsigned int j = 0; j < approximation[i].size(); j++)
 				module[j].swapSummand(approximation[i][j]);
-			{
+			{//for Timer
 				Debug::Timer timer("Computing image of dimension " + std::to_string(i) + " ...", verbose);
 				image_vector[i]=compute_2D_image(module, delta, resolution, Box<double>(box), verbose);
-			}
+			}//Timer death
 		}
 		return image_vector;
 	}

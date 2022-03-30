@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file debug.h
- * @author David Loiseaux
+ * @author David Loiseaux, Hannah Schreiber
  * @brief Display functions for debug purposes
- *
- * @copyright Copyright (c) 2021 Inria
- *
- * Modifications: Hannah Schreiber
- *
  */
 
 

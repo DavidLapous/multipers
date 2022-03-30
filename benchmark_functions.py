@@ -18,11 +18,18 @@ from tqdm import tqdm
 
 ncores = cpu_count()
 
-def compute_heatmap(time_matrix,set_of_npts, set_of_nlines, save = ""):
+def compute_heatmap(time_matrix,set_of_npts, set_of_nlines, save = "", dimension=-1):
 	plt.imshow(np.flip(time_matrix,0), cmap='hot', interpolation='nearest',
 		   extent=[set_of_nlines[0], set_of_nlines[-1], set_of_npts[0], set_of_npts[-1]],
 		   aspect=(set_of_nlines[-1] - set_of_nlines[0])/(set_of_npts[-1] - set_of_npts[0]))
-	plt.xlabel("Number of lines")
+	if dimension <=2:
+		plt.xlabel("Number of lines")
+	elif dimension == 3:
+		plt.xlabel("Square root of the number of lines")
+	elif dimension == 4:
+		plt.xlabel("Cubic root of the number of lines")
+	else:
+		plt.xlabel(f"{dimension}-root of the number of lines")
 	plt.ylabel("Number of points")
 	plt.colorbar()
 	if save != "":
@@ -30,11 +37,12 @@ def compute_heatmap(time_matrix,set_of_npts, set_of_nlines, save = ""):
 	plt.show()
 
 
-def synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_points, number_of_lines, persistence_dimension=2, filtration="rips", verbose = True, max_dimension=3, parallel_tries=True):
-	number_of_lines = (int)(number_of_lines)
+def synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_points, number_of_loglines, persistence_dimension=2, filtration="rips", verbose = True, max_dimension=3, parallel_tries=True):
+	number_of_loglines = (int)(number_of_loglines)
+	assert(number_of_loglines > 0)
 	X = np.random.uniform(low=0, high=2, size=[number_of_points,dimension_of_points])
 	if filtration == "alpha":
-		simplextree = gd.AlphaComplex(points=X).create_simplex_tree(max_alpha_square=2)
+		simplextree = gd.AlphaComplex(points=X).create_simplex_tree()
 	if filtration == "rips":
 		simplextree = gd.RipsComplex(points=X, max_edge_length= 0.3).create_simplex_tree(max_dimension = max_dimension)
 #	 if max_dimension <= 1:
@@ -46,12 +54,12 @@ def synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_p
 
 	precision = 1
 	basepoint = [0 for _ in range(persistence_dimension)]
-	box = nlines_precision_box(number_of_lines, basepoint, precision)
+	box = nlines_precision_box(number_of_loglines, basepoint, precision, square=True)
 	if verbose:
 		print("Precision :",precision, flush=True)
 	times = []
 	if parallel_tries:
-		times = Parallel(n_jobs=min(ncores,number_of_tries))(delayed(time_approx)(boundary, filters, precision, box, threshold = False, multithread = 0) for i in range(number_of_tries))
+		times = Parallel(n_jobs=min(ncores,number_of_tries))(delayed(time_approx)(boundary, filters, precision, box, threshold = False, multithread = 0, verbose = verbose) for i in range(number_of_tries))
 	else:
 		for i in range(number_of_tries):
 			times+=[time_approx(boundary, filters, precision, box, threshold = False, multithread = 0)]
@@ -74,11 +82,19 @@ def noisy_annulus(r1=1, r2=2, n=50, seed=None):
 
 
 
-def nlines_precision_box(nlines, basepoint, scale):
+def nlines_precision_box(nlines, basepoint, scale, square = False):
 	import math
 	h = scale
 	dim = len(basepoint)
 	basepoint = np.array(basepoint, 'double')
+	if square:
+		# here we want n^dim-1 lines (n = nlines)
+		n=nlines
+		basepoint = np.array(basepoint, 'double')
+		deathpoint = basepoint.copy()
+		deathpoint+=n*h + - h/2
+		deathpoint[-1] = basepoint[-1]+h/2
+		return [basepoint,deathpoint]
 	factors = factorint(nlines)
 	prime_list=[]
 	for prime in factors:

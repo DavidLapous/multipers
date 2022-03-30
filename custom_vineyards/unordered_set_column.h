@@ -1,3 +1,13 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef UNORDEREDSETCOLUMN_H
 #define UNORDEREDSETCOLUMN_H
 
@@ -129,7 +139,6 @@ inline void Unordered_set_column::add(Unordered_set_column &column)
             if (static_cast<int>(v) > pivot_){
                 pivot_ = v;
                 pivotChanged_ = false;
-//                pivotChanged_ = true;
             }
         }
     }

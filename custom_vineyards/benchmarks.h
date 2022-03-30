@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file benchmarks.h
- * @author David Loiseaux	
+ * @author David Loiseaux, Hannah Schreiber
  * @brief Functions to benchmark specific part of functions from vineyard_trajectories.h
- * 
- * @copyright Copyright (c) 2021 Inria
- *
- * Modifications: Hannah Schreiber
- * 
  */
 
 #ifndef BENCHMARKS_H_INCLUDED
@@ -60,7 +64,7 @@ double time_approximated_vineyard_barcode_computation(
 	auto elapsed = clock();
     Vineyard::compute_vineyard_barcode_approximation(
                 boundaryMatrix, filtersList, precision, box,
-                threshold, keepOrder, complete, multithread
+                threshold, keepOrder, complete, multithread, verbose
                 );
 	elapsed = clock() - elapsed;
     auto time = static_cast<double>(elapsed) / CLOCKS_PER_SEC;

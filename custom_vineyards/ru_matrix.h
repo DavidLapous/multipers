@@ -1,3 +1,13 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef RU_MATRIX_H
 #define RU_MATRIX_H
 
@@ -29,7 +39,8 @@ public:
     void print_matrices();  //for debug
 
     RU_matrix<Column_type>& operator=(RU_matrix<Column_type> other);
-    friend void swap(RU_matrix<Column_type>& matrix1, RU_matrix<Column_type>& matrix2);
+    template<class Friend_column_type>
+    friend void swap(RU_matrix<Column_type>& matrix1, RU_matrix<Friend_column_type>& matrix2);
 
 private:
     Vector_matrix<Column_type> reducedMatrixR_;
@@ -145,26 +156,10 @@ inline void RU_matrix<Column_type>::vine_swap(index index)
     bool iIsPositive = (barcode_.at(indexToBar_.at(index)).birth == static_cast<int>(index));
     bool iiIsPositive = (barcode_.at(indexToBar_.at(index + 1)).birth == static_cast<int>(index) + 1);
 
-//    if (iIsPositive && iiIsPositive){
-//        std::cout << "\n";
-////        std::cout << "index: " << index << " is positive: " << iIsPositive << "\n";
-////        std::cout << "index+: " << (index + 1) << " is positive: " << iiIsPositive << "\n";
-
-//        std::cout << "before: " << barcode_.at(indexToBar_.at(index)).birth << ", " << barcode_.at(indexToBar_.at(index)).death << " - " << index << "\n";
-//        std::cout << "before+: " << barcode_.at(indexToBar_.at(index+1)).birth << ", " << barcode_.at(indexToBar_.at(index+1)).death << "\n";
-//    }
-
-    //TODO: optimize by avoiding useless additions in R
     if (iIsPositive && iiIsPositive) _positive_vine_swap(index);
     else if (!iIsPositive && !iiIsPositive) _negative_vine_swap(index);
     else if (iIsPositive && !iiIsPositive) _positive_negative_vine_swap(index);
     else _negative_positive_vine_swap(index);
-
-//    if (iIsPositive && iiIsPositive){
-//        std::cout << "after: " << barcode_.at(indexToBar_.at(index)).birth << ", " << barcode_.at(indexToBar_.at(index)).death << "\n";
-//        std::cout << "after+: " << barcode_.at(indexToBar_.at(index+1)).birth << ", " << barcode_.at(indexToBar_.at(index+1)).death << "\n";
-//        std::cout << "\n";
-//    }
 }
 
 template<class Column_type>
@@ -245,10 +240,7 @@ template<class Column_type>
 inline void RU_matrix<Column_type>::_positive_vine_swap(index index)
 {
     int iDeath = barcode_.at(indexToBar_.at(index)).death;
-    int iiDeath = barcode_.at(indexToBar_.at(index + 1)).death;
-
-//    std::cout << "index: " << index << " has death: " << iDeath << "\n";
-//    std::cout << "index+: " << (index + 1) << " has death: " << iiDeath << "\n";
+	int iiDeath = barcode_.at(indexToBar_.at(index + 1)).death;
 
     if (get_dimension(index) == get_dimension(index + 1))
     {
@@ -262,39 +254,26 @@ inline void RU_matrix<Column_type>::_positive_vine_swap(index index)
 
                 barcode_.at(indexToBar_.at(index)).birth = index + 1;
                 barcode_.at(indexToBar_.at(index + 1)).birth = index;
-                std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-
-//                std::cout << "1 index: " << index << " has new death: " << barcode_.at(indexToBar_.at(index)).death << "\n";
-//                std::cout << "1 index+: " << (index + 1) << " has new death: " << barcode_.at(indexToBar_.at(index + 1)).death << "\n";
+				std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
 
                 return;
             }
 
             if (iiDeath < iDeath) {
                 _swap_at_index(index);
-                _add_to(iiDeath, iDeath);
-
-//                std::cout << "2 index: " << index << " has new death: " << barcode_.at(indexToBar_.at(index)).death << "\n";
-//                std::cout << "2 index+: " << (index + 1) << " has new death: " << barcode_.at(indexToBar_.at(index + 1)).death << "\n";
+				_add_to(iiDeath, iDeath);
 
                 return;
             }
         }
 
-//        if (iDeath == -1 && iiDeath == 21) print_matrices();
-
         _swap_at_index(index);
-
-//        std::cout << "k,l,r: " << iDeath << ", " << iiDeath << ", " << !(reducedMatrixR_.is_zero_cell(iiDeath, index + 1)) << "\n";
 
         if (iDeath != -1 || iiDeath == -1 || reducedMatrixR_.is_zero_cell(iiDeath, index + 1)) {
             barcode_.at(indexToBar_.at(index)).birth = index + 1;
             barcode_.at(indexToBar_.at(index + 1)).birth = index;
             std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-        }
-
-//        std::cout << "3 index: " << index << " has new death: " << barcode_.at(indexToBar_.at(index)).death << "\n";
-//        std::cout << "3 index+: " << (index + 1) << " has new death: " << barcode_.at(indexToBar_.at(index + 1)).death << "\n";
+		}
 
         return;
     }
@@ -303,10 +282,7 @@ inline void RU_matrix<Column_type>::_positive_vine_swap(index index)
 
     barcode_.at(indexToBar_.at(index)).birth = index + 1;
     barcode_.at(indexToBar_.at(index + 1)).birth = index;
-    std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-
-//    std::cout << "4 index: " << index << " has new death: " << barcode_.at(indexToBar_.at(index)).death << "\n";
-//    std::cout << "4 index+: " << (index + 1) << " has new death: " << barcode_.at(indexToBar_.at(index + 1)).death << "\n";
+	std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
 }
 
 template<class Column_type>
@@ -337,39 +313,6 @@ inline void RU_matrix<Column_type>::_negative_vine_swap(index index)
 	barcode_.at(indexToBar_.at(index)).death = index + 1;
 	barcode_.at(indexToBar_.at(index + 1)).death = index;
 	std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-
-//    if (get_dimension(index) == get_dimension(index + 1)){
-//        if (!mirrorMatrixU_.is_zero_cell(index, index + 1)){
-//            if (barcode_.at(indexToBar_.at(index)).birth < barcode_.at(indexToBar_.at(index + 1)).birth){
-//                _add_to(index, index + 1);
-//                _swap_at_index(index);
-
-//                barcode_.at(indexToBar_.at(index)).death = index + 1;
-//                barcode_.at(indexToBar_.at(index + 1)).death = index;
-//                std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//                return;
-//            } else {
-//                _add_to(index, index + 1);
-//                _swap_at_index(index);
-//                _add_to(index, index + 1);
-//                return;
-//            }
-//        } else {
-//            _swap_at_index(index);
-
-//            barcode_.at(indexToBar_.at(index)).death = index + 1;
-//            barcode_.at(indexToBar_.at(index + 1)).death = index;
-//            std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//            return;
-//        }
-//    } else {
-//        _swap_at_index(index);
-
-//        barcode_.at(indexToBar_.at(index)).death = index + 1;
-//        barcode_.at(indexToBar_.at(index + 1)).death = index;
-//        std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//        return;
-//    }
 }
 
 template<class Column_type>
@@ -384,25 +327,6 @@ inline void RU_matrix<Column_type>::_positive_negative_vine_swap(index index)
 	barcode_.at(indexToBar_.at(index)).birth = index + 1;
 	barcode_.at(indexToBar_.at(index + 1)).death = index;
 	std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-
-//    if (get_dimension(index) == get_dimension(index + 1)){
-//        if (!mirrorMatrixU_.is_zero_cell(index, index + 1))
-//            mirrorMatrixU_.zero_cell(index, index + 1);
-
-//        _swap_at_index(index);
-
-//        barcode_.at(indexToBar_.at(index)).birth = index + 1;
-//        barcode_.at(indexToBar_.at(index + 1)).death = index;
-//        std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//        return;
-//    } else {
-//        _swap_at_index(index);
-
-//        barcode_.at(indexToBar_.at(index)).birth = index + 1;
-//        barcode_.at(indexToBar_.at(index + 1)).death = index;
-//        std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//        return;
-//    }
 }
 
 template<class Column_type>
@@ -423,29 +347,6 @@ inline void RU_matrix<Column_type>::_negative_positive_vine_swap(index index)
 	barcode_.at(indexToBar_.at(index)).death = index + 1;
 	barcode_.at(indexToBar_.at(index + 1)).birth = index;
 	std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-
-//    if (get_dimension(index) == get_dimension(index + 1)){
-//        if (!mirrorMatrixU_.is_zero_cell(index, index + 1)){
-//            _add_to(index, index + 1);
-//            _swap_at_index(index);
-//            _add_to(index, index + 1);
-//            return;
-//        } else {
-//            _swap_at_index(index);
-
-//            barcode_.at(indexToBar_.at(index)).death = index + 1;
-//            barcode_.at(indexToBar_.at(index + 1)).birth = index;
-//            std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//            return;
-//        }
-//    } else {
-//        _swap_at_index(index);
-
-//        barcode_.at(indexToBar_.at(index)).death = index + 1;
-//        barcode_.at(indexToBar_.at(index + 1)).birth = index;
-//        std::swap(indexToBar_.at(index), indexToBar_.at(index + 1));
-//        return;
-//    }
 }
 
 template<class Column_type>

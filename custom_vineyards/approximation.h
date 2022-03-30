@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file approximation.h
- * @author David Loiseaux
+ * @author David Loiseaux, Hannah Schreiber
  * @brief Contains the functions related to the approximation of n-modules.
- * 
- * @copyright Copyright (c) 2022 Inria
- *
- * Modifications: Hannah Schreiber
- * 
  */
 
 #ifndef APPROXIMATION_H_INCLUDED
@@ -177,14 +181,18 @@ std::vector<summand_list_type> compute_vineyard_barcode_approximation(
         basepoint[i] -= box.second.back();
     basepoint.back() = 0;
 
-    get_filter_from_line(basepoint, filtersList, filter, true);
-    // where is the cursor in the output matrix
     std::vector<unsigned int> position(filtrationDimension - 1, 0);
+    {Timer timer("Computing filtration... ", verbose);
+        get_filter_from_line(basepoint, filtersList, filter, true);
+        // where is the cursor in the output matrix
 
-    if (filtersList[0].size() < numberOfSimplices) {
-        filtration_type tmp = filter;
-        Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp, filter);
+
+        if (filtersList[0].size() < numberOfSimplices) {
+            filtration_type tmp = filter;
+            Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp, filter);
+        }
     }
+
 
     Vineyard_persistence<Vineyard_matrix_type> persistence(boundaryMatrix, filter, verbose);
 
@@ -242,6 +250,7 @@ std::vector<summand_list_type> compute_vineyard_barcode_approximation(
         }
     }//Timer death
     return output;
+//     return std::vector<summand_list_type>();
 }
 
 /**
@@ -297,33 +306,35 @@ void compute_vineyard_barcode_approximation_recursively(
     // Fills the barcode of the line having the basepoint basepoint
     unsigned int feature = 0;
     int oldDim = 0;
+    {
+        corner_type birthContainer(filtersList.size());
+        corner_type deathContainer(filtersList.size());
 
-    corner_type birthContainer(filtersList.size());
-    corner_type deathContainer(filtersList.size());
+        for(unsigned int i = 0; i < dgm.size(); i++){
+            corner_list &summand = output[dgm[i].dim][feature];
+            add_bar_to_summand(
+                        dgm[i].birth,
+                        dgm[i].death,
+                        summand,
+                        basepoint,
+                        birthContainer,
+                        deathContainer,
+                        threshold,
+                        box);
 
-    for(unsigned int i = 0; i < dgm.size(); i++){
-        corner_list &summand = output[dgm[i].dim][feature];
-        add_bar_to_summand(
-                    dgm[i].birth,
-                    dgm[i].death,
-                    summand,
-                    basepoint,
-                    birthContainer,
-                    deathContainer,
-                    threshold,
-                    box);
-
-        // If next bar is of upper dimension, or we reached the end,
-        // then we update the pointer index of where to fill the next
-        // bar in output.
-        if (i + 1 < dgm.size() && oldDim < dgm[i+1].dim) {
-            oldDim = dgm[i+1].dim;
-            feature = 0;
+            // If next bar is of upper dimension, or we reached the end,
+            // then we update the pointer index of where to fill the next
+            // bar in output.
+            if (i + 1 < dgm.size() && oldDim < dgm[i+1].dim) {
+                oldDim = dgm[i+1].dim;
+                feature = 0;
+            }
+            else feature++;
+    //        if  (verbose)
+    //            std::cout <<"Feature : " << feature << " dim : " << oldDim << std::endl;
         }
-        else feature++;
-//        if  (verbose)
-//            std::cout <<"Feature : " << feature << " dim : " << oldDim << std::endl;
     }
+
 
     compute_vineyard_barcode_approximation_recursively_for_higher_dimension(
                 output,
@@ -381,7 +392,7 @@ void compute_vineyard_barcode_approximation_recursively_for_higher_dimension(
 {
     if (filtersList.size() > 1 && last + 2 < filtersList.size()){
 //        if  (verbose && Debug::debug) Debug::disp_vect(basepoint);
-//        if  (verbose) std::cout << multithread<< std::endl;
+//        if  (verbose) std::cout << multithread << std::endl;
 
         if (multithread){
 //            if  (verbose) std::cout << "Multithreading dimension..." << std::endl;

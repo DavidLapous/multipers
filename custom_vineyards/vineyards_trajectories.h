@@ -1,12 +1,16 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       David Loiseaux
+ *
+ *    Copyright (C) 2021 Inria
+ *
+ *    Modification(s):
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ */
 /**
  * @file vineyards_trajectories.h
- * @author David Loiseaux
+ * @author David Loiseaux, Hannah Schreiber
  * @brief This file contains the functions related to trajectories of barcodes via vineyards.
- * 
- * @copyright Copyright (c) 2022 Inria
- *
- * Modifications: Hannah Schreiber
- * 
  */
 
 #ifndef VINEYARDS_TRAJECTORIES_H_INCLUDED
@@ -36,11 +40,13 @@ namespace Vineyard {
 
 using point_type = std::vector<filtration_value_type>;
 using interval_type = std::pair<point_type, point_type>;
-//using Vineyard_matrix_type = RU_matrix<Heap_column>;
-using Vineyard_matrix_type = RU_matrix<List_column>;
-//using Vineyard_matrix_type = RU_matrix<Vector_column>;
-//using Vineyard_matrix_type = RU_matrix<Set_column>;
-//using Vineyard_matrix_type = RU_matrix<Unordered_set_column>;
+
+// Different implementations of the matrix columns. Set seems to be the fastest in our tests.
+// using Vineyard_matrix_type = RU_matrix<Heap_column>;
+// using Vineyard_matrix_type = RU_matrix<List_column>;
+//  using Vineyard_matrix_type = RU_matrix<Vector_column>;
+using Vineyard_matrix_type = RU_matrix<Set_column>;
+// using Vineyard_matrix_type = RU_matrix<Unordered_set_column>;
 
 bool verbose = false;
 
@@ -196,40 +202,14 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     // where is the cursor in the output matrix
     std::vector<unsigned int> position(filtrationDimension - 1, 0);
 
-//    std::cout << "Boundary matrix:\n";
-//    for (auto& b : boundaryMatrix){
-//        for (auto v : b)
-//            std::cout << v << " ";
-//        std::cout << "\n";
-//    }
-//    std::cout << "\n";
-
-//    std::cout << "filter:\n";
-//    for (double v : filter){
-//        std::cout << v << " ";
-//    }
-//    std::cout << "\n";
-
     if (filtersList[0].size() < numberSimplices) {
         filtration_type tmp = filter;
         Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp, filter);
     }
 
-//    std::cout << "filter lower star:\n";
-//    for (double v : filter){
-//        std::cout << v << " ";
-//    }
-//    std::cout << "\n";
-
     Vineyard_persistence<Vineyard_matrix_type> persistence(boundaryMatrix, filter, verbose);
     persistence.initialize_barcode();
     auto &firstBarcode = persistence.get_diagram();
-
-//    std::cout << "diagram:\n";
-//    for (auto d : firstBarcode){
-//        std::cout << d.dim << " (" << d.birth << ", " << d.death << ")\n";
-//    }
-//    std::cout << "\n";
 
     // filtered by dimension so last one is of maximal dimension
     unsigned int maxDimension = firstBarcode.back().dim;
@@ -239,12 +219,6 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     for(unsigned int i = 0; i < firstBarcode.size(); i++){
         numberOfFeaturesByDimension[firstBarcode[i].dim]++;
     }
-
-//    std::cout << "numberOfFeaturesByDimension: " << numberOfFeaturesByDimension.size() << "\n";
-//    for (unsigned int v : numberOfFeaturesByDimension){
-//        std::cout << v << " ";
-//    }
-//    std::cout << "\n";
 
     for (unsigned int i = 0; i < maxDimension + 1; i++){
         output[i] = std::vector<std::vector<interval_type> >(
@@ -278,34 +252,6 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     if  (verbose)
             std::cout << " Done ! It took " << (static_cast<float>(elapsed)/CLOCKS_PER_SEC)
                       << " seconds."<< std::endl;
-
-//    for (std::vector<std::vector<interval_type>>& v1 : output){
-//        for (std::vector<interval_type>& v2 : v1){
-//            //int c = 0;
-//            for (interval_type& p : v2){
-//                //if (c < 10){
-//                    std::vector<double>& b = p.first;
-//                    std::vector<double>& d = p.second;
-
-//                    std::cout << "b: ";
-//                    for (double v : b){
-//                        std::cout << v << " ";
-//                    }
-//                    std::cout << "\n";
-
-////                    std::cout << "d: ";
-////                    for (double v : d){
-////                        std::cout << v << " ";
-////                    }
-////                    std::cout << "\n";
-//                //}
-//                //c++;
-//            }
-//            std::cout << "\n";
-//        }
-//        std::cout << "\n";
-//    }
-//    std::cout << "\n";
 
     return output;
 }
@@ -409,21 +355,9 @@ void compute_vineyard_barcode_recursively(
 
     //if  (verbose && Debug::debug) Debug::disp_vect(basepoint);
 
-//    std::cout << "filter:\n";
-//    for (double filtValue : filter)
-//        std::cout << filtValue << " ";
-//    std::cout << std::endl;
-
     persistence.update(filter); // Updates the RU decomposition of persistence.
     // Computes the diagram from the RU decomposition
     const diagram_type& dgm = persistence.get_diagram();
-
-//    std::cout << "diagram:\n";
-//    for (auto d : dgm){
-//        std::cout << d.dim << " (" << d.birth << ", " << d.death << ")\n";
-//    }
-//    std::cout << "\n";
-//    persistence.display_filtration();
 
     // Fills the barcode of the line having the basepoint basepoint
     unsigned int feature = 0;
@@ -468,8 +402,6 @@ void compute_vineyard_barcode_recursively(
             if (birth.back() >= death.back()){
                 birth.clear();
                 death.clear();
-//                birth = {};
-//                death = {};
             }
         }
 

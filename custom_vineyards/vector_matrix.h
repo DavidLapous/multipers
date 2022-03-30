@@ -1,3 +1,13 @@
+/*    This file is part of the MMA Library - https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT.
+ *    See file LICENSE for full license details.
+ *    Author(s):       Hannah Schreiber
+ *
+ *    Copyright (C) 2022 Inria
+ *
+ *    Modification(s):
+ *      - YYYY/MM Author: Description of the modification
+ */
+
 #ifndef VECTOR_MATRIX_H
 #define VECTOR_MATRIX_H
 
@@ -5,6 +15,7 @@
 #include <vector>
 #include <unordered_map>
 #include <iostream>
+#include <algorithm>
 
 #include "utilities.h"  //type definitions
 
@@ -45,8 +56,9 @@ public:
     dimension_type get_column_dimension(index columnIndex) const;
 
     Vector_matrix<Column_type>& operator=(Vector_matrix<Column_type> other);
-    friend void swap(Vector_matrix<Column_type>& matrix1,
-                     Vector_matrix<Column_type>& matrix2);
+    template<class Friend_column_type>
+    friend void swap(Vector_matrix<Friend_column_type>& matrix1,
+                     Vector_matrix<Friend_column_type>& matrix2);
 
 private:
     std::vector<Column_type> matrix_;
