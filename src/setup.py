@@ -17,7 +17,7 @@ from Cython.Build import cythonize
 import sys as _sys
 
 extensions = [Extension('mma',
-						sources=['custom_vineyards.pyx'],
+						sources=['mma.pyx'],
 						language='c++',
 						extra_compile_args=[
 							"-O3",
@@ -25,10 +25,9 @@ extensions = [Extension('mma',
 							"-g0",
 							"-std=c++17"
 						  ,'-fopenmp'
-						  ,"-pthread"
 						  ,"-Wall"
 						  ],
-						extra_link_args=['-fopenmp', '-pthread'],
+						extra_link_args=['-fopenmp'],
 )]
 setup(
 	name='mma',
@@ -36,5 +35,7 @@ setup(
 	author_email="david.loiseaux@inria.fr",
 	url="https://gitlab.inria.fr/dloiseau/multipers",
 	description="Open source library for multipersistence module approximation.",
-	ext_modules=cythonize(extensions, language_level = str(_sys.version_info[0])), include_dirs=['.'],
+	ext_modules	=cythonize(extensions, language_level = str(_sys.version_info[0])),
+
+	include_dirs=['.'],
 	)

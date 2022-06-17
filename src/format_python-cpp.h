@@ -90,10 +90,11 @@ boundary_matrix build_sparse_boundary_matrix_from_simplex_list(
 
 std::pair<boundary_matrix, std::vector<filtration_type> >
 build_boundary_matrix_from_simplex_list(
-        std::vector<boundary_type>& simplexList,
-        const std::vector<filtration_type>& filtrations,
+        std::vector<boundary_type> &simplexList,
+        const std::vector<filtration_type> &filtrations,
         std::vector<unsigned int>& indices_of_filtrations_to_order)
 {
+	return std::make_pair(boundary_matrix(),std::vector<filtration_type>());
     unsigned int numberOfSimplices = simplexList.size();
     // for dictionary hashmap
     unsigned int scale = std::pow(10, std::ceil(std::log10(numberOfSimplices)));
@@ -161,6 +162,66 @@ build_boundary_matrix_from_simplex_list(
     return std::make_pair(boundaries, filtersList);
 }
 
+
+std::pair<boundary_matrix, filtration_type>
+simplextree_to_boundary_filtration(
+        std::vector<boundary_type> &simplexList,
+        filtration_type &filtration)
+{
+    unsigned int numberOfSimplices = simplexList.size();
+    // for dictionary hashmap
+    unsigned int scale = std::pow(10, std::ceil(std::log10(numberOfSimplices)));
+
+    for (unsigned int i = 0; i < numberOfSimplices; i++){
+        std::sort(simplexList[i].begin(), simplexList[i].end());
+    }
+
+    //sort list_simplices with filtration
+    //of size num_simplices
+    permutation_type p = Combinatorics::sort_and_return_permutation<boundary_type>(
+                simplexList, &is_strictly_smaller_simplex);
+	
+    boundary_matrix boundaries(numberOfSimplices);
+	// permute filters the same as simplices
+	Combinatorics::compose(filtration, p);
+
+    // Dictionary to store simplex ids. simplex [0,2,4] number is
+    // simplex_id[024]; that's why we needed to sort first
+    std::unordered_map<unsigned int, unsigned int> simplexID;
+    for (unsigned int i = 0; i < numberOfSimplices; i++){
+        // populate the dictionary with this simplex
+        // stores the id of the simplex
+        simplexID.emplace(
+                    hash_simplex_into_unsigned_int(simplexList[i], scale),
+                    i);
+
+        // If simplex is of dimension 0, there is no boundary
+        if (simplexList[i].size() <= 1) continue;
+
+        // Fills the output matrix with the boundary of simplex cursor,
+        // and computes filtration of the simplex
+        for (unsigned int j = 0; j < simplexList[i].size(); j++){
+            // computes the id of the child
+            unsigned int childID =
+                    simplexID[hash_simplex_face_into_unsigned_int(
+                        simplexList[i], j, scale
+                        )];
+
+            // add this child to the boundary
+            boundaries[i].push_back(childID);
+        }
+    }
+
+    for (unsigned int i = 0; i < numberOfSimplices; i++){
+        std::sort(boundaries[i].begin(), boundaries[i].end());
+    }
+
+    return std::make_pair(boundaries, filtration);
+}
+
+
+
+
 // Lexical order + dimension
 bool is_strictly_smaller_simplex(const boundary_type& s1, const boundary_type& s2)
 {
@@ -204,5 +265,9 @@ unsigned int hash_simplex_face_into_unsigned_int(
 
     return output;
 }
+
+
+
+
 
 #endif // FORMAT_PYTHON_CPP_H_INCLUDED

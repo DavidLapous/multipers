@@ -6,6 +6,7 @@
  *
  *    Modification(s):
  *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
+ *      - 2022/05 Hannah Schreiber: Addition of Box class.
  */
 /**
  * @file vineyards_trajectories.h
@@ -18,13 +19,16 @@
 
 #include <vector>
 #include <iostream>
+// #include <iomanip>
 #include <cmath>
 #include <limits>
 #include <cassert>
+// #include "gudhi/Simplex_tree.h"
 
 #include "vineyards.h"
 #include "structure_higher_dim_barcode.h"
-#include "combinatory.h"
+#include "format_python-cpp.h"
+// #include "combinatory.h"
 #include "debug.h"
 
 #include "utilities.h"
@@ -36,9 +40,13 @@
 #include "set_column.h"
 #include "unordered_set_column.h"
 
+
+
+
 namespace Vineyard {
 
-using point_type = std::vector<filtration_value_type>;
+class Box;
+
 using interval_type = std::pair<point_type, point_type>;
 
 // Different implementations of the matrix columns. Set seems to be the fastest in our tests.
@@ -54,7 +62,7 @@ std::vector<std::vector<std::vector<interval_type> > > compute_vineyard_barcode(
         boundary_matrix& boundaryMatrix,
         const std::vector<filtration_type>& filtersList,
         double precision,
-        std::pair<point_type, point_type>& box,
+		Box& box,
         bool threshold = false,
         bool multithread = false,
         const bool verbose = false);
@@ -62,9 +70,10 @@ std::vector<std::vector<interval_type> > compute_vineyard_barcode_in_dimension(
         boundary_matrix& boundaryMatrix,
         const std::vector<filtration_type>& filtersList,
         double precision,
-        std::pair<point_type, point_type>& box,
+		Box& box,
         dimension_type dimension,
-        bool threshold = false);
+		bool threshold = false,
+		const bool verbose = false);
 void compute_vineyard_barcode_recursively(
         std::vector<std::vector<std::vector<interval_type> > >& output,
         Vineyard_persistence<Vineyard_matrix_type>& persistence,
@@ -75,7 +84,7 @@ void compute_vineyard_barcode_recursively(
         filtration_type& filter,
         const std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<point_type, point_type>& box,
+		const Box& box,
         const std::vector<unsigned int>& size,
         bool first = false,
         bool threshold = false,
@@ -90,25 +99,48 @@ void compute_vineyard_barcode_recursively_in_higher_dimension(
         filtration_type& filter,
         const std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<point_type, point_type>& box,
+		const Box& box,
         const std::vector<unsigned int>& size,
         bool threshold = false,
         bool multithread = false);
 void get_filter_from_line(
-        const point_type& lineBasepoint,
-        const std::vector<filtration_type>& filterList,
-        filtration_type& newFilter,
-        bool ignoreLast = false);
+		const point_type& lineBasepoint,
+		const std::vector<filtration_type>& filterList,
+		filtration_type& newFilter,
+		const Box &box,
+		bool ignoreLast = false);
 void threshold_up(
-        point_type& point,
-        const interval_type& box,
-        const point_type& basepoint = std::vector<double>(1, negInf));
+		point_type& point,
+		const Box& box,
+		const point_type& basepoint = std::vector<double>(1, negInf));
 void threshold_down(
-        point_type& point,
-        const interval_type& box,
-        const point_type& basepoint = std::vector<double>(1, negInf));
-bool is_less(const point_type& x, const point_type& y);
+		point_type& point,
+		const Box& box,
+		const point_type& basepoint = std::vector<double>(1, negInf));
+bool is_smaller(const point_type& x, const point_type& y);
 bool is_greater(const point_type& x, const point_type& y);
+// boundary_matrix simplex_tree_to_boundary_matrix(Gudhi::Simplex_tree<> &simplexTree);
+
+/**
+ * @brief Holds the square box on which to compute.
+ */
+class Box
+{
+public:
+	Box();
+	Box(const corner_type& bottomCorner, const corner_type& upperCorner);
+	Box(const std::pair<corner_type, corner_type>& box);
+
+	void inflate(double delta);
+	const corner_type& get_bottom_corner() const;
+	const corner_type& get_upper_corner() const;
+	bool contains(point_type& point) const;
+	void infer_from_filters(std::vector<std::vector<double>> &Filters_list);
+
+private:
+	corner_type bottomCorner_;
+	corner_type upperCorner_;
+};
 
 // TODO improve multithread
 // Main function of vineyard computation. It computes the fibered barcodes of
@@ -150,7 +182,7 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
         boundary_matrix& boundaryMatrix,
         const std::vector<filtration_type>& filtersList,
         double precision,
-        std::pair<point_type, point_type>& box,
+		Box& box,
         bool threshold,
         bool multithread,
         bool verbose)
@@ -158,8 +190,8 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     Vineyard::verbose = verbose;
     // Checks if dimensions are compatibles
     assert(!filtersList.empty() && "A non trivial filters list is needed !");
-    assert(filtersList.size() == box.first.size()
-            && filtersList.size() == box.second.size()
+	assert(filtersList.size() == box.get_bottom_corner().size()
+			&& filtersList.size() == box.get_upper_corner().size()
             && "Filtration and box must be of the same dimension");
     if (Debug::debug){
         for (unsigned int i = 1; i < boundaryMatrix.size(); i++)
@@ -182,8 +214,8 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     for (unsigned int i = 0; i < filtrationDimension - 1; i++)
         sizeLine[i] = static_cast<unsigned int>(
                     std::ceil(
-                        std::abs(box.second[i] - box.first.back()
-                                 - box.first[i] + box.second.back()) / precision
+						std::abs(box.get_upper_corner()[i] - box.get_bottom_corner().back()
+								 - box.get_bottom_corner()[i] + box.get_upper_corner().back()) / precision
                         )
                     );
 
@@ -193,12 +225,12 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     if  (verbose)
             std::cout << "Number of lines : " << numberOfLines << std::endl;
 
-    auto basePoint = box.first;
+	auto basePoint = box.get_bottom_corner();
     for (unsigned int i = 0; i < basePoint.size() - 1; i++)
-        basePoint[i] -= box.second.back();
+		basePoint[i] -= box.get_upper_corner().back();
     basePoint.back() = 0;
 
-    get_filter_from_line(basePoint, filtersList, filter, true);
+    get_filter_from_line(basePoint, filtersList, filter, box, true);
     // where is the cursor in the output matrix
     std::vector<unsigned int> position(filtrationDimension - 1, 0);
 
@@ -252,7 +284,6 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
     if  (verbose)
             std::cout << " Done ! It took " << (static_cast<float>(elapsed)/CLOCKS_PER_SEC)
                       << " seconds."<< std::endl;
-
     return output;
 }
 
@@ -275,7 +306,7 @@ std::vector<std::vector<interval_type>> compute_vineyard_barcode_in_dimension(
         boundary_matrix& boundaryMatrix,
         const std::vector<filtration_type>& filtersList,
         double precision,
-        std::pair<point_type, point_type>& box,
+		Box& box,
         dimension_type dimension,
         bool threshold,
         const bool verbose)
@@ -285,6 +316,7 @@ std::vector<std::vector<interval_type>> compute_vineyard_barcode_in_dimension(
                                     precision,
                                     box,
                                     threshold,
+                                    false,
                                     verbose)[dimension];
 }
 
@@ -339,14 +371,14 @@ void compute_vineyard_barcode_recursively(
         filtration_type& filter,
         const std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<point_type, point_type>& box,
+		const Box& box,
         const std::vector<unsigned int>& size,
         bool first,
         bool threshold,
         bool multithread)
 {
     if (!first) {
-        get_filter_from_line(basepoint, filtersList, filter, true);
+        get_filter_from_line(basepoint, filtersList, filter, box, true);
         if (filtersList[0].size() < boundaryMatrix.size()) {
             filtration_type tmp = filter;
             Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp, filter);
@@ -486,7 +518,7 @@ void compute_vineyard_barcode_recursively_in_higher_dimension(
         filtration_type& filter,
         const std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<point_type, point_type>& box,
+		const Box& box,
         const std::vector<unsigned int>& size,
         bool threshold,
         bool multithread)
@@ -554,6 +586,7 @@ void get_filter_from_line(
         const point_type& lineBasepoint,
         const std::vector<filtration_type>& filterList,
         filtration_type& newFilter,
+		const Box &box,
         bool ignoreLast)
 {
 //    if  (verbose && Debug::debug) {
@@ -561,6 +594,17 @@ void get_filter_from_line(
 //    }
 
     unsigned int dimension = lineBasepoint.size() + 1 - ignoreLast;
+
+// 	double minLength = box.get_bottom_corner().back();
+// 	double maxLength = box.get_upper_corner().back();
+// // #pragma omp parallel for reduction(max : minLength)
+// 	for (unsigned int i = 0;  i<dimension-1; i++){
+// 		minLength = std::max(minLength, box.get_bottom_corner()[i] - lineBasepoint[i]);
+// 	}
+// // #pragma omp parallel for reduction(min : maxLength)
+// 	for (unsigned int i = 0;  i<dimension-1; i++){
+// 		maxLength = std::min(maxLength, box.get_upper_corner()[i] - lineBasepoint[i]);
+// 	}
 
     filtration_type relativeFiltrationValues(dimension);
     for(unsigned int i = 0; i < filterList[0].size(); i++){
@@ -571,7 +615,9 @@ void get_filter_from_line(
         double length = *max_element(relativeFiltrationValues.begin(),
                                      relativeFiltrationValues.end());
 
-        newFilter[i] = length;
+//         newFilter[i] = std::min(std::max(length,minLength), maxLength);
+		newFilter[i] = length;
+
     }
 
 //    if  (verbose && Debug::debug) {
@@ -591,10 +637,10 @@ void get_filter_from_line(
  * we cannot infer the line).
  */
 void threshold_up(point_type& point,
-                  const interval_type& box,
+				  const Box& box,
                   const point_type& basepoint)
 {
-    if (is_less(point, box.second)) return;
+	if (is_smaller(point, box.get_upper_corner())) return;
 
 //    if  (verbose && Debug::debug) Debug::disp_vect(point);
 
@@ -604,9 +650,9 @@ void threshold_up(point_type& point,
     if (point.back() == inf){
 //        if (verbose) std::cout << " Infinite point" << std::endl;
 
-        double threshold = box.second.back();
+		double threshold = box.get_upper_corner().back();
         for(unsigned int i = 0; i < point.size(); i++){
-            threshold = std::min(threshold, box.second[i] - basepoint[i]);
+			threshold = std::min(threshold, box.get_upper_corner()[i] - basepoint[i]);
         }
         for (unsigned int i = 0; i < point.size()-1; i++)
             point[i] = basepoint[i] + threshold;
@@ -615,16 +661,16 @@ void threshold_up(point_type& point,
         return;
     }
 
-    if (!is_greater(point, box.first)) {
+	if (!is_greater(point, box.get_bottom_corner())) {
         point[0] = inf; // puts point to infinity
 //        if  (verbose) std::cout << "buggy point" << std::endl;
         return;
     }
     //in this last case, at least 1 coord of point is is_greater than a coord of box.second
 
-    double threshold = point[0] - box.second[0];
+	double threshold = point[0] - box.get_upper_corner()[0];
     for (unsigned int i = 1; i < point.size(); i++){
-        threshold = std::max(threshold, point[i] - box.second[i]);
+		threshold = std::max(threshold, point[i] - box.get_upper_corner()[i]);
     }
 
 //    if  (verbose)
@@ -647,7 +693,7 @@ void threshold_up(point_type& point,
  * we cannot infer the line).
  */
 void threshold_down(point_type& point,
-                    const interval_type& box,
+					const Box& box,
                     const point_type& basepoint)
 {
     if (basepoint[0] == negInf) return;
@@ -656,21 +702,21 @@ void threshold_down(point_type& point,
         return;
     }
 
-    if (is_greater(point, box.first)) return;
+	if (is_greater(point, box.get_bottom_corner())) return;
 
-    if(!is_less(point, box.second)) {
+	if (!is_smaller(point, box.get_upper_corner())) {
         point[0] = inf;// puts point to infinity
         return;
     }
 
-    double threshold = box.first[0] - point[0];
+	double threshold = box.get_bottom_corner()[0] - point[0];
     for (unsigned int i = 1; i < point.size(); i++){
-        threshold = std::max(threshold, box.first[i] - point[i]);
+		threshold = std::max(threshold, box.get_bottom_corner()[i] - point[i]);
     }
     for (unsigned int i = 0; i < point.size(); i++) point[i] += threshold;
 }
 
-bool is_less(const point_type& x, const point_type& y)
+bool is_smaller(const point_type& x, const point_type& y)
 {
     for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
         if (x[i] > y[i]) return false;
@@ -684,6 +730,112 @@ bool is_greater(const point_type& x, const point_type& y)
     return true;
 }
 
+// boundary_matrix simplex_tree_to_boundary_matrix(Gudhi::Simplex_tree<> &simplexTree){
+// 	std::vector<std::vector<unsigned int> > simplexList(simplexTree.num_simplices());
+// 	// unsigned int count = 0;
+// 	// for (auto sh : simplexTree.filtration_simplex_range())
+//     // 	simplexTree.assign_key(sh, count++);
+// 	// for (auto &simplex : simplexTree.filtration_simplex_range()){
+// 	// 	for (auto &simplex_id : simplexTree.boundary_simplex_range(simplex)){
+// 	// 		simplexList[i].push_back(simplexTree.key(simplex_id));
+// 	// 		// std::cout << simplexTree.key(simplex_id)<< "\n";
+// 	// 	}
+// 	// 	i++;
+// 	// } // À faire quand les clés gudhi fonctionneront.
+// 	unsigned int i = 0;
+// 	for (auto& simplex : simplexTree.filtration_simplex_range()) {
+//     	for (auto vertex : simplexTree.simplex_vertex_range(simplex))
+// 			simplexList[i].push_back(vertex);
+// 		i++;
+//   	}
+// 	return build_sparse_boundary_matrix_from_simplex_list(simplexList);
+// }
+
+
+
+
+inline Box::Box() : bottomCorner_(1), upperCorner_(1)
+{}
+
+inline Box::Box(const corner_type &bottomCorner, const corner_type &upperCorner)
+	: bottomCorner_(bottomCorner),
+	  upperCorner_(upperCorner)
+{
+	assert(bottomCorner.size() == upperCorner.size()
+		   && is_smaller(bottomCorner, upperCorner)
+		   && "This box is trivial !");
+}
+
+inline Box::Box(const std::pair<corner_type, corner_type> &box)
+	: bottomCorner_(box.first),
+	  upperCorner_(box.second)
+{}
+
+inline void Box::inflate(double delta)
+{
+#pragma omp simd
+	for (unsigned int i = 0; i < bottomCorner_.size(); i++){
+		bottomCorner_[i] -= delta;
+		upperCorner_[i] += delta;
+	}
+}
+
+inline void Box::infer_from_filters(std::vector<std::vector<double>> &Filters_list){
+	unsigned int dimension = Filters_list.size();
+	unsigned int nsplx = Filters_list[0].size();
+	std::vector<double> lower(dimension);
+	std::vector<double> upper(dimension);
+	for (unsigned int i =0; i<dimension; i++){
+		Vineyard::filtration_value_type min = Filters_list[i][0];
+		Vineyard::filtration_value_type max = Filters_list[i][0];
+		for (unsigned int j=1; j<nsplx; j++){
+			min = std::min(min, Filters_list[i][j]);
+			max = std::max(max, Filters_list[i][j]);
+		}
+		lower[i] = min;
+		upper[i] = max;
+	}
+	bottomCorner_.swap(lower);
+	upperCorner_.swap(upper);
+}
+
+inline const corner_type &Box::get_bottom_corner() const
+{
+	return bottomCorner_;
+}
+
+inline const corner_type &Box::get_upper_corner() const
+{
+	return upperCorner_;
+}
+
+inline bool Box::contains(point_type &point) const
+{
+	if (point.size() != bottomCorner_.size()) return false;
+
+	for (unsigned int i = 0; i < point.size(); i++){
+		if (point.at(i) < bottomCorner_.at(i)) return false;
+		if (point.at(i) > upperCorner_.at(i)) return false;
+	}
+
+	return true;
+}
+
+std::ostream& operator<<(std::ostream& os, const Box& box)
+{
+    os << "low : ";
+    for (auto value : box.get_bottom_corner())
+        os << value << " ";
+    os << "\n";
+    os << "upper : ";
+    for (auto value : box.get_upper_corner())
+        os << value << " ";
+    os << "\n";
+    return os;
+}
+
 }   //namespace Vineyard
+
+
 
 #endif // VINEYARDS_TRAJECTORIES_H_INCLUDED

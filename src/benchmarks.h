@@ -29,12 +29,13 @@ using Vineyard::filtration_type;
 using Vineyard::point_type;
 using Vineyard::corner_type;
 using Vineyard::dimension_type;
+using Vineyard::Box;
 
 double time_vineyard_barcode_computation(
         boundary_matrix& boundaryMatrix,
-        const std::vector<filtration_type>& filtersList,
+        std::vector<filtration_type>& filtersList,
         double precision,
-        std::pair<point_type, point_type>& box,
+		Box& box,
         bool threshold = false,
         bool multithread = false,
         const bool verbose = false)
@@ -50,11 +51,10 @@ double time_vineyard_barcode_computation(
 
 double time_approximated_vineyard_barcode_computation(
         boundary_matrix &boundaryMatrix,
-        const std::vector<filtration_type>& filtersList,
+        std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<corner_type, corner_type>& box,
+		Box& box,
         const bool threshold = false,
-        const bool keepOrder = false,
         const bool complete = true,
         const bool multithread = false,
         const bool verbose = false)
@@ -64,7 +64,7 @@ double time_approximated_vineyard_barcode_computation(
 	auto elapsed = clock();
     Vineyard::compute_vineyard_barcode_approximation(
                 boundaryMatrix, filtersList, precision, box,
-                threshold, keepOrder, complete, multithread, verbose
+				threshold, complete, multithread, verbose
                 );
 	elapsed = clock() - elapsed;
     auto time = static_cast<double>(elapsed) / CLOCKS_PER_SEC;
@@ -76,9 +76,9 @@ double time_approximated_vineyard_barcode_computation(
 
 double time_2D_image_from_boundary_matrix_construction(
         boundary_matrix &boundaryMatrix,
-        const std::vector<filtration_type>& filtersList,
+        std::vector<filtration_type>& filtersList,
         const double precision,
-        const std::pair<corner_type, corner_type>& box,
+		Box& box,
         const double delta,
         const std::vector<unsigned int> &resolution,
         const dimension_type dimension,

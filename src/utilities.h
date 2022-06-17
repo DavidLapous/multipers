@@ -27,6 +27,10 @@ using persistence_pair = std::pair<filtration_value_type, filtration_value_type>
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
 using permutation_type = std::vector<unsigned int>;
+using point_type = std::vector<filtration_value_type>;
+using corner_type = std::vector<double>;
+using corners_type = std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>;
+
 
 struct Bar{
     Bar() : dim(-1), birth(-1), death(-1)

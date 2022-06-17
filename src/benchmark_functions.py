@@ -72,14 +72,15 @@ def synthetic_random_benchmark_time(number_of_points, number_of_tries, dimension
 	return synthetic_random_benchmark(number_of_points, number_of_tries, dimension_of_points, number_of_lines, persistence_dimension=2, filtration="rips", verbose = True, max_dimension=3)[0]
 
 
-def noisy_annulus(r1=1, r2=2, n=50, dim=2, center=None):
-	set =[]
-	while len(set)<n:
-		draw=np.random.uniform(low=-r2, high=r2, size=dim)
-		if np.linalg.norm(draw) > r1 and np.linalg.norm(draw) < r2:
-			set.append(draw)
-	dataset = np.array(set) if center == None else np.array(set) + np.array(center)
-	return dataset
+def noisy_annulus(r1=1, r2=2, n=50, seed=None, dim=2):
+    set =[]
+    if seed != None :
+        np.random.seed(seed)
+    while len(set)<n:
+        x=np.random.uniform(low=-r2, high=r2, size=dim)
+        if np.linalg.norm(x) > r1 and np.linalg.norm(x) < r2:
+            set.append(x)
+    return set
 
 
 def nlines_precision_box(nlines, basepoint, scale, square = False):
@@ -179,11 +180,11 @@ def density_persistence_benchmark(X, nlines, ntries=10, gaussian_var = 0.3, filt
 
 
 
-def convergence_image(boundary, filters,max_precision, bandwidth, verbose=False, box=[], save=False, show_img = True, num=100, min_precision=1, resolution=[200,200], p=2, progress=True):
+def convergence_image(boundary, filters,max_precision, bandwidth, verbose=False, box=[], save=False, show_img = True, num=100, min_precision=1, resolution=[200,200], p=2):
 	baseline = persistence_image_2d(boundary, filters, precision = max_precision,bandwidth=bandwidth, verbose = verbose, plot = show_img, resolution = resolution,box=box,  save=save)
 	errors = []
 	precisions = np.logspace(np.log10(min_precision),np.log10(max_precision), num)
-	for precision in tqdm(precisions, disable=not(progress)):
+	for precision in tqdm(precisions):
 		img = persistence_image_2d(boundary, filters, precision = precision,bandwidth=bandwidth, plot=False, resolution=resolution, box=box)
 		error = []
 		for dimension in range(len(baseline)):

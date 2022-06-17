@@ -20,6 +20,7 @@
 #include <iostream>
 #include <functional>
 #include <algorithm>
+#include <climits>
 
 #include "utilities.h"
 #include "debug.h"
@@ -46,7 +47,7 @@ void quicksort_and_record_permutation(
 template<typename T>
 void compose(std::vector<T> &p,const permutation_type &q){
     uint n = p.size();
-    assert(q.size() == n);
+//     assert(q.size() == n);
     std::vector<T> r(n);
     for(uint i = 0; i< n; i++){
         r[i] = p[q[i]];
