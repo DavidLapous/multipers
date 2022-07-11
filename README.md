@@ -12,7 +12,7 @@ It provides a set of functions to compute an approximation and fibered barcodes 
 [Hannah Schreiber](https://github.com/hschreiber)
 
 ### References
-TODO
+[arXiv Link](https://arxiv.org/abs/2206.02026)
 
 Most multipers.py functions taken from [Mathieu Carrière](https://github.com/MathieuCarriere/multipers)'s Github; which adds the [dionysus library](https://github.com/mrzv/dionysus) as a dependency.
 
