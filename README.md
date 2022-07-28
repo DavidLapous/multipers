@@ -24,12 +24,11 @@ The `Python` part relies on several standard packages : `cython`, `sys`, `numpy`
 ### Compilation
 
 #### Using pip
-Clone this repository and compile-install this library using the following commands
+Clone (or download) this repository and compile-install this library using the following commands in a terminal in the `src` folder
 
->	cd /path-to-cloned-directory/	<br>
->	pip install --user custom_vineyards/
+>	pip install --user .
 
-
+<!--
 #### Get the compiled file (that can manually be imported from python)
 Clone this repository and execute the following commands in a terminal to compile the `C++` code, and move the compiled file in the root folder
 
@@ -47,13 +46,15 @@ Compile the Doxygen documentation using the following commands
 > 	doxygen doc/Doxyfile
 
 and open the `doc/html/index.html` using your favourite web-browser.
-
+-->
 ## Usage
 Import the compiled library and Gudhi in Python:
 ```
 from mma import *
 import gudhi as gd
 ```
+For an introduction, follow the tutorial notebook `How to use`. The notebook `examples_of_approximations` shows a few more examples, and `UCR_images` shows a few 2-parameter persistence images.
+<!--
 ### Main functions
 - `approx(simplextree, filtration, precision, box)` computes an interval decomposable approximation of the `n`-persistence module defined by the following `simplextree` and `multifiltration` below, with approximation parameters :
     -  `simplextree` is a Gudhi simplextree, 
@@ -75,6 +76,6 @@ import gudhi as gd
 	- `save = False` : if nonempty, saves the figure as the string contained in `save`,
 	- `dpi = 50` : sets the dpi of the saved figure.
 - `plot_vine_2d(simplextree, filtration, precision, box)` plots the matched fibered barcode.
+-->
 
 
-Follow the tutorial notebooks `How to use custom_vineyards` and `examples_of_approximations` for more functions, and detailed examples.
