@@ -18,10 +18,10 @@ Most multipers.py functions taken from [Mathieu Carrière](https://github.com/Ma
 
 ## Installation, compilation
 ### Dependencies
-The `C++` part only uses the standard library of `C++`. Aimed for `c++17`. <br>
+The `C++` part only uses the standard library of `C++`.<br>
 The `Python` part relies on several standard packages : `cython`, `sys`, `numpy`, `libcpp`,  `matplotlib`, and `shapely`; the [Gudhi](https://gudhi.inria.fr) library is also needed, and can be easily installed using pip or conda, following [the python documentation of Gudhi](https://gudhi.inria.fr/python/latest/installation.html#packages).
 
-### Compilation
+### Installation
 
 #### Using pip
 Clone (or download) this repository and compile-install this library using the following commands in a terminal in the `src` folder
