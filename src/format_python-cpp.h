@@ -23,6 +23,8 @@
 
 #include "combinatory.h"
 #include "utilities.h"
+#include "gudhi/Simplex_tree.h"
+
 
 using Vineyard::boundary_type;
 using Vineyard::boundary_matrix;
@@ -164,7 +166,7 @@ build_boundary_matrix_from_simplex_list(
 
 
 std::pair<boundary_matrix, filtration_type>
-simplextree_to_boundary_filtration(
+__old__simplextree_to_boundary_filtration(
         std::vector<boundary_type> &simplexList,
         filtration_type &filtration)
 {
@@ -218,6 +220,59 @@ simplextree_to_boundary_filtration(
 
     return std::make_pair(boundaries, filtration);
 }
+
+
+std::pair<boundary_matrix, filtration_type>
+simplextree_to_boundary_filtration(
+       uintptr_t splxptr)
+{
+	Gudhi::Simplex_tree<> simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
+
+	unsigned int numberOfSimplices = simplexTree.num_simplices();
+	boundary_matrix boundaries(numberOfSimplices);
+	boundary_matrix simplices(numberOfSimplices);
+
+	filtration_type filtration(numberOfSimplices);
+	
+	unsigned int count = 0;
+		for (auto sh : simplexTree.filtration_simplex_range())
+			simplexTree.assign_key(sh, count++);
+	
+	unsigned int i = 0;
+	for (auto &simplex : simplexTree.filtration_simplex_range()){
+ 		for (const auto &simplex_id : simplexTree.boundary_simplex_range(simplex)){
+			boundaries[i].push_back(simplexTree.key(simplex_id));
+		}
+		for (const auto &vertex : simplexTree.simplex_vertex_range(simplex)){
+			simplices[i].push_back(vertex);
+		}
+		filtration[i] = simplexTree.filtration(simplex);
+ 		i++;
+	}
+    for (boundary_type &simplex : simplices){
+        std::sort(simplex.begin(), simplex.end());
+    }
+    permutation_type p = Combinatorics::sort_and_return_permutation<boundary_type>(
+                simplices, &is_strictly_smaller_simplex);
+
+	
+	Combinatorics::compose(filtration, p);
+	Combinatorics::compose(boundaries, p);
+
+	auto inv = Combinatorics::inverse(p);
+	
+    for (boundary_type &simplex : boundaries){
+		for (unsigned int &b : simplex)
+			b = inv[b];
+		std::sort(simplex.begin(), simplex.end());
+	}
+    
+    
+    return std::make_pair(boundaries, filtration);
+}
+
+
+
 
 
 

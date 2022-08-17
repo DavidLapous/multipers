@@ -22,7 +22,7 @@ extensions = [Extension('mma',
 						extra_compile_args=[
 							"-O3",
 							"-march=native",
-							"-g0",
+							#"-g0",
 							"-std=c++17"
 						  ,'-fopenmp'
 						  ,"-Wall"
@@ -36,6 +36,5 @@ setup(
 	url="https://gitlab.inria.fr/dloiseau/multipers",
 	description="Open source library for multipersistence module approximation.",
 	ext_modules	=cythonize(extensions, language_level = str(_sys.version_info[0])),
-
 	include_dirs=['.'],
 	)

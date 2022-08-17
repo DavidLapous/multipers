@@ -13,6 +13,8 @@
  * @brief Functions to benchmark specific part of functions from vineyard_trajectories.h
  */
 
+// /!\ WARNING outdated.
+
 #ifndef BENCHMARKS_H_INCLUDED
 #define BENCHMARKS_H_INCLUDED
 
@@ -87,7 +89,7 @@ double time_2D_image_from_boundary_matrix_construction(
 {
 	auto elapsed = clock();
     get_2D_image_from_boundary_matrix(
-                boundaryMatrix, filtersList, precision, box, delta,
+                boundaryMatrix, filtersList, precision, box, delta,1,1,
                 resolution, dimension, complete, verbose
                 );
 	elapsed = clock() - elapsed;

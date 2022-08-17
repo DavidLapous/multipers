@@ -27,12 +27,27 @@ using Vineyard::dimension_type;
 using Vineyard::Module;
 using Vineyard::Box;
 
+struct ImageArgs{
+private:
+	unsigned int module_dim;				// number of persistent parameters.	
+public:
+	std::vector<unsigned int> resolution;	// resolution of the image
+	double p;								// sum smoothing
+	bool normalize;							// Enforce image to take values in [0,1]
+	int dimension;							// if negative -> all dim
+	Box box;								// Possible sub-box.
+};
+
+
+
 std::vector<std::vector<std::vector<double> > > get_2D_image_from_boundary_matrix(
 		boundary_matrix &boundaryMatrix,
 		std::vector<filtration_type> &filtersList,
 		const double precision,
 		const Box &box,
 		const double delta,
+		const double p,
+		const bool normalize, 
 		const std::vector<unsigned int> &resolution,
 		const dimension_type dimension,
 		const bool complete = true,
@@ -52,9 +67,9 @@ std::vector<std::vector<std::vector<double> > > get_2D_image_from_boundary_matri
 				verbose);
 
 	if (dimension < 0)
-		return approximation.get_vectorization(delta, resolution[0], resolution[1]);
+		return approximation.get_vectorization(delta, p, normalize, resolution[0], resolution[1]);
 
-	return {approximation.get_vectorization_in_dimension(dimension, delta, resolution[0], resolution[1])};
+	return {approximation.get_vectorization_in_dimension(dimension, delta, p, normalize,  resolution[0], resolution[1])};
 }
 
 #endif // IMAGES_H_INCLUDED

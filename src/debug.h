@@ -27,7 +27,8 @@ namespace Debug {
 using clk = std::chrono::high_resolution_clock;
 using tp = clk::time_point;
 
-const bool debug = false;
+constexpr bool debug = false;
+
 
 class Timer
 {
@@ -56,6 +57,9 @@ private:
     bool activated_;
 };
 
+
+
+
 template<typename T>
 void disp_vect(std::vector<T> v){
     for(uint i=0; i< v.size(); i++){
@@ -75,7 +79,7 @@ void disp_vect(std::list<T> v){
 
 template<typename T>
 void disp_vect(std::vector<std::pair<T,T> > v){
-    for(uint i=0; i< v.size(); i++){
+    for(unsigned int i=0; i< v.size(); i++){
         std::cout << "(" << v[i].first << " " << v[i].second <<")  ";
     }
 }
@@ -94,7 +98,21 @@ void disp_vect(std::vector<std::vector<T>> v, bool show_small = true){
     std::cout << std::endl;
 }
 
+
 } //namespace Debug
+namespace std{
+    template<typename T>
+    std::ostream& operator<<(std::ostream& stream, const std::vector<T> truc){
+        stream << "[";
+        for(unsigned int i = 0; i < truc.size()-1; i++){
+            stream << truc[i] << ", ";
+        }
+        if(!truc.empty()) stream << truc.back();
+        stream << "]";
+        return stream;
+    }
+}
+
 
 #endif // DEBUG_H_INCLUDED
 

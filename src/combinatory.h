@@ -21,7 +21,7 @@
 #include <functional>
 #include <algorithm>
 #include <climits>
-
+#include <assert.h>
 #include "utilities.h"
 #include "debug.h"
 
@@ -46,13 +46,23 @@ void quicksort_and_record_permutation(
 
 template<typename T>
 void compose(std::vector<T> &p,const permutation_type &q){
-    uint n = p.size();
+    unsigned int n = p.size();
 //     assert(q.size() == n);
     std::vector<T> r(n);
-    for(uint i = 0; i< n; i++){
+    for(unsigned int i = 0; i< n; i++){
         r[i] = p[q[i]];
     }
     p.swap(r);
+}
+
+template<typename T>
+std::vector<T> inverse(const std::vector<T> &p){
+    unsigned int n = p.size();
+    std::vector<T> inv(n);
+    for(unsigned int i = 0; i< n; i++)
+        inv[p[i]] = i;
+	
+    return inv;
 }
 
 unsigned int prod(const std::vector<unsigned int>& toMultiply,

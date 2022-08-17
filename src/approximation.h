@@ -97,6 +97,9 @@ public:
 
 	std::vector<image_type> get_vectorization(
 			const double delta,
+			const double p,
+			const bool normalize,
+			const Box &box,
 			unsigned int horizontalResolution,
 			unsigned int verticalResolution);
 	std::vector<image_type> get_vectorization(
@@ -106,6 +109,9 @@ public:
 	image_type get_vectorization_in_dimension(
 			const dimension_type dimension,
 			const double delta,
+			const double p,
+			const bool normalize,
+			const Box &box,
 			unsigned int horizontalResolution,
 			unsigned int verticalResolution);
 	image_type get_vectorization_in_dimension(
@@ -119,17 +125,20 @@ public:
 	unsigned int size() const;
 	void infer_box(std::vector<filtration_type>& filters_list);
 	unsigned int get_dimension() const ;
-	std::vector<Summand> get_summands_of_dimension(unsigned int dimension) const;
-	std::vector<corners_type> get_corners_of_dimension(unsigned int dimension) const;
+	std::vector<Summand> get_summands_of_dimension(const int dimension) const;
+	std::vector<corners_type> get_corners_of_dimension(const int dimension) const;
 private:
 	module_type module_;
 	Box box_;
 	void _compute_2D_image(image_type& image,
 			const module_type::iterator start,
 			const module_type::iterator end,
-			const double delta,
-			unsigned int horizontalResolution,
-			unsigned int verticalResolution);
+			const double delta = 0.1,
+			const double p = 1,
+			const bool normalize = true,
+			const Box &box = Box(),
+			unsigned int horizontalResolution = 100,
+			unsigned int verticalResolution = 100);
 	void _compute_2D_image(image_type& image,
 			const module_type::iterator start,
 			const module_type::iterator end,
@@ -140,7 +149,9 @@ private:
 			const module_type::iterator end,
 			const corner_type x,
 			const double delta,
-			double moduleWeight);
+			const double p,
+			const bool normalize,
+			const double moduleWeight);
 };
 
 class Summand
@@ -150,6 +161,7 @@ public:
 	Summand(std::vector<corner_type>& birth_corners, std::vector<corner_type>& death_corners, dimension_type dimension);
 
 	double get_interleaving();
+	double get_interleaving(const Box &box);
 	double get_local_weight(const corner_type& x, const double delta);
 
 	void add_bar(
@@ -177,18 +189,17 @@ private:
 	std::vector<corner_type> birth_corners_;
 	std::vector<corner_type> death_corners_;
 	double distanceTo0_;
-	bool updateDistance_;
 	dimension_type dimension_;
 
-	void _compute_interleaving();
-	void _add_birth(corner_type& birth);
-	void _add_death(corner_type& death);
-	double _get_min_diagonal(const corner_type& a, const corner_type& b);
-	double _get_max_diagonal(const corner_type& a,
-							const corner_type& b);
+	void _compute_interleaving(const Box &box);
+	void _add_birth(const corner_type& birth);
+	void _add_death(const corner_type& death);
+	double _rectangle_volume(const corner_type& a, const corner_type& b);
+	double _get_max_diagonal(const corner_type& a, const corner_type& b, const Box& box);
+	double d_inf(const corner_type& a, const corner_type& b);
 	void _factorize_min(corner_type& a, const corner_type& b);
 	void _factorize_max(corner_type& a, const corner_type& b);
-	void _clean(std::vector<corner_type>& list);
+	void _clean(std::vector<corner_type>& list, bool keep_inf = true);
 };
 
 /**
@@ -238,13 +249,13 @@ Module compute_vineyard_barcode_approximation(
 	Filtration_creator::complete_lower_star_filters_list(boundaryMatrix, filtersList); 
 
     // Checks if dimensions are compatibles
-    // assert(!filtersList.empty() && "A non trivial filters list is needed!");
-	assert(filtersList.size() == box.get_bottom_corner().size()
+    // if constexpr (Debug::debug) assert(!filtersList.empty() && "A non trivial filters list is needed!");
+	if constexpr (Debug::debug) assert(filtersList.size() == box.get_bottom_corner().size()
 		   && filtersList.size() == box.get_upper_corner().size()
            && "Filters and box must be of the same dimension!");
     if (Debug::debug){
         for (unsigned int i = 1; i < boundaryMatrix.size(); i++)
-            assert(boundaryMatrix.at(i - 1).size() <= boundaryMatrix.at(i).size()
+            if constexpr (Debug::debug) assert(boundaryMatrix.at(i - 1).size() <= boundaryMatrix.at(i).size()
                    && "Boundary matrix has to be sorted by dimension!");
     }
 
@@ -608,6 +619,9 @@ inline void Module::fill(const double precision)
 
 inline std::vector<Module::image_type> Module::get_vectorization(
 		const double delta,
+		const double p,
+		const bool normalize,
+		const Box &box,
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution)
 {
@@ -625,6 +639,9 @@ inline std::vector<Module::image_type> Module::get_vectorization(
 					start,
 					end,
 					delta,
+					p,
+					normalize,
+					box,
 					horizontalResolution,
 					verticalResolution);
 		}//Timer death
@@ -661,6 +678,9 @@ inline std::vector<Module::image_type> Module::get_vectorization(
 inline Module::image_type Module::get_vectorization_in_dimension(
 		const dimension_type dimension,
 		const double delta,
+		const double p,
+		const bool normalize,
+		const Box &box,
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution)
 {
@@ -676,6 +696,9 @@ inline Module::image_type Module::get_vectorization_in_dimension(
 				start,
 				end,
 				delta,
+				p,
+				normalize,
+				box,
 				horizontalResolution,
 				verticalResolution);
 
@@ -724,7 +747,7 @@ inline unsigned int Module::get_dimension() const {
 	return this->module_.back().get_dimension();
 }
 
-inline std::vector<Summand> Module::get_summands_of_dimension(const unsigned int dimension) const {
+inline std::vector<Summand> Module::get_summands_of_dimension(const int dimension) const {
 	std::vector<Summand> list;
 	for (const Summand &summand : this->module_)
 	{
@@ -735,7 +758,7 @@ inline std::vector<Summand> Module::get_summands_of_dimension(const unsigned int
 	
 }
 
-inline std::vector<corners_type> Module::get_corners_of_dimension(const unsigned int dimension) const {
+inline std::vector<corners_type> Module::get_corners_of_dimension(const int dimension) const {
 	std::vector<corners_type> list;
 	for (const Summand &summand : this->module_)
 	{
@@ -753,28 +776,44 @@ inline void Module::_compute_2D_image(
 		const module_type::iterator start,
 		const module_type::iterator end,
 		const double delta,
+		const double p,
+		const bool normalize,
+		const Box &box,
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution)
 {
 	image.resize(horizontalResolution, std::vector<double>(verticalResolution));
 	double moduleWeight = 0;
-	Box &box = this->box_;
 	{//for Timer
 		Debug::Timer timer("Computing module weight ...", verbose);
+		for (auto it = start; it != end; it++)//  precomputes interleaving restricted to box for all summands.
+			it->get_interleaving(box);
 
+		if (p != inf){
 #pragma omp parallel for reduction(+ : moduleWeight)
-		for (auto it = start; it != end; it++){
-			moduleWeight += it->get_interleaving();
+			for (auto it = start; it != end; it++){
+    // /!\ TODO deal with inf summands (for the moment,  depends on the box ...)
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight += std::pow(it->get_interleaving(), p);
+			}
+		}
+		else{
+#pragma omp parallel for reduction(std::max : moduleWeight)
+			for (auto it = start; it != end; it++){
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight = std::max(moduleWeight, it->get_interleaving());
+			}
 		}
 	}//Timer death
-
-	if (verbose) std::cout << "Module weight : " << moduleWeight << "\n";
-
-	if (moduleWeight <= 0){
-		if (Debug::debug) std::cout << "!! Negative weight !!" << std::endl;
-		image.clear();
-		return;
-	}
+	if (verbose) std::cout << "Module " << start->get_dimension() << " has weight : " << moduleWeight << "\n";
+	if (!moduleWeight) return;
+	
+	if constexpr (Debug::debug)
+		if (moduleWeight < 0){
+			if (Debug::debug) std::cout << "!! Negative weight !!" << std::endl;
+		// 		image.clear();
+			return;
+		}
 
 	double stepX = (box.get_upper_corner()[0] - box.get_bottom_corner()[0]) / horizontalResolution;
 	double stepY = (box.get_upper_corner()[1] - box.get_bottom_corner()[1]) / verticalResolution;
@@ -788,8 +827,10 @@ inline void Module::_compute_2D_image(
 				image[i][j] = _get_pixel_value(
 							start,
 							end,
-							{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1] + stepY * j},
+							{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1]  + stepY * j},
 							delta,
+							p,
+							normalize,
 							moduleWeight);
 			}
 		}
@@ -830,21 +871,41 @@ inline double Module::_get_pixel_value(
 		const module_type::iterator end,
 		const corner_type x,
 		const double delta,
-		double moduleWeight)
+		const double p,
+		const bool normalize,
+		const double moduleWeight)
 {
 	double value = 0;
-
+// 	if (p == 0){
+// #pragma omp parallel for reduction(+ : value)
+// 		for (auto it = start; it != end; it++) {
+// 			value += it->get_local_weight(x, delta) != 0;
+// 		}
+// 		if (normalize) value /= moduleWeight;
+// 		return value;
+// 	}
+	if (p != inf){
 #pragma omp parallel for reduction(+ : value)
-	for (auto it = start; it != end; it++) {
-		double summandWeight = it->get_interleaving() / moduleWeight;
-		double summandXWeight = it->get_local_weight(x, delta) / delta;
-		value += summandWeight * summandXWeight;
+		for (auto it = start; it != end; it++) {
+			double summandWeight = it->get_interleaving();
+			double summandXWeight = it->get_local_weight(x, delta);
+			value += std::pow(summandWeight,p)* summandXWeight;
+		}
+		if (normalize)	value /= moduleWeight;
+		return value;
 	}
 
-	return value/2;
-}
+#pragma omp parallel for reduction(max : value)
+	for (auto it = start; it != end; it++) {
+		value = std::max(value, it->get_local_weight(x, delta));
+	}
+	return value;
 
-inline Summand::Summand() : distanceTo0_(-1), updateDistance_(true), dimension_(-1)
+	
+}
+/////////////////////////////////////////////////
+
+inline Summand::Summand() : distanceTo0_(-1), dimension_(-1)
 {}
 
 inline Summand::Summand(std::vector<corner_type> &birth_corners,
@@ -853,33 +914,25 @@ inline Summand::Summand(std::vector<corner_type> &birth_corners,
 	: birth_corners_(birth_corners),
 	  death_corners_(death_corners),
 	  distanceTo0_(-1),
-	  updateDistance_(true),
 	  dimension_(dimension)
 {}
 
-//inline Summand::Summand(Summand &summandToCopy)
-//	: summand_(summandToCopy.summand_),
-//	  distanceTo0_(summandToCopy.distanceTo0_),
-//	  updateDistance_(summandToCopy.updateDistance_)
-//{}
 
-//inline Summand::Summand(Summand &&other) noexcept
-//	: summand_(std::move(other.summand_)),
-//	  distanceTo0_(std::exchange(other.distanceTo0_, 0)),
-//	  updateDistance_(std::exchange(other.updateDistance_, false))
-//{}
-
-inline double Summand::get_interleaving()
+inline double Summand::get_interleaving(const Box &box)
 {
-	if (updateDistance_) _compute_interleaving();
+	_compute_interleaving(box);
 	return distanceTo0_;
+
 }
+
+inline double Summand::get_interleaving(){
+	return distanceTo0_;
+  }
 
 inline double Summand::get_local_weight(const corner_type &x, const double delta)
 {
 	if (delta <= 0) return 0;
 
-	double maxDiag = 0;
 	std::vector<double> mini(x.size());
 	std::vector<double> maxi(x.size());
 
@@ -898,7 +951,6 @@ inline double Summand::get_local_weight(const corner_type &x, const double delta
 		if (is_smaller(birth, maxi)){
 			corner_type tmpBirth(birth.size());
 			// WARNING should crash here if birth and x aren't of the same size.
-#pragma omp simd
 			for (unsigned int i = 0; i < birth.size(); i++)
 				tmpBirth[i] = std::max(birth[i], mini[i]);
 			birthList[lastEntry].swap(tmpBirth);
@@ -912,7 +964,6 @@ inline double Summand::get_local_weight(const corner_type &x, const double delta
 		if (is_greater(death, mini)){
 			corner_type tmpDeath(death.size());
 			// WARNING should crash here if birth and x aren't of the same size.
-#pragma omp simd
 			for (unsigned int i = 0; i < death.size(); i++)
 				tmpDeath[i] = std::min(death[i], maxi[i]);
 			deathList[lastEntry].swap(tmpDeath);
@@ -921,18 +972,29 @@ inline double Summand::get_local_weight(const corner_type &x, const double delta
 	}
 	deathList.resize(lastEntry);
 
+	// for (const corner_type& birth : birthList){
+	// 	if (birth.size() == 0 )
+	// 		continue;
+	// 	for (const corner_type& death : deathList){
+	// 		if (death.size() > 0)
+	// 			maxDiag = std::max(maxDiag,
+	// 							   _get_min_diagonal(birth,death));
+	// 	}
+	// }
+	double max_rectangle_volume = 0;
 	for (const corner_type& birth : birthList){
 		if (birth.size() == 0 )
 			continue;
 		for (const corner_type& death : deathList){
 			if (death.size() > 0)
-				maxDiag = std::max(maxDiag,
-								   _get_min_diagonal(birth,death));
+				max_rectangle_volume = std::max(max_rectangle_volume,
+								   _rectangle_volume(birth,death));
 		}
 	}
-
-	return maxDiag; // should be less than delta
+	return max_rectangle_volume / std::pow(2*delta, x.size()); 
 }
+
+
 
 /**
  * @brief Adds the bar @p bar to the indicator module @p summand if @p bar
@@ -1004,7 +1066,7 @@ inline void Summand::complete_birth(const double precision)
 
 	for (unsigned int i = 0; i < birth_corners_.size(); i++){
 		for (unsigned int j = i + 1; j < birth_corners_.size(); j++){
-			double dinf = _get_max_diagonal(birth_corners_[i], birth_corners_[j]);
+			double dinf = d_inf(birth_corners_[i], birth_corners_[j]);
 			if (dinf < 1.1 * precision){
 				_factorize_min(birth_corners_[i], birth_corners_[j]);
 				birth_corners_[j].clear();
@@ -1020,7 +1082,7 @@ inline void Summand::complete_death(const double precision)
 
 	for (unsigned int i = 0; i < death_corners_.size(); i++){
 		for (unsigned int j = i + 1; j < death_corners_.size(); j++){
-			double d = _get_max_diagonal(death_corners_[i], death_corners_[j]);
+			double d = d_inf(death_corners_[i], death_corners_[j]);
 			if (d < 1.1 * precision){
 				_factorize_max(death_corners_[i], death_corners_[j]);
 				death_corners_[j].clear();
@@ -1040,15 +1102,15 @@ inline void Summand::set_dimension(dimension_type dimension)
 	dimension_ = dimension;
 }
 
-inline void Summand::_compute_interleaving(){
+inline void Summand::_compute_interleaving(const Box &box){
 	distanceTo0_ = 0;
+#pragma omp parallel for reduction(max : distanceTo0_)
 	for (const std::vector<double> &birth : birth_corners_){
 		for(const std::vector<double> &death : death_corners_){
 			distanceTo0_ = std::max(distanceTo0_,
-									_get_min_diagonal(birth, death));
+									_get_max_diagonal(birth, death, box));
 		}
 	}
-	updateDistance_ = false;
 }
 
 
@@ -1061,7 +1123,7 @@ inline void Summand::_compute_interleaving(){
  * @param birth_list p_birth_list: birthpoint list of a summand
  * @param birth p_birth: birth to add to the summand
  */
-inline void Summand::_add_birth(corner_type &birth)
+inline void Summand::_add_birth(const corner_type &birth)
 {
 	if (birth_corners_.empty()){
 		birth_corners_.push_back(birth);
@@ -1101,7 +1163,7 @@ inline void Summand::_add_birth(corner_type &birth)
  * @param death_list p_death_list: List of deathpoints of a summand
  * @param death p_death: deathpoint to add to this list
  */
-inline void Summand::_add_death(corner_type &death)
+inline void Summand::_add_death(const corner_type &death)
 {
 	if (death_corners_.empty()){
 		death_corners_.push_back(death);
@@ -1135,26 +1197,35 @@ inline void Summand::_add_death(corner_type &death)
 		death_corners_.push_back(death);
 }
 
-inline double Summand::_get_min_diagonal(const corner_type &a, const corner_type &b)
+inline double Summand::_get_max_diagonal(const corner_type &birth, const corner_type &death, const Box &box)
 {
-	assert(a.size() == b.size() && "Inputs must be of the same size !");
-	double s = b[0] - a[0];
-
-	for (unsigned int i = 1; i < a.size(); i++){
-		s = std::min(s, b[i] - a[i]);
+	if constexpr (Debug::debug) assert(birth.size() == death.size() && "Inputs must be of the same size !");
+	double s = inf;
+	for (unsigned int i = 0; i < birth.size(); i++){
+		double max_i = box.get_upper_corner().size() > i ? box.get_upper_corner()[i] : inf;
+		double min_i = box.get_upper_corner().size() > i ? box.get_bottom_corner()[i] : negInf;
+		double t_death = std::min(death[i], max_i);
+		double t_birth = std::max(birth[i], min_i);
+		s = std::min(s, t_death - t_birth);
 	}
 	return s;
 }
 
-/**
- * @brief Returns the biggest diagonal length in the rectangle
- * {z : @p a ≤ z ≤ @p b}
- *
- * @param a smallest element of the box
- * @param b biggest element of the box.
- * @return double, length of the diagonal.
- */
-inline double Summand::_get_max_diagonal(const corner_type &a, const corner_type &b)
+
+inline double Summand::_rectangle_volume(const corner_type &a, const corner_type &b)
+{
+	if constexpr (Debug::debug) assert(a.size() == b.size() && "Inputs must be of the same size !");
+	double s = b[0] - a[0];
+
+	for (unsigned int i = 1; i < a.size(); i++){
+		s = s*(b[i] - a[i]);
+	}
+	return s;
+}
+
+
+
+inline double Summand::d_inf(const corner_type &a, const corner_type &b)
 {
 	if (a.empty() || b.empty() || a.size() != b.size())
 		return inf;
@@ -1166,19 +1237,27 @@ inline double Summand::_get_max_diagonal(const corner_type &a, const corner_type
 	return d;
 }
 
+
 inline void Summand::_factorize_min(corner_type& a, const corner_type& b)
 {
-	if (a.size() != b.size()) return;
+	if (Debug::debug && (a.empty() || b.empty())){
+		std::cout << "Empty corners ??\n";
+		return;
+	}
 
-	for (unsigned int i = 0; i < a.size(); i++)
+	for (unsigned int i = 0; i < std::min(b.size(), a.size()); i++)
 		a[i] = std::min(a[i], b[i]);
 }
 
 inline void Summand::_factorize_max(corner_type &a, const corner_type &b)
 {
-	if (a.size() != b.size()) return;
 
-	for (unsigned int i = 0; i < a.size(); i++)
+	if (Debug::debug && (a.empty() || b.empty())){
+		std::cout << "Empty corners ??\n";
+		return;
+	}
+
+	for (unsigned int i = 0; i < std::min(b.size(), a.size()); i++)
 		a[i] = std::max(a[i], b[i]);
 }
 
@@ -1190,13 +1269,13 @@ inline void Summand::_factorize_max(corner_type &a, const corner_type &b)
  * with a computational overhead. Defaults to false.
  */
 // WARNING Does permute the output.
-inline void Summand::_clean(std::vector<corner_type> &list)
+inline void Summand::_clean(std::vector<corner_type> &list, bool keep_inf)
 {
 	unsigned int i = 0;
 	while (i < list.size()){
-		while (!list.empty() && (*(list.rbegin())).empty())
+		while (!list.empty() && ((*(list.rbegin())).empty() || (!keep_inf && ((*(list.rbegin()))[0] == inf || (*(list.rbegin()))[0] == negInf)) ))
 			list.pop_back();
-		if (i < list.size() && list[i].empty()){
+		if (i < list.size() && (list[i].empty()|| (!keep_inf && (list[i][0] == inf || list[i][0] == negInf)))){
 			list[i].swap(*(list.rbegin()));
 			list.pop_back();
 		}
@@ -1209,7 +1288,7 @@ inline void swap(Summand& sum1, Summand& sum2)
 	std::swap(sum1.birth_corners_, sum2.birth_corners_);
 	std::swap(sum1.death_corners_, sum2.death_corners_);
 	std::swap(sum1.distanceTo0_, sum2.distanceTo0_);
-	std::swap(sum1.updateDistance_, sum2.updateDistance_);
+// 	std::swap(sum1.updateDistance_, sum2.updateDistance_);
 }
 
 }   //namespace Vineyard

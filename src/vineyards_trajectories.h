@@ -136,6 +136,7 @@ public:
 	const corner_type& get_upper_corner() const;
 	bool contains(point_type& point) const;
 	void infer_from_filters(std::vector<std::vector<double>> &Filters_list);
+    bool is_trivial();
 
 private:
 	corner_type bottomCorner_;
@@ -798,6 +799,9 @@ inline void Box::infer_from_filters(std::vector<std::vector<double>> &Filters_li
 	bottomCorner_.swap(lower);
 	upperCorner_.swap(upper);
 }
+inline bool Box::is_trivial(){
+    return bottomCorner_.empty() || upperCorner_.empty();
+}
 
 inline const corner_type &Box::get_bottom_corner() const
 {
@@ -823,14 +827,10 @@ inline bool Box::contains(point_type &point) const
 
 std::ostream& operator<<(std::ostream& os, const Box& box)
 {
-    os << "low : ";
-    for (auto value : box.get_bottom_corner())
-        os << value << " ";
-    os << "\n";
-    os << "upper : ";
-    for (auto value : box.get_upper_corner())
-        os << value << " ";
-    os << "\n";
+    os << "Box -- Bottom corner : ";
+    os << box.get_bottom_corner();
+    os << ", Top corner : ";
+    os << box.get_upper_corner();
     return os;
 }
 
