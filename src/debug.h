@@ -22,6 +22,8 @@
 #include <vector>
 #include <list>
 
+#include <functional>
+
 namespace Debug {
 
 using clk = std::chrono::high_resolution_clock;
@@ -112,6 +114,10 @@ namespace std{
         return stream;
     }
 }
+
+
+
+
 
 
 #endif // DEBUG_H_INCLUDED

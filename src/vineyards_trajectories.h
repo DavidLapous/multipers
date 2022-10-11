@@ -136,7 +136,7 @@ public:
 	const corner_type& get_upper_corner() const;
 	bool contains(point_type& point) const;
 	void infer_from_filters(std::vector<std::vector<double>> &Filters_list);
-    bool is_trivial();
+    bool is_trivial() const ;
 
 private:
 	corner_type bottomCorner_;
@@ -194,7 +194,7 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
 	assert(filtersList.size() == box.get_bottom_corner().size()
 			&& filtersList.size() == box.get_upper_corner().size()
             && "Filtration and box must be of the same dimension");
-    if (Debug::debug){
+    if constexpr (Debug::debug){
         for (unsigned int i = 1; i < boundaryMatrix.size(); i++)
             assert(boundaryMatrix.at(i - 1).size() <= boundaryMatrix.at(i).size()
                    && "Boundary matrix has to be sorted by dimension!");
@@ -755,7 +755,7 @@ bool is_greater(const point_type& x, const point_type& y)
 
 
 
-inline Box::Box() : bottomCorner_(1), upperCorner_(1)
+inline Box::Box()
 {}
 
 inline Box::Box(const corner_type &bottomCorner, const corner_type &upperCorner)
@@ -786,7 +786,7 @@ inline void Box::infer_from_filters(std::vector<std::vector<double>> &Filters_li
 	unsigned int nsplx = Filters_list[0].size();
 	std::vector<double> lower(dimension);
 	std::vector<double> upper(dimension);
-	for (unsigned int i =0; i<dimension; i++){
+	for (unsigned int i =0; i < dimension; i++){
 		Vineyard::filtration_value_type min = Filters_list[i][0];
 		Vineyard::filtration_value_type max = Filters_list[i][0];
 		for (unsigned int j=1; j<nsplx; j++){
@@ -799,8 +799,8 @@ inline void Box::infer_from_filters(std::vector<std::vector<double>> &Filters_li
 	bottomCorner_.swap(lower);
 	upperCorner_.swap(upper);
 }
-inline bool Box::is_trivial(){
-    return bottomCorner_.empty() || upperCorner_.empty();
+inline bool Box::is_trivial() const {
+    return bottomCorner_.empty() || upperCorner_.empty() || bottomCorner_.size() != upperCorner_.size();
 }
 
 inline const corner_type &Box::get_bottom_corner() const

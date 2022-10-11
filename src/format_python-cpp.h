@@ -23,6 +23,7 @@
 
 #include "combinatory.h"
 #include "utilities.h"
+
 #include "gudhi/Simplex_tree.h"
 
 
@@ -223,8 +224,7 @@ __old__simplextree_to_boundary_filtration(
 
 
 std::pair<boundary_matrix, filtration_type>
-simplextree_to_boundary_filtration(
-       uintptr_t splxptr)
+simplextree_to_boundary_filtration(const uintptr_t splxptr)
 {
 	Gudhi::Simplex_tree<> simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
 
@@ -235,10 +235,10 @@ simplextree_to_boundary_filtration(
 	filtration_type filtration(numberOfSimplices);
 	
 	unsigned int count = 0;
-		for (auto sh : simplexTree.filtration_simplex_range())
-			simplexTree.assign_key(sh, count++);
-	
-	unsigned int i = 0;
+    for (auto sh : simplexTree.filtration_simplex_range())
+        simplexTree.assign_key(sh, count++);
+
+    unsigned int i = 0;
 	for (auto &simplex : simplexTree.filtration_simplex_range()){
  		for (const auto &simplex_id : simplexTree.boundary_simplex_range(simplex)){
 			boundaries[i].push_back(simplexTree.key(simplex_id));
@@ -320,6 +320,86 @@ unsigned int hash_simplex_face_into_unsigned_int(
 
     return output;
 }
+
+
+
+
+// void complete_filtration(Gudhi::Simplex_tree<> &simplexTree, std::vector<filtration_type> &filtersList){
+//
+//     for (filtration_type &fi : filtersList){
+//         std::vector<bool> has_filtration(simplexTree.num_simplices());
+//         for (unsigned int i = 0; i < fi.size(); i++)
+//             has_filtration[i] = true;
+//         fi.resize(simplexTree.num_simplices());
+//
+//     }
+// }
+
+// std::vector<unsigned int> splxKey2splxVertices(const boundary_matrix &boundary, unsigned int splx_key){
+//     if (boundary[splx_key].empty())
+//         return {splx_key};
+//     else{
+//         std::vector<unsigned int> out(boundary[splx_key].size());
+//         for (unsigned int i = 0; i < boundary[splx_key].size(); i++){
+//             unsigned int child_key =
+//         }
+//     }
+// }
+
+
+bool is_face(boundary_type &face, boundary_type &splx){
+    if (splx.empty() || splx.size() != face.size()+1) return false;
+    if (splx.size() <=2 )
+        return splx[0] == face[0] || splx[1] == face[0];
+    bool flag = false;
+    for (unsigned int i = 0; i < splx.size(); i++){
+        if (splx[i] != face[i-flag]){
+            if (flag) return false;
+            flag = true;
+        }
+    }
+    return true;
+}
+
+
+std::string simplextree2rivet(const uintptr_t splxptr, std::vector<filtration_type> &F) {
+    Gudhi::Simplex_tree<> &simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
+
+    int numberOfSimplices = simplexTree.num_simplices();
+    boundary_matrix simplices(numberOfSimplices);
+    unsigned int i = 0;
+    for (auto &simplex : simplexTree.complex_simplex_range()){
+        for (const auto &vertex : simplexTree.simplex_vertex_range(simplex)){
+            simplices[i].push_back(vertex);
+        }
+        i++;
+    }
+    for (boundary_type &simplex : simplices){
+        std::sort(simplex.begin(), simplex.end());
+    }
+    std::sort(simplices, &is_strictly_smaller_simplex);
+    std::string output;
+    output.reserve(numberOfSimplices * 10);
+    for (auto &Fi : F)
+        Fi.resize(numberOfSimplices, Vineyard::negInf);
+    for (int i = 0; i < numberOfSimplices; i++){
+        for (const auto &vertex : simplices[i]) {output.append(std::to_string(vertex) + " ");}
+        output.append("; ");
+        for (filtration_type  &Fi : F){
+            Vineyard::filtration_value_type f = Fi[i];
+            for (int j=0; j<i; j++){
+                if (is_face(simplices[j],simplices[i])){
+                    f = std::max(f, Fi[j]);
+                }
+            }
+            Fi[i] = f;
+            output.append(std::to_string(Fi[i]) + " ");
+        }
+        output.append("\n");
+    }
+    return output;
+}
+
 
 
 

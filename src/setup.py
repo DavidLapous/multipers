@@ -15,12 +15,12 @@ __license__ = ""
 from setuptools import Extension, setup
 from Cython.Build import cythonize
 import sys as _sys
-
+py_modules=[]
 extensions = [Extension('mma',
 						sources=['mma.pyx'],
 						language='c++',
 						extra_compile_args=[
-							"-O3",
+							"-Ofast",
 							"-march=native",
 							#"-g0",
 							"-std=c++17"
