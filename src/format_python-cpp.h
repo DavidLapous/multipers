@@ -27,6 +27,7 @@
 #include "utilities.h"
 
 #include "gudhi/Simplex_tree.h"
+#include "gudhi/Simplex_tree_multi.h"
 
 
 
@@ -34,6 +35,8 @@ using Vineyard::boundary_type;
 using Vineyard::boundary_matrix;
 using Vineyard::filtration_type;
 using Vineyard::permutation_type;
+using Vineyard::multifiltration_type;
+
 using Vineyard::negInf;
 
 boundary_matrix build_sparse_boundary_matrix_from_simplex_list(
@@ -226,52 +229,58 @@ __old__simplextree_to_boundary_filtration(
 }
 
 
-std::pair<boundary_matrix, filtration_type>
-simplextree_to_boundary_filtration(const uintptr_t splxptr)
+std::pair<boundary_matrix, multifiltration_type> simplextree_to_boundary_filtration(const uintptr_t splxptr)
 {
-	Gudhi::Simplex_tree<> simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
+	using option = Gudhi::Simplex_tree_options_multidimensional_filtration;
+	Gudhi::Simplex_tree<option> &simplexTree = *(Gudhi::Simplex_tree<option>*)(splxptr);
 
 	unsigned int numberOfSimplices = simplexTree.num_simplices();
 	boundary_matrix boundaries(numberOfSimplices);
 	boundary_matrix simplices(numberOfSimplices);
+	if (simplexTree.num_simplices() <= 0)
+		return {{}, {{}}};
+	unsigned int filtration_number = simplexTree.filtration(*(simplexTree.complex_simplex_range().begin())).size();
+	std::vector<filtration_type> filtration(filtration_number, filtration_type(numberOfSimplices));
 
-	filtration_type filtration(numberOfSimplices);
-	
 	unsigned int count = 0;
-    for (auto sh : simplexTree.filtration_simplex_range())
-        simplexTree.assign_key(sh, count++);
+	for (auto sh : simplexTree.filtration_simplex_range())
+		simplexTree.assign_key(sh, count++);
 
-    unsigned int i = 0;
+	unsigned int i = 0;
 	for (auto &simplex : simplexTree.filtration_simplex_range()){
- 		for (const auto &simplex_id : simplexTree.boundary_simplex_range(simplex)){
+		for (const auto &simplex_id : simplexTree.boundary_simplex_range(simplex)){
 			boundaries[i].push_back(simplexTree.key(simplex_id));
 		}
 		for (const auto &vertex : simplexTree.simplex_vertex_range(simplex)){
 			simplices[i].push_back(vertex);
 		}
-		filtration[i] = simplexTree.filtration(simplex);
- 		i++;
+		const auto &temp = simplexTree.filtration(simplex);
+		for (unsigned int j = 0; j< temp.size(); j++)
+			filtration[j][i] = temp[j];
+		i++;
 	}
-    for (boundary_type &simplex : simplices){
-        std::sort(simplex.begin(), simplex.end());
-    }
-    permutation_type p = Combinatorics::sort_and_return_permutation<boundary_type>(
-                simplices, &is_strictly_smaller_simplex);
+	for (boundary_type &simplex : simplices){
+		std::sort(simplex.begin(), simplex.end());
+	}
+	permutation_type p = Combinatorics::sort_and_return_permutation<boundary_type>(
+				simplices, &is_strictly_smaller_simplex);
 
-	
-	Combinatorics::compose(filtration, p);
+	for (auto &F : filtration){
+		Combinatorics::compose(F, p);
+	}
+
 	Combinatorics::compose(boundaries, p);
 
 	auto inv = Combinatorics::inverse(p);
-	
-    for (boundary_type &simplex : boundaries){
+
+	for (boundary_type &simplex : boundaries){
 		for (unsigned int &b : simplex)
 			b = inv[b];
 		std::sort(simplex.begin(), simplex.end());
 	}
-    
-    
-    return std::make_pair(boundaries, filtration);
+
+
+	return std::make_pair(boundaries, filtration);
 }
 
 

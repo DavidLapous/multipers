@@ -20,6 +20,7 @@ namespace Vineyard {
 using index = unsigned int;
 using filtration_value_type = double;
 using filtration_type = std::vector<filtration_value_type>;
+using multifiltration_type = std::vector<filtration_type>;
 using dimension_type = int;
 using persistence_pair = std::pair<filtration_value_type, filtration_value_type>;
 using boundary_type = std::vector<index>;

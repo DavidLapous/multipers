@@ -1,4 +1,6 @@
 *.so
+*.gch
+*.svg
 __pycache__
 dionysus_vineyards
 simplextree
@@ -11,12 +13,12 @@ test_*
 doc/doxygen-awesome-css
 doc/html
 doc/latex
-__pycache__
-custom_vineyards/custom_vineyards.cpp
+src/mma.cpp
 *.kdev4
 *.gch
-custom_vineyards/build/
-custom_vineyards/.vscode
-custom_vineyards/.kdev4
-custom_vineyards/test*
-
+src/build/
+src/.vscode
+src/.kdev4
+src/test*
+rivet_GUI
+rivet_console
