@@ -7,7 +7,6 @@
 
 # distutils: language = c++
 
-
 ###########################################################################
 #PYTHON LIBRARIES
 import gudhi as _gd
@@ -24,6 +23,7 @@ from sympy.ntheory import factorint as _factorint
 from matplotlib.patches import Rectangle as _Rectangle
 from cycler import cycler
 import pickle as _pk
+from filtration_domination import remove_strongly_filtration_dominated as _remove_strongly_filtration_dominated
 try:
 	shapely = True
 	from shapely.geometry import box as _rectangle_box
@@ -88,7 +88,8 @@ cdef extern from "format_python-cpp.h":
 
 	pair[vector[vector[unsigned int]], vector[double]] __old__simplextree_to_boundary_filtration(vector[boundary_type]&, filtration_type&)
 
-	string simplextree2rivet(const uintptr_t splxptr, const vector[filtration_type]&)
+	string __old__simplextree2rivet(const uintptr_t, const vector[filtration_type]&)
+	void simplextree2rivet(const string&, const uintptr_t, const vector[filtration_type]&)
 
 ###########################################################################
 # CYTHON CLASSES
@@ -183,16 +184,30 @@ cdef class PyMultiDiagrams:
 		# return _np.array([PyMultiDiagram().set(x).get_points(dimension) for x in self.multiDiagrams])
 	cdef _get_plot_bars(self, dimension:int=-1, min_persistence:float=0):
 		return self.multiDiagrams._for_python_plot(dimension, min_persistence);
-	def plot(self, dimension:int, min_persistence:float=0):
+	def plot(self, dimension:int=-1, min_persistence:float=0):
+		"""
+		Plots the barcodes.
+
+		Parameters
+		----------
+		dimension:int=-1
+			Only plots the bars of specified dimension. Useful when the multidiagrams contains multiple dimenions
+		min_persistence:float=0
+			Only plot bars of length greater than this value. Useful to reduce the time to plot.
+
+		Warning
+		-------
+		If the barcodes are not thresholded, essential barcodes will not be displayed !
+
+		Returns
+		-------
+		Nothing
+		"""
 		if len(self) == 0: return
-		multidiagrams = self.get_points(dimension)
-		#if _np.any((_np.isinf(pts))):
-			#print("Warning, infinite bars are not shown. Recompute the diagrams with threshold = True to show them.") # TODO maybe change this
-		figure = _plt.figure()
-		n_summands = self.multiDiagrams.at(0).size()
-		cmap = _get_cmap("Spectral")
+		_cmap = _get_cmap("Spectral")
 		multibarcodes_, colors = self._get_plot_bars(dimension, min_persistence)
-		_plt.rc('axes', prop_cycle = cycler('color', [cmap(i/n_summands) for i in colors]))
+		n_summands = _np.max(colors)+1
+		_plt.rc('axes', prop_cycle = cycler('color', [_cmap(i/n_summands) for i in colors]))
 		_plt.plot(*multibarcodes_)
 cdef class PyLine:
 	cdef Line line
@@ -241,7 +256,7 @@ cdef class PyModule:
 			out[summand.get_dimension()].append([summand.get_birth_list(), summand.get_death_list()])
 		if path is None:
 			return out
-		_pk.dump(open(path, "wb"))
+		_pk.dump(out, open(path, "wb"))
 		return out
 	def __getitem__(self, i:int) -> PySummand:
 		summand = PySummand()
@@ -285,7 +300,7 @@ cdef class PyModule:
 		num = 0
 		if(dimension < 0):
 			ndim = self.cmod.get_dimension()+1
-			scale = kwargs.get("scale", 4)
+			scale = kwargs.pop("scale", 4)
 			fig, axes = _plt.subplots(1, ndim, figsize=(ndim*scale,scale))
 			for dimension in range(ndim):
 				_plt.sca(axes[dimension]) if ndim > 1 else  _plt.sca(axes)
@@ -309,10 +324,14 @@ cdef class PyModule:
 		threshold = False : threshold t
 			Resolution of the image(s).
 
+		Warning
+		-------
+		If the barcodes are not thresholded, essential barcodes will not be plot-able.
+
 		Returns
 		-------
 		PyMultiDiagrams
-			Structure that holds the barcodes. Barcodes can be retrieved with a .get() or a .to_multipers() or a .plot().
+			Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
 		"""
 		out = PyMultiDiagram()
 		out.set(self.cmod.get_barcode(Line(basepoint), dimension, threshold))
@@ -333,10 +352,14 @@ cdef class PyModule:
 		threshold = False : threshold t
 			Resolution of the image(s).
 
+		Warning
+		-------
+		If the barcodes are not thresholded, essential barcodes will not be plot-able.
+
 		Returns
 		-------
 		PyMultiDiagrams
-			Structure that holds the barcodes. Barcodes can be retrieved with a .get() or a .to_multipers() or a .plot().
+			Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
 		"""
 		out = PyMultiDiagrams()
 		if (kwargs.get('box')):
@@ -497,12 +520,13 @@ cdef class PyModule:
 def approx(
 	B:Union[list,_SimplexTree], 
 	filters:Union[_np.ndarray, list], 
-	precision:float = 0.1,
+	precision:float = 0.01,
 	box = None,
 	threshold:bool = False,
 	complete:bool = True,
 	multithread:bool = False, 
-	verbose:bool = False, **kwargs)->PyModule:
+	verbose:bool = False,
+	ignore_warning:bool = False, **kwargs)->PyModule:
 	"""Computes an interval module approximation of a multiparameter filtration.
 
 	Parameters
@@ -523,7 +547,9 @@ def approx(
 	threshold: bool
 		When true, intersects the module support with the box.
 	verbose: bool
-
+		Prints C++ infos.
+	ignore_warning : bool
+		Unless set to true, prevents computing on more than 10k lines. Useful to prevent a segmentation fault due to "infinite" recursion.
 	Returns
 	-------
 	PyModule
@@ -543,9 +569,21 @@ def approx(
 	else:
 		boundary = B
 	if box is None:
-		M = [_np.max(f) for f in filters]
-		m = [_np.min(f) for f in filters]
+		M = [_np.max(f)+2*precision for f in filtration]
+		m = [_np.min(f)-2*precision for f in filtration]
 		box = [m,M]
+	else:
+		m, M = box
+	if not ignore_warning:
+		prod = 1
+		h = M[-1] - m[-1]
+		for i, [a,b] in enumerate(zip(m,M)):
+			if i == len(M)-1:	continue
+			prod *= (b-a + h) / precision
+		if prod >= 10_000:
+			from warnings import warn
+			warn(f"Warning : the number of lines (around {_np.round(prod)}) may be too high. Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. Returning the trivial module.")
+			return PyModule()
 	approx_mod = PyModule()
 	approx_mod.set(compute_vineyard_barcode_approximation(boundary,filtration,precision, Box(box), threshold, complete, multithread,verbose))
 	return approx_mod
@@ -582,6 +620,21 @@ def splx2bf_old(simplextree:_SimplexTree):
 	
 
 def splx2bf(simplextree:_SimplexTree):
+	"""Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
+	
+	Parameters
+	----------
+	simplextree:SimplexTree
+		The simplextree defining the filtration to convert to boundary-filtration.
+	
+	Returns
+	-------
+	B:List of lists of ints
+		The boundary matrix.
+	F: List of filtration values
+		The filtrations aligned with B; the i-th simplex of this simplextree has boundary B[i] and filtration F[i].
+	
+	"""
 	return simplextree_to_boundary_filtration(simplextree.thisptr)
 
 
@@ -602,13 +655,10 @@ def _d_inf(a,b):
 		b = _np.array(b)
 	return _np.min(_np.abs(b-a))
 
+	
 
 def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 0, alpha=1, verbose = False, save=False, dpi=200, shapely = True, xlabel=None, ylabel=None, **kwargs):
-	# assert(len(box) == 0, "You have to provide the box") # TODO : retrieve the box from the module.
-	if (kwargs.get('cmap')):
-		cmap = _get_cmap(kwargs.pop('cmap'))
-	else:
-		cmap = _get_cmap("Spectral")
+	cmap = _get_cmap(kwargs.pop('cmap', "Spectral"))
 	if not(separated):
 		# fig, ax = _plt.subplots()
 		ax = _plt.gca()
@@ -651,9 +701,6 @@ def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 
 					_plt.ylabel(ylabel)
 				if dimension>=0:
 					_plt.title(f"H_{dimension} 2-persistence")
-				# _plt.show()
-	# if save:
-	# 	_plt.savefig(save, dpi=dpi)
 	if not(separated):
 		if xlabel != None:
 			_plt.xlabel(xlabel)
@@ -661,7 +708,6 @@ def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 
 			_plt.ylabel(ylabel)
 		if dimension>=0:
 			_plt.title(f"H_{dimension} 2-persistence")
-		# _plt.show()
 	for kw in kwargs:
 		print(kw, "argument non implemented, ignoring.")
 	return
@@ -694,7 +740,23 @@ def __old__convert_to_rivet(simplextree:_SimplexTree, kde, X,*, dimension=1, ver
 	file.write(to_write)
 	file.close()
 
-def splx2rivet(simplextree:_SimplexTree, F, **kwargs):
+def __old__splx2rivet(simplextree:_SimplexTree, F, **kwargs):
+	"""Converts an input of approx to a file (rivet_dataset.txt) that can be opened by rivet.
+
+	Parameters
+	----------
+	simplextree: gudhi.SimplexTree
+		A gudhi simplextree defining the chain complex
+	bifiltration: pair of filtrations. Same format as the approx function.
+		list of 1-dimensional filtrations that encode the multiparameter filtration.
+		Given an index i, filters[i] should be the list of filtration values of
+		the simplices, in lexical order, of the i-th filtration.
+
+	Returns
+	-------
+	Nothing.
+	The file created is located at <current_working_directory>/rivet_dataset.txt; and can be directly imported to rivet.
+	"""
 	if(type(F) == _np.ndarray):
 		#assert filters.shape[1] == 2
 		G = [F[:,i] for i in range(F.shape[1])]
@@ -709,9 +771,46 @@ def splx2rivet(simplextree:_SimplexTree, F, **kwargs):
 	file.write("--xlabel "+ kwargs.get("xlabel", "")+"\n")
 	file.write("--ylabel " + kwargs.get("ylabel", "") + "\n\n")
 
-	simplices = simplextree2rivet(simplextree.thisptr, G).decode("UTF-8")
+	simplices = __old__simplextree2rivet(simplextree.thisptr, G).decode("UTF-8")
 	file.write(simplices)
 	#return simplices
+
+def splx2rivet(simplextree:_SimplexTree, F, **kwargs):
+	"""Converts an input of approx to a file (rivet_dataset.txt) that can be opened by rivet.
+
+	Parameters
+	----------
+	simplextree: gudhi.SimplexTree
+		A gudhi simplextree defining the chain complex
+	bifiltration: pair of filtrations. Same format as the approx function.
+		list of 1-dimensional filtrations that encode the multiparameter filtration.
+		Given an index i, filters[i] should be the list of filtration values of
+		the simplices, in lexical order, of the i-th filtration.
+
+	Returns
+	-------
+	Nothing.
+	The file created is located at <current_working_directory>/rivet_dataset.txt; and can be directly imported to rivet.
+	"""
+	from os import getcwd
+	if(type(F) == _np.ndarray):
+		#assert filters.shape[1] == 2
+		G = [F[:,i] for i in range(F.shape[1])]
+	else:
+		G = F
+	path = getcwd()+"/rivet_dataset.txt"
+	if _exists(path):
+		_remove(path)
+	file = open(path, "a")
+	file.write("--datatype bifiltration\n")
+	file.write("--xbins " + str(kwargs.get("xbins", 0))+"\n")
+	file.write("--ybins " + str(kwargs.get("xbins", 0))+"\n")
+	file.write("--xlabel "+ kwargs.get("xlabel", "")+"\n")
+	file.write("--ylabel " + kwargs.get("ylabel", "") + "\n\n")
+	file.close()
+
+	simplextree2rivet(path.encode("UTF-8"), simplextree.thisptr, G)
+	return
 
 
 def noisy_annulus(r1:float=1, r2:float=2, n1:int=1000,n2:int=200, dim:int=2, center:Union[_np.ndarray, list]=None, **kwargs)->_np.ndarray:
@@ -752,6 +851,29 @@ def noisy_annulus(r1:float=1, r2:float=2, n1:int=1000,n2:int=200, dim:int=2, cen
 	return _np.vstack([annulus, diffuse_noise])
 
 def test_module(**kwargs):
+	"""Generates a module from a noisy annulus.
+
+	Parameters
+	----------
+	r1 : float.
+		Lower radius of the annulus.
+	r2 : float.
+		Upper radius of the annulus.
+	n1 : int
+		Number of points in the annulus.
+	n2 : int
+		Number of points in the square.
+	dim : int
+		Dimension of the annulus.
+	center: list or array
+		center of the annulus.
+
+	Returns
+	-------
+	PyModule
+		The associated module.
+
+	"""
 	points = noisy_annulus(**kwargs)
 	points = _np.unique(points, axis=0)
 	from sklearn.neighbors import KernelDensity
@@ -792,3 +914,43 @@ def nlines_precision_box(nlines, basepoint, scale, square = False):
 	for i in range(dim-1):
 		deathpoint[i] = basepoint[i] + prime_list[i] * scale - scale/2
 	return [basepoint,deathpoint]
+
+
+def collapse_2pers(tree:_SimplexTree, F2, max_dimension:int=None, num:int=1):
+	"""Strong collapse of 1 critical clique complex, compatible with 2-parameter filtration.
+
+	Parameters
+	----------
+	tree:SimplexTree
+		The complex to collapse
+	F2: 1-dimensional array, or callable
+		Second filtration. The first one being in the simplextree.
+	max_dimension:int
+		Max simplicial dimension of the complex. Unless specified, 
+	num:int
+		The number of collapses to do.
+	Returns
+	-------
+	reduced_tree:SimplexTree
+		A simplex tree that has the same homology over this bifiltration.
+
+	"""
+	if num <= 0:
+		return tree
+	max_dimension = tree.dimension() if max_dimension is None else max_dimension
+	if type(F2) is list:
+		F2 = _np.array(F2)
+	if type(F2) is _np.ndarray:
+		F = lambda x : _np.max(F2[x])
+	else:
+		# We assume here that F2 is callable, and output the simplex values.
+		F=F2
+	tree_edges = [(tuple(splx), (f1, F(splx))) for splx,f1 in tree.get_skeleton(1) if len(splx) == 2]
+	reduced_edges = _remove_strongly_filtration_dominated(tree_edges)
+	reduced_tree = _gd.SimplexTree()
+	for splx, f in tree.get_skeleton(0):
+		reduced_tree.insert(splx, f)
+	for e, (f1, f2) in reduced_edges:
+		reduced_tree.insert(e, f1)
+	reduced_tree.expansion(max_dimension)
+	return collapse_2pers(reduced_tree, F, max_dimension, num-1)

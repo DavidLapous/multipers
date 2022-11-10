@@ -16,8 +16,22 @@ from setuptools import Extension, setup
 from Cython.Build import cythonize
 import sys as _sys
 py_modules=[]
+python_requirements = [
+	"numpy",
+	"matplotlib",
+	"gudhi",
+	"scikit-learn",
+	"cython",
+	"sympy",
+	"tqdm",
+	"cycler",
+	"typing",
+	"shapely",
+	"filtration-domination",
+]
+
 extensions = [Extension('mma',
-						sources=['mma.pyx'],
+						sources=['mma.pyx',],
 						language='c++',
 						extra_compile_args=[
 							"-Ofast",
@@ -35,6 +49,7 @@ setup(
 	author_email="david.loiseaux@inria.fr",
 	url="https://gitlab.inria.fr/dloiseau/multipers",
 	description="Open source library for multipersistence module approximation.",
-	ext_modules	=cythonize(extensions, language_level = str(_sys.version_info[0])),
+	install_requires=python_requirements,
+	ext_modules=cythonize(extensions, language_level = str(_sys.version_info[0])),
 	include_dirs=['.'],
 	)

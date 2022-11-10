@@ -20,11 +20,14 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
+#include <fstream>
 
 #include "combinatory.h"
 #include "utilities.h"
 
 #include "gudhi/Simplex_tree.h"
+
 
 
 using Vineyard::boundary_type;
@@ -362,7 +365,7 @@ bool is_face(boundary_type &face, boundary_type &splx){
 }
 
 
-std::string simplextree2rivet(const uintptr_t splxptr, std::vector<filtration_type> &F) {
+std::string __old__simplextree2rivet(const uintptr_t splxptr, std::vector<filtration_type> &F) {
     Gudhi::Simplex_tree<> &simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
 
     int numberOfSimplices = simplexTree.num_simplices();
@@ -398,6 +401,46 @@ std::string simplextree2rivet(const uintptr_t splxptr, std::vector<filtration_ty
         output.append("\n");
     }
     return output;
+}
+
+
+
+
+void simplextree2rivet(const std::string& path, const uintptr_t splxptr, std::vector<filtration_type> &F) {
+    Gudhi::Simplex_tree<> &simplexTree = *(Gudhi::Simplex_tree<>*)(splxptr);
+
+    int numberOfSimplices = simplexTree.num_simplices();
+    boundary_matrix simplices(numberOfSimplices);
+    unsigned int i = 0;
+    for (auto &simplex : simplexTree.complex_simplex_range()){
+        for (const auto &vertex : simplexTree.simplex_vertex_range(simplex)){
+            simplices[i].push_back(vertex);
+        }
+        i++;
+    }
+    for (boundary_type &simplex : simplices){
+        std::sort(simplex.begin(), simplex.end());
+    }
+    std::sort(simplices, &is_strictly_smaller_simplex);
+    std::ofstream output;
+    output.open(path, std::ios_base::app);
+    for (auto &Fi : F)
+        Fi.resize(numberOfSimplices, Vineyard::negInf);
+    for (int i = 0; i < numberOfSimplices; i++){
+        for (const auto &vertex : simplices[i]) {output << std::to_string(vertex) + " ";}
+        output << "; ";
+        for (filtration_type  &Fi : F){
+            Vineyard::filtration_value_type f = Fi[i];
+            for (int j=0; j<i; j++){
+                if (is_face(simplices[j],simplices[i])){
+                    f = std::max(f, Fi[j]);
+                }
+            }
+            Fi[i] = f;
+            output << std::to_string(Fi[i]) + " ";
+        }
+        output << "\n";
+    }
 }
 
 

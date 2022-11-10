@@ -803,12 +803,15 @@ namespace Vineyard
 
 		#pragma omp parallel for collapse(2)
 		for (unsigned int i = 0; i < resolution[0]; i++)
-			for (unsigned int j = 0; j < resolution[1]; j++)
-				image[i][j] = this->get_landscape_values(
+			for (unsigned int j = 0; j < resolution[1]; j++){
+				auto landscape = this->get_landscape_values(
 					{
 						box.get_bottom_corner()[0] + stepX * i,
 						box.get_bottom_corner()[1] + stepY * j
-					}, dimension)[k];
+					}, dimension);
+				image[i][j] = k < landscape.size() ? landscape[k] : 0;
+			}
+
 		return image;
 	}
 	std::vector<Module::image_type> Module::get_landscapes(
@@ -831,8 +834,8 @@ namespace Vineyard
 						box.get_bottom_corner()[0] + stepX * i,
 						box.get_bottom_corner()[1] + stepY * j
 					}, dimension);
-				for (auto k : ks){
-					images[k][i][j] = landscapes[k];
+				for (const auto k : ks){
+					images[k][i][j] = k < landscapes.size() ? landscapes[k] : 0 ;
 				}
 			}
 		}
@@ -912,7 +915,7 @@ namespace Vineyard
 		barcode.resize(count);
 		return MultiDiagram(barcode);
 	}
-	MultiDiagrams Module::get_barcodes(const std::vector<Line> lines, const dimension_type dimension, const bool threshold)const {
+	MultiDiagrams Module::get_barcodes(const std::vector<Line> lines, const dimension_type dimension, const bool threshold) const {
 		unsigned int nlines = lines.size();
 		MultiDiagrams out(nlines);
 		for (unsigned int i = 0; i < nlines; i++){

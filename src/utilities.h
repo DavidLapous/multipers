@@ -160,10 +160,9 @@ public:
         for (const MultiDiagram& multiDiagram : this->multiDiagrams){
             unsigned int count = 0;
             for (const MultiDiagram_point& bar : multiDiagram){
-                // if (bar.get_dimension() != -1 || bar.get_dimension() != dimension){ continue;}
                 const auto& birth = bar.get_birth();
                 const auto& death = bar.get_death();
-                if (!_is_inf(birth) && (death[0] > birth[0] + min_persistence)){
+                if ( (dimension == -1  || bar.get_dimension() == dimension) &&  (!_is_inf(birth) && (death[0] > birth[0] + min_persistence)) ) {
                     bars.push_back({birth[0], death[0]});
                     bars.push_back({birth[1], death[1]});
                     summand_idx.push_back(count);
