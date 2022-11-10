@@ -1,6 +1,6 @@
 /*    This file is part of the Gudhi Library - https://gudhi.inria.fr/ - which is released under MIT.
  *    See file LICENSE or go to https://gudhi.inria.fr/licensing/ for full license details.
- *    Author(s):       David Salinas
+ *    Author(s):       Hannah Schreiber
  *
  *    Copyright (C) 2014 Inria        """
  *
@@ -69,16 +69,12 @@ public:
 	static std::vector<double> infinity() throw(){
 		return std::vector<double>(1, numeric_limits<double>::infinity());
 	};
-	// static constexpr std::vector<double> infinity() noexcept{
-	// 	return std::vector<double>(1, numeric_limits<double>::infinity());
-	// };
+
 
 	static std::vector<double> quiet_NaN() throw(){
 		return std::vector<double>(1, numeric_limits<double>::quiet_NaN());
 	};
-	// static constexpr std::vector<double> quiet_NaN() noexcept{
-	// 	return std::vector<double>(1, numeric_limits<double>::quiet_NaN());
-	// };
+
 };
 
 }	// namespace std

@@ -1,7 +1,7 @@
 """!
 @package mma
 @brief Files containing the C++ cythonized functions.
-@author David Loiseaux, Mathieu Carrière
+@author David Loiseaux, Mathieu Carrière, Hannah Schreiber
 @copyright Copyright (c) 2022 Inria.
 """
 

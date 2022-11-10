@@ -5,6 +5,7 @@
  *    Copyright (C) 2014 Inria
  *
  *    Modification(s):
+ * 		- 2022/11 Hannah Schreiber / David Loiseaux : adapt for multipersistence. 
  *      - YYYY/MM Author: Description of the modification
  */
 
