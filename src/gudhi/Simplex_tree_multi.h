@@ -6,6 +6,7 @@
  *
  *
  *    Modification(s):
+ * 		- 2022/11 David Loiseaux / Hannah Schreiber : added multify / flatten to interface standard simplextree.
  *      - YYYY/MM Author: Description of the modification
  */
 #ifndef SIMPLEX_TREE_MULTI_H_
@@ -55,6 +56,18 @@ void multify(const uintptr_t splxptr, const uintptr_t newsplxptr, const unsigned
 			simplex.push_back(vertex);
 		f[0] = st.filtration(simplex_handle);
 		st_multi.insert_simplex(simplex,f);
+	}
+}
+void flatten(const uintptr_t splxptr, const uintptr_t newsplxptr, const unsigned int dimension = 0){
+	Simplex_tree<option_std> &st = *(Gudhi::Simplex_tree<option_std>*)(newsplxptr);
+	Simplex_tree<option_multi> &st_multi = *(Gudhi::Simplex_tree<option_multi>*)(splxptr);
+
+	for (const auto &simplex_handle : st_multi.complex_simplex_range()){
+		std::vector<int> simplex;
+		for (auto vertex : st_multi.simplex_vertex_range(simplex_handle))
+			simplex.push_back(vertex);
+		double f = st_multi.filtration(simplex_handle)[dimension];
+		st.insert_simplex(simplex,f);
 	}
 }
 

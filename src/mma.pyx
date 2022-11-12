@@ -541,7 +541,7 @@ cdef class PyModule:
 # PYTHON FUNCTIONS USING CYTHON
 def approx(
 	st:type(SimplexTree()),
-	precision:float = 0.01,
+	precision:float = None,
 	box = None,
 	threshold:bool = False,
 	complete:bool = True,
@@ -552,12 +552,8 @@ def approx(
 
 	Parameters
 	----------
-	B : Simplextree or (sparse) boundary matrix
-		Stores the full complex of the filtration.
-	filters : list of filtrations
-		list of 1-dimensional filtrations that encode the multiparameter filtration.
-		Given an index i, filters[i] should be the list of filtration values of 
-		the simplices, in lexical order, of the i-th filtration.
+	B : n-filtered Simplextree.
+		Defines the n-filtration on which to compute the homology.
 	precision: positive float
 		Trade-off between approximation and computational complexity.
 		Upper bound of the module approximation, in bottleneck distance, 
@@ -590,28 +586,40 @@ def approx(
 # 		boundary,_ = splx2bf(B)
 # 	else:
 # 		boundary = B
-	boundary,filtration = splx2bf(st)
+	boundary,filtration = splx2bf(st) # TODO : recomputed each time... maybe store this somewhere ?
+	nfiltration = len(filtration)
+	if nfiltration <= 0:
+		return PyModule()
+	if nfiltration == 1:
+		st = to_gudhi(st, 0)
+		return st.persistence()
+
+	if box is None:
+		m,M = st.filtration_bounds()
+	else:
+		m,M = box
+	prod = 1
+	h = M[-1] - m[-1]
+	for i, [a,b] in enumerate(zip(m,M)):
+		if i == len(M)-1:	continue
+		prod *= (b-a + h)
+	if precision is None:
+		precision = (prod/200)**(1/(nfiltration-1))
+
 	if box is None:
 		M = [_np.max(f)+2*precision for f in filtration]
 		m = [_np.min(f)-2*precision for f in filtration]
 		box = [m,M]
-	else:
-		m, M = box
-	if not ignore_warning:
-		prod = 1
-		h = M[-1] - m[-1]
-		for i, [a,b] in enumerate(zip(m,M)):
-			if i == len(M)-1:	continue
-			prod *= (b-a + h) / precision
-		if prod >= 10_000:
-			from warnings import warn
-			warn(f"Warning : the number of lines (around {_np.round(prod)}) may be too high. Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. Returning the trivial module.")
-			return PyModule()
+
+	if ignore_warning and prod >= 20_000:
+		from warnings import warn
+		warn(f"Warning : the number of lines (around {_np.round(prod)}) may be too high. Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. Returning the trivial module.")
+		return PyModule()
 	approx_mod = PyModule()
 	approx_mod.set(compute_vineyard_barcode_approximation(boundary,filtration,precision, Box(box), threshold, complete, multithread,verbose))
 	return approx_mod
 
-def from_dump(dump)->PyModule: #Assumes that the input format is the same as the output of a PyModule dump.
+def from_dump(dump)->PyModule:
 	"""Retrieves a PyModule from a previous dump.
 
 	Parameters
@@ -624,6 +632,7 @@ def from_dump(dump)->PyModule: #Assumes that the input format is the same as the
 	PyModule
 		The retrieved module.
 	"""
+	# TODO : optimize...
 	mod = PyModule()
 	if type(dump) is str:
 		dump = _pk.load(open(dump, "rb"))

@@ -60,7 +60,6 @@ cdef class SimplexTree:
 		return <Simplex_tree_multi_interface*>(self.thisptr)
 
 	# cdef Simplex_tree_persistence_interface * pcohptr
-
 	# Fake constructor that does nothing but documenting the constructor
 	def __init__(self, other = None):
 		"""SimplexTree constructor.
@@ -75,7 +74,6 @@ cdef class SimplexTree:
 		:note: If the `SimplexTree` is a copy, the persistence information is not copied. If you need it in the clone,
 			you have to call :func:`compute_persistence` on it even if you had already computed it in the original.
 		"""
-
 	# The real cython constructor
 	def __cinit__(self, other = None):
 		if other:
@@ -168,6 +166,7 @@ cdef class SimplexTree:
 		"""
 		return self.get_ptr().num_simplices()
 
+
 	def dimension(self)->dimension_type:
 		"""This function returns the dimension of the simplicial complex.
 
@@ -223,7 +222,7 @@ cdef class SimplexTree:
 		"""
 		return self.get_ptr().find_simplex(simplex)
 
-	def insert(self, simplex, filtration:list=[0.0])->bool:
+	def insert(self, simplex, filtration:list=[0,0])->bool:
 		"""This function inserts the given N-simplex and its subfaces with the
 		given filtration value (default value is '0.0'). If some of those
 		simplices are already present with a higher filtration value, their
@@ -238,6 +237,21 @@ cdef class SimplexTree:
 			otherwise (whatever its original filtration value).
 		:rtype:  bool
 		"""
+
+		# TODO : add a filtration_dimension attribute
+		# if self.filtration_dimension is None:
+		# 	if filtration is None:
+		# 		from warnings import warn
+		# 		warn("Filtration has to be specified to initialize the complex dimension.")
+		# 		return False
+		# 	self.dimension = len(filtration)
+		# elif filtration is None:
+		# 	filtration = [0]*self.filtration_dimension
+		# elif len(filtration) != self.filtration_dimension:
+		# 	from warnings import warn
+		# 	warn(f"Filtration value has to be of size {self.dimension}.")
+		# 	return False
+
 		return self.get_ptr().insert(simplex, <filtration_type>filtration)
 
 	def get_simplices(self):
@@ -388,7 +402,7 @@ cdef class SimplexTree:
 		"""
 		return self.get_ptr().prune_above_filtration(filtration)
 
-	def expansion(self, max_dim):
+	def expansion(self, max_dim)->SimplexTree:
 		"""Expands the simplex tree containing only its one skeleton
 		until dimension max_dim.
 
@@ -408,16 +422,17 @@ cdef class SimplexTree:
 		cdef int maxdim = max_dim
 		with nogil:
 			self.get_ptr().expansion(maxdim)
+		return self
 
 	# def make_filtration_non_decreasing(self):
-	#     """This function ensures that each simplex has a higher filtration
-	#     value than its faces by increasing the filtration values.
-	#
-	#     :returns: True if any filtration value was modified,
-	#         False if the filtration was already non-decreasing.
-	#     :rtype: bool
-	#     """
-	#     return self.get_ptr().make_filtration_non_decreasing()
+	# 	"""This function ensures that each simplex has a higher filtration
+	# 	value than its faces by increasing the filtration values.
+ #
+	# 	:returns: True if any filtration value was modified,
+	# 		False if the filtration was already non-decreasing.
+	# 	:rtype: bool
+	# 	"""
+	# 	return self.get_ptr().make_filtration_non_decreasing()
 
 	def reset_filtration(self, filtration, min_dim = 0):
 		"""This function resets the filtration value of all the simplices of dimension at least min_dim. Resets all the
@@ -531,7 +546,7 @@ cdef class SimplexTree:
 	#     self.compute_persistence(homology_coeff_field, min_persistence, persistence_dim_max)
 	#     return self.pcohptr.get_persistence()
 
-	def persistence(self, **kwargs):
+	def persistence(self, **kwargs)->PyModule:
 		"""Computes an interval module approximation of a multiparameter filtration.
 
 		Parameters
@@ -565,15 +580,17 @@ cdef class SimplexTree:
 		if len(f) < 2:
 			print("Use Gudhi for 1-persistence !")
 		return approx(self,**kwargs)
-	def edge_collapse(self, max_dimension:int=None, num:int=1):
+	def edge_collapse(self, max_dimension:int=None, num:int=1, progress:bool=True)->SimplexTree:
 		"""Strong collapse of 1 critical clique complex, compatible with 2-parameter filtration.
 
 		Parameters
 		----------
 		max_dimension:int
-			Max simplicial dimension of the complex. Unless specified,
+			Max simplicial dimension of the complex. Unless specified, keeps the same dimension.
 		num:int
 			The number of collapses to do.
+		progress:bool
+			If true, shows the progress of the number of collapses.
 
 		WARNING
 		-------
@@ -585,22 +602,100 @@ cdef class SimplexTree:
 			A simplex tree that has the same homology over this bifiltration.
 
 		"""
+		from tqdm import tqdm
 		if num <= 0:
 			return self
 		max_dimension = self.dimension() if max_dimension is None else max_dimension
-		tree = self
-		for i in range(num):
-			edges = [(tuple(splx), (f1, f2)) for splx,(f1,f2) in tree.get_skeleton(1) if len(splx) == 2]
+		edges = [(tuple(splx), (f1, f2)) for splx,(f1,f2) in self.get_skeleton(1) if len(splx) == 2]
+		n = len(edges)
+		for i in tqdm(range(num), total=num, desc="Collapse", disable=not(progress)):
 			edges = _remove_strongly_filtration_dominated(edges)
-			reduced_tree = SimplexTree()
-			for splx, f in self.get_skeleton(0):
-				reduced_tree.insert(splx, f)
-			for e, (f1, f2) in edges:
-				reduced_tree.insert(e, [f1,f2])
-			tree = reduced_tree.copy()
-		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr
-		self.expansion(max_dimension)
+			# Prevents doing useless collapses
+			if len(edges) >= n:
+				break
+			else:
+				n = len(edges)
+		reduced_tree = SimplexTree()
+		for splx, f in self.get_skeleton(0): # Adds vertices back
+			reduced_tree.insert(splx, f)
+		for e, (f1, f2) in edges:			# Adds reduced edges back
+			reduced_tree.insert(e, [f1,f2])
+		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
+		self.expansion(max_dimension) # Expands back the simplextree to the original dimension.
 		return self
+
+	def to_rivet(self, path="rivet_dataset.txt", homology:int = 1, progress:bool=True, overwrite:bool=False, xbins:int=0, ybins:int=0)->None:
+		""" Create a file that can be imported by rivet, representing the filtration of the simplextree.
+
+		Parameters
+		----------
+		path:str
+			path of the file.
+		homology:int
+			The homological dimension to ask rivet to compute.
+		progress:bool = True
+			Shows the progress bar.
+		overwrite:bool = False
+			If true, will overwrite the previous file if it already exists.
+		Returns
+		-------
+		Nothing
+		"""
+		from os.path import exists
+		from os import remove
+		if exists(path):
+			if not(overwrite):
+				print(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
+				return
+			remove(path)
+		file = open(path, "a")
+		file.write("--datatype bifiltration\n")
+		file.write(f"--homology {homology}\n")
+		file.write(f"-x {xbins}\n")
+		file.write(f"-y {ybins}\n")
+		file.write("--xlabel time of appearance\n")
+		file.write("--ylabel density\n\n")
+		from tqdm import tqdm
+		with tqdm(total=self.num_simplices(), position=0, disable = not(progress), desc="Writing simplex to file") as bar:
+			for dim in range(0,self.dimension()+1): # Not sure if dimension sort is necessary for rivet. Check ?
+				for s,F in self.get_skeleton(dim):
+					if len(s) != dim+1:	continue
+					for i in s:
+						file.write(str(i) + " ")
+					file.write("; ")
+					for f in F:
+						file.write(str(f) + " ")
+					file.write("\n")
+					bar.update(1)
+		file.close()
+		return
+
+	def filtration_bounds(self):
+		"""
+		Returns the filtrations bounds.
+		"""
+		low = np.min([f for s,f in self.get_simplices()], axis=0)
+		high = np.max([f for s,f in self.get_simplices()], axis=0)
+		return [low,high]
+
+	def fill_lowerstar(self, F, dimension:int):
+		""" Fills the `dimension`th filtration by the lower-star filtration defined by F.
+
+		Parameters
+		----------
+		F:1d array
+			The density over the vertices, that induces a lowerstar filtrration.
+		dimension:int
+			Which filtration to fill. /!\ python starts at 0.
+
+		Returns
+		-------
+		self:Simplextree
+		"""
+		for s, sf in self.get_simplices():
+			self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
+		return self
+
 	# def compute_persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
 	#     """This function computes the persistence of the simplicial complex, so it can be accessed through
 	#     :func:`persistent_betti_numbers`, :func:`persistence_pairs`, etc. This function is equivalent to :func:`persistence`
@@ -792,11 +887,37 @@ cdef intptr_t _get_copy_intptr(SimplexTree stree) nogil:
 
 cdef extern from "gudhi/Simplex_tree_multi.h" namespace "Gudhi":
 	void multify(const uintptr_t, const uintptr_t, const unsigned int)
+	void flatten(const uintptr_t, const uintptr_t, const unsigned int)
 
-
-def from_gudhi(simplextree:_SimplexTree, dimension:int=2)->SimplexTree:
-	"""TODO
+def to_gudhi(simplextree, dimension=0):
+	"""Converts an mma simplextree to a gudhi simplextree.
+	Parameters
+	----------
+		dimension:int = 0
+			The dimension to keep. WARNING will crash if the mma simplextree is not well filled.
+	Returns
+	-------
+		A gudhi simplextree with filtration being the `dimension`th one of the original simplextree.
 	"""
+	import gudhi as gd
+	if type(simplextree) == type(gd.SimplexTree()):
+		return simplextree
+	new_simplextree = gd.SimplexTree()
+	flatten(simplextree.thisptr, new_simplextree.thisptr, dimension)
+	return new_simplextree
+
+def from_gudhi(simplextree, dimension:int=2)->SimplexTree:
+	"""Converts a gudhi simplextree to an mma simplextree.
+	Parameters
+	----------
+		dimension:int = 2
+			The number of filtrations
+	Returns
+	-------
+		An mma simplextree, with first filtration value being the one from the original simplextree.
+	"""
+	if type(simplextree) == type(SimplexTree()):
+		return simplextree
 	st = SimplexTree()
 	multify(simplextree.thisptr, st.thisptr, dimension)
 	return st
