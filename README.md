@@ -22,7 +22,7 @@ Most multipers.py functions taken from [Mathieu Carrière](https://github.com/Ma
 The `C++` part only uses the standard library of `C++`.<br>
 The `Python` part relies on several standard packages, that can be found in `src/requirements.txt`; the [Gudhi](https://gudhi.inria.fr) library is needed, and can be easily installed using pip or conda, following [the python documentation of Gudhi](https://gudhi.inria.fr/python/latest/installation.html#packages).
 
-For strong edges collapses, the pip package of [filtration-domination](https://github.com/aj-alonso/filtration-domination) is needed. It **needs** the rust toolchain, that can be installed with  `conda install rust` or by following the [Rust documentation](https://www.rust-lang.org/tools/install).
+For strong edges collapses, the pip package of [filtration domination](https://github.com/aj-alonso/filtration_domination) is needed. It **needs** the rust toolchain, that can be installed with  `conda install rust` or by following the [Rust documentation](https://www.rust-lang.org/tools/install).
 
 ### Compilation
 #### Using pip
