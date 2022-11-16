@@ -12,11 +12,11 @@
 #ifndef INCLUDE_SIMPLEX_TREE_INTERFACE_H_
 #define INCLUDE_SIMPLEX_TREE_INTERFACE_H_
 
-#include <gudhi/graph_simplicial_complex.h>
-#include <gudhi/distance_functions.h>
-#include <gudhi/Simplex_tree.h>
-#include <gudhi/Points_off_io.h>
-//#include <gudhi/Flag_complex_edge_collapser.h>
+// #include <gudhi/graph_simplicial_complex.h>
+// #include <gudhi/distance_functions.h>
+#include "gudhi/Simplex_tree.h"
+// #include <gudhi/Points_off_io.h>
+// #include <gudhi/Flag_complex_edge_collapser.h>
 #include "gudhi/Simplex_tree_multi.h"
 
 
