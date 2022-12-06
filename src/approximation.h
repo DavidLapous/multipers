@@ -22,15 +22,18 @@
 #include <vector>
 #include <algorithm>
 
+#include "utilities.h"
 #include "vineyards.h"
+
 #include "vineyards_trajectories.h"
 // #include "combinatory.h"
 #include "debug.h"
-#include "utilities.h"
 #include "line_filtration_translation.h"
+#include "box.h"
 // // //
 namespace Vineyard
 {
+
 
 	using Debug::Timer;
 
@@ -143,9 +146,10 @@ namespace Vineyard
 		dimension_type get_dimension() const;
 		std::vector<Summand> get_summands_of_dimension(const int dimension) const;
 		std::vector<corners_type> get_corners_of_dimension(const int dimension) const;
-		MultiDiagram get_barcode(const Line l, const dimension_type dimension = -1, const bool threshold = false) const;
-		MultiDiagrams get_barcodes(const std::vector<Line> lines, const dimension_type dimension = -1, const bool threshold = false)const ;
-		MultiDiagrams get_barcodes(const std::vector<point_type> basepoints, const dimension_type dimension = -1, const bool threshold = false)const ;
+		MultiDiagram get_barcode(const Line &l, const dimension_type dimension = -1, const bool threshold = false) const;
+		MultiDiagrams get_barcodes(const std::vector<Line> &lines, const dimension_type dimension = -1, const bool threshold = false)const ;
+		MultiDiagrams get_barcodes(const std::vector<point_type> &basepoints, const dimension_type dimension = -1, const bool threshold = false) const ;
+		std::vector<int> euler_curve(const std::vector<filtration_type> &points) const;
 	private:
 		module_type module_;
 		Box box_;
@@ -204,6 +208,8 @@ namespace Vineyard
 
 		friend void swap(Summand &sum1, Summand &sum2);
 
+		bool contains(const corner_type &x) const;
+
 	private:
 		std::vector<corner_type> birth_corners_;
 		std::vector<corner_type> death_corners_;
@@ -250,9 +256,9 @@ namespace Vineyard
 		const bool threshold,
 		const bool complete,
 		const bool multithread,
-		const bool verbose)
+		const bool verbose_)
 	{
-		Vineyard::verbose = verbose;
+		verbose = verbose_;
 		if (box.get_bottom_corner().size() <= 1)
 		{
 			std::cout << "#parameter is " << box.get_bottom_corner().size() << ". Infering the box.\n";
@@ -887,7 +893,7 @@ namespace Vineyard
 		}
 		return list;
 	}
-	MultiDiagram Module::get_barcode(const Line l, const dimension_type dimension, const bool threshold) const
+	MultiDiagram Module::get_barcode(const Line &l, const dimension_type dimension, const bool threshold) const
 	{
 		std::vector<MultiDiagram_point> barcode(this->size());
 		std::pair<corner_type, corner_type> threshold_bounds;
@@ -915,7 +921,7 @@ namespace Vineyard
 		barcode.resize(count);
 		return MultiDiagram(barcode);
 	}
-	MultiDiagrams Module::get_barcodes(const std::vector<Line> lines, const dimension_type dimension, const bool threshold) const {
+	MultiDiagrams Module::get_barcodes(const std::vector<Line> &lines, const dimension_type dimension, const bool threshold) const {
 		unsigned int nlines = lines.size();
 		MultiDiagrams out(nlines);
 		for (unsigned int i = 0; i < nlines; i++){
@@ -924,7 +930,7 @@ namespace Vineyard
 		}
 		return out;
 	}
-	MultiDiagrams Module::get_barcodes(const std::vector<point_type> basepoints, const dimension_type dimension, const bool threshold)const {
+	MultiDiagrams Module::get_barcodes(const std::vector<point_type> &basepoints, const dimension_type dimension, const bool threshold)const {
 		unsigned int nlines = basepoints.size();
 		MultiDiagrams out(nlines);
 		for (unsigned int i = 0; i < nlines; i++){
@@ -933,6 +939,28 @@ namespace Vineyard
 		}
 		return out;
 	}
+	std::vector<int> Module::euler_curve(const std::vector<filtration_type> &points) const {
+		unsigned int npts = points.size();
+		std::vector<int> out(npts);
+#pragma omp parallel for
+		for (unsigned int i = 0; i<out.size(); i++){
+			auto &euler_char = out[i];
+			const auto &point = points[i];
+#pragma omp parallel for reduction(+:euler_char)
+			for (const Summand &I : this->module_){
+				if (I.contains(point)){
+					int sign = I.get_dimension() %2 ? -1 : 1;
+					euler_char += sign;
+				}
+			}
+		}
+		return out;
+	}
+
+
+
+
+
 
 	inline void Module::_compute_2D_image(
 		Module::image_type &image,
@@ -1100,6 +1128,25 @@ namespace Vineyard
 		  dimension_(dimension)
 	{
 	}
+	inline bool Summand::contains(const corner_type &x) const{
+		bool out = false;
+		for (const auto &birth : this->birth_corners_){ // checks if there exists a birth smaller than x
+			if (is_smaller(birth, x)){
+				out = true;
+				break;
+			}
+		}
+		if (!out)	return false;
+		out = false;
+		for (const auto &death : this->death_corners_){
+			if (is_smaller(x,death)){
+				out = true;
+				break;
+			}
+		}
+		return out;
+	}
+
 
 	inline double Summand::get_interleaving(const Box &box)
 	{

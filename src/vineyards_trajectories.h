@@ -39,24 +39,15 @@
 #include "vector_column.h"
 #include "set_column.h"
 #include "unordered_set_column.h"
-
+#include "box.h"
 
 
 
 namespace Vineyard {
 
-class Box;
 
-using interval_type = std::pair<point_type, point_type>;
 
-// Different implementations of the matrix columns. Set seems to be the fastest in our tests.
-// using Vineyard_matrix_type = RU_matrix<Heap_column>;
-// using Vineyard_matrix_type = RU_matrix<List_column>;
-//  using Vineyard_matrix_type = RU_matrix<Vector_column>;
-using Vineyard_matrix_type = RU_matrix<Set_column>;
-// using Vineyard_matrix_type = RU_matrix<Unordered_set_column>;
 
-bool verbose = false;
 
 std::vector<std::vector<std::vector<interval_type> > > compute_vineyard_barcode(
         boundary_matrix& boundaryMatrix,
@@ -121,27 +112,7 @@ bool is_smaller(const point_type& x, const point_type& y);
 bool is_greater(const point_type& x, const point_type& y);
 // boundary_matrix simplex_tree_to_boundary_matrix(Gudhi::Simplex_tree<> &simplexTree);
 
-/**
- * @brief Holds the square box on which to compute.
- */
-class Box
-{
-public:
-	Box();
-	Box(const corner_type& bottomCorner, const corner_type& upperCorner);
-	Box(const std::pair<corner_type, corner_type>& box);
 
-	void inflate(double delta);
-	const corner_type& get_bottom_corner() const;
-	const corner_type& get_upper_corner() const;
-	bool contains(point_type& point) const;
-	void infer_from_filters(std::vector<std::vector<double>> &Filters_list);
-    bool is_trivial() const ;
-
-private:
-	corner_type bottomCorner_;
-	corner_type upperCorner_;
-};
 
 // TODO improve multithread
 // Main function of vineyard computation. It computes the fibered barcodes of
@@ -717,19 +688,7 @@ void threshold_down(point_type& point,
     for (unsigned int i = 0; i < point.size(); i++) point[i] += threshold;
 }
 
-bool is_smaller(const point_type& x, const point_type& y)
-{
-    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
-        if (x[i] > y[i]) return false;
-    return true;
-}
 
-bool is_greater(const point_type& x, const point_type& y)
-{
-    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
-        if (x[i] < y[i]) return false;
-    return true;
-}
 
 // boundary_matrix simplex_tree_to_boundary_matrix(Gudhi::Simplex_tree<> &simplexTree){
 // 	std::vector<std::vector<unsigned int> > simplexList(simplexTree.num_simplices());
@@ -753,88 +712,7 @@ bool is_greater(const point_type& x, const point_type& y)
 // }
 
 
-
-
-inline Box::Box()
-{}
-
-inline Box::Box(const corner_type &bottomCorner, const corner_type &upperCorner)
-	: bottomCorner_(bottomCorner),
-	  upperCorner_(upperCorner)
-{
-	assert(bottomCorner.size() == upperCorner.size()
-		   && is_smaller(bottomCorner, upperCorner)
-		   && "This box is trivial !");
 }
-
-inline Box::Box(const std::pair<corner_type, corner_type> &box)
-	: bottomCorner_(box.first),
-	  upperCorner_(box.second)
-{}
-
-inline void Box::inflate(double delta)
-{
-#pragma omp simd
-	for (unsigned int i = 0; i < bottomCorner_.size(); i++){
-		bottomCorner_[i] -= delta;
-		upperCorner_[i] += delta;
-	}
-}
-
-inline void Box::infer_from_filters(std::vector<std::vector<double>> &Filters_list){
-	unsigned int dimension = Filters_list.size();
-	unsigned int nsplx = Filters_list[0].size();
-	std::vector<double> lower(dimension);
-	std::vector<double> upper(dimension);
-	for (unsigned int i =0; i < dimension; i++){
-		Vineyard::filtration_value_type min = Filters_list[i][0];
-		Vineyard::filtration_value_type max = Filters_list[i][0];
-		for (unsigned int j=1; j<nsplx; j++){
-			min = std::min(min, Filters_list[i][j]);
-			max = std::max(max, Filters_list[i][j]);
-		}
-		lower[i] = min;
-		upper[i] = max;
-	}
-	bottomCorner_.swap(lower);
-	upperCorner_.swap(upper);
-}
-inline bool Box::is_trivial() const {
-    return bottomCorner_.empty() || upperCorner_.empty() || bottomCorner_.size() != upperCorner_.size();
-}
-
-inline const corner_type &Box::get_bottom_corner() const
-{
-	return bottomCorner_;
-}
-
-inline const corner_type &Box::get_upper_corner() const
-{
-	return upperCorner_;
-}
-
-inline bool Box::contains(point_type &point) const
-{
-	if (point.size() != bottomCorner_.size()) return false;
-
-	for (unsigned int i = 0; i < point.size(); i++){
-		if (point.at(i) < bottomCorner_.at(i)) return false;
-		if (point.at(i) > upperCorner_.at(i)) return false;
-	}
-
-	return true;
-}
-
-std::ostream& operator<<(std::ostream& os, const Box& box)
-{
-    os << "Box -- Bottom corner : ";
-    os << box.get_bottom_corner();
-    os << ", Top corner : ";
-    os << box.get_upper_corner();
-    return os;
-}
-
-}   //namespace Vineyard
 
 
 

@@ -15,6 +15,9 @@ ctypedef vector[bar] barcode
 ctypedef pair[vector[pair[double, double]], vector[unsigned int]] plot_interface_type
 ctypedef vector[double] multipers_bar
 ctypedef vector[multipers_bar] multipers_barcode
+ctypedef vector[barcode] barcodes
+ctypedef vector[int] euler_curve_type
+
 
 cdef extern from "vineyards_trajectories.h" namespace "Vineyard":
 	cdef cppclass Box:
@@ -41,6 +44,7 @@ cdef extern from "approximation.h" namespace "Vineyard":
 		void complete_death(const double)
 		dimension_type get_dimension()
 		void set_dimension(int)
+		bool contains(const corner_type&)
 
 
 
@@ -77,6 +81,7 @@ cdef extern from "utilities.h" namespace "Vineyard":
 		vector[MultiDiagram].const_iterator begin()
 		vector[MultiDiagram].const_iterator end()
 		plot_interface_type _for_python_plot(dimension_type, double)
+		barcodes get_points()
 
 cdef extern from "approximation.h" namespace "Vineyard":
 	cdef cppclass Module:
@@ -95,9 +100,10 @@ cdef extern from "approximation.h" namespace "Vineyard":
 		void set_box(Box &box)
 		dimension_type get_dimension() const
 		vector[corner_list] get_corners_of_dimension(unsigned int)
-		image_type get_vectorization_in_dimension(const dimension_type, const double, const double, const bool, Box, unsigned int, unsigned int)
+		image_type get_vectorization_in_dimension(const dimension_type, const double, const double, const bool, Box&, unsigned int, unsigned int)
 		vector[image_type] get_vectorization(const double, const double, const bool, Box, unsigned int, unsigned int)
-		MultiDiagram get_barcode(const Line &line, const dimension_type, const bool)
-		MultiDiagrams get_barcodes(const vector[point_type] , const dimension_type, const bool )
+		MultiDiagram get_barcode(const Line&, const dimension_type, const bool)
+		MultiDiagrams get_barcodes(const vector[point_type]& , const dimension_type, const bool )
 		image_type get_landscape(const dimension_type,const unsigned int,const Box&,const vector[unsigned int]&)
 		vector[image_type] get_landscapes(const dimension_type,const vector[unsigned int],const Box&,const vector[unsigned int]&)
+		euler_curve_type euler_curve(const vector[corner_type]&)

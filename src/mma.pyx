@@ -22,8 +22,8 @@ from tqdm import tqdm as _tqdm
 from sympy.ntheory import factorint as _factorint
 from matplotlib.patches import Rectangle as _Rectangle
 from cycler import cycler
+from joblib import Parallel, delayed
 import pickle as _pk
-from filtration_domination import remove_strongly_filtration_dominated as _remove_strongly_filtration_dominated
 try:
 	shapely = True
 	from shapely.geometry import box as _rectangle_box
@@ -94,8 +94,7 @@ include "simplex_tree_multi.pyx"
 #CPP TO CYTHON FUNCTIONS
 
 cdef extern from "approximation.h" namespace "Vineyard":
-	# Approximation
-	Module compute_vineyard_barcode_approximation(boundary_matrix &B, vector[vector[double]] &filters_list, double precision, Box &box, bool threshold, bool complete, bool multithread, bool verbose)
+	Module compute_vineyard_barcode_approximation(boundary_matrix, vector[vector[double]] , double precision, Box &box, bool threshold, bool complete, bool multithread, bool verbose)
 
 
 cdef extern from "format_python-cpp.h":
@@ -117,6 +116,9 @@ cdef extern from "format_python-cpp.h":
 # CYTHON CLASSES
 
 cdef class PySummand:
+	"""
+	Stores a Summand of a PyModule
+	"""
 	cdef Summand sum 
 	# def __cinit__(self, vector[corner_type]& births, vector[corner_type]& deaths, int dim):
 	# 	self.sum = Summand(births, deaths, dim)
@@ -160,14 +162,17 @@ cdef class PyMultiDiagramPoint:
 		self.point = pt
 		return self
 
-	def get_dimension(self):
-		return self.get_dimension()
+	def get_degree(self):
+		return self.point.get_dimension()
 	def get_birth(self):
-		return self.get_birth()
+		return self.point.get_birth()
 	def get_death(self):
-		return self.get_death()
+		return self.point.get_death()
 
 cdef class PyMultiDiagram:
+	"""
+	Stores the diagram of a PyModule on a line
+	"""
 	cdef MultiDiagram multiDiagram
 	cdef set(self, MultiDiagram m):
 		self.multiDiagram = m
@@ -186,6 +191,9 @@ cdef class PyMultiDiagram:
 		else:
 			print("Bad index.")
 cdef class PyMultiDiagrams:
+	"""
+	Stores the barcodes of a PyModule on multiple lines
+	"""
 	cdef MultiDiagrams multiDiagrams
 	cdef set(self,MultiDiagrams m):
 		self.multiDiagrams = m
@@ -201,19 +209,20 @@ cdef class PyMultiDiagrams:
 			return PyMultiDiagram().set(self.multiDiagrams.at( self.multiDiagrams.size() - i))
 	def __len__(self):
 		return self.multiDiagrams.size()
-	def get_points(self, dimension:int=-1):
-		return _np.array([x.get_points(dimension) for x in self.multiDiagrams], dtype=float)
+	def get_points(self, degree:int=-1):
+		return self.multiDiagrams.get_points()
+		# return _np.array([x.get_points(dimension) for x in self.multiDiagrams], dtype=float)
 		# return _np.array([PyMultiDiagram().set(x).get_points(dimension) for x in self.multiDiagrams])
 	cdef _get_plot_bars(self, dimension:int=-1, min_persistence:float=0):
 		return self.multiDiagrams._for_python_plot(dimension, min_persistence);
-	def plot(self, dimension:int=-1, min_persistence:float=0):
+	def plot(self, degree:int=-1, min_persistence:float=0):
 		"""
 		Plots the barcodes.
 
 		Parameters
 		----------
-		dimension:int=-1
-			Only plots the bars of specified dimension. Useful when the multidiagrams contains multiple dimenions
+		degree:int=-1
+			Only plots the bars of specified homology degree. Useful when the multidiagrams contains multiple dimenions
 		min_persistence:float=0
 			Only plot bars of length greater than this value. Useful to reduce the time to plot.
 
@@ -227,7 +236,7 @@ cdef class PyMultiDiagrams:
 		"""
 		if len(self) == 0: return
 		_cmap = _get_cmap("Spectral")
-		multibarcodes_, colors = self._get_plot_bars(dimension, min_persistence)
+		multibarcodes_, colors = self._get_plot_bars(degree, min_persistence)
 		n_summands = _np.max(colors)+1
 		_plt.rc('axes', prop_cycle = cycler('color', [_cmap(i/n_summands) for i in colors]))
 		_plt.plot(*multibarcodes_)
@@ -235,6 +244,9 @@ cdef class PyLine:
 	cdef Line line
 
 cdef class PyModule:
+	"""
+	Stores a representation of a n-persistence module.
+	"""
 	cdef Module cmod
 
 	cdef set(self, Module m):
@@ -242,11 +254,11 @@ cdef class PyModule:
 	cdef set_box(self, Box box):
 		self.cmod.set_box(box)
 		return self
-	def get_module_of_dimension(self, dim:int)->PyModule: # TODO : in c++ ?
+	def get_module_of_dimension(self, degree:int)->PyModule: # TODO : in c++ ?
 		pmodule = PyModule()
 		pmodule.set_box(self.cmod.get_box())
 		for summand in self.cmod:
-			if summand.get_dimension() == dim:
+			if summand.get_dimension() == degree:
 				pmodule.cmod.add_summand(summand)
 		return pmodule
 
@@ -260,7 +272,7 @@ cdef class PyModule:
 		return [self.get_bottom(), self.get_top()]
 	def get_dimension(self)->int:
 		return self.cmod.get_dimension()
-	def dump(self, path:str=None):
+	def dump(self, path:str|None=None):
 		"""
 		Dumps the module into a pickle-able format.
 		
@@ -285,16 +297,16 @@ cdef class PyModule:
 		if i>=0:
 			summand.set(self.cmod.at(i))
 		else:
-			summand.set(self.cmod.at(self.size() - i))
+			summand.set(self.cmod.at(self.cmod.size() - i))
 		return summand
 	
-	def plot(self, dimension:int=-1,**kwargs)->None:
+	def plot(self, degree:int=-1,**kwargs)->None:
 		"""Shows the module on a plot. Each color corresponds to an apprimation summand of the module, and its shape corresponds to its support.
 		Only works with 2-parameter modules.
 
 		Parameters
 		----------
-		dimension = -1 : integer
+		degree = -1 : integer
 			If positive returns only the image of dimension `dimension`.
 		box=None : of the form [[b_x,b_y], [d_x,d_y]] where b,d are the bottom and top corner of the rectangle.
 			If non-None, will plot the module on this specific rectangle.
@@ -320,27 +332,27 @@ cdef class PyModule:
 			print("Filtration size :", len(box[0]), " != 2")
 			return
 		num = 0
-		if(dimension < 0):
+		if(degree < 0):
 			ndim = self.cmod.get_dimension()+1
 			scale = kwargs.pop("scale", 4)
 			fig, axes = _plt.subplots(1, ndim, figsize=(ndim*scale,scale))
-			for dimension in range(ndim):
-				_plt.sca(axes[dimension]) if ndim > 1 else  _plt.sca(axes)
-				self.plot(dimension,box=box,**kwargs)
+			for degree in range(ndim):
+				_plt.sca(axes[degree]) if ndim > 1 else  _plt.sca(axes)
+				self.plot(degree,box=box,**kwargs)
 			return
-		corners = self.cmod.get_corners_of_dimension(dimension)
-		plot2d(corners, box=box, dimension=dimension, **kwargs)
+		corners = self.cmod.get_corners_of_dimension(degree)
+		plot2d(corners, box=box, dimension=degree, **kwargs)
 		return
 
-	def barcode(self, basepoint, dimension:int=-1,*, threshold = False): # TODO direction vector interface
+	def barcode(self, basepoint, degree:int,*, threshold = False): # TODO direction vector interface
 		"""Computes the barcode of module along a lines.
 
 		Parameters
 		----------
 		basepoint  : vector
 			basepoint of the lines on which to compute the barcodes, i.e. a point on the line
-		dimension = -1 : integer
-			Homology dimension on which to compute the bars. If negative, every dimension is computed
+		degree = -1 : integer
+			Homology degree on which to compute the bars. If negative, every dimension is computed
 		box (default) :
 			box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
 		threshold = False : threshold t
@@ -356,17 +368,17 @@ cdef class PyModule:
 			Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
 		"""
 		out = PyMultiDiagram()
-		out.set(self.cmod.get_barcode(Line(basepoint), dimension, threshold))
+		out.set(self.cmod.get_barcode(Line(basepoint), degree, threshold))
 		return out
-	def barcodes(self, basepoints = None, dimension:int=-1, *,threshold = False, **kwargs):
+	def barcodes(self, degree:int, basepoints = None, *,threshold = False, **kwargs):
 		"""Computes barcodes of module along a set of lines.
 
 		Parameters
 		----------
 		basepoints = None : list of vectors
 			basepoints of the lines on which to compute the barcodes.
-		dimension = -1 : integer
-			Homology dimension on which to compute the bars. If negative, every dimension is computed
+		degree = -1 : integer
+			Homology degree on which to compute the bars. If negative, every dimension is computed
 		box (default) :
 			box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
 		num:int=100
@@ -388,15 +400,14 @@ cdef class PyModule:
 			box = kwargs.pop('box')
 		else:
 			box = [self.get_bottom(), self.get_top()]
-		if (len(box[0]) != 2) and (basepoints == None):
-			print("Filtration size :", len(box[0]), " != 2")
+		if (len(box[0]) != 2) and (basepoints is None):
 			print("Basepoints has to be specified for filtration dimension >= 3 !")
 			return
 		elif basepoints is None:
 			basepoints = _np.linspace([box[0][0] - box[1][1],0], [box[1][0],0], num=kwargs.get("num", 100))
-		out.set(self.cmod.get_barcodes(basepoints, dimension, threshold))
+		out.set(self.cmod.get_barcodes(basepoints, degree, threshold))
 		return out
-	def __old__multipers_landscape(self, dimension:int,num:int=100,  **kwargs):
+	def __old__multipers_landscape(self, degree:int,num:int=100,  **kwargs):
 		"""
 		Computes the Multi parameter landscape, using the multipers library.
 		"""
@@ -413,18 +424,18 @@ cdef class PyModule:
 		last = [box[1][0],0]
 		basepoints = kwargs.get("basepoints", _np.linspace(first, last, num=num))
 		# Computes barcodes from PyModule in the multipers format
-		decomposition = self.barcodes(basepoints, dimension = dimension, threshold = True).to_multipers()
+		decomposition = self.barcodes(basepoints, degree = degree, threshold = True).to_multipers()
 		delta = (last[0] - first[0]) / num
 		from multipers import multipersistence_landscape
 		# Computes multipers Landscapes
 		return multipersistence_landscape(decomposition, bnds, delta,**kwargs)
-	def landscape(self, dimension:int, k:int=0,box=None, resolution:List[int]=[100,100], plot=True):
+	def landscape(self, degree:int, k:int=0,box:list[list[float]]|None=None, resolution:List[int]=[100,100], plot=True):
 		"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
 		Parameters
 		----------
-		dimension : integer
-			The homology dimension of the landscape.
+		degree : integer
+			The homology degree of the landscape.
 		k = 0 : int
 			the k-th landscape
 		resolution = [50,50] : pair of integers
@@ -439,26 +450,23 @@ cdef class PyModule:
 			The landscape of the module.
 		"""
 		if box is None:
-			cbox = self.cmod.get_box()
-			pbox = self.get_box()
-		else:
-			cbox = PyBox(*box).box
-			pbox = box
+			box = self.get_box()
+		
 
-		out = _np.array(self.cmod.get_landscape(dimension, k, cbox, resolution))
+		out = _np.array(self.cmod.get_landscape(degree, k, Box(box), resolution))
 		if plot:
 			_plt.figure()
-			aspect = (pbox[1][0]-pbox[0][0]) / (pbox[1][1]-pbox[0][1])
-			extent = [pbox[0][0], pbox[1][0], pbox[0][1], pbox[1][1]]
+			aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
+			extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
 			_plt.imshow(out.T, origin="lower", extent=extent, aspect=aspect)
 		return out
-	def landscapes(self, dimension:int, ks:List[int]=[0],box=None, resolution:List[int]=[100,100], plot=True):
+	def landscapes(self, degree:int, ks:List[int]=[0],box=None, resolution:List[int]=[100,100], plot=True):
 		"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
 		Parameters
 		----------
-		dimension : integer
-			The homology dimension of the landscape.
+		degree : integer
+			The homology degree of the landscape.
 		ks = 0 : list of int
 			the k-th landscape
 		resolution = [50,50] : pair of integers
@@ -473,28 +481,25 @@ cdef class PyModule:
 			The landscapes of the module with parameters ks.
 		"""
 		if box is None:
-			cbox = self.cmod.get_box()
-			pbox = self.get_box()
-		else:
-			cbox = PyBox(*box).box
-			pbox = box
-		out = _np.array(self.cmod.get_landscapes(dimension, ks, cbox, resolution))
+			box = self.get_box()
+	
+		out = _np.array(self.cmod.get_landscapes(degree, ks, Box(box), resolution))
 		if plot:
 			to_plot = _np.sum(out, axis=0)
 			_plt.figure()
-			aspect = (pbox[1][0]-pbox[0][0]) / (pbox[1][1]-pbox[0][1])
-			extent = [pbox[0][0], pbox[1][0], pbox[0][1], pbox[1][1]]
+			aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
+			extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
 			_plt.imshow(to_plot.T, origin="lower", extent=extent, aspect=aspect)
 		return out
 
 
-	def image(self, dimension:int = -1, bandwidth:float=0.1, resolution:list=[100,100], normalize:bool=True, plot:bool=True, save:bool=False, dpi:int=200,p:float=1., **kwargs)->_np.ndarray:
+	def image(self, degree:int = -1, bandwidth:float=0.1, resolution:list[int]=[100,100], normalize:bool=True, plot:bool=True, save:bool=False, dpi:int=200,p:float=1., **kwargs)->_np.ndarray:
 		"""Computes a vectorization from a PyModule. Python interface only bifiltrations.
 
 		Parameters
 		----------
-		dimension = -1 : integer
-			If positive returns only the image of dimension `dimension`.
+		degree = -1 : integer
+			If positive returns only the image of homology degree `degree`.
 		bandwidth = 0.1 : float
 			Image parameter. TODO : different weights
 		resolution = [100,100] : pair of integers
@@ -511,16 +516,16 @@ cdef class PyModule:
 		"""
 		if (len(self.get_bottom()) != 2):
 			print("Non 2 dimensional images not yet implemented in python !")
-			return
+			return _np.zeros(shape=resolution)
 		box = kwargs.get("box",[self.get_bottom(),self.get_top()])
-		if dimension < 0:
+		if degree < 0:
 			image_vector = _np.array(self.cmod.get_vectorization(bandwidth, p, normalize, Box(box), resolution[0], resolution[1]))
 		else:
-			image_vector = _np.array([self.cmod.get_vectorization_in_dimension(dimension, bandwidth, p,normalize,Box(box),  resolution[0], resolution[1])])
+			image_vector = _np.array([self.cmod.get_vectorization_in_dimension(degree, bandwidth, p,normalize,Box(box),  resolution[0], resolution[1])])
 		if plot:
 			i=0
 			n_plots = len(image_vector)
-			scale = 4 if not(kwargs.get("size")) else kwargs.get("size")
+			scale:float = kwargs.get("size", 4.0)
 			fig, axs = _plt.subplots(1,n_plots, figsize=(n_plots*scale,scale))
 			aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
 			extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
@@ -529,35 +534,66 @@ cdef class PyModule:
 				temp = ax.imshow(_np.flip(_np.array(image).transpose(),0),extent=extent, aspect=aspect)
 				if (kwargs.get('colorbar') or kwargs.get('cb')):
 					_plt.colorbar(temp, ax = ax)
-				if dimension < 0 :
+				if degree < 0 :
 					ax.set_title(f"H_{i} 2-persistence image")
-				if dimension >= 0:
-					ax.set_title(f"H_{dimension} 2-persistence image")
+				if degree >= 0:
+					ax.set_title(f"H_{degree} 2-persistence image")
 				i+=1
 
-		return image_vector[0] if dimension >=0 else  image_vector
+		return image_vector[0] if degree >=0 else  image_vector
+
+
+	def euler_char(self, points:list[float] | list[list[float]] | np.ndarray) -> np.ndarray:
+		""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
+
+		Parameters
+		----------
+		points: list[float] | list[list[float]] | np.ndarray
+			List of filtration values on which to compute the euler characteristic.
+			WARNING FIXME : the points have to have the same dimension as the simplextree.	
+
+		Returns
+		-------
+		The list of euler characteristic values
+		"""
+		if len(points) == 0:
+			return []
+		if type(points[0]) is float:
+			points = [points]
+		if type(points) is np.ndarray:
+			assert len(points.shape) in [1,2]
+			if len(points.shape) == 1:
+				points = [points]
+		return np.array(self.cmod.euler_curve(points), dtype=int)
 
 ###########################################################################
 # PYTHON FUNCTIONS USING CYTHON
 def approx(
-	st:type(SimplexTree()),
-	precision:float = None,
-	box = None,
+	st = None,
+	max_error:float|None = None,
+	box:list[list[float]]|None = None,
 	threshold:bool = False,
 	complete:bool = True,
 	multithread:bool = False, 
 	verbose:bool = False,
-	ignore_warning:bool = False, **kwargs)->PyModule:
+	ignore_warning:bool = False,
+	nlines:int = 500,
+	max_dimension=np.inf,
+	boundary = None,
+	filtration = None,
+	**kwargs)->PyModule:
 	"""Computes an interval module approximation of a multiparameter filtration.
 
 	Parameters
 	----------
-	B : n-filtered Simplextree.
+	st : n-filtered Simplextree.
 		Defines the n-filtration on which to compute the homology.
-	precision: positive float
+	max_error: positive float
 		Trade-off between approximation and computational complexity.
 		Upper bound of the module approximation, in bottleneck distance, 
 		for interval-decomposable modules.
+	nlines: int
+		Alternative to precision.
 	box : pair of list of floats
 		Defines a rectangle on which to compute the approximation.
 		Format : [x,y], where x,y defines the rectangle {z : x ≤ z ≤ y}
@@ -573,28 +609,26 @@ def approx(
 		An interval decomposable module approximation of the module defined by the
 		homology of this multi-filtration.
 	"""
-# 	if(type(filters) == _np.ndarray):
-# 		#assert filters.shape[1] == 2
-# 		filtration = [filters[:,i] for i in range(filters.shape[1])]
-# 	else:
-# 		filtration = filters
-#
-#
-# 	if type(B) == _SimplexTree:
-# 		if verbose:
-# 			print("Converting simplextree to boundary matrix...")
-# 		boundary,_ = splx2bf(B)
-# 	else:
-# 		boundary = B
-	boundary,filtration = splx2bf(st) # TODO : recomputed each time... maybe store this somewhere ?
+
+	if boundary is None or filtration is None:
+		boundary,filtration = splx2bf(st) # TODO : recomputed each time... maybe store this somewhere ?
+	if max_dimension < np.inf: # TODO : make it more efficient
+		nsplx = len(boundary)
+		for i in range(nsplx-1,-1,-1):
+			b = boundary[i]
+			dim=len(b) -1
+			if dim>max_dimension:
+				boundary.pop(i)
+				for f in filtration:
+					f.pop(i)
 	nfiltration = len(filtration)
 	if nfiltration <= 0:
 		return PyModule()
-	if nfiltration == 1:
-		st = to_gudhi(st, 0)
+	if nfiltration == 1 and not(st is None):
+		st = st.to_gudhi(0)
 		return st.persistence()
 
-	if box is None:
+	if box is None and not(st is None):
 		m,M = st.filtration_bounds()
 	else:
 		m,M = box
@@ -603,12 +637,13 @@ def approx(
 	for i, [a,b] in enumerate(zip(m,M)):
 		if i == len(M)-1:	continue
 		prod *= (b-a + h)
-	if precision is None:
-		precision = (prod/200)**(1/(nfiltration-1))
+
+	if max_error is None:
+		max_error:float = (prod/nlines)**(1/(nfiltration-1))
 
 	if box is None:
-		M = [_np.max(f)+2*precision for f in filtration]
-		m = [_np.min(f)-2*precision for f in filtration]
+		M = [_np.max(f)+2*max_error for f in filtration]
+		m = [_np.min(f)-2*max_error for f in filtration]
 		box = [m,M]
 
 	if ignore_warning and prod >= 20_000:
@@ -616,7 +651,7 @@ def approx(
 		warn(f"Warning : the number of lines (around {_np.round(prod)}) may be too high. Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. Returning the trivial module.")
 		return PyModule()
 	approx_mod = PyModule()
-	approx_mod.set(compute_vineyard_barcode_approximation(boundary,filtration,precision, Box(box), threshold, complete, multithread,verbose))
+	approx_mod.set(compute_vineyard_barcode_approximation(boundary,filtration,max_error, Box(box), threshold, complete, multithread,verbose))
 	return approx_mod
 
 def from_dump(dump)->PyModule:
@@ -671,7 +706,7 @@ def splx2bf(simplextree:Union[type(SimplexTree()), type(_gd.SimplexTree())]):
 	if type(simplextree) == type(SimplexTree()):
 		return simplextree_to_boundary_filtration(simplextree.thisptr)
 	else:
-		temp_st = from_gudhi(simplextree, dimension=1)
+		temp_st = from_gudhi(simplextree, parameters=1)
 		b,f=simplextree_to_boundary_filtration(temp_st.thisptr)
 		temp_st
 		return b, f[0]
@@ -852,7 +887,7 @@ def splx2rivet(simplextree:_SimplexTree, F, **kwargs):
 	return
 
 
-def noisy_annulus(r1:float=1, r2:float=2, n1:int=1000,n2:int=200, dim:int=2, center:Union[_np.ndarray, list]=None, **kwargs)->_np.ndarray:
+def noisy_annulus(r1:float=1, r2:float=2, n1:int=1000,n2:int=200, dim:int=2, center:_np.ndarray|list[float]|None=None, **kwargs)->_np.ndarray:
 	"""Generates a noisy annulus dataset.
 
 	Parameters
@@ -917,12 +952,13 @@ def test_module(**kwargs):
 	points = _np.unique(points, axis=0)
 	from sklearn.neighbors import KernelDensity
 	kde = KernelDensity(bandwidth = 1).fit(points)
-	ac = _gd.AlphaComplex(points = points)
-	st = ac.create_simplex_tree(max_alpha_square=10)
-	points = [ac.get_point(i) for i,_ in enumerate(points)]
-	b,f1 = splx2bf(st)
-	f2 = kde.score_samples(points)
-	mod = approx(b, [f1,f2], **kwargs)
+	st = _gd.RipsComplex(points = points).create_simplex_tree()
+	st = from_gudhi(st, parameters = 2)
+	st.collapse_edges(num=100)
+	st.collapse_edges(num=100, strong=False, max_dimension = 2)
+	f2 =  - kde.score_samples(points)
+	st.fill_lowerstar(f2,parameter=1)
+	mod = st.persistence(**kwargs)
 	return mod
 
 def nlines_precision_box(nlines, basepoint, scale, square = False):
@@ -955,730 +991,52 @@ def nlines_precision_box(nlines, basepoint, scale, square = False):
 	return [basepoint,deathpoint]
 
 
-def collapse_2pers(tree:type(SimplexTree()), max_dimension:int=None, num:int=1):
-	"""Strong collapse of 1 critical clique complex, compatible with 2-parameter filtration.
 
+def estimate_matching(b1:PyMultiDiagrams, b2:PyMultiDiagrams):
+	assert(len(b1) == len(b2))
+	from gudhi.bottleneck import bottleneck_distance
+	def get_bc(b:PyMultiDiagrams, i:int)->_np.ndarray:
+		temp = b[i].get_points()
+		out = np.array(temp)[:,:,0] if len(temp) >0  else _np.array([[0,0]]) # GUDHI FIX
+		return out
+	return max((bottleneck_distance(get_bc(b1,i), get_bc(b2,i)) for i in range(len(b1))))
+
+
+#### Functions to estimate precision
+def _get_bc_MD(b, i:int):
+	temp = b[i].get_points()
+	out = np.array(temp)[:,:,0] if len(temp) >0  else np.array([[0,0]]) # GUDHI FIX
+	return out
+def _get_bc_ST(st, basepoint, degree:int):
+	"""
+	Slices an mma simplextree to a gudhi simplextree, and compute its persistence on the diagonal line crossing the given basepoint.
+	"""
+	gst = st.to_gudhi(basepoint=basepoint)
+	gst.compute_persistence()
+	return gst.persistence_intervals_in_dimension(degree)
+def estimate_error(st:SimplexTree, module:PyModule, degree:int, nlines = 100):
+	"""
+	Given an MMA SimplexTree and PyModule, estimates the bottleneck distance using barcodes given by gudhi.
+	
 	Parameters
 	----------
-	tree:SimplexTree
-		The complex to collapse
-	F2: 1-dimensional array, or callable
-		Second filtration. The first one being in the simplextree.
-	max_dimension:int
-		Max simplicial dimension of the complex. Unless specified, 
-	num:int
-		The number of collapses to do.
+	st:SimplexTree
+		The simplextree representing the n-filtered complex. Used to define the gudhi simplextrees on different lines.
+	module:PyModule
+		The module on which to estimate approximation error, w.r.t. the original simplextree st.
+	degree: The homology degree to consider
+	
 	Returns
 	-------
-	reduced_tree:SimplexTree
-		A simplex tree that has the same homology over this bifiltration.
-
+	The estimation of the matching distance, i.e., the maximum of the sampled bottleneck distances.
+		
 	"""
-	if num <= 0:
-		return tree
-	max_dimension = tree.dimension() if max_dimension is None else max_dimension
-	edges = [(tuple(splx), (f1, f2)) for splx,(f1,f2) in tree.get_skeleton(1) if len(splx) == 2]
-	edges = _remove_strongly_filtration_dominated(edges)
-	reduced_tree = SimplexTree()
-	for splx, f in tree.get_skeleton(0):
-		reduced_tree.insert(splx, f)
-	for e, (f1, f2) in edges:
-		reduced_tree.insert(e, [f1,f2])
-	reduced_tree.expansion(max_dimension)
-	return collapse_2pers(reduced_tree, max_dimension, num-1)
-
-
-#
-# ############################################################
-# # SimplexTree
-# # from simplex_tree_multi cimport Simplex_tree_multi_interface
-# #
-# # cdef ntruc():
-# #
-# # 	return Simplex_tree_multi_interface().num_vertices()
-# # def truc():
-# # 	return ntruc()
-#
-# cdef bool callback(vector[int] simplex, void *blocker_func):
-# 	return (<object>blocker_func)(simplex)
-#
-# # SimplexTree python interface
-# cdef class SimplexTree:
-# 	"""The simplex tree is an efficient and flexible data structure for
-# 	representing general (filtered) simplicial complexes. The data structure
-# 	is described in Jean-Daniel Boissonnat and Clément Maria. The Simplex
-# 	Tree: An Efficient Data Structure for General Simplicial Complexes.
-# 	Algorithmica, pages 1–22, 2014.
-#
-# 	This class is a filtered, with keys, and non contiguous vertices version
-# 	of the simplex tree.
-# 	"""
-# 	# unfortunately 'cdef public Simplex_tree_multi_interface* thisptr' is not possible
-# 	# Use intptr_t instead to cast the pointer
-# 	cdef public intptr_t thisptr
-#
-# 	# Get the pointer casted as it should be
-# 	cdef Simplex_tree_multi_interface* get_ptr(self) nogil:
-# 		return <Simplex_tree_multi_interface*>(self.thisptr)
-#
-# 	# cdef Simplex_tree_persistence_interface * pcohptr
-#
-# 	# Fake constructor that does nothing but documenting the constructor
-# 	def __init__(self, other = None):
-# 		"""SimplexTree constructor.
-#
-# 		:param other: If `other` is `None` (default value), an empty `SimplexTree` is created.
-# 			If `other` is a `SimplexTree`, the `SimplexTree` is constructed from a deep copy of `other`.
-# 		:type other: SimplexTree (Optional)
-# 		:returns: An empty or a copy simplex tree.
-# 		:rtype: SimplexTree
-#
-# 		:raises TypeError: In case `other` is neither `None`, nor a `SimplexTree`.
-# 		:note: If the `SimplexTree` is a copy, the persistence information is not copied. If you need it in the clone,
-# 			you have to call :func:`compute_persistence` on it even if you had already computed it in the original.
-# 		"""
-#
-# 	# The real cython constructor
-# 	def __cinit__(self, other = None):
-# 		if other:
-# 			if isinstance(other, SimplexTree):
-# 				self.thisptr = _get_copy_intptr(other)
-# 			else:
-# 				raise TypeError("`other` argument requires to be of type `SimplexTree`, or `None`.")
-# 		else:
-# 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
-#
-# 	def __dealloc__(self):
-# 		cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
-# 		if ptr != NULL:
-# 			del ptr
-# 		# if self.pcohptr != NULL:
-# 		#     del self.pcohptr
-#
-# 	def __is_defined(self):
-# 		"""Returns true if SimplexTree pointer is not NULL.
-# 			"""
-# 		return self.get_ptr() != NULL
-#
-# 	# def __is_persistence_defined(self):
-# 	#     """Returns true if Persistence pointer is not NULL.
-# 	#      """
-# 	#     return self.pcohptr != NULL
-#
-# 	def copy(self)->SimplexTree:
-# 		"""
-# 		:returns: A simplex tree that is a deep copy of itself.
-# 		:rtype: SimplexTree
-#
-# 		:note: The persistence information is not copied. If you need it in the clone, you have to call
-# 			:func:`compute_persistence` on it even if you had already computed it in the original.
-# 		"""
-# 		stree = SimplexTree()
-# 		stree.thisptr = _get_copy_intptr(self)
-# 		return stree
-#
-# 	def __deepcopy__(self):
-# 		return self.copy()
-#
-# 	def filtration(self, simplex)->filtration_type:
-# 		"""This function returns the filtration value for a given N-simplex in
-# 		this simplicial complex, or +infinity if it is not in the complex.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int
-# 		:returns:  The simplicial complex filtration value.
-# 		:rtype:  float
-# 		"""
-# 		return self.get_ptr().simplex_filtration(simplex)
-#
-# 	def assign_filtration(self, simplex, filtration):
-# 		"""This function assigns a new filtration value to a
-# 		given N-simplex.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int
-# 		:param filtration:  The new filtration value.
-# 		:type filtration:  float
-#
-# 		.. note::
-# 			Beware that after this operation, the structure may not be a valid
-# 			filtration anymore, a simplex could have a lower filtration value
-# 			than one of its faces. Callers are responsible for fixing this
-# 			(with more :meth:`assign_filtration` or
-# 			:meth:`make_filtration_non_decreasing` for instance) before calling
-# 			any function that relies on the filtration property, like
-# 			:meth:`persistence`.
-# 		"""
-# 		self.get_ptr().assign_simplex_filtration(simplex, filtration)
-#
-#
-# 	def num_vertices(self)->int:
-# 		"""This function returns the number of vertices of the simplicial
-# 		complex.
-#
-# 		:returns:  The simplicial complex number of vertices.
-# 		:rtype:  int
-# 		"""
-# 		return self.get_ptr().num_vertices()
-#
-# 	def num_simplices(self)->int:
-# 		"""This function returns the number of simplices of the simplicial
-# 		complex.
-#
-# 		:returns:  the simplicial complex number of simplices.
-# 		:rtype:  int
-# 		"""
-# 		return self.get_ptr().num_simplices()
-#
-# 	def dimension(self)->dimension_type:
-# 		"""This function returns the dimension of the simplicial complex.
-#
-# 		:returns:  the simplicial complex dimension.
-# 		:rtype:  int
-#
-# 		.. note::
-#
-# 			This function is not constant time because it can recompute
-# 			dimension if required (can be triggered by
-# 			:func:`remove_maximal_simplex`
-# 			or
-# 			:func:`prune_above_filtration`
-# 			methods).
-# 		"""
-# 		return self.get_ptr().dimension()
-#
-# 	def upper_bound_dimension(self)->dimension_type:
-# 		"""This function returns a valid dimension upper bound of the
-# 		simplicial complex.
-#
-# 		:returns:  an upper bound on the dimension of the simplicial complex.
-# 		:rtype:  int
-# 		"""
-# 		return self.get_ptr().upper_bound_dimension()
-#
-# 	def set_dimension(self, dimension)->None:
-# 		"""This function sets the dimension of the simplicial complex.
-#
-# 		:param dimension: The new dimension value.
-# 		:type dimension: int
-#
-# 		.. note::
-#
-# 			This function must be used with caution because it disables
-# 			dimension recomputation when required
-# 			(this recomputation can be triggered by
-# 			:func:`remove_maximal_simplex`
-# 			or
-# 			:func:`prune_above_filtration`
-# 			).
-# 		"""
-# 		self.get_ptr().set_dimension(<int>dimension)
-#
-# 	def find(self, simplex)->bool:
-# 		"""This function returns if the N-simplex was found in the simplicial
-# 		complex or not.
-#
-# 		:param simplex: The N-simplex to find, represented by a list of vertex.
-# 		:type simplex: list of int
-# 		:returns:  true if the simplex was found, false otherwise.
-# 		:rtype:  bool
-# 		"""
-# 		return self.get_ptr().find_simplex(simplex)
-#
-# 	def insert(self, simplex, filtration:list=[0.0])->bool:
-# 		"""This function inserts the given N-simplex and its subfaces with the
-# 		given filtration value (default value is '0.0'). If some of those
-# 		simplices are already present with a higher filtration value, their
-# 		filtration value is lowered.
-#
-# 		:param simplex: The N-simplex to insert, represented by a list of
-# 			vertex.
-# 		:type simplex: list of int
-# 		:param filtration: The filtration value of the simplex.
-# 		:type filtration: float
-# 		:returns:  true if the simplex was not yet in the complex, false
-# 			otherwise (whatever its original filtration value).
-# 		:rtype:  bool
-# 		"""
-# 		return self.get_ptr().insert(simplex, <filtration_type>filtration)
-#
-# 	def get_simplices(self):
-# 		"""This function returns a generator with simplices and their given
-# 		filtration values.
-#
-# 		:returns:  The simplices.
-# 		:rtype:  generator with tuples(simplex, filtration)
-# 		"""
-# 		cdef Simplex_tree_multi_simplices_iterator it = self.get_ptr().get_simplices_iterator_begin()
-# 		cdef Simplex_tree_multi_simplices_iterator end = self.get_ptr().get_simplices_iterator_end()
-# 		cdef Simplex_tree_multi_simplex_handle sh = dereference(it)
-#
-# 		while it != end:
-# 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
-# 			preincrement(it)
-#
-# 	def get_filtration(self):
-# 		"""This function returns a generator with simplices and their given
-# 		filtration values sorted by increasing filtration values.
-#
-# 		:returns:  The simplices sorted by increasing filtration values.
-# 		:rtype:  generator with tuples(simplex, filtration)
-# 		"""
-# 		cdef vector[Simplex_tree_multi_simplex_handle].const_iterator it = self.get_ptr().get_filtration_iterator_begin()
-# 		cdef vector[Simplex_tree_multi_simplex_handle].const_iterator end = self.get_ptr().get_filtration_iterator_end()
-#
-# 		while it != end:
-# 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
-# 			preincrement(it)
-#
-# 	def get_skeleton(self, dimension):
-# 		"""This function returns a generator with the (simplices of the) skeleton of a maximum given dimension.
-#
-# 		:param dimension: The skeleton dimension value.
-# 		:type dimension: int
-# 		:returns:  The (simplices of the) skeleton of a maximum dimension.
-# 		:rtype:  generator with tuples(simplex, filtration)
-# 		"""
-# 		cdef Simplex_tree_multi_skeleton_iterator it = self.get_ptr().get_skeleton_iterator_begin(dimension)
-# 		cdef Simplex_tree_multi_skeleton_iterator end = self.get_ptr().get_skeleton_iterator_end(dimension)
-#
-# 		while it != end:
-# 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
-# 			preincrement(it)
-#
-# 	def get_star(self, simplex):
-# 		"""This function returns the star of a given N-simplex.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int
-# 		:returns:  The (simplices of the) star of a simplex.
-# 		:rtype:  list of tuples(simplex, filtration)
-# 		"""
-# 		cdef simplex_type csimplex
-# 		for i in simplex:
-# 			csimplex.push_back(i)
-# 		cdef vector[pair[simplex_type, filtration_type]] star \
-# 			= self.get_ptr().get_star(csimplex)
-# 		ct = []
-# 		for filtered_simplex in star:
-# 			v = []
-# 			for vertex in filtered_simplex.first:
-# 				v.append(vertex)
-# 			ct.append((v, filtered_simplex.second))
-# 		return ct
-#
-# 	def get_cofaces(self, simplex, codimension):
-# 		"""This function returns the cofaces of a given N-simplex with a
-# 		given codimension.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int
-# 		:param codimension: The codimension. If codimension = 0, all cofaces
-# 			are returned (equivalent of get_star function)
-# 		:type codimension: int
-# 		:returns:  The (simplices of the) cofaces of a simplex
-# 		:rtype:  list of tuples(simplex, filtration)
-# 		"""
-# 		cdef vector[int] csimplex
-# 		for i in simplex:
-# 			csimplex.push_back(i)
-# 		cdef vector[pair[simplex_type, filtration_type]] cofaces \
-# 			= self.get_ptr().get_cofaces(csimplex, <int>codimension)
-# 		ct = []
-# 		for filtered_simplex in cofaces:
-# 			v = []
-# 			for vertex in filtered_simplex.first:
-# 				v.append(vertex)
-# 			ct.append((v, filtered_simplex.second))
-# 		return ct
-#
-# 	def get_boundaries(self, simplex):
-# 		"""This function returns a generator with the boundaries of a given N-simplex.
-# 		If you do not need the filtration values, the boundary can also be obtained as
-# 		:code:`itertools.combinations(simplex,len(simplex)-1)`.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int.
-# 		:returns:  The (simplices of the) boundary of a simplex
-# 		:rtype:  generator with tuples(simplex, filtration)
-# 		"""
-# 		cdef pair[Simplex_tree_multi_boundary_iterator, Simplex_tree_multi_boundary_iterator] it =  self.get_ptr().get_boundary_iterators(simplex)
-#
-# 		while it.first != it.second:
-# 			yield self.get_ptr().get_simplex_and_filtration(dereference(it.first))
-# 			preincrement(it.first)
-#
-# 	def remove_maximal_simplex(self, simplex):
-# 		"""This function removes a given maximal N-simplex from the simplicial
-# 		complex.
-#
-# 		:param simplex: The N-simplex, represented by a list of vertex.
-# 		:type simplex: list of int
-#
-# 		.. note::
-#
-# 			The dimension of the simplicial complex may be lower after calling
-# 			remove_maximal_simplex than it was before. However,
-# 			:func:`upper_bound_dimension`
-# 			method will return the old value, which
-# 			remains a valid upper bound. If you care, you can call
-# 			:func:`dimension`
-# 			to recompute the exact dimension.
-# 		"""
-# 		self.get_ptr().remove_maximal_simplex(simplex)
-#
-# 	def prune_above_filtration(self, filtration)->bool:
-# 		"""Prune above filtration value given as parameter.
-#
-# 		:param filtration: Maximum threshold value.
-# 		:type filtration: float
-# 		:returns: The filtration modification information.
-# 		:rtype: bool
-#
-#
-# 		.. note::
-#
-# 			Note that the dimension of the simplicial complex may be lower
-# 			after calling
-# 			:func:`prune_above_filtration`
-# 			than it was before. However,
-# 			:func:`upper_bound_dimension`
-# 			will return the old value, which remains a
-# 			valid upper bound. If you care, you can call
-# 			:func:`dimension`
-# 			method to recompute the exact dimension.
-# 		"""
-# 		return self.get_ptr().prune_above_filtration(filtration)
-#
-# 	def expansion(self, max_dim):
-# 		"""Expands the simplex tree containing only its one skeleton
-# 		until dimension max_dim.
-#
-# 		The expanded simplicial complex until dimension :math:`d`
-# 		attached to a graph :math:`G` is the maximal simplicial complex of
-# 		dimension at most :math:`d` admitting the graph :math:`G` as
-# 		:math:`1`-skeleton.
-# 		The filtration value assigned to a simplex is the maximal filtration
-# 		value of one of its edges.
-#
-# 		The simplex tree must contain no simplex of dimension bigger than
-# 		1 when calling the method.
-#
-# 		:param max_dim: The maximal dimension.
-# 		:type max_dim: int
-# 		"""
-# 		cdef int maxdim = max_dim
-# 		with nogil:
-# 			self.get_ptr().expansion(maxdim)
-#
-# 	# def make_filtration_non_decreasing(self):
-# 	#     """This function ensures that each simplex has a higher filtration
-# 	#     value than its faces by increasing the filtration values.
-# 	#
-# 	#     :returns: True if any filtration value was modified,
-# 	#         False if the filtration was already non-decreasing.
-# 	#     :rtype: bool
-# 	#     """
-# 	#     return self.get_ptr().make_filtration_non_decreasing()
-
-#
-# 	def reset_filtration(self, filtration, min_dim = 0):
-# 		"""This function resets the filtration value of all the simplices of dimension at least min_dim. Resets all the
-# 		simplex tree when `min_dim = 0`.
-# 		`reset_filtration` may break the filtration property with `min_dim > 0`, and it is the user's responsibility to
-# 		make it a valid filtration (using a large enough `filt_value`, or calling `make_filtration_non_decreasing`
-# 		afterwards for instance).
-#
-# 		:param filtration: New threshold value.
-# 		:type filtration: float.
-# 		:param min_dim: The minimal dimension. Default value is 0.
-# 		:type min_dim: int.
-# 		"""
-# 		self.get_ptr().reset_filtration(filtration, min_dim)
-#
-# 	# def extend_filtration(self):
-# 	#     """ Extend filtration for computing extended persistence. This function only uses the filtration values at the
-# 	#     0-dimensional simplices, and computes the extended persistence diagram induced by the lower-star filtration
-# 	#     computed with these values.
-# 	#
-# 	#     .. note::
-# 	#
-# 	#         Note that after calling this function, the filtration values are actually modified within the simplex tree.
-# 	#         The function :func:`extended_persistence` retrieves the original values.
-# 	#
-# 	#     .. note::
-# 	#
-# 	#         Note that this code creates an extra vertex internally, so you should make sure that the simplex tree does
-# 	#         not contain a vertex with the largest possible value (i.e., 4294967295).
-# 	#
-# 	#     This `notebook <https://github.com/GUDHI/TDA-tutorial/blob/master/Tuto-GUDHI-extended-persistence.ipynb>`_
-# 	#     explains how to compute an extension of persistence called extended persistence.
-# 	#     """
-# 	#     self.get_ptr().compute_extended_filtration()
-#
-# 	# def extended_persistence(self, homology_coeff_field=11, min_persistence=0):
-# 	#     """This function retrieves good values for extended persistence, and separate the diagrams into the Ordinary,
-# 	#     Relative, Extended+ and Extended- subdiagrams.
-# 	#
-# 	#     :param homology_coeff_field: The homology coefficient field. Must be a prime number. Default value is 11. Max is 46337.
-# 	#     :type homology_coeff_field: int
-# 	#     :param min_persistence: The minimum persistence value (i.e., the absolute value of the difference between the
-# 	#         persistence diagram point coordinates) to take into account (strictly greater than min_persistence).
-# 	#         Default value is 0.0. Sets min_persistence to -1.0 to see all values.
-# 	#     :type min_persistence: float
-# 	#     :returns: A list of four persistence diagrams in the format described in :func:`persistence`. The first one is
-# 	#         Ordinary, the second one is Relative, the third one is Extended+ and the fourth one is Extended-.
-# 	#         See https://link.springer.com/article/10.1007/s10208-008-9027-z and/or section 2.2 in
-# 	#         https://link.springer.com/article/10.1007/s10208-017-9370-z for a description of these subtypes.
-# 	#
-# 	#     .. note::
-# 	#
-# 	#         This function should be called only if :func:`extend_filtration` has been called first!
-# 	#
-# 	#     .. note::
-# 	#
-# 	#         The coordinates of the persistence diagram points might be a little different than the
-# 	#         original filtration values due to the internal transformation (scaling to [-2,-1]) that is
-# 	#         performed on these values during the computation of extended persistence.
-# 	#
-# 	#     This `notebook <https://github.com/GUDHI/TDA-tutorial/blob/master/Tuto-GUDHI-extended-persistence.ipynb>`_
-# 	#     explains how to compute an extension of persistence called extended persistence.
-# 	#     """
-# 	#     cdef vector[pair[int, pair[double, double]]] persistence_result
-# 	#     if self.pcohptr != NULL:
-# 	#         del self.pcohptr
-# 	#     self.pcohptr = new Simplex_tree_persistence_interface(self.get_ptr(), False)
-# 	#     self.pcohptr.compute_persistence(homology_coeff_field, -1.)
-# 	#     return self.pcohptr.compute_extended_persistence_subdiagrams(min_persistence)
-#
-# 	def expansion_with_blocker(self, max_dim, blocker_func):
-# 		"""Expands the Simplex_tree containing only a graph. Simplices corresponding to cliques in the graph are added
-# 		incrementally, faces before cofaces, unless the simplex has dimension larger than `max_dim` or `blocker_func`
-# 		returns `True` for this simplex.
-#
-# 		The function identifies a candidate simplex whose faces are all already in the complex, inserts it with a
-# 		filtration value corresponding to the maximum of the filtration values of the faces, then calls `blocker_func`
-# 		with this new simplex (represented as a list of int). If `blocker_func` returns `True`, the simplex is removed,
-# 		otherwise it is kept. The algorithm then proceeds with the next candidate.
-#
-# 		.. warning::
-# 			Several candidates of the same dimension may be inserted simultaneously before calling `blocker_func`, so
-# 			if you examine the complex in `blocker_func`, you may hit a few simplices of the same dimension that have
-# 			not been vetted by `blocker_func` yet, or have already been rejected but not yet removed.
-#
-# 		:param max_dim: Expansion maximal dimension value.
-# 		:type max_dim: int
-# 		:param blocker_func: Blocker oracle.
-# 		:type blocker_func: Callable[[List[int]], bool]
-# 		"""
-# 		self.get_ptr().expansion_with_blockers_callback(max_dim, callback, <void*>blocker_func)
-#
-# 	# def persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
-# 	#     """This function computes and returns the persistence of the simplicial complex.
-# 	#
-# 	#     :param homology_coeff_field: The homology coefficient field. Must be a
-# 	#         prime number. Default value is 11. Max is 46337.
-# 	#     :type homology_coeff_field: int
-# 	#     :param min_persistence: The minimum persistence value to take into
-# 	#         account (strictly greater than min_persistence). Default value is
-# 	#         0.0.
-# 	#         Set min_persistence to -1.0 to see all values.
-# 	#     :type min_persistence: float
-# 	#     :param persistence_dim_max: If true, the persistent homology for the
-# 	#         maximal dimension in the complex is computed. If false, it is
-# 	#         ignored. Default is false.
-# 	#     :type persistence_dim_max: bool
-# 	#     :returns: The persistence of the simplicial complex.
-# 	#     :rtype:  list of pairs(dimension, pair(birth, death))
-# 	#     """
-# 	#     self.compute_persistence(homology_coeff_field, min_persistence, persistence_dim_max)
-# 	#     return self.pcohptr.get_persistence()
-#
-# 	# def compute_persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
-# 	#     """This function computes the persistence of the simplicial complex, so it can be accessed through
-# 	#     :func:`persistent_betti_numbers`, :func:`persistence_pairs`, etc. This function is equivalent to :func:`persistence`
-# 	#     when you do not want the list :func:`persistence` returns.
-# 	#
-# 	#     :param homology_coeff_field: The homology coefficient field. Must be a
-# 	#         prime number. Default value is 11. Max is 46337.
-# 	#     :type homology_coeff_field: int
-# 	#     :param min_persistence: The minimum persistence value to take into
-# 	#         account (strictly greater than min_persistence). Default value is
-# 	#         0.0.
-# 	#         Sets min_persistence to -1.0 to see all values.
-# 	#     :type min_persistence: float
-# 	#     :param persistence_dim_max: If true, the persistent homology for the
-# 	#         maximal dimension in the complex is computed. If false, it is
-# 	#         ignored. Default is false.
-# 	#     :type persistence_dim_max: bool
-# 	#     :returns: Nothing.
-# 	#     """
-# 	#     if self.pcohptr != NULL:
-# 	#         del self.pcohptr
-# 	#     cdef bool pdm = persistence_dim_max
-# 	#     cdef int coef = homology_coeff_field
-# 	#     cdef double minp = min_persistence
-# 	#     with nogil:
-# 	#         self.pcohptr = new Simplex_tree_persistence_interface(self.get_ptr(), pdm)
-# 	#         self.pcohptr.compute_persistence(coef, minp)
-# 	#
-# 	# def betti_numbers(self):
-# 	#     """This function returns the Betti numbers of the simplicial complex.
-# 	#
-# 	#     :returns: The Betti numbers ([B0, B1, ..., Bn]).
-# 	#     :rtype:  list of int
-# 	#
-# 	#     :note: betti_numbers function requires
-# 	#         :func:`compute_persistence`
-# 	#         function to be launched first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "compute_persistence() must be called before betti_numbers()"
-# 	#     return self.pcohptr.betti_numbers()
-# 	#
-# 	# def persistent_betti_numbers(self, from_value, to_value):
-# 	#     """This function returns the persistent Betti numbers of the
-# 	#     simplicial complex.
-# 	#
-# 	#     :param from_value: The persistence birth limit to be added in the
-# 	#         numbers (persistent birth <= from_value).
-# 	#     :type from_value: float
-# 	#     :param to_value: The persistence death limit to be added in the
-# 	#         numbers (persistent death > to_value).
-# 	#     :type to_value: float
-# 	#
-# 	#     :returns: The persistent Betti numbers ([B0, B1, ..., Bn]).
-# 	#     :rtype:  list of int
-# 	#
-# 	#     :note: persistent_betti_numbers function requires
-# 	#         :func:`compute_persistence`
-# 	#         function to be launched first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistent_betti_numbers()"
-# 	#     return self.pcohptr.persistent_betti_numbers(<double>from_value, <double>to_value)
-# 	#
-# 	# def persistence_intervals_in_dimension(self, dimension):
-# 	#     """This function returns the persistence intervals of the simplicial
-# 	#     complex in a specific dimension.
-# 	#
-# 	#     :param dimension: The specific dimension.
-# 	#     :type dimension: int
-# 	#     :returns: The persistence intervals.
-# 	#     :rtype:  numpy array of dimension 2
-# 	#
-# 	#     :note: intervals_in_dim function requires
-# 	#         :func:`compute_persistence`
-# 	#         function to be launched first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistence_intervals_in_dimension()"
-# 	#     piid = np.array(self.pcohptr.intervals_in_dimension(dimension))
-# 	#     # Workaround https://github.com/GUDHI/gudhi-devel/issues/507
-# 	#     if len(piid) == 0:
-# 	#         return np.empty(shape = [0, 2])
-# 	#     return piid
-# 	#
-# 	# def persistence_pairs(self):
-# 	#     """This function returns a list of persistence birth and death simplices pairs.
-# 	#
-# 	#     :returns: A list of persistence simplices intervals.
-# 	#     :rtype:  list of pair of list of int
-# 	#
-# 	#     :note: persistence_pairs function requires
-# 	#         :func:`compute_persistence`
-# 	#         function to be launched first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistence_pairs()"
-# 	#     return self.pcohptr.persistence_pairs()
-# 	#
-# 	# def write_persistence_diagram(self, persistence_file):
-# 	#     """This function writes the persistence intervals of the simplicial
-# 	#     complex in a user given file name.
-# 	#
-# 	#     :param persistence_file: Name of the file.
-# 	#     :type persistence_file: string
-# 	#
-# 	#     :note: intervals_in_dim function requires
-# 	#         :func:`compute_persistence`
-# 	#         function to be launched first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "compute_persistence() must be called before write_persistence_diagram()"
-# 	#     self.pcohptr.write_output_diagram(persistence_file.encode('utf-8'))
-# 	#
-# 	# def lower_star_persistence_generators(self):
-# 	#     """Assuming this is a lower-star filtration, this function returns the persistence pairs,
-# 	#     where each simplex is replaced with the vertex that gave it its filtration value.
-# 	#
-# 	#     :returns: First the regular persistence pairs, grouped by dimension, with one vertex per extremity,
-# 	#         and second the essential features, grouped by dimension, with one vertex each
-# 	#     :rtype: Tuple[List[numpy.array[int] of shape (n,2)], List[numpy.array[int] of shape (m,)]]
-# 	#
-# 	#     :note: lower_star_persistence_generators requires that `persistence()` be called first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "lower_star_persistence_generators() requires that persistence() be called first."
-# 	#     gen = self.pcohptr.lower_star_generators()
-# 	#     normal = [np.array(d).reshape(-1,2) for d in gen.first]
-# 	#     infinite = [np.array(d) for d in gen.second]
-# 	#     return (normal, infinite)
-# 	#
-# 	# def flag_persistence_generators(self):
-# 	#     """Assuming this is a flag complex, this function returns the persistence pairs,
-# 	#     where each simplex is replaced with the vertices of the edges that gave it its filtration value.
-# 	#
-# 	#     :returns: First the regular persistence pairs of dimension 0, with one vertex for birth and two for death;
-# 	#         then the other regular persistence pairs, grouped by dimension, with 2 vertices per extremity;
-# 	#         then the connected components, with one vertex each;
-# 	#         finally the other essential features, grouped by dimension, with 2 vertices for birth.
-# 	#     :rtype: Tuple[numpy.array[int] of shape (n,3), List[numpy.array[int] of shape (m,4)], numpy.array[int] of shape (l,), List[numpy.array[int] of shape (k,2)]]
-# 	#
-# 	#     :note: flag_persistence_generators requires that `persistence()` be called first.
-# 	#     """
-# 	#     assert self.pcohptr != NULL, "flag_persistence_generators() requires that persistence() be called first."
-# 	#     gen = self.pcohptr.flag_generators()
-# 	#     if len(gen.first) == 0:
-# 	#         normal0 = np.empty((0,3))
-# 	#         normals = []
-# 	#     else:
-# 	#         l = iter(gen.first)
-# 	#         normal0 = np.array(next(l)).reshape(-1,3)
-# 	#         normals = [np.array(d).reshape(-1,4) for d in l]
-# 	#     if len(gen.second) == 0:
-# 	#         infinite0 = np.empty(0)
-# 	#         infinites = []
-# 	#     else:
-# 	#         l = iter(gen.second)
-# 	#         infinite0 = np.array(next(l))
-# 	#         infinites = [np.array(d).reshape(-1,2) for d in l]
-# 	#     return (normal0, normals, infinite0, infinites)
-# 	#
-# 	# def collapse_edges(self, nb_iterations = 1):
-# 	#     """Assuming the complex is a graph (simplices of higher dimension are ignored), this method implicitly
-# 	#     interprets it as the 1-skeleton of a flag complex, and replaces it with another (smaller) graph whose
-# 	#     expansion has the same persistent homology, using a technique known as edge collapses
-# 	#     (see :cite:`edgecollapsearxiv`).
-# 	#
-# 	#     A natural application is to get a simplex tree of dimension 1 from :class:`~gudhi.RipsComplex`,
-# 	#     then collapse edges, perform :meth:`expansion()` and finally compute persistence
-# 	#     (cf. :download:`rips_complex_edge_collapse_example.py <../example/rips_complex_edge_collapse_example.py>`).
-# 	#
-# 	#     :param nb_iterations: The number of edge collapse iterations to perform. Default is 1.
-# 	#     :type nb_iterations: int
-# 	#     """
-# 	#     # Backup old pointer
-# 	#     cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
-# 	#     cdef int nb_iter = nb_iterations
-# 	#     with nogil:
-# 	#         # New pointer is a new collapsed simplex tree
-# 	#         self.thisptr = <intptr_t>(ptr.collapse_edges(nb_iter))
-# 	#         # Delete old pointer
-# 	#         del ptr
-#
-# 	def __eq__(self, other:SimplexTree):
-# 		"""Test for structural equality
-# 		:returns: True if the 2 simplex trees are equal, False otherwise.
-# 		:rtype: bool
-# 		"""
-# 		return dereference(self.get_ptr()) == dereference(other.get_ptr())
-#
-# cdef intptr_t _get_copy_intptr(SimplexTree stree) nogil:
-# 	return <intptr_t>(new Simplex_tree_multi_interface(dereference(stree.get_ptr())))
-#
-
+	from gudhi.bottleneck import bottleneck_distance
+	low, high = module.get_box()
+	nfiltration = len(low)
+	basepoints = _np.random.uniform(low=low, high=high, size=(nlines,nfiltration))
+	# barcodes from module
+	bcs_from_mod = (_get_bc_MD(module.barcodes(degree=degree, basepoints = basepoints), i) for i in range(len(basepoints)) )
+	# Computes gudhi barcodes
+	bcs_from_gudhi = (_get_bc_ST(st,basepoint=basepoint, degree=degree) for basepoint in basepoints)
+	return max((bottleneck_distance(a,b) for a,b in zip(bcs_from_mod, bcs_from_gudhi)))

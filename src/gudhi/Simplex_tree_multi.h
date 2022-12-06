@@ -14,9 +14,12 @@
 
 #include <algorithm>
 #include "gudhi/Simplex_tree.h"
+#include "../box.h"
+#include "../line_filtration_translation.h"
+
+
 
 namespace Gudhi {
-
 /** Model of SimplexTreeOptions.
  *
  * Maximum number of simplices to compute persistence is <CODE>std::numeric_limits<std::uint32_t>::max()</CODE>
@@ -44,7 +47,7 @@ bool operator<(const std::vector<double>& v1, const std::vector<double>& v2)
 	return true;
 }
 
-void multify(const uintptr_t splxptr, const uintptr_t newsplxptr, const unsigned int dimension = 1){
+void multify(const uintptr_t splxptr, const uintptr_t newsplxptr, const unsigned int dimension){
 	Simplex_tree<option_std> &st = *(Gudhi::Simplex_tree<option_std>*)(splxptr);
 	Simplex_tree<option_multi> &st_multi = *(Gudhi::Simplex_tree<option_multi>*)(newsplxptr);;
 	if (dimension <= 0)
@@ -70,6 +73,23 @@ void flatten(const uintptr_t splxptr, const uintptr_t newsplxptr, const unsigned
 		st.insert_simplex(simplex,f);
 	}
 }
+
+void flatten_diag(const uintptr_t splxptr, const uintptr_t newsplxptr, const std::vector<double> basepoint, int dimension){
+	Simplex_tree<option_std> &st = *(Gudhi::Simplex_tree<option_std>*)(newsplxptr);
+	Simplex_tree<option_multi> &st_multi = *(Gudhi::Simplex_tree<option_multi>*)(splxptr);
+	Vineyard::Line l(basepoint);
+	for (const auto &simplex_handle : st_multi.complex_simplex_range()){
+		std::vector<int> simplex;
+		for (auto vertex : st_multi.simplex_vertex_range(simplex_handle))
+			simplex.push_back(vertex);
+		
+		std::vector<double> f = st_multi.filtration(simplex_handle);
+		if (dimension <0)	 dimension = 0;
+		double new_filtration = l.push_forward(f)[dimension];
+		st.insert_simplex(simplex,new_filtration);
+	}
+}
+
 
 }	// namespace Gudhi
 

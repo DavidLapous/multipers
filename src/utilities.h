@@ -13,8 +13,15 @@
 
 #include <vector>
 #include <limits>
+#include <omp.h>
+
+
 
 namespace Vineyard {
+
+bool verbose = false;
+
+
 
 
 using index = unsigned int;
@@ -33,6 +40,25 @@ using bar = std::pair<corner_type, corner_type>;
 using multipers_barcode = std::vector<std::vector<double>>;
 const filtration_value_type inf = std::numeric_limits<filtration_value_type>::infinity();
 const filtration_value_type negInf = -1 * inf;
+using interval_type = std::pair<point_type, point_type>;
+
+
+bool is_smaller(const point_type& x, const point_type& y)
+{
+    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
+        if (x[i] > y[i]) return false;
+    return true;
+}
+
+bool is_greater(const point_type& x, const point_type& y)
+{
+    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
+        if (x[i] < y[i]) return false;
+    return true;
+}
+
+
+
 
 struct Bar{
     Bar() : dim(-1), birth(-1), death(-1)
@@ -94,8 +120,9 @@ public:
         std::vector<bar> out;
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
-            if (dimension == -1 or pt.get_dimension() == dimension){
-                out.push_back({pt.get_birth(), pt.get_death()});
+            if (dimension == -1 || pt.get_dimension() == dimension){
+                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != Vineyard::inf )
+					out.push_back({pt.get_birth(), pt.get_death()});
             }
         }
         out.shrink_to_fit();
@@ -115,7 +142,7 @@ public:
         return out;
     }
     iterator begin() const {return this->multiDiagram.begin();}
-    iterator end() const{return this->multiDiagram.end();}
+    iterator end() const {return this->multiDiagram.end();}
     unsigned int size() {return this->multiDiagram.size();}
     void set(std::vector<MultiDiagram_point>& m) {this-> multiDiagram.swap(m);}
     std::vector<MultiDiagram_point>& getref() {return this->multiDiagram;}
@@ -182,6 +209,21 @@ public:
     iterator begin() const {return this->multiDiagrams.begin();} // cython bug : iterators like bc in bcs crash)
     iterator end() const {return this->multiDiagrams.end();}
 
+	using barcodes = std::vector<std::vector<bar>>;
+	barcodes get_points(){
+		unsigned int nsummands = this->multiDiagrams.front().size();
+        unsigned int nlines = this->multiDiagrams.size();
+        // std::vector<std::vector<std::vector<double>>> out(nsummands, std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
+        barcodes out(nlines, std::vector<bar>(nsummands));
+        for (unsigned int i = 0; i < nlines; i++){
+            for(unsigned int j = 0; j < nsummands; j++){
+                const MultiDiagram_point &pt = this->multiDiagrams[i][j];
+				out[i][j] = {pt.get_birth(), pt.get_death()};
+            }
+        }
+        return out;
+	}
+
     unsigned int size() const {return this->multiDiagrams.size();}
 private:
     std::vector<MultiDiagram> multiDiagrams;
@@ -196,7 +238,8 @@ private:
         return true;
     }
 };
-}   //namespace Vineyard
+} //namespace Vineyard
+
 
 
 
@@ -218,5 +261,25 @@ namespace std{
 
 } // namespace std
 
+
+
+	// Different implementations of the matrix columns. Set seems to be the fastest in our tests.
+// using Vineyard_matrix_type = RU_matrix<Heap_column>;
+// using Vineyard_matrix_type = RU_matrix<List_column>;
+//  using Vineyard_matrix_type = RU_matrix<Vector_column>;
+// using Vineyard_matrix_type = RU_matrix<Unordered_set_column>;
+#include "ru_matrix.h"
+#include "heap_column.h"
+#include "list_column.h"
+//#include "list_column_2.h"
+#include "vector_column.h"
+#include "set_column.h"
+#include "unordered_set_column.h"
+
+
+namespace Vineyard {
+using Vineyard_matrix_type = RU_matrix<Set_column>;
+
+}   //namespace Vineyard
 
 #endif // UTILITIES_H

@@ -23,7 +23,9 @@ ctypedef vector[double] point_type
 ctypedef double filtration_value_type
 ctypedef vector[double] filtration_type
 ctypedef vector[int] simplex_type
-
+ctypedef vector[simplex_type] simplex_list
+ctypedef vector[pair[pair[int,int], pair[double, double]]] edge_list 
+ctypedef vector[int] euler_char_list
 
 cdef extern from "Simplex_tree_interface.h" namespace "Gudhi":
 	cdef cppclass Simplex_tree_options_multidimensional_filtration:
@@ -87,3 +89,11 @@ cdef extern from "Simplex_tree_interface.h" namespace "Gudhi":
 		ctypedef bool (*blocker_func_t)(vector[int], void *user_data)
 		void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void *user_data)
 
+		## MULTIPERS STUFF
+		void reset_keys() 
+		int get_key(const simplex_type)
+		void set_key(simplex_type, int)
+		void fill_lowerstar(vector[double], int)
+		simplex_list get_simplices_of_dimension(int)
+		edge_list get_edge_list()
+		euler_char_list euler_char(vector[filtration_type])

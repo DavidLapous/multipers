@@ -19,6 +19,10 @@ from simplex_tree_multi cimport Simplex_tree_multi_simplex_handle
 from simplex_tree_multi cimport Simplex_tree_multi_skeleton_iterator
 from simplex_tree_multi cimport Simplex_tree_multi_boundary_iterator
 
+
+from filtration_domination import remove_strongly_filtration_dominated, remove_filtration_dominated
+
+
 __author__ = "Vincent Rouvreau"
 __copyright__ = "Copyright (C) 2016 Inria"
 __license__ = "MIT"
@@ -33,6 +37,10 @@ __license__ = "MIT"
 
 
 
+cdef extern from "gudhi/Simplex_tree_multi.h" namespace "Gudhi":
+	void multify(const uintptr_t, const uintptr_t, const unsigned int)
+	void flatten(const uintptr_t, const uintptr_t, const unsigned int)
+	void flatten_diag(const uintptr_t, const uintptr_t, const vector[double], int)
 
 
 
@@ -420,19 +428,30 @@ cdef class SimplexTree:
 		:type max_dim: int
 		"""
 		cdef int maxdim = max_dim
+		current_dim = self.dimension()
 		with nogil:
 			self.get_ptr().expansion(maxdim)
+
+		# This is a fix for multipersistence. FIXME expansion in c++
+		self.make_filtration_non_decreasing(start_dimension=current_dim+1)
 		return self
 
-	# def make_filtration_non_decreasing(self):
-	# 	"""This function ensures that each simplex has a higher filtration
-	# 	value than its faces by increasing the filtration values.
- #
-	# 	:returns: True if any filtration value was modified,
-	# 		False if the filtration was already non-decreasing.
-	# 	:rtype: bool
-	# 	"""
-	# 	return self.get_ptr().make_filtration_non_decreasing()
+	def make_filtration_non_decreasing(self, start_dimension:int=1)->SimplexTree: # FIXME TODO code in c++
+		"""This function ensures that each simplex has a higher filtration
+		value than its faces by increasing the filtration values.
+
+		:returns: True if any filtration value was modified,
+			False if the filtration was already non-decreasing.
+		:rtype: bool
+		"""
+		# return self.get_ptr().make_filtration_non_decreasing()
+		if start_dimension <= 0:
+			start_dimension = 1
+		for dim in range(start_dimension, self.dimension()+1):
+			for splx, f in self.get_skeleton(dim):
+				if len(splx) != dim + 1:	continue
+				self.assign_filtration(splx, np.max([g for _,g in self.get_boundaries(splx)] + [f], axis=0))
+		return self
 
 	def reset_filtration(self, filtration, min_dim = 0):
 		"""This function resets the filtration value of all the simplices of dimension at least min_dim. Resets all the
@@ -551,20 +570,24 @@ cdef class SimplexTree:
 
 		Parameters
 		----------
-
-		precision: positive float
+		max_error: positive float
 			Trade-off between approximation and computational complexity.
-			Upper bound of the module approximation, in bottleneck distance,
+			Upper bound of the module approximation, in bottleneck distance, 
 			for interval-decomposable modules.
+		nlines: int
+			Alternative to precision.
 		box : pair of list of floats
 			Defines a rectangle on which to compute the approximation.
 			Format : [x,y], where x,y defines the rectangle {z : x ≤ z ≤ y}
 		threshold: bool
-			When true, intersects the module support with the box.
+			When true, computes the module restricted to the box.
+		max_dimension:int
+			Max simplextree dimension to consider. 
 		verbose: bool
 			Prints C++ infos.
 		ignore_warning : bool
 			Unless set to true, prevents computing on more than 10k lines. Useful to prevent a segmentation fault due to "infinite" recursion.
+		
 		Returns
 		-------
 		PyModule
@@ -580,8 +603,10 @@ cdef class SimplexTree:
 		if len(f) < 2:
 			print("Use Gudhi for 1-persistence !")
 		return approx(self,**kwargs)
-	def edge_collapse(self, max_dimension:int=None, num:int=1, progress:bool=True)->SimplexTree:
-		"""Strong collapse of 1 critical clique complex, compatible with 2-parameter filtration.
+	def get_edge_list(self):
+		return self.get_ptr().get_edge_list()
+	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True)->SimplexTree:
+		"""(Strong) collapse of 1 critical clique complex, compatible with 2-parameter filtration.
 
 		Parameters
 		----------
@@ -589,6 +614,8 @@ cdef class SimplexTree:
 			Max simplicial dimension of the complex. Unless specified, keeps the same dimension.
 		num:int
 			The number of collapses to do.
+		strong:bool
+			Whether to use strong collapses or collapses (slower, but may remove more edges)
 		progress:bool
 			If true, shows the progress of the number of collapses.
 
@@ -606,10 +633,15 @@ cdef class SimplexTree:
 		if num <= 0:
 			return self
 		max_dimension = self.dimension() if max_dimension is None else max_dimension
-		edges = [(tuple(splx), (f1, f2)) for splx,(f1,f2) in self.get_skeleton(1) if len(splx) == 2]
+		# edges_iterator = ((tuple(splx), tuple(f)) for splx,f in self.get_skeleton(1) if len(splx) == 2)
+		# edges = list(edges_iterator)
+		edges = self.get_ptr().get_edge_list()
 		n = len(edges)
-		for i in tqdm(range(num), total=num, desc="Collapse", disable=not(progress)):
-			edges = _remove_strongly_filtration_dominated(edges)
+		for i in tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)):
+			if strong:
+				edges = remove_strongly_filtration_dominated(edges)
+			else:
+				edges = remove_filtration_dominated(edges)
 			# Prevents doing useless collapses
 			if len(edges) >= n:
 				break
@@ -622,17 +654,18 @@ cdef class SimplexTree:
 			reduced_tree.insert(e, [f1,f2])
 		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
 		self.expansion(max_dimension) # Expands back the simplextree to the original dimension.
+		# self.make_filtration_non_decreasing(2)
 		return self
 
-	def to_rivet(self, path="rivet_dataset.txt", homology:int = 1, progress:bool=True, overwrite:bool=False, xbins:int=0, ybins:int=0)->None:
+	def to_rivet(self, path="rivet_dataset.txt", degree:int = 1, progress:bool=False, overwrite:bool=False, xbins:int=0, ybins:int=0)->None:
 		""" Create a file that can be imported by rivet, representing the filtration of the simplextree.
 
 		Parameters
 		----------
 		path:str
 			path of the file.
-		homology:int
-			The homological dimension to ask rivet to compute.
+		degree:int
+			The homological degree to ask rivet to compute.
 		progress:bool = True
 			Shows the progress bar.
 		overwrite:bool = False
@@ -649,8 +682,9 @@ cdef class SimplexTree:
 				return
 			remove(path)
 		file = open(path, "a")
+		file.write("# This file was generated by MMA.\n")
 		file.write("--datatype bifiltration\n")
-		file.write(f"--homology {homology}\n")
+		file.write(f"--homology {degree}\n")
 		file.write(f"-x {xbins}\n")
 		file.write(f"-y {ybins}\n")
 		file.write("--xlabel time of appearance\n")
@@ -670,6 +704,134 @@ cdef class SimplexTree:
 		file.close()
 		return
 
+	def get_simplices_of_dimension(self, dim:int):
+		return self.get_ptr().get_simplices_of_dimension(dim)
+	def key(self, simplex:list[int])->int:
+		return self.get_ptr().get_key(simplex)
+	def reset_keys(self)->None:
+		self.get_ptr().reset_keys()
+		return
+	def set_key(self,simplex:list[int], key:int)->None:
+		self.get_ptr().set_key(simplex, key)
+		return
+	def to_firep(self, path="firep_dataset.txt", progress:bool=True, overwrite:bool=False, mpfree_compatible:bool=True, xlabel="Filtration 1", ylabel="Filtration 2")->None:
+		""" Create a file that can be imported by rivet or mpfree, representing the bi-filtration of the simplextree (cut to dimension 2).
+
+		Parameters
+		----------
+		path:str
+			path of the file.
+		progress:bool = True
+			Shows the progress bar.
+		overwrite:bool = False
+			If true, will overwrite the previous file if it already exists.
+		WARNING
+		-------
+		This will not take into account simplices of order higher than 2.
+		Returns
+		-------
+		Nothing
+		"""
+		### GUDHI BUGFIX
+		self.reset_keys()
+		### File 
+		from os.path import exists
+		from os import remove
+		if exists(path):
+			if not(overwrite):
+				print(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
+				return
+			remove(path)
+		file = open(path, "a")
+		#file.write("# This file was generated by MMA.\n")
+		file.write("firep\n") if mpfree_compatible else file.write("--datatype firep\n")
+		if not mpfree_compatible:
+			file.write("--xlabel ")
+		file.write(f"{xlabel}\n")
+		if not mpfree_compatible:
+			file.write("--ylabel ")
+		file.write(f"{ylabel}\n")
+		## WRITES TSR VARIABLES
+		tsr:list[int]= [0]*3
+		for splx,f in self.get_simplices():
+			dim = len(splx)-1
+			tsr[dim] += (int)(len(f)/2)
+		r,s,t = tsr
+		file.write(f"{t} {s} {r}\n")
+
+		dict_splx_to_firep_number = {}
+		tsr:list[list[int]] = [[],[],[]]
+
+
+		#####################NEW TODO : FIXME 1-critical only here ...
+		# def multiplicity(splx:list[int]):
+		# 	return len(self.filtration()) // 2 # This will also work if splx is not in the filtration ! (inf is [inf] and 1//2 =0)
+		# def write_splx_f(file, splx:list[int], filtration:list[float])->str:
+		# 	for f in filtration:
+		# 		file.write(f"{f} ")
+		# 	file.write(";")
+		# 	for v in splx:
+		# 		file.write(f" {v}")
+		# 	file.write("\n")
+		# 	return
+
+		# C0, C1, C2 = {}, {}, {}
+		# c0,c1,c2 = 0,0,0
+		# ## Fills dim2 and its faces to tsr
+		# for splx, _ in self.get_skeleton(2):
+		# 	if len(splx) != 3:	continue
+		# 	# max_boundary_multiplicity = max([multiplicity(b) for b,_ in self.get_boundaries(splx)])
+		# 	C2[self.key(splx)] = [len(C2), splx]
+		# 	for b,_ in self.get_boundaries(splx):
+		# 		C1[self.key(b)] = [len(C1), b]
+		# 		for bb,_ in self.get_boundaries(splx):
+		# 			C0[self.key(bb)] = [len(C0), bb]
+		# # Fills dim1 numbers
+		# for splx, _ in self.get_skeleton(1):
+		# 	if len(splx) != 2:	continue
+		# 	if not self.key(splx) in C1:
+		# 		C1[self.key(splx)] = [len(C1), splx]
+		# 	for b,_ in self.get_boundaries(splx):
+		# 		if not self.key(b) in C0:
+		# 			C0[self.key(b)] = [len(C0), b]
+		# # Fills dim0 numbers
+		# for splx,_ in self.get_skeleton(0):
+		# 	if not self.key(splx) in C0:
+		# 		C0[self.key(splx)] = [len(C0), []]
+		
+		# C = [C2,C1]
+		# for Ci in C:
+		# 	for key, [idx, splx] in Ci.items():
+		# 		write_splx_f(file, splx, self.filtration(splx))
+
+
+		for dim in range(2,-1,-1):  #range(self.dimension(),-1 , -1): 
+			for splx,F in self.get_skeleton(dim):
+				if len(splx) != dim+1:	continue
+				nbirth = (int)(len(F)/2)					
+				for i in range(nbirth):
+					for b,_ in self.get_boundaries(splx):
+						if not self.key(b) in dict_splx_to_firep_number:
+							dict_splx_to_firep_number[self.key(b)] = len(tsr[dim-1])
+							tsr[dim-1].append(b)
+		## Adds simplices that are not borders to tsr
+		for splx,_ in self.get_skeleton(2):
+			if not self.key(splx) in dict_splx_to_firep_number:
+				tsr[len(splx)-1].append(splx)
+		## Writes simplices of tsr to file
+		for dim in range(2,0,-1):
+			for splx in tsr[dim]:
+				F = self.filtration(splx)
+				nbirth = (int)(len(F)/2)					
+				for i in range(nbirth):
+					birth = [F[i*2], F[i*2+1]]
+					file.write(f"{F[i*2]} {F[i*2+1]} ;")
+					for b,_ in self.get_boundaries(splx):
+						file.write(f" {dict_splx_to_firep_number[self.key(b)]}")
+					file.write("\n")
+		file.close()
+		return
+	
 	def filtration_bounds(self):
 		"""
 		Returns the filtrations bounds.
@@ -678,24 +840,72 @@ cdef class SimplexTree:
 		high = np.max([f for s,f in self.get_simplices()], axis=0)
 		return [low,high]
 
-	def fill_lowerstar(self, F, dimension:int):
+	def fill_lowerstar(self, F, parameter:int):
 		""" Fills the `dimension`th filtration by the lower-star filtration defined by F.
 
 		Parameters
 		----------
 		F:1d array
-			The density over the vertices, that induces a lowerstar filtrration.
-		dimension:int
-			Which filtration to fill. /!\ python starts at 0.
+			The density over the vertices, that induces a lowerstar filtration.
+		parameter:int
+			Which filtration parameter to fill. /!\ python starts at 0.
 
 		Returns
 		-------
 		self:Simplextree
 		"""
-		for s, sf in self.get_simplices():
-			self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
+		# for s, sf in self.get_simplices():
+		# 	self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
+		self.get_ptr().fill_lowerstar(F, parameter)
 		return self
+	
+	# def diag_slice(self, basepoint, col:int=0):
+	# 	""" Turns this simplextree into a gudhi simplextree, with filtration given by the diagonal line crossing the basepoint. 
+	# 	Filtration is given by its `col`'s coordinate
 
+	# 	Parameters
+	# 	----------
+	# 	basepoint:1d array
+			
+	# 	parameter:int
+	# 		Which filtration parameter to fill. /!\ python starts at 0.
+
+	# 	Returns
+	# 	-------
+	# 	self:Simplextree
+
+	# 	"""
+	# 	from gudhi import SimplexTree
+	# 	st = SimplexTree()
+	# 	basepoint = np.array(basepoint)
+	# 	for s,f in self.get_simplices():
+	# 		f1d = (basepoint + np.max(np.array(f) - basepoint))[col]
+	# 		st.insert(s, f1d)
+	# 	return st
+
+
+	def to_gudhi(self, parameter:int=0, basepoint:None|list[float]|np.ndarray= None):
+		"""Converts an mma simplextree to a gudhi simplextree.
+		Parameters
+		----------
+			parameter:int = 0
+				The parameter to keep. WARNING will crash if the mma simplextree is not well filled.
+			basepoint:None
+				Instead of keeping a single parameter, will consider the filtration defined by the diagonal line crossing the basepoint.
+		WARNING 
+		-------
+			There are no safeguard yet, it WILL crash if asking for a parameter that is not filled.
+		Returns
+		-------
+			A gudhi simplextree with chosen 1D filtration.
+		"""
+		import gudhi as gd
+		new_simplextree = gd.SimplexTree()
+		if basepoint is None:
+			flatten(self.thisptr, new_simplextree.thisptr, parameter)
+		else: 
+			flatten_diag(self.thisptr, new_simplextree.thisptr, basepoint, parameter)
+		return new_simplextree
 	# def compute_persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
 	#     """This function computes the persistence of the simplicial complex, so it can be accessed through
 	#     :func:`persistent_betti_numbers`, :func:`persistence_pairs`, etc. This function is equivalent to :func:`persistence`
@@ -879,34 +1089,40 @@ cdef class SimplexTree:
 		:rtype: bool
 		"""
 		return dereference(self.get_ptr()) == dereference(other.get_ptr())
+	def euler_char(self, points:list[float] | list[list[float]] | np.ndarray) -> np.ndarray:
+		""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
+
+		Parameters
+		----------
+		points: list[float] | list[list[float]] | np.ndarray
+			List of filtration values on which to compute the euler characteristic.
+			WARNING FIXME : the points have to have the same dimension as the simplextree.
+
+		Returns
+		-------
+		The list of euler characteristic values
+		"""
+		if len(points) == 0:
+			return []
+		if type(points[0]) is float:
+			points = [points]
+		if type(points) is np.ndarray:
+			assert len(points.shape) in [1,2]
+			if len(points.shape) == 1:
+				points = [points]
+		return np.array(self.get_ptr().euler_char(points), dtype=int)
+	
 
 
 cdef intptr_t _get_copy_intptr(SimplexTree stree) nogil:
 	return <intptr_t>(new Simplex_tree_multi_interface(dereference(stree.get_ptr())))
 
 
-cdef extern from "gudhi/Simplex_tree_multi.h" namespace "Gudhi":
-	void multify(const uintptr_t, const uintptr_t, const unsigned int)
-	void flatten(const uintptr_t, const uintptr_t, const unsigned int)
 
-def to_gudhi(simplextree, dimension=0):
-	"""Converts an mma simplextree to a gudhi simplextree.
-	Parameters
-	----------
-		dimension:int = 0
-			The dimension to keep. WARNING will crash if the mma simplextree is not well filled.
-	Returns
-	-------
-		A gudhi simplextree with filtration being the `dimension`th one of the original simplextree.
-	"""
-	import gudhi as gd
-	if type(simplextree) == type(gd.SimplexTree()):
-		return simplextree
-	new_simplextree = gd.SimplexTree()
-	flatten(simplextree.thisptr, new_simplextree.thisptr, dimension)
-	return new_simplextree
 
-def from_gudhi(simplextree, dimension:int=2)->SimplexTree:
+
+
+def from_gudhi(simplextree, parameters:int=2)->SimplexTree:
 	"""Converts a gudhi simplextree to an mma simplextree.
 	Parameters
 	----------
@@ -919,5 +1135,50 @@ def from_gudhi(simplextree, dimension:int=2)->SimplexTree:
 	if type(simplextree) == type(SimplexTree()):
 		return simplextree
 	st = SimplexTree()
-	multify(simplextree.thisptr, st.thisptr, dimension)
+	multify(simplextree.thisptr, st.thisptr, parameters)
 	return st
+
+
+
+# def from_firep(path:str, enfore_1critical=True): ## Not finished yet
+# 	st = SimplexTree()
+# 	contains_pv = lambda line : ';' in line 
+# 	is_comment = lambda line : line[0] == "#"
+# 	def get_splx_filtration(line:str):
+# 		line += " "
+# 		filtration, splx = line.split(";")
+# 		splx = [truc for truc in splx.split(" ") if truc != ""]
+# 		boundary = [truc for truc in splx.split(" ") if truc != ""]
+# 		splx = convert(splx)
+# 		return filtration, splx
+# 	n_inserted_splxs = [0]*2
+# 	def convert(splx):
+# 		if len(splx) <= 0: return [n_inserted_splxs[0]]
+# 		dim:int = len(splx)-1
+# 		new_splx = []
+# 		if dim == 1:
+# 			k = n_inserted_splxs[0]
+# 			for s in splx:
+# 				new_splx.append(k-s-1)
+# 			return new_splx
+# 		if dim > 2: 
+# 			warn("OSKOUR")
+# 			return new_splx
+# 		k = sum(n_inserted_splxs)
+# 		for s in splx:
+# 			new_splx.append(k-s-1)
+# 		return new_splx
+
+# 	t,s,r = [-1]*3
+# 	with open(path, "r") as f:
+# 		passed  == false
+# 		for line in f.readlines()[::-1]:
+# 			if is_comment(line):	continue
+# 			if not contains_pv:	break
+# 			filtration, splx = get_splx_filtration(line)
+# 			if not st.insert(splx, filtration):
+# 				old_filtration = st.filtration(splx)
+# 				st.assign_filtration(splx,old_filtration + filtration)
+# 			else:
+# 				n_inserted_splxs[max(len(splx)-1,0)] += 1
+# 	return st

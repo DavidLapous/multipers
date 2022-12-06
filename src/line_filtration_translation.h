@@ -16,13 +16,13 @@
 #ifndef LINE_FILTRATION_TRANSLATION_H_INCLUDED
 #define LINE_FILTRATION_TRANSLATION_H_INCLUDED
 
-#include "approximation.h"
 #include "utilities.h"
+#include "debug.h"
+#include "box.h"
 
 namespace Vineyard{
 	using Debug::Timer;
 
-	class line;
 
 
 	class Line
