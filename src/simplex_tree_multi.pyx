@@ -38,9 +38,11 @@ __license__ = "MIT"
 
 
 cdef extern from "gudhi/Simplex_tree_multi.h" namespace "Gudhi":
-	void multify(const uintptr_t, const uintptr_t, const unsigned int)
-	void flatten(const uintptr_t, const uintptr_t, const unsigned int)
-	void flatten_diag(const uintptr_t, const uintptr_t, const vector[double], int)
+	void multify(const uintptr_t, const uintptr_t, const unsigned int) nogil
+	void flatten(const uintptr_t, const uintptr_t, const unsigned int) nogil
+	void flatten_diag(const uintptr_t, const uintptr_t, const vector[double], int) nogil
+
+
 
 
 
@@ -63,13 +65,14 @@ cdef class SimplexTree:
 	# Use intptr_t instead to cast the pointer
 	cdef public intptr_t thisptr
 
+
 	# Get the pointer casted as it should be
 	cdef Simplex_tree_multi_interface* get_ptr(self) nogil:
 		return <Simplex_tree_multi_interface*>(self.thisptr)
 
 	# cdef Simplex_tree_persistence_interface * pcohptr
 	# Fake constructor that does nothing but documenting the constructor
-	def __init__(self, other = None):
+	def __init__(self, other = None, num_parameters:int=2):
 		"""SimplexTree constructor.
 
 		:param other: If `other` is `None` (default value), an empty `SimplexTree` is created.
@@ -82,8 +85,9 @@ cdef class SimplexTree:
 		:note: If the `SimplexTree` is a copy, the persistence information is not copied. If you need it in the clone,
 			you have to call :func:`compute_persistence` on it even if you had already computed it in the original.
 		"""
+		
 	# The real cython constructor
-	def __cinit__(self, other = None):
+	def __cinit__(self, other = None, num_parameters:int=2): #TODO doc
 		if other:
 			if isinstance(other, SimplexTree):
 				self.thisptr = _get_copy_intptr(other)
@@ -91,6 +95,9 @@ cdef class SimplexTree:
 				raise TypeError("`other` argument requires to be of type `SimplexTree`, or `None`.")
 		else:
 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
+		self.get_ptr().set_number_of_parameters(num_parameters)
+	
+	# TODO : set number of parameters outside the constructor ?
 
 	def __dealloc__(self):
 		cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
@@ -153,6 +160,7 @@ cdef class SimplexTree:
 			any function that relies on the filtration property, like
 			:meth:`persistence`.
 		"""
+		assert len(filtration)>0 and len(filtration) % self.get_ptr().get_number_of_parameters() == 0
 		self.get_ptr().assign_simplex_filtration(simplex, filtration)
 
 
@@ -230,7 +238,7 @@ cdef class SimplexTree:
 		"""
 		return self.get_ptr().find_simplex(simplex)
 
-	def insert(self, simplex, filtration:list=[0,0])->bool:
+	def insert(self, simplex, filtration:list|np.ndarray|None=None)->bool:
 		"""This function inserts the given N-simplex and its subfaces with the
 		given filtration value (default value is '0.0'). If some of those
 		simplices are already present with a higher filtration value, their
@@ -245,22 +253,20 @@ cdef class SimplexTree:
 			otherwise (whatever its original filtration value).
 		:rtype:  bool
 		"""
-
-		# TODO : add a filtration_dimension attribute
-		# if self.filtration_dimension is None:
-		# 	if filtration is None:
-		# 		from warnings import warn
-		# 		warn("Filtration has to be specified to initialize the complex dimension.")
-		# 		return False
-		# 	self.dimension = len(filtration)
-		# elif filtration is None:
-		# 	filtration = [0]*self.filtration_dimension
-		# elif len(filtration) != self.filtration_dimension:
-		# 	from warnings import warn
-		# 	warn(f"Filtration value has to be of size {self.dimension}.")
-		# 	return False
-
-		return self.get_ptr().insert(simplex, <filtration_type>filtration)
+		num_parameters = self.get_ptr().get_number_of_parameters()
+		if filtration is None:	filtration = np.array([-np.inf]*num_parameters)
+		simplex_already_exists = not self.get_ptr().insert(simplex, <filtration_type>filtration)
+		if simplex_already_exists:
+			old_filtration  = np.array(self.filtration(simplex))
+			old_filtrations = np.array(np.array_split(old_filtration, len(old_filtration) // num_parameters))
+			filtration = np.array(filtration)
+			if np.all(old_filtrations >= filtration) or np.all(old_filtrations <= filtration):
+				return False
+			else:
+				new_filtration = np.array(np.concatenate([old_filtration, filtration], axis = 0))
+				self.assign_filtration(simplex, new_filtration)
+				return True
+		return True
 
 	def get_simplices(self):
 		"""This function returns a generator with simplices and their given
@@ -451,6 +457,7 @@ cdef class SimplexTree:
 			for splx, f in self.get_skeleton(dim):
 				if len(splx) != dim + 1:	continue
 				self.assign_filtration(splx, np.max([g for _,g in self.get_boundaries(splx)] + [f], axis=0))
+		# FIXME adapt for multicritical filtrrations
 		return self
 
 	def reset_filtration(self, filtration, min_dim = 0):
@@ -605,7 +612,7 @@ cdef class SimplexTree:
 		return approx(self,**kwargs)
 	def get_edge_list(self):
 		return self.get_ptr().get_edge_list()
-	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True)->SimplexTree:
+	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True, full:bool=False)->SimplexTree:
 		"""(Strong) collapse of 1 critical clique complex, compatible with 2-parameter filtration.
 
 		Parameters
@@ -616,41 +623,52 @@ cdef class SimplexTree:
 			The number of collapses to do.
 		strong:bool
 			Whether to use strong collapses or collapses (slower, but may remove more edges)
+		full:bool
+			Collapses the maximum number of edges if true, i.e., will do at most 100 strong collapses and 100 non-strong collapses afterward.
 		progress:bool
 			If true, shows the progress of the number of collapses.
 
 		WARNING
 		-------
-			This will destroy all of the k-simplices, with k>=2. Be sure to use this with a clique complex, if you want to preserve the homology strictly above dimension 1.
-
+			- This will destroy all of the k-simplices, with k>=2. Be sure to use this with a clique complex, if you want to preserve the homology strictly above dimension 1.
+			- This is for 1 critical simplices, with 2 parameter persistence.
 		Returns
 		-------
 		self:SimplexTree
 			A simplex tree that has the same homology over this bifiltration.
 
 		"""
+		# TODO : find a way to do multiple edge collapses without python conversions.
+		assert self.get_ptr().get_number_of_parameters() == 2
 		from tqdm import tqdm
 		if num <= 0:
 			return self
 		max_dimension = self.dimension() if max_dimension is None else max_dimension
-		# edges_iterator = ((tuple(splx), tuple(f)) for splx,f in self.get_skeleton(1) if len(splx) == 2)
-		# edges = list(edges_iterator)
-		edges = self.get_ptr().get_edge_list()
+		# edge_list = std::vector<std::pair<std::pair<int,int>, std::pair<double, double>>>
+		# cdef vector[pair[pair[int,int],pair[double,double]]] 
+		edges = self.get_ptr().get_edge_list() 
+		# cdef int n = edges.size()
 		n = len(edges)
 		for i in tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)):
 			if strong:
-				edges = remove_strongly_filtration_dominated(edges)
+				edges = remove_strongly_filtration_dominated(edges) # nogil ?
 			else:
 				edges = remove_filtration_dominated(edges)
 			# Prevents doing useless collapses
 			if len(edges) >= n:
-				break
+				if full and strong:
+					strong = False
+					n = len(edges)
+					# n = edges.size() # len(edges)
+				else : 
+					break
 			else:
 				n = len(edges)
+				# n = edges.size()
 		reduced_tree = SimplexTree()
 		for splx, f in self.get_skeleton(0): # Adds vertices back
 			reduced_tree.insert(splx, f)
-		for e, (f1, f2) in edges:			# Adds reduced edges back
+		for e, (f1, f2) in edges:			# Adds reduced edges back # TODO : with insert_batch
 			reduced_tree.insert(e, [f1,f2])
 		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
 		self.expansion(max_dimension) # Expands back the simplextree to the original dimension.
@@ -706,12 +724,12 @@ cdef class SimplexTree:
 
 	def get_simplices_of_dimension(self, dim:int):
 		return self.get_ptr().get_simplices_of_dimension(dim)
-	def key(self, simplex:list[int])->int:
+	def key(self, simplex:list|np.ndarray):
 		return self.get_ptr().get_key(simplex)
 	def reset_keys(self)->None:
 		self.get_ptr().reset_keys()
 		return
-	def set_key(self,simplex:list[int], key:int)->None:
+	def set_key(self,simplex:list|np.ndarray, key:int)->None:
 		self.get_ptr().set_key(simplex, key)
 		return
 	def to_firep(self, path="firep_dataset.txt", progress:bool=True, overwrite:bool=False, mpfree_compatible:bool=True, xlabel="Filtration 1", ylabel="Filtration 2")->None:
@@ -831,11 +849,92 @@ cdef class SimplexTree:
 					file.write("\n")
 		file.close()
 		return
-	
+		
+	def to_scc(self, path="scc_dataset.txt", progress:bool=True, overwrite:bool=False, ignore_last_generators:bool=True, strip_comments:bool=False)->None:
+		""" Create a file with the scc2020 standard, representing the n-filtration of the simplextree.
+		Link : https://bitbucket.org/mkerber/chain_complex_format/src/master/
+
+		Parameters
+		----------
+		path:str
+			path of the file.
+		ignore_last_generators:bool = True
+			If false, will include the filtration values of the last free persistence module.
+		progress:bool = True
+			Shows the progress bar.
+		overwrite:bool = False
+			If true, will overwrite the previous file if it already exists.
+
+		Returns
+		-------
+		Nothing
+		"""
+		### GUDHI BUGFIX
+		self.reset_keys()
+		### File 
+		from os.path import exists
+		from os import remove
+		if exists(path):
+			if not(overwrite):
+				print(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
+				return
+			remove(path)
+		file = open(path, "a")
+		file.write("scc2020\n")
+		if not strip_comments: file.write("# This file was generated by MMA.\n")
+		if not strip_comments: file.write("# Number of parameters\n")
+		num_parameters = self.get_ptr().get_number_of_parameters()
+		file.write(f"{num_parameters}\n") 
+		if not strip_comments: file.write("# Sizes of generating sets\n")
+		## WRITES TSR VARIABLES
+		tsr:list[int]= [0]*(self.dimension()+1) # dimension --- 0
+		for splx,f in self.get_simplices():
+			dim = len(splx)-1
+			tsr[dim] += (int)(len(f) // num_parameters)
+		tsr.reverse()
+		file.write(" ".join([str(n) for n in tsr])+"\n")
+
+		## Adds the boundaries to the dictionnary + tsr
+		dict_splx_to_firep_number = {}
+		tsr:list[list[int]] = [[] for _ in range(len(tsr))] # tsr stores simplices vertices, according to dimension, and the dictionnary
+		for dim in range(self.dimension(),-1 , -1): # range(2,-1,-1):
+			for splx,F in self.get_skeleton(dim):
+				if len(splx) != dim+1:	continue
+				for b,_ in self.get_boundaries(splx):
+					if not self.key(b) in dict_splx_to_firep_number:
+						dict_splx_to_firep_number[self.key(b)] = len(tsr[dim-1])
+						tsr[dim-1].append(b)
+		
+		## Adds simplices that are not borders to tsr, i.e., simplices not in the dictionnary 
+		for splx,_ in self.get_simplices():
+			if not self.key(splx) in dict_splx_to_firep_number:
+				tsr[len(splx)-1].append(splx)
+		## Writes simplices of tsr to file
+		dim_range = range(self.dimension(),0,-1) if ignore_last_generators else range(self.dimension(),-1,-1)
+		for dim in dim_range: # writes block by block
+			if not strip_comments: file.write(f"# Block of dimension {dim}\n")
+			for splx in tsr[dim]: # for simplices of dimension
+				F = self.filtration(splx)
+				nbirth = (int)(len(F)//2)
+				for i in range(nbirth):
+					simplex_filtration = F[i*num_parameters:(i+1)*num_parameters]
+					file.write(" ".join([str(f) for f in simplex_filtration]))
+					file.write("; ")
+					for b,_ in self.get_boundaries(splx):
+						file.write(f" {dict_splx_to_firep_number[self.key(b)]}")
+					file.write("\n")
+		file.close()
+		return
+
+
+
+
+
 	def filtration_bounds(self):
 		"""
 		Returns the filtrations bounds.
 		"""
+		#FIXME : deal with multicritical filtrations
 		low = np.min([f for s,f in self.get_simplices()], axis=0)
 		high = np.max([f for s,f in self.get_simplices()], axis=0)
 		return [low,high]
@@ -858,33 +957,9 @@ cdef class SimplexTree:
 		# 	self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
 		self.get_ptr().fill_lowerstar(F, parameter)
 		return self
-	
-	# def diag_slice(self, basepoint, col:int=0):
-	# 	""" Turns this simplextree into a gudhi simplextree, with filtration given by the diagonal line crossing the basepoint. 
-	# 	Filtration is given by its `col`'s coordinate
-
-	# 	Parameters
-	# 	----------
-	# 	basepoint:1d array
-			
-	# 	parameter:int
-	# 		Which filtration parameter to fill. /!\ python starts at 0.
-
-	# 	Returns
-	# 	-------
-	# 	self:Simplextree
-
-	# 	"""
-	# 	from gudhi import SimplexTree
-	# 	st = SimplexTree()
-	# 	basepoint = np.array(basepoint)
-	# 	for s,f in self.get_simplices():
-	# 		f1d = (basepoint + np.max(np.array(f) - basepoint))[col]
-	# 		st.insert(s, f1d)
-	# 	return st
 
 
-	def to_gudhi(self, parameter:int=0, basepoint:None|list[float]|np.ndarray= None):
+	def to_gudhi(self, parameter:int=0, basepoint:None|list|np.ndarray= None):
 		"""Converts an mma simplextree to a gudhi simplextree.
 		Parameters
 		----------
@@ -899,189 +974,25 @@ cdef class SimplexTree:
 		-------
 			A gudhi simplextree with chosen 1D filtration.
 		"""
+		# FIXME : deal with multicritical filtrations
 		import gudhi as gd
 		new_simplextree = gd.SimplexTree()
+		assert parameter < self.get_ptr().get_number_of_parameters()
+		cdef int c_parameter = parameter
+		cdef intptr_t old_ptr = self.thisptr
+		cdef intptr_t new_ptr = new_simplextree.thisptr
+		cdef vector[double] c_basepoint = [] if basepoint is None else basepoint
 		if basepoint is None:
-			flatten(self.thisptr, new_simplextree.thisptr, parameter)
+			with nogil:
+				flatten(old_ptr, new_ptr, c_parameter)
 		else: 
-			flatten_diag(self.thisptr, new_simplextree.thisptr, basepoint, parameter)
+			with nogil:
+				flatten_diag(old_ptr, new_ptr, c_basepoint, c_parameter)
 		return new_simplextree
-	# def compute_persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
-	#     """This function computes the persistence of the simplicial complex, so it can be accessed through
-	#     :func:`persistent_betti_numbers`, :func:`persistence_pairs`, etc. This function is equivalent to :func:`persistence`
-	#     when you do not want the list :func:`persistence` returns.
-	#
-	#     :param homology_coeff_field: The homology coefficient field. Must be a
-	#         prime number. Default value is 11. Max is 46337.
-	#     :type homology_coeff_field: int
-	#     :param min_persistence: The minimum persistence value to take into
-	#         account (strictly greater than min_persistence). Default value is
-	#         0.0.
-	#         Sets min_persistence to -1.0 to see all values.
-	#     :type min_persistence: float
-	#     :param persistence_dim_max: If true, the persistent homology for the
-	#         maximal dimension in the complex is computed. If false, it is
-	#         ignored. Default is false.
-	#     :type persistence_dim_max: bool
-	#     :returns: Nothing.
-	#     """
-	#     if self.pcohptr != NULL:
-	#         del self.pcohptr
-	#     cdef bool pdm = persistence_dim_max
-	#     cdef int coef = homology_coeff_field
-	#     cdef double minp = min_persistence
-	#     with nogil:
-	#         self.pcohptr = new Simplex_tree_persistence_interface(self.get_ptr(), pdm)
-	#         self.pcohptr.compute_persistence(coef, minp)
-	#
-	# def betti_numbers(self):
-	#     """This function returns the Betti numbers of the simplicial complex.
-	#
-	#     :returns: The Betti numbers ([B0, B1, ..., Bn]).
-	#     :rtype:  list of int
-	#
-	#     :note: betti_numbers function requires
-	#         :func:`compute_persistence`
-	#         function to be launched first.
-	#     """
-	#     assert self.pcohptr != NULL, "compute_persistence() must be called before betti_numbers()"
-	#     return self.pcohptr.betti_numbers()
-	#
-	# def persistent_betti_numbers(self, from_value, to_value):
-	#     """This function returns the persistent Betti numbers of the
-	#     simplicial complex.
-	#
-	#     :param from_value: The persistence birth limit to be added in the
-	#         numbers (persistent birth <= from_value).
-	#     :type from_value: float
-	#     :param to_value: The persistence death limit to be added in the
-	#         numbers (persistent death > to_value).
-	#     :type to_value: float
-	#
-	#     :returns: The persistent Betti numbers ([B0, B1, ..., Bn]).
-	#     :rtype:  list of int
-	#
-	#     :note: persistent_betti_numbers function requires
-	#         :func:`compute_persistence`
-	#         function to be launched first.
-	#     """
-	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistent_betti_numbers()"
-	#     return self.pcohptr.persistent_betti_numbers(<double>from_value, <double>to_value)
-	#
-	# def persistence_intervals_in_dimension(self, dimension):
-	#     """This function returns the persistence intervals of the simplicial
-	#     complex in a specific dimension.
-	#
-	#     :param dimension: The specific dimension.
-	#     :type dimension: int
-	#     :returns: The persistence intervals.
-	#     :rtype:  numpy array of dimension 2
-	#
-	#     :note: intervals_in_dim function requires
-	#         :func:`compute_persistence`
-	#         function to be launched first.
-	#     """
-	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistence_intervals_in_dimension()"
-	#     piid = np.array(self.pcohptr.intervals_in_dimension(dimension))
-	#     # Workaround https://github.com/GUDHI/gudhi-devel/issues/507
-	#     if len(piid) == 0:
-	#         return np.empty(shape = [0, 2])
-	#     return piid
-	#
-	# def persistence_pairs(self):
-	#     """This function returns a list of persistence birth and death simplices pairs.
-	#
-	#     :returns: A list of persistence simplices intervals.
-	#     :rtype:  list of pair of list of int
-	#
-	#     :note: persistence_pairs function requires
-	#         :func:`compute_persistence`
-	#         function to be launched first.
-	#     """
-	#     assert self.pcohptr != NULL, "compute_persistence() must be called before persistence_pairs()"
-	#     return self.pcohptr.persistence_pairs()
-	#
-	# def write_persistence_diagram(self, persistence_file):
-	#     """This function writes the persistence intervals of the simplicial
-	#     complex in a user given file name.
-	#
-	#     :param persistence_file: Name of the file.
-	#     :type persistence_file: string
-	#
-	#     :note: intervals_in_dim function requires
-	#         :func:`compute_persistence`
-	#         function to be launched first.
-	#     """
-	#     assert self.pcohptr != NULL, "compute_persistence() must be called before write_persistence_diagram()"
-	#     self.pcohptr.write_output_diagram(persistence_file.encode('utf-8'))
-	#
-	# def lower_star_persistence_generators(self):
-	#     """Assuming this is a lower-star filtration, this function returns the persistence pairs,
-	#     where each simplex is replaced with the vertex that gave it its filtration value.
-	#
-	#     :returns: First the regular persistence pairs, grouped by dimension, with one vertex per extremity,
-	#         and second the essential features, grouped by dimension, with one vertex each
-	#     :rtype: Tuple[List[numpy.array[int] of shape (n,2)], List[numpy.array[int] of shape (m,)]]
-	#
-	#     :note: lower_star_persistence_generators requires that `persistence()` be called first.
-	#     """
-	#     assert self.pcohptr != NULL, "lower_star_persistence_generators() requires that persistence() be called first."
-	#     gen = self.pcohptr.lower_star_generators()
-	#     normal = [np.array(d).reshape(-1,2) for d in gen.first]
-	#     infinite = [np.array(d) for d in gen.second]
-	#     return (normal, infinite)
-	#
-	# def flag_persistence_generators(self):
-	#     """Assuming this is a flag complex, this function returns the persistence pairs,
-	#     where each simplex is replaced with the vertices of the edges that gave it its filtration value.
-	#
-	#     :returns: First the regular persistence pairs of dimension 0, with one vertex for birth and two for death;
-	#         then the other regular persistence pairs, grouped by dimension, with 2 vertices per extremity;
-	#         then the connected components, with one vertex each;
-	#         finally the other essential features, grouped by dimension, with 2 vertices for birth.
-	#     :rtype: Tuple[numpy.array[int] of shape (n,3), List[numpy.array[int] of shape (m,4)], numpy.array[int] of shape (l,), List[numpy.array[int] of shape (k,2)]]
-	#
-	#     :note: flag_persistence_generators requires that `persistence()` be called first.
-	#     """
-	#     assert self.pcohptr != NULL, "flag_persistence_generators() requires that persistence() be called first."
-	#     gen = self.pcohptr.flag_generators()
-	#     if len(gen.first) == 0:
-	#         normal0 = np.empty((0,3))
-	#         normals = []
-	#     else:
-	#         l = iter(gen.first)
-	#         normal0 = np.array(next(l)).reshape(-1,3)
-	#         normals = [np.array(d).reshape(-1,4) for d in l]
-	#     if len(gen.second) == 0:
-	#         infinite0 = np.empty(0)
-	#         infinites = []
-	#     else:
-	#         l = iter(gen.second)
-	#         infinite0 = np.array(next(l))
-	#         infinites = [np.array(d).reshape(-1,2) for d in l]
-	#     return (normal0, normals, infinite0, infinites)
-	#
-	# def collapse_edges(self, nb_iterations = 1):
-	#     """Assuming the complex is a graph (simplices of higher dimension are ignored), this method implicitly
-	#     interprets it as the 1-skeleton of a flag complex, and replaces it with another (smaller) graph whose
-	#     expansion has the same persistent homology, using a technique known as edge collapses
-	#     (see :cite:`edgecollapsearxiv`).
-	#
-	#     A natural application is to get a simplex tree of dimension 1 from :class:`~gudhi.RipsComplex`,
-	#     then collapse edges, perform :meth:`expansion()` and finally compute persistence
-	#     (cf. :download:`rips_complex_edge_collapse_example.py <../example/rips_complex_edge_collapse_example.py>`).
-	#
-	#     :param nb_iterations: The number of edge collapse iterations to perform. Default is 1.
-	#     :type nb_iterations: int
-	#     """
-	#     # Backup old pointer
-	#     cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
-	#     cdef int nb_iter = nb_iterations
-	#     with nogil:
-	#         # New pointer is a new collapsed simplex tree
-	#         self.thisptr = <intptr_t>(ptr.collapse_edges(nb_iter))
-	#         # Delete old pointer
-	#         del ptr
+
+	def resize_all_filtrations(self, num:int): #TODO : num_parameters
+		self.get_ptr().resize_all_filtrations(num)
+		return
 
 	def __eq__(self, other:SimplexTree):
 		"""Test for structural equality
@@ -1089,7 +1000,7 @@ cdef class SimplexTree:
 		:rtype: bool
 		"""
 		return dereference(self.get_ptr()) == dereference(other.get_ptr())
-	def euler_char(self, points:list[float] | list[list[float]] | np.ndarray) -> np.ndarray:
+	def euler_char(self, points:list | np.ndarray) -> np.ndarray:
 		""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
 
 		Parameters
@@ -1120,22 +1031,24 @@ cdef intptr_t _get_copy_intptr(SimplexTree stree) nogil:
 
 
 
-
-
-def from_gudhi(simplextree, parameters:int=2)->SimplexTree:
+def from_gudhi(simplextree, num_parameters:int=2)->SimplexTree:
 	"""Converts a gudhi simplextree to an mma simplextree.
 	Parameters
 	----------
-		dimension:int = 2
+		parameters:int = 2
 			The number of filtrations
 	Returns
 	-------
 		An mma simplextree, with first filtration value being the one from the original simplextree.
 	"""
-	if type(simplextree) == type(SimplexTree()):
+	if type(simplextree) is SimplexTree:
 		return simplextree
-	st = SimplexTree()
-	multify(simplextree.thisptr, st.thisptr, parameters)
+	st = SimplexTree(num_parameters=num_parameters)
+	cdef int c_num_parameters = num_parameters
+	cdef intptr_t old_ptr = simplextree.thisptr
+	cdef intptr_t new_ptr = st.thisptr
+	with nogil:
+		multify(old_ptr, new_ptr, c_num_parameters)
 	return st
 
 
@@ -1182,3 +1095,7 @@ def from_gudhi(simplextree, parameters:int=2)->SimplexTree:
 # 			else:
 # 				n_inserted_splxs[max(len(splx)-1,0)] += 1
 # 	return st
+
+
+
+

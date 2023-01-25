@@ -1,0 +1,11 @@
+numpy
+matplotlib
+gudhi>=3.7.1
+scikit-learn
+cython
+sympy
+tqdm
+cycler
+typing
+shapely
+filtration-domination>=0.0.4

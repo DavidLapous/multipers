@@ -27,7 +27,7 @@ ctypedef vector[simplex_type] simplex_list
 ctypedef vector[pair[pair[int,int], pair[double, double]]] edge_list 
 ctypedef vector[int] euler_char_list
 
-cdef extern from "Simplex_tree_interface.h" namespace "Gudhi":
+cdef extern from "gudhi/Simplex_tree_interface.h" namespace "Gudhi":
 	cdef cppclass Simplex_tree_options_multidimensional_filtration:
 		pass
 
@@ -90,10 +90,13 @@ cdef extern from "Simplex_tree_interface.h" namespace "Gudhi":
 		void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void *user_data)
 
 		## MULTIPERS STUFF
-		void reset_keys() 
-		int get_key(const simplex_type)
-		void set_key(simplex_type, int)
-		void fill_lowerstar(vector[double], int)
-		simplex_list get_simplices_of_dimension(int)
-		edge_list get_edge_list()
-		euler_char_list euler_char(vector[filtration_type])
+		void reset_keys() nogil
+		int get_key(const simplex_type) nogil
+		void set_key(simplex_type, int) nogil
+		void fill_lowerstar(vector[double], int) nogil
+		simplex_list get_simplices_of_dimension(int) nogil
+		edge_list get_edge_list() nogil
+		euler_char_list euler_char(vector[filtration_type]) nogil
+		void resize_all_filtrations(int) nogil
+		void set_number_of_parameters(int) nogil
+		int get_number_of_parameters() nogil

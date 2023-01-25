@@ -14,10 +14,10 @@
 
 //#include <gudhi/graph_simplicial_complex.h>
 //#include <gudhi/distance_functions.h>
-#include "gudhi/Simplex_tree.h"
+#include "../gudhi/Simplex_tree.h"
 //#include <gudhi/Points_off_io.h>
 //#include <gudhi/Flag_complex_edge_collapser.h>
-#include "gudhi/Simplex_tree_multi.h"
+#include "../gudhi/Simplex_tree_multi.h"
 #include <omp.h>
 
 #include <iostream>
@@ -303,8 +303,18 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 		}
 		return out;
 	}
+	void resize_all_filtrations(int num){ //TODO : that is for 1 critical filtrations
+		if (num < 0)	return;
+		for(const auto &SimplexHandle : Base::complex_simplex_range()){
+			std::vector<double> new_filtration_value = Base::filtration(SimplexHandle);
+			new_filtration_value.resize(num);
+			Base::assign_filtration(SimplexHandle, new_filtration_value);
+		}
+	}
+
 	
 };
+
 
 }  // namespace Gudhi
 

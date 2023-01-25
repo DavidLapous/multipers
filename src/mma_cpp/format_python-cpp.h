@@ -26,8 +26,8 @@
 #include "combinatory.h"
 #include "utilities.h"
 
-#include "gudhi/Simplex_tree.h"
-#include "gudhi/Simplex_tree_multi.h"
+#include "../gudhi/Simplex_tree.h"
+#include "../gudhi/Simplex_tree_multi.h"
 
 
 

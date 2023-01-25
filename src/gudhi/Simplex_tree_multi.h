@@ -13,9 +13,9 @@
 #define SIMPLEX_TREE_MULTI_H_
 
 #include <algorithm>
-#include "gudhi/Simplex_tree.h"
-#include "../box.h"
-#include "../line_filtration_translation.h"
+#include "../gudhi/Simplex_tree.h"
+#include "../mma_cpp/box.h"
+#include "../mma_cpp/line_filtration_translation.h"
 
 
 
@@ -25,6 +25,7 @@ namespace Gudhi {
  * Maximum number of simplices to compute persistence is <CODE>std::numeric_limits<std::uint32_t>::max()</CODE>
  * (about 4 billions of simplices). */
 struct Simplex_tree_options_multidimensional_filtration {
+public:
 	typedef linear_indexing_tag Indexing_tag;
 	typedef int Vertex_handle;
 	typedef std::vector<double> Filtration_value;
@@ -32,7 +33,9 @@ struct Simplex_tree_options_multidimensional_filtration {
 	static const bool store_key = true;
 	static const bool store_filtration = true;
 	static const bool contiguous_vertices = false;
+	unsigned int number_of_parameters = 2; // TODO: Do we want to instanciate it during with constructor --> const
 };
+
 using option_multi = Simplex_tree_options_multidimensional_filtration;
 using option_std = Simplex_tree_options_full_featured;
 bool operator<(const std::vector<double>& v1, const std::vector<double>& v2)
