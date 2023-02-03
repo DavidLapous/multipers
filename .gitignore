@@ -19,6 +19,6 @@ src/mma.cpp
 src/build/
 src/.vscode
 src/.kdev4
-src/test*
+src/test_*
 rivet_GUI
 rivet_console
