@@ -22,3 +22,4 @@ src/.kdev4
 src/test_*
 rivet_GUI
 rivet_console
+.DS_Store

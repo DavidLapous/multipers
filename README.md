@@ -1,10 +1,10 @@
 # Multipersistence Modules Approximation (MMA)
 
-**/!\ Warning** This is a clone of [the gitlab repository](https://gitlab.inria.fr/dloiseau/multipers).
-
 ## Description
 This repository is a python library, with a `C++` backend, for multipersistence modules approximation. 
 It provides a set of functions to compute an approximation of any multiparameter persistence module (from 1-critical filtrations if using python), aswell as some representations, e.g., Fibered Barcode, Multiparameter Persistence Images, Multiparameter Persistence Landscapes, etc.
+
+This library is also available as a submodule of [multipers-signed-measure](https://github.com/DavidLapous/multipers-signed-measure).
 
 ### Authors
 [David Loiseaux](http://www-sop.inria.fr/members/David.Loiseaux/) and [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/).
@@ -17,19 +17,19 @@ It provides a set of functions to compute an approximation of any multiparameter
 
 ## Installation, compilation
 ### Dependencies
-The `C++` part only uses the standard library of `C++`.<br>
-The `Python` part relies on several standard packages; the [Gudhi](https://gudhi.inria.fr) library is needed, and can be installed using pip or conda, following [the python documentation of Gudhi](https://gudhi.inria.fr/python/latest/installation.html#packages). Note that this library **needs** `python>=3.10`.
-
-For strong edges collapses, the pip package of [filtration_domination](https://github.com/aj-alonso/filtration_domination) is needed.
-
 A minimal environment with all dependencies can be obtained from scratch, with the following conda environment.
 
-```
+```bash
 conda create -n python310
 conda activate python310
 conda install python=3.10 numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
 pip install filtration-domination
 ```
+ - Our multiparameter simplextrees are based on [Gudhi](https://gudhi.inria.fr)'s simplextrees.
+ - [filtration_domination](https://github.com/aj-alonso/filtration_domination/) is needed for 2-parameter edge collapses.
+
+
+
 
 ### Installation
 #### Using pip
@@ -46,9 +46,8 @@ You should end up with a file `mma.cpython-*.so` (where `*` depends on your setu
 
 ## Usage
 Import the compiled library and Gudhi in Python:
-```
+```python
 import mma
 import gudhi as gd
 ```
-For an introduction, follow the tutorial notebook `How to use`. The notebook `examples_of_approximations` shows a few more examples.
-
+For an introduction, follow the tutorial notebook `How to use`. The notebook `examples_of_approximations` shows a few more examples. You can also find a few notebook relying on `MMA` in the [multipers-signed-measure](https://github.com/DavidLapous/multipers-signed-measure) fork.
