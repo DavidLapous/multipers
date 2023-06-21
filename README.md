@@ -13,7 +13,7 @@ This library is also available as a submodule of [multipers-signed-measure](http
 [Hannah Schreiber](https://github.com/hschreiber)
 
 ### References
-[Arxiv link](https://arxiv.org/abs/2206.02026).
+Arxiv links : [MMA](https://arxiv.org/abs/2206.02026), [MMA representations](https://arxiv.org/abs/2306.11170).
 
 ## Installation, compilation
 ### Dependencies
