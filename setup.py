@@ -41,18 +41,24 @@ cython_compiler_directives = {
 	"emit_code_comments":True,
 }
 
+cpp_dirs = [
+	"multipers/gudhi",
+	"multipers", 
+	np.get_include(),
+]
+
 
 extensions = [Extension(f"multipers.{module}",
-		sources=[f"multipers/{module}.pyx"],
+		sources=[f"multipers/{module}.pyx",],
 		language='c++',
 		extra_compile_args=[
 			"-Ofast",
 			#"-march=native",
 			"-std=c++20",
-            # Uncomment this if you have trouble compiling on macos.
-			# "-fno-aligned-new", 
+			# "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
 			"-Wall",
 		],
+		include_dirs=cpp_dirs,
 		define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
 		libraries=["tbb", "tbbmalloc"]
 	) for module in cython_modules
@@ -62,10 +68,15 @@ setup(
 	author="David Loiseaux",
 	author_email="david.loiseaux@inria.fr",
 	description="Multiparameter persistence toolkit",
+	version="1.0",
 	ext_modules=cythonize(
-		extensions, compiler_directives=cython_compiler_directives, **cythonize_flags),
-	packages=find_packages(include=['multipers', "multipers.*"]),
-	package_data={"multipers":["*.pyi", "*.pyx", "*.pxd"]},
+		extensions, 
+		compiler_directives=cython_compiler_directives, 
+		**cythonize_flags),
+	packages=find_packages(),
+	package_data={
+		"multipers":["*.pyi", "*.pyx", "*.pxd"],
+		},
 	python_requires=">=3.10",
-	include_dirs = ['multipers', np.get_include(), 'multipers/gudhi'],
+
 )
