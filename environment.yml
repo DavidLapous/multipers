@@ -1,0 +1,37 @@
+name: compile_env
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python
+  - cython
+  - pybind11
+  - cmake
+  - pytest
+  - cxx-compiler
+  - gudhi
+  - numpy
+  - matplotlib
+  - sympy
+  - tqdm
+  - cycler
+  - typing
+  - shapely
+  - setuptools
+  - scikit-learn
+  - networkx
+  - pandas
+  - pytorch
+  - pot
+  - tbb
+  - llvm-openmp
+  - matplotlib
+  - joblib
+  - boost
+  - cgal-cpp
+  - boost-cpp
+  - scipy
+  - tbb-devel
+  - plotly
+  - dash
+  - mdanalysis
