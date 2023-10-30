@@ -34,7 +34,9 @@ jobs:
         pip install pykeops filtration-domination Cython
     - name: Build package
       run: |
-        python setup.py sdist bdist_wheel
+        python setup.py sdist
+        pip wheel .
+        mv *.whl dist
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
