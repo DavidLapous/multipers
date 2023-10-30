@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        conda install setuptools cxx-compiler boost tbb tbb-devel numpy gudhi scikit-learn cython -c conda-forge
+        conda install boost tbb tbb-devel numpy gudhi cython -c conda-forge
         pip install pykeops filtration-domination
     - name: Build package
       run: |
@@ -44,7 +44,6 @@ jobs:
   send_to_pypi:
     name: Release
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
     needs: [ linux ]
     steps:
       - uses: actions/download-artifact@v3
