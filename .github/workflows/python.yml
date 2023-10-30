@@ -6,11 +6,10 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Upload Python Package
+name: Build and Push to PyPI
 
 on:
-  release:
-    types: [published]
+  push:
 
 permissions:
   contents: read
