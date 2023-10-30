@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        conda install setuptools cxx-compiler boost tbb tbb-devel numpy gudhi scikit-learn cython --upgrade
+        conda install setuptools cxx-compiler boost tbb tbb-devel numpy gudhi scikit-learn cython
         pip install pykeops filtration-domination
     - name: Build package
       run: |
