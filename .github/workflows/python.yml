@@ -64,5 +64,5 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           pip install --upgrade pip twine
-          twine upload --repository testpypi --skip-existing *
+          twine upload --skip-existing *
           
