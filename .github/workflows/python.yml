@@ -27,10 +27,14 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        conda install boost tbb tbb-devel numpy gudhi -c conda-forge
+        conda install boost tbb tbb-devel numpy gudhi cython -c conda-forge
         pip install pykeops filtration-domination Cython
     - name: Build package
       run: |
