@@ -9,7 +9,7 @@ Using conda
 ```sh
 conda create -n python311
 conda activate python311
-conda install python=3.11 cxx-compiler boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely numba -c conda-forge
+conda install python=3.11 cxx-compiler boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
 pip install filtration-domination pykeops
 ```
 
