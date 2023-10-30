@@ -24,7 +24,9 @@ Don't hesitate to fill an issue if this doesn't work out of the box; it can help
 
 ## How to use
 ### Tutorial notebooks
-We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
+We provide a few notebooks, which explains, in different scenarios, how to use our library. <br>
+**Take a look at them !** They are in the tutorial folder.<br>
+If something is not clear, or you have trouble using a function, don't hesitate to fill an issue; I'll try to update this.
 
 
 ## References and similar projects
