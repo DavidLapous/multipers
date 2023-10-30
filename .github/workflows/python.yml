@@ -39,8 +39,8 @@ jobs:
     - name: Build package
       run: |
         python setup.py sdist
-        pip wheel .
-        mv *.whl dist
+        pip wheel . --wheel-dir dist
+        ls 
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
@@ -63,6 +63,6 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
-          pip install --upgrade twine
-          twine upload --repository testpypi --skip-existing dist/*
+          pip install --upgrade pip twine
+          twine upload --repository testpypi --skip-existing *
           
