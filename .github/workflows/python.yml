@@ -30,7 +30,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build setuptools wheel boost tbb tbb-devel numpy gudhi scikit-learn Cython pykeops filtration-domination --upgrade
+        conda create -n build_env
+        conda activate build_env
+        conda install setuptools cxx-compiler boost tbb tbb-devel numpy gudhi scikit-learn cython --upgrade
+        pip install pykeops filtration-domination
     - name: Build package
       run: |
         python setup.py sdist bdist_wheel
