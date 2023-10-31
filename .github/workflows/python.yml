@@ -35,7 +35,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        conda install boost tbb tbb-devel numpy gudhi cython pytest -c conda-forge
+        conda install boost tbb tbb-devel numpy gudhi cython pytest scikit-learn matplotlib -c conda-forge
         pip install pykeops filtration-domination
     - name: Build package
       run: |
