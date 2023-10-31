@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 
-def _plot_rectangle(rectangle:np.ndarray, weight):
+def _plot_rectangle(rectangle:np.ndarray, weight, **plt_kwargs):
+	rectangle = np.asarray(rectangle)
 	x_axis=rectangle[[0,2]]
 	y_axis=rectangle[[1,3]]
 	color = "blue" if weight > 0 else "red"
-	plt.plot(x_axis, y_axis, c=color)
+	plt.plot(x_axis, y_axis, c=color, **plt_kwargs)
 
 
 def _plot_signed_measure_2(pts, weights,temp_alpha=.7, **plt_kwargs):
@@ -41,9 +43,21 @@ def _plot_signed_measure_2(pts, weights,temp_alpha=.7, **plt_kwargs):
 	plt.scatter([],[],color=bordeaux,label="negative mass", **plt_kwargs)
 	plt.legend()
 
-def _plot_signed_measure_4(pts, weights):
+def _plot_signed_measure_4(pts, weights, x_smoothing:float=1, area_alpha:bool=True):
+    # compute the maximal rectangle area
+	alpha_rescaling = 0;
 	for rectangle, weight in zip(pts, weights):
-		_plot_rectangle(rectangle=rectangle, weight=weight)
+		if rectangle[2] > x_smoothing*rectangle[0]:
+			alpha_rescaling = max(alpha_rescaling, (rectangle[2]/x_smoothing-rectangle[0])*(rectangle[3]-rectangle[1]))
+	# draw the rectangles
+	for rectangle, weight in zip(pts, weights):
+		# draw only the rectangles that have not been reduced to the empty set
+		if rectangle[2] > x_smoothing*rectangle[0]:
+			# make the alpha channel proportional to the rectangle's area
+			if area_alpha:
+				_plot_rectangle(rectangle=[rectangle[0], rectangle[1], rectangle[2]/x_smoothing, rectangle[3]], weight=weight, alpha=(rectangle[2]/x_smoothing-rectangle[0])*(rectangle[3]-rectangle[1])/alpha_rescaling)
+			else:
+				_plot_rectangle(rectangle=[rectangle[0], rectangle[1], rectangle[2]/x_smoothing, rectangle[3]], weight=weight, alpha=1)
 
 def plot_signed_measure(signed_measure, ax=None, **plt_kwargs):
 	if ax is None:
@@ -78,20 +92,22 @@ def plot_signed_measures(signed_measures, size=4):
 	plt.tight_layout()
 
 
-def plot_surface(grid, hf, fig=None, ax=None, **plt_args):
+def plot_surface(grid, hf, fig=None, ax=None,cmap=None, **plt_args):
+	import matplotlib
 	if ax is None:
 		ax = plt.gca()
 	else:
 		plt.sca(ax)
-	# a,b = hf.shape
-	# ax.set(xticks=grid[1], yticks=grid[0])
-	# ax.imshow(hf.T, origin='lower', interpolation=None, **plt_args)
-	# ax.set_box_aspect((a)
-	im = ax.pcolormesh(grid[0], grid[1], hf.T, **plt_args)
-	# ax.set_aspect("equal")
-	# ax.axis('off'
+	if hf.ndim == 3 and hf.shape[0] == 1: hf=hf[0]
+	assert hf.ndim == 2, "Can only plot a 2d surface"
 	fig = plt.gcf() if fig is None else fig
-	fig.colorbar(im,ax=ax)
+	cmap = matplotlib.colormaps["gray_r"] if cmap is None else matplotlib.colormaps[cmap]
+	bounds = np.arange(0,11,1, dtype=int)
+	norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend='max')
+	im = ax.pcolormesh(grid[0], grid[1], hf.T,cmap=cmap,norm=norm, **plt_args)
+	cbar=fig.colorbar(matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm), spacing="proportional", ax=ax)
+	cbar.set_ticks(ticks=bounds, labels=bounds)
+
 def plot_surfaces(HF, size=4, **plt_args):
 	grid, hf = HF
 	assert hf.ndim == 3, f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
