@@ -41,6 +41,8 @@ jobs:
       run: |
         python setup.py sdist
         python setup.py build_ext -j2 --inplace
+        pip install .
+        python -c "import multipers"
         # Need to configure manylinux for this...
         # pip wheel . --wheel-dir dist
         # auditwheel repair -w dist dist/*.whl
