@@ -6,7 +6,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Build and Push to PyPI
+name: Build, test, and Push to PyPI
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
   linux:
     name: linux_compile
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux_2_28_x86_64 
+#    container: quay.io/pypa/manylinux_2_28_x86_64 
     strategy:
       matrix:
         python-version: ['3.11']
@@ -36,12 +36,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         conda install boost tbb tbb-devel numpy gudhi cython -c conda-forge
-        pip install pykeops filtration-domination Cython
+        pip install pykeops filtration-domination
     - name: Build package
       run: |
         python setup.py sdist
-        pip wheel . --wheel-dir dist
-        auditwheel repair -w dist dist/*.whl
+        python setup.py build_ext -j2 --inplace
+        # Need to configure manylinux for this...
+        # pip wheel . --wheel-dir dist
+        # auditwheel repair -w dist dist/*.whl
+    - name: Tests
+      run: |
+        pytest multipers/tests
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
