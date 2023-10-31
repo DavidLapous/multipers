@@ -17,5 +17,4 @@ def test_throw_test():
 	assert isinstance( st.persistence_approximation(), mp.multiparameter_module_approximation.PyModule)
 	assert mp.signed_measure(st, degree=None, invariant='euler')[0][0].ndim ==2 
 	assert mp.signed_measure(st, degree=0,    invariant='hilbert')[0][0].ndim ==2
-	assert mp.signed_measure(st, degree=0,    invariant='rank')[0][0].ndim ==2
-		
+	# assert mp.signed_measure(st, degree=0,    invariant='rank')[0][0].ndim ==2 # This needs torch which is too heavy
