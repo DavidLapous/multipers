@@ -1,7 +1,11 @@
 *.so
 *.gch
 *.svg
+*.whl
 __pycache__
+build
+dist
+multipers.egg-info
 dionysus_vineyards
 simplextree
 .ipynb_checkpoints
@@ -23,3 +27,4 @@ src/test_*
 rivet_GUI
 rivet_console
 .DS_Store
+multipers/*.cpp
