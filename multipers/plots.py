@@ -120,12 +120,9 @@ def plot_surfaces(HF, size=4, **plt_args):
 	plt.tight_layout()
 
 
-from shapely.geometry import box as _rectangle_box
-from shapely.geometry import Polygon as _Polygon
-from shapely import union_all
 
-import numpy as np
-import matplotlib.pyplot as plt
+
+
 
 
 
@@ -147,6 +144,15 @@ def _d_inf(a,b):
 
 def plot2d_PyModule(corners, box = [],*,dimension=-1, separated=False, min_persistence = 0, alpha=1, verbose = False, save=False, dpi=200, shapely = True, xlabel=None, ylabel=None, cmap=None):
 	import matplotlib
+	try:
+		from shapely.geometry import Polygon as _Polygon
+		from shapely.geometry import box as _rectangle_box
+		from shapely import union_all
+		shapely=True and shapely
+	except:
+		from warnings import warn
+		shapely=False
+		warn("Shapely not installed. Fallbacking to matplotlib. The plots may be inacurate.")
 	cmap = matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
 	if not(separated):
 		# fig, ax = plt.subplots()
