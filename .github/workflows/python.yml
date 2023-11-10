@@ -62,6 +62,7 @@ jobs:
         # $PYTHON/bin/python -m pip install .
         # $PYTHON/bin/python -c "import multipers"
         # $PYTHON/bin/python -m pip wheel . --wheel-dir dist
+        PATH="$PYTHON:$PATH"
         $PYTHON/bin/python -m build -n -w
         $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
     # - name: Repair wheels
