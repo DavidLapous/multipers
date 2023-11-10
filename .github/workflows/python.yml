@@ -50,22 +50,30 @@ jobs:
         make install
         cd .. 
         rm -rf build_gudhi gudhi.3.8.0.tar.gz
-
+    - name: Variables log
+      run: |
+        PYTHON_NAME=PYTHON${{matrix.python-version}}
+        PYTHON="${!PYTHON_NAME}"
+        echo $PYTHON 
+        export LD_LIBRARY_PATH="$PYTHON/lib/:$LD_LIBRARY_PATH"
+        export CXXFLAGS="-I$PYTHON/include/ $CXXFLAGS"
+        echo ""
+        echo $LD_LIBRARY_PATH
+        echo ""
+        echo $CXXFLAGS
+        echo ""
+        ls $PYTHON/lib/
     - name: Build package
       run: |
         # Regets the variable name
         PYTHON_NAME=PYTHON${{matrix.python-version}}
         PYTHON="${!PYTHON_NAME}"
-        echo $PYTHON
-        # $PYTHON/bin/python setup.py sdist
-        # $PYTHON/bin/python setup.py build_ext -j2 --inplace
-        # $PYTHON/bin/python -m pip install .
-        # $PYTHON/bin/python -c "import multipers"
-        # $PYTHON/bin/python -m pip wheel . --wheel-dir dist
-        export LD_LIBRARY_PATH="$PYTHON/lib/:$LD_LIBRARY_PATH"
-        export CXXFLAGS="-I$PYTHON/include/ $CXXFLAGS"
-        # $PYTHON/bin/python -m build -n -w
+        $PYTHON/bin/python setup.py sdist
+        $PYTHON/bin/python setup.py build_ext -j2 --inplace --library-dirs="$LD_LIBRARY_PATH"
+        $PYTHON/bin/python -m pip install .
+        $PYTHON/bin/python -c "import multipers"
         $PYTHON/bin/python -m pip wheel . --wheel-dir dist
+        # $PYTHON/bin/python -m build -n -w
         $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
     # - name: Repair wheels
     #   run: |
