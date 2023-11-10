@@ -64,7 +64,8 @@ jobs:
         # $PYTHON/bin/python -m pip wheel . --wheel-dir dist
         export LD_LIBRARY_PATH="$PYTHON/lib/:$LD_LIBRARY_PATH"
         export CXXFLAGS="-I$PYTHON/include/ $CXXFLAGS"
-        $PYTHON/bin/python -m build -n -w
+        # $PYTHON/bin/python -m build -n -w
+        $PYTHON/bin/python -m pip wheel . --wheel-dir dist --library-dirs=$PYTHON/lib/
         $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
     # - name: Repair wheels
     #   run: |
