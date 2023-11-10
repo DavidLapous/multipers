@@ -39,6 +39,18 @@ jobs:
         echo $PYTHON
         $PYTHON/bin/python -m pip install --upgrade pip
         $PYTHON/bin/python -m pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
+
+        ## Gudhi headers
+        curl -LO "https://github.com/GUDHI/gudhi-devel/releases/download/tags%2Fgudhi-release-3.8.0/gudhi.3.8.0.tar.gz"
+        tar xf gudhi.3.8.0.tar.gz
+        mkdir build_gudhi
+        cd build_gudhi
+        #header only gudhi
+        cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GUDHI_PYTHON=OFF -DWITH_GUDHI_EXAMPLE=OFF -DWITH_GUDHI_BENCHMARK=OFF -DWITH_GUDHI_TEST=OFF -DWITH_GUDHI_UTILITIES=OFF -DWITH_GUDHI_THIRD_PARTY=OFF ../gudhi.3.8.0
+        make install
+        cd .. 
+        rm -rf build_gudhi gudhi.3.8.0.tar.gz
+        
     - name: Build package
       run: |
         # Regets the variable name
