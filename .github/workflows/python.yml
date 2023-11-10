@@ -41,6 +41,10 @@ jobs:
         $PYTHON/bin/python -m pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
     - name: Build package
       run: |
+        # Regets the variable name
+        PYTHON_NAME=PYTHON${{matrix.python-version}}
+        PYTHON="${!PYTHON_NAME}"
+        echo $PYTHON
         # $PYTHON/bin/python setup.py sdist
         # $PYTHON/bin/python setup.py build_ext -j2 --inplace
         # $PYTHON/bin/python -m pip install .
