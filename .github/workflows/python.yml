@@ -11,8 +11,6 @@ name: Build, test, and Push to PyPI
 on:
   push:
 
-permissions:
-  contents: read
 
 jobs:
   linux:
@@ -49,12 +47,17 @@ jobs:
         # $PYTHON/bin/python -c "import multipers"
         # $PYTHON/bin/python -m pip wheel . --wheel-dir dist
         $PYTHON/bin/python -m build -n -w
-    - name: Repair wheels
-      run: |
         $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
+    # - name: Repair wheels
+    #   run: |
 
-    - name: Tests
+    - name: Install wheel and test
       run: |
+        # I'm not sure if its necessary
+        PYTHON_NAME=PYTHON${{matrix.python-version}}
+        PYTHON="${!PYTHON_NAME}"
+        echo $PYTHON
+        $PYTHON/bin/python -m pip install --user pytest dist/*.whl
         $PYTHON/bin/python -m pytest multipers/tests
     # - name: Upload sources
     #   uses: actions/upload-artifact@v3
