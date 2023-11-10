@@ -18,55 +18,69 @@ jobs:
   linux:
     name: linux_compile
     runs-on: ubuntu-latest
-#    container: quay.io/pypa/manylinux_2_28_x86_64 
+    container: gudhi/pip_for_gudhi:latest
     strategy:
       matrix:
-        python-version: ['3.11']
+        python-version: ['310']
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Add conda to system path
-      run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
+    # - name: Set up Python # Inside the docker now
+    #   uses: actions/setup-python@v4
+    #   with:
+    #     python-version: ${{ matrix.python-version }}
+    # - name: Add conda to system path
+      # run: |
+      #   # $CONDA is an environment variable pointing to the root of the miniconda directory
+      #   echo $CONDA/bin >> $GITHUB_PATH
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        conda install boost tbb tbb-devel numpy gudhi cython pytest scikit-learn matplotlib -c conda-forge
-        pip install pykeops filtration-domination
+        # Gudhi's docker stores python pathes in PYTHON39, PYTHON310, PYTHON311, ... variables
+        # we store that in the variable PYTHON, depending on the asked python version
+        PYTHON_NAME=PYTHON${{matrix.python-version}}
+        PYTHON="${!PYTHON_NAME}"
+        $PYTHON/bin/python -m pip install --upgrade pip
+        $PYTHON/bin/python pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination --upgrade
     - name: Build package
       run: |
-        python setup.py sdist
-        python setup.py build_ext -j2 --inplace
-        pip install .
-        python -c "import multipers"
-        # Need to configure manylinux for this...
-        # pip wheel . --wheel-dir dist
-        # auditwheel repair -w dist dist/*.whl
+        $PYTHON/bin/python setup.py sdist
+        $PYTHON/bin/python setup.py build_ext -j2 --inplace
+        $PYTHON/bin/python -m pip install .
+        $PYTHON/bin/python -c "import multipers"
+        $PYTHON/bin/python -m pip wheel . --wheel-dir dist
+    - name: Repair wheels
+      run: |
+        pip install auditwheel --upgrade
+        auditwheel repair -w dist dist/*.whl
+
     - name: Tests
       run: |
-        pytest multipers/tests
+        $PYTHON/bin/python -m pytest multipers/tests
+    - name: Upload sources
+      uses: actions/upload-artifact@v3
+      with:
+        name: sources
+        path: dist
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
         name: wheels
-        path: dist
+        path: wheelhouse
   
   send_to_pypi:
-    name: Release
+    name: Send sources and wheels
     runs-on: ubuntu-latest
     needs: [ linux ]
     steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: sources
       - uses: actions/download-artifact@v3
         with:
           name: wheels
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Publish to PyPI
+      - name: Repair builds,Publish to PyPI
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
