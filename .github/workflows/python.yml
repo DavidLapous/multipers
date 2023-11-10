@@ -39,7 +39,7 @@ jobs:
         PYTHON_NAME=PYTHON${{matrix.python-version}}
         PYTHON="${!PYTHON_NAME}"
         $PYTHON/bin/python -m pip install --upgrade pip
-        $PYTHON/bin/python pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination --upgrade
+        $PYTHON/bin/python -m pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination --upgrade
     - name: Build package
       run: |
         $PYTHON/bin/python setup.py sdist
