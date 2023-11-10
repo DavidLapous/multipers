@@ -55,8 +55,8 @@ jobs:
         PYTHON_NAME=PYTHON${{matrix.python-version}}
         PYTHON="${!PYTHON_NAME}"
         echo $PYTHON 
-        export LD_LIBRARY_PATH="$PYTHON/lib/:$LD_LIBRARY_PATH"
-        export CXXFLAGS="-I$PYTHON/include/ $CXXFLAGS"
+        export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
+        export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
         echo ""
         echo $LD_LIBRARY_PATH
         echo ""
@@ -68,6 +68,8 @@ jobs:
         # Regets the variable name
         PYTHON_NAME=PYTHON${{matrix.python-version}}
         PYTHON="${!PYTHON_NAME}"
+        export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
+        export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
         $PYTHON/bin/python setup.py sdist
         $PYTHON/bin/python setup.py build_ext -j2 --inplace --library-dirs="$LD_LIBRARY_PATH"
         $PYTHON/bin/python -m pip install .
