@@ -38,7 +38,7 @@ jobs:
         PYTHON="${!PYTHON_NAME}"
         echo $PYTHON
         $PYTHON/bin/python -m pip install --upgrade pip
-        $PYTHON/bin/python -m pip install numpy gudhi cython pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
+        $PYTHON/bin/python -m pip install numpy gudhi cython tbb tbb-devel pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
 
         ## Gudhi headers
         curl -LO "https://github.com/GUDHI/gudhi-devel/releases/download/tags%2Fgudhi-release-3.8.0/gudhi.3.8.0.tar.gz"
@@ -50,7 +50,7 @@ jobs:
         make install
         cd .. 
         rm -rf build_gudhi gudhi.3.8.0.tar.gz
-        
+
     - name: Build package
       run: |
         # Regets the variable name
