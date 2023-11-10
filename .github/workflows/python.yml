@@ -23,7 +23,7 @@ jobs:
       matrix:
         python-version: ['310']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
     # - name: Set up Python # Inside the docker now
     #   uses: actions/setup-python@v4
     #   with:
