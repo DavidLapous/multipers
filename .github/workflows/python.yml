@@ -16,88 +16,109 @@ jobs:
   linux:
     name: linux_compile
     runs-on: ubuntu-latest
-    container: gudhi/pip_for_gudhi:latest
+    # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
-        python-version: ['310']
+        # python-version: ['310']
+        python-version: ["3.10"]
     steps:
     - uses: actions/checkout@v3
-    # - name: Set up Python # Inside the docker now
-    #   uses: actions/setup-python@v4
-    #   with:
-    #     python-version: ${{ matrix.python-version }}
-    # - name: Add conda to system path
-      # run: |
-      #   # $CONDA is an environment variable pointing to the root of the miniconda directory
-      #   echo $CONDA/bin >> $GITHUB_PATH
+    - name: Set up Python # Inside the docker now
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    #### GUDHI CONTAINER PIPE
+    # - name: Install dependencies
+    #   run: |
+    #     # Gudhi's docker stores python pathes in PYTHON39, PYTHON310, PYTHON311, ... variables
+    #     # we store that in the variable PYTHON, depending on the asked python version
+    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
+    #     PYTHON="${!PYTHON_NAME}"
+    #     echo $PYTHON
+    #     $PYTHON/bin/python -m pip install --upgrade pip
+    #     $PYTHON/bin/python -m pip install numpy gudhi cython tbb tbb-devel pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
+
+    #     ## Gudhi headers
+    #     curl -LO "https://github.com/GUDHI/gudhi-devel/releases/download/tags%2Fgudhi-release-3.8.0/gudhi.3.8.0.tar.gz"
+    #     tar xf gudhi.3.8.0.tar.gz
+    #     mkdir build_gudhi
+    #     cd build_gudhi
+    #     #header only gudhi
+    #     cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GUDHI_PYTHON=OFF -DWITH_GUDHI_EXAMPLE=OFF -DWITH_GUDHI_BENCHMARK=OFF -DWITH_GUDHI_TEST=OFF -DWITH_GUDHI_UTILITIES=OFF -DWITH_GUDHI_THIRD_PARTY=OFF ../gudhi.3.8.0
+    #     make install
+    #     cd .. 
+    #     rm -rf build_gudhi gudhi.3.8.0.tar.gz
+    # - name: Variables log
+    #   run: |
+    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
+    #     PYTHON="${!PYTHON_NAME}"
+    #     echo $PYTHON 
+    #     export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
+    #     export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
+    #     echo ""
+    #     echo $LD_LIBRARY_PATH
+    #     echo ""
+    #     echo $CXXFLAGS
+    #     echo ""
+    #     ls $PYTHON/lib/
+    # - name: Build package
+    #   run: |
+    #     # Regets the variable name
+    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
+    #     PYTHON="${!PYTHON_NAME}"
+    #     export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
+    #     export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
+    #     $PYTHON/bin/python setup.py sdist
+    #     $PYTHON/bin/python setup.py build_ext -j2 --inplace --library-dirs="$LD_LIBRARY_PATH"
+    #     $PYTHON/bin/python -m pip install .
+    #     $PYTHON/bin/python -c "import multipers"
+    #     $PYTHON/bin/python -m pip wheel . --wheel-dir dist
+    #     # $PYTHON/bin/python -m build -n -w
+    #     $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
+    # # - name: Repair wheels
+    # #   run: |
+
+    # - name: Install wheel and test
+    #   run: |
+    #     # I'm not sure if its necessary
+    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
+    #     PYTHON="${!PYTHON_NAME}"
+    #     echo $PYTHON
+    #     $PYTHON/bin/python -m pip install --user pytest dist/*.whl
+    #     $PYTHON/bin/python -m pytest multipers/tests
+
     - name: Install dependencies
       run: |
-        # Gudhi's docker stores python pathes in PYTHON39, PYTHON310, PYTHON311, ... variables
-        # we store that in the variable PYTHON, depending on the asked python version
-        PYTHON_NAME=PYTHON${{matrix.python-version}}
-        PYTHON="${!PYTHON_NAME}"
-        echo $PYTHON
-        $PYTHON/bin/python -m pip install --upgrade pip
-        $PYTHON/bin/python -m pip install numpy gudhi cython tbb tbb-devel pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
-
-        ## Gudhi headers
-        curl -LO "https://github.com/GUDHI/gudhi-devel/releases/download/tags%2Fgudhi-release-3.8.0/gudhi.3.8.0.tar.gz"
-        tar xf gudhi.3.8.0.tar.gz
-        mkdir build_gudhi
-        cd build_gudhi
-        #header only gudhi
-        cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GUDHI_PYTHON=OFF -DWITH_GUDHI_EXAMPLE=OFF -DWITH_GUDHI_BENCHMARK=OFF -DWITH_GUDHI_TEST=OFF -DWITH_GUDHI_UTILITIES=OFF -DWITH_GUDHI_THIRD_PARTY=OFF ../gudhi.3.8.0
-        make install
-        cd .. 
-        rm -rf build_gudhi gudhi.3.8.0.tar.gz
-    - name: Variables log
-      run: |
-        PYTHON_NAME=PYTHON${{matrix.python-version}}
-        PYTHON="${!PYTHON_NAME}"
-        echo $PYTHON 
-        export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
-        export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
-        echo ""
-        echo $LD_LIBRARY_PATH
-        echo ""
-        echo $CXXFLAGS
-        echo ""
-        ls $PYTHON/lib/
+        conda install install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build auditwheel cxx-compiler
+        pip install pykeops filtration-domination --upgrade
     - name: Build package
       run: |
-        # Regets the variable name
-        PYTHON_NAME=PYTHON${{matrix.python-version}}
-        PYTHON="${!PYTHON_NAME}"
-        export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
-        export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
-        $PYTHON/bin/python setup.py sdist
-        $PYTHON/bin/python setup.py build_ext -j2 --inplace --library-dirs="$LD_LIBRARY_PATH"
-        $PYTHON/bin/python -m pip install .
-        $PYTHON/bin/python -c "import multipers"
-        $PYTHON/bin/python -m pip wheel . --wheel-dir dist
-        # $PYTHON/bin/python -m build -n -w
-        $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
-    # - name: Repair wheels
-    #   run: |
-
-    - name: Install wheel and test
+        python setup.py sdist
+        python setup.py build_ext -j2 --inplace
+        pip wheel . --wheel-dir dist
+    - name: Auditwheel
       run: |
-        # I'm not sure if its necessary
-        PYTHON_NAME=PYTHON${{matrix.python-version}}
-        PYTHON="${!PYTHON_NAME}"
-        echo $PYTHON
-        $PYTHON/bin/python -m pip install --user pytest dist/*.whl
-        $PYTHON/bin/python -m pytest multipers/tests
-    # - name: Upload sources
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: sources
-    #     path: dist
+        auditwheel show dist/*.whl
+        auditwheel repair dist/*.whl --plat manylinux_2_34_x86_64 
+    - name: Install and Test
+      run: |
+        pip install wheelhouse/*.whl
+        pytest multipers/tests
+        
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
         name: wheels
         path: wheelhouse
+    - name: Upload sources
+      uses: actions/upload-artifact@v3
+      with:
+        name: sources
+        path: dist
   
   send_to_pypi:
     name: Send sources and wheels
