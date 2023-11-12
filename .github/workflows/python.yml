@@ -93,7 +93,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        conda install install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build auditwheel cxx-compiler
+        conda install mamba -c conda-forge
+        mamba install install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build auditwheel cxx-compiler -c conda-forge
         pip install pykeops filtration-domination --upgrade
     - name: Build package
       run: |
@@ -108,7 +109,7 @@ jobs:
       run: |
         pip install wheelhouse/*.whl
         pytest multipers/tests
-        
+
     - name: Upload wheels
       uses: actions/upload-artifact@v3
       with:
