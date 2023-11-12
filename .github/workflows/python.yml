@@ -57,6 +57,20 @@ jobs:
       run: |
         pip install dist/*.whl
         pytest multipers/tests
+    - name: Auditwheel on linux
+      shell: bash -el {0}
+      run: |
+        if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
+          cd dist
+          pip install auditwheel --upgrade
+          for wheel_file in multipers*linux*.whl; do
+            auditwheel show $wheel_file
+            auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
+            rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
 
     # - name: Upload wheels
     #   uses: actions/upload-artifact@v3
@@ -83,15 +97,6 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Auditwheel
-        run: |
-          pip install auditwheel --upgrade
-          for wheel_file in multipers*linux*.whl; do
-            auditwheel show $wheel_file
-            auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
-            rm $wheel_file
-          done
-          mv wheelhouse/*.whl . # retrieves repaired wheels
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
