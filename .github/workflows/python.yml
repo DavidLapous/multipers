@@ -15,12 +15,13 @@ on:
 jobs:
   linux:
     name: linux_compile
-    runs-on: ubuntu-latest
     # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
         # python-version: ['310']
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.11"]
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python # Inside the docker now
@@ -31,66 +32,6 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
-    #### GUDHI CONTAINER PIPE
-    # - name: Install dependencies
-    #   run: |
-    #     # Gudhi's docker stores python pathes in PYTHON39, PYTHON310, PYTHON311, ... variables
-    #     # we store that in the variable PYTHON, depending on the asked python version
-    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
-    #     PYTHON="${!PYTHON_NAME}"
-    #     echo $PYTHON
-    #     $PYTHON/bin/python -m pip install --upgrade pip
-    #     $PYTHON/bin/python -m pip install numpy gudhi cython tbb tbb-devel pytest scikit-learn matplotlib pykeops filtration-domination build auditwheel --upgrade
-
-    #     ## Gudhi headers
-    #     curl -LO "https://github.com/GUDHI/gudhi-devel/releases/download/tags%2Fgudhi-release-3.8.0/gudhi.3.8.0.tar.gz"
-    #     tar xf gudhi.3.8.0.tar.gz
-    #     mkdir build_gudhi
-    #     cd build_gudhi
-    #     #header only gudhi
-    #     cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GUDHI_PYTHON=OFF -DWITH_GUDHI_EXAMPLE=OFF -DWITH_GUDHI_BENCHMARK=OFF -DWITH_GUDHI_TEST=OFF -DWITH_GUDHI_UTILITIES=OFF -DWITH_GUDHI_THIRD_PARTY=OFF ../gudhi.3.8.0
-    #     make install
-    #     cd .. 
-    #     rm -rf build_gudhi gudhi.3.8.0.tar.gz
-    # - name: Variables log
-    #   run: |
-    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
-    #     PYTHON="${!PYTHON_NAME}"
-    #     echo $PYTHON 
-    #     export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
-    #     export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
-    #     echo ""
-    #     echo $LD_LIBRARY_PATH
-    #     echo ""
-    #     echo $CXXFLAGS
-    #     echo ""
-    #     ls $PYTHON/lib/
-    # - name: Build package
-    #   run: |
-    #     # Regets the variable name
-    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
-    #     PYTHON="${!PYTHON_NAME}"
-    #     export LD_LIBRARY_PATH="${PYTHON}lib/:$LD_LIBRARY_PATH"
-    #     export CXXFLAGS="-I${PYTHON}include/ $CXXFLAGS"
-    #     $PYTHON/bin/python setup.py sdist
-    #     $PYTHON/bin/python setup.py build_ext -j2 --inplace --library-dirs="$LD_LIBRARY_PATH"
-    #     $PYTHON/bin/python -m pip install .
-    #     $PYTHON/bin/python -c "import multipers"
-    #     $PYTHON/bin/python -m pip wheel . --wheel-dir dist
-    #     # $PYTHON/bin/python -m build -n -w
-    #     $PYTHON/bin/python -m auditwheel repair -w dist dist/*.whl
-    # # - name: Repair wheels
-    # #   run: |
-
-    # - name: Install wheel and test
-    #   run: |
-    #     # I'm not sure if its necessary
-    #     PYTHON_NAME=PYTHON${{matrix.python-version}}
-    #     PYTHON="${!PYTHON_NAME}"
-    #     echo $PYTHON
-    #     $PYTHON/bin/python -m pip install --user pytest dist/*.whl
-    #     $PYTHON/bin/python -m pytest multipers/tests
-
     - name: Install dependencies
       run: |
         conda install mamba -c conda-forge
@@ -135,7 +76,7 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Repair builds,Publish to PyPI
+      - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
