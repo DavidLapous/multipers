@@ -32,7 +32,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v2
       with:
         python-version:  ${{ matrix.python-version }}
-        activate-environment: true
+        activate-environment: build_test_env
         mamba-version: "*"
         channels: conda-forge
         channel-priority: true
@@ -41,7 +41,7 @@ jobs:
     #   run: |
     #     # $CONDA is an environment variable pointing to the root of the miniconda directory
     #     echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
+    - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
@@ -54,23 +54,18 @@ jobs:
         python setup.py sdist
         python setup.py build_ext -j2 --inplace
         pip wheel . --wheel-dir dist
-    - name: Auditwheel
-      shell: bash -el {0}
-      run: |
-        auditwheel show dist/*.whl
-        auditwheel repair dist/*.whl --plat manylinux_2_34_x86_64 
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install wheelhouse/*.whl
+        pip install dist/*.whl
         pytest multipers/tests
 
-    - name: Upload wheels
-      uses: actions/upload-artifact@v3
-      with:
-        name: wheels
-        path: wheelhouse
-    - name: Upload sources
+    # - name: Upload wheels
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: wheels
+    #     path: wheelhouse
+    - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
       with:
         name: sources
@@ -81,20 +76,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ linux ]
     steps:
-      # - uses: actions/download-artifact@v3
-      #   with:
-      #     name: sources
       - uses: actions/download-artifact@v3
         with:
-          name: wheels
+          name: sources
+      # - uses: actions/download-artifact@v3
+      #   with:
+      #     name: wheels
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+      - name: Auditwheel
+        run: |
+          pip install auditwheel --upgrade
+          auditwheel show multipers*linux*.whl
+          auditwheel repair multipers*linux*.whl --plat manylinux_2_34_x86_64
+          rm multipers*linux*.whl # removes bad wheels
+          mv wheelhouse/*.whl . # retrieves repaired wheels
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           pip install --upgrade pip twine
-          twine upload --skip-existing *
-          
+          twine upload --skip-existing *.tar.gz # sources
+          twine upload --skip-existing *.whl    # wheels     
