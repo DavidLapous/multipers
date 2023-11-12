@@ -34,7 +34,7 @@ jobs:
         python-version:  ${{ matrix.python-version }}
         activate-environment: build_test_env
         channels: conda-forge
-        channel-priority: true
+        # channel-priority: true
     # - name: Add conda to system path
     #   run: |
     #     # $CONDA is an environment variable pointing to the root of the miniconda directory
@@ -42,8 +42,8 @@ jobs:
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
-        # conda install mamba -c conda-forge
-        mamba install python=${{matrix.python-version}} pip mamba -c conda-forge
+        conda install mamba -c conda-forge
+        mamba install python=${{matrix.python-version}} pip -c conda-forge
         mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build cxx-compiler joblib tqdm scipy -c conda-forge
         pip install pykeops filtration-domination --upgrade
     - name: Build package
