@@ -46,7 +46,7 @@ jobs:
       run: |
         # conda install mamba -c conda-forge
         mamba install python=${{matrix.python-version}} pip -c conda-forge
-        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build cxx-compiler -c conda-forge
+        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build cxx-compiler joblib tqdm scipy -c conda-forge
         pip install pykeops filtration-domination --upgrade
     - name: Build package
       shell: bash -el {0}
