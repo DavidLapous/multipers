@@ -9,13 +9,20 @@ Using conda
 ```sh
 conda create -n python311
 conda activate python311
-conda install python=3.11 cxx-compiler boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
+conda install python=3.11 boost tbb numpy matplotlib gudhi scikit-learn sympy tqdm typing shapely -c conda-forge
 pip install filtration-domination pykeops
 ```
 
 ### Installation
-In a terminal, in the root folder
+#### Using pip (Recommended)
+Precompiled versions, for linux and macos, are available on PyPI. Just use 
 ```sh
+pip install multipers
+```
+#### Building from source
+Clone the repo, and in a terminal, in the root folder
+```sh
+conda install python=3.11 cxx-compiler boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
 pip install .
 ```
 It has been tested with python 3.11 on Linux (gcc12) and Macos (clang14-clang16). 
