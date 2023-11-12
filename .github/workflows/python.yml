@@ -32,11 +32,11 @@ jobs:
       uses: conda-incubator/setup-miniconda@v2
       with:
         python-version:  ${{ matrix.python-version }}
+        activate-environment: true
         mamba-version: "*"
         channels: conda-forge
         channel-priority: true
         auto-activate-base: true
-        activate-environment: ""
     # - name: Add conda to system path
     #   run: |
     #     # $CONDA is an environment variable pointing to the root of the miniconda directory
