@@ -41,12 +41,21 @@ cython_compiler_directives = {
 	"emit_code_comments":True,
 }
 
+## When venv is not properly set, we have to add the current python path
+import site
+PYTHON_ENV_PATH = "/".join((site.getsitepackages()[0]).split("/")[:-3]) # removes lib / python3.x / site-packages
+INCLUDE_PATH = PYTHON_ENV_PATH + "/include/"
+LIBRARY_PATH = PYTHON_ENV_PATH + "/lib/"
+
 cpp_dirs = [
 	"multipers/gudhi",
 	"multipers", 
 	np.get_include(),
+	INCLUDE_PATH,
 ]
-
+library_dirs = [
+	LIBRARY_PATH,
+]
 
 extensions = [Extension(f"multipers.{module}",
 		sources=[f"multipers/{module}.pyx",],
@@ -60,7 +69,8 @@ extensions = [Extension(f"multipers.{module}",
 		],
 		include_dirs=cpp_dirs,
 		define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-		libraries=["tbb", "tbbmalloc"]
+		libraries=["tbb", "tbbmalloc"],
+		library_dirs=library_dirs,
 	) for module in cython_modules
 ]
 setup(
