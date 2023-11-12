@@ -59,7 +59,7 @@ cdef extern from "gudhi/Simplex_tree_multi_interface.h" namespace "Gudhi::multip
 	void squeeze_filtration_from_ptr(intptr_t, const vector[vector[value_type]]&, bool)  except + nogil
 	vector[vector[vector[value_type]]] get_filtration_values_from_ptr(intptr_t, const vector[int]&)  except + nogil
 
-SAFE_CONVERSION=False
+SAFE_CONVERSION=True #Slower but at least it works everywhere
 
 _available_strategies = Literal["regular","regular_closest", "partition", "quantile", "precomputed"]
 # cdef bool callback(vector[int] simplex, void *blocker_func):

@@ -64,7 +64,7 @@ extensions = [Extension(f"multipers.{module}",
 			"-Ofast",
 			#"-march=native",
 			"-std=c++20",
-			# "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
+			"-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
 			"-Wall",
 		],
 		include_dirs=cpp_dirs,
