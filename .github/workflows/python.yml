@@ -94,7 +94,7 @@ jobs:
     - name: Install dependencies
       run: |
         conda install mamba -c conda-forge
-        mamba install install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build auditwheel cxx-compiler -c conda-forge
+        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build auditwheel cxx-compiler -c conda-forge
         pip install pykeops filtration-domination --upgrade
     - name: Build package
       run: |
