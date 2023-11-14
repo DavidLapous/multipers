@@ -9,9 +9,10 @@ Using conda
 ```sh
 conda create -n python311
 conda activate python311
-conda install python=3.11 boost tbb numpy matplotlib gudhi scikit-learn sympy tqdm typing shapely -c conda-forge
+conda install python=3.11 numpy matplotlib gudhi scikit-learn scipy sympy tqdm shapely -c conda-forge
 pip install filtration-domination pykeops
 ```
+Other libraries may be required for some specific functions, e.g., pytorch for to compute the rank invariant.
 
 ### Installation
 #### Using pip (Recommended)
