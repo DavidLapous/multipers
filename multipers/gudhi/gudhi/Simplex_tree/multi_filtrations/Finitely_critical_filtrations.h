@@ -65,6 +65,17 @@ class Finitely_critical_multi_filtration : public std::vector<T> {
     if (this->size() != 1) return false;
     return std::isnan(*(this->begin()));
   }
+  inline bool is_finite() const {
+    if (this->size() > 1) return true;
+    if (this->size() == 0) return false;
+    auto first_value = *(this->begin()); // TODO : Maybe check all entries ?
+    if (std::isnan(first_value) 
+      || first_value == - std::numeric_limits<T>::infinity() 
+      || first_value == std::numeric_limits<T>::infinity())
+        return false;
+    return true;
+  }
+
   inline friend bool operator<(const Finitely_critical_multi_filtration& a, const Finitely_critical_multi_filtration& b) {
     if (a.is_inf() || a.is_nan() || b.is_nan() || b.is_minus_inf()) return false;
     if (b.is_inf() || a.is_minus_inf()) return true;
@@ -209,7 +220,33 @@ class Finitely_critical_multi_filtration : public std::vector<T> {
       std::cerr << "arg : " << x << std::endl;
       throw std::logic_error("Bad sizes");
     }
-    for (unsigned int i = 0; i < x.size(); i++) this->at(i) = this->at(i) > x[i] ? this->at(i) : x[i];
+    for (unsigned int i = 0; i < x.size(); i++) 
+      this->operator[](i) = this->operator[](i) > x[i] ? this->operator[](i) : x[i];
+  }
+
+  /** \brief This functions take the filtration value `this` and pulls it to the cone \f$ \{ y\in \mathbb R^n : y<=x \} \f$.
+   * After calling this method, the value of this is updated to
+   * \f$ \mathrm{this} = \max \{ y\in \mathbb R^n : y<=this \}\cap \{ y\in \mathbb R^n : y<=x \}
+   * @param[in] x The target filtration value on which to push `this`.
+   */
+  inline void pull_to(const Finitely_critical_multi_filtration<T>& x) {
+    if (x.is_inf() || this->is_nan() || x.is_nan() || this->is_minus_inf()) 
+      return;
+    if (this->is_inf() || x.is_minus_inf()) {
+      *this = x;
+      return;
+    }
+    if (this->size() != x.size()) {
+      std::cerr << "Does only work with 1-critical filtrations ! Sizes " 
+        << this->size() << " and " << x.size()
+        << "are different !" << std::endl;
+      std::cerr << "This : " << *this << std::endl;
+      std::cerr << "arg : " << x << std::endl;
+      throw std::logic_error("Bad sizes");
+    }
+    for (auto i = 0u; i < x.size(); i++) 
+         this->operator[](i) = this->operator[](i) > x[i] ? x[i] : this->operator[](i);
+
   }
   // Warning, this function  assumes that the comparisons checks have already been made !
   inline void insert_new(Finitely_critical_multi_filtration to_concatenate) {
@@ -220,7 +257,7 @@ class Finitely_critical_multi_filtration : public std::vector<T> {
   inline T linear_projection(const std::vector<T>& x) {
     T projection = 0;
     unsigned int size = std::min(x.size(), this->size());
-    for (auto i = 0u; i < size; i++) projection += x[i] * this->at(i);
+    for (auto i = 0u; i < size; i++) projection += x[i] * this->operator[](i);
     return projection;
   }
 

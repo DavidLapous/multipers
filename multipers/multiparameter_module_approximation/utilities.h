@@ -15,6 +15,7 @@
 #include <limits>
 #include <omp.h>
 #include <algorithm>
+#include <cassert>
 #include <gudhi/Simplex_tree/Simplex_tree_multi.h>
 
 namespace Gudhi::multiparameter::mma {
@@ -121,20 +122,21 @@ public:
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
             if (dimension == -1 || pt.get_dimension() == dimension){
-                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != mma::inf )
+                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && !pt.get_birth().is_inf() && !pt.get_death().is_minus_inf())
 					out.push_back({pt.get_birth(), pt.get_death()});
             }
         }
-        out.shrink_to_fit();
+        /* out.shrink_to_fit(); */
         return out;
     }
     std::vector<std::vector<value_type>> to_multipers(const dimension_type dimension = -1) const{ // dump for python interface
         std::vector<std::vector<value_type>> out;
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
-            if (pt.get_dimension() == dimension){
+            if (dimension == -1 || pt.get_dimension() == dimension){
                 const auto &b = pt.get_birth();
                 const auto &d = pt.get_death();
+                assert(!( b.is_inf() || b.is_minus_inf() || d.is_inf() || d.is_minus_inf()));
                 out.push_back({b[0], d[0],b[1], d[1]});
             }
         }
@@ -170,12 +172,26 @@ public:
             out[i].reserve(nlines);
             for(unsigned int j = 0; j < nlines; j++){
                 const MultiDiagram_point &pt = this->multiDiagrams[j][i];
-                if(_is_inf(pt.get_birth()) || _is_negInf(pt.get_death()))
-                    out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)});
-                else
-                    out[i].push_back({pt.get_birth()[0], pt.get_death()[0], pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)});
+                /* if(pt.get_birth().is_inf() || pt.get_death().is_minus_inf()) */
+                /*     out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)}); */
+                /* else */
+                value_type a,b,c,d;
+                value_type inf = std::numeric_limits<value_type>::infinity();
+                if (pt.get_birth().is_inf()){ a=0; b=0;}
+                else if (pt.get_birth().is_minus_inf()){ a=-inf; b=-inf;}
+                else {
+                    a = pt.get_birth()[0];
+                    b = pt.get_birth()[1];
+                }
+                if (pt.get_death().is_inf()){ c=inf; d=inf;}
+                if (pt.get_death().is_minus_inf()){c=0; d=0;}
+                else{
+                    c = pt.get_death()[0];
+                    d = pt.get_death()[1];
+                }
+                /* out[i].push_back({pt.get_birth()[0], pt.get_death()[0], pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)}); */
+                out[i].push_back({a,c,b,d,static_cast<value_type>(j)});
             }
-            out[i].shrink_to_fit();
         }
         return out;
     }
@@ -191,7 +207,8 @@ public:
             for (const MultiDiagram_point& bar : multiDiagram){
                 const auto& birth = bar.get_birth();
                 const auto& death = bar.get_death();
-                if ( (dimension == -1  || bar.get_dimension() == dimension) &&  (!_is_inf(birth) && (death[0] > birth[0] + min_persistence)) ) {
+                if ( (dimension == -1  || bar.get_dimension() == dimension) &&  birth.size()>1 && death.size()>1 && (death[0] > birth[0] + min_persistence)) {
+                    // Checking >1 ensure that filtration is not inf or -inf or nan.
                     bars.push_back({birth[0], death[0]});
                     bars.push_back({birth[1], death[1]});
                     summand_idx.push_back(count);
@@ -228,16 +245,16 @@ public:
     unsigned int size() const {return this->multiDiagrams.size();}
 private:
     std::vector<MultiDiagram> multiDiagrams;
-    inline bool _is_inf(const std::vector<value_type> &truc) const{
-        for (const auto coord : truc)
-            if (coord != inf)   return false;
-        return true;
-    }
-    inline bool _is_negInf(const std::vector<value_type> &truc) const{
-        for (const auto coord : truc)
-            if (coord != negInf)   return false;
-        return true;
-    }
+    /* inline bool _is_inf(const std::vector<value_type> &truc) const{ */
+    /*     for (const auto coord : truc) */
+    /*         if (coord != inf)   return false; */
+    /*     return true; */
+    /* } */
+    /* inline bool _is_negInf(const std::vector<value_type> &truc) const{ */
+    /*     for (const auto coord : truc) */
+    /*         if (coord != negInf)   return false; */
+    /*     return true; */
+    /* } */
 };
 } //namespace Gudhi::mma
 

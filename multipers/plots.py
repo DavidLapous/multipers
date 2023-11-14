@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import matplotlib
+from typing import Optional
 import numpy as np
 
 def _plot_rectangle(rectangle:np.ndarray, weight, **plt_kwargs):
@@ -92,7 +92,7 @@ def plot_signed_measures(signed_measures, size=4):
 	plt.tight_layout()
 
 
-def plot_surface(grid, hf, fig=None, ax=None,cmap=None, **plt_args):
+def plot_surface(grid, hf, fig=None, ax=None,cmap:Optional[str]=None,discrete_surface=False, **plt_args):
 	import matplotlib
 	if ax is None:
 		ax = plt.gca()
@@ -101,12 +101,20 @@ def plot_surface(grid, hf, fig=None, ax=None,cmap=None, **plt_args):
 	if hf.ndim == 3 and hf.shape[0] == 1: hf=hf[0]
 	assert hf.ndim == 2, "Can only plot a 2d surface"
 	fig = plt.gcf() if fig is None else fig
-	cmap = matplotlib.colormaps["gray_r"] if cmap is None else matplotlib.colormaps[cmap]
-	bounds = np.arange(0,11,1, dtype=int)
-	norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend='max')
-	im = ax.pcolormesh(grid[0], grid[1], hf.T,cmap=cmap,norm=norm, **plt_args)
-	cbar=fig.colorbar(matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm), spacing="proportional", ax=ax)
-	cbar.set_ticks(ticks=bounds, labels=bounds)
+	cmap = matplotlib.colormaps["gray_r"] if cmap is None and discrete_surface else matplotlib.colormaps[cmap]
+	if cmap is None:
+		if discrete_surface:
+			cmap =  matplotlib.colormaps["gray_r"]
+		else:
+			cmap =  matplotlib.colormaps["Plasma"]
+	if discrete_surface:
+		bounds = np.arange(0,11,1, dtype=int)
+		norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend='max')
+		im = ax.pcolormesh(grid[0], grid[1], hf.T,cmap=cmap,norm=norm, **plt_args)
+		cbar=fig.colorbar(matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm), spacing="proportional", ax=ax)
+		cbar.set_ticks(ticks=bounds, labels=bounds)
+		return
+	im = ax.pcolormesh(grid[0], grid[1], hf.T,cmap=cmap, **plt_args)
 
 def plot_surfaces(HF, size=4, **plt_args):
 	grid, hf = HF

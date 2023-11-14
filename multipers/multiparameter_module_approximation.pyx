@@ -13,7 +13,6 @@ import gudhi as gd
 import numpy as np
 from typing import List
 import pickle as pk
-import matplotlib.pyplot as plt
 
 ###########################################################################
 ## CPP CLASSES
@@ -346,6 +345,7 @@ cdef class PyModule:
 		The figure of the plot.
 		"""
 		from multipers.plots import plot2d_PyModule
+		import matplotlib.pyplot as plt
 		if (kwargs.get('box')):
 			box = kwargs.pop('box')
 		else:
@@ -433,6 +433,7 @@ cdef class PyModule:
 		
 		out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
 		return out
+
 	def landscape(self, degree:int, k:int=0,box:list|np.ndarray|None=None, resolution:List=[100,100], bool plot=False):
 		"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
@@ -453,6 +454,7 @@ cdef class PyModule:
 		Numpy array
 			The landscape of the module.
 		"""
+		import matplotlib.pyplot as plt
 		if box is None:
 			box = self.get_box()
 		cdef Box[value_type] c_box = Box[value_type](box)
@@ -463,6 +465,7 @@ cdef class PyModule:
 			extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
 			plt.imshow(out.T, origin="lower", extent=extent, aspect=aspect)
 		return out
+
 	def landscapes(self, degree:int, ks:list|np.ndarray=[0],box=None, resolution:list|np.ndarray=[100,100], bool plot=False):
 		"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
@@ -483,6 +486,7 @@ cdef class PyModule:
 		Numpy array
 			The landscapes of the module with parameters ks.
 		"""
+		import matplotlib.pyplot as plt
 		if box is None:
 			box = self.get_box()
 		out = np.array(self.cmod.get_landscapes(degree, ks, Box[value_type](box), resolution))
@@ -495,15 +499,17 @@ cdef class PyModule:
 		return out
 
 
-	def image(self, degrees:Iterable[int]=None, bandwidth:float=0.1, resolution:list|int=50, normalize:bool=False, plot:bool=False, save:bool=False, dpi:int=200,p:float=1., box=None, flatten=False, int n_jobs=0,  **kwargs)->np.ndarray:
-		"""Computes a vectorization from a PyModule. Python interface only bifiltrations.
+	def image(self, degrees:List[int]=None, bandwidth:float=0.1, resolution:List[int]|int=50, 
+		   bool normalize=False, bool plot=False, 
+		   bool save=False, int dpi=200, p:float=1., box=None, bool flatten=False, int n_jobs=0,  **kwargs)->np.ndarray:
+		"""Computes a vectorization from a PyModule.
 
 		Parameters
 		----------
-		degree = -1 : integer
-			If positive returns only the image of homology degree `degree`.
+		degrees = None : integer list
+			If given returns only the image(s) of homology degrees `degrees`.
 		bandwidth = 0.1 : float
-			Image parameter. TODO : different weights
+			Image parameter. 
 		resolution = [100,100] : pair of integers
 			Resolution of the image(s).
 		normalize = True : Boolean
@@ -511,13 +517,14 @@ cdef class PyModule:
 		plot = False : Boolean
 			If true, plots the images;
 		flatten=False :
-			If False, reshapes the output to the expected shape.
+			If True, reshapes the output to a flattened shape.
 
 		Returns
 		-------
 		List of Numpy arrays or numpy array
 			The list of images, or the image of fixed dimension.
 		"""
+		import matplotlib.pyplot as plt
 		# box = kwargs.get("box",[self.get_bottom(),self.get_top()])
 		if box is None:
 			box = self.get_box()
@@ -595,7 +602,7 @@ cdef class PyModule:
 		with nogil:
 			c_euler = c_mod.euler_curve(c_points)
 		euler = c_euler
-		return np.array(euler, dtype=int)
+		return np.asarray(euler, dtype=int)
 
 def module_approximation(
 	st:SimplexTreeMulti|None=None,

@@ -1,5 +1,4 @@
 from typing import Iterable
-from joblib import Parallel, delayed
 import numpy as np
 from itertools import product
 
@@ -127,6 +126,7 @@ def convolution_signed_measures(iterable_of_signed_measures, filtrations, bandwi
 	
 	if n_jobs>1 or n_jobs ==-1:
 		prefer = "processes" if backend=="sklearn" else "threads"
+		from joblib import Parallel, delayed
 		convolutions = Parallel(n_jobs=n_jobs, prefer=prefer)(delayed(convolution_signed_measures_on_grid)(sms) for sms in iterable_of_signed_measures)
 	else:	convolutions = [convolution_signed_measures_on_grid(sms) for sms in iterable_of_signed_measures]
 	if not flatten:

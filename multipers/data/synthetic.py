@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 def noisy_annulus(n1:int=1000,n2:int=200, r1:float=1, r2:float=2, dim:int=2, center:np.ndarray|list|None=None, **kwargs)->np.ndarray:
 	"""Generates a noisy annulus dataset.
 
@@ -61,6 +60,7 @@ def orbit(n:int=1000, r:float=1., x0=[]):
 	return np.asarray(point_list, dtype=float)
 
 def get_orbit5k(num_pts = 1000,  num_data=5000):
+	from sklearn.preprocessing import LabelEncoder
 	rs = [2.5, 3.5, 4, 4.1, 4.3]
 	labels = np.random.choice(rs, size=num_data, replace=True)
 	X = [orbit(n=num_pts, r=r) for r in labels]

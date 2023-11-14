@@ -11,14 +11,13 @@ Options.fast_fail = True
 # Options.warning_errors = True
 
 cython_modules = [
-    "simplex_tree_multi", 
-    "rank_invariant",
+	"simplex_tree_multi", 
+	"rank_invariant",
 	"function_rips",
-    "multiparameter_module_approximation", 
-    # 'diff_helper',
+	"multiparameter_module_approximation", 
 	'hilbert_function',
 	'euler_characteristic',
-    # 'cubical_multi_complex',
+	# 'cubical_multi_complex',
 	'point_measure_integration',
 ]
 
@@ -57,14 +56,29 @@ library_dirs = [
 	LIBRARY_PATH,
 ]
 
+python_dependencies=[
+#	"gudhi",
+	"numpy",
+	"Cython",
+#	"scikit-learn",
+	"tbb",
+	"tbb-devel",
+#	"tqdm",
+	"setuptools",
+]
+
+
+
+
+
 extensions = [Extension(f"multipers.{module}",
 		sources=[f"multipers/{module}.pyx",],
 		language='c++',
 		extra_compile_args=[
 			"-Ofast",
 			#"-march=native",
-			"-std=c++20",
-			"-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
+			"-std=c++17", #Stuck here bc of Windows...
+			# "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
 			"-Wall",
 		],
 		include_dirs=cpp_dirs,

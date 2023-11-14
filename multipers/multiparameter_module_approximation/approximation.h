@@ -1073,7 +1073,7 @@ MultiDiagram Module::get_barcode(const Line<value_type> &l, const dimension_type
 	std::vector<MultiDiagram_point> barcode(this->size());
 	std::pair<filtration_type, filtration_type> threshold_bounds;
 	if (threshold) threshold_bounds = l.get_bounds(this->box_);
-	unsigned int count = 0;
+	unsigned int summand_idx = 0; 
 	for (unsigned int i=0; i < this->size(); i++){
 		const Summand &summand = this->module_[i];
 		if constexpr (verbose) 
@@ -1091,22 +1091,21 @@ MultiDiagram Module::get_barcode(const Line<value_type> &l, const dimension_type
 		if (threshold){
 			auto &min = threshold_bounds.first;
 			auto &max = threshold_bounds.second;
-			if ((pbirth <= min)) 
-				pbirth = min;
-			else if ((pbirth>= max)) {
-				pbirth = filtration_type(l.get_dim(), inf); 
+			if (!(pbirth < max) || !(pdeath > min) ) {
+				/* continue; */ // We still need summands to be aligned. The price to pay is some memory.
+				pbirth = std::numeric_limits<filtration_type>::infinity();
 				pdeath = pbirth;
 			}
-			if ((pdeath>= max) && pbirth[0] != inf) 
-				pdeath = max;
-			else if ((pdeath<= min)) {
-				pbirth = filtration_type(l.get_dim(), negInf); 
-				pdeath = pbirth;
-			}
+			pbirth.push_to(min);
+			pdeath.pull_to(max);
+			/* if ((pbirth <= min))  */
+			/* 	pbirth = min; */
+			/* if ((pdeath>= max) && pbirth[0] != inf)  */
+			/* 	pdeath = max; */
 		}
-		barcode[count++] = MultiDiagram_point(summand.get_dimension(), pbirth, pdeath);
+		barcode[summand_idx++] = MultiDiagram_point(summand.get_dimension(), pbirth, pdeath);
 	}
-	barcode.resize(count);
+	barcode.resize(summand_idx);
 	return MultiDiagram(barcode);
 }
 

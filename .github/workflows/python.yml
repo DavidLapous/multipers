@@ -13,21 +13,16 @@ on:
 
 
 jobs:
-  linux:
-    name: linux_compile
+  build_test:
+    name: Build and Test 
     # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
-        # python-version: ['310']
         python-version: ["3.10", "3.11"]
         os: ["ubuntu-latest", "macos-latest"] #windows fails for some reasons
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
-    # - name: Set up Python # Inside the docker now
-    #   uses: actions/setup-python@v4
-    #   with:
-    #     python-version: ${{ matrix.python-version }}
     - name: Setup miniconda
       uses: conda-incubator/setup-miniconda@v2
       with:
@@ -35,10 +30,6 @@ jobs:
         activate-environment: build_test_env
         channels: conda-forge
         # channel-priority: true
-    # - name: Add conda to system path
-    #   run: |
-    #     # $CONDA is an environment variable pointing to the root of the miniconda directory
-    #     echo $CONDA/bin >> $GITHUB_PATH
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
@@ -49,8 +40,11 @@ jobs:
     - name: Build package
       shell: bash -el {0}
       run: |
+        if [[ ${{ matrix.os }} == "macos-latest" ]]; then
+          export CXXFLAGS="-fno-aligned-new $CXXFLAGS" # Macos workaround
+        fi
         python setup.py sdist
-        python setup.py build_ext -j2 --inplace
+        python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
         pip wheel . --wheel-dir dist
     - name: Install and Test
       shell: bash -el {0}
@@ -72,28 +66,21 @@ jobs:
           cd ..
         fi
 
-    # - name: Upload wheels
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: wheels
-    #     path: wheelhouse
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
       with:
         name: sources
         path: dist
-  
+
+
   send_to_pypi:
     name: Send sources and wheels
     runs-on: ubuntu-latest
-    needs: [ linux ]
+    needs: [ build_test ]
     steps:
       - uses: actions/download-artifact@v3
         with:
           name: sources
-      # - uses: actions/download-artifact@v3
-      #   with:
-      #     name: wheels
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
