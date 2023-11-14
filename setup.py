@@ -92,7 +92,7 @@ setup(
 	author="David Loiseaux",
 	author_email="david.loiseaux@inria.fr",
 	description="Multiparameter persistence toolkit",
-	version="1.0.1",
+	version="1.0.2",
 	ext_modules=cythonize(
 		extensions, 
 		compiler_directives=cython_compiler_directives, 
