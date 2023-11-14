@@ -77,7 +77,7 @@ extensions = [Extension(f"multipers.{module}",
 		extra_compile_args=[
 			"-Ofast",
 			#"-march=native",
-			"-std=c++17", #Stuck here bc of Windows...
+			"-std=c++20", # Windows doesn't support this yet. TODO: Wait (haha).
 			# "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
 			"-Wall",
 		],
