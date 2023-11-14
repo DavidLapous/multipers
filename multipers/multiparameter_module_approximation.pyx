@@ -242,11 +242,11 @@ cdef class PyModule:
 		return np.asarray(out)
 	def __len__(self)->int:
 		return self.cmod.size()
-	def get_bottom(self)->list:
-		return self.cmod.get_box().get_bottom_corner().get_vector()
-	def get_top(self)->list:
-		return self.cmod.get_box().get_upper_corner().get_vector()
-	def get_box(self):
+	def get_bottom(self)->np.ndarray:
+		return np.asarray(self.cmod.get_box().get_bottom_corner().get_vector())
+	def get_top(self)->np.ndarray:
+		return np.asarray(self.cmod.get_box().get_upper_corner().get_vector())
+	def get_box(self)->np.ndarray:
 		return np.asarray([self.get_bottom(), self.get_top()])
 	@property
 	def max_degree(self)->int:
@@ -499,7 +499,7 @@ cdef class PyModule:
 		return out
 
 
-	def image(self, degrees:List[int]=None, bandwidth:float=0.1, resolution:List[int]|int=50, 
+	def image(self, degrees=None, bandwidth:float=0.1, resolution:List[int]|int=50, 
 		   bool normalize=False, bool plot=False, 
 		   bool save=False, int dpi=200, p:float=1., box=None, bool flatten=False, int n_jobs=0,  **kwargs)->np.ndarray:
 		"""Computes a vectorization from a PyModule.

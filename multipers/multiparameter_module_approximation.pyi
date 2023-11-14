@@ -11,9 +11,9 @@ class PySummand:
 	"""
 
 
-	def get_birth_list(self)->list: # TODO: FIXME
+	def get_birth_list(self): # TODO: FIXME
 		...
-	def get_death_list(self)->list:
+	def get_death_list(self):
 		...
 	@property
 	def num_parameters(self)->int:
@@ -97,9 +97,9 @@ class PyModule:
 
 	def __len__(self)->int:
 		...
-	def get_bottom(self)->list:
+	def get_bottom(self):
 		...
-	def get_top(self)->list:
+	def get_top(self):
 		...
 	def get_box(self):
 		...
