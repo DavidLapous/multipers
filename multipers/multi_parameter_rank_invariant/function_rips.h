@@ -37,20 +37,20 @@ std::tuple<interface_multi, std::vector<interface_multi::Filtration_value::value
     interface_std& st, 
     const std::vector<int>& degrees
 ){
-    const bool verbose = false;
-    using value_type = interface_multi::Filtration_value::value_type;
-    using filtration_lists = std::vector<std::vector<value_type>>;
+	const bool verbose = false;
+	using value_type = interface_multi::Filtration_value::value_type;
+	using filtration_lists = std::vector<std::vector<value_type>>;
 
-    assert( st.dimension() == 1); // the st slices will be expanded + collapsed after being filled. 
-    interface_multi st_multi;
-    std::vector<value_type> rips_filtration_values = {0}; // vector that will hold the used filtration values
-    rips_filtration_values.reserve(st.num_simplices());
-    int max_st_degree = 0;
-    
-    int num_degrees = degrees.size();
-    multify(st,st_multi,0); // puts the st filtration in axis 0 + fitrations for each degrees afterward	
-    // preprocess
-    filtration_lists edge_filtration_of_nodes(st.num_vertices());
+	assert( st.dimension() == 1); // the st slices will be expanded + collapsed after being filled. 
+	interface_multi st_multi;
+	std::vector<value_type> rips_filtration_values = {0}; // vector that will hold the used filtration values
+	rips_filtration_values.reserve(st.num_simplices());
+	int max_st_degree = 0;
+	
+	int num_degrees = degrees.size();
+	multify(st,st_multi,0); // puts the st filtration in axis 0 + fitrations for each degrees afterward	
+	// preprocess
+	filtration_lists edge_filtration_of_nodes(st.num_vertices());
 	for (auto sh : st.complex_simplex_range()){
 		if (st.dimension() == 0) continue;
 		value_type filtration = st.filtration(sh);

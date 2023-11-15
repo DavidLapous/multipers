@@ -103,6 +103,37 @@ std::pair<boundary_matrix, multifiltration_type> simplextree_to_boundary_filtrat
 
 
 
+using scc_type = std::vector<std::pair<boundary_matrix, std::vector<std::vector<float>>>>;
+scc_type simplextree_to_scc(const uintptr_t splxptr)
+{
+	using option = Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
+	Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option>*)(splxptr);
+
+	scc_type out(st.dimension()+1);
+	if (st.num_simplices() <= 0)
+		return out;
+
+	/* Assigns keys to simplices according their dimension */
+	std::vector<int> simplices_per_block_dim(st.dimension()+1);
+	for (auto sh : st.filtration_simplex_range())
+		st.assign_key(sh, simplices_per_block_dim[st.dimension(sh)]++);
+
+	std::vector<unsigned int> key_boundary_container;
+	for (auto &simplex : st.filtration_simplex_range()){
+		key_boundary_container.clear();
+		for (const auto &simplex_id : st.boundary_simplex_range(simplex)){
+			key_boundary_container.push_back(st.key(simplex_id));
+		}
+		auto& [block_matrix, block_filtrations] = out[st.dimension(simplex)];
+		const auto &simplex_filtration = st.filtration(simplex);
+		block_matrix.push_back(key_boundary_container);
+		block_filtrations.push_back(simplex_filtration);
+	}
+	return out;
+}
+
+
+
 
 
 

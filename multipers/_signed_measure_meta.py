@@ -2,6 +2,7 @@ from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack
 from typing import Optional
 import numpy as np
 from multipers.simplex_tree_multi import _available_strategies
+from shutil import which
 def signed_measure(
 	simplextree:SimplexTreeMulti,
 	degree:Optional[int]=None,
@@ -13,6 +14,8 @@ def signed_measure(
 	verbose:bool=False, 
 	n_jobs:int=-1,
 	expand_collapse:bool=False,
+	backend="multipers",
+	mpfree_path=None,
 	**infer_grid_kwargs
 	):
 	"""
@@ -37,13 +40,41 @@ def signed_measure(
 	if len(degrees) ==1 and degrees[0] is None and degree is not None:
 		degrees = [degree]
 	if None in degrees: assert len(degrees) == 1
+	
 	if len(degrees) == 0: return []
+
+
 	if not simplextree._is_squeezed:
 		simplextree_ = SimplexTreeMulti(simplextree)
-		simplextree_.grid_squeeze(grid_strategy=grid_strategy, **infer_grid_kwargs) # put a warning ?
+		simplextree_.grid_squeeze(grid_strategy=grid_strategy,coordinate_values= not (backend =="mpfree"), **infer_grid_kwargs) # put a warning ?
 	else:
 		simplextree_ = simplextree
-
+	if backend == "mpfree":
+		assert not simplextree_._is_squeezed
+		assert len(degrees) == 1 and mass_default is None and (invariant is None or "hilbert" in invariant)
+		in_path="temp_scc_multipers"
+		out_path = "out_temp_scc_multipers"
+		simplextree_.to_scc(path=in_path, overwrite=1,rivet_compatible=False,
+			strip_comments=False,
+			ignore_last_generators=False,
+			reverse_block=True)
+			
+		if mpfree_path is None:
+			a = which("./mpfree")
+			b = which("mpfree")
+			if a: 
+				mpfree_path = a
+			elif b:
+				mpfree_path = b
+			else:
+				raise Exception("mpfree not found.")
+		if mpfree_path:
+			import os
+			degree = degrees[0]
+			if os.path.exists(out_path):
+				os.remove(out_path)
+			os.system(f"{mpfree_path} --resolution --dim={degree} {in_path} {out_path} ") 
+		return _signed_measure_from_scc(out_path)
 	# assert simplextree.num_parameters == 2
 	if mass_default is None:
 		mass_default = mass_default
@@ -55,7 +86,7 @@ def signed_measure(
 	else:
 		mass_default = np.asarray(mass_default)
 		assert mass_default.ndim == 1 and mass_default.shape[0] == simplextree.num_parameters
-
+	
 	if invariant in ["rank_invariant", "rank"]:
 		assert simplextree.num_parameters == 2, "Rank invariant only implemented for 2-parameter modules."
 		from multipers.rank_invariant import signed_measure as smri
@@ -70,3 +101,18 @@ def signed_measure(
 		sms = hilbert_signed_measure(simplextree_,degrees=degrees, mass_default=mass_default, verbose=verbose,plot=plot, n_jobs=n_jobs, expand_collapse=expand_collapse)
 
 	return sms
+	
+
+def _signed_measure_from_scc(
+		path:str,
+	):
+	from multipers.io import scc_parser
+	blocks = scc_parser(path)
+	pts = np.concatenate([b[0] for b in blocks if len(b[0])>0])
+	weights = np.concatenate([(1-2*(i%2)) * np.ones(len(b[0])) for i,b in enumerate(blocks) if len(b[0])>0])
+	sm = [(pts, weights)]
+	return sm
+
+
+
+

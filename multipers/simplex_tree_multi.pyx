@@ -42,7 +42,7 @@ cnp.import_array()
 from multipers.simplex_tree_multi cimport *
 cimport cython
 from gudhi.simplex_tree import SimplexTree ## Small hack for typing
-from multipers.multiparameter_module_approximation import PyModule
+from multipers.multiparameter_module_approximation import PyModule, simplextree2scc
 from typing import Iterable,Literal,Optional
 from tqdm import tqdm
 
@@ -80,6 +80,7 @@ cdef class SimplexTreeMulti:
 	# Use intptr_t instead to cast the pointer
 	cdef public intptr_t thisptr
 	cdef public vector[vector[value_type]] filtration_grid
+	cdef public bool _is_function_simplextree
 
 	# Get the pointer casted as it should be
 	cdef Simplex_tree_multi_interface* get_ptr(self) nogil:
@@ -129,6 +130,7 @@ cdef class SimplexTreeMulti:
 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
 		self.get_ptr().set_number_of_parameters(num_parameters)
 		self.filtration_grid=[[]*num_parameters] 
+		self._is_function_simplextree = False
 
 	def __dealloc__(self):
 		cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
@@ -747,7 +749,7 @@ cdef class SimplexTreeMulti:
 		return module_approximation(self,**kwargs)
 		
 		
-## This function is only meant for the edge collapse interface.
+	## This function is only meant for the edge collapse interface.
 	def get_edge_list(self):
 		cdef edge_list out
 		with nogil:
@@ -846,7 +848,7 @@ cdef class SimplexTreeMulti:
 		return
 	
 	
-	def to_scc(self, path="scc_dataset.txt", progress:bool=True, overwrite:bool=False, ignore_last_generators:bool=True, strip_comments:bool=False, reverse_block:bool=True, rivet_compatible=False)->None:
+	def __old__to_scc(self, path="scc_dataset.txt", progress:bool=True, overwrite:bool=False, ignore_last_generators:bool=True, strip_comments:bool=False, reverse_block:bool=True, rivet_compatible=False)->None:
 		""" Create a file with the scc2020 standard, representing the n-filtration of the simplextree.
 		Link : https://bitbucket.org/mkerber/chain_complex_format/src/master/
 
@@ -931,7 +933,90 @@ cdef class SimplexTreeMulti:
 					file.write("\n")
 		file.close()
 		return
-	
+
+	def to_scc_kcritical(self,
+			path="scc_dataset.scc", 
+			bool rivet_compatible=False, 
+			bool strip_comments=False, 
+			bool ignore_last_generators=False, 
+			bool overwrite=False,
+			bool reverse_block=True,
+		):
+		"""
+		TODO: function-simplextree, from squeezed
+		"""
+		from os.path import exists
+		from os import remove
+		if exists(path):
+			if not(overwrite):
+				raise Exception(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
+			remove(path)
+		stuff = simplextree2scc(self)
+		if reverse_block:	stuff.reverse()
+		with open(path, "w") as f:
+			f.write("scc2020\n") if not rivet_compatible else f.write("firep\n")
+			if not strip_comments and not rivet_compatible: f.write("# Number of parameters\n")
+			num_parameters = self.num_parameters
+			if rivet_compatible:
+				assert num_parameters == 2
+				f.write("Filtration 1\n")
+				f.write("Filtration 2\n")
+			else:
+				f.write(f"{num_parameters}\n")
+			
+			if not strip_comments: f.write("# Sizes of generating sets\n")
+			for block in stuff: f.write(f"{len(block[1])} ")
+			f.write("\n")
+			
+			for i,block in enumerate(stuff):
+				if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
+				if not strip_comments: f.write(f"# Block of dimension {len(stuff)-i}\n")
+				for boundary, filtration in zip(*block):
+					line = " ".join([str(x) for x in filtration]) + " ; " + " ".join([str(x) for x in boundary]) +"\n"
+					f.write(line)
+	def to_scc_function_st(self,
+			path="scc_dataset.scc", 
+			bool rivet_compatible=False, 
+			bool strip_comments=False, 
+			bool ignore_last_generators=False, 
+			bool overwrite=False,
+			bool reverse_block=True,
+		):
+		from os.path import exists
+		from os import remove
+		if exists(path):
+			if not(overwrite):
+				raise Exception(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
+			remove(path)
+		stuff = simplextree2scc(self)
+		if reverse_block:	stuff.reverse()
+		with open(path, "w") as f:
+			f.write("scc2020\n") if not rivet_compatible else f.write("firep\n")
+			if not strip_comments and not rivet_compatible: f.write("# Number of parameters\n")
+			num_parameters = self.num_parameters
+			if rivet_compatible:
+				assert num_parameters == 2
+				f.write("Filtration 1\n")
+				f.write("Filtration 2\n")
+			else:
+				f.write(f"{num_parameters}\n")
+			
+			if not strip_comments: f.write("# Sizes of generating sets\n")
+			for block in stuff: f.write(f"{len(block[1])} ")
+			f.write("\n")
+			
+			for i,block in enumerate(stuff):
+				if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
+				if not strip_comments: f.write(f"# Block of dimension {len(stuff)-i}\n")
+				for boundary, filtration in zip(*block):
+					line = " ".join([str(i)+" " + str(x) for i,x in enumerate(filtration)]) + " ; " + " ".join([str(x) for x in boundary]) +"\n"
+					f.write(line)
+	def to_scc(self,**kwargs):
+		if self._is_function_simplextree:
+			return self.to_scc_function_st(**kwargs)
+		else:
+			return self.to_scc_kcritical(**kwargs)
+
 	def to_rivet(self, path="rivet_dataset.txt", degree:int|None = None, progress:bool=False, overwrite:bool=False, xbins:int|None=None, ybins:int|None=None)->None:
 		""" Create a file that can be imported by rivet, representing the filtration of the simplextree.
 

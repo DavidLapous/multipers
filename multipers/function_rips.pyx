@@ -50,6 +50,7 @@ def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0
 		filtrations = np.concatenate([filtrations, [np.inf]])
 	degree_rips_st.grid_squeeze([filtrations]*degree_rips_st.num_parameters)
 	degree_rips_st.filtration_grid = [filtrations, np.asarray(degrees)[::-1]]
+	degree_rips_st._is_function_simplextree= True
 	return degree_rips_st,max_degree
 
 def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0):

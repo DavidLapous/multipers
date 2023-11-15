@@ -885,7 +885,7 @@ cdef extern from "multiparameter_module_approximation/format_python-cpp.h" names
 	#pair[vector[vector[unsigned int]], vector[vector[double]]] build_boundary_matrix_from_simplex_list(vector[vector[unsigned int]] list_simplices, vector[vector[double]] filtrations, vector[unsigned int] filters_to_permute)
 	# pair[vector[vector[unsigned int]], vector[double]] simplextree_to_boundary_filtration(vector[boundary_type] &simplexList, filtration_type &filtration)
 	pair[boundary_matrix, vector[Finitely_critical_multi_filtration]] simplextree_to_boundary_filtration(uintptr_t)
-
+	vector[pair[boundary_matrix, vector[vector[float]]]] simplextree_to_scc(uintptr_t)
 #	pair[vector[vector[unsigned int]], vector[double]] __old__simplextree_to_boundary_filtration(vector[boundary_type]&, filtration_type&)
 
 #	string __old__simplextree2rivet(const uintptr_t, const vector[filtration_type]&)
@@ -922,6 +922,18 @@ def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree
 	multi_filtrations = np.array(Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
 	return boundary, multi_filtrations
 
+
+def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree):
+	cdef intptr_t cptr
+	if isinstance(simplextree, SimplexTreeMulti):
+		cptr = simplextree.thisptr
+	elif isinstance(simplextree, SimplexTree):
+		temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
+		cptr = temp_st.thisptr
+	else:
+		raise TypeError("Has to be a simplextree")
+
+	return simplextree_to_scc(cptr)
 
 # def simplextree_to_sparse_boundary(st:SimplexTree):
 # 	return build_sparse_boundary_matrix_from_simplex_list([simplex[0] for simplex in st.get_simplices()])
