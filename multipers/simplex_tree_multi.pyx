@@ -1179,7 +1179,7 @@ cdef class SimplexTreeMulti:
 		cdef vector[vector[value_type]] c_filtration_grid = filtration_grid
 		cdef intptr_t ptr = self.thisptr
 		if coordinate_values:
-			self.filtration_grid = c_filtration_grid
+			self.filtration_grid = [np.asarray(f) for f in c_filtration_grid]
 		with nogil:
 			squeeze_filtration_from_ptr(ptr, c_filtration_grid, coordinate_values)
 		return self
