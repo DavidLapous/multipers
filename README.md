@@ -16,7 +16,7 @@ Other libraries may be required for some specific functions, e.g., pytorch for t
 
 ### Installation
 #### Using pip (Recommended)
-Precompiled versions, for linux and macos, are available on PyPI. Just use 
+Precompiled versions, for linux and macos, are available [on PyPI](https://pypi.org/project/multipers/). Just use 
 ```sh
 pip install multipers
 ```
