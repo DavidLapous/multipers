@@ -31,7 +31,7 @@ dependencies:
   - cgal-cpp
   - boost-cpp
   - scipy
+  - tbb
   - tbb-devel
   - plotly
-  - dash
   - mdanalysis

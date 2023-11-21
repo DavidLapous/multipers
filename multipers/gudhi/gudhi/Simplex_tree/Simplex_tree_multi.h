@@ -56,7 +56,7 @@ template <class simplextree_std, class simplextree_multi>
 void multify(simplextree_std &st, simplextree_multi &st_multi, const int num_parameters,
              const typename simplextree_multi::Options::Filtration_value &default_values = {}) {
   typename simplextree_multi::Options::Filtration_value f(num_parameters);
-static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert non-multiparameter to multiparameter simplextree.");
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert non-multiparameter to multiparameter simplextree.");
   for (auto i = 0u;
        i < std::min(static_cast<unsigned int>(default_values.size()), static_cast<unsigned int>(num_parameters - 1));
        i++)
@@ -70,7 +70,7 @@ static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi
     if (num_parameters > 0) f[0] = st.filtration(simplex_handle);
     st_multi.insert_simplex(simplex, f);
   }
-st_multi.set_number_of_parameters(num_parameters);
+  st_multi.set_number_of_parameters(num_parameters);
 }
 
 /**
@@ -84,7 +84,7 @@ st_multi.set_number_of_parameters(num_parameters);
  * */
 template <class simplextree_std, class simplextree_multi>
 void flatten(simplextree_std &st, simplextree_multi &st_multi, const int dimension = 0) {
-static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
   for (const auto &simplex_handle : st_multi.complex_simplex_range()) {
     std::vector<int> simplex;
     for (auto vertex : st_multi.simplex_vertex_range(simplex_handle)) simplex.push_back(vertex);
@@ -107,7 +107,7 @@ static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi
 template <class simplextree_std, class simplextree_multi>
 void linear_projection(simplextree_std &st, simplextree_multi &st_multi,
                        const std::vector<typename simplextree_multi::Options::value_type> &linear_form) {
-static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
   auto sh = st.complex_simplex_range().begin();
   auto sh_multi = st_multi.complex_simplex_range().begin();
   auto end = st.complex_simplex_range().end();
@@ -133,7 +133,7 @@ static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi
 template <class simplextree_std, class simplextree_multi>
 void flatten_diag(simplextree_std &st, simplextree_multi &st_multi,
                   const std::vector<typename simplextree_multi::Options::value_type> basepoint, int dimension) {
-static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter, "Can only convert multiparameter to non-multiparameter simplextree.");
   assert(dimension>=0);
   multi_filtrations::Line<typename simplextree_multi::Options::value_type> l(basepoint);
   for (const auto &simplex_handle : st_multi.complex_simplex_range()) {
@@ -141,7 +141,7 @@ static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi
     for (auto vertex : st_multi.simplex_vertex_range(simplex_handle)) simplex.push_back(vertex);
 
     std::vector<typename simplextree_multi::Options::value_type> f = st_multi.filtration(simplex_handle);
-        typename simplextree_multi::Options::value_type new_filtration = l.push_forward(f)[dimension];
+    typename simplextree_multi::Options::value_type new_filtration = l.push_forward(f)[dimension];
     st.insert_simplex(simplex, new_filtration);
   }
 }
@@ -198,7 +198,7 @@ inline void find_coordinates(vector_like &x, const multi_filtration_grid &grid) 
  * */
 template <class simplextree_multi>
 void squeeze_filtration(simplextree_multi& st_multi, const multi_filtration_grid &grid, bool coordinate_values = true) {
-static_assert(simplextree_multi::Options::is_multi_parameter, "Only works for multiparameter simplextrees.");
+  static_assert(simplextree_multi::Options::is_multi_parameter, "Only works for multiparameter simplextrees.");
   auto num_parameters = static_cast<unsigned int>(st_multi.get_number_of_parameters());
   if (grid.size() != num_parameters) {
     throw std::invalid_argument("Grid and simplextree do not agree on number of parameters.");
@@ -225,7 +225,7 @@ static_assert(simplextree_multi::Options::is_multi_parameter, "Only works for mu
  * */
 template <class simplextree_multi>
 std::vector<multi_filtration_grid> get_filtration_values(simplextree_multi& st_multi, const std::vector<int> &degrees) {
-static_assert(simplextree_multi::Options::is_multi_parameter, "Only works for multiparameter simplextrees.");
+  static_assert(simplextree_multi::Options::is_multi_parameter, "Only works for multiparameter simplextrees.");
   int num_parameters = st_multi.get_number_of_parameters();
   std::vector<multi_filtration_grid> out(degrees.size(), multi_filtration_grid(num_parameters));
   std::vector<int> degree_index(degrees.size());

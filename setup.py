@@ -5,6 +5,12 @@ from Cython.Build import cythonize
 from Cython.Compiler import Options
 
 
+from pathlib import Path
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
+
+
+
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
@@ -57,12 +63,14 @@ library_dirs = [
 ]
 
 python_dependencies=[
-#	"gudhi",
+	"gudhi", # Waiting for gudhi with python 3.12
 	"numpy",
-	"Cython",
+	"Cython", # needed for compilation
 #	"scikit-learn",
-	"tbb",
-	"tbb-devel",
+	"tbb", # needed for compilation
+	# "tbb-devel", # needed for compilation
+	# boost,
+	# boost-cpp,
 #	"tqdm",
 	"setuptools",
 ]
@@ -91,8 +99,13 @@ setup(
 	name='multipers',
 	author="David Loiseaux",
 	author_email="david.loiseaux@inria.fr",
-	description="Multiparameter persistence toolkit",
-	version="1.0.3",
+	description="Scikit-style Multiparameter persistence toolkit",
+	url="https://github.com/DavidLapous/multipers",
+	# long_description=long_description,
+	# long_description_content_type='text/markdown'
+	version="1.0.4",
+	license = "MIT",
+	keywords = "TDA Persistence Multiparameter sklearn",
 	ext_modules=cythonize(
 		extensions, 
 		compiler_directives=cython_compiler_directives, 
@@ -102,5 +115,16 @@ setup(
 		"multipers":["*.pyi", "*.pyx", "*.pxd"],
 		},
 	python_requires=">=3.10",
-
+	classifiers=[
+		'Development Status :: 5 - Production/Stable',
+		'Programming Language :: Python :: 3.10',
+		'Programming Language :: Python :: 3.11',
+		# 'Programming Language :: Python :: 3.12', # waiting for gudhi
+		'Programming Language :: Python :: Implementation :: CPython',
+		'Topic :: Scientific/Engineering :: Artificial Intelligence',
+		'Topic :: Scientific/Engineering :: Mathematics',
+		'Topic :: Scientific/Engineering :: Visualization',
+		'Topic :: Software Development :: Libraries :: Python Modules',
+		'License :: OSI Approved :: MIT License',
+	],
 )

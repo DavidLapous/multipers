@@ -231,7 +231,7 @@ class Simplex_tree_multi_interface : public Simplex_tree_interface<Simplex_tree_
 };
 
 
-using interface_std = Simplex_tree<Simplex_tree_options_full_featured>; // Interface not necessary (smaller so should do less segfaults)
+using interface_std = Simplex_tree<Simplex_tree_options_for_python>; // Interface not necessary (smaller so should do less segfaults)
 using interface_multi = Simplex_tree_multi_interface<Simplex_tree_options_multidimensional_filtration>;
 
 template<class simplextreeinterface>

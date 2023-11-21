@@ -153,7 +153,7 @@ def plot_surface(
         if discrete_surface:
             cmap = matplotlib.colormaps["gray_r"]
         else:
-            cmap = matplotlib.colormaps["Plasma"]
+            cmap = matplotlib.colormaps["plasma"]
     if discrete_surface:
         bounds = np.arange(0, 11, 1, dtype=int)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend="max")

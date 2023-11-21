@@ -77,9 +77,14 @@ def signed_measure(
             grid_conversion = simplextree.filtration_grid
         else:
             grid_conversion = None
-        return _signed_measure_from_scc(
+        sms = _signed_measure_from_scc(
             minimal_presentation, grid_conversion=grid_conversion
         )
+        if plot:
+            from multipers.plots import plot_signed_measures
+
+            plot_signed_measures(sms)
+        return sms
     # assert simplextree.num_parameters == 2
     if mass_default is None:
         mass_default = mass_default

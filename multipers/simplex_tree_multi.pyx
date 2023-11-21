@@ -90,7 +90,7 @@ cdef class SimplexTreeMulti:
 	# Fake constructor that does nothing but documenting the constructor
 	def __init__(self, other = None, num_parameters:int=2,default_values=[], safe_conversion=False):
 		"""SimplexTreeMulti constructor.
-		
+
 		:param other: If `other` is `None` (default value), an empty `SimplexTreeMulti` is created.
 			If `other` is a `SimplexTree`, the `SimplexTreeMulti` is constructed from a deep copy of `other`.
 			If `other` is a `SimplexTreeMulti`, the `SimplexTreeMulti` is constructed from a deep copy of `other`.
@@ -102,12 +102,12 @@ cdef class SimplexTreeMulti:
 
 		:raises TypeError: In case `other` is neither `None`, nor a `SimplexTree`, nor a `SimplexTreeMulti`.
 		"""
-		
+
 	# The real cython constructor
 	def __cinit__(self, other = None, int num_parameters=2, 
-		default_values=np.asarray([-np.inf]), # I'm not sure why `[]` does not work. Cython bug ? 
-		bool safe_conversion=False,
-		): #TODO doc
+			   default_values=np.asarray([-np.inf]), # I'm not sure why `[]` does not work. Cython bug ? 
+			   bool safe_conversion=False,
+			   ): #TODO doc
 		cdef  vector[value_type] c_default_values=default_values
 		cdef intptr_t other_ptr
 		if other is not None:
@@ -784,8 +784,10 @@ cdef class SimplexTreeMulti:
 
 		"""
 		# TODO : find a way to do multiple edge collapses without python conversions.
-		if num <= 0:
+		if num == 0:
 			return self
+		if num == -1:
+			full=True
 		assert self.num_parameters == 2, "Number of parameters has to be 2 to use edge collapses ! This is a limitation of Filtration-domination"
 		if self.dimension > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")
 		

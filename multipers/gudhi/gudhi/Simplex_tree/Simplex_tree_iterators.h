@@ -120,8 +120,8 @@ class Simplex_tree_boundary_simplex_iterator : public boost::iterator_facade<
       {
         if (sib_->oncles() == nullptr)  // Only relevant for edges
           sh_ = sib_->members_.begin() + next_;
-      else
-        sh_ = sib_->find(next_);
+        else
+          sh_ = sib_->find(next_);
       } else {
         sh_ = sib_->find(next_);
       }
@@ -151,19 +151,19 @@ class Simplex_tree_boundary_simplex_iterator : public boost::iterator_facade<
     auto rit = suffix_.rbegin();
     if constexpr (SimplexTree::Options::contiguous_vertices && !SimplexTree::Options::stable_simplex_handles) {
       if (new_sib == nullptr) {
-      // We reached the root, use a short-cut to find a vertex.
-      if (rit == suffix_.rend()) {
-        // Segment, this vertex is the last boundary simplex
+        // We reached the root, use a short-cut to find a vertex.
+        if (rit == suffix_.rend()) {
+          // Segment, this vertex is the last boundary simplex
           sh_ = for_sib->members_.begin() + last_;
-        sib_ = nullptr;
-        return;
-      } else {
-        // Dim >= 2, initial step of the descent
+          sib_ = nullptr;
+          return;
+        } else {
+          // Dim >= 2, initial step of the descent
           sh_ = for_sib->members_.begin() + *rit;
-        for_sib = sh_->second.children();
-        ++rit;
+          for_sib = sh_->second.children();
+          ++rit;
+        }
       }
-    }
     }
 
     for (; rit != suffix_.rend(); ++rit) {
@@ -231,10 +231,10 @@ class Simplex_tree_boundary_opposite_vertex_simplex_iterator : public boost::ite
       if constexpr (SimplexTree::Options::contiguous_vertices &&
                     !SimplexTree::Options::stable_simplex_handles) {
         if (sib_->oncles() == nullptr)
-        // Only relevant for edges
+          // Only relevant for edges
           baov_.first = sib_->members_.begin() + next_;
-      else
-        baov_.first = sib_->find(next_);
+        else
+          baov_.first = sib_->find(next_);
       } else {
         baov_.first = sib_->find(next_);
       }
@@ -263,20 +263,20 @@ class Simplex_tree_boundary_opposite_vertex_simplex_iterator : public boost::ite
     auto rit = suffix_.rbegin();
     if constexpr (SimplexTree::Options::contiguous_vertices && !SimplexTree::Options::stable_simplex_handles) {
       if (new_sib == nullptr) {
-      // We reached the root, use a short-cut to find a vertex.
-      if (rit == suffix_.rend()) {
-        baov_.second = baov_.first->first;
-        // Segment, this vertex is the last boundary simplex
+        // We reached the root, use a short-cut to find a vertex.
+        if (rit == suffix_.rend()) {
+          baov_.second = baov_.first->first;
+          // Segment, this vertex is the last boundary simplex
           baov_.first = for_sib->members_.begin() + last_;
-        sib_ = nullptr;
-        return;
-      } else {
-        // Dim >= 2, initial step of the descent
+          sib_ = nullptr;
+          return;
+        } else {
+          // Dim >= 2, initial step of the descent
           baov_.first = for_sib->members_.begin() + *rit;
-        for_sib = baov_.first->second.children();
-        ++rit;
+          for_sib = baov_.first->second.children();
+          ++rit;
+        }
       }
-    }
     }
 
     for (; rit != suffix_.rend(); ++rit) {
