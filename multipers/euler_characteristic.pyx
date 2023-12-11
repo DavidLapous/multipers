@@ -25,7 +25,7 @@ cdef extern from "multi_parameter_rank_invariant/euler_characteristic.h" namespa
 	void get_euler_surface_python(const intptr_t, tensor_dtype*, const vector[indices_type], bool, bool, bool) except + nogil
 	signed_measure_type get_euler_signed_measure(const intptr_t, tensor_dtype* , const vector[indices_type], bool, bool) except + nogil
 
-def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, bool plot=False):
+def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, bool plot=False, grid_conversion=None):
 	"""
 	Computes the signed measures given by the decomposition of the hilbert function.
 
@@ -44,7 +44,7 @@ def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, boo
 	"""
 	assert len(simplextree.filtration_grid[0]) > 0, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
-	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
+	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid] if grid_conversion is None else grid_conversion
 	# assert simplextree.num_parameters == 2
 	grid_shape = np.array([len(f) for f in grid_conversion])
 	
@@ -80,8 +80,13 @@ def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, boo
 		out = get_euler_signed_measure(simplextree_ptr, container_ptr, c_grid_shape, zero_pad, verbose)
 	pts, weights = np.asarray(out.first, dtype=int).reshape(-1, simplextree.num_parameters), np.asarray(out.second, dtype=int)
 	# return pts, weights
-	
-	coords = np.empty(shape=pts.shape, dtype=float)
+	def empty_like(x):
+		if isinstance(grid_conversion[0], np.ndarray):
+			return np.empty_like(x, dtype=float)
+		import torch
+		assert isinstance(grid_conversion[0], torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
+		return torch.empty(x.shape,dtype=float)
+	coords = empty_like(pts)
 	for i in range(coords.shape[1]):
 		coords[:,i] = grid_conversion[i][pts[:,i]]
 	sm =(coords, weights)

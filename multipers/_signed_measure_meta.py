@@ -15,8 +15,11 @@ def signed_measure(
     verbose: bool = False,
     n_jobs: int = -1,
     expand_collapse: bool = False,
-    backend="multipers",
-    mpfree_path=None,
+    backend: str = "multipers",
+    thread_id: str = "",
+    mpfree_path: Optional[str] = None,
+    grid_conversion: Optional[list] = None,
+    num_collapses: int = 0,
     **infer_grid_kwargs,
 ):
     """
@@ -55,14 +58,27 @@ def signed_measure(
 
     if not simplextree._is_squeezed:
         simplextree_ = SimplexTreeMulti(simplextree)
-        simplextree_.grid_squeeze(
-            grid_strategy=grid_strategy,
-            coordinate_values=not (backend == "mpfree"),
-            **infer_grid_kwargs,
-        )  # put a warning ?
+        if grid_conversion is None:
+            simplextree_.grid_squeeze(
+                grid_strategy=grid_strategy,
+                coordinate_values=not (backend == "mpfree"),
+                **infer_grid_kwargs,
+            )  # put a warning ?
+        else:
+            simplextree_.grid_squeeze(
+                grid_conversion,
+                coordinate_values=not (backend == "mpfree"),
+                **infer_grid_kwargs,
+            )
+        if num_collapses != 0:
+            simplextree_.collapse_edges(num_collapses)
     else:
         simplextree_ = simplextree
     if backend == "mpfree":
+        if mpfree_path is not None:
+            import multipers.io as mio
+
+            mio.mpfree_path = mpfree_path
         assert (
             len(degrees) == 1
             and mass_default is None
@@ -71,9 +87,14 @@ def signed_measure(
         from multipers.io import minimal_presentation_from_mpfree
 
         minimal_presentation = minimal_presentation_from_mpfree(
-            simplextree, True, degrees[0]
+            simplextree,
+            True,
+            degrees[0],
+            id=thread_id,
         )
-        if simplextree._is_squeezed:
+        if grid_conversion is not None:
+            grid_conversion = grid_conversion
+        elif simplextree._is_squeezed:
             grid_conversion = simplextree.filtration_grid
         else:
             grid_conversion = None
@@ -124,7 +145,11 @@ def signed_measure(
 
         sms = [
             euler_signed_measure(
-                simplextree_, mass_default=mass_default, verbose=verbose, plot=plot
+                simplextree_,
+                mass_default=mass_default,
+                verbose=verbose,
+                plot=plot,
+                grid_conversion=grid_conversion,
             )
         ]
     else:
@@ -142,6 +167,7 @@ def signed_measure(
             plot=plot,
             n_jobs=n_jobs,
             expand_collapse=expand_collapse,
+            grid_conversion=grid_conversion,
         )
 
     return sms

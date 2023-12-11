@@ -26,7 +26,16 @@ cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "
 	signed_measure_type get_hilbert_signed_measure(const intptr_t, tensor_dtype* , const vector[indices_type], const vector[indices_type], bool, indices_type, bool, bool) except + nogil
 
 
-def hilbert_signed_measure(simplextree, vector[indices_type] degrees, mass_default=None, plot=False, indices_type n_jobs=0, bool verbose=False, bool expand_collapse=False):
+def hilbert_signed_measure(
+		simplextree, 
+		vector[indices_type] degrees, 
+		mass_default=None, 
+		plot=False, 
+		indices_type n_jobs=0, 
+		bool verbose=False,
+		bool expand_collapse=False, 
+		grid_conversion = None
+	):
 	"""
 	Computes the signed measures given by the decomposition of the hilbert function.
 
@@ -46,20 +55,9 @@ def hilbert_signed_measure(simplextree, vector[indices_type] degrees, mass_defau
 	"""
 	assert simplextree._is_squeezed > 0, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
-	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
+	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid] if grid_conversion is None else grid_conversion
 	# assert simplextree.num_parameters == 2
 	grid_shape = np.array([len(f) for f in grid_conversion])
-	
-	# match mass_default: ## Cython bug
-	# 	case None:
-	# 		pass
-	# 	case "inf":
-	# 		mass_default = np.array([np.inf]*simplextree.num_parameters)
-	# 	case "auto":
-	# 		mass_default = np.array([1.1*np.max(f) - 0.1*np.min(f) for f in grid_conversion])
-	# 	case _:
-	# 		mass_default = np.asarray(mass_default)
-	# 		assert mass_default.ndim == 1 and mass_default.shape[0] == simplextree.num_parameters
 	if mass_default is None:
 		mass_default = mass_default
 	else:
@@ -85,8 +83,16 @@ def hilbert_signed_measure(simplextree, vector[indices_type] degrees, mass_defau
 	# return pts, weights
 	degree_indices = [np.argwhere(pts[:,0] == degree_index).flatten() for degree_index, degree in enumerate(degrees)] ## TODO : maybe optimize
 	sms = [(pts[id,1:],weights[id]) for id in degree_indices]
+	
+	def empty_like(x):
+		if isinstance(grid_conversion[0], np.ndarray):
+			return np.empty_like(x, dtype=float)
+		import torch
+		assert isinstance(grid_conversion[0], torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
+		return torch.empty(x.shape,dtype=float)
+
 	for degree_index,(pts,weights) in enumerate(sms):
-		coords = np.empty(shape=pts.shape, dtype=float)
+		coords = empty_like(pts)
 		for i in range(coords.shape[1]):
 			coords[:,i] = grid_conversion[i][pts[:,i]]
 		sms[degree_index]=(coords, weights)

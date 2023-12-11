@@ -2,6 +2,7 @@ from libcpp.utility cimport pair
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp cimport tuple
+from libc.stdint cimport uintptr_t,intptr_t
 
 ctypedef float value_type
 
@@ -38,6 +39,8 @@ cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrat
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&) except +
 		filtration_type get_vector() nogil const 
 		int size() nogil
+		void clear() nogil
+		void push_back(value_type) nogil
 		@staticmethod
 		multifiltration& to_python(vector[Finitely_critical_multi_filtration]&) nogil const 
 		@staticmethod
@@ -132,16 +135,21 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 		unsigned int size() const  
 		Box[value_type] get_box() const  
 		Box[value_type] get_bounds() nogil const
-		void set_box(Box[value_type] &box)  nogil
+		void set_box(Box[value_type])  nogil
 		int get_dimension() const 
 		vector[corner_list] get_corners_of_dimension(unsigned int)  nogil
 		image_type get_vectorization_in_dimension(const dimension_type, const value_type, const value_type, const bool, Box[value_type]&, unsigned int, unsigned int)  nogil
 		vector[image_type] get_vectorization(const value_type, const value_type, const bool, Box[value_type], unsigned int, unsigned int)  nogil
 		MultiDiagram get_barcode(Line[value_type]&, const dimension_type, const bool)  nogil
 		MultiDiagrams get_barcodes(const vector[Finitely_critical_multi_filtration]& , const dimension_type, const bool )  nogil
-		image_type get_landscape(const dimension_type,const unsigned int,Box[value_type]&,const vector[unsigned int]&)  nogil
-		vector[image_type] get_landscapes(const dimension_type,const vector[unsigned int],Box[value_type]&,const vector[unsigned int]&)  nogil
+		image_type get_landscape(const dimension_type,const unsigned int,Box[value_type],const vector[unsigned int]&)  nogil
+		vector[image_type] get_landscapes(const dimension_type,const vector[unsigned int],Box[value_type],const vector[unsigned int]&)  nogil
 		euler_curve_type euler_curve(const vector[Finitely_critical_multi_filtration]&) nogil
-		void rescale(const vector[value_type]&, int) nogil
-		void translate(const vector[value_type]&, int) nogil
-		vector[vector[value_type]] compute_pixels(const vector[vector[value_type]], vector[int], Box[value_type], value_type, value_type, bool,int) nogil
+		void rescale(vector[value_type]&, int) nogil
+		void translate(vector[value_type]&, int) nogil
+		vector[vector[value_type]] compute_pixels(vector[vector[value_type]], vector[int], Box[value_type], value_type, value_type, bool,int) nogil
+
+
+
+
+

@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Callable
 
 from itertools import product
 import matplotlib.pyplot as plt
@@ -52,10 +52,12 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        degrees: list[int | None] | None = [],  # homological degrees + None for euler
+        # homological degrees + None for euler
+        degrees: list[int | None] = [],
         rank_degrees: list[int] = [],  # same for rank invariant
         filtration_grid: Iterable[np.ndarray]
-        | None = None,  # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
+        # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
+        | None = None,
         progress=False,  # tqdm
         num_collapses: int | str = 0,  # edge collapses before computing
         n_jobs=None,
@@ -65,7 +67,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
         plot: bool = False,
         filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
-        _möbius_inversion: bool = True,  # wether or not to do the möbius inversion (not recommended to touch)
+        # wether or not to do the möbius inversion (not recommended to touch)
+        _möbius_inversion: bool = True,
         expand=True,  # expand the simplextree befoe computing the homology
         normalize_filtrations: bool = False,
         # exact_computation:bool=False, # compute the exact signed measure.
@@ -78,6 +81,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
         enforce_null_mass: bool = False,
         flatten=True,
+        backend="multipers",
     ):
         super().__init__()
         self.degrees = degrees
@@ -88,9 +92,11 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self.n_jobs = n_jobs
         self.resolution = resolution
         self.plot = plot
+        self.backend = backend
         # self.sparse=sparse # TODO : deprecate
         self.filtration_quantile = filtration_quantile
-        self.normalize_filtrations = normalize_filtrations  # Will only work for non sparse output. (discrete matrices cannot be "rescaled")
+        # Will only work for non sparse output. (discrete matrices cannot be "rescaled")
+        self.normalize_filtrations = normalize_filtrations
         self.grid_strategy = grid_strategy
         self.num_parameter = None
         self._is_input_delayed = None
@@ -102,22 +108,24 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self.seed = seed
         self.fit_fraction = fit_fraction
         self._transform_st = None
-        self._to_simplex_tree = None
+        self._to_simplex_tree: Callable
         self.out_resolution = out_resolution
         self.individual_grid = individual_grid
         self.enforce_null_mass = enforce_null_mass
         self._default_mass_location = None
         self.flatten = flatten
+        self.num_parameters: int = 0
         return
 
     def _infer_filtration(self, X):
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
-        get_st_filtration = lambda x: self._to_simplex_tree(x).get_filtration_grid(
-            grid_strategy="exact"
-        )
-        filtrations = Parallel(n_jobs=self.n_jobs, backend="threading")(
+
+        def get_st_filtration(x) -> np.ndarray:
+            return self._to_simplex_tree(x).get_filtration_grid(grid_strategy="exact")
+
+        filtrations: list = Parallel(n_jobs=self.n_jobs, backend="threading")(
             delayed(get_st_filtration)(x) for x in (X[idx] for idx in indices)
         )
         num_parameters = len(filtrations[0])
@@ -191,13 +199,19 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         )
         return self
 
-    def transform1(self, simplextree, filtration_grid=None, _reconversion_grid=None):
+    def transform1(
+        self,
+        simplextree,
+        filtration_grid=None,
+        _reconversion_grid=None,
+        thread_id: str = "",
+    ):
         if filtration_grid is None:
             filtration_grid = self.filtration_grid
         if _reconversion_grid is None:
             _reconversion_grid = self._reconversion_grid
         st = self._to_simplex_tree(simplextree)
-        st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  ## COPY
+        st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  # COPY
         if self.individual_grid:
             filtration_grid = st.get_filtration_grid(
                 grid_strategy=self.grid_strategy, resolution=self.resolution
@@ -217,7 +231,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 raise Exception("Bad edge collapse type. either 'full' or an int.")
         int_degrees = np.asarray([d for d in self.degrees if d is not None])
         if self._möbius_inversion:
-            ## EULER. First as there is prune above dimension below
+            # EULER. First as there is prune above dimension below
             if self.expand and None in self.degrees:
                 st.expansion(st.num_vertices)
             signed_measures_euler = (
@@ -227,6 +241,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                     plot=self.plot,
                     mass_default=self._default_mass_location,
                     invariant="euler",
+                    thread_id=thread_id,
                 )[0]
                 if None in self.degrees
                 else []
@@ -237,7 +252,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             if len(int_degrees) > 0:
                 st.prune_above_dimension(
                     np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
-                )  ## no need to compute homology beyond this
+                )  # no need to compute homology beyond this
             signed_measures_pers = (
                 mp.signed_measure(
                     simplextree=st,
@@ -245,6 +260,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                     mass_default=self._default_mass_location,
                     plot=self.plot,
                     invariant="hilbert",
+                    thread_id=thread_id,
+                    backend=self.backend,
                 )
                 if len(int_degrees) > 0
                 else []
@@ -256,7 +273,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             if len(self.rank_degrees) > 0:
                 st.prune_above_dimension(
                     np.max(self.rank_degrees) + 1
-                )  ## no need to compute homology beyond this
+                )  # no need to compute homology beyond this
             signed_measures_rank = (
                 mp.signed_measure(
                     simplextree=st,
@@ -264,6 +281,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                     mass_default=self._default_mass_location,
                     plot=self.plot,
                     invariant="rank",
+                    thread_id=thread_id,
                 )
                 if len(self.rank_degrees) > 0
                 else []
@@ -293,7 +311,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 st.prune_above_dimension(
                     np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
                 )
-                ## no need to compute homology beyond this
+                # no need to compute homology beyond this
             signed_measures_pers = (
                 hilbert_surface(
                     simplextree=st,
@@ -311,10 +329,10 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             if len(self.rank_degrees) > 0:
                 st.prune_above_dimension(
                     np.max(self.rank_degrees) + 1
-                )  ## no need to compute homology beyond this
+                )  # no need to compute homology beyond this
             signed_measures_rank = (
                 rank_invariant(
-                    simplextree=st,
+                    sieplextree=st,
                     degrees=self.rank_degrees,
                     plot=self.plot,
                 )
@@ -339,15 +357,14 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         assert self.filtration_grid is not None or self.individual_grid, "Fit first"
         prefer = "loky" if self._is_input_delayed else "threading"
         out = Parallel(n_jobs=self.n_jobs, backend=prefer)(
-            delayed(self.transform1)(to_st)
-            for to_st in tqdm(
-                X,
+            delayed(self.transform1)(to_st, thread_id=str(thread_id))
+            for thread_id, to_st in tqdm(
+                enumerate(X),
                 disable=not self.progress,
-                desc=f"Computing signed measure decompositions",
+                desc="Computing signed measure decompositions",
             )
         )
         return out
-        # return [self.transform1(x) for x in tqdm(X, disable = not self.progress, desc="Computing Hilbert function")]
 
 
 class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
@@ -432,7 +449,7 @@ def rescale_sparse_signed_measure(
         for degree in range(len(out)):  # degree
             for parameter in range(len(filtration_weights)):
                 out[degree][0][:, parameter] *= filtration_weights[parameter]
-                ## TODO Broadcast w.r.t. the parameter
+                # TODO Broadcast w.r.t. the parameter
     else:
         for degree in range(len(out)):
             for parameter in range(len(filtration_weights)):
@@ -464,10 +481,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self,
         filtrations_weights: Optional[Iterable[float]] = None,
         normalize=False,
-        num_parameters: int | None = None,
         plot: bool = False,
         unsparse: bool = False,
-        axis: Optional[int] = None,
+        axis: int = -1,
         resolution: int | Iterable[int] = 50,
         flatten: bool = False,
         deep_format: bool = False,
@@ -479,13 +495,12 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
     ):
         super().__init__()
         self.filtrations_weights = filtrations_weights
-        self.num_parameters = num_parameters
+        self.num_parameters: int = 0
         self.plot = plot
         self.unsparse = unsparse
         self.n_jobs = n_jobs
         self.axis = axis
-        self._num_axis = None
-        self._is_input_sparse = None
+        self._num_axis = 0
         self.resolution = resolution
         self._filtrations_bounds = None
         self.flatten = flatten
@@ -496,7 +511,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         assert not self.deep_format or not self.unsparse
         assert not normalize or (not unsparse and not deep_format and not integrate)
         self.verbose = verbose
-        self._num_degrees = None
+        self._num_degrees = 0
         self.integrate = integrate
         self.grid_strategy = grid_strategy
         self._infered_grids = None
@@ -539,61 +554,48 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             for j, sm_of_degree in enumerate(sm):
                 plot_signed_measure(sm_of_degree, ax=axes[i, j])
 
-    def fit(self, X, y=None):
-        assert not self.normalize or (
-            not self.unsparse and not self.deep_format and not self.integrate
-        )
-        ## Gets a grid. This will be the max in each coord+1
-        if (
-            len(X) == 0
-            or len(X[0]) == 0
-            or (self.axis is not None and len(X[0][0][0]) == 0)
-        ):
-            return self
+    def _check_axis(self, X):
+        # axes should be (num_data, num_axis, num_degrees, (signed_measure))
+        if len(X) == 0:
+            return
+        if len(X[0]) == 0:
+            return
+        if isinstance(X[0][0], tuple):
+            self._has_axis = False
+            self._num_axis = 1
+            return
+        assert isinstance(X[0][0][0], tuple), "Cannot take this input."
+        self._has_axis = True
+        self._num_axis = len(X[0])
 
-        self._is_input_sparse = (isinstance(X[0][0], tuple) and self.axis is None) or (
-            isinstance(X[0][0][0], tuple) and self.axis is not None
-        )
-        # print("Sparse input : ", self._is_input_sparse)
-        if self.axis is None:
-            # try:
-            ## DATA,NOAXIS,DEGREE,(sm,weights)
-            self.num_parameters = (
-                X[0][0][0].shape[1] if self._is_input_sparse else X[0][0].ndim
-            )
-            # except:
-            # print(X)
-            # raise Exception("")
-            self._num_degrees = len(X[0])
+    def _check_measures(self, X):
+        if self._has_axis:
+            first_sm = X[0][0]
         else:
-            #  (data) x (axis) x (degree) x (signed measure)
-            self.num_parameters = (
-                X[0][0][0][0].shape[1] if self._is_input_sparse else X[0][0][0].ndim
-            )
-            self._num_degrees = len(X[0][0])
-        # Sets weights to 1 if None
+            first_sm = X[0]
+        self._num_degrees = len(first_sm)
+        self.num_parameters = first_sm[0][0].shape[1]
+
+    def _check_resolution(self):
+        assert self.num_parameters > 0, "Num parameters hasn't been initialized."
+        if isinstance(self.resolution, int):
+            self.resolution = [self.resolution] * self.num_parameters
+        self.resolution = np.asarray(self.resolution, dtype=int)
+        assert (
+            self.resolution.shape[0] == self.num_parameters
+        ), "Resolution doesn't have a proper size."
+
+    def _check_weights(self):
         if self.filtrations_weights is None:
             self.filtrations_weights = np.array([1] * self.num_parameters)
-        ## Checks compatibilities
-        assert self._is_input_sparse or (not self.deep_format)
-
-        # resolution is iterable over the parameters
-        try:
-            float(self.resolution)
-            self.resolution = [self.resolution] * self.num_parameters
-        except:
-            None
+        self.filtrations_weights = np.asarray(self.filtrations_weights)
         assert (
-            len(self.filtrations_weights) == self.num_parameters == len(self.resolution)
-        ), f"Number of parameter is not consistent. Inferred : {self.num_parameters}, Filtration weigths : {len(self.filtrations_weights)}, Resolutions : {len(self.resolution)}."
-        # if not sparse : not recommended.
-        assert (
-            np.all(1 == np.asarray(self.filtrations_weights)) or self._is_input_sparse
-        ), f"Use sparse signed measure to rescale. Recieved weights {self.filtrations_weights}"
-        self._num_axis = None if self.axis is None else len(X[0])
+            self.filtrations_weights.shape[0] == self.num_parameters
+        ), "Filtration weights don't have a proper size"
 
-        ## Computes normalization factors
-        if self._is_input_sparse and self.normalize:
+    def _infer_grids(self, X):
+        # Computes normalization factors
+        if self.normalize:
             axis = slice(None) if self.axis is None else self.axis
             if axis == -1:
                 self._filtrations_bounds = []
@@ -610,10 +612,10 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                     self._filtrations_bounds,
                     self._normalization_factors,
                 ) = self._get_filtration_bounds(X, axis=axis)
-        elif self._is_input_sparse and (self.integrate or self.unsparse):
+        elif self.integrate or self.unsparse:
             axis = (
                 [slice(None)]
-                if self.axis is None
+                if not self._has_axis
                 else range(self._num_axis)
                 if self.axis == -1
                 else [self.axis]
@@ -624,7 +626,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 )
                 for ax in axis
             ]
-            ## axis, filtration_values
+            # axis, filtration_values
             filtration_values = [
                 reduce_grid(
                     f_ax.T, resolutions=self.resolution, strategy=self.grid_strategy
@@ -633,28 +635,52 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             ]
             self._infered_grids = filtration_values
 
+    def _print_stats(self, X):
+        print("------------SignedMeasureFormatter------------")
+        print("---- Parameters")
+        print(f"Number of axis : {self._num_axis}")
+        print(f"Number of degrees : {self._num_degrees}")
+        print(f"Filtration bounds : \n{self._filtrations_bounds}")
+        print(f"Normalization factor : \n{self._normalization_factors}")
+        if self._infered_grids is not None:
+            print(
+                f"Filtration grid shape : \n \
+                {tuple(tuple(len(f) for f in F) for F in self._infered_grids)}"
+            )
+        print("---- SM stats")
+        print("In axis :", self._num_axis)
+        if self.axis == -1 and self._has_axis:
+            axis = range(self._num_axis)
+        elif self._has_axis:
+            axis = [self.axis]
+        else:
+            axis = [slice(None)]
+        sizes = [[[len(xd[1]) for xd in x[ax]] for x in X] for ax in axis]
+        print(f"Size means (axis) x (degree): {np.mean(sizes, axis=(1))}")
+        print(f"Size std : {np.std(sizes, axis=(1))}")
+        print("----------------------------------------------")
+
+    def fit(self, X, y=None):
+        assert not self.normalize or (
+            not self.unsparse and not self.deep_format and not self.integrate
+        )
+        # Gets a grid. This will be the max in each coord+1
+        if (
+            len(X) == 0
+            or len(X[0]) == 0
+            or (self.axis is not None and len(X[0][0][0]) == 0)
+        ):
+            return self
+
+        self._check_axis(X)
+        self._check_measures(X)
+        self._check_resolution()
+        self._check_weights()
+        # if not sparse : not recommended.
+
+        self._infer_grids(X)
         if self.verbose:
-            print("------------SignedMeasureFormatter------------")
-            print("---- Parameters")
-            print(f"Sparse input : {self._is_input_sparse}")
-            print(f"Number of axis : {self._num_axis}")
-            print(f"Number of degrees : {self._num_degrees}")
-            print(f"Filtration bounds : \n{self._filtrations_bounds}")
-            print(f"Normalization factor : \n{self._normalization_factors}")
-            if self._infered_grids is not None:
-                print(
-                    f"Filtration grid shape : {tuple(tuple(len(f) for f in F) for F in self._infered_grids)}"
-                )
-            print("---- SM stats")
-            print(f"In axis : {1 if self.axis is None else len(X[0])}")
-            if self.axis == -1:
-                axis = range(len(X[0]))
-            else:
-                axis = [slice(None)] if self.axis is None else [self.axis]
-            sizes = [[[len(xd[1]) for xd in x[ax]] for x in X] for ax in axis]
-            print(f"Size means (axis) x (degree): {np.mean(sizes, axis=(1))}")
-            print(f"Size std : {np.std(sizes, axis=(1))}")
-            print("----------------------------------------------")
+            self._print_stats(X)
         return self
 
     def unsparse_signed_measure(self, sparse_signed_measure):
@@ -698,12 +724,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
         return integrate_measure(sm[0], sm[1], filtrations)
 
-    def transform(self, X):
-        def rescale_from_not_sparse(signed_measure: Iterable[np.ndarray]):
-            if not self.flatten:
-                return signed_measure
-            return np.asarray([sm.flatten() for sm in signed_measure]).flatten()
-
+    def _rescale_measures(self, X):
         def rescale_from_sparse(sparse_signed_measure):
             if self.axis == -1:
                 return [
@@ -720,82 +741,74 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 normalize_scales=self._normalization_factors,
             )
 
-        if self._is_input_sparse:
-            todo_rescale = rescale_from_sparse
-        else:
-            todo_rescale = rescale_from_not_sparse
+        out = tuple(rescale_from_sparse(x) for x in X)
+        return out
 
+    def transform(self, X):
         if self.axis is None or self.axis == -1:
             out = X
         else:
             out = tuple(x[self.axis] for x in X)
+            # same format for everyone
+
         if self._normalization_factors is not None:
-            if self.n_jobs > 1:
-                out = Parallel(n_jobs=self.n_jobs, backend="threading")(
-                    delayed(todo_rescale)(x) for x in out
-                )
-            else:
-                out = tuple(todo_rescale(x) for x in out)
+            out = self._rescale_measures(out)
 
-        if self._is_input_sparse:
-            if self.plot:
-                # assert ax != -1, "Not implemented"
-                self._plot_signed_measures(out)
-            if self.integrate:
-                filtrations = self._infered_grids
-                # if self.axis != -1:
-                ax = 0  # if self.axis is None else self.axis # TODO deal with axis -1
+        if self.plot:
+            # assert ax != -1, "Not implemented"
+            self._plot_signed_measures(out)
+        if self.integrate:
+            filtrations = self._infered_grids
+            # if self.axis != -1:
+            ax = 0  # if self.axis is None else self.axis # TODO deal with axis -1
 
-                assert ax != -1, "Not implemented"
-                # try:
-                out = np.asarray(
+            assert ax != -1, "Not implemented"
+            # try:
+            out = np.asarray(
+                [
                     [
-                        [
-                            self._integrate_measure(
-                                x[degree], filtrations=filtrations[ax]
-                            )
-                            for degree in range(self._num_degrees)
-                        ]
-                        for x in out
+                        self._integrate_measure(x[degree], filtrations=filtrations[ax])
+                        for degree in range(self._num_degrees)
                     ]
-                )
-                # except:
-                # print(self.axis, ax, filtrations)
-                if self.flatten:
-                    out = out.reshape((len(X), -1))
-                # else:
-                # out = [[[self._integrate_measure(x[axis][degree],filtrations=filtrations[degree].T) for degree in range(self._num_degrees)] for axis in range(self._num_axis)] for x in out]
-            elif self.unsparse:
-                out = [self.unsparse_signed_measure(x) for x in out]
-            elif self.deep_format:
-                if self.axis is None:
-                    num_degrees = len(out[0])
-                    axes = [slice(None)]
-                else:
-                    num_degrees = len(out[0][0])
-                    axes = range(self._num_axis) if self.axis == -1 else (self.axis,)
-                out = [
-                    [self.deep_format_measure(sm[axis][degree]) for sm in out]
-                    for degree in range(num_degrees)
-                    for axis in axes
+                    for x in out
                 ]
-                if self.unrag:
-                    max_num_pts = np.max(
-                        [sm.shape[0] for sm_of_axis in out for sm in sm_of_axis]
-                    )
-                    num_axis = len(out)
-                    num_data = len(out[0])
-                    num_parameters = out[0][0].shape[1]
-                    unragged_tensor = np.zeros(
-                        shape=(num_axis, num_data, max_num_pts, num_parameters),
-                        dtype=np.float32,
-                    )
-                    for ax in range(num_axis):
-                        for data in range(num_data):
-                            sm = out[ax][data]
-                            a, b = sm.shape
-                            unragged_tensor[ax, data, :a, :b] = sm
-                    out = unragged_tensor
+            )
+            # except:
+            # print(self.axis, ax, filtrations)
+            if self.flatten:
+                out = out.reshape((len(X), -1))
+            # else:
+            # out = [[[self._integrate_measure(x[axis][degree],filtrations=filtrations[degree].T) for degree in range(self._num_degrees)] for axis in range(self._num_axis)] for x in out]
+        elif self.unsparse:
+            out = [self.unsparse_signed_measure(x) for x in out]
+        elif self.deep_format:
+            num_degrees = self._num_degrees
+            if self.axis != -1:
+                axes = [slice(None)]
+            else:
+                axes = range(self._num_axis)
+            out = [
+                [self.deep_format_measure(sm[axis][degree]) for sm in out]
+                for degree in range(num_degrees)
+                for axis in axes
+            ]
+            if self.unrag:
+                max_num_pts = np.max(
+                    [sm.shape[0] for sm_of_axis in out for sm in sm_of_axis]
+                )
+                num_axis = len(out)
+                num_data = len(out[0])
+                num_parameters = out[0][0].shape[1]
+                unragged_tensor = np.zeros(
+                    shape=(num_axis, num_data, max_num_pts, num_parameters),
+                    dtype=np.float32,
+                )
+                for ax in range(num_axis):
+                    for data in range(num_data):
+                        sm = out[ax][data]
+                        a, b = sm.shape
+                        unragged_tensor[ax, data, :a, :b] = sm
+                out = unragged_tensor
         return out
 
 
@@ -860,7 +873,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         return
 
     def fit(self, X, y=None):
-        ## Infers if the input is sparse given X
+        # Infers if the input is sparse given X
         if len(X) == 0:
             return self
         if isinstance(X[0][0], tuple):
@@ -887,7 +900,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             raise Exception(
                 "Cannot infer filtration grid. Provide either a filtration grid or a resolution."
             )
-        ## If not sparse : a grid has to be defined
+        # If not sparse : a grid has to be defined
         if self._refit:
             # print("Fitting a grid...", end="")
             pts = np.concatenate(
@@ -941,7 +954,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         bandwidth = (
             self.bandwidth if self.bandwidth > 0 else -self.bandwidth * self.diameter
         )
-        ## COMPILE KEOPS FIRST
+        # COMPILE KEOPS FIRST
         dummyx = [X[0]]
         dummyf = [f[:2] for f in self.filtration_grid]
         convolution_signed_measures(
@@ -1087,7 +1100,9 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         ) as SWD_it:
             # signed_measures_of_degree = [x[degree] for x in X]
             # out.append(swd.transform(signed_measures_of_degree))
-            todo = lambda swd, X_of_degree: swd.transform(X_of_degree)
+            def todo(swd, X_of_degree):
+                return swd.transform(X_of_degree)
+
             out = Parallel(n_jobs=self.n_jobs, prefer="threads")(
                 delayed(todo)(swd, [x[degree] for x in X]) for degree, swd in SWD_it
             )
@@ -1216,7 +1231,7 @@ class SimplexTree2RectangleDecomposition(BaseEstimator, TransformerMixin):
             ]
             for simplextree in X
         ]
-        ## TODO : return iterator ?
+        # TODO : return iterator ?
         return rectangle_decompositions
 
 
@@ -1231,7 +1246,7 @@ def _st2ranktensor(
     """
     TODO
     """
-    ## Copy (the squeeze change the filtration values)
+    # Copy (the squeeze change the filtration values)
     stcpy = mp.SimplexTreeMulti(st)
     # turns the simplextree into a coordinate simplex tree
     stcpy.grid_squeeze(filtration_grid=filtration_grid, coordinate_values=True)
@@ -1244,7 +1259,8 @@ def _st2ranktensor(
         )
     else:
         raise TypeError(
-            f"Invalid num_collapse={num_collapse} type. Either full, or an integer."
+            f"Invalid num_collapse=\
+            {num_collapse} type. Either full, or an integer."
         )
     # computes the rank invariant tensor
     rank_tensor = mp.rank_invariant2d(
@@ -1372,7 +1388,9 @@ def tensor_möbius_inversion(
         rank_invariant = True
     else:
         raise TypeError(
-            f"Unsupported betti shape. {num_indices} has to be either {num_parameters} or {2*num_parameters}."
+            f"Unsupported betti shape. {num_indices}\
+            has to be either {num_parameters} or \
+            {2*num_parameters}."
         )
     points_filtration = np.asarray(betti_sparse.indices().T, dtype=int)
     weights = np.asarray(betti_sparse.values(), dtype=int)
@@ -1408,7 +1426,8 @@ def tensor_möbius_inversion(
     signed_measure = np.asarray(coords[correct_indices])
     weights = weights[correct_indices]
     if plot:
-        assert signed_measure.shape[1] == 4  # plot only the rank decompo for the moment
+        # plot only the rank decompo for the moment
+        assert signed_measure.shape[1] == 4
 
         def _plot_rectangle(rectangle: np.ndarray, weight: float):
             x_axis = rectangle[[0, 2]]
