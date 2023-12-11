@@ -134,15 +134,15 @@ scc_type simplextree_to_scc(const uintptr_t splxptr) {
   return out;
 }
 
-template <class MultiFiltration>
+template <typename MultiFiltration>
 using BoundaryFiltration =
     std::pair<boundary_matrix, std::vector<MultiFiltration>>;
 
 template <class SimplexTree>
-BoundaryFiltration<class SimplexTree::Options::Filtration_value>
+BoundaryFiltration<typename SimplexTree::Options::Filtration_value>
 st2bf(SimplexTree &st) {
 
-  BoundaryFiltration<class SimplexTree::Options::Filtration_value> out;
+  BoundaryFiltration<typename SimplexTree::Options::Filtration_value> out;
   auto &[matrix, filtrations] = out;
   matrix.reserve(st.num_simplices());
   filtrations.reserve(st.num_simplices());
