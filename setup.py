@@ -50,7 +50,6 @@ cython_compiler_directives = {
     # "nonecheck": False,
     "cdivision": True,
     "profile": False,
-
 }
 
 # When venv is not properly set, we have to add the current python path
@@ -114,7 +113,7 @@ setup(
     url="https://github.com/DavidLapous/multipers",
     # long_description=long_description,
     # long_description_content_type='text/markdown'
-    version="1.0.4",
+    version="1.1.0",
     license="MIT",
     keywords="TDA Persistence Multiparameter sklearn",
     ext_modules=cythonize(
