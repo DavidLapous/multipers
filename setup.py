@@ -31,7 +31,7 @@ with contextlib.suppress(ImportError):
 
 cythonize_flags = {
     # "depfile":True,
-    "nthreads": n_jobs,  # Broken on mac
+    # "nthreads": n_jobs,  # Broken on mac
     # "show_all_warnings":True,
 }
 
