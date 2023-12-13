@@ -221,14 +221,16 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                     np.concatenate([f, [d]], axis=0)
                     for f, d in zip(filtration_grid, self._default_mass_location)
                 ]
-        st.grid_squeeze(filtration_grid=filtration_grid, coordinate_values=True)
+        st.grid_squeeze(filtration_grid=filtration_grid,
+                        coordinate_values=True)
         if st.num_parameters == 2:
             if self.num_collapses == "full":
                 st.collapse_edges(full=True, max_dimension=1)
             elif isinstance(self.num_collapses, int):
                 st.collapse_edges(num=self.num_collapses, max_dimension=1)
             else:
-                raise Exception("Bad edge collapse type. either 'full' or an int.")
+                raise Exception(
+                    "Bad edge collapse type. either 'full' or an int.")
         int_degrees = np.asarray([d for d in self.degrees if d is not None])
         if self._möbius_inversion:
             # EULER. First as there is prune above dimension below
@@ -251,7 +253,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 st.expansion(np.max(int_degrees) + 1)
             if len(int_degrees) > 0:
                 st.prune_above_dimension(
-                    np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
+                    np.max(np.concatenate(
+                        [int_degrees, self.rank_degrees])) + 1
                 )  # no need to compute homology beyond this
             signed_measures_pers = (
                 mp.signed_measure(
@@ -309,7 +312,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 st.expansion(np.max(int_degrees) + 1)
             if len(int_degrees) > 0:
                 st.prune_above_dimension(
-                    np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
+                    np.max(np.concatenate(
+                        [int_degrees, self.rank_degrees])) + 1
                 )
                 # no need to compute homology beyond this
             signed_measures_pers = (
@@ -454,7 +458,8 @@ def rescale_sparse_signed_measure(
         for degree in range(len(out)):
             for parameter in range(len(filtration_weights)):
                 out[degree][0][:, parameter] *= (
-                    filtration_weights[parameter] / normalize_scales[degree][parameter]
+                    filtration_weights[parameter] /
+                    normalize_scales[degree][parameter]
                 )
     return out
 
@@ -509,7 +514,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self.deep_format = deep_format
         self.unrag = unrag
         assert not self.deep_format or not self.unsparse
-        assert not normalize or (not unsparse and not deep_format and not integrate)
+        assert not normalize or (
+            not unsparse and not deep_format and not integrate)
         self.verbose = verbose
         self._num_degrees = 0
         self.integrate = integrate
@@ -524,8 +530,10 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             for degree in range(num_degrees)
         ]
         sizes_ = np.array([len(x) == 0 for x in stuff])
-        assert np.all(1 - sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
-        filtrations_bounds = np.asarray([[f.min(axis=0), f.max(axis=0)] for f in stuff])
+        assert np.all(
+            1 - sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
+        filtrations_bounds = np.asarray(
+            [[f.min(axis=0), f.max(axis=0)] for f in stuff])
         normalization_factors = (
             filtrations_bounds[:, 1] - filtrations_bounds[:, 0]
             if self.normalize
@@ -596,8 +604,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
     def _infer_grids(self, X):
         # Computes normalization factors
         if self.normalize:
-            axis = slice(None) if self.axis is None else self.axis
-            if axis == -1:
+            axis = slice(None) if not self._has_axis else self.axis
+            if self._has_axis and axis == -1:
                 self._filtrations_bounds = []
                 self._normalization_factors = []
                 for ax in range(self._num_axis):
@@ -622,7 +630,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             )
             filtration_values = [
                 np.concatenate(
-                    [x[ax][degree][0] for x in X for degree in range(self._num_degrees)]
+                    [x[ax][degree][0]
+                        for x in X for degree in range(self._num_degrees)]
                 )
                 for ax in axis
             ]
@@ -726,7 +735,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
     def _rescale_measures(self, X):
         def rescale_from_sparse(sparse_signed_measure):
-            if self.axis == -1:
+            if self.axis == -1 and self._has_axis:
                 return [
                     rescale_sparse_signed_measure(
                         sparse_signed_measure[ax],
@@ -745,7 +754,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         return out
 
     def transform(self, X):
-        if self.axis is None or self.axis == -1:
+        if not self._has_axis or self.axis == -1:
             out = X
         else:
             out = tuple(x[self.axis] for x in X)
@@ -767,7 +776,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             out = np.asarray(
                 [
                     [
-                        self._integrate_measure(x[degree], filtrations=filtrations[ax])
+                        self._integrate_measure(
+                            x[degree], filtrations=filtrations[ax])
                         for degree in range(self._num_degrees)
                     ]
                     for x in out
@@ -992,7 +1002,8 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         for i, img in enumerate(imgs):
             for j, img_of_degree in enumerate(img):
                 plot_surface(
-                    self.filtration_grid, img_of_degree, ax=axes[i, j], cmap="Spectral"
+                    self.filtration_grid, img_of_degree, ax=axes[i,
+                                                                 j], cmap="Spectral"
                 )
 
     def transform(self, X):
@@ -1165,7 +1176,8 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
             self.scales[0] is None or self.scales.ndim == 2
         ), "Scales have to be either None or a list of scales !"
         self._childs_to_fit = [
-            clone(self._init_child).set_params(scales=scales).fit([x[axis] for x in X])
+            clone(self._init_child).set_params(
+                scales=scales).fit([x[axis] for x in X])
             for axis, scales in product(self._axe_iterator, self.scales)
         ]
         print("New axes : ", list(product(self._axe_iterator, self.scales)))
@@ -1173,7 +1185,8 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
 
     def transform(self, X):
         return Parallel(n_jobs=self.n_jobs, prefer="processes")(
-            delayed(self._childs_to_fit[child_id].transform)([x[axis] for x in X])
+            delayed(self._childs_to_fit[child_id].transform)(
+                [x[axis] for x in X])
             for child_id, (axis, _) in tqdm(
                 enumerate(product(self._axe_iterator, self.scales)),
                 desc=f"Computing distances matrices of axis, and scales",
@@ -1252,7 +1265,8 @@ def _st2ranktensor(
     stcpy.grid_squeeze(filtration_grid=filtration_grid, coordinate_values=True)
     # stcpy.collapse_edges(num=100, strong = True, ignore_warning=True)
     if num_collapse == "full":
-        stcpy.collapse_edges(full=True, ignore_warning=True, max_dimension=degree + 1)
+        stcpy.collapse_edges(full=True, ignore_warning=True,
+                             max_dimension=degree + 1)
     elif isinstance(num_collapse, int):
         stcpy.collapse_edges(
             num=num_collapse, ignore_warning=True, max_dimension=degree + 1
@@ -1379,7 +1393,8 @@ def tensor_möbius_inversion(
 ):
     from torch import Tensor
 
-    betti_sparse = Tensor(tensor.copy()).to_sparse()  # Copy necessary in some cases :(
+    betti_sparse = Tensor(tensor.copy()).to_sparse(
+    )  # Copy necessary in some cases :(
     num_indices, num_pts = betti_sparse.indices().shape
     num_parameters = num_indices if num_parameters is None else num_parameters
     if num_indices == num_parameters:  # either hilbert or rank invariant
@@ -1398,7 +1413,8 @@ def tensor_möbius_inversion(
     if grid_conversion is not None:
         coords = np.empty(shape=(num_pts, num_indices), dtype=float)
         for i in range(num_indices):
-            coords[:, i] = grid_conversion[i % num_parameters][points_filtration[:, i]]
+            coords[:, i] = grid_conversion[i %
+                                           num_parameters][points_filtration[:, i]]
     else:
         coords = points_filtration
     if (not rank_invariant) and plot:
@@ -1420,7 +1436,8 @@ def tensor_möbius_inversion(
         death = rectangle[num_parameters:]
         return np.all(birth <= death)  # and not np.array_equal(birth,death)
 
-    correct_indices = np.array([_is_trivial(rectangle) for rectangle in coords])
+    correct_indices = np.array([_is_trivial(rectangle)
+                               for rectangle in coords])
     if len(correct_indices) == 0:
         return np.empty((0, num_indices)), np.empty((0))
     signed_measure = np.asarray(coords[correct_indices])
