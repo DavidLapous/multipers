@@ -18,7 +18,7 @@ jobs:
     # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
-        python-version: ["3.10", "3.11"]
+        python-version: ["3.10", "3.11", "3.12"]
         os: ["ubuntu-latest", "macos-latest"] #windows fails for some reasons
     runs-on: ${{ matrix.os }}
     steps:

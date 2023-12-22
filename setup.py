@@ -128,7 +128,7 @@ setup(
         "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
-        # 'Programming Language :: Python :: 3.12', # waiting for gudhi
+        'Programming Language :: Python :: 3.12',
         "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Scientific/Engineering :: Mathematics",
