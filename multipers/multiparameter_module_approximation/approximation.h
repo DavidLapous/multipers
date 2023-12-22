@@ -29,9 +29,8 @@
 #include "utilities.h"
 #include "vineyards.h"
 
-#include "vineyards_trajectories.h"
-// #include "combinatory.h"
 #include "debug.h"
+#include "vineyards_trajectories.h"
 #include <Persistence_slices_interface.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Line.h>

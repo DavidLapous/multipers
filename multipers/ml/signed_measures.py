@@ -717,14 +717,21 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def deep_format_measure(signed_measure):
-        from numpy import empty, float32
-
         dirac_positions, dirac_signs = signed_measure
+        dtype = dirac_positions.dtype
         new_shape = list(dirac_positions.shape)
         new_shape[1] += 1
-        c = empty(new_shape, dtype=float32)
-        c[:, :-1] = dirac_positions
-        c[:, -1] = dirac_signs
+        if isinstance(dirac_positions, np.ndarray):
+            c = np.empty(new_shape, dtype=dtype)
+            c[:, :-1] = dirac_positions
+            c[:, -1] = dirac_signs
+
+        else:
+            import torch
+
+            c = torch.empty(new_shape, dtype=dtype)
+            c[:, :-1] = dirac_positions
+            c[:, -1] = torch.from_numpy(dirac_signs)
         return c
 
     @staticmethod
@@ -793,10 +800,12 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             out = [self.unsparse_signed_measure(x) for x in out]
         elif self.deep_format:
             num_degrees = self._num_degrees
-            if self.axis != -1:
+            if not self._has_axis:
                 axes = [slice(None)]
-            else:
+            elif self.axis == -1:
                 axes = range(self._num_axis)
+            else:
+                axes = [self.axis]
             out = [
                 [self.deep_format_measure(sm[axis][degree]) for sm in out]
                 for degree in range(num_degrees)
@@ -806,14 +815,27 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 max_num_pts = np.max(
                     [sm.shape[0] for sm_of_axis in out for sm in sm_of_axis]
                 )
-                num_axis = len(out)
+                num_axis_degree = len(out)
                 num_data = len(out[0])
+                assert num_axis_degree == num_degrees * (
+                    self._num_axis if self._has_axis else 1
+                ), f"Bad axis/degree count. Got {num_axis_degree} (Internal error)"
                 num_parameters = out[0][0].shape[1]
-                unragged_tensor = np.zeros(
-                    shape=(num_axis, num_data, max_num_pts, num_parameters),
-                    dtype=np.float32,
+                dtype = out[0][0].dtype
+                if isinstance(out[0][0], np.ndarray):
+                    from numpy import zeros
+                else:
+                    from torch import zeros
+                unragged_tensor = zeros(
+                    (
+                        num_axis_degree,
+                        num_data,
+                        max_num_pts,
+                        num_parameters,
+                    ),
+                    dtype=dtype,
                 )
-                for ax in range(num_axis):
+                for ax in range(num_axis_degree):
                     for data in range(num_data):
                         sm = out[ax][data]
                         a, b = sm.shape

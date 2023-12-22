@@ -17,6 +17,7 @@
 #ifndef BOX_H_INCLUDED
 #define BOX_H_INCLUDED
 
+#include <gudhi/Debug_utils.h>
 #include <cassert>
 #include <ostream>
 #include <vector>
@@ -67,8 +68,9 @@ template <typename T>
 inline Box<T>::Box(const point_type &bottomCorner,
                    const point_type &upperCorner)
     : bottomCorner_(bottomCorner), upperCorner_(upperCorner) {
-  assert(bottomCorner.size() == upperCorner.size() &&
-         bottomCorner <= upperCorner && "This box is trivial !");
+  GUDHI_CHECK(bottomCorner.size() == upperCorner.size() &&
+                  bottomCorner <= upperCorner,
+              "This box is trivial !");
 }
 
 template <typename T>
@@ -80,6 +82,9 @@ template <typename T> inline void Box<T>::inflate(T delta) {
   upperCorner_ += delta;
 }
 
+/**
+ * Define a box containing the filtration values.
+ */
 template <typename T>
 inline void
 Box<T>::infer_from_filters(const std::vector<point_type> &Filters_list) {
@@ -127,8 +132,10 @@ inline typename Box<T>::point_type &Box<T>::get_upper_corner() {
 
 template <typename T>
 inline bool Box<T>::contains(const point_type &point) const {
-  if (point.size() != bottomCorner_.size())
+  if (point.size() != bottomCorner_.size()) {
+    std::cerr << "Box and point are not of the same size." << std::endl;
     return false;
+  }
 
   return bottomCorner_ <= point && point <= upperCorner_;
 }

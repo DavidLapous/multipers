@@ -80,11 +80,11 @@ cdef class SimplexTreeMulti:
 	# unfortunately 'cdef public Simplex_tree_multi_interface* thisptr' is not possible
 	# Use intptr_t instead to cast the pointer
 	cdef public intptr_t thisptr
-	# removing the c-typing as this prevents grid conversions from e.g., pytorch
+
 	cdef public vector[vector[value_type]] filtration_grid
 	cdef public bool _is_function_simplextree
 	# Get the pointer casted as it should be
-	cdef Simplex_tree_multi_interface* get_ptr(self) nogil:
+	cdef Simplex_tree_multi_interface* get_ptr(self) noexcept nogil:
 		return <Simplex_tree_multi_interface*>(self.thisptr)
 
 	# cdef Simplex_tree_persistence_interface * pcohptr
@@ -329,8 +329,10 @@ cdef class SimplexTreeMulti:
 		# cdef vector[int] vertices = np.unique(vertex_array)
 		cdef Py_ssize_t k = vertex_array.shape[0]
 		cdef Py_ssize_t n = vertex_array.shape[1]
-		assert filtrations.shape[0] == n, 'inconsistent sizes for vertex_array and filtrations'
-		assert filtrations.shape[1] == self.num_parameters, "wrong number of parameters"
+		assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
+				Filtrations should be of shape ({n},{self.num_parameters})"
+		assert filtrations.shape[1] == self.num_parameters, f"Inconsistent number of parameters.\
+				Filtrations should be of shape ({n},{self.num_parameters})"
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
@@ -813,7 +815,11 @@ cdef class SimplexTreeMulti:
 		# TODO : find a way to do multiple edge collapses without python conversions.
 		if num == 0:
 			return self
-		if num == -1:
+		elif num == -1:
+			num=100
+			full=False
+		elif num == -2:
+			num=100
 			full=True
 		assert self.num_parameters == 2, "Number of parameters has to be 2 to use edge collapses ! This is a limitation of Filtration-domination"
 		if self.dimension > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")

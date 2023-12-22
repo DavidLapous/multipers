@@ -27,7 +27,10 @@ using Available_columns = Gudhi::persistence_matrix::Column_types;
 template <Available_columns col>
 using BackendOptionsWithVine =
     Gudhi::multiparameter::interface::Multi_persistence_options<col>;
-;
+template <Available_columns col>
+using ClementBackendOptionsWithVine =
+    Gudhi::multiparameter::interface::Multi_persistence_Clement_options<col>;
+
 using SimplicialStructure =
     Gudhi::multiparameter::interface::SimplicialStructure;
 using PresentationStructure =
@@ -36,11 +39,14 @@ using PresentationStructure =
 using MatrixBackendNoVine =
     Gudhi::multiparameter::interface::Persistence_backend_matrix<
         BackendOptionsWithoutVine, SimplicialStructure>;
-
 template <Available_columns col, class Structure = SimplicialStructure>
 using MatrixBackendVine =
     Gudhi::multiparameter::interface::Persistence_backend_matrix<
         BackendOptionsWithVine<col>, Structure>;
+template <Available_columns col, class Structure = SimplicialStructure>
+using ClementMatrixBackendVine =
+    Gudhi::multiparameter::interface::Persistence_backend_matrix<
+        ClementBackendOptionsWithVine<col>, Structure>;
 using GraphBackendVine =
     Gudhi::multiparameter::interface::Persistence_backend_h0<
         SimplicialStructure>;
@@ -54,6 +60,11 @@ using SimplicialNoVineMatrixTruc = Gudhi::multiparameter::interface::Truc<
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using GeneralVineTruc = Gudhi::multiparameter::interface::Truc<
     MatrixBackendVine<col, PresentationStructure>, PresentationStructure,
+    Filtration_value>;
+
+template <Available_columns col = Available_columns::INTRUSIVE_SET>
+using GeneralVineClementTruc = Gudhi::multiparameter::interface::Truc<
+    ClementMatrixBackendVine<col, PresentationStructure>, PresentationStructure,
     Filtration_value>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>

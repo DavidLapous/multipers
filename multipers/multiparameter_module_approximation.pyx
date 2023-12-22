@@ -38,7 +38,7 @@ from multipers.slicer cimport *
 ## Small hack for typing
 from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
-from multipers.slicer import Slicer
+from multipers.slicer import Slicer, SlicerClement
 from multipers.mma_structures import PyModule
 # cimport numpy as cnp
 # cnp.import_array()
@@ -51,6 +51,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
 	Module multiparameter_module_approximation(SimplicialVineMatrixTruc&, value_type, Box[value_type]&, bool, bool, bool) nogil
 	Module multiparameter_module_approximation(GeneralVineTruc&, value_type, Box[value_type]&, bool, bool, bool) nogil
+	Module multiparameter_module_approximation(GeneralVineClementTruc&, value_type, Box[value_type]&, bool, bool, bool) nogil
 
 # TODO : remove when old is deprecated
 cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
@@ -240,7 +241,6 @@ def module_approximation(
 	else:
 		m,M = st.filtration_bounds()
 	box =np.asarray([m,M])
-
 	prod = 1
 	h = M[-1] - m[-1]
 	for i, [a,b] in enumerate(zip(m,M)):
@@ -277,13 +277,21 @@ def module_approximation(
 
 
 
+
 def multiparameter_module_approximation_from_slicer(slicer, box, int num_parameters, value_type max_error, bool complete, bool threshold, bool verbose):
 	cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
-	cdef GeneralVineTruc cslicer = dereference(<GeneralVineTruc*>(slicer_ptr))
+	cdef GeneralVineTruc cslicer
+	cdef GeneralVineClementTruc generalclementtruc
 	cdef Module mod
 	cdef Box[value_type] c_box = Box[value_type](box)
-	with nogil:
-		mod = multiparameter_module_approximation(cslicer, max_error,c_box,threshold, complete, verbose)
+	if isinstance(slicer,Slicer):
+		cslicer = dereference(<GeneralVineTruc*>(slicer_ptr))
+		with nogil:
+			mod = multiparameter_module_approximation(cslicer, max_error,c_box,threshold, complete, verbose)
+	elif isinstance(slicer,SlicerClement):
+		generalclementtruc = dereference(<GeneralVineClementTruc*>(slicer_ptr))
+		with nogil:
+			mod = multiparameter_module_approximation(generalclementtruc, max_error,c_box,threshold, complete, verbose)
 	approx_mod = PyModule()
 	approx_mod._set_from_ptr(<intptr_t>(&mod))
 	return approx_mod

@@ -18,6 +18,7 @@
 #define MMA_INTERFACE_MATRIX_H
 
 #include <cstddef>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -36,6 +37,21 @@ struct Multi_persistence_options
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = true;
+};
+
+template <Gudhi::persistence_matrix::Column_types column_type =
+              Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
+struct Multi_persistence_Clement_options
+    : Gudhi::persistence_matrix::Default_options<
+          true, Gudhi::persistence_matrix::Z2_field_element, column_type,
+          false> {
+  static const bool has_matrix_maximal_dimension_access = false;
+  static const bool has_column_pairings = true;
+  static const bool has_vine_update = true;
+  static const bool is_of_boundary_type = false;
+  static const bool is_indexed_by_position =
+      true; // useless if has_vine_update = false, as the two indexing
+            // strategies only differ when swaps occur.
 };
 
 template <Gudhi::persistence_matrix::Column_types column_type =
@@ -138,7 +154,7 @@ public:
       : matrix_(boundaries.size()), permutation_(&permutation) {
     const bool verbose = false;
     if constexpr (verbose)
-      std::cout << "Constructing matrix...\n";
+      std::cout << "Constructing matrix..." << std::endl;
     std::vector<std::size_t> permutationInv(permutation.size());
     std::vector<std::size_t> boundary_container;
     std::size_t c = 0;
@@ -146,7 +162,9 @@ public:
       permutationInv[i] = c++;
       boundary_container.resize(boundaries[i].size());
       if constexpr (verbose)
-        std::cout << i << "/" << permutation.size() << "...\n";
+        std::cout << i << "/" << permutation.size() << " dimension "
+                  << boundaries.dimension(i) << "..." << std::endl
+                  << std::flush;
       for (std::size_t j = 0; j < boundaries[i].size(); ++j) {
         boundary_container[j] = permutationInv[boundaries[i][j]];
       }

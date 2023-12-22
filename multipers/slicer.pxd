@@ -66,6 +66,19 @@ cdef extern from "Persistence_slices_interface.h":
 		uint32_t num_generators()
 		string to_str()
 
+	cdef cppclass GeneralVineClementTruc "GeneralVineClementTruc<>":
+		GeneralVineClementTruc()
+		GeneralVineClementTruc(const vector[vector[unsigned int]]&, const vector[int]&, const vector[Finitely_critical_multi_filtration]&)
+		GeneralVineClementTruc& operator=(const GeneralVineClementTruc&)
+		void vineyard_update()
+		Barcode get_barcode()
+		void push_to[Line](const Line&) 
+		void set_one_filtration(const one_filtration_type&)
+		one_filtration_type get_one_filtration()
+		void compute_persistence() 
+		uint32_t num_generators()
+		string to_str()
+
 	cdef cppclass SimplicialVineGraphTruc "SimplicialVineGraphTruc":
 		SimplicialVineGraphTruc()
 		SimplicialVineGraphTruc(Simplex_tree_multi_interface*)

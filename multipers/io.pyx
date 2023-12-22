@@ -119,7 +119,7 @@ def minimal_presentation_from_mpfree(
 
 def clear_io(*args):
     global mpfree_in_path, mpfree_out_path
-    for x in [mpfree_in_path, mpfree_out_path] + list(*args):
+    for x in [mpfree_in_path, mpfree_out_path] + list(args):
         if os.path.exists(x):
             os.remove(x)
 

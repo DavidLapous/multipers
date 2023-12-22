@@ -271,7 +271,7 @@ get_filtration_values(simplextree_multi &st_multi,
   int num_parameters = st_multi.get_number_of_parameters();
   std::vector<multi_filtration_grid> out(degrees.size(),
                                          multi_filtration_grid(num_parameters));
-  std::vector<int> degree_index(degrees.size());
+  std::vector<int> degree_index(st_multi.dimension() + 1);
   int count = 0;
   for (auto degree : degrees) {
     degree_index[degree] = count++;
@@ -279,7 +279,7 @@ get_filtration_values(simplextree_multi &st_multi,
   }
 
   for (const auto &simplex_handle : st_multi.complex_simplex_range()) {
-    const auto filtration = st_multi.filtration(simplex_handle);
+    const auto &filtration = st_multi.filtration(simplex_handle);
     const auto degree = st_multi.dimension(simplex_handle);
     if (std::find(degrees.begin(), degrees.end(), degree) == degrees.end())
       continue;

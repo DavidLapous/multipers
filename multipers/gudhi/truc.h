@@ -27,14 +27,34 @@ public:
   PresentationStructure(
       const std::vector<std::vector<unsigned int>> &generators,
       const std::vector<int> &generator_dimensions)
-      : generators(generators), generator_dimensions(generator_dimensions){};
+      : generators(generators), generator_dimensions(generator_dimensions),
+        num_vertices_(0) {
+    for (const auto &stuff : generator_dimensions) {
+      if (stuff == 0)
+        num_vertices_++;
+    }
+  };
+
+  PresentationStructure(const PresentationStructure &other)
+      : generators(other.generators),
+        generator_dimensions(other.generator_dimensions),
+        num_vertices_(other.num_vertices_),
+        max_dimension_(other.max_dimension_) {}
+  /* PresentationStructure &operator=(const PresentationStructure &other) { */
+  /*   generators = other.generators; */
+  /*   generator_dimensions = other.generator_dimensions; */
+  /*   num_vertices_ = other.num_vertices_; */
+  /*   max_dimension_ = other.max_dimension_; */
+  /**/
+  /*   return *this; */
+  /* } */
 
   std::vector<unsigned int> operator[](std::size_t i) {
     return generators[i];
   } // needs to be iterable (begin, end, size)
   inline int dimension(std::size_t i) { return generator_dimensions[i]; };
-  inline friend std::ostream &
-  operator<<(std::ostream &stream, const PresentationStructure &structure) {
+  inline friend std::ostream &operator<<(std::ostream &stream,
+                                         PresentationStructure &structure) {
     stream << "Boundary:\n";
     stream << "{";
     for (const auto &stuff : structure.generators) {
@@ -49,14 +69,15 @@ public:
       stream << "},\n";
     }
     stream << "}\n";
-    stream << "Degrees:\n";
+    stream << "Degrees: (max " << structure.max_dimension() << ")\n";
     stream << "{";
     for (const auto &stuff : structure.generator_dimensions)
-      std::cout << stuff << ", ";
+      stream << stuff << ", ";
     if (structure.size() > 0) {
-      std::cout << "\b\b";
+      stream << "\b"
+             << "\b";
     }
-    std::cout << "}";
+    stream << "}\n";
     return stream;
   }
   inline void to_stream(std::ostream &stream,
@@ -84,7 +105,7 @@ private:
   std::vector<std::vector<unsigned int>> generators;
   std::vector<int> generator_dimensions;
   unsigned int num_vertices_;
-  unsigned int max_dimension_ = -1;
+  int max_dimension_ = -1;
 };
 
 class SimplicialStructure {
@@ -359,6 +380,14 @@ public:
     stream << "-------------------- Truc \n";
     stream << "--- Structure \n";
     stream << truc.structure;
+    /* stream << "-- Dimensions (max " << truc.structure.max_dimension() <<
+     * ")\n"; */
+    /* stream << "{"; */
+    /* for (auto i = 0u; i < truc.num_generators(); i++) */
+    /*   stream << truc.structure.dimension(i) << ", "; */
+    /* stream << "\b" */
+    /*        << "\b"; */
+    /* stream << "}" << std::endl; */
     stream << "--- Order \n";
     stream << "{";
     for (const auto &idx : truc.generator_order)

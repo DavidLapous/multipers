@@ -381,7 +381,7 @@ template <typename T>
 class numeric_limits<Gudhi::multiparameter::multi_filtrations::
                          Finitely_critical_multi_filtration<T>> {
 public:
-  static constexpr bool has_infinity = true;
+  static constexpr bool has_infinity = numeric_limits<T>::has_infinity;
 
   static Gudhi::multiparameter::multi_filtrations::
       Finitely_critical_multi_filtration<T>
