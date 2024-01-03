@@ -52,7 +52,7 @@ jobs:
       run: |
         pip install dist/*.whl
         pytest multipers/tests
-    - name: Auditwheel on linux
+    - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
       run: |
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
@@ -62,6 +62,17 @@ jobs:
             auditwheel show $wheel_file
             auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
             rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
+        if [[ ${{ matrix.os }} == "macos-latest" ]]; then
+          cd dist
+          pip install delocate --upgrade
+          for wheel_file in multipers*macosx*.whl; do
+            delocate-listdeps $wheel_file
+            delocate-wheel --require-archs x86_64,arm64 -w wheelhouse -v $wheel_file
+            # rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
