@@ -71,8 +71,8 @@ jobs:
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*.whl; do
             delocate-listdeps $wheel_file
-            delocate-wheel --require-archs x86_64,arm64 -w wheelhouse -v $wheel_file
-            # rm $wheel_file
+            delocate-wheel --require-archs x86_64 -w wheelhouse -v $wheel_file
+            rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
