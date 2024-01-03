@@ -248,7 +248,8 @@ def _pts_convolution_pykeops(
     """
     Pykeops convolution
     """
-    kde = KDE(kernel=kernel, bandwidth=bandwidth, return_log=False, **more_kde_args)
+    kde = KDE(kernel=kernel, bandwidth=bandwidth,
+              return_log=False, **more_kde_args)
     return kde.fit(
         pts, sample_weights=np.asarray(pts_weights, dtype=pts.dtype)
     ).score_samples(grid_iterator)
@@ -311,7 +312,8 @@ class KDE:
 
     @staticmethod
     def exponential_kernel(x_i, y_j, bandwidth):
-        exponent = -(((((x_i - y_j) ** 2).sum()) ** 1 / 2) / bandwidth).sum(dim=2)
+        exponent = -(((((x_i - y_j) ** 2).sum()) **
+                     1 / 2) / bandwidth).sum(dim=2)
         kernel = exponent.exp() / bandwidth
         return kernel
 
@@ -370,7 +372,8 @@ class KDE:
             kernel *= w
         if return_kernel:
             return kernel
-        density_estimation = kernel.sum(dim=0).flatten() / kernel.shape[0]  # mean
+        density_estimation = kernel.sum(
+            dim=0).flatten() / kernel.shape[0]  # mean
         return (
             self._backend.log(density_estimation)
             if self.return_log
@@ -409,13 +412,15 @@ class DTM:
         if not isinstance(X, np.ndarray):
             import torch
 
-            assert isinstance(X, torch.Tensor), "Backend has to be numpy of torch"
+            assert isinstance(
+                X, torch.Tensor), "Backend has to be numpy of torch"
             _X = X.detach()
             self._backend = "torch"
         else:
             _X = X
             self._backend = "numpy"
-        self._ks = np.array([int(mass * X.shape[0]) + 1 for mass in self.masses])
+        self._ks = np.array(
+            [int(mass * X.shape[0]) + 1 for mass in self.masses])
         self._kdtree = KDTree(_X, metric=self.metric, **self._kdtree_kwargs)
         self._X = X
         return self
@@ -441,8 +446,10 @@ class DTM:
             _Y = Y.detach().numpy()
         else:
             _Y = Y
-        NN_Dist, NN = self._kdtree.query(_Y, self._ks.max(), return_distance=True)
-        DTMs = np.array([((NN_Dist**2)[:, :k].mean(1)) ** 0.5 for k in self._ks])
+        NN_Dist, NN = self._kdtree.query(
+            _Y, self._ks.max(), return_distance=True)
+        DTMs = np.array([((NN_Dist**2)[:, :k].mean(1))
+                        ** 0.5 for k in self._ks])
         return DTMs
 
     def score_samples_diff(self, Y):
@@ -470,9 +477,11 @@ class DTM:
         assert self._backend == "torch", "Use the non-diff version with numpy."
         if len(self.masses) == 0:
             return torch.empty(0, len(Y))
-        NN = self._kdtree.query(Y.detach(), self._ks.max(), return_distance=False)
+        NN = self._kdtree.query(
+            Y.detach(), self._ks.max(), return_distance=False)
         DTMs = tuple(
-            (((self._X[NN] - Y[:, None, :]) ** 2)[:, :k].sum(dim=(1, 2)) / k) ** 0.5
+            (((self._X[NN] - Y[:, None, :]) ** 2)
+             [:, :k].sum(dim=(1, 2)) / k) ** 0.5
             for k in self._ks
         )  # TODO : kdtree already computes distance, find implementation of kdtree that is pytorch differentiable
         return DTMs

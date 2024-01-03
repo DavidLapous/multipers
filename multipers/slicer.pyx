@@ -7,6 +7,8 @@ cimport cython
 cdef class SlicerNoVineSimplcial:
     cdef SimplicialNoVineMatrixTruc truc
 
+    def get_ptr(self):
+        return <intptr_t>(&self.truc)
     def __cinit__(self, st, bool vine=False):
         cdef intptr_t ptr = st.thisptr
         cdef Simplex_tree_multi_interface* st_ptr = <Simplex_tree_multi_interface*>(ptr)
@@ -46,6 +48,9 @@ cdef class SlicerNoVineSimplcial:
 
 cdef class SlicerVineSimplcial:
     cdef SimplicialVineMatrixTruc truc
+
+    def get_ptr(self):
+        return <intptr_t>(&self.truc)
     def __cinit__(self, st, bool vine=False):
         cdef intptr_t ptr = st.thisptr
         cdef Simplex_tree_multi_interface* st_ptr = <Simplex_tree_multi_interface*>(ptr)
@@ -234,6 +239,9 @@ cdef class SlicerVineGraph:
         self.truc.vineyard_update()
     def get_barcode(self):
         return self.truc.get_barcode()
+
+    def get_ptr(self):
+        return <intptr_t>(&self.truc)
     def persistence_on_line(self,basepoint,direction=None):
         basepoint = np.asarray(basepoint)
         cdef Line line

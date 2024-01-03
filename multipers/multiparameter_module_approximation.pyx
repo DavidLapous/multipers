@@ -38,7 +38,7 @@ from multipers.slicer cimport *
 ## Small hack for typing
 from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
-from multipers.slicer import Slicer, SlicerClement
+from multipers.slicer import Slicer, SlicerClement,SlicerVineGraph,SlicerVineSimplcial
 from multipers.mma_structures import PyModule
 # cimport numpy as cnp
 # cnp.import_array()
@@ -282,6 +282,8 @@ def multiparameter_module_approximation_from_slicer(slicer, box, int num_paramet
 	cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
 	cdef GeneralVineTruc cslicer
 	cdef GeneralVineClementTruc generalclementtruc
+	cdef SimplicialVineGraphTruc graphtruc
+	cdef SimplicialVineMatrixTruc matrixtruc
 	cdef Module mod
 	cdef Box[value_type] c_box = Box[value_type](box)
 	if isinstance(slicer,Slicer):
@@ -292,6 +294,18 @@ def multiparameter_module_approximation_from_slicer(slicer, box, int num_paramet
 		generalclementtruc = dereference(<GeneralVineClementTruc*>(slicer_ptr))
 		with nogil:
 			mod = multiparameter_module_approximation(generalclementtruc, max_error,c_box,threshold, complete, verbose)
+	elif isinstance(slicer,SlicerVineGraph):
+		graphtruc = dereference(<SimplicialVineGraphTruc*>(slicer_ptr))
+		with nogil:
+			mod = multiparameter_module_approximation(graphtruc, max_error,c_box,threshold, complete, verbose)
+	elif isinstance(slicer,SlicerVineSimplcial):
+		matrixtruc = dereference(<SimplicialVineMatrixTruc*>(slicer_ptr))
+		with nogil:
+			mod = multiparameter_module_approximation(matrixtruc, max_error,c_box,threshold, complete, verbose)
+	else:
+		raise ValueError("Unimplemeted slicer / Invalid slicer.")
+
+
 	approx_mod = PyModule()
 	approx_mod._set_from_ptr(<intptr_t>(&mod))
 	return approx_mod
