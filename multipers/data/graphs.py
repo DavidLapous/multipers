@@ -9,13 +9,37 @@ from sklearn.preprocessing import LabelEncoder
 from scipy.spatial import distance_matrix
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 import multipers as mp
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 from numpy.typing import ArrayLike
 
 DATASET_PATH = expanduser("~/Datasets/")
 
 
-def get(dataset: str, filtration: str):
+def _check_installed(dataset: str):
+    from warnings import warn
+    from os.path import exists
+
+    assert dataset.startswith(
+        "graphs/"
+    ), "Graph datasets have to be of the form graphs/<name>"
+    if exists(DATASET_PATH + dataset):
+        return
+    else:
+        warn(
+            f"""
+Dataset {dataset} not installed.
+You can find it in https://networkrepository.com
+Then (optinally) configure multipers.data.graphs.DATASET_PATH, which is currently
+> {DATASET_PATH=}
+and puts this dataset in $DATASET_PATH/{dataset}
+"""
+        )
+        raise ValueError("Unknown dataset.")
+
+
+def get(dataset: str, filtration: Optional[str] = None):
+    if filtration is None:
+        return get_graphs(dataset)
     graphs, labels = get_graphs(dataset)
     try:
         for g in graphs:
@@ -88,6 +112,7 @@ def get_from_file(dataset: str):
 
 
 def get_graphs(dataset: str, N: int | str = "") -> tuple[list[nx.Graph], list[int]]:
+    _check_installed(dataset)
     graphs_path = f"{DATASET_PATH}{dataset}/graphs{N}.pkl"
     labels_path = f"{DATASET_PATH}{dataset}/labels{N}.pkl"
     if not exists(graphs_path) or not exists(labels_path):
@@ -95,6 +120,7 @@ def get_graphs(dataset: str, N: int | str = "") -> tuple[list[nx.Graph], list[in
             return get_from_file_old(
                 dataset,
             )
+
         graphs, labels = get_from_file(
             dataset,
         )
