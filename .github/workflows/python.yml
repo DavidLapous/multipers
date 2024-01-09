@@ -40,23 +40,32 @@ jobs:
     - name: Build package
       shell: bash -el {0}
       run: |
+        python setup.py sdist
         if [[ ${{ matrix.os }} == "macos-latest" ]]; then
           # erase old CXXFLAGS and CFLAGS
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
           export MACOSX_DEPLOYMENT_TARGET="11.7"
-          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
-          export ARCHFLAGS="-arch arm64 -arch x86_64"
+          # export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
           ## Latest fix
           # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-march=core2//g')
           # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-mtune=haswell//g')
           # export CFLAGS=$(echo $CFLAGS | sed 's/-march=core2//g')
           # export CFLAGS=$(echo $CFLAGS | sed 's/-mtune=haswell//g')
+          
+          export ARCHFLAGS="-arch x86_64"
+          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          pip wheel . --wheel-dir dist
+          
+          export ARCHFLAGS="-arch arm64"
+          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          pip wheel . --wheel-dir dist
         fi
-        python setup.py sdist
-        python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
-        pip wheel . --wheel-dir dist
+        if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
+          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          pip wheel . --wheel-dir dist
+        fi
     - name: Install and Test
       shell: bash -el {0}
       run: |
@@ -81,7 +90,7 @@ jobs:
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*.whl; do
             delocate-listdeps $wheel_file
-            delocate-wheel --require-archs universal2 -w wheelhouse -v $wheel_file
+            delocate-wheel --require-archs arm64 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
