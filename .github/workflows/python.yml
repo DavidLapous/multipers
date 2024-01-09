@@ -41,8 +41,8 @@ jobs:
       shell: bash -el {0}
       run: |
         if [[ ${{ matrix.os }} == "macos-latest" ]]; then
-          export CXXFLAGS="-fno-aligned-new $CXXFLAGS" # Macos workaround
-          export CFLAGS="-fno-aligned-new $CFLAGS" # Macos workaround
+          export CXXFLAGS="-march=generic -mtune=generic -fno-aligned-new $CXXFLAGS" # Macos workaround
+          export CFLAGS="-march=generic -mtune=generic-fno-aligned-new $CFLAGS" # Macos workaround
           ## should compile for both architecture
           export MACOSX_DEPLOYMENT_TARGET="11.7"
           export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
