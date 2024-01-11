@@ -54,12 +54,12 @@ jobs:
           # export CFLAGS=$(echo $CFLAGS | sed 's/-march=core2//g')
           # export CFLAGS=$(echo $CFLAGS | sed 's/-mtune=haswell//g')
           
-          export ARCHFLAGS="-arch x86_64"
-          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
-          pip wheel . --wheel-dir dist
+          # export ARCHFLAGS="-arch x86_64"
+          # python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          # pip wheel . --wheel-dir dist
           
-          export ARCHFLAGS="-arch arm64"
-          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          export ARCHFLAGS="-arch arm64 -arch x86_64"
+          python setup.py build_ext -j2 --inplace --force # Parallel compilation, compatible with macos
           pip wheel . --wheel-dir dist
         fi
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
@@ -90,7 +90,7 @@ jobs:
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*.whl; do
             delocate-listdeps $wheel_file
-            delocate-wheel --require-archs arm64 -w wheelhouse -v $wheel_file
+            delocate-wheel --require-archs arm64,x86_64 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
