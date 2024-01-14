@@ -47,7 +47,7 @@ jobs:
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
           export MACOSX_DEPLOYMENT_TARGET="11.7"
-          # export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
+          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
           ## Latest fix
           # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-march=core2//g')
           # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-mtune=haswell//g')
@@ -58,8 +58,17 @@ jobs:
           # python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
           # pip wheel . --wheel-dir dist
           
+          ### Installs TBB in the conda env for both archs
           export ARCHFLAGS="-arch arm64 -arch x86_64"
-          python setup.py build_ext -j2 --inplace --force # Parallel compilation, compatible with macos
+          git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
+          cd oneTBB
+          mkdir build && cd build
+          cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DTBB_TEST=OFF ..
+          cmake --build . -j4
+          cmake --install .
+          ####
+          
+          python setup.py build_ext -j4 --inplace --force # Parallel compilation, compatible with macos
           pip wheel . --wheel-dir dist
         fi
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
