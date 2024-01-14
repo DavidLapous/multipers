@@ -42,7 +42,7 @@ jobs:
         if [[ ${{ matrix.os }} == "macos-latest" ]]; then
           brew update || true
           ## boost doesn't need to be linked so brew is fine
-          brew install boost eigen gmp mpfr cgal || true
+          brew install boost || true
           pip install numpy cython gudhi pytest scikit-learn matplotlib joblib tqdm scipy --upgrade
 
           ### Installs TBB in the conda env for both archs (brew doesn't propose universal/fat builds)
@@ -65,8 +65,8 @@ jobs:
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
-          export MACOSX_DEPLOYMENT_TARGET="11.7"
-          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
+          # export MACOSX_DEPLOYMENT_TARGET="11.7"
+          # export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
           
           python setup.py build_ext -j4 --inplace
           pip wheel . --wheel-dir dist
