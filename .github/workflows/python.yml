@@ -65,8 +65,8 @@ jobs:
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
-          export MACOSX_DEPLOYMENT_TARGET="12.7"
-          export _PYTHON_HOST_PLATFORM="macosx-12.7-universal2"
+          export MACOSX_DEPLOYMENT_TARGET="11.7"
+          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
           
           python setup.py build_ext -j4 --inplace
           pip wheel . --wheel-dir dist
