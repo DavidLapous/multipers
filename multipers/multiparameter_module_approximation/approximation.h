@@ -604,7 +604,7 @@ template <class Filtration_value =
           size_t axis = 0>
 class LineIterator {
 public:
-  using value_type = Filtration_value::value_type;
+  using value_type = typename Filtration_value::value_type;
   LineIterator(const Filtration_value &basepoint, value_type precision,
                int num_iterations)
       : precision(precision), remaining_iterations(num_iterations),
