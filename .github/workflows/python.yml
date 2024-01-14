@@ -15,7 +15,7 @@ on:
 jobs:
   build_test:
     name: Build and Test 
-    # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
+    container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -33,36 +33,19 @@ jobs:
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
-        conda install mamba -c conda-forge
-        mamba install python=${{matrix.python-version}} pip -c conda-forge
-        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
-          # use default macos compiler for mac
-          mamba install cxx-compiler
+          conda install mamba -c conda-forge
+          mamba install python=${{matrix.python-version}} pip -c conda-forge
+          mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
+          mamba install cxx-compiler numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
         fi
-        pip install pykeops filtration-domination --upgrade
-    - name: Build package
-      shell: bash -el {0}
-      run: |
-        python setup.py sdist
         if [[ ${{ matrix.os }} == "macos-latest" ]]; then
-          # erase old CXXFLAGS and CFLAGS
-          export CXXFLAGS="-fno-aligned-new" # Macos workaround
-          export CFLAGS="-fno-aligned-new" # Macos workaround
-          ## should compile for both architecture
-          export MACOSX_DEPLOYMENT_TARGET="11.7"
-          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
-          ## Latest fix
-          # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-march=core2//g')
-          # export CXXFLAGS=$(echo $CXXFLAGS | sed 's/-mtune=haswell//g')
-          # export CFLAGS=$(echo $CFLAGS | sed 's/-march=core2//g')
-          # export CFLAGS=$(echo $CFLAGS | sed 's/-mtune=haswell//g')
-          
-          # export ARCHFLAGS="-arch x86_64"
-          # python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
-          # pip wheel . --wheel-dir dist
-          
-          ### Installs TBB in the conda env for both archs
+          brew update || true
+          ## boost doesn't need to be linked so brew is fine
+          brew install boost eigen gmp mpfr cgal || true
+          pip install numpy cython gudhi pytest scikit-learn matplotlib joblib tqdm scipy --upgrade
+
+          ### Installs TBB in the conda env for both archs (brew doesn't propose universal/fat builds)
           export ARCHFLAGS="-arch arm64 -arch x86_64"
           git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
           cd oneTBB
@@ -72,12 +55,24 @@ jobs:
           cmake --install .
           cd ../..
           ####
+        fi
+        pip install pykeops filtration-domination --upgrade
+    - name: Build package
+      shell: bash -el {0}
+      run: |
+        python setup.py sdist
+        if [[ ${{ matrix.os }} == "macos-latest" ]]; then
+          export CXXFLAGS="-fno-aligned-new" # Macos workaround
+          export CFLAGS="-fno-aligned-new" # Macos workaround
+          ## should compile for both architecture
+          export MACOSX_DEPLOYMENT_TARGET="11.7"
+          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
           
-          python setup.py build_ext -j4 --inplace --force # Parallel compilation, compatible with macos
+          python setup.py build_ext -j4 --inplace
           pip wheel . --wheel-dir dist
         fi
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
-          python setup.py build_ext -j2 --inplace # Parallel compilation, compatible with macos
+          python setup.py build_ext -j2 --inplace 
           pip wheel . --wheel-dir dist
         fi
     - name: Install and Test
@@ -104,7 +99,7 @@ jobs:
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*.whl; do
             delocate-listdeps $wheel_file
-            delocate-wheel --require-archs arm64,x86_64 -w wheelhouse -v $wheel_file
+            delocate-wheel --require-archs universal2 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
