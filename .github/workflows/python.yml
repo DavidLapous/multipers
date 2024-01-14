@@ -70,6 +70,7 @@ jobs:
           cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DTBB_TEST=OFF ..
           cmake --build . -j4
           cmake --install .
+          cd ..
           ####
           
           python setup.py build_ext -j4 --inplace --force # Parallel compilation, compatible with macos
