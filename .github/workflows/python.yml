@@ -35,7 +35,11 @@ jobs:
       run: |
         conda install mamba -c conda-forge
         mamba install python=${{matrix.python-version}} pip -c conda-forge
-        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build cxx-compiler joblib tqdm scipy -c conda-forge
+        mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
+        if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
+          # use default macos compiler for mac
+          mamba install cxx-compiler
+        fi
         pip install pykeops filtration-domination --upgrade
     - name: Build package
       shell: bash -el {0}
