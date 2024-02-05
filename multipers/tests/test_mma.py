@@ -32,7 +32,7 @@ def test_2():
     st.insert([0], [1, 2])
     st.insert([0, 1], [2, 2])
     mod = st.persistence_approximation(
-        box=[[0, 0], [4, 4]], backend="matrix", max_error=0.1
+        box=[[0, 0], [4, 4]], slicer_backend="graph", max_error=0.1
     )
     assert len(mod) == 1
     assert np.isclose(

@@ -329,25 +329,63 @@ cdef class SimplexTreeMulti:
 		# cdef vector[int] vertices = np.unique(vertex_array)
 		cdef Py_ssize_t k = vertex_array.shape[0]
 		cdef Py_ssize_t n = vertex_array.shape[1]
-		assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
-				Filtrations should be of shape ({n},{self.num_parameters})"
-		assert filtrations.shape[1] == self.num_parameters, f"Inconsistent number of parameters.\
-				Filtrations should be of shape ({n},{self.num_parameters})"
+		cdef int num_parameters = self.get_ptr().get_number_of_parameters()		
+		cdef bool empty_filtration = (filtrations.size == 0)
+		if not empty_filtration :
+			assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
+					Filtrations should be of shape ({n},{self.num_parameters})"
+			assert filtrations.shape[1] == num_parameters, f"Inconsistent number of parameters.\
+					Filtrations should be of shape ({n},{self.num_parameters})"
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
 		cdef Finitely_critical_multi_filtration w
-		cdef int n_parameters = self.num_parameters
+		if empty_filtration:
+			w = Finitely_critical_multi_filtration(num_parameters) # at -inf by default
 		with nogil:
 			for i in range(n):
+				# vertex
 				for j in range(k):
 					v.push_back(vertex_array[j, i])
-				for j in range(n_parameters):
-					w.push_back(filtrations[i,j])
+				#filtration
+				if not empty_filtration:
+					for j in range(num_parameters):
+						w.push_back(filtrations[i,j])
 				self.get_ptr().insert(v, w)
 				v.clear()
-				w.clear()
+				if not empty_filtration:
+					w.clear()
+		#repair filtration if necessary
+		if empty_filtration:
+			self.make_filtration_non_decreasing()
 		return self
+
+	def lower_star_multi_filtration_update(self, nodes_filtrations):
+		cdef Py_ssize_t num_vertices = nodes_filtrations.shape[0]
+		cdef Py_ssize_t num_parameters = nodes_filtrations.shape[1]
+		assert self.get_ptr().get_number_of_parameters() == num_parameters and self.num_vertices == num_vertices, f"Invalid shape {nodes_filtrations.shape}. Should be (?,{self.num_parameters=})."
+
+		cdef Simplex_tree_multi_simplices_iterator it = self.get_ptr().get_simplices_iterator_begin()
+		cdef Simplex_tree_multi_simplices_iterator end = self.get_ptr().get_simplices_iterator_end()
+		cdef Py_ssize_t node_idx = 0
+		cdef value_type[:,:] F = nodes_filtrations
+		cdef value_type minus_inf = -np.inf
+		with nogil:
+			while it != end:
+				pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
+				if pair.first.size() == 1: # dimension == 0
+					for i in range(num_parameters):
+						pair.second[i] = F[node_idx,i]
+					node_idx += 1
+					# with gil:
+					# 	print(pair.first, node_idx,i, F[node_idx,i])
+				else:
+					for i in range(num_parameters):
+						pair.second[i] = minus_inf
+				preincrement(it)
+		self.make_filtration_non_decreasing()
+		return self
+
 
 	def assign_all(self, filtration_values)-> SimplexTreeMulti:
 		cdef Py_ssize_t num_simplices = filtration_values.shape[0] 
@@ -1218,6 +1256,7 @@ cdef class SimplexTreeMulti:
 		if filtration_grid is None:	
 			filtration_grid = self.get_filtration_grid(grid_strategy=grid_strategy, **filtration_grid_kwargs)
 		cdef vector[vector[value_type]] c_filtration_grid = filtration_grid
+		assert c_filtration_grid.size() == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
 		cdef intptr_t ptr = self.thisptr
 		if coordinate_values:
 			self.filtration_grid = filtration_grid
@@ -1227,7 +1266,7 @@ cdef class SimplexTreeMulti:
 
 	@property
 	def _is_squeezed(self)->bool:
-		return self.num_vertices > 0 and len(self.filtration_grid[0]) > 0
+		return self.num_vertices > 0 and len(self.filtration_grid)>0 and len(self.filtration_grid[0]) > 0
 
 	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float|tuple=0, split_dimension:bool=False)->np.ndarray:
 		"""

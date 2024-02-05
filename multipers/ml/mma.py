@@ -4,9 +4,9 @@ from multipers.ml.tools import filtration_grid_to_coordinates
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, TransformerMixin
-from multipers.multiparameter_module_approximation import PyModule
+from multipers.mma_structures import PyModule, PyBox
 from tqdm import tqdm
-
+import multipers.simplex_tree_multi
 from multipers.simplex_tree_multi import SimplexTreeMulti
 
 reduce_grid = mp.simplex_tree_multi.SimplexTreeMulti._reduce_grid
@@ -432,9 +432,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 if self.weights is None
                 else np.asarray(self.weights)
             )
-            standard_box = mp.multiparameter_module_approximation.PyBox(
-                [0] * self._num_parameters, w
-            )
+            standard_box = PyBox([0] * self._num_parameters, w)
 
             X_copy = [
                 [

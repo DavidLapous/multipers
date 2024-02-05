@@ -33,6 +33,7 @@ ctypedef pair[simplex_type, value_type*] simplex_filtration_type
 cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h" namespace "Gudhi::multiparameter::multi_filtrations":
 	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration::value_type>":
 		Finitely_critical_multi_filtration()  except + nogil
+		Finitely_critical_multi_filtration(int)  except + nogil
 		Finitely_critical_multi_filtration(vector[value_type]) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&)
 		filtration_type& get_vector()  nogil

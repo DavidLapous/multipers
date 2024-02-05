@@ -44,9 +44,8 @@ def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, boo
 	"""
 	assert len(simplextree.filtration_grid[0]) > 0, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
-	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid] if grid_conversion is None else grid_conversion
 	# assert simplextree.num_parameters == 2
-	grid_shape = np.array([len(f) for f in grid_conversion])
+	grid_shape = np.array([len(f) for f in simplextree.filtration_grid])
 	
 	# match mass_default: ## Cython bug
 	# 	case None:
@@ -66,8 +65,9 @@ def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, boo
 	if zero_pad:
 		for i, _ in enumerate(grid_shape):
 			grid_shape[i] += 1 # adds a 0
-		for i,f in enumerate(grid_conversion):
-			grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
+		if grid_conversion is not None:
+			for i,f in enumerate(grid_conversion):
+				grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
 	assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."
 	container_array = np.ascontiguousarray(np.zeros(grid_shape, dtype=python_tensor_dtype).flatten())
 	assert len(container_array) < np.iinfo(python_indices_type).max, "Too large container. Raise an issue on github if you encounter this issue. (Due to tensor's operator[])"
@@ -80,16 +80,11 @@ def euler_signed_measure(simplextree, mass_default=None, bool verbose=False, boo
 		out = get_euler_signed_measure(simplextree_ptr, container_ptr, c_grid_shape, zero_pad, verbose)
 	pts, weights = np.asarray(out.first, dtype=int).reshape(-1, simplextree.num_parameters), np.asarray(out.second, dtype=int)
 	# return pts, weights
-	def empty_like(x):
-		if isinstance(grid_conversion[0], np.ndarray):
-			return np.empty_like(x, dtype=float)
-		import torch
-		assert isinstance(grid_conversion[0], torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
-		return torch.empty(x.shape,dtype=float)
-	coords = empty_like(pts)
-	for i in range(coords.shape[1]):
-		coords[:,i] = grid_conversion[i][pts[:,i]]
-	sm =(coords, weights)
+	sm = (pts,weights)
+
+	if grid_conversion is not None:
+		from multipers.hilbert_function import sms_in_grid
+		sm, = sms_in_grid([sm], grid_conversion)
 	if plot:
 		from multipers.plots import plot_signed_measures
 		plot_signed_measures([sm])

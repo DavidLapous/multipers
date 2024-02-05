@@ -12,9 +12,11 @@
 #define SIMPLEX_TREE_MULTI_H_
 
 #include <algorithm>
+#include <cstddef>
 #include <gudhi/Simplex_tree.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Line.h>
+#include <tbb/parallel_for.h>
 
 namespace Gudhi::multiparameter {
 /** Model of SimplexTreeOptions, with a multiparameter filtration. */
@@ -187,9 +189,12 @@ void flatten_diag(
 template <typename vector_like>
 inline void find_coordinates(vector_like &x,
                              const multi_filtration_grid &grid) {
-  // TODO: optimize with, e.g., dichotomy
+    for (auto parameter = 0u; parameter < grid.size(); parameter++) {
 
-  for (auto parameter = 0u; parameter < grid.size(); parameter++) {
+    // my guess is that it's memory bottlenecked, so parallel not useful.
+    /* tbb::parallel_for( */
+    /*     static_cast<std::size_t>(0u), grid.size(), [&](std::size_t parameter)
+     * { */
     const auto &filtration = grid[parameter]; // assumes its sorted
     const auto to_project = x[parameter];
     if constexpr (std::numeric_limits<
@@ -199,24 +204,30 @@ inline void find_coordinates(vector_like &x,
         x[parameter] =
             std::numeric_limits<typename vector_like::value_type>::infinity();
         continue;
+/* return; */
       }
     if (to_project >= filtration.back()) {
       x[parameter] = filtration.size() - 1;
       continue;
+/* return; */
     } // deals with infinite value at the end of the grid
 
-    unsigned int i = 0;
-    while (to_project > filtration[i] && i < filtration.size()) {
-      i++;
-    }
-    if (i == 0)
-      x[parameter] = 0;
-    else if (i < filtration.size()) {
-      typename vector_like::value_type d1, d2;
-      d1 = std::abs(filtration[i - 1] - to_project);
-      d2 = std::abs(filtration[i] - to_project);
-      x[parameter] = d1 < d2 ? i - 1 : i;
-    }
+    /* unsigned int i = 0; */
+    /* while (to_project > filtration[i] && i < filtration.size()) { */
+    /*   i++; */
+    /* } */
+    /* if (i == 0) */
+    /*   x[parameter] = 0; */
+    /* else if (i < filtration.size()) { */
+    /*   typename vector_like::value_type d1, d2; */
+    /*   d1 = std::abs(filtration[i - 1] - to_project); */
+    /*   d2 = std::abs(filtration[i] - to_project); */
+    /*   x[parameter] = d1 < d2 ? i - 1 : i; */
+    /* } */
+    x[parameter] = std::distance(
+        filtration.begin(),
+        std::lower_bound(filtration.begin(), filtration.end(), to_project));
+    /* }); */
   }
 }
 

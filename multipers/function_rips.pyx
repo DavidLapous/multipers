@@ -22,6 +22,7 @@ ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure
 
 
 from multipers.simplex_tree_multi import SimplexTreeMulti
+from gudhi.simplex_tree import SimplexTree
 
 cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::multiparameter::function_rips":
 	void compute_function_rips_surface_python(const intptr_t, tensor_dtype* , const vector[indices_type], indices_type,indices_type, bool, bool, indices_type) except + nogil
@@ -33,7 +34,8 @@ cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gud
 
 
 def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0):
-	assert st.dimension() == 1
+	assert isinstance(st,SimplexTree), "Input has to be a Gudhi simplextree for now."
+	assert st.dimension() == 1, "Simplextree has to be of dimension 1. You can use the `prune_above_dimension` method."
 	degree_rips_st = SimplexTreeMulti(num_parameters=degrees.size())
 	cdef intptr_t simplextree_ptr = st.thisptr
 	cdef intptr_t st_multi_ptr = degree_rips_st.thisptr

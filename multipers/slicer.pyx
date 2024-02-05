@@ -1,10 +1,14 @@
 from multipers.simplex_tree_multi import SimplexTreeMulti
+import multipers
+from typing import Optional,Literal
+from multipers.io import function_delaunay_presentation
 
 from multipers.slicer cimport *
 import numpy as np
 cimport cython
+python_value_type = np.float32
 
-cdef class SlicerNoVineSimplcial:
+cdef class SlicerNoVineSimplicial:
     cdef SimplicialNoVineMatrixTruc truc
 
     def get_ptr(self):
@@ -45,8 +49,13 @@ cdef class SlicerNoVineSimplcial:
         return self.truc.num_generators()
     def __repr__(self):
         return self.truc.to_str().decode()
+    def compute_box(self):
+        cdef box_type box = self.truc.get_bounding_box()
+        a = np.asarray(box.first._convert_back())
+        b = np.asarray(box.second._convert_back())
+        return np.array([a,b], dtype=python_value_type)
 
-cdef class SlicerVineSimplcial:
+cdef class SlicerVineSimplicial:
     cdef SimplicialVineMatrixTruc truc
 
     def get_ptr(self):
@@ -96,6 +105,11 @@ cdef class SlicerVineSimplcial:
         return self.truc.num_generators()
     def __repr__(self):
         return self.truc.to_str().decode()
+    def compute_box(self):
+        cdef box_type box = self.truc.get_bounding_box()
+        a = np.asarray(box.first._convert_back())
+        b = np.asarray(box.second._convert_back())
+        return np.array([a,b], dtype=python_value_type)
 
 cdef class SlicerClement:
     cdef GeneralVineClementTruc truc
@@ -159,6 +173,11 @@ cdef class SlicerClement:
         return self.truc.num_generators()
     def __repr__(self):
         return self.truc.to_str().decode()
+    def compute_box(self):
+        cdef box_type box = self.truc.get_bounding_box()
+        a = np.asarray(box.first._convert_back())
+        b = np.asarray(box.second._convert_back())
+        return np.array([a,b], dtype=python_value_type)
 
 cdef class Slicer:
     cdef GeneralVineTruc truc
@@ -221,6 +240,11 @@ cdef class Slicer:
         return self.truc.num_generators()
     def __repr__(self):
         return self.truc.to_str().decode()
+    def compute_box(self):
+        cdef box_type box = self.truc.get_bounding_box()
+        a = np.asarray(box.first._convert_back())
+        b = np.asarray(box.second._convert_back())
+        return np.array([a,b], dtype=python_value_type)
 
 cdef class SlicerVineGraph:
     cdef SimplicialVineGraphTruc truc
@@ -272,5 +296,20 @@ cdef class SlicerVineGraph:
         return self.truc.num_generators()
     def __repr__(self):
         return self.truc.to_str().decode()
+    def compute_box(self):
+        cdef box_type box = self.truc.get_bounding_box()
+        a = np.asarray(box.first._convert_back())
+        b = np.asarray(box.second._convert_back())
+        return np.array([a,b], dtype=python_value_type)
 
 
+def from_function_delaunay(
+    points,
+    grades,
+    degree: int,
+    backend: Literal["matrix", "clement"] = "matrix",
+    vineyard=True,
+    minpres_backend:Optional[Literal["mpfree"]] = None,
+):
+    blocks = function_delaunay_presentation(points, grades, degree=degree)
+    return multipers.Slicer(blocks, backend=backend, vineyard=vineyard, minpres_backend=minpres_backend)

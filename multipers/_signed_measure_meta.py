@@ -19,19 +19,25 @@ def signed_measure(
     thread_id: str = "",
     mpfree_path: Optional[str] = None,
     grid_conversion: Optional[list] = None,
+    coordinate_measure: bool = False,
     num_collapses: int = 0,
     **infer_grid_kwargs,
 ):
     """
-    Computes the signed measures given by the decomposition of the hilbert function or the euler characteristic.
+    Computes the signed measures given by the decomposition of the hilbert
+    function or the euler characteristic.
 
     Input
     -----
-     - simplextree:SimplexTreeMulti, the multifiltered simplicial complex. Its recommended to squeeze the simplextree first.
-     - mass_default: Either None, or 'auto' or 'inf', or array-like of floats. Where to put the default mass to get a zero-mass measure.
-     - degree:int|None / degrees:list[int] the degrees to compute. None represents the euler characteristic.
+     - simplextree:SimplexTreeMulti, the multifiltered simplicial complex.
+       Its recommended to squeeze the simplextree first.
+     - mass_default: Either None, or 'auto' or 'inf', or array-like of floats.
+       Where to put the default mass to get a zero-mass measure.
+     - degree:int|None / degrees:list[int] the degrees to compute.
+       None represents the euler characteristic.
      - plot:bool, plots the computed measures if true.
-     - n_jobs:int, number of jobs. Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
+     - n_jobs:int, number of jobs.
+       Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
      - verbose:bool, prints c++ logs.
 
     Output
@@ -59,21 +65,24 @@ def signed_measure(
     if not simplextree._is_squeezed:
         simplextree_ = SimplexTreeMulti(simplextree)
         if grid_conversion is None:
-            simplextree_.grid_squeeze(
+            grid_conversion = simplextree_.get_filtration_grid(
                 grid_strategy=grid_strategy,
-                coordinate_values=not (backend == "mpfree"),
                 **infer_grid_kwargs,
             )  # put a warning ?
-        else:
-            simplextree_.grid_squeeze(
-                grid_conversion,
-                coordinate_values=not (backend == "mpfree"),
-                **infer_grid_kwargs,
-            )
+        simplextree_.grid_squeeze(
+            grid_conversion,
+            coordinate_values=True,
+            **infer_grid_kwargs,
+        )
         if num_collapses != 0:
             simplextree_.collapse_edges(num_collapses)
     else:
         simplextree_ = simplextree
+        if grid_conversion is None:
+            grid_conversion = [np.asarray(f) for f in simplextree_.filtration_grid]
+    if coordinate_measure:
+        grid_conversion = None
+
     if backend == "mpfree":
         if mpfree_path is not None:
             import multipers.io as mio
@@ -87,17 +96,11 @@ def signed_measure(
         from multipers.io import minimal_presentation_from_mpfree
 
         minimal_presentation = minimal_presentation_from_mpfree(
-            simplextree,
+            simplextree_,
             True,
             degrees[0],
             id=thread_id,
         )
-        if grid_conversion is not None:
-            grid_conversion = grid_conversion
-        elif simplextree._is_squeezed:
-            grid_conversion = simplextree.filtration_grid
-        else:
-            grid_conversion = None
         sms = _signed_measure_from_scc(
             minimal_presentation, grid_conversion=grid_conversion
         )
@@ -122,11 +125,13 @@ def signed_measure(
             mass_default.ndim == 1
             and mass_default.shape[0] == simplextree.num_parameters
         )
+    # assert not coordinate_measure or grid_conversion is None
 
     if invariant in ["rank_invariant", "rank"]:
         assert (
             simplextree.num_parameters == 2
         ), "Rank invariant only implemented for 2-parameter modules."
+        assert not coordinate_measure, "Not implemented"
         from multipers.rank_invariant import signed_measure as smri
 
         sms = smri(
@@ -141,6 +146,7 @@ def signed_measure(
             "euler",
             "euler_characteristic",
         ], "Provide a degree to compute hilbert function."
+        # assert not coordinate_measure, "Not implemented"
         from multipers.euler_characteristic import euler_signed_measure
 
         sms = [

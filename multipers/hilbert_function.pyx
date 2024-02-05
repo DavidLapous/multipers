@@ -27,7 +27,7 @@ cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "
 
 
 def hilbert_signed_measure(
-		simplextree, 
+		simplextree,
 		vector[indices_type] degrees, 
 		mass_default=None, 
 		plot=False, 
@@ -53,11 +53,10 @@ def hilbert_signed_measure(
 	`[signed_measure_of_degree for degree in degrees]`
 	with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
 	"""
-	assert simplextree._is_squeezed > 0, "Squeeze grid first."
+	assert simplextree._is_squeezed, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
-	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid] if grid_conversion is None else grid_conversion
 	# assert simplextree.num_parameters == 2
-	grid_shape = np.array([len(f) for f in grid_conversion])
+	grid_shape = np.array([len(f) for f in simplextree.filtration_grid])
 	if mass_default is None:
 		mass_default = mass_default
 	else:
@@ -66,8 +65,9 @@ def hilbert_signed_measure(
 	if zero_pad:
 		for i, _ in enumerate(grid_shape):
 			grid_shape[i] += 1 # adds a 0
-		for i,f in enumerate(grid_conversion):
-			grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
+		if  grid_conversion is not None:
+			for i,f in enumerate(grid_conversion):
+				grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
 	assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."
 	grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape]), dtype=python_indices_type)
 	container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).flatten())
@@ -81,24 +81,39 @@ def hilbert_signed_measure(
 		out = get_hilbert_signed_measure(simplextree_ptr, container_ptr, c_grid_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse)
 	pts, weights = np.asarray(out.first, dtype=int).reshape(-1, simplextree.num_parameters+1), np.asarray(out.second, dtype=int)
 	# return pts, weights
-	degree_indices = [np.argwhere(pts[:,0] == degree_index).flatten() for degree_index, degree in enumerate(degrees)] ## TODO : maybe optimize
-	sms = [(pts[id,1:],weights[id]) for id in degree_indices]
-	
-	def empty_like(x):
-		if isinstance(grid_conversion[0], np.ndarray):
-			return np.empty_like(x, dtype=float)
-		import torch
-		assert isinstance(grid_conversion[0], torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
-		return torch.empty(x.shape,dtype=float)
 
-	for degree_index,(pts,weights) in enumerate(sms):
-		coords = empty_like(pts)
-		for i in range(coords.shape[1]):
-			coords[:,i] = grid_conversion[i][pts[:,i]]
-		sms[degree_index]=(coords, weights)
+	# degree_indices = [np.argwhere(pts[:,0] == degree_index).flatten() for degree_index, degree in enumerate(degrees)] ## TODO : maybe optimize
+	# sms = [(pts[idx,1:], weights[idx]) for idx in degree_indices]
+	
+	# is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+	# assert is_sorted(pts[:,0]), "TODO : REMOVE THIS."
+	slices = np.concatenate([np.searchsorted(pts[:,0], np.arange(degrees.size())), [pts.shape[0]] ])
+	sms = [
+			(pts[slices[i]:slices[i+1],1:],weights[slices[i]:slices[i+1]])
+			for i in range(slices.shape[0]-1)
+	]
+	if grid_conversion is not None:
+		sms = sms_in_grid(sms,grid_conversion)
+
 	if plot:
 		from multipers.plots import plot_signed_measures
 		plot_signed_measures(sms)
+	return sms
+
+# TODO : optimize with memoryviews / typing
+def sms_in_grid(sms, grid_conversion):
+	def empty_like(x, weights):
+		first_filtration = grid_conversion[0]
+		dtype = first_filtration.dtype
+		return np.empty_like(x, dtype=dtype), np.asarray(weights)
+
+	for degree_index,(pts,weights) in enumerate(sms):
+		# print(pts.shape,weights.shape)
+		# assert (pts>=0).all(), f"{degree_index=}, {pts=}, {weights=}"
+		coords,weights = empty_like(pts,weights)
+		for i in range(coords.shape[1]):
+			coords[:,i] = grid_conversion[i][pts[:,i]]
+		sms[degree_index]=(coords, weights)
 	return sms
 
 
@@ -148,4 +163,5 @@ def hilbert_surface(simplextree, vector[indices_type] degrees, mass_default=None
 		from multipers.plots import plot_surfaces
 		plot_surfaces(out)
 	return out
+
 

@@ -51,6 +51,8 @@ def sm_distance(sm1, sm2, reg=0, reg_m=0, numItermax=10000, p=1):
         empty_tensor = np.array([])  # uniform weights
     elif isinstance(x, torch.Tensor):
         empty_tensor = torch.tensor([])  # uniform weights
+    else:
+        raise ValueError("Unimplemented backend.")
 
     if reg == 0:
         return ot.lp.emd2(empty_tensor, empty_tensor, M=loss) * len(x)

@@ -418,6 +418,17 @@ public:
     stream << *this;
     return stream.str();
   }
+  inline std::pair<MultiFiltration, MultiFiltration> get_bounding_box() const {
+    auto out = std::pair(generator_filtration_values[0],
+                         generator_filtration_values[0]);
+    auto &a = out.first;
+    auto &b = out.second;
+    for (const auto &filtration_value : generator_filtration_values) {
+      a.pull_to(filtration_value);
+      b.push_to(filtration_value);
+    }
+    return out;
+  }
 
 private:
   std::vector<MultiFiltration>

@@ -26,6 +26,7 @@ cdef extern from "gudhi/Simplex_tree/multi_filtrations/Line.h" namespace "Gudhi:
 		Line(point_type&, point_type&)   except + nogil
 
 from multipers.mma_structures cimport Finitely_critical_multi_filtration
+ctypedef pair[Finitely_critical_multi_filtration,Finitely_critical_multi_filtration] box_type
 
 cdef extern from "Persistence_slices_interface.h":
 	cdef cppclass SimplicialNoVineMatrixTruc "SimplicialNoVineMatrixTruc":
@@ -39,6 +40,7 @@ cdef extern from "Persistence_slices_interface.h":
 		void compute_persistence() 
 		uint32_t num_generators()
 		string to_str()
+		box_type get_bounding_box()
 
 	cdef cppclass SimplicialVineMatrixTruc "SimplicialVineMatrixTruc<>":
 		SimplicialVineMatrixTruc()
@@ -52,6 +54,7 @@ cdef extern from "Persistence_slices_interface.h":
 		void compute_persistence() 
 		uint32_t num_generators()
 		string to_str()
+		box_type get_bounding_box()
 
 	cdef cppclass GeneralVineTruc "GeneralVineTruc<>":
 		GeneralVineTruc()
@@ -65,6 +68,7 @@ cdef extern from "Persistence_slices_interface.h":
 		void compute_persistence() 
 		uint32_t num_generators()
 		string to_str()
+		box_type get_bounding_box()
 
 	cdef cppclass GeneralVineClementTruc "GeneralVineClementTruc<>":
 		GeneralVineClementTruc()
@@ -78,6 +82,7 @@ cdef extern from "Persistence_slices_interface.h":
 		void compute_persistence() 
 		uint32_t num_generators()
 		string to_str()
+		box_type get_bounding_box()
 
 	cdef cppclass SimplicialVineGraphTruc "SimplicialVineGraphTruc":
 		SimplicialVineGraphTruc()
@@ -91,4 +96,5 @@ cdef extern from "Persistence_slices_interface.h":
 		void compute_persistence() 
 		uint32_t num_generators()
 		string to_str()
+		box_type get_bounding_box()
 
