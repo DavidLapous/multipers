@@ -1,11 +1,20 @@
 from multipers.simplex_tree_multi import SimplexTreeMulti  # Typing hack
-from typing import Optional
+from typing import Optional, Union
 import numpy as np
 from multipers.simplex_tree_multi import _available_strategies
 
+from multipers.slicer import (
+    Slicer,
+    SlicerClement,
+    SlicerVineGraph,
+    SlicerVineSimplicial,
+)
+
 
 def signed_measure(
-    simplextree: SimplexTreeMulti,
+    simplextree: Union[
+        SimplexTreeMulti, Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial
+    ],
     degree: Optional[int] = None,
     degrees=[None],
     mass_default=None,
@@ -45,6 +54,10 @@ def signed_measure(
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
+    if not isinstance(simplextree, SimplexTreeMulti):
+        return signed_measure_from_slicer(
+            simplextree,
+        )
     assert invariant is None or invariant in [
         "hilbert",
         "rank_invariant",
@@ -197,3 +210,12 @@ def _signed_measure_from_scc(minimal_presentation, grid_conversion=None):
     else:
         sm = [(pts, weights)]
     return sm
+
+
+def signed_measure_from_slicer(
+    slicer: Union[Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial]
+):
+    pts = slicer.get_filtrations()
+    dims = slicer.get_dimensions()
+    weights = 1 - 2 * (dims % 2)
+    return (pts, weights)

@@ -6,26 +6,36 @@ import multipers.simplex_tree_multi
 from multipers.simplex_tree_multi import SimplexTreeMulti
 import multipers.io as mio
 import numpy as np
+from copy import deepcopy
 
 
-def _blocks2boundary_dimension_grades_box(blocks, filtration_type=np.float32):
-    gen0_f = np.asarray(blocks[-3][0], dtype=filtration_type)
-    gen1_f = np.asarray(blocks[-2][0], dtype=filtration_type)
-    assert len(
-        blocks[-1][0]) == 0, "Unimplemented when blocks[-1] is not trivial"
-    gen0 = blocks[-3][1]
-    gen1 = blocks[-2][1]
-    multifiltration = np.concatenate([gen1_f, gen0_f])
-    box = np.array(
-        [
-            [multifiltration[:, 0].min(), multifiltration[:, 1].min()],
-            [multifiltration[:, 0].max(), multifiltration[:, 1].max()],
-        ]
+def _blocks2boundary_dimension_grades(
+    blocks, filtration_type=np.float32, num_parameters: int = -1
+):
+    if num_parameters < 0:
+        for b in blocks:
+            if len(b[0]) > 0:
+                num_parameters = np.asarray(b[0]).shape[1]
+                break
+        if num_parameters < 0:
+            # empty presentation
+            # return [], [], np.empty(0, dtype=filtration_type)
+            raise ValueError("Empty Filtration")
+    rblocks = deepcopy(blocks)
+    rblocks.reverse()
+    block_sizes = [len(b[0]) for b in rblocks]
+    S = np.cumsum([0, 0] + block_sizes)
+    multifiltration = np.concatenate(
+        tuple(
+            b[0] if len(b[0]) > 0 else np.empty((0, num_parameters)) for b in rblocks
+        ),
+        dtype=filtration_type,
     )
-    boundary = gen1 + gen0
-    dimensions = np.array(([0] * len(gen1)) +
-                          ([1] * len(gen0)), dtype=np.int32)
-    return boundary, dimensions, multifiltration, box
+    boundary = tuple(x + S[i] for i, b in enumerate(rblocks) for x in b[1])
+    dimensions = np.fromiter(
+        (i for i, b in enumerate(rblocks) for _ in range(len(b[0]))), dtype=int
+    )
+    return boundary, dimensions, multifiltration
 
 
 def Slicer(
@@ -65,9 +75,7 @@ def Slicer(
     else:
         blocks = st
 
-    boundary, dimensions, multifiltrations, box = _blocks2boundary_dimension_grades_box(
-        blocks
-    )
+    boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(blocks)
     if vineyard:
         if backend == "matrix":
             return mps.Slicer(boundary, dimensions, multifiltrations)

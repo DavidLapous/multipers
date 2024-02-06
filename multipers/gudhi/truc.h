@@ -52,7 +52,7 @@ public:
   std::vector<unsigned int> operator[](std::size_t i) {
     return generators[i];
   } // needs to be iterable (begin, end, size)
-  inline int dimension(std::size_t i) { return generator_dimensions[i]; };
+  inline int dimension(std::size_t i) const { return generator_dimensions[i]; };
   inline friend std::ostream &operator<<(std::ostream &stream,
                                          PresentationStructure &structure) {
     stream << "Boundary:\n";
@@ -129,7 +129,7 @@ public:
   std::vector<unsigned int> operator[](std::size_t i) {
     return boundaries[i];
   } // needs to be iterable (begin, end, size)
-  int dimension(std::size_t i) {
+  int dimension(std::size_t i) const {
     return boundaries[i].size() == 0 ? 0 : boundaries[i].size() - 1;
   };
   inline friend std::ostream &operator<<(std::ostream &stream,
@@ -426,6 +426,25 @@ public:
     for (const auto &filtration_value : generator_filtration_values) {
       a.pull_to(filtration_value);
       b.push_to(filtration_value);
+    }
+    return out;
+  }
+  const std::vector<MultiFiltration> &get_filtration_values() const {
+    return generator_filtration_values;
+  }
+  const std::vector<int> get_dimensions() const {
+    std::size_t n = this->num_generators();
+    std::vector<int> out(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      out[i] = structure.dimension(i);
+    }
+    return out;
+  }
+  const std::vector<std::vector<unsigned int>> get_boundaries() {
+    std::size_t n = this->num_generators();
+    std::vector<std::vector<unsigned int>> out(n);
+    for (auto i = 0u; i < n; ++i) {
+      out[i] = this->structure[i];
     }
     return out;
   }

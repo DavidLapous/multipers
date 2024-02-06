@@ -54,6 +54,12 @@ cdef class SlicerNoVineSimplicial:
         a = np.asarray(box.first._convert_back())
         b = np.asarray(box.second._convert_back())
         return np.array([a,b], dtype=python_value_type)
+    def get_filtrations(self):
+        return np.asarray([np.asarray(stuff._convert_back()) for stuff in self.truc.get_filtration_values()], dtype=python_value_type)
+    def get_dimensions(self):
+        return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
+    def get_boundaries(self):
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
 
 cdef class SlicerVineSimplicial:
     cdef SimplicialVineMatrixTruc truc
@@ -110,6 +116,12 @@ cdef class SlicerVineSimplicial:
         a = np.asarray(box.first._convert_back())
         b = np.asarray(box.second._convert_back())
         return np.array([a,b], dtype=python_value_type)
+    def get_filtrations(self):
+        return np.asarray([np.asarray(stuff._convert_back()) for stuff in self.truc.get_filtration_values()], dtype=python_value_type)
+    def get_dimensions(self):
+        return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
+    def get_boundaries(self):
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
 
 cdef class SlicerClement:
     cdef GeneralVineClementTruc truc
@@ -178,6 +190,12 @@ cdef class SlicerClement:
         a = np.asarray(box.first._convert_back())
         b = np.asarray(box.second._convert_back())
         return np.array([a,b], dtype=python_value_type)
+    def get_filtrations(self):
+        return np.asarray([np.asarray(stuff._convert_back()) for stuff in self.truc.get_filtration_values()], dtype=python_value_type)
+    def get_dimensions(self):
+        return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
+    def get_boundaries(self):
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
 
 cdef class Slicer:
     cdef GeneralVineTruc truc
@@ -245,6 +263,12 @@ cdef class Slicer:
         a = np.asarray(box.first._convert_back())
         b = np.asarray(box.second._convert_back())
         return np.array([a,b], dtype=python_value_type)
+    def get_filtrations(self):
+        return np.asarray([np.asarray(stuff._convert_back()) for stuff in self.truc.get_filtration_values()], dtype=python_value_type)
+    def get_dimensions(self):
+        return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
+    def get_boundaries(self):
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
 
 cdef class SlicerVineGraph:
     cdef SimplicialVineGraphTruc truc
@@ -301,6 +325,12 @@ cdef class SlicerVineGraph:
         a = np.asarray(box.first._convert_back())
         b = np.asarray(box.second._convert_back())
         return np.array([a,b], dtype=python_value_type)
+    def get_filtrations(self):
+        return np.asarray([np.asarray(stuff._convert_back()) for stuff in self.truc.get_filtration_values()], dtype=python_value_type)
+    def get_dimensions(self):
+        return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
+    def get_boundaries(self):
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
 
 
 def from_function_delaunay(

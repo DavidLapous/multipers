@@ -3,16 +3,17 @@ from gudhi import SimplexTree
 import gudhi as gd
 import numpy as np
 import os
+from libcpp cimport bool 
 
 from typing import Optional
 
 mpfree_path = None
 function_delaunay_path = None
 
-mpfree_in_path = "multipers_mpfree_input.scc"
-mpfree_out_path = "multipers_mpfree_output.scc"
-function_delaunay_out_path = "function_delaunay_output.scc"
-function_delaunay_in_path = "function_delaunay_input.txt" # point cloud
+mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
+mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
+function_delaunay_out_path:str|os.PathLike = "function_delaunay_output.scc"
+function_delaunay_in_path:str|os.PathLike = "function_delaunay_input.txt" # point cloud
 
 def scc_parser(path: str):
     with open(path, "r") as f:
@@ -40,7 +41,7 @@ def scc_parser(path: str):
         line = line.strip()
         if pass_line(line):
             continue
-        block_sizes = [int(i) for i in line.split(" ")]
+        block_sizes = tuple(int(i) for i in line.split(" "))
         lines = lines[i + 1 :]
         break
     blocks = []
@@ -57,14 +58,13 @@ def scc_parser(path: str):
                 continue
             filtration, boundary = line.split(";")
             block_filtrations.append(
-                    [float(x) for x in filtration.split(" ") if len(x) > 0]
+                    tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
                     )
-            block_boundaries.append([int(x) for x in boundary.split(" ") if len(x) > 0])
+            block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
             counter -= 1
-        blocks.append((block_filtrations, block_boundaries))
+        blocks.append((np.asarray(block_filtrations, dtype=float), tuple(block_boundaries)))
 
     return blocks
-
 
 def _init_external_softwares(requires=[]):
 
@@ -163,9 +163,10 @@ def function_delaunay_presentation(
         point_cloud:np.ndarray,
         function_values:np.ndarray,
         id:str = "",
-        clear:bool = True,
-        verbose:bool=False,
-        degree: Optional[int] = None,
+        bool clear:bool = True,
+        bool verbose:bool=False,
+        int degree = -1,
+        bool multi_chunk = True,
         ):
     global function_delaunay_path, function_delaunay_in_path, function_delaunay_out_path
     if  function_delaunay_path is None :
@@ -174,12 +175,14 @@ def function_delaunay_presentation(
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(function_delaunay_in_path+id,to_write,delimiter=' ')
     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    degree_arg = f"--minpres {degree}" if degree is not None else ""
+    degree_arg = f"--minpres {degree}" if degree > 0 else ""
+    multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
     if os.path.exists(function_delaunay_out_path + id):
         os.remove(function_delaunay_out_path+ id)
-    os.system(
-        f"{function_delaunay_path} {degree_arg} {function_delaunay_in_path+id} {function_delaunay_out_path+id} {verbose_arg}"
-             )
+    command = f"{function_delaunay_path} {degree_arg} {multi_chunk_arg} {function_delaunay_in_path+id} {function_delaunay_out_path+id} {verbose_arg} --no-delaunay-compare"
+    if verbose:
+        print(command)
+    os.system(command)
 
     blocks = scc_parser(function_delaunay_out_path + id)
     if clear:
@@ -244,4 +247,43 @@ def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree):
 
     return simplextree_to_scc(cptr)
 
+def scc2disk(
+        stuff,
+        path:str|os.PathLike,
+        int num_parameters = -1,
+        bool reverse_block = True,
+        bool rivet_compatible = False,
+        bool ignore_last_generators = False,
+        bool strip_comments = False,
+        ):
+    if num_parameters == -1:
+        for block in stuff:
+            if len(block[0]) == 0:
+                continue
+            num_gens, num_parameters_= np.asarray(block[0]).shape 
+            num_parameters = num_parameters_
+            break
+    assert num_parameters > 0, f"Invalid number of parameters {num_parameters}"
 
+
+    if reverse_block:	stuff.reverse()
+    with open(path, "w") as f:
+        f.write("scc2020\n") if not rivet_compatible else f.write("firep\n")
+        if not strip_comments and not rivet_compatible: f.write("# Number of parameters\n")
+        if rivet_compatible:
+            assert num_parameters == 2
+            f.write("Filtration 1\n")
+            f.write("Filtration 2\n")
+        else:
+            f.write(f"{num_parameters}\n")
+        
+        if not strip_comments: f.write("# Sizes of generating sets\n")
+        for block in stuff: f.write(f"{len(block[1])} ")
+        f.write("\n")
+        
+        for i,block in enumerate(stuff):
+            if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
+            if not strip_comments: f.write(f"# Block of dimension {len(stuff)-i}\n")
+            for boundary, filtration in zip(*block):
+                line = " ".join(tuple(str(x) for x in filtration)) + " ; " + " ".join(tuple(str(x) for x in boundary)) +"\n"
+                f.write(line)
