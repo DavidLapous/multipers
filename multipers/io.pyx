@@ -9,6 +9,7 @@ from typing import Optional
 
 mpfree_path = None
 function_delaunay_path = None
+multi_chunk_path = None
 
 mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
 mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
@@ -45,6 +46,7 @@ def scc_parser(path: str):
         lines = lines[i + 1 :]
         break
     blocks = []
+    cdef int counter
     for block_size in block_sizes:
         counter = block_size
         block_filtrations = []
@@ -89,15 +91,28 @@ def _init_external_softwares(requires=[]):
         elif b:
             function_delaunay_path = b
 
+    if function_delaunay_path is None:
+        a = which("./multi_chunk")
+        b = which("multi_chunk")
+        if a:
+            multi_chunk_path = a
+        elif b:
+            multi_chunk_path = b
     if mpfree_path is None and "mpfree" in requires:
         raise Exception(
 """mpfree not found. Install it from https://bitbucket.org/mkerber/mpfree/,
 and put it in the current directory or in your $PATH.
                 """
                 )
+    if multi_chunk_path is None and "multi_chunk" in requires:
+        raise Exception(
+"""multi_chunk not found. Install it from https://bitbucket.org/mkerber/multi_chunk,
+and put it in the current directory or in your $PATH.
+                """
+                )
     if function_delaunay_path is None  and "function_delaunay" in requires:
         raise Exception(
-"""Function_Delaunay not found. Install it from https://bitbucket.org/mkerber/function_delaunay/,
+"""function_delaunay not found. Install it from https://bitbucket.org/mkerber/function_delaunay/,
 and put it in the current directory or in your $PATH.
                 """
                 )
