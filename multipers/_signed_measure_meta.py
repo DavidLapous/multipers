@@ -222,7 +222,7 @@ def _signed_measure_from_slicer(
 ):
     pts = slicer.get_filtrations()
     dims = slicer.get_dimensions()
-    weights = 1 - 2 * (dims % 2)
+    weights = 1 - 2 * ((1 + dims) % 2)
     if grid_conversion is not None:
         pts = np.asarray(pts, dtype=int)
         coords = np.empty(shape=pts.shape, dtype=float)

@@ -223,12 +223,16 @@ def reduce_complex(
                 overwrite=True,
                 reverse_block=True,
                 )
-    elif not isinstance(complex,str):
-        # Assumes its a slicer
-        blocks = mps.slicer2blocks(complex, degree=dimension)
-        scc2disk(blocks,path=path)
-    else:
+        dimension = complex.dimension - dimension
+    elif isinstance(complex,str):
         path = complex
+    elif isinstance(complex, list) or isinstance(complex, tuple):
+        scc2disk(complex,path=path)
+    else:
+        # Assumes its a slicer
+        blocks = mps.slicer2blocks(complex)
+        scc2disk(blocks,path=path)
+        dimension = len(blocks) -2 -dimension
     
     return scc_reduce_from_str(
             path=path,
