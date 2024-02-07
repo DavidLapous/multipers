@@ -1,4 +1,6 @@
 # Multipers
+[![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
+<br>
 Scikit-style multiparameter persistent homology python library. 
 This librairy aims to provide easy to use and performant strategies for applied multiparameter topology.
 A non-exhaustive list of features can be found in the **Features** section.
@@ -42,6 +44,7 @@ This librairy features a bunch of different functions and helpers. See below for
  - [x] [Multiparameter Module Approximation](https://arxiv.org/abs/2206.02026) provides the multiparameter simplicial structure, aswell as technics of approximating modules, via interval decompostion modules. It is also very useful for visualization.
  - [x] [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](https://arxiv.org/abs/2306.03801) provides fast representations of multiparameter persistence modules, by using their signed barcodes decompositions, and encoding it into signed measures. Implemented decompositions : Euler surfaces, Hilbert function, rank invariant (i.e. rectangles). It also provides representation technics for Machine Learning, i.e., Sliced Wasserstein kernels, Vectorizations.
  - [x] [A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions](https://arxiv.org/abs/2306.11170) Provides a vectorization framework for interval decomposable modules, for Machine Learning. Currently implemented as an extension of MMA.
+ - [x] [Multiparameter Persistence Landscapes](https://jmlr.org/papers/v21/19-054.html) A vectoriazation technic for multiparameter persistence modules.
  - [x] [Filtration-Domination in Bifiltered Graphs](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. **Very useful** to speed up, e.g., Rips-Codensity bifiltrations.
  - [x] [Chunk Reduction for Multi-Parameter Persistent Homology](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm.
  - [x] [Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology](https://arxiv.org/abs/1902.05708) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
@@ -50,7 +53,7 @@ This librairy features a bunch of different functions and helpers. See below for
  - [ ] [Backend only] [Projected distances for multi-parameter persistence modules](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
  - [ ] [Partial, and experimental] [Efficient Two-Parameter Persistence Computation via Cohomology](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
 
-
+If I missed something, or you want to add something, feel free to open an issue.
 
 ## Authors
 [David Loiseaux](https://www-sop.inria.fr/members/David.Loiseaux/index.html),<br>
