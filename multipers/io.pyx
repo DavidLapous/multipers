@@ -1,22 +1,59 @@
 from multipers.simplex_tree_multi import SimplexTreeMulti
 from gudhi import SimplexTree
+import multipers.slicer as mps
 import gudhi as gd
 import numpy as np
 import os
 from libcpp cimport bool 
+from shutil import which
 
 from typing import Optional
+from collections import defaultdict
+doc_soft_urls = {
+    "mpfree":"https://bitbucket.org/mkerber/mpfree/",
+    "multi_chunk":"",
+    "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
+    "2pac":"https://gitlab.com/flenzen/2-parameter-persistent-cohomology",
+}
+doc_soft_urls = defaultdict(lambda:"<Unknown url>")
+doc_soft_urls["mpfree"]= "https://bitbucket.org/mkerber/mpfree/"
+doc_soft_urls["multi_chunk"]= "https://bitbucket.org/mkerber/multi_chunk"
+doc_soft_urls["function_delaunay"]= "https://bitbucket.org/mkerber/function_delaunay/"
+doc_soft_urls["twopac"]= "https://gitlab.com/flenzen/2-parameter-persistent-cohomology"
 
-mpfree_path = None
-function_delaunay_path = None
-multi_chunk_path = None
 
-mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
-mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
-function_delaunay_out_path:str|os.PathLike = "function_delaunay_output.scc"
-function_delaunay_in_path:str|os.PathLike = "function_delaunay_input.txt" # point cloud
+
+def _path_init(soft:str|os.PathLike):
+    a = which(f"./{soft}")
+    b = which(f"{soft}")
+    if a:
+        pathes[soft] = a
+    elif b:
+        pathes[soft] = b
+
+
+pathes = {
+    "mpfree":None,
+    "2pac":None,
+    "function_delaunay":None,
+    "multi_chunk":None,
+}
+
+# mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
+# mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
+# twopac_in_path:str|os.PathLike = "multipers_twopac_input.scc"
+# twopac_out_path:str|os.PathLike = "multipers_twopac_output.scc"
+# multi_chunk_in_path:str|os.PathLike = "multipers_multi_chunk_input.scc"
+# multi_chunk_out_path:str|os.PathLike = "multipers_multi_chunk_output.scc"
+# function_delaunay_out_path:str|os.PathLike = "function_delaunay_output.scc"
+# function_delaunay_in_path:str|os.PathLike = "function_delaunay_input.txt" # point cloud
+input_path:str|os.PathLike = "multipers_input.scc"
+output_path:str|os.PathLike = "multipers_output.scc"
 
 def scc_parser(path: str):
+    """
+    Parse an scc file into the scc python format, aka blocks.
+    """
     with open(path, "r") as f:
         lines = f.readlines()
     # Find scc2020
@@ -58,7 +95,11 @@ def scc_parser(path: str):
             line = line.strip()
             if pass_line(line):
                 continue
-            filtration, boundary = line.split(";")
+            filtration_boundary = line.split(";")
+            if len(filtration_boundary) == 1:
+                # happens when last generators do not have a ";" in the end
+                filtration_boundary.append(" ")
+            filtration, boundary = filtration_boundary
             block_filtrations.append(
                     tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
                     )
@@ -68,108 +109,136 @@ def scc_parser(path: str):
 
     return blocks
 
-def _init_external_softwares(requires=[]):
-
-    global function_delaunay_path, mpfree_path, mpfree_in_path, mpfree_out_path, function_delaunay_out_path, function_delaunay_in_path
-    if function_delaunay_path is not None and mpfree_path is not None:
-        return
-
-    from shutil import which
-    if mpfree_path is None:
-        a = which("./mpfree")
-        b = which("mpfree")
-        if a:
-            mpfree_path = a
-        elif b:
-            mpfree_path = b
-
-    if function_delaunay_path is None:
-        a = which("./function_delaunay")
-        b = which("function_delaunay")
-        if a:
-            function_delaunay_path = a
-        elif b:
-            function_delaunay_path = b
-
-    if function_delaunay_path is None:
-        a = which("./multi_chunk")
-        b = which("multi_chunk")
-        if a:
-            multi_chunk_path = a
-        elif b:
-            multi_chunk_path = b
-    if mpfree_path is None and "mpfree" in requires:
-        raise Exception(
-"""mpfree not found. Install it from https://bitbucket.org/mkerber/mpfree/,
-and put it in the current directory or in your $PATH.
-                """
-                )
-    if multi_chunk_path is None and "multi_chunk" in requires:
-        raise Exception(
-"""multi_chunk not found. Install it from https://bitbucket.org/mkerber/multi_chunk,
-and put it in the current directory or in your $PATH.
-                """
-                )
-    if function_delaunay_path is None  and "function_delaunay" in requires:
-        raise Exception(
-"""function_delaunay not found. Install it from https://bitbucket.org/mkerber/function_delaunay/,
-and put it in the current directory or in your $PATH.
-                """
-                )
-
+def _put_temp_files_to_ram():
+    global input_path,output_path
     shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
-    if os.access(shm_memory, os.W_OK):
-        mpfree_in_path = shm_memory + mpfree_in_path
-        mpfree_out_path = shm_memory + mpfree_out_path
-        function_delaunay_in_path = shm_memory + function_delaunay_in_path
-        function_delaunay_out_path = shm_memory + function_delaunay_out_path
+    if os.access(shm_memory, os.W_OK) and not input_path.startswith("/tmp/"):
+        input_path = shm_memory + input_path
+        output_path = shm_memory + output_path
 
-def minimal_presentation_from_str_mpfree(
-        path:str,
-        full_resolution=True,
-        dimension: int | np.int64 = 1,
-        clear: bool = True,
+def _init_external_softwares(requires=[]):
+    global pathes
+    cdef bool any = False
+    for soft,soft_path in pathes.items():
+        if soft_path is None:
+            _path_init(soft)
+            any = any or (soft in requires) 
+
+    if any:
+        _put_temp_files_to_ram()
+        for soft in requires:
+            if pathes[soft] is None:
+                global doc_soft_urls
+                raise ValueError(f"""
+Did not found {soft}.
+Install it from {doc_soft_urls[soft]}, and put it in your current directory,
+or in you $PATH.
+""")
+
+def scc_reduce_from_str(
+        path:str|os.PathLike,
+        bool full_resolution=True,
+        int dimension: int | np.int64 = 1,
+        bool clear: bool = True,
         id: str = "",  # For parallel stuff
-        verbose:bool=False,
+        bool verbose:bool=False,
+        backend:Literal["mpfree","multi_chunk","twopac"]="mpfree"
     ):
-    global mpfree_path, mpfree_in_path, mpfree_out_path
-    if not mpfree_path:
-        _init_external_softwares(requires=["mpfree"])
+    """
+    Computes a minimal presentation of the file in path,
+    using mpfree.
 
+    path:PathLike
+    full_resolution: bool
+    dimension: int, presentation dimension to consider
+    clear: bool, removes temporary files if True
+    id: str, temporary files are of this id, allowing for multiprocessing
+    verbose: bool
+    backend: "mpfree", "multi_chunk" or "2pac"
+    """
+    global pathes, input_path, output_path
+    if pathes[backend] is None:
+        _init_external_softwares(requires=[backend])
+    
+    
     resolution_str = "--resolution" if full_resolution else ""
     # print(mpfree_in_path + id, mpfree_out_path + id)
-    if os.path.exists(mpfree_out_path + id):
-        os.remove(mpfree_out_path + id)
+    if not os.path.exists(path):
+        raise ValueError(f"No file found at {path}.")
+    if os.path.exists(output_path + id):
+        os.remove(output_path + id)
     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    os.system(
-        f"{mpfree_path} {resolution_str} --dim={dimension} {path} {mpfree_out_path+id} {verbose_arg}"
-             )
-    blocks = scc_parser(mpfree_out_path + id)
+    if backend == "mpfree":
+        more_verbose = "-v" if verbose else ""
+        command = (
+            f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
+                )
+    elif backend == "multi_chunk":
+        command = (
+            f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
+                )
+    elif backend in ["twopac", "2pac"]:
+        command = (
+            f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
+                )
+    else:
+        raise ValueError(f"Unsupported backend {backend}.")
+    if verbose:
+        print(f"Calling :\n\n {command}")
+    os.system(command)
+
+    blocks = scc_parser(output_path + id)
     if clear:
-        clear_io(path, mpfree_out_path + id)
+        clear_io(output_path + id)
     return blocks
 
-def minimal_presentation_from_mpfree(
-        simplextree: SimplexTreeMulti,
-        full_resolution: bool = True,
-        dimension: int | np.int64 = 1,
-        clear: bool = True,
+def reduce_complex(
+        complex, # Simplextree, Slicer, or str
+        bool full_resolution: bool = True,
+        int dimension: int | np.int64 = 1,
+        bool clear: bool = True,
         id: str = "",  # For parallel stuff
-        verbose:bool=False,
+        bool verbose:bool=False,
+        backend:Literal[*pathes.keys()]="mpfree"
     ):
-    global mpfree_path, mpfree_in_path, mpfree_out_path
-    if mpfree_path is None:
-        _init_external_softwares(requires=["mpfree"])
+    """
+    Computes a minimal presentation of the file in path,
+    using `backend`.
 
-    simplextree.to_scc(
-            path=mpfree_in_path + id,
-            rivet_compatible=False,
-            strip_comments=False,
-            ignore_last_generators=False,
-            overwrite=True,
-            reverse_block=True,
-            )
-    return minimal_presentation_from_str_mpfree(mpfree_in_path+id,full_resolution,dimension,clear,id,verbose)
+    simplextree
+    full_resolution: bool
+    dimension: int, presentation dimension to consider
+    clear: bool, removes temporary files if True
+    id: str, temporary files are of this id, allowing for multiprocessing
+    verbose: bool
+    """
+    
+    path = input_path+id
+    if isinstance(complex, SimplexTreeMulti):
+        complex.to_scc(
+                path=path,
+                rivet_compatible=False,
+                strip_comments=False,
+                ignore_last_generators=False,
+                overwrite=True,
+                reverse_block=True,
+                )
+    elif not isinstance(complex,str):
+        # Assumes its a slicer
+        blocks = mps.slicer2blocks(complex, degree=dimension)
+        scc2disk(blocks,path=path)
+    else:
+        path = complex
+    
+    return scc_reduce_from_str(
+            path=path,
+            full_resolution=full_resolution,
+            dimension=dimension,
+            clear=clear,
+            id=id,
+            verbose=verbose,
+            backend=backend
+        )
 
 
 
@@ -181,34 +250,45 @@ def function_delaunay_presentation(
         bool clear:bool = True,
         bool verbose:bool=False,
         int degree = -1,
-        bool multi_chunk = True,
+        bool multi_chunk = False,
         ):
-    global function_delaunay_path, function_delaunay_in_path, function_delaunay_out_path
-    if  function_delaunay_path is None :
-        _init_external_softwares(requires=["function_delaunay"])
+    """
+    Computes a function delaunay presentation, and returns it as blocks.
+
+    points : (num_pts, n) float array
+    grades : (num_pts,) float array
+    degree (opt) : if given, computes a minimal presentation of this homological degree first
+    clear:bool, removes temporary files if true
+    degree: computes minimal presentation of this degree if given
+    verbose : bool
+    """
+    global input_path, output_path, pathes
+    backend = "function_delaunay"
+    if  pathes[backend] is None :
+        _init_external_softwares(requires=[backend])
 
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
-    np.savetxt(function_delaunay_in_path+id,to_write,delimiter=' ')
+    np.savetxt(input_path+id,to_write,delimiter=' ')
     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
     degree_arg = f"--minpres {degree}" if degree > 0 else ""
     multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
-    if os.path.exists(function_delaunay_out_path + id):
-        os.remove(function_delaunay_out_path+ id)
-    command = f"{function_delaunay_path} {degree_arg} {multi_chunk_arg} {function_delaunay_in_path+id} {function_delaunay_out_path+id} {verbose_arg} --no-delaunay-compare"
+    if os.path.exists(output_path + id):
+        os.remove(output_path+ id)
+    command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
     if verbose:
         print(command)
     os.system(command)
 
-    blocks = scc_parser(function_delaunay_out_path + id)
+    blocks = scc_parser(output_path + id)
     if clear:
-        clear_io(function_delaunay_out_path + id, function_delaunay_in_path + id)
+        clear_io(output_path + id, input_path + id)
     return blocks
 
 
 
 def clear_io(*args):
-    global mpfree_in_path, mpfree_out_path, function_delaunay_out_path
-    for x in [mpfree_in_path, mpfree_out_path, function_delaunay_out_path] + list(args):
+    global input_path,output_path
+    for x in [input_path,output_path] + list(args):
         if os.path.exists(x):
             os.remove(x)
 
@@ -219,7 +299,7 @@ def clear_io(*args):
 from multipers.mma_structures cimport Finitely_critical_multi_filtration,uintptr_t,boundary_matrix,float,pair,vector,intptr_t
 cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
     pair[boundary_matrix, vector[Finitely_critical_multi_filtration]] simplextree_to_boundary_filtration(uintptr_t)
-    vector[pair[boundary_matrix, vector[vector[float]]]] simplextree_to_scc(uintptr_t)
+    vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(uintptr_t)
 
 def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree):
     """Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
@@ -251,6 +331,9 @@ def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree
     return boundary, multi_filtrations
 
 def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree):
+    """
+    Turns a simplextree into a block / scc python format
+    """
     cdef intptr_t cptr
     if isinstance(simplextree, SimplexTreeMulti):
         cptr = simplextree.thisptr
@@ -266,11 +349,14 @@ def scc2disk(
         stuff,
         path:str|os.PathLike,
         int num_parameters = -1,
-        bool reverse_block = True,
+        bool reverse_block = False,
         bool rivet_compatible = False,
         bool ignore_last_generators = False,
         bool strip_comments = False,
         ):
+    """
+    Writes a scc python format / blocks into a file.
+    """
     if num_parameters == -1:
         for block in stuff:
             if len(block[0]) == 0:
@@ -279,7 +365,6 @@ def scc2disk(
             num_parameters = num_parameters_
             break
     assert num_parameters > 0, f"Invalid number of parameters {num_parameters}"
-
 
     if reverse_block:	stuff.reverse()
     with open(path, "w") as f:
@@ -293,12 +378,12 @@ def scc2disk(
             f.write(f"{num_parameters}\n")
         
         if not strip_comments: f.write("# Sizes of generating sets\n")
-        for block in stuff: f.write(f"{len(block[1])} ")
+        for block in stuff: f.write(f"{len(block[0])} ")
         f.write("\n")
         
         for i,block in enumerate(stuff):
             if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
-            if not strip_comments: f.write(f"# Block of dimension {len(stuff)-i}\n")
-            for boundary, filtration in zip(*block):
+            if not strip_comments: f.write(f"# Block of dimension {len(stuff)-1-i}\n")
+            for filtration,boundary in zip(*block):
                 line = " ".join(tuple(str(x) for x in filtration)) + " ; " + " ".join(tuple(str(x) for x in boundary)) +"\n"
                 f.write(line)

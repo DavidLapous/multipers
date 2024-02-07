@@ -12,6 +12,9 @@ from copy import deepcopy
 def _blocks2boundary_dimension_grades(
     blocks, filtration_type=np.float32, num_parameters: int = -1
 ):
+    """
+    Turns blocks, aka scc, into the input of non-simplicial slicers.
+    """
     if num_parameters < 0:
         for b in blocks:
             if len(b[0]) > 0:
@@ -42,10 +45,26 @@ def Slicer(
     st: SimplexTreeMulti | list | str,
     backend: Literal["matrix", "clement", "graph"] = "matrix",
     vineyard: bool = True,
-    minpres_backend: Optional[Literal["mpfree"]] = None,
-    **minpres_backend_kwargs,
 ):
-    if minpres_backend is None and isinstance(st, SimplexTreeMulti):
+    """
+    Given a simplextree or blocks (a.k.a scc for python),
+    returns a structure that can compute persistence on line (or more)
+    slices, eventually vineyard update, etc.
+
+    This can be used to compute interval-decomposable module approximations
+    or signed measures, using, e.g.
+     - `multipers.module_approximation(this, *args)`
+     - `multipers.signed_measure(this, *args)`
+
+    Note : it is recommended and sometime required to apply
+        a minimal presentation before computing these functions !
+    `mp.slicer.minimal_presentation(slicer, *args, **kwargs)`
+
+    st : SimplexTreeMulti or scc-like blocks
+    backend: slicer backend;
+    vineyard: vineyard capable (may slow down computations if true)
+    """
+    if isinstance(st, SimplexTreeMulti):
         if vineyard:
             if backend == "matrix":
                 return mps.SlicerVineSimplicial(st)
@@ -65,13 +84,7 @@ def Slicer(
     if isinstance(st, SimplexTreeMulti):
         blocks = mio.minimal_presentation_from_mpfree(st)
     elif isinstance(st, str):
-        if minpres_backend is None:
-            blocks = mio.scc_parser(st)
-        else:
-            assert minpres_backend == "mpfree", "Mpfree only here"
-            blocks = mio.minimal_presentation_from_str_mpfree(
-                st, **minpres_backend_kwargs
-            )
+        blocks = mio.scc_parser(st)
     else:
         blocks = st
 
@@ -82,7 +95,9 @@ def Slicer(
 
         if backend == "clement":
             return mps.SlicerClement(boundary, dimensions, multifiltrations)
+    if backend == "matrix":
+        return mps.SlicerNoVine(boundary, dimensions, multifiltrations)
     if backend == "clement":
         raise ValueError("Clement is vineyard")
 
-    raise ValueError("TODO : python interface for this")
+    raise ValueError(f"Unimplemented combo : f{backend=}, f{vineyard=}")

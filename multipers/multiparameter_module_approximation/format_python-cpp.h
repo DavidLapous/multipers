@@ -105,7 +105,7 @@ simplextree_to_boundary_filtration(const uintptr_t splxptr) {
 }
 
 using scc_type =
-    std::vector<std::pair<boundary_matrix, std::vector<std::vector<float>>>>;
+    std::vector<std::pair<std::vector<std::vector<float>>, boundary_matrix>>;
 scc_type simplextree_to_scc(const uintptr_t splxptr) {
   using option =
       Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
@@ -126,7 +126,7 @@ scc_type simplextree_to_scc(const uintptr_t splxptr) {
     for (const auto &simplex_id : st.boundary_simplex_range(simplex)) {
       key_boundary_container.push_back(st.key(simplex_id));
     }
-    auto &[block_matrix, block_filtrations] = out[st.dimension(simplex)];
+    auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
     const auto &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
     block_filtrations.push_back(simplex_filtration);

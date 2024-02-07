@@ -1,3 +1,4 @@
+from multipers.plots import plot_signed_measures
 from multipers.simplex_tree_multi import SimplexTreeMulti  # Typing hack
 from typing import Optional, Union
 import numpy as np
@@ -55,8 +56,10 @@ def signed_measure(
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
     if not isinstance(simplextree, SimplexTreeMulti):
-        return signed_measure_from_slicer(
+        return _signed_measure_from_slicer(
             simplextree,
+            plot=plot,
+            grid_conversion=grid_conversion,
         )
     assert invariant is None or invariant in [
         "hilbert",
@@ -212,10 +215,22 @@ def _signed_measure_from_scc(minimal_presentation, grid_conversion=None):
     return sm
 
 
-def signed_measure_from_slicer(
-    slicer: Union[Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial]
+def _signed_measure_from_slicer(
+    slicer: Union[Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial],
+    plot: bool = False,
+    grid_conversion=None,
 ):
     pts = slicer.get_filtrations()
     dims = slicer.get_dimensions()
     weights = 1 - 2 * (dims % 2)
-    return (pts, weights)
+    if grid_conversion is not None:
+        pts = np.asarray(pts, dtype=int)
+        coords = np.empty(shape=pts.shape, dtype=float)
+        for i in range(coords.shape[1]):
+            coords[:, i] = np.asarray(grid_conversion[i])[pts[:, i]]
+        sm = [(coords, weights)]
+    else:
+        sm = [(pts, weights)]
+    if plot:
+        plot_signed_measures(sm)
+    return sm
