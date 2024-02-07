@@ -50,7 +50,7 @@ This librairy features a bunch of different functions and helpers. See below for
  - [ ] [Backend only] [Projected distances for multi-parameter persistence modules](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
  - [ ] [Partial, and experimental] [Efficient Two-Parameter Persistence Computation via Cohomology](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
 
-
+If I missed something, or you want to add something, feel free to open an issue.
 
 ## Authors
 [David Loiseaux](https://www-sop.inria.fr/members/David.Loiseaux/index.html),<br>
