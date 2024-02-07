@@ -1,4 +1,5 @@
 # Multipers
+[![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
 Scikit-style multiparameter persistent homology python library. 
 This librairy aims to provide easy to use and performant strategies for applied multiparameter topology.
 A non-exhaustive list of features can be found in the **Features** section.
