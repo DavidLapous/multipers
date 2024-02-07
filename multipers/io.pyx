@@ -330,7 +330,7 @@ def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree
     multi_filtrations = np.array(Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
     return boundary, multi_filtrations
 
-def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree):
+def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32):
     """
     Turns a simplextree into a block / scc python format
     """
@@ -343,7 +343,10 @@ def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree):
     else:
         raise TypeError("Has to be a simplextree")
 
-    return simplextree_to_scc(cptr)
+    blocks = simplextree_to_scc(cptr)
+    # reduces the space in memory
+    blocks = [(np.asarray(f,dtype=filtration_dtype), tuple(b)) for f,b in blocks[::-1]] ## presentation is on the other order 
+    return blocks
 
 def scc2disk(
         stuff,
