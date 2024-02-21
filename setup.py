@@ -116,7 +116,7 @@ setup(
     url="https://github.com/DavidLapous/multipers",
     # long_description=long_description,
     # long_description_content_type='text/markdown'
-    version="1.2.1",
+    version="1.2.2",
     license="MIT",
     keywords="TDA Persistence Multiparameter sklearn",
     ext_modules=cythonize(
