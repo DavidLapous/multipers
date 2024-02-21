@@ -8,8 +8,8 @@
 
 name: Build, test, and Push to PyPI
 
-on:
-  push:
+on: 
+  workflow_dispatch
 
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: ["ubuntu-latest", "macos-latest"] #windows fails for some reasons
+        os: ["ubuntu-20.04", "macos-11"] #windows fails for some reasons
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -37,7 +37,6 @@ jobs:
           conda install mamba -c conda-forge
           mamba install python=${{matrix.python-version}} pip -c conda-forge
           mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
-          mamba install cxx-compiler numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
         fi
         if [[ ${{ matrix.os }} == "macos-latest" ]]; then
           brew update || true
@@ -65,20 +64,20 @@ jobs:
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
-          export MACOSX_DEPLOYMENT_TARGET="11.7"
-          export _PYTHON_HOST_PLATFORM="macosx-11.7-universal2"
+          export MACOSX_DEPLOYMENT_TARGET="11.0"
+          export _PYTHON_HOST_PLATFORM="macosx-11.0-universal2"
           
-          python setup.py build_ext -j4 --inplace
-          pip wheel . --wheel-dir dist
+          python setup.py build_ext -j4 --inplace bdist_wheel
         fi
         if [[ ${{ matrix.os }} == "ubuntu-latest" ]]; then
-          python setup.py build_ext -j2 --inplace 
-          pip wheel . --wheel-dir dist
+          export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
+          export CFLAGS="-march=x86-64-v3"
+          python setup.py build_ext -j4 --inplace bdist_wheel
         fi
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install dist/*.whl
+        pip install --no-build-isolation dist/*.whl
         pytest multipers/tests
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
