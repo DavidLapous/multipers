@@ -1206,7 +1206,7 @@ cdef class SimplexTreeMulti:
 		if filtration_grid is None:	
 			filtration_grid = self.get_filtration_grid(grid_strategy=grid_strategy, **filtration_grid_kwargs)
 		cdef vector[vector[value_type]] c_filtration_grid = filtration_grid
-		assert c_filtration_grid.size() == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
+		assert <int>c_filtration_grid.size() == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
 		cdef intptr_t ptr = self.thisptr
 		if coordinate_values:
 			self.filtration_grid = filtration_grid

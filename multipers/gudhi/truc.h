@@ -176,7 +176,7 @@ template <class PersBackend, class Structure,
 class Truc {
 public:
   using Filtration_value = MultiFiltration;
-  using value_type = MultiFiltration::value_type;
+  using value_type = typename MultiFiltration::value_type;
 
   // CONSTRUCTORS.
   //  - Need everything of the same size, generator order is a PERMUTATION
