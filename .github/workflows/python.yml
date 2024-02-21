@@ -9,7 +9,8 @@
 name: Build, test, and Push to PyPI
 
 on: 
-  workflow_dispatch
+  [workflow_dispatch, push]
+
 
 
 jobs:
@@ -36,7 +37,7 @@ jobs:
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           conda install mamba -c conda-forge
           mamba install python=${{matrix.python-version}} pip -c conda-forge
-          mamba install numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
+          mamba install cxx-compiler numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
         fi
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           brew update || true
