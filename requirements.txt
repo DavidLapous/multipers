@@ -1,0 +1,11 @@
+cython>=3
+numpy
+tqdm
+scikit-learn
+matplotlib
+joblib
+scipy
+gudhi
+torch
+pykeops
+filtration-domination

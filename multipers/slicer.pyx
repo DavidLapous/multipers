@@ -2,6 +2,8 @@ from multipers.simplex_tree_multi import SimplexTreeMulti
 import multipers
 from typing import Optional,Literal
 import multipers.io as mio
+import multipers.grids as mpg
+
 
 from multipers.slicer cimport *
 import numpy as np
@@ -60,6 +62,15 @@ cdef class SlicerNoVineSimplicial:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 cdef class SlicerVineSimplicial:
     cdef SimplicialVineMatrixTruc truc
@@ -122,6 +133,16 @@ cdef class SlicerVineSimplicial:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 cdef class SlicerClement:
     cdef GeneralVineClementTruc truc
@@ -196,6 +217,15 @@ cdef class SlicerClement:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 cdef class Slicer:
     cdef GeneralVineTruc truc
@@ -269,6 +299,15 @@ cdef class Slicer:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 cdef class SlicerNoVine:
     cdef GeneralNoVineTruc truc
@@ -333,6 +372,15 @@ cdef class SlicerNoVine:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 cdef class SlicerVineGraph:
     cdef SimplicialVineGraphTruc truc
@@ -395,6 +443,15 @@ cdef class SlicerVineGraph:
         return np.asarray(self.truc.get_dimensions(), dtype=np.int32)
     def get_boundaries(self):
         return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True):
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations().T,
+                    strategy=grid_strategy,
+                    resolutions=resolution)
+        cdef vector[vector[value_type]] grid = filtration_grid
+        self.truc.coarsen_on_grid_inplace(grid, coordinates)
+        return self
 
 
 def from_function_delaunay(
@@ -456,3 +513,34 @@ def minimal_presentation(
     new_blocks = mio.scc_reduce_from_str(path=mio.input_path,dimension=dimension, backend=backend, **minpres_kwargs)
     new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend)
     return new_slicer
+
+
+def to_simplextree(s, max_dim:int=-1):
+    """
+    Turns a --simplicial-- slicer into a simplextree.
+    """
+    dims = s.get_dimensions()
+    assert np.all(dims[:-1] <= dims[1:]), "Dims is not sorted."
+    idx = np.searchsorted(dims, np.unique(dims))
+    idx = np.concatenate([idx, [dims.shape[0]]])
+    if max_dim>=0:
+        idx = idx[:max_dim+2]
+
+    cdef vector[vector[int]] boundaries_ = s.get_boundaries()
+    cdef int a
+    cdef int b
+    if len(idx)>2:
+        a = idx[2]
+        b = idx[-1]
+        for i in range(a, b):
+            boundaries_[i] = np.unique(np.concatenate([boundaries_[k] for k in boundaries_[i]]))
+    boundaries = [np.asarray(boundaries_[idx[i]:idx[i+1]]).T for i in range(len(idx)-1)]
+    boundaries[0] = np.arange(boundaries[0].shape[1])[None,:]
+    filtrations = s.get_filtrations()
+    num_parameters  = filtrations.shape[1]
+    filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(len(idx)-1))
+    st = SimplexTreeMulti(num_parameters = num_parameters)
+    # for b,f in zip(boundaries, filtrations):
+    for i in range(len(filtrations)):
+        st.insert_batch(boundaries[i],filtrations[i])
+    return st

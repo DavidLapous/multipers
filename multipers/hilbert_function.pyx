@@ -4,7 +4,7 @@ from libcpp.vector cimport vector
 from libcpp cimport bool, int, float
 from libcpp.utility cimport pair
 from typing import Optional,Iterable,Callable
-
+from multipers.grids import sms_in_grid
 import numpy as np
 cimport numpy as cnp
 cnp.import_array()
@@ -24,6 +24,7 @@ ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure
 cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "Gudhi::multiparameter::hilbert_function":
 	void get_hilbert_surface_python(const intptr_t, tensor_dtype* , const vector[indices_type], const vector[indices_type], bool, bool, indices_type, bool) except + nogil
 	signed_measure_type get_hilbert_signed_measure(const intptr_t, tensor_dtype* , const vector[indices_type], const vector[indices_type], bool, indices_type, bool, bool) except + nogil
+
 
 
 def hilbert_signed_measure(
@@ -100,21 +101,6 @@ def hilbert_signed_measure(
 		plot_signed_measures(sms)
 	return sms
 
-# TODO : optimize with memoryviews / typing
-def sms_in_grid(sms, grid_conversion):
-	def empty_like(x, weights):
-		first_filtration = grid_conversion[0]
-		dtype = first_filtration.dtype
-		return np.empty_like(x, dtype=dtype), np.asarray(weights)
-
-	for degree_index,(pts,weights) in enumerate(sms):
-		# print(pts.shape,weights.shape)
-		# assert (pts>=0).all(), f"{degree_index=}, {pts=}, {weights=}"
-		coords,weights = empty_like(pts,weights)
-		for i in range(coords.shape[1]):
-			coords[:,i] = grid_conversion[i][pts[:,i]]
-		sms[degree_index]=(coords, weights)
-	return sms
 
 
 def hilbert_surface(simplextree, vector[indices_type] degrees, mass_default=None, bool mobius_inversion=False, bool plot=False, indices_type n_jobs=0, bool expand_collapse=False):

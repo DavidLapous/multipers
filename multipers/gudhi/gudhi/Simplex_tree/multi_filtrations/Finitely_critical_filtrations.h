@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -46,9 +47,7 @@ class Finitely_critical_multi_filtration : public std::vector<T> {
 public:
   Finitely_critical_multi_filtration() : std::vector<T>(){};
   Finitely_critical_multi_filtration(int n)
-      : std::vector<T>(
-            n,
-            -std::numeric_limits<T>::infinity()){}; // minus infinity by default
+      : std::vector<T>(n, -T_inf){}; // minus infinity by default
   Finitely_critical_multi_filtration(int n, T value)
       : std::vector<T>(n, value){};
   Finitely_critical_multi_filtration(std::initializer_list<T> init)
@@ -73,12 +72,12 @@ public:
   inline bool is_inf() const {
     if (this->size() != 1)
       return false;
-    return *(this->begin()) == std::numeric_limits<T>::infinity();
+    return *(this->begin()) == T_inf;
   }
   inline bool is_minus_inf() const {
     if (this->size() != 1)
       return false;
-    return *(this->begin()) == -std::numeric_limits<T>::infinity();
+    return *(this->begin()) == -T_inf;
   }
   inline bool is_nan() const {
     if (this->size() != 1)
@@ -91,9 +90,8 @@ public:
     if (this->size() == 0)
       return false;
     auto first_value = *(this->begin()); // TODO : Maybe check all entries ?
-    if (std::isnan(first_value) ||
-        first_value == -std::numeric_limits<T>::infinity() ||
-        first_value == std::numeric_limits<T>::infinity())
+    if (std::isnan(first_value) || first_value == -T_inf ||
+        first_value == T_inf)
       return false;
     return true;
   }
@@ -371,6 +369,37 @@ public:
     }
     return sqrt(out);
   }
+  template <typename oned_array>
+  inline Finitely_critical_multi_filtration<std::size_t>
+  coordinates_in_grid(std::vector<oned_array> grid) {
+    Finitely_critical_multi_filtration<std::size_t> coords(this->size());
+    assert(grid.size() >= this->size());
+    for (auto parameter = 0u; parameter < grid.size(); ++parameter) {
+      const auto &filtration = grid[parameter];
+      coords[parameter] =
+          std::distance(filtration.begin(),
+                        std::lower_bound(filtration.begin(), filtration.end(),
+                                         this->operator[](parameter)));
+    }
+    return coords;
+  }
+  template <typename oned_array>
+  inline void coordinates_in_grid_inplace(std::vector<oned_array> grid) {
+    Finitely_critical_multi_filtration<std::size_t> coords(this->size());
+    assert(grid.size() >= this->size());
+    for (auto parameter = 0u; parameter < grid.size(); ++parameter) {
+      const auto &filtration = grid[parameter];
+      this->operator[](parameter) =
+          std::distance(filtration.begin(),
+                        std::lower_bound(filtration.begin(), filtration.end(),
+                                         this->operator[](parameter)));
+    }
+  }
+
+public:
+  constexpr static T T_inf = std::numeric_limits<T>::has_infinity
+                                 ? std::numeric_limits<T>::infinity()
+                                 : std::numeric_limits<T>::max();
 };
 
 } // namespace Gudhi::multiparameter::multi_filtrations

@@ -30,6 +30,7 @@ cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gud
 	pair[vector[value_type],int] get_degree_rips_st_python(const intptr_t,const intptr_t, const vector[int]) except + nogil
 
 
+import multipers.grids as mpg
 
 
 
@@ -47,7 +48,7 @@ def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0
 	cdef bool inf_flag = filtrations[-1] == np.inf
 	if inf_flag:
 		filtrations = filtrations[:-1]
-	filtrations, = degree_rips_st._reduce_grid([filtrations],strategy=grid_strategy,resolutions=resolution)
+	filtrations, = mpg.compute_grid([filtrations],strategy=grid_strategy,resolutions=resolution)
 	if inf_flag:
 		filtrations = np.concatenate([filtrations, [np.inf]])
 	degree_rips_st.grid_squeeze([filtrations]*degree_rips_st.num_parameters)

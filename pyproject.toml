@@ -1,0 +1,11 @@
+[build-system]
+requires = [
+    "numpy>=1.24",
+    "cython>=3.0",
+    "setuptools",
+    "wheel",
+    "gudhi>=3.9",
+    "tqdm",
+    "joblib",
+]
+

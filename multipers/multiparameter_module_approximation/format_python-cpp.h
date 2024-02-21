@@ -19,6 +19,7 @@
 #define FORMAT_PYTHON_CPP_H_INCLUDED
 
 #include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include "combinatory.h"
@@ -106,11 +107,8 @@ simplextree_to_boundary_filtration(const uintptr_t splxptr) {
 
 using scc_type =
     std::vector<std::pair<std::vector<std::vector<float>>, boundary_matrix>>;
-scc_type simplextree_to_scc(const uintptr_t splxptr) {
-  using option =
-      Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
-  Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option> *)(splxptr);
-
+template <typename STOptions>
+inline scc_type simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
   scc_type out(st.dimension() + 1);
   if (st.num_simplices() <= 0)
     return out;
@@ -134,6 +132,51 @@ scc_type simplextree_to_scc(const uintptr_t splxptr) {
   return out;
 }
 
+scc_type simplextree_to_scc(const uintptr_t splxptr) {
+  using option =
+      Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
+  Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option> *)(splxptr);
+  return simplextree_to_scc<option>(st);
+}
+template <typename Options>
+using flattened_scc_type =
+    std::pair<std::vector<std::vector<typename Options::value_type>>,
+              std::vector<std::vector<unsigned int>>>;
+
+template <typename Options>
+flattened_scc_type<Options> inline simplextree_to_ordered_bf(
+    Gudhi::Simplex_tree<Options> &st) {
+  auto scc = simplextree_to_scc<Options>(st);
+  flattened_scc_type<Options> out;
+  auto &[filtration, boundary] = out;
+  std::size_t num_simplices = 0;
+  std::vector<std::size_t> cumsum_sizes = {0, 0};
+  for (auto &[f, b] : scc) {
+    num_simplices += b.size();
+    cumsum_sizes.push_back(num_simplices);
+  }
+  filtration.reserve(num_simplices);
+  boundary.reserve(num_simplices);
+  for (auto i = 0u; i < scc.size(); ++i) {
+    auto shift = cumsum_sizes[i];
+    auto &[f, b] = scc[i];
+    for (auto j = 0u; j < b.size(); ++j) {
+      filtration.push_back(f[j]);
+      auto new_b = b[j];
+      for (auto &stuff : new_b)
+        stuff += shift;
+      boundary.push_back(new_b);
+    }
+  }
+  return out;
+}
+template <
+    typename Options =
+        Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration>
+flattened_scc_type<Options> simplextree_to_ordered_bf(const uintptr_t splxptr) {
+  Gudhi::Simplex_tree<Options> &st = *(Gudhi::Simplex_tree<Options> *)(splxptr);
+  return simplextree_to_ordered_bf<Options>(st);
+}
 template <typename MultiFiltration>
 using BoundaryFiltration =
     std::pair<boundary_matrix, std::vector<MultiFiltration>>;

@@ -1,16 +1,18 @@
+from copy import deepcopy
 from typing import Literal, Optional
 
-
-import multipers.slicer as mps
-import multipers.simplex_tree_multi
-from multipers.simplex_tree_multi import SimplexTreeMulti
-import multipers.io as mio
 import numpy as np
-from copy import deepcopy
+
+import multipers.io as mio
+import multipers.slicer as mps
+from multipers.simplex_tree_multi import SimplexTreeMulti
 
 
 def _blocks2boundary_dimension_grades(
-    blocks, filtration_type=np.float32, num_parameters: int = -1
+    blocks,
+    filtration_type=np.float32,
+    num_parameters: int = -1,
+    inplace: bool = False,
 ):
     """
     Turns blocks, aka scc, into the input of non-simplicial slicers.
@@ -24,7 +26,7 @@ def _blocks2boundary_dimension_grades(
             # empty presentation
             # return [], [], np.empty(0, dtype=filtration_type)
             raise ValueError("Empty Filtration")
-    rblocks = deepcopy(blocks)
+    rblocks = blocks if inplace else deepcopy(blocks)
     rblocks.reverse()
     block_sizes = [len(b[0]) for b in rblocks]
     S = np.cumsum([0, 0] + block_sizes)
@@ -41,10 +43,51 @@ def _blocks2boundary_dimension_grades(
     return boundary, dimensions, multifiltration
 
 
+def _slicer_from_simplextree(st, backend, vineyard):
+    if vineyard:
+        if backend == "matrix":
+            slicer = mps.SlicerVineSimplicial(st)
+        elif backend == "clement":
+            raise ValueError("This one takes a minpres")
+        elif backend == "graph":
+            slicer = mps.SlicerVineGraph(st)
+        else:
+            raise ValueError(f"Inimplemented backend {backend}.")
+    else:
+        if backend == "matrix":
+            slicer = mps.SlicerNoVineSimplicial(st)
+        if backend == "clement":
+            raise ValueError("Clement is Vineyard")
+        if backend == "graph":
+            raise ValueError("Graph is Vineyard")
+    return slicer
+
+
+def _slicer_from_blocks(blocks, backend, vineyard):
+    boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
+        blocks,
+        inplace=True,
+    )
+    if vineyard:
+        if backend == "matrix":
+            slicer = mps.Slicer(boundary, dimensions, multifiltrations)
+        elif backend == "clement":
+            slicer = mps.SlicerClement(boundary, dimensions, multifiltrations)
+    else:
+        if backend == "matrix":
+            slicer = mps.SlicerNoVine(boundary, dimensions, multifiltrations)
+        elif backend == "clement":
+            raise ValueError("Clement is vineyard")
+        raise ValueError(f"Unimplemented combo : f{backend=}, f{vineyard=}")
+    return slicer
+
+
 def Slicer(
     st: SimplexTreeMulti | list | str,
     backend: Literal["matrix", "clement", "graph"] = "matrix",
     vineyard: bool = True,
+    reduce: bool = False,
+    reduce_backend: Optional[str] = None,
 ):
     """
     Given a simplextree or blocks (a.k.a scc for python),
@@ -60,44 +103,31 @@ def Slicer(
         a minimal presentation before computing these functions !
     `mp.slicer.minimal_presentation(slicer, *args, **kwargs)`
 
-    st : SimplexTreeMulti or scc-like blocks
-    backend: slicer backend;
-    vineyard: vineyard capable (may slow down computations if true)
+    Input
+    -----
+     - st : SimplexTreeMulti or scc-like blocks or path to scc file
+     - backend: slicer backend, e.g, "matrix", "clement", "graph"
+     - vineyard: vineyard capable (may slow down computations if true)
+    Output
+    ------
+    The corresponding slicer.
     """
     if isinstance(st, SimplexTreeMulti):
-        if vineyard:
-            if backend == "matrix":
-                return mps.SlicerVineSimplicial(st)
-            if backend == "clement":
-                raise ValueError("This one takes a minpres")
-            if backend == "graph":
-                return mps.SlicerVineGraph(st)
-            raise ValueError(f"Inimplemented backend {backend}.")
-        if backend == "matrix":
-            return mps.SlicerNoVineSimplicial(st)
-        if backend == "clement":
-            raise ValueError("Clement is Vineyard")
-        if backend == "graph":
-            raise ValueError("Graph is Vineyard")
-    if backend == "graph":
-        raise ValueError("Graph is simplicial, incompatible with minpres")
-    if isinstance(st, SimplexTreeMulti):
-        blocks = mio.minimal_presentation_from_mpfree(st)
-    elif isinstance(st, str):
-        blocks = mio.scc_parser(st)
+        slicer = _slicer_from_simplextree(st, backend, vineyard)
+    elif backend == "graph":
+        raise ValueError(
+            """
+Graph is simplicial, incompatible with minpres.
+You can try using `multipers.slicer.to_simplextree`."""
+        )
     else:
-        blocks = st
-
-    boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(blocks)
-    if vineyard:
-        if backend == "matrix":
-            return mps.Slicer(boundary, dimensions, multifiltrations)
-
-        if backend == "clement":
-            return mps.SlicerClement(boundary, dimensions, multifiltrations)
-    if backend == "matrix":
-        return mps.SlicerNoVine(boundary, dimensions, multifiltrations)
-    if backend == "clement":
-        raise ValueError("Clement is vineyard")
-
-    raise ValueError(f"Unimplemented combo : f{backend=}, f{vineyard=}")
+        if isinstance(st, str):
+            blocks = mio.scc_parser(st)
+        else:
+            blocks = st
+        slicer = _slicer_from_blocks(blocks, backend, vineyard)
+    if reduce:
+        slicer = mps.minimal_presentation(
+            slicer, backend=reduce_backend, slicer_backend=backend, vineyard=vineyard
+        )
+    return slicer

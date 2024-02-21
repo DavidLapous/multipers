@@ -44,6 +44,7 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 
     cdef cppclass SimplicialVineMatrixTruc "SimplicialVineMatrixTruc<>":
         SimplicialVineMatrixTruc()
@@ -61,6 +62,7 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 
     cdef cppclass GeneralVineTruc "GeneralVineTruc<>":
         GeneralVineTruc()
@@ -78,6 +80,7 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 
     cdef cppclass GeneralNoVineTruc "GeneralNoVineTruc<>":
         GeneralNoVineTruc()
@@ -94,6 +97,7 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 
     cdef cppclass GeneralVineClementTruc "GeneralVineClementTruc<>":
         GeneralVineClementTruc()
@@ -111,6 +115,7 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 
     cdef cppclass SimplicialVineGraphTruc "SimplicialVineGraphTruc":
         SimplicialVineGraphTruc()
@@ -128,4 +133,5 @@ cdef extern from "Persistence_slices_interface.h":
         vector[Finitely_critical_multi_filtration] get_filtration_values()
         vector[int] get_dimensions()
         vector[vector[uint]] get_boundaries()
+        void coarsen_on_grid_inplace(vector[vector[value_type]], bool)
 

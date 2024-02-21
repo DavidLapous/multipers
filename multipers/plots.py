@@ -283,9 +283,9 @@ def plot2d_PyModule(
                 if dimension >= 0:
                     plt.title(rf"$H_{dimension}$ $2$-persistence")
     if not (separated):
-        if xlabel != None:
+        if xlabel is not None:
             plt.xlabel(xlabel)
-        if ylabel != None:
+        if ylabel is not None:
             plt.ylabel(ylabel)
         if dimension >= 0:
             plt.title(rf"$H_{dimension}$ $2$-persistence")

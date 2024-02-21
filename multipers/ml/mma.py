@@ -9,7 +9,7 @@ from tqdm import tqdm
 import multipers.simplex_tree_multi
 from multipers.simplex_tree_multi import SimplexTreeMulti
 
-reduce_grid = mp.simplex_tree_multi.SimplexTreeMulti._reduce_grid
+from multipers.grids import compute_grid as reduce_grid
 
 
 class SimplexTree2MMA(BaseEstimator, TransformerMixin):
@@ -187,7 +187,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         filtration_values = x.get_module_of_degree(degree).get_filtration_values(
             unique=True
         )
-        out = np.array([[f[0], f[-1]] for f in filtration_values if len(f) > 0]).T
+        out = np.array([[f[0], f[-1]]
+                       for f in filtration_values if len(f) > 0]).T
         if len(out) != 2:
             print(f"Missing degree {degree} here !")
             m = M = [np.nan for _ in range(x.num_parameters)]
@@ -305,7 +306,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             )
         else:
             filtration_values = tuple(
-                mod.get_module_of_degrees(degrees).get_filtration_values(unique=True)
+                mod.get_module_of_degrees(
+                    degrees).get_filtration_values(unique=True)
                 for mod in X
             )
 
@@ -323,7 +325,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         else:
             filtration_values = [
                 np.unique(
-                    np.concatenate([f[parameter] for f in filtration_values], axis=0)
+                    np.concatenate([f[parameter]
+                                   for f in filtration_values], axis=0)
                 )
                 for parameter in range(num_parameters)
             ]
@@ -345,7 +348,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         if self.axis is None and self._has_axis:
             self.axis = -1
         if self.axis is not None and not (self._has_axis):
-            raise Exception(f"SMF didn't find an axis, but requested axis {self.axis}")
+            raise Exception(
+                f"SMF didn't find an axis, but requested axis {self.axis}")
         if self._has_axis:
             self._num_axis = len(X[0])
         if self.verbose:
@@ -368,7 +372,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 X, self.degrees, self._axis, self.quantiles
             )
         else:
-            m = np.zeros((self._num_axis, len(self.degrees), self._num_parameters))
+            m = np.zeros((self._num_axis, len(
+                self.degrees), self._num_parameters))
             M = m + 1
             self._module_bounds = (m, M)
         assert self._num_parameters == self._module_bounds[0].shape[-1]
@@ -390,11 +395,13 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         if np.any(zero_normalizer):
             from warnings import warn
 
-            warn(f"Encountered empty bounds. Please fix me. \n M-m = {normalizer}")
+            warn(
+                f"Encountered empty bounds. Please fix me. \n M-m = {normalizer}")
         normalizer[zero_normalizer] = 1
         self._normalization_factors = w / normalizer
         if self.verbose:
-            print("-- Normalization factors:", self._normalization_factors.shape)
+            print("-- Normalization factors:",
+                  self._normalization_factors.shape)
             print(self._normalization_factors)
 
         if self.verbose:
@@ -402,7 +409,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             for ax in self._axis:
                 print(f"- Axis {ax}")
                 for degree in self.degrees:
-                    sizes = [len(x[ax].get_module_of_degree(degree)) for x in X]
+                    sizes = [len(x[ax].get_module_of_degree(degree))
+                             for x in X]
                     print(
                         f" - Degree {degree} size \
                         {np.mean(sizes).round(decimals=2)}\

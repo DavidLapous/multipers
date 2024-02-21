@@ -22,6 +22,7 @@ cython_modules = [
     # 'cubical_multi_complex',
     "point_measure_integration",
     "slicer",
+    "grids",
 ]
 n_jobs = 1
 with contextlib.suppress(ImportError):
@@ -38,10 +39,12 @@ cythonize_flags = {
 cython_compiler_directives = {
     "language_level": 3,
     "embedsignature": True,
+    "embedsignature.format": "python",
     "binding": True,
     "infer_types": True,
     "boundscheck": False,
     "wraparound": True,
+    "iterable_coroutine": True,
     # "profile":True,
     # "unraisable_tracebacks":True,
     "annotation_typing": True,
@@ -136,4 +139,6 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "License :: OSI Approved :: MIT License",
     ],
+    setup_requires=["numpy>=1.24", "gudhi>=3.9", "cython>=3.0", "joblib"],
+    install_requires=["numpy>=1.24", "gudhi>=3.9", "cython>=3.0", "joblib"],
 )

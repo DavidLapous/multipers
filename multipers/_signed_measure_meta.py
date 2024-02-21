@@ -1,9 +1,14 @@
-from multipers.plots import plot_signed_measures
-from multipers.simplex_tree_multi import SimplexTreeMulti  # Typing hack
 from typing import Optional, Union
-import numpy as np
-from multipers.simplex_tree_multi import _available_strategies
 
+from collections import defaultdict
+import numpy as np
+
+from multipers.grids import sms_in_grid
+from multipers.plots import plot_signed_measures
+from multipers.simplex_tree_multi import (
+    SimplexTreeMulti,  # Typing hack
+    _available_strategies,
+)
 from multipers.slicer import (
     Slicer,
     SlicerClement,
@@ -27,10 +32,11 @@ def signed_measure(
     expand_collapse: bool = False,
     backend: str = "multipers",
     thread_id: str = "",
-    mpfree_path: Optional[str] = None,
+    input_path: Optional[str] = None,
     grid_conversion: Optional[list] = None,
     coordinate_measure: bool = False,
     num_collapses: int = 0,
+    clean: bool = False,
     **infer_grid_kwargs,
 ):
     """
@@ -57,9 +63,7 @@ def signed_measure(
     """
     if not isinstance(simplextree, SimplexTreeMulti):
         return _signed_measure_from_slicer(
-            simplextree,
-            plot=plot,
-            grid_conversion=grid_conversion,
+            simplextree, plot=plot, grid_conversion=grid_conversion, clean=clean
         )
     assert invariant is None or invariant in [
         "hilbert",
@@ -99,23 +103,25 @@ def signed_measure(
     if coordinate_measure:
         grid_conversion = None
 
-    if backend == "mpfree":
-        if mpfree_path is not None:
+    if backend != "multipers":
+        if input_path is not None:
             import multipers.io as mio
 
-            mio.mpfree_path = mpfree_path
+            mio.input_path = input_path
         assert (
             len(degrees) == 1
             and mass_default is None
             and (invariant is None or "hilbert" in invariant)
         )
-        from multipers.io import minimal_presentation_from_mpfree
+        from multipers.io import reduce_complex
 
-        minimal_presentation = minimal_presentation_from_mpfree(
+        minimal_presentation = reduce_complex(
             simplextree_,
-            True,
-            degrees[0],
+            full_resolution=True,
+            dimension=degrees[0],
             id=thread_id,
+            backend=backend,
+            verbose=verbose,
         )
         sms = _signed_measure_from_scc(
             minimal_presentation, grid_conversion=grid_conversion
@@ -192,6 +198,8 @@ def signed_measure(
             grid_conversion=grid_conversion,
         )
 
+    if clean:
+        sms = clean_signed_measure(sms)
     return sms
 
 
@@ -201,17 +209,11 @@ def _signed_measure_from_scc(minimal_presentation, grid_conversion=None):
         [
             (1 - 2 * (i % 2)) * np.ones(len(b[0]))
             for i, b in enumerate(minimal_presentation)
-            if len(b[0]) > 0
         ]
     )
+    sm = [(pts, weights)]
     if grid_conversion is not None:
-        pts = np.asarray(pts, dtype=int)
-        coords = np.empty(shape=pts.shape, dtype=float)
-        for i in range(coords.shape[1]):
-            coords[:, i] = np.asarray(grid_conversion[i])[pts[:, i]]
-        sm = [(coords, weights)]
-    else:
-        sm = [(pts, weights)]
+        sm = sms_in_grid(sm, grid_conversion)
     return sm
 
 
@@ -219,18 +221,40 @@ def _signed_measure_from_slicer(
     slicer: Union[Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial],
     plot: bool = False,
     grid_conversion=None,
+    clean: bool = False,
 ):
     pts = slicer.get_filtrations()
     dims = slicer.get_dimensions()
-    weights = 1 - 2 * ((1 + dims) % 2)
+    weights = 1 - 2 * (
+        (1 + dims) % 2
+    )  # dim 0 is always empty : TODO : make that more clean
+    sm = [(pts, weights)]
     if grid_conversion is not None:
-        pts = np.asarray(pts, dtype=int)
-        coords = np.empty(shape=pts.shape, dtype=float)
-        for i in range(coords.shape[1]):
-            coords[:, i] = np.asarray(grid_conversion[i])[pts[:, i]]
-        sm = [(coords, weights)]
-    else:
-        sm = [(pts, weights)]
+        sm = sms_in_grid(sm, grid_conversion)
     if plot:
         plot_signed_measures(sm)
+    if clean:
+        sm = clean_signed_measure(sm)
     return sm
+
+
+def clean_signed_measure(sms):
+    """
+    Sum the diracs at the same locations. i.e.,
+    returns the minimal sized measure to represent the input.
+    Mostly useful for, e.g., euler_characteristic from simplical complexes.
+    """
+    new_sms = []
+    for pts, weights in sms:
+        out = defaultdict(lambda: 0)
+        for pt, w in zip(
+            pts, weights
+        ):  ## this is slow. but not a bottleneck TODO: optimize
+            out[tuple(pt)] += w
+        pts = np.fromiter(out.keys(), dtype=np.dtype((np.float32, 2)))
+        weights = np.fromiter(out.values(), dtype=int)
+        idx = np.nonzero(weights)
+        pts = pts[idx]
+        weights = weights[idx]
+        new_sms.append(tuple((pts, weights)))
+    return new_sms

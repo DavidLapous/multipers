@@ -1,4 +1,5 @@
 from multipers.simplex_tree_multi import SimplexTreeMulti
+import re
 from gudhi import SimplexTree
 import multipers.slicer as mps
 import gudhi as gd
@@ -7,20 +8,20 @@ import os
 from libcpp cimport bool 
 from shutil import which
 
-from typing import Optional
+from typing import Optional, Literal
 from collections import defaultdict
 doc_soft_urls = {
-    "mpfree":"https://bitbucket.org/mkerber/mpfree/",
-    "multi_chunk":"",
-    "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
-    "2pac":"https://gitlab.com/flenzen/2-parameter-persistent-cohomology",
-}
+        "mpfree":"https://bitbucket.org/mkerber/mpfree/",
+        "multi_chunk":"",
+        "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
+        "2pac":"https://gitlab.com/flenzen/2-parameter-persistent-cohomology",
+        }
 doc_soft_urls = defaultdict(lambda:"<Unknown url>")
 doc_soft_urls["mpfree"]= "https://bitbucket.org/mkerber/mpfree/"
 doc_soft_urls["multi_chunk"]= "https://bitbucket.org/mkerber/multi_chunk"
 doc_soft_urls["function_delaunay"]= "https://bitbucket.org/mkerber/function_delaunay/"
 doc_soft_urls["twopac"]= "https://gitlab.com/flenzen/2-parameter-persistent-cohomology"
-
+available_reduce_softs = Literal["mpfree","multi_chunk","2pac"]
 
 
 def _path_init(soft:str|os.PathLike):
@@ -33,11 +34,11 @@ def _path_init(soft:str|os.PathLike):
 
 
 pathes = {
-    "mpfree":None,
-    "2pac":None,
-    "function_delaunay":None,
-    "multi_chunk":None,
-}
+        "mpfree":None,
+        "2pac":None,
+        "function_delaunay":None,
+        "multi_chunk":None,
+        }
 
 # mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
 # mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
@@ -63,7 +64,7 @@ def scc_parser(path: str):
     # stripped scc2020 we can start
 
     def pass_line(line):
-        return len(line) == 0 or line[0] == "#"
+        return re.match(r"^\s*$|^#", line) is not None
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -95,15 +96,20 @@ def scc_parser(path: str):
             line = line.strip()
             if pass_line(line):
                 continue
-            filtration_boundary = line.split(";")
-            if len(filtration_boundary) == 1:
-                # happens when last generators do not have a ";" in the end
-                filtration_boundary.append(" ")
-            filtration, boundary = filtration_boundary
-            block_filtrations.append(
-                    tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
-                    )
-            block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
+            splitted_line = re.match(r"^(?P<floats>[^;]+);(?P<ints>[^;]*)$", line)
+            filtrations = np.asarray(splitted_line.group("floats").split(), dtype=float)
+            boundary = np.asarray(splitted_line.group("ints").split(), dtype=int)
+            block_filtrations.append(filtrations)
+            block_boundaries.append(boundary)
+            # filtration_boundary = line.split(";")
+            # if len(filtration_boundary) == 1:
+            #     # happens when last generators do not have a ";" in the end
+            #     filtration_boundary.append(" ")
+            # filtration, boundary = filtration_boundary
+            # block_filtrations.append(
+            #         tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
+            #         )
+            # block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
             counter -= 1
         blocks.append((np.asarray(block_filtrations, dtype=float), tuple(block_boundaries)))
 
@@ -112,7 +118,7 @@ def scc_parser(path: str):
 def _put_temp_files_to_ram():
     global input_path,output_path
     shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
-    if os.access(shm_memory, os.W_OK) and not input_path.startswith("/tmp/"):
+    if os.access(shm_memory, os.W_OK) and not input_path.startswith(shm_memory):
         input_path = shm_memory + input_path
         output_path = shm_memory + output_path
 
@@ -133,7 +139,7 @@ def _init_external_softwares(requires=[]):
 Did not found {soft}.
 Install it from {doc_soft_urls[soft]}, and put it in your current directory,
 or in you $PATH.
-""")
+                                 """)
 
 def scc_reduce_from_str(
         path:str|os.PathLike,
@@ -143,7 +149,7 @@ def scc_reduce_from_str(
         id: str = "",  # For parallel stuff
         bool verbose:bool=False,
         backend:Literal["mpfree","multi_chunk","twopac"]="mpfree"
-    ):
+        ):
     """
     Computes a minimal presentation of the file in path,
     using mpfree.
@@ -159,8 +165,8 @@ def scc_reduce_from_str(
     global pathes, input_path, output_path
     if pathes[backend] is None:
         _init_external_softwares(requires=[backend])
-    
-    
+
+
     resolution_str = "--resolution" if full_resolution else ""
     # print(mpfree_in_path + id, mpfree_out_path + id)
     if not os.path.exists(path):
@@ -171,15 +177,15 @@ def scc_reduce_from_str(
     if backend == "mpfree":
         more_verbose = "-v" if verbose else ""
         command = (
-            f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
+                f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
                 )
     elif backend == "multi_chunk":
         command = (
-            f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
+                f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
                 )
     elif backend in ["twopac", "2pac"]:
         command = (
-            f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
+                f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
                 )
     else:
         raise ValueError(f"Unsupported backend {backend}.")
@@ -199,8 +205,8 @@ def reduce_complex(
         bool clear: bool = True,
         id: str = "",  # For parallel stuff
         bool verbose:bool=False,
-        backend:Literal[*pathes.keys()]="mpfree"
-    ):
+        backend:available_reduce_softs="mpfree"
+        ):
     """
     Computes a minimal presentation of the file in path,
     using `backend`.
@@ -212,7 +218,7 @@ def reduce_complex(
     id: str, temporary files are of this id, allowing for multiprocessing
     verbose: bool
     """
-    
+
     path = input_path+id
     if isinstance(complex, SimplexTreeMulti):
         complex.to_scc(
@@ -221,7 +227,7 @@ def reduce_complex(
                 strip_comments=False,
                 ignore_last_generators=False,
                 overwrite=True,
-                reverse_block=True,
+                reverse_block=False,
                 )
         dimension = complex.dimension - dimension
     elif isinstance(complex,str):
@@ -233,7 +239,7 @@ def reduce_complex(
         blocks = mps.slicer2blocks(complex)
         scc2disk(blocks,path=path)
         dimension = len(blocks) -2 -dimension
-    
+
     return scc_reduce_from_str(
             path=path,
             full_resolution=full_resolution,
@@ -242,7 +248,7 @@ def reduce_complex(
             id=id,
             verbose=verbose,
             backend=backend
-        )
+            )
 
 
 
@@ -304,6 +310,7 @@ from multipers.mma_structures cimport Finitely_critical_multi_filtration,uintptr
 cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
     pair[boundary_matrix, vector[Finitely_critical_multi_filtration]] simplextree_to_boundary_filtration(uintptr_t)
     vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(uintptr_t)
+    pair[vector[vector[float]],boundary_matrix ] simplextree_to_ordered_bf(uintptr_t)
 
 def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree):
     """Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
@@ -334,9 +341,9 @@ def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree
     multi_filtrations = np.array(Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
     return boundary, multi_filtrations
 
-def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32):
+def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32, bool flattened=False):
     """
-    Turns a simplextree into a block / scc python format
+    Turns a simplextree into a (simplicial) module presentation.
     """
     cdef intptr_t cptr
     if isinstance(simplextree, SimplexTreeMulti):
@@ -346,6 +353,11 @@ def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype
         cptr = temp_st.thisptr
     else:
         raise TypeError("Has to be a simplextree")
+    
+    cdef pair[vector[vector[float]], boundary_matrix] out
+    if flattened:
+        out = simplextree_to_ordered_bf(cptr)
+        return np.asarray(out.first,dtype=filtration_dtype), tuple(out.second)
 
     blocks = simplextree_to_scc(cptr)
     # reduces the space in memory
@@ -383,11 +395,11 @@ def scc2disk(
             f.write("Filtration 2\n")
         else:
             f.write(f"{num_parameters}\n")
-        
+
         if not strip_comments: f.write("# Sizes of generating sets\n")
         for block in stuff: f.write(f"{len(block[0])} ")
         f.write("\n")
-        
+
         for i,block in enumerate(stuff):
             if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
             if not strip_comments: f.write(f"# Block of dimension {len(stuff)-1-i}\n")

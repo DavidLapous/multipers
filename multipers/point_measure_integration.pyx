@@ -6,8 +6,7 @@ import numpy as np
 cimport numpy as cnp
 cnp.import_array()
 
-from multipers.simplex_tree_multi import SimplexTreeMulti
-
+import multipers.grids as mpg
 ctypedef fused some_int:
     int32_t
     int64_t
@@ -33,7 +32,7 @@ def integrate_measure(
         ):
     if filtration_grid is None:
         import multipers.simplex_tree_multi
-        filtration_grid = SimplexTreeMulti._reduce_grid(
+        filtration_grid = mpg.compute_grid(
                 np.asarray(pts).T,
                 strategy=grid_strategy,
                 resolutions=resolution,

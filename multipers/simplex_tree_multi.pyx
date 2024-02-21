@@ -46,7 +46,7 @@ from multipers.multiparameter_module_approximation import PyModule
 from multipers.io import simplextree2scc
 from typing import Iterable,Literal,Optional
 from tqdm import tqdm
-
+import multipers.grids as mpg
 
 
 from warnings import warn
@@ -1158,56 +1158,6 @@ cdef class SimplexTreeMulti:
 				filtrations_values[i][f == - np.inf] = np.nan
 		return filtrations_values
 	
-	@staticmethod
-	def _reduce_grid(filtrations_values,resolutions=None, strategy:_available_strategies="exact", bool unique=True, some_float _q_factor=1., drop_quantiles=[0,0]):
-		num_parameters = len(filtrations_values)
-		if resolutions is None and strategy not in ["exact", "precomputed"]:
-			raise ValueError("Resolutions must be provided for this strategy.")
-		elif resolutions is not None:
-			try:
-				int(resolutions)
-				resolutions = [resolutions]*num_parameters
-			except:
-				pass
-		try:
-			a,b=drop_quantiles
-		except:
-			a,b=drop_quantiles,drop_quantiles
-		
-		if a != 0 or b != 0:
-			boxes = np.asarray([np.quantile(filtration, [a, b], axis=1, method='closest_observation') for filtration in filtrations_values])
-			min_filtration, max_filtration = np.min(boxes, axis=(0,1)), np.max(boxes, axis=(0,1)) # box, birth/death, filtration
-			filtrations_values = [
-				filtration[(m<filtration) * (filtration <M)] 
-				for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
-			]
-
-		## match doesn't work with cython BUG
-		if strategy == "exact":
-			to_unique = lambda f : np.unique(f) if isinstance(f,np.ndarray) else f.unique()
-			F=[to_unique(f) for f in filtrations_values]
-		elif strategy == "quantile":
-			F = [f.unique() for f in filtrations_values]
-			max_resolution = [min(len(f),r) for f,r in zip(F,resolutions)]
-			F = [np.quantile(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0, method='closest_observation') for f,r in zip(F, resolutions)]
-			if unique:
-				F = [np.unique(f) for f in F]
-				if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
-					return SimplexTreeMulti._reduce_grid(filtrations_values=filtrations_values, resolutions=resolutions, strategy="quantile",_q_factor=1.5*_q_factor)
-		elif strategy == "regular":
-			F = [np.linspace(f.min(),f.max(),num=r) for f,r in zip(filtrations_values, resolutions)]
-		elif strategy == "regular_closest":
-			F = [_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
-		elif strategy == "torch_regular_closest":
-			F = [_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
-		elif strategy == "partition":
-			F = [_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
-		elif strategy == "precomputed":
-			F=filtrations_values
-		else:
-			raise Exception("Invalid strategy. Pick either regular, regular_closest, partition, quantile, precomputed or exact.")
-
-		return F
 	
 	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, drop_quantiles:float|tuple=0, grid_strategy:_available_strategies="exact")->Iterable[np.ndarray]:
 		"""
@@ -1237,7 +1187,7 @@ cdef class SimplexTreeMulti:
 		# removes nan
 		filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
 		
-		return self._reduce_grid(filtrations_values=filtrations_values, resolutions=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
+		return mpg.compute_grid(filtrations_values=filtrations_values, resolutions=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
 	
 	
 
@@ -1393,27 +1343,6 @@ cdef class SimplexTreeMulti:
 cdef intptr_t _get_copy_intptr(SimplexTreeMulti stree) nogil:
 	return <intptr_t>(new Simplex_tree_multi_interface(dereference(stree.get_ptr())))
 
-
-def _todo_regular_closest(cnp.ndarray[some_float,ndim=1] f, int r, bool unique):
-	f_regular = np.linspace(f.min(),f.max(),num=r)
-	f_regular_closest = np.asarray([f[np.argmin(np.abs(f-x))] for x in f_regular])
-	if unique: f_regular_closest = np.unique(f_regular_closest)
-	return f_regular_closest
-
-def _torch_regular_closest(f, int r, bool unique=True):
-	import torch
-	f_regular = torch.linspace(f.min(),f.max(), r)
-	f_regular_closest =torch.tensor([f[(f-x).abs().argmin()] for x in f_regular]) 
-	if unique: f_regular_closest = f_regular_closest.unique()
-	return f_regular_closest
-
-def _todo_partition(cnp.ndarray[some_float,ndim=1] data,int resolution, bool unique):
-	if data.shape[0] < resolution: resolution=data.shape[0]
-	k = data.shape[0] // resolution
-	partitions = np.partition(data, k)
-	f = partitions[[i*k for i in range(resolution)]]
-	if unique: f= np.unique(f)
-	return f
 
 
 
