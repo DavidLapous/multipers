@@ -18,3 +18,5 @@ dist
 .pytest_cache
 .virtual_documents
 *.egg-info
+*.scc
+*.dmp
