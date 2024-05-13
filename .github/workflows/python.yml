@@ -75,7 +75,7 @@ jobs:
           ## should compile for both architecture
           ## initialize below ?
           export MACOSX_DEPLOYMENT_TARGET="13.0"
-          export _PYTHON_HOST_PLATFORM="macosx-13.0-universal2"
+          # export _PYTHON_HOST_PLATFORM="macosx-13.0-universal2"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
