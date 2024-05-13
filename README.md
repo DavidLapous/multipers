@@ -2,44 +2,25 @@
 [![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
 <br>
 Scikit-style multiparameter persistent homology python library. 
-This librairy aims to provide easy to use and performant strategies for applied multiparameter topology.
+This library aims to provide easy to use and performant strategies for applied multiparameter topology.
 A non-exhaustive list of features can be found in the **Features** section.
+<br> Documentation is available [here](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
 <br> Meant to be integrated in [the Gudhi library](https://gudhi.inria.fr/).
 
 
-## Installation
-Some dependencies are needed, e.g., using conda
-```sh
-conda create -n python311
-conda activate python311
-conda install python=3.11 numpy matplotlib gudhi scikit-learn scipy sympy tqdm shapely -c conda-forge
-pip install filtration-domination pykeops
-```
-Other libraries may be required for some specific functions, e.g., pytorch for to compute the rank invariant.
+## Quickstart
 
-#### Using pip (Recommended)
-Precompiled versions, for linux and macos, are available [on PyPI](https://pypi.org/project/multipers/). Just use 
+This library is available [on PyPI](https://pypi.org/project/multipers/) for Linux and macOS, via
 ```sh
 pip install multipers
 ```
-#### Building from source
-Clone the repo, and in a terminal, in the root folder
-```sh
-conda install python=3.11 cxx-compiler boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
-pip install .
-```
-Mostly tested on *latest everything* on linux. **For macos users**, this command may fail, see a fix at the end.
 
-## How to use
-To get a first idea on how this library works, we provide a few tutorial notebooks, in the **tutorial** folder.
+A documentation and building instructions are available [here](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
 <br>
-If something is not clear, or a function not covered, feel free to open an issue to ask for an example (or open a PR with a new notebook).
-<br>
-As the example zoo is far from covering everything, don't hesitate to submit something if you find an interesting example.
-
+Some more jupyter notebooks are available in the `tutorial` folder, but may be outdated.
 
 ## Features, and linked projects
-This librairy features a bunch of different functions and helpers. See below for a non-exhaustive list.
+This library features a bunch of different functions and helpers. See below for a non-exhaustive list.
 <br>Filled box refers to implemented or interfaced code.
  - [x] [Multiparameter Module Approximation](https://arxiv.org/abs/2206.02026) provides the multiparameter simplicial structure, aswell as technics of approximating modules, via interval decompostion modules. It is also very useful for visualization.
  - [x] [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](https://proceedings.neurips.cc/paper_files/paper/2023/hash/d75c474bc01735929a1fab5d0de3b189-Abstract-Conference.html) provides fast representations of multiparameter persistence modules, by using their signed barcodes decompositions, and encoding it into signed measures. Implemented decompositions : Euler surfaces, Hilbert function, rank invariant (i.e. rectangles). It also provides representation technics for Machine Learning, i.e., Sliced Wasserstein kernels, Vectorizations.

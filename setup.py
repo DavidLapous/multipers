@@ -40,7 +40,9 @@ templated_cython_modules = [
 ]
 
 
-os.system("python _tempita_grid_gen.py")  ## generates some parameter files
+os.system(
+    "python _tempita_grid_gen.py"
+)  ## generates some parameter files (Tempita fails with python<3.12)
 sklearn._build_utils.gen_from_templates(
     (f"multipers/{mod}.tp" for mod in templated_cython_modules)
 )
@@ -114,6 +116,7 @@ python_dependencies = [
     "pykeops",
     "scikit-learn",
     "joblib",
+    "pot",
 ]
 
 
@@ -128,7 +131,7 @@ extensions = [
             "-Ofast",
             # "-g",
             # "-march=native",
-            "-std=c++20",  # Windows doesn't support this yet. TODO: Wait (haha).
+            "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
         ],
@@ -151,7 +154,7 @@ if __name__ == "__main__":
         url="https://github.com/DavidLapous/multipers",
         # long_description=long_description,
         # long_description_content_type='text/markdown'
-        version="1.2.2",
+        version="2.0.0",
         license="MIT",
         keywords="TDA Persistence Multiparameter sklearn",
         ext_modules=cythonize(
