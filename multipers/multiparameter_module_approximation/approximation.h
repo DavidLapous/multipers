@@ -22,15 +22,18 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <limits>
+#include <oneapi/tbb/parallel_for.h>
+#include <utility>
 #include <vector>
 
+#include "gudhi/Simplex_tree/multi_filtrations/Box.h"
 #include "utilities.h"
-#include "vineyards.h"
 
 #include "debug.h"
-#include "vineyards_trajectories.h"
 #include <Persistence_slices_interface.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Line.h>
@@ -40,59 +43,47 @@ namespace Gudhi::multiparameter::mma {
 using Debug::Timer;
 using multi_filtrations::Box;
 using multi_filtrations::Line;
-class Module;
-class Summand;
-
-Module compute_vineyard_barcode_approximation(
-    boundary_matrix &boundaryMatrix, std::vector<filtration_type> &filtersList,
-    const value_type precision, multi_filtrations::Box<value_type> &box,
-    const bool threshold = false, const bool complete = true,
-    const bool multithread = false, const bool verbose = false);
-
-void compute_vineyard_barcode_approximation_recursively(
-    Module &output, Vineyard_persistence<Vineyard_matrix_type> &persistence,
-    const boundary_matrix &boundaryMatrix, filtration_type &basepoint,
-    std::vector<unsigned int> &position, unsigned int last,
-    filtration_type &filter, const std::vector<filtration_type> &filtersList,
-    value_type precision, const Box<value_type> &box,
-    const std::vector<unsigned int> &sizeLine, bool first = false,
-    const bool threshold = false, const bool multithread = false);
-
-void compute_vineyard_barcode_approximation_recursively_for_higher_dimension(
-    Module &output, Vineyard_persistence<Vineyard_matrix_type> &persistence,
-    const boundary_matrix &boundaryMatrix, const filtration_type &basepoint,
-    const std::vector<unsigned int> &position, unsigned int last,
-    filtration_type &filter, const std::vector<filtration_type> &filtersList,
-    const value_type precision, const Box<value_type> &box,
-    const std::vector<unsigned int> &size, const bool threshold,
-    const bool multithread);
+template <typename T> class Module;
+template <typename T> class Summand;
 
 void threshold_filters_list(std::vector<value_type> &filtersList,
                             const Box<value_type> &box);
 
-class Module {
+template <typename value_type> class Module {
 public:
-  using module_type = std::vector<Summand>;
+  using filtration_type = Gudhi::multiparameter::multi_filtrations::
+      Finitely_critical_multi_filtration<value_type>;
+  using module_type = std::vector<Summand<value_type>>;
   using image_type = std::vector<std::vector<value_type>>;
   using get_2dpixel_value_function_type = std::function<value_type(
-      const module_type::const_iterator, const module_type::const_iterator,
-      value_type, value_type)>;
+      const typename module_type::const_iterator,
+      const typename module_type::const_iterator, value_type, value_type)>;
   using get_pixel_value_function_type = std::function<value_type(
-      const module_type::const_iterator, const module_type::const_iterator,
-      std::vector<value_type> &)>;
+      const typename module_type::const_iterator,
+      const typename module_type::const_iterator, std::vector<value_type> &)>;
 
   Module();
   Module(Box<value_type> &box);
 
   void resize(unsigned int size);
-  Summand &at(unsigned int index);
-  Summand &operator[](size_t index);
+  Summand<value_type> &at(unsigned int index);
+  Summand<value_type> &operator[](size_t index);
+
+  const Summand<value_type> &operator[](const size_t index) const;
   template <class Barcode> void add_barcode(const Barcode &barcode);
-  template <class Filtration_type, class Barcode>
-  void add_barcode(const Filtration_type &basepoint, const Barcode &barcode,
-                   const bool verbose);
-  module_type::iterator begin();
-  module_type::iterator end();
+  template <class Filtration_type>
+  void add_barcode(
+      const Filtration_type &basepoint,
+      const std::vector<std::pair<int, std::pair<value_type, value_type>>>
+          &barcode,
+      const bool verbose, const Filtration_type &direction = {});
+  template <class Filtration_type>
+  void
+  add_barcode(const Filtration_type &basepoint,
+              const std::vector<std::pair<value_type, value_type>> &barcode,
+              const bool verbose, const Filtration_type &direction = {});
+  typename module_type::iterator begin();
+  typename module_type::iterator end();
 
   void clean();
   void fill(const value_type precision);
@@ -124,7 +115,7 @@ public:
   get_landscapes(const dimension_type dimension,
                  const std::vector<unsigned int> ks, const Box<value_type> &box,
                  const std::vector<unsigned int> &resolution) const;
-  void add_summand(Summand summand);
+  void add_summand(Summand<value_type> summand);
   Box<value_type> get_box() const;
   void set_box(Box<value_type> box);
   unsigned int size() const;
@@ -134,15 +125,22 @@ public:
   std::vector<std::pair<std::vector<std::vector<value_type>>,
                         std::vector<std::vector<value_type>>>>
   get_corners_of_dimension(const int dimension) const;
-  MultiDiagram get_barcode(const Line<value_type> &l,
-                           const dimension_type dimension = -1,
-                           const bool threshold = false) const;
-  MultiDiagrams get_barcodes(const std::vector<Line<value_type>> &lines,
-                             const dimension_type dimension = -1,
-                             const bool threshold = false) const;
-  MultiDiagrams get_barcodes(const std::vector<filtration_type> &basepoints,
-                             const dimension_type dimension = -1,
-                             const bool threshold = false) const;
+  MultiDiagram<filtration_type, value_type> get_barcode(const Line<value_type> &l,
+                                            const dimension_type dimension = -1,
+                                            const bool threshold = false) const;
+  std::vector<std::vector<std::pair<value_type, value_type>>>
+  get_barcode2(const Line<value_type> &l, const dimension_type dimension) const;
+  std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>>
+  get_barcodes2(const std::vector<Line<value_type>> &lines,
+                const dimension_type dimension = -1) const;
+  MultiDiagrams<filtration_type, value_type>
+  get_barcodes(const std::vector<Line<value_type>> &lines,
+               const dimension_type dimension = -1,
+               const bool threshold = false) const;
+  MultiDiagrams<filtration_type, value_type>
+  get_barcodes(const std::vector<filtration_type> &basepoints,
+               const dimension_type dimension = -1,
+               const bool threshold = false) const;
   std::vector<int>
   euler_curve(const std::vector<filtration_type> &points) const;
 
@@ -157,50 +155,90 @@ public:
                  const Box<value_type> &box = {}, const value_type delta = 0.1,
                  const value_type p = 1, const bool normalize = true,
                  const int n_jobs = 0);
+
+  std::vector<value_type> get_interleavings(const Box<value_type> &box);
+  using distance_to_idx_type = std::vector<std::vector<int>>;
+  distance_to_idx_type
+  compute_distance_idx_to(const std::vector<value_type> &pt, bool full) const;
+  std::vector<value_type> compute_distance_to(const std::vector<value_type> &pt,
+                                              bool negative) const;
+  std::vector<std::vector<value_type>>
+  compute_distances_to(const std::vector<std::vector<value_type>> &pt,
+                       bool negative, int n_jobs) const;
+  using distances_to_idx_type = std::vector<distance_to_idx_type>;
+  distances_to_idx_type
+  compute_distances_idx_to(const std::vector<std::vector<value_type>> &pt,
+                           bool full, int n_jobs) const;
   std::vector<value_type> compute_pixels_of_degree(
-      const module_type::iterator start, const module_type::iterator end,
-      const value_type delta, const value_type p, const bool normalize,
-      const Box<value_type> &box,
+      const typename module_type::iterator start,
+      const typename module_type::iterator end, const value_type delta,
+      const value_type p, const bool normalize, const Box<value_type> &box,
       const std::vector<std::vector<value_type>> &coordinates,
       const int n_jobs = 0);
+
+  using idx_dump_type = std::vector<std::vector<
+      std::pair<std::vector<std::vector<int>>, std::vector<std::vector<int>>>>>;
+  idx_dump_type to_idx(const std::vector<std::vector<value_type>> &grid) const;
+  Module<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const ;
+
+  std::vector<std::vector<std::vector<int>>>
+  to_flat_idx(const std::vector<std::vector<value_type>> &grid) const;
+
+  std::vector<int> inline get_degree_splits() const;
 
 private:
   module_type module_;
   Box<value_type> box_;
-  void _compute_2D_image(image_type &image, const module_type::iterator start,
-                         const module_type::iterator end,
+  void _compute_2D_image(image_type &image,
+                         const typename module_type::iterator start,
+                         const typename module_type::iterator end,
                          const value_type delta = 0.1, const value_type p = 1,
                          const bool normalize = true,
                          const Box<value_type> &box = Box<value_type>(),
                          const unsigned int horizontalResolution = 100,
                          const unsigned int verticalResolution = 100);
   void _compute_2D_image(image_type &image,
-                         const module_type::const_iterator start,
-                         const module_type::const_iterator end,
+                         const typename module_type::const_iterator start,
+                         const typename module_type::const_iterator end,
                          unsigned int horizontalResolution,
                          unsigned int verticalResolution,
                          get_2dpixel_value_function_type get_pixel_value) const;
 
-  value_type _get_pixel_value(const module_type::iterator start,
-                              const module_type::iterator end,
+  value_type _get_pixel_value(const typename module_type::iterator start,
+                              const typename module_type::iterator end,
                               const filtration_type x, const value_type delta,
                               const value_type p, const bool normalize,
                               const value_type moduleWeight) const;
 };
 
-class Summand {
+template <typename value_type> class Summand {
 public:
+  using births_type = Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<value_type, false>;
+  using deaths_type = Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<value_type, true>;
+  using filtration_type = typename births_type::OneCritical; // same for death
+  using dimension_type = int;
   Summand();
-  Summand(std::vector<filtration_type> &birth_corners,
-          std::vector<filtration_type> &death_corners,
+  Summand(const births_type &birth_corners,
+          const deaths_type &death_corners,
+          dimension_type dimension);
+  Summand(const std::vector<filtration_type> &birth_corners,
+          const std::vector<filtration_type> &death_corners,
           dimension_type dimension);
 
   value_type get_interleaving() const;
   value_type get_interleaving(const Box<value_type> &box);
   value_type get_local_weight(const filtration_type &x,
                               const value_type delta) const;
+
+  value_type distance_to_upper(const filtration_type &x, bool negative) const;
+  value_type distance_to_lower(const filtration_type &x, bool negative) const;
+  value_type distance_to(const filtration_type &x, bool negative) const;
+  std::tuple<int, int> distance_idx_to_upper(const filtration_type &x) const;
+  std::tuple<int, int> distance_idx_to_lower(const filtration_type &x) const;
+  std::vector<int> distance_idx_to(const filtration_type &x, bool full) const;
   std::pair<filtration_type, filtration_type>
   get_bar(const Line<value_type> &line) const;
+  std::pair<value_type, value_type> get_bar2(const Line<value_type> &l) const;
   void add_bar(value_type baseBirth, value_type baseDeath,
                const filtration_type &basepoint, filtration_type &birth,
                filtration_type &death, const bool threshold,
@@ -212,6 +250,9 @@ public:
 
   const std::vector<filtration_type> &get_birth_list() const;
   const std::vector<filtration_type> &get_death_list() const;
+  const multi_filtrations::KCriticalFiltration<value_type>& get_upset() const;
+  const multi_filtrations::KCriticalFiltration<value_type>& get_downset() const;
+  void clean();
 
   void complete_birth(const value_type precision);
   void complete_death(const value_type precision);
@@ -221,14 +262,14 @@ public:
 
   value_type get_landscape_value(const std::vector<value_type> &x) const;
 
-  friend void swap(Summand &sum1, Summand &sum2);
+  friend void swap(Summand<value_type> &sum1, Summand<value_type> &sum2);
 
   bool contains(const filtration_type &x) const;
 
   inline Box<value_type> get_bounds() const {
-    if (birth_corners_.size() == 0)
+    if (birth_corners_.num_generators() == 0)
       return Box<value_type>();
-    auto dimension = birth_corners_[0].size();
+    auto dimension = birth_corners_.num_parameters();
     filtration_type m(dimension, std::numeric_limits<value_type>::infinity());
     filtration_type M(dimension, -std::numeric_limits<value_type>::infinity());
     for (const auto &corner : birth_corners_) {
@@ -246,9 +287,9 @@ public:
     return Box(m, M);
   }
   inline void rescale(const std::vector<value_type> &rescale_factors) {
-    if (birth_corners_.size() == 0)
+    if (birth_corners_.num_generators() == 0)
       return;
-    auto dimension = birth_corners_[0].size();
+    auto dimension = birth_corners_.num_parameters();
     for (auto &corner : birth_corners_) {
       for (auto parameter = 0u; parameter < dimension; parameter++) {
         corner[parameter] *= rescale_factors.at(parameter);
@@ -261,9 +302,9 @@ public:
     }
   }
   inline void translate(const std::vector<value_type> &translation) {
-    if (birth_corners_.size() == 0)
+    if (birth_corners_.num_generators() == 0)
       return;
-    auto dimension = birth_corners_[0].size();
+    auto dimension = birth_corners_.num_parameters();
     for (auto &corner : birth_corners_) {
       for (auto parameter = 0u; parameter < dimension; parameter++) {
         corner[parameter] += translation.at(parameter);
@@ -275,10 +316,13 @@ public:
       }
     }
   }
+  inline Summand<int64_t> grid_squeeze(
+      const std::vector<std::vector<value_type>> &grid) const;
+  
 
 private:
-  std::vector<filtration_type> birth_corners_;
-  std::vector<filtration_type> death_corners_;
+  multi_filtrations::KCriticalFiltration<value_type,false> birth_corners_; // TODO : use KCriticalFiltration
+  multi_filtrations::KCriticalFiltration<value_type,true> death_corners_;
   value_type distanceTo0_;
   dimension_type dimension_;
 
@@ -293,301 +337,10 @@ private:
   value_type d_inf(const filtration_type &a, const filtration_type &b) const;
   void _factorize_min(filtration_type &a, const filtration_type &b);
   void _factorize_max(filtration_type &a, const filtration_type &b);
-  void _clean(std::vector<filtration_type> &list, bool keep_inf = true);
+  static void _clean(std::vector<filtration_type> &list, bool keep_inf = true);
+  static inline void _clean(births_type& list, bool keep_inf = true){list._clean(keep_inf);}
+  static inline void _clean(deaths_type& list, bool keep_inf = true){list._clean(keep_inf);}
 };
-
-/**
- * @brief Appproximate any multipersistence module with an interval
- * decomposable module. If this module is interval decomposable,
- * then the matching is controlled by the precision, and exact under
- * specific circumstances (see TODO: cite paper).
- *
- * @param B p_B: Boundary matrix of the initial simplices.
- * @param filters_list p_filters_list: Filtration of the simplices
- * @param precision p_precision: wanted precision.
- * @param box p_box: Box on which to make the approximation
- * @param threshold p_threshold:... Defaults to false. If set to true, will
- * intersect the computed summands with the box
- * @param kee_order : keeps a natural order of summands at a small
- * computational overhead. See \ref clean .
- * @param complete : gives a more natural output, at a small computational
- * overhead.
- * @param multithread ${p_multithread:...} Defaults to false.
- * WIP, not useful yet.
- * @return std::vector< std::vector< corner_list > >
- */
-// Assumes matrix ordered by dimensions
-
-Module compute_vineyard_barcode_approximation(
-    boundary_matrix &boundaryMatrix, std::vector<filtration_type> &filtersList,
-    const value_type precision, Box<value_type> &box, const bool threshold,
-    const bool complete, const bool multithread, const bool verbose_) {
-
-  verbose = verbose_;
-  if (box.get_bottom_corner().size() <= 1) {
-    std::cout << "#parameter is " << box.get_bottom_corner().size()
-              << ". Infering the box.\n";
-    box.infer_from_filters(filtersList);
-  }
-  Module output(box);
-  // 	if(threshold)
-  // 	{
-  // 		Debug::Timer("Thresholding filtration...", verbose);
-  // 		threshold_filters_list(filtersList, box);
-  // 	}
-
-  // completes lowerstar filtrations into full filtrations.
-  Filtration_creator::complete_lower_star_filters_list(boundaryMatrix,
-                                                       filtersList);
-
-  // Checks if dimensions are compatibles
-  // if constexpr (Debug::debug) assert(!filtersList.empty() && "A non trivial
-  // filters list is needed!");
-  if constexpr (Debug::debug)
-    assert(filtersList.size() == box.get_bottom_corner().size() &&
-           filtersList.size() == box.get_upper_corner().size() &&
-           "Filters and box must be of the same dimension!");
-  if (Debug::debug) {
-    for (unsigned int i = 1; i < boundaryMatrix.size(); i++)
-      if constexpr (Debug::debug)
-        assert(boundaryMatrix.at(i - 1).size() <= boundaryMatrix.at(i).size() &&
-               "Boundary matrix has to be sorted by dimension!");
-  }
-
-  const unsigned int filtrationDimension = filtersList.size();
-  if (verbose)
-    std::cout << "Filtration dimension : " << filtrationDimension << std::flush
-              << std::endl;
-
-  unsigned int numberOfSimplices = boundaryMatrix.size();
-  if (verbose)
-    std::cout << "Number of simplices : " << numberOfSimplices << std::flush
-              << std::endl;
-
-  filtration_type filter(numberOfSimplices); // container of filters
-
-  std::vector<unsigned int> size_line(filtrationDimension - 1);
-  for (unsigned int i = 0; i < filtrationDimension - 1; i++)
-    size_line[i] = static_cast<unsigned int>(std::ceil(
-        std::abs(box.get_upper_corner().at(i) - box.get_bottom_corner().back() -
-                 box.get_bottom_corner().at(i) +
-                 box.get_upper_corner().back()) /
-        precision));
-
-  if (verbose)
-    std::cout << "Precision : " << precision << std::endl;
-  if (verbose)
-    std::cout << "Number of lines : " << Combinatorics::prod(size_line)
-              << std::endl;
-
-  filtration_type basepoint = box.get_bottom_corner();
-  for (unsigned int i = 0; i < basepoint.size() - 1; i++)
-    basepoint[i] -= box.get_upper_corner().back();
-  basepoint.back() = 0;
-
-  std::vector<unsigned int> position(filtrationDimension - 1, 0);
-  {
-    Timer timer("Computing filtration... ", verbose);
-    get_filter_from_line(basepoint, filtersList, filter, box, true);
-    // where is the cursor in the output matrix
-
-    if (filtersList[0].size() < numberOfSimplices) {
-      filtration_type tmp = filter;
-      Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp,
-                                                    filter);
-    }
-  }
-
-  Vineyard_persistence<Vineyard_matrix_type> persistence(boundaryMatrix, filter,
-                                                         verbose);
-  persistence.initialize_barcode();
-
-  auto elapsed = clock();
-  if (verbose)
-    std::cout << "Multithreading status : " << multithread << std::endl;
-  if (verbose)
-    std::cout << "Starting recursive vineyard loop..." << std::flush;
-
-  // Call the compute recursive function
-  compute_vineyard_barcode_approximation_recursively(
-      output, persistence, boundaryMatrix, basepoint, position, 0, filter,
-      filtersList, precision, box, size_line, true, threshold, multithread);
-
-  elapsed = clock() - elapsed;
-  if (verbose)
-    std::cout << " Done ! It took "
-              << static_cast<float>(elapsed) / CLOCKS_PER_SEC << " seconds."
-              << std::endl;
-
-  { // for Timer
-    Timer timer("Cleaning output ... ", verbose);
-    output.clean();
-    if (complete) {
-      if (verbose)
-        std::cout << "Completing output ...";
-      output.fill(precision);
-    }
-  } // Timer death
-
-  return output;
-}
-
-/**
- * @brief Recursive function of \ref approximation_vineyards.
- * Computes what's on a line, adds the barcode to the module,
- * and goes to the next line.
- *
- * @param output p_output:...
- * @param persistence p_persistence:...
- * @param basepoint p_basepoint:...
- * @param position p_position:...
- * @param last p_last:...
- * @param filter p_filter:...
- * @param filters_list p_filters_list:...
- * @param precision p_precision:...
- * @param box p_box:...
- * @param size_line p_size_line:...
- * @param first p_first:... Defaults to false.
- * @param threshold p_threshold:... Defaults to false.
- * @param multithread p_multithread:... Defaults to false.
- */
-
-void compute_vineyard_barcode_approximation_recursively(
-    Module &output, Vineyard_persistence<Vineyard_matrix_type> &persistence,
-    const boundary_matrix &boundaryMatrix, filtration_type &basepoint,
-    std::vector<unsigned int> &position, unsigned int last,
-    filtration_type &filter, const std::vector<filtration_type> &filtersList,
-    value_type precision, const Box<value_type> &box,
-    const std::vector<unsigned int> &sizeLine, bool first, const bool threshold,
-    const bool multithread) {
-  if (!first) {
-    get_filter_from_line(basepoint, filtersList, filter, box, true);
-    if (filtersList[0].size() < boundaryMatrix.size()) {
-      filtration_type tmp = filter;
-      Filtration_creator::get_lower_star_filtration(boundaryMatrix, tmp,
-                                                    filter);
-    }
-
-    // Updates the RU decomposition of persistence.
-    persistence.update(filter);
-  }
-
-  if (verbose && Debug::debug)
-    Debug::disp_vect(basepoint);
-  if (threshold) {
-    // TODO if threshold is set to true, we can put a lot of values to 0 / inf
-    // so that there is much less swaps to do
-  }
-
-  // Computes the diagram from the RU decomposition
-  const diagram_type &dgm = persistence.get_diagram();
-
-  if (first) {
-    output.resize(dgm.size());
-  }
-
-  // Fills the barcode of the line having the basepoint basepoint
-  //     unsigned int feature = 0;
-  //     int oldDim = 0;
-
-  {
-    filtration_type birthContainer(filtersList.size());
-    filtration_type deathContainer(filtersList.size());
-
-    //        unsigned int counter = 0;
-    for (unsigned int i = 0; i < dgm.size(); i++) {
-      output.at(i).set_dimension(dgm.at(i).dim);
-      output.at(i).add_bar(dgm.at(i).birth, dgm.at(i).death, basepoint,
-                           birthContainer, deathContainer, threshold, box);
-    }
-    //        for (int dim = 0; dim <= dgm.rbegin()->dim; dim++){
-    //			module_type &list_of_summands = output[dim];
-    //            for (unsigned int i = 0; i < output[dim].size(); i++)
-    //            {
-    //				list_of_summands[i].add_bar(
-    //							dgm[counter+i].birth,
-    //							dgm[counter+i].death,
-    //							basepoint,
-    //							birthContainer,
-    //							deathContainer,
-    //							threshold,
-    //							box);
-    //            }
-    //            counter += output[dim].size();
-    //        }
-  }
-
-  compute_vineyard_barcode_approximation_recursively_for_higher_dimension(
-      output, persistence, boundaryMatrix, basepoint, position, last, filter,
-      filtersList, precision, box, sizeLine, threshold, multithread);
-
-  // recursive calls of bigger dims, minus current dim (to make less copies)
-  //  We keep -last- on the same thread / memory as the previous call
-  //  we reached a border and finished this path
-  if (sizeLine[last] - 1 == position[last])
-    return;
-  // If we didn't reached the end, go to the next line
-  basepoint[last] += precision;
-  position[last]++;
-  compute_vineyard_barcode_approximation_recursively(
-      output, persistence, boundaryMatrix, basepoint, position, last, filter,
-      filtersList, precision, box, sizeLine, false, threshold, multithread);
-}
-
-void compute_vineyard_barcode_approximation_recursively_for_higher_dimension(
-    Module &output, Vineyard_persistence<Vineyard_matrix_type> &persistence,
-    const boundary_matrix &boundaryMatrix, const filtration_type &basepoint,
-    const std::vector<unsigned int> &position, unsigned int last,
-    filtration_type &filter, const std::vector<filtration_type> &filtersList,
-    const value_type precision, const Box<value_type> &box,
-    const std::vector<unsigned int> &size, const bool threshold,
-    const bool multithread) {
-  if (filtersList.size() > 1 && last + 2 < filtersList.size()) {
-    //        if  (verbose && Debug::debug) Debug::disp_vect(basepoint);
-    //        if  (verbose) std::cout << multithread << std::endl;
-
-    if (multithread) {
-      //            if  (verbose) std::cout << "Multithreading dimension..." <<
-      //            std::endl;
-
-      /* #pragma omp parallel for */
-      for (unsigned int i = last + 1; i < filtersList.size() - 1; i++) {
-        if (size[i] - 1 == position[i])
-          continue;
-        // TODO check if it get deleted at each loop !! WARNING
-        auto copyPersistence = persistence;
-        auto copyBasepoint = basepoint;
-        auto copyPosition = position;
-        copyBasepoint[i] += precision;
-        copyPosition[i]++;
-        compute_vineyard_barcode_approximation_recursively(
-            output, copyPersistence, boundaryMatrix, copyBasepoint,
-            copyPosition, i, filter, filtersList, precision, box, size, false,
-            threshold, multithread);
-      }
-    } else {
-      // No need to copy when not multithreaded.
-      // Memory operations are slower than vineyard.
-      // %TODO improve trajectory of vineyard
-      auto copyPersistence = persistence;
-      auto copyBasepoint = basepoint;
-      auto copyPosition = position;
-      for (unsigned int i = last + 1; i < filtersList.size() - 1; i++) {
-        if (size[i] - 1 == position[i])
-          continue;
-        copyPersistence = persistence;
-        copyBasepoint = basepoint;
-        copyPosition = position;
-        copyBasepoint[i] += precision;
-        copyPosition[i]++;
-        compute_vineyard_barcode_approximation_recursively(
-            output, copyPersistence, boundaryMatrix, copyBasepoint,
-            copyPosition, i, filter, filtersList, precision, box, size, false,
-            threshold, multithread);
-      }
-    }
-  }
-}
 
 inline void threshold_filters_list(std::vector<filtration_type> &filtersList,
                                    const Box<value_type> &box) {
@@ -599,29 +352,36 @@ inline void threshold_filters_list(std::vector<filtration_type> &filtersList,
     }
   }
 }
-template <class Filtration_value =
-              multi_filtrations::Finitely_critical_multi_filtration<value_type>,
-          size_t axis = 0>
+template <class Filtration_value, int axis = 0, bool sign = true>
 class LineIterator {
 public:
   using value_type = typename Filtration_value::value_type;
-  LineIterator(const Filtration_value &basepoint, value_type precision,
+  LineIterator(const Filtration_value &basepoint,
+               const Filtration_value &direction, value_type precision,
                int num_iterations)
       : precision(precision), remaining_iterations(num_iterations),
-        current_line(std::move(basepoint)){};
+        current_line(std::move(basepoint), direction){};
 
-  inline LineIterator &operator++() {
+  inline LineIterator<Filtration_value, axis, sign> &operator++() {
     //
     auto &basepoint = current_line.basepoint();
     if (this->is_finished())
       return *this;
     // If we didn't reached the end, go to the next line
-    basepoint[axis] += precision;
+    basepoint[axis] += sign ? precision : -precision;
     --remaining_iterations;
     return *this;
   }
   inline const Line<value_type> &operator*() const { return current_line; }
-
+  inline LineIterator<Filtration_value, axis, sign> &next(std::size_t i) {
+    auto &basepoint = current_line.basepoint();
+    if (this->is_finished())
+      return *this;
+    // If we didn't reached the end, go to the next line
+    basepoint[i] += sign ? precision : -precision;
+    --remaining_iterations;
+    return *this;
+  }
   inline bool is_finished() const { return remaining_iterations <= 0; }
 
 private:
@@ -630,17 +390,28 @@ private:
   Line<value_type> current_line;
 };
 
-template <class Filtration_value =
-              multi_filtrations::Finitely_critical_multi_filtration<value_type>,
-          class Slicer = SimplicialVineMatrixTruc<>>
+template <class Filtration_value,
+          int axis_ = 0, bool sign = true,
+          class Slicer>
 inline void __add_vineyard_trajectory_to_module(
-    Module &module, Slicer &slicer,
-    LineIterator<Filtration_value> &line_iterator, const bool threshold) {
+    Module<typename Filtration_value::value_type> &module, Slicer &&slicer,
+    LineIterator<Filtration_value, axis_, sign> &line_iterator,
+    const bool threshold, int axis = 0) {
+
+  static_assert(std::is_same<typename Filtration_value::value_type,
+                             typename Slicer::Filtration_value::value_type>::value);
+  using value_type = typename Filtration_value::value_type;
+  // Line iterator should be on the biggest axis
   const bool verbose = false;
   const bool verbose2 = false;
   while (!line_iterator.is_finished()) {
-
-    auto &new_line = *(++line_iterator); // first line is always a persistence
+    const Line<value_type>& new_line =
+        (axis_ >= 0) ? *(++line_iterator) : *line_iterator.next(axis);
+    // if constexpr (axis_ >= 0) {
+    //   new_line = *(++line_iterator); // first line is always a persistence
+    // } else {
+    //   new_line = *line_iterator.next(axis);
+    // }
     // copy, no need to add it
     if constexpr (verbose)
       std::cout << "----------------------------------------------"
@@ -651,50 +422,143 @@ inline void __add_vineyard_trajectory_to_module(
     slicer.vineyard_update();
     if constexpr (verbose2)
       std::cout << slicer << std::endl;
-    const auto &diagram = slicer.get_flat_barcode();
-    module.add_barcode(new_line.basepoint(), diagram, threshold);
-  }
+    const auto &diagram = slicer.get_flat_nodim_barcode();
+    module.add_barcode(new_line.basepoint(), std::move(diagram), threshold,
+                       new_line.direction());
+  };
 };
 
-template <class Filtration_value =
-              multi_filtrations::Finitely_critical_multi_filtration<value_type>,
+template <class Filtration_value ,
           class Slicer = SimplicialVineMatrixTruc<>>
-void _rec_mma(Module &module, Filtration_value &basepoint,
-              const std::vector<int> &grid_size, int dim_to_iterate,
-              Slicer &current_persistence, const value_type precision,
-              bool threshold) {
+void _rec_mma(Module<typename Filtration_value::value_type> &module,
+              Filtration_value &basepoint, const std::vector<int> &grid_size,
+              int dim_to_iterate, Slicer &&current_persistence,
+              const value_type precision, bool threshold) {
   if (dim_to_iterate <= 0) {
     LineIterator<Filtration_value, 0> line_iterator(std::move(basepoint),
                                                     precision, grid_size[0]);
-    __add_vineyard_trajectory_to_module<Filtration_value>(
-        module, current_persistence, line_iterator, threshold);
+    __add_vineyard_trajectory_to_module<Filtration_value, 0, Slicer>(
+        module, std::move(current_persistence), line_iterator, threshold);
     return;
   }
   Slicer pers_copy;
   Filtration_value basepoint_copy;
   for (int i = 0; i < grid_size[dim_to_iterate]; ++i) {
+    // TODO : multithread, but needs matrix to be thread safe + put mutex on
+    // module
     pers_copy = current_persistence;
     basepoint_copy = basepoint;
     _rec_mma(module, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy,
              precision, threshold);
     basepoint[dim_to_iterate] += precision;
-    current_persistence.push_to(Line(basepoint));
-    current_persistence.vineyard_update();
+    // current_persistence.push_to(Line(basepoint));
+    // current_persistence.vineyard_update();
   }
 }
 
-template <class Slicer = SimplicialVineMatrixTruc<>>
-Module
-multiparameter_module_approximation(Slicer &slicer, const value_type precision,
+template <int axis,
+          class Filtration_value ,
+          class Slicer >
+void _rec_mma2(Module<typename Filtration_value::value_type> &module,
+               Filtration_value &&basepoint, const Filtration_value &direction,
+               const std::vector<int> &grid_size,
+               const std::vector<bool> &signs, int dim_to_iterate,
+               Slicer &&current_persistence, const value_type precision,
+               bool threshold) {
+  static_assert(std::is_same<typename Filtration_value::value_type,
+                             typename Slicer::value_type>::value);
+
+  if (dim_to_iterate <= axis) {
+    if (signs[axis]) {
+      LineIterator<Filtration_value, axis, true> line_iterator(
+          std::move(basepoint), direction, precision, grid_size[axis]);
+      __add_vineyard_trajectory_to_module<Filtration_value, axis, true, Slicer>(
+          module, std::move(current_persistence), line_iterator, threshold);
+    } else {
+      LineIterator<Filtration_value, axis, false> line_iterator(
+          std::move(basepoint), direction, precision, grid_size[axis]);
+      __add_vineyard_trajectory_to_module<Filtration_value, axis, false,
+                                          Slicer>(
+          module, std::move(current_persistence), line_iterator, threshold);
+    }
+
+    return;
+  }
+  if (grid_size[dim_to_iterate] == 0) {
+    // no need to copy basepoint, we just skip the dim here
+    _rec_mma2<axis, Filtration_value, Slicer>(
+        module, std::move(basepoint), direction, grid_size, signs,
+        dim_to_iterate - 1, std::move(current_persistence), precision,
+        threshold);
+    return;
+  }
+  for (int i = 0; i < grid_size[dim_to_iterate]; ++i) {
+    // TODO : multithread, but needs matrix to be thread safe + put mutex on
+    // module
+    _rec_mma2<axis, Filtration_value, typename Slicer::ThreadSafe>(
+        module, basepoint.copy(), direction, grid_size, signs,
+        dim_to_iterate - 1, current_persistence.weak_copy(), precision,
+        threshold);
+    basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
+    // current_persistence.push_to(Line(basepoint));
+    // current_persistence.vineyard_update();
+  }
+}
+
+template <class Slicer, typename value_type >
+Module<value_type>
+multiparameter_module_approximation(Slicer &slicer,
+                                    const multi_filtrations::Finitely_critical_multi_filtration<value_type> &direction,
+                                    const value_type precision,
                                     Box<value_type> &box, const bool threshold,
                                     const bool complete, const bool verbose) {
+  static_assert(std::is_same<typename Slicer::Filtration_value::value_type, value_type>::value); //Value type can be exposed to python interface.
   if (verbose)
     std::cout << "Starting Module Approximation" << std::endl;
   /* using Filtration_value = Slicer::Filtration_value; */
 
-  Module out(box);
-  box.inflate(precision); // for infinte summands
-  const int num_parameters = box.dimension();
+  multi_filtrations::Finitely_critical_multi_filtration<value_type> basepoint = box.get_bottom_corner();
+  const std::size_t num_parameters = box.dimension();
+  std::vector<int> grid_size(num_parameters);
+  std::vector<bool> signs(num_parameters);
+  int signs_shifts = 0;
+  int arg_max_signs_shifts = -1;
+  for (std::size_t i = 0; i < num_parameters; i++) {
+    auto &a = box.get_bottom_corner()[i];
+    auto &b = box.get_upper_corner()[i];
+    grid_size[i] =
+        static_cast<int>(std::ceil((std::fabs(b - a) / precision))) + 1;
+    signs[i] = b > a;
+    if (b < a) {
+      std::swap(a, b);
+      int local_shift;
+      if (!direction.num_parameters())
+        local_shift = grid_size[i];
+      else {
+        local_shift =
+            direction[i] > 0
+                ? static_cast<int>(std::ceil(grid_size[i] / direction[i]))
+                : 0;
+      }
+      if (local_shift > signs_shifts) {
+        signs_shifts = std::max(signs_shifts, local_shift);
+        arg_max_signs_shifts = i;
+      }
+    }
+
+    // fix the box
+  }
+  if (signs_shifts > 0) {
+    for (std::size_t i = 0; i < num_parameters; i++)
+      grid_size[i] +=
+          signs_shifts; // this may be too much for large num_parameters
+    grid_size[arg_max_signs_shifts] = 1;
+    if (verbose)
+      std::cout << "Had to flatten/shift coordinate " << arg_max_signs_shifts
+                << " by " << signs_shifts << std::endl;
+  }
+  Module<value_type> out(box);
+  box.inflate(2 * precision); // for infinte summands
 
   if (verbose)
     std::cout << "Num parameters : " << num_parameters << std::endl;
@@ -704,11 +568,11 @@ multiparameter_module_approximation(Slicer &slicer, const value_type precision,
     return out;
 
   // first line to compute
-  auto basepoint = box.get_bottom_corner();
-  for (auto i = 0u; i < basepoint.size() - 1; i++)
-    basepoint[i] -= box.get_upper_corner().back();
-  basepoint.back() = 0;
-  Line<value_type> current_line(basepoint);
+  // TODO: change here
+  // for (auto i = 0u; i < basepoint.size() - 1; i++)
+  //   basepoint[i] -= box.get_upper_corner().back();
+  // basepoint.back() = 0;
+  Line<value_type> current_line(basepoint, direction);
   if (verbose)
     std::cout << "First line basepoint " << basepoint << std::endl;
 
@@ -728,32 +592,70 @@ multiparameter_module_approximation(Slicer &slicer, const value_type precision,
      */
     /* threshold, box); */
   }
-  out.add_barcode(basepoint, barcode, threshold);
+  out.add_barcode(basepoint, barcode, threshold, direction);
 
   if (verbose)
     std::cout << "Instanciated " << num_bars << " summands" << std::endl;
-  std::vector<int> grid_size(num_parameters - 1);
-  auto h = box.get_upper_corner().back() - box.get_bottom_corner().back();
-  for (int i = 0; i < num_parameters - 1; i++) {
-    auto a = box.get_bottom_corner()[i];
-    auto b = box.get_upper_corner()[i];
-    grid_size[i] =
-        static_cast<unsigned int>(std::ceil((std::abs(b - a + h) / precision)));
-  }
+  // TODO : change here
+  // std::vector<int> grid_size(num_parameters - 1);
+  // auto h = box.get_upper_corner().back() - box.get_bottom_corner().back();
+  // for (int i = 0; i < num_parameters - 1; i++) {
+  //   auto a = box.get_bottom_corner()[i];
+  //   auto b = box.get_upper_corner()[i];
+  //   grid_size[i] =
+  //       static_cast<unsigned int>(std::ceil((std::abs(b - a + h) /
+  //       precision)));
+  // }
+  // TODO : change here
   if (verbose)
     std::cout << "Grid size "
               << multi_filtrations::Finitely_critical_multi_filtration(
                      grid_size)
+              << " Signs "
+              << multi_filtrations::Finitely_critical_multi_filtration(signs)
               << std::endl;
 
   if (verbose)
     std::cout << "Max error " << precision << std::endl;
-  if (verbose)
-    std::cout << "Starting recursive loop" << std::endl;
+  {
 
-  // actual computation. -1 as line grid is n-1 dim, -1 as we start from 0
-  _rec_mma(out, basepoint, grid_size, num_parameters - 2, slicer, precision,
-           threshold);
+    Timer timer("Computing mma...", verbose);
+    // actual computation. -1 as line grid is n-1 dim, -1 as we start from 0
+    // _rec_mma(out, basepoint, grid_size, num_parameters - 2, slicer,
+    // precision,
+    //          threshold);
+    // TODO : change here
+
+    for (std::size_t i = 1; i < num_parameters; i++) {
+      // the loop is on the faces of the lower box
+      // should be parallelizable, up to a mutex on out
+      if (direction.num_parameters() && direction[i] == 0.0)
+        continue; // skip faces with codim d_i=0
+      auto temp_grid_size = grid_size;
+      temp_grid_size[i] = 0;
+      if (verbose)
+        std::cout << "Face " << i << "/" << num_parameters << " with grid size "
+                  << multi_filtrations::Finitely_critical_multi_filtration(
+                         temp_grid_size)
+                  << std::endl;
+      // if (!direction.size() || direction[0] > 0)
+      _rec_mma2<0>(out, basepoint.copy(), direction, temp_grid_size, signs,
+                   num_parameters - 1, slicer.weak_copy(), precision,
+                   threshold);
+    }
+    // last one, we can destroy basepoint & cie
+    if (!direction.num_parameters() || direction[0] > 0) {
+      grid_size[0] = 0;
+      if (verbose)
+        std::cout << "Face " << num_parameters << "/" << num_parameters
+                  << " with grid size "
+                  << multi_filtrations::Finitely_critical_multi_filtration(
+                         grid_size)
+                  << std::endl;
+      _rec_mma2<1>(out, std::move(basepoint), direction, grid_size, signs,
+                   num_parameters - 1, std::move(slicer), precision, threshold);
+    }
+  }
 
   { // for Timer
     Timer timer("Cleaning output ... ", verbose);
@@ -761,15 +663,16 @@ multiparameter_module_approximation(Slicer &slicer, const value_type precision,
     if (complete) {
       if (verbose)
         std::cout << "Completing output ...";
-      for (auto i = 0; i < num_parameters; i++)
+      for (std::size_t i = 0; i < num_parameters; i++)
         out.fill(precision);
     }
   } // Timer death
   return out;
 };
 
+template <typename value_type>
 template <class Barcode>
-inline void Module::add_barcode(const Barcode &barcode) {
+inline void Module<value_type>::add_barcode(const Barcode &barcode) {
   const bool verbose = false;
   if (barcode.size() != module_.size()) {
     std::cerr << "Barcode sizes doesn't match. Module is " << module_.size()
@@ -786,9 +689,13 @@ inline void Module::add_barcode(const Barcode &barcode) {
     summand.add_bar(birth_filtration, death_filtration);
   }
 }
-template <class Filtration_type, class Barcode>
-inline void Module::add_barcode(const Filtration_type &basepoint,
-                                const Barcode &barcode, const bool threshold) {
+template <typename value_type>
+template <class Filtration_type>
+inline void Module<value_type>::add_barcode(
+    const Filtration_type &basepoint,
+    const std::vector<std::pair<int, std::pair<value_type, value_type>>>
+        &barcode,
+    const bool threshold, const Filtration_type &direction) {
   const bool verbose = false;
   if (barcode.size() != module_.size()) {
     std::cerr << "Barcode sizes doesn't match. Module is " << module_.size()
@@ -804,43 +711,126 @@ inline void Module::add_barcode(const Filtration_type &basepoint,
     if (birth_filtration >= death_filtration)
       continue;
     if constexpr (verbose)
-      std::cout << "Birth " << basepoint + birth_filtration << " Death "
-                << basepoint + death_filtration << std::endl;
+      std::cout << "--BAR (" << birth_filtration << ", " << death_filtration
+                << ") at basepoint " << basepoint << " direction " << direction;
 
-    birth_container = basepoint + birth_filtration;
-    for (auto i = 0u; i < birth_container.size(); i++) {
+    birth_container = direction.num_parameters()
+                          ? basepoint + (direction * birth_filtration)
+                          : basepoint + birth_filtration;
+    if constexpr (verbose)
+      std::cout << " B: " << birth_container
+                << " B*d: " << birth_filtration * direction;
+    for (std::size_t i = 0u; i < birth_container.num_parameters(); i++) {
       auto t = this->box_.get_bottom_corner()[i];
-      if (birth_container[i] < t)
+      if (birth_container[i] < t - 1e-10)
         birth_container[i] = threshold ? t : -inf;
     }
-    death_container = basepoint + death_filtration;
-    for (auto i = 0u; i < death_container.size(); i++) {
+    death_container = direction.num_parameters()
+                          ? basepoint + (direction * death_filtration)
+                          : basepoint + death_filtration;
+    if constexpr (verbose)
+      std::cout << " D: " << death_container;
+    for (std::size_t i = 0u; i < death_container.num_parameters(); i++) {
       auto t = this->box_.get_upper_corner()[i];
-      if (death_container[i] > t)
+      if (death_container[i] > t + 1e-10)
         death_container[i] = threshold ? t : inf;
     }
+    if constexpr (verbose)
+      std::cout << " BT: " << birth_container << " DT: " << death_container
+                << std::endl;
     summand.add_bar(birth_container, death_container);
   }
 }
+template <typename value_type>
+template <class Filtration_type>
+inline void Module<value_type>::add_barcode(
+    const Filtration_type &basepoint,
+    const std::vector<std::pair<value_type, value_type>> &barcode,
+    const bool threshold, const Filtration_type &direction) {
+  const bool verbose = false;
+  if (barcode.size() != module_.size()) {
+    std::cerr << "Barcode sizes doesn't match. Module is " << module_.size()
+              << " and barcode is " << barcode.size() << std::endl;
+  }
+  auto count = 0u;
+  Filtration_type birth_container(basepoint.num_parameters()),
+      death_container(basepoint.num_parameters());
+  for (const auto &bar : barcode) {
+    auto &summand = this->operator[](count++);
+    auto &[birth_filtration, death_filtration] = bar;
+    if (birth_filtration >= death_filtration)
+      continue;
+    if constexpr (verbose)
+      std::cout << "--BAR (" << birth_filtration << ", " << death_filtration
+                << ") at basepoint " << basepoint << " direction " << direction;
 
-inline Module::Module() {}
+    birth_container = direction.num_parameters()
+                          ? basepoint + (direction * birth_filtration)
+                          : basepoint + birth_filtration;
+    if constexpr (verbose)
+      std::cout << " B: " << birth_container
+                << " B*d: " << birth_filtration * direction;
+    for (std::size_t i = 0u; i < birth_container.num_parameters(); i++) {
+      auto t = this->box_.get_bottom_corner()[i];
+      if (birth_container[i] < t - 1e-10)
+        birth_container[i] = threshold ? t : -inf;
+    }
+    death_container = direction.num_parameters()
+                          ? basepoint + (direction * death_filtration)
+                          : basepoint + death_filtration;
+    if constexpr (verbose)
+      std::cout << " D: " << death_container;
+    for (std::size_t i = 0u; i < death_container.num_parameters(); i++) {
+      auto t = this->box_.get_upper_corner()[i];
+      if (death_container[i] > t + 1e-10)
+        death_container[i] = threshold ? t : inf;
+    }
+    if constexpr (verbose)
+      std::cout << " BT: " << birth_container << " DT: " << death_container
+                << std::endl;
+    summand.add_bar(birth_container, death_container);
+  }
+}
+template <typename value_type> inline Module<value_type>::Module() {}
 
-inline Module::Module(Box<value_type> &box) : box_(box) {}
+template <typename value_type>
+inline Module<value_type>::Module(Box<value_type> &box) : box_(box) {}
 
-inline void Module::resize(const unsigned int size) { module_.resize(size); }
+template <typename value_type>
+inline void Module<value_type>::resize(const unsigned int size) {
+  module_.resize(size);
+}
 
-inline Summand &Module::at(const unsigned int index) {
+template <typename value_type>
+inline Summand<value_type> &Module<value_type>::at(const unsigned int index) {
   return module_.at(index);
 }
-inline Summand &Module::operator[](const size_t index) {
+template <typename value_type>
+inline Summand<value_type> &Module<value_type>::operator[](const size_t index) {
+  return this->module_[index];
+}
+template <typename value_type>
+inline const Summand<value_type> &
+Module<value_type>::operator[](const size_t index) const {
   return this->module_[index];
 }
 
-inline Module::module_type::iterator Module::begin() { return module_.begin(); }
+template <typename value_type>
+inline typename Module<value_type>::module_type::iterator
+Module<value_type>::begin() {
+  return module_.begin();
+}
 
-inline Module::module_type::iterator Module::end() { return module_.end(); }
+template <typename value_type>
+inline typename Module<value_type>::module_type::iterator
+Module<value_type>::end() {
+  return module_.end();
+}
 
-inline void Module::add_summand(Summand summand) { module_.push_back(summand); }
+template <typename value_type>
+inline void Module<value_type>::add_summand(Summand<value_type> summand) {
+  module_.push_back(summand);
+}
 
 /**
  * @brief Remove the empty summands of the output
@@ -849,22 +839,24 @@ inline void Module::add_summand(Summand summand) { module_.push_back(summand); }
  * @param keep_order p_keep_order:... Defaults to false.
  */
 
-inline void Module::clean() {
+template <typename value_type> inline void Module<value_type>::clean() {
   module_type tmp;
-  for (unsigned int i = 0; i < module_.size(); i++) {
-    if (!module_.at(i).get_birth_list().empty() ||
-        !module_.at(i).get_death_list().empty()) {
-      tmp.push_back(module_.at(i));
-    }
+  for (size_t i = 0u; i < module_.size(); i++) {
+    module_[i].clean();
   }
-  module_.swap(tmp);
+  module_.erase(std::remove_if(module_.begin(), module_.end(),
+                               [](const Summand<value_type> &s) {
+                                 return s.get_upset().is_inf();
+                               }),
+                module_.end());
 }
 
-inline void Module::fill(const value_type precision) {
+template <typename value_type>
+inline void Module<value_type>::fill(const value_type precision) {
   if (module_.empty())
     return;
 
-  for (Summand &sum : module_) {
+  for (Summand<value_type> &sum : module_) {
     if (!sum.is_empty()) {
       sum.complete_birth(precision);
       sum.complete_death(precision);
@@ -872,19 +864,89 @@ inline void Module::fill(const value_type precision) {
   }
 }
 
-inline std::vector<std::vector<value_type>>
-Module::compute_pixels(const std::vector<std::vector<value_type>> &coordinates,
-                       const std::vector<int> &degrees,
-                       const Box<value_type> &box, const value_type delta,
-                       const value_type p, const bool normalize,
-                       const int n_jobs) {
+template <typename value_type>
+std::vector<value_type> inline Module<value_type>::get_interleavings(
+    const Box<value_type> &box) {
+  std::vector<value_type> out(this->size());
+  for (auto i = 0u; i < out.size(); ++i) {
+    out[i] = module_[i].get_interleaving(box);
+  }
+  return out;
+}
+
+template <typename value_type>
+typename Module<value_type>::distance_to_idx_type inline Module<
+    value_type>::compute_distance_idx_to(const std::vector<value_type> &pt,
+                                         bool full) const {
+  typename Module<value_type>::distance_to_idx_type out(
+      module_.size(), std::vector<int>(full ? 4 : 2));
+  for (auto i = 0u; i < module_.size(); ++i) {
+    out[i] = module_[i].distance_idx_to(pt, full);
+  }
+  return out;
+}
+
+template <typename value_type>
+std::vector<value_type> inline Module<value_type>::compute_distance_to(
+    const std::vector<value_type> &pt, bool negative) const {
+  std::vector<value_type> out(this->size());
+  for (auto i = 0u; i < this->size(); ++i) {
+    out[i] = module_[i].distance_to(pt, negative);
+  }
+  return out;
+}
+
+template <typename value_type>
+std::vector<std::vector<value_type>> inline Module<value_type>::
+    compute_distances_to(const std::vector<std::vector<value_type>> &pts,
+                         bool negative, int n_jobs) const {
+  std::vector<std::vector<value_type>> out(
+      pts.size(), std::vector<value_type>(this->size()));
+  oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
+  arena.execute([&] {
+    tbb::parallel_for(std::size_t(0u), pts.size(), [&](std::size_t i) {
+      tbb::parallel_for(std::size_t(0u), std::size_t(this->size()),
+                        [&](std::size_t j) {
+                          out[i][j] = module_[j].distance_to(pts[i], negative);
+                        });
+    });
+  });
+  return out;
+}
+
+template <typename value_type>
+typename Module<value_type>::distances_to_idx_type inline Module<value_type>::
+    compute_distances_idx_to(const std::vector<std::vector<value_type>> &pts,
+                             bool full, int n_jobs) const {
+  Module::distances_to_idx_type out(
+      pts.size(), Module::distance_to_idx_type(module_.size(),
+                                               std::vector<int>(full ? 4 : 2)));
+
+  oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
+  arena.execute([&] {
+    tbb::parallel_for(std::size_t(0u), pts.size(), [&](std::size_t i) {
+      tbb::parallel_for(std::size_t(0u), std::size_t(this->size()),
+                        [&](std::size_t j) {
+                          out[i][j] = module_[j].distance_idx_to(pts[i], full);
+                        });
+    });
+  });
+  return out;
+}
+
+template <typename value_type>
+inline std::vector<std::vector<value_type>> Module<value_type>::compute_pixels(
+    const std::vector<std::vector<value_type>> &coordinates,
+    const std::vector<int> &degrees, const Box<value_type> &box,
+    const value_type delta, const value_type p, const bool normalize,
+    const int n_jobs) {
   auto num_degrees = degrees.size();
   auto num_pts = coordinates.size();
   std::vector<std::vector<value_type>> out(num_degrees,
                                            std::vector<value_type>(num_pts));
 
-  module_type::iterator start;
-  module_type::iterator end = module_.begin();
+  typename module_type::iterator start;
+  typename module_type::iterator end = module_.begin();
   for (auto degree_idx = 0u; degree_idx < num_degrees; degree_idx++) {
     { // for Timer
       auto d = degrees[degree_idx];
@@ -906,15 +968,17 @@ Module::compute_pixels(const std::vector<std::vector<value_type>> &coordinates,
   return out;
 }
 
-inline typename std::vector<Module::image_type>
-Module::get_vectorization(const value_type delta, const value_type p,
-                          const bool normalize, const Box<value_type> &box,
-                          unsigned int horizontalResolution,
-                          unsigned int verticalResolution) {
+template <typename value_type>
+inline typename std::vector<typename Module<value_type>::image_type>
+Module<value_type>::get_vectorization(const value_type delta,
+                                      const value_type p, const bool normalize,
+                                      const Box<value_type> &box,
+                                      unsigned int horizontalResolution,
+                                      unsigned int verticalResolution) {
   dimension_type maxDim = module_.back().get_dimension();
   std::vector<Module::image_type> image_vector(maxDim + 1);
-  module_type::iterator start;
-  module_type::iterator end = module_.begin();
+  typename module_type::iterator start;
+  typename module_type::iterator end = module_.begin();
   for (dimension_type d = 0; d <= maxDim; d++) {
     { // for Timer
       Debug::Timer timer("Computing image of dimension " + std::to_string(d) +
@@ -930,13 +994,15 @@ Module::get_vectorization(const value_type delta, const value_type p,
   return image_vector;
 }
 
-inline std::vector<Module::image_type> Module::get_vectorization(
+template <typename value_type>
+inline std::vector<typename Module<value_type>::image_type>
+Module<value_type>::get_vectorization(
     unsigned int horizontalResolution, unsigned int verticalResolution,
     get_2dpixel_value_function_type get_pixel_value) const {
   dimension_type maxDim = module_.back().get_dimension();
   std::vector<Module::image_type> image_vector(maxDim + 1);
-  module_type::const_iterator start;
-  module_type::const_iterator end = module_.begin();
+  typename module_type::const_iterator start;
+  typename module_type::const_iterator end = module_.begin();
   for (dimension_type d = 0; d <= maxDim; d++) {
     { // for Timer
       Debug::Timer timer("Computing image of dimension " + std::to_string(d) +
@@ -952,7 +1018,9 @@ inline std::vector<Module::image_type> Module::get_vectorization(
   return image_vector;
 }
 
-inline Module::image_type Module::get_vectorization_in_dimension(
+template <typename value_type>
+inline typename Module<value_type>::image_type
+Module<value_type>::get_vectorization_in_dimension(
     const dimension_type dimension, const value_type delta, const value_type p,
     const bool normalize, const Box<value_type> &box,
     unsigned int horizontalResolution, unsigned int verticalResolution) {
@@ -961,10 +1029,10 @@ inline Module::image_type Module::get_vectorization_in_dimension(
                      verbose);
 
   Module::image_type image;
-  module_type::iterator start = module_.begin();
+  typename module_type::iterator start = module_.begin();
   while (start != module_.end() && start->get_dimension() < dimension)
     start++;
-  module_type::iterator end = start;
+  typename module_type::iterator end = start;
   while (end != module_.end() && end->get_dimension() == dimension)
     end++;
   _compute_2D_image(image, start, end, delta, p, normalize, box,
@@ -972,7 +1040,9 @@ inline Module::image_type Module::get_vectorization_in_dimension(
 
   return image;
 }
-inline Module::image_type Module::get_vectorization_in_dimension(
+template <typename value_type>
+inline typename Module<value_type>::image_type
+Module<value_type>::get_vectorization_in_dimension(
     const dimension_type dimension, unsigned int horizontalResolution,
     unsigned int verticalResolution,
     get_2dpixel_value_function_type get_pixel_value) const {
@@ -980,11 +1050,11 @@ inline Module::image_type Module::get_vectorization_in_dimension(
                          std::to_string(dimension) + " ...",
                      verbose);
 
-  Module::image_type image;
-  module_type::const_iterator start = module_.begin();
+  typename Module::image_type image;
+  typename module_type::const_iterator start = module_.begin();
   while (start != module_.end() && start->get_dimension() < dimension)
     start++;
-  module_type::const_iterator end = start;
+  typename module_type::const_iterator end = start;
   while (end != module_.end() && end->get_dimension() == dimension)
     end++;
   _compute_2D_image(image, start, end, horizontalResolution, verticalResolution,
@@ -993,13 +1063,14 @@ inline Module::image_type Module::get_vectorization_in_dimension(
   return image;
 }
 
+template <typename value_type>
 std::vector<value_type>
-Module::get_landscape_values(const std::vector<value_type> &x,
-                             const dimension_type dimension) const {
+Module<value_type>::get_landscape_values(const std::vector<value_type> &x,
+                                         const dimension_type dimension) const {
   std::vector<value_type> out;
   out.reserve(this->size());
   for (unsigned int i = 0; i < this->size(); i++) {
-    const Summand &summand = this->module_[i];
+    const Summand<value_type> &summand = this->module_[i];
     if (summand.get_dimension() == dimension)
       out.push_back(summand.get_landscape_value(x));
   }
@@ -1008,10 +1079,11 @@ Module::get_landscape_values(const std::vector<value_type> &x,
   return out;
 }
 
-Module::image_type
-Module::get_landscape(const dimension_type dimension, const unsigned int k,
-                      const Box<value_type> &box,
-                      const std::vector<unsigned int> &resolution) const {
+template <typename value_type>
+typename Module<value_type>::image_type Module<value_type>::get_landscape(
+    const dimension_type dimension, const unsigned int k,
+    const Box<value_type> &box,
+    const std::vector<unsigned int> &resolution) const {
   // TODO extend in higher dimension (ie, change the image type to a template
   // class)
   Module::image_type image;
@@ -1020,18 +1092,6 @@ Module::get_landscape(const dimension_type dimension, const unsigned int k,
       (box.get_upper_corner()[0] - box.get_bottom_corner()[0]) / resolution[0];
   value_type stepY =
       (box.get_upper_corner()[1] - box.get_bottom_corner()[1]) / resolution[1];
-
-  // #pragma omp parallel for collapse(2)
-  // for (unsigned int i = 0; i < resolution[0]; i++){
-  // 	for (unsigned int j = 0; j < resolution[1]; j++){
-  // 		auto landscape = this->get_landscape_values(
-  // 			{
-  // 				box.get_bottom_corner()[0] + stepX * i,
-  // 				box.get_bottom_corner()[1] + stepY * j
-  // 			}, dimension);
-  // 		image[i][j] = k < landscape.size() ? landscape[k] : 0;
-  // 	}
-  // }
   tbb::parallel_for(0U, resolution[0], [&](unsigned int i) {
     tbb::parallel_for(0U, resolution[1], [&](unsigned int j) {
       auto landscape =
@@ -1044,11 +1104,12 @@ Module::get_landscape(const dimension_type dimension, const unsigned int k,
   return image;
 }
 
-std::vector<Module::image_type>
-Module::get_landscapes(const dimension_type dimension,
-                       const std::vector<unsigned int> ks,
-                       const Box<value_type> &box,
-                       const std::vector<unsigned int> &resolution) const {
+template <typename value_type>
+std::vector<typename Module<value_type>::image_type>
+Module<value_type>::get_landscapes(
+    const dimension_type dimension, const std::vector<unsigned int> ks,
+    const Box<value_type> &box,
+    const std::vector<unsigned int> &resolution) const {
   std::vector<Module::image_type> images(ks.size());
   for (auto &image : images)
     image.resize(resolution[0], std::vector<value_type>(resolution[1]));
@@ -1057,20 +1118,6 @@ Module::get_landscapes(const dimension_type dimension,
   value_type stepY =
       (box.get_upper_corner()[1] - box.get_bottom_corner()[1]) / resolution[1];
 
-  // #pragma omp parallel for collapse(2)
-  // for (unsigned int i = 0; i < resolution[0]; i++){
-  // 	for (unsigned int j = 0; j < resolution[1]; j++){
-  // 		std::vector<value_type> landscapes = this->get_landscape_values(
-  // 			{
-  // 				box.get_bottom_corner()[0] + stepX * i,
-  // 				box.get_bottom_corner()[1] + stepY * j
-  // 			}, dimension);
-  // 		for (const auto k : ks){
-  // 			images[k][i][j] = k < landscapes.size() ? landscapes[k]
-  // : 0 ;
-  // 		}
-  // 	}
-  // }
   tbb::parallel_for(0U, resolution[0], [&](unsigned int i) {
     tbb::parallel_for(0U, resolution[1], [&](unsigned int j) {
       std::vector<value_type> landscapes =
@@ -1085,37 +1132,50 @@ Module::get_landscapes(const dimension_type dimension,
   return images;
 }
 
-inline Box<value_type> Module::get_box() const { return this->box_; }
+template <typename value_type>
+inline Box<value_type> Module<value_type>::get_box() const {
+  return this->box_;
+}
 
-inline void Module::set_box(Box<value_type> box) { this->box_ = box; }
+template <typename value_type>
+inline void Module<value_type>::set_box(Box<value_type> box) {
+  this->box_ = box;
+}
 
-inline unsigned int Module::size() const { return this->module_.size(); }
+template <typename value_type>
+inline unsigned int Module<value_type>::size() const {
+  return this->module_.size();
+}
 
-inline void Module::infer_box(std::vector<filtration_type> &f) {
+template <typename value_type>
+inline void Module<value_type>::infer_box(std::vector<filtration_type> &f) {
   this->box_.infer_from_filters(f);
 }
 
-inline dimension_type Module::get_dimension() const {
+template <typename value_type>
+inline dimension_type Module<value_type>::get_dimension() const {
   return this->module_.empty() ? -1 : this->module_.back().get_dimension();
 }
 
-inline std::vector<Summand>
-Module::get_summands_of_dimension(const int dimension) const {
-  std::vector<Summand> list;
-  for (const Summand &summand : this->module_) {
+template <typename value_type>
+inline std::vector<Summand<value_type>>
+Module<value_type>::get_summands_of_dimension(const int dimension) const {
+  std::vector<Summand<value_type>> list;
+  for (const Summand<value_type> &summand : this->module_) {
     if (summand.get_dimension() == dimension)
       list.push_back(summand);
   }
   return list;
 }
 
+template <typename value_type>
 inline std::vector<std::pair<std::vector<std::vector<value_type>>,
                              std::vector<std::vector<value_type>>>>
-Module::get_corners_of_dimension(const int dimension) const {
+Module<value_type>::get_corners_of_dimension(const int dimension) const {
   std::vector<std::pair<std::vector<std::vector<value_type>>,
                         std::vector<std::vector<value_type>>>>
       list;
-  for (const Summand &summand : this->module_) {
+  for (const Summand<value_type> &summand : this->module_) {
     if (summand.get_dimension() == dimension)
       list.push_back(
           std::make_pair(Gudhi::multiparameter::multi_filtrations::
@@ -1127,21 +1187,48 @@ Module::get_corners_of_dimension(const int dimension) const {
   }
   return list;
 }
+template <typename value_type>
+std::vector<std::vector<std::pair<value_type, value_type>>>
+Module<value_type>::get_barcode2(const Line<value_type> &l,
+                                 const dimension_type dimension) const {
+  const bool verbose = false;
+  std::vector<std::vector<std::pair<value_type, value_type>>> barcode(
+      this->get_dimension() + 1);
+  for (auto i = 0; i < this->get_dimension(); ++i) {
+    barcode[i].reserve(this->size());
+  }
+  for (unsigned int i = 0; i < this->size(); i++) {
+    const Summand<value_type> &summand = this->module_[i];
+    if constexpr (verbose)
+      std::cout << "Summand of dimension " << summand.get_dimension()
+                << std::endl;
 
-MultiDiagram Module::get_barcode(const Line<value_type> &l,
-                                 const dimension_type dimension,
-                                 const bool threshold) const {
+    if (dimension != -1 && summand.get_dimension() != dimension)
+      continue;
+    /* if (dimension != -1 && summand.get_dimension() > dimension) */
+    /* 	break; */
+    const auto &pushed_summand = summand.get_bar2(l);
+
+    barcode[summand.get_dimension()].push_back(pushed_summand);
+  }
+  return barcode;
+}
+template <typename value_type>
+MultiDiagram<typename Module<value_type>::filtration_type, value_type>
+Module<value_type>::get_barcode(const Line<value_type> &l,
+                                const dimension_type dimension,
+                                const bool threshold) const {
   const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing barcode of dimension " << dimension
               << " and threshold " << threshold << std::endl;
-  std::vector<MultiDiagram_point> barcode(this->size());
+  std::vector<MultiDiagram_point<filtration_type>> barcode(this->size());
   std::pair<filtration_type, filtration_type> threshold_bounds;
   if (threshold)
     threshold_bounds = l.get_bounds(this->box_);
   unsigned int summand_idx = 0;
   for (unsigned int i = 0; i < this->size(); i++) {
-    const Summand &summand = this->module_[i];
+    const Summand<value_type> &summand = this->module_[i];
     if constexpr (verbose)
       std::cout << "Summand of dimension " << summand.get_dimension()
                 << std::endl;
@@ -1167,24 +1254,21 @@ MultiDiagram Module::get_barcode(const Line<value_type> &l,
       }
       pbirth.push_to(min);
       pdeath.pull_to(max);
-      /* if ((pbirth <= min))  */
-      /* 	pbirth = min; */
-      /* if ((pdeath>= max) && pbirth[0] != inf)  */
-      /* 	pdeath = max; */
     }
     barcode[summand_idx++] =
         MultiDiagram_point(summand.get_dimension(), pbirth, pdeath);
   }
   barcode.resize(summand_idx);
-  return MultiDiagram(barcode);
+  return MultiDiagram<filtration_type, value_type>(barcode);
 }
 
-// TODO TBB
-MultiDiagrams Module::get_barcodes(const std::vector<Line<value_type>> &lines,
-                                   const dimension_type dimension,
-                                   const bool threshold) const {
+template <typename value_type>
+MultiDiagrams<typename Module<value_type>::filtration_type, value_type>
+Module<value_type>::get_barcodes(const std::vector<Line<value_type>> &lines,
+                                 const dimension_type dimension,
+                                 const bool threshold) const {
   unsigned int nlines = lines.size();
-  MultiDiagrams out(nlines);
+  MultiDiagrams<typename Module<value_type>::filtration_type, value_type> out(nlines);
   tbb::parallel_for(0U, nlines, [&](unsigned int i) {
     const Line<value_type> &l = lines[i];
     out[i] = this->get_barcode(l, dimension, threshold);
@@ -1192,12 +1276,33 @@ MultiDiagrams Module::get_barcodes(const std::vector<Line<value_type>> &lines,
   return out;
 }
 
-MultiDiagrams
-Module::get_barcodes(const std::vector<filtration_type> &basepoints,
-                     const dimension_type dimension,
-                     const bool threshold) const {
+template <typename value_type>
+std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>>
+Module<value_type>::get_barcodes2(const std::vector<Line<value_type>> &lines,
+                                  const dimension_type dimension) const {
+  unsigned int nlines = lines.size();
+  std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> out(
+      this->get_dimension() + 1,
+      std::vector<std::vector<std::pair<value_type, value_type>>>(nlines));
+  tbb::parallel_for(0U, nlines, [&](unsigned int i) {
+    const Line<value_type> &l = lines[i];
+    for (const auto &summand : module_) {
+      if (dimension != -1 && summand.get_dimension() != dimension)
+        continue;
+      const auto &bar = summand.get_bar2(l);
+      out[summand.get_dimension()][i].push_back(bar);
+    }
+  });
+  return out;
+}
+
+template <typename value_type>
+MultiDiagrams<typename Module<value_type>::filtration_type, value_type>
+Module<value_type>::get_barcodes(const std::vector<filtration_type> &basepoints,
+                                 const dimension_type dimension,
+                                 const bool threshold) const {
   unsigned int nlines = basepoints.size();
-  MultiDiagrams out(nlines);
+  MultiDiagrams<typename Module<value_type>::filtration_type, value_type> out(nlines);
   // for (unsigned int i = 0; i < nlines; i++){
   tbb::parallel_for(0U, nlines, [&](unsigned int i) {
     const Line<value_type> &l = Line<value_type>(basepoints[i]);
@@ -1206,8 +1311,9 @@ Module::get_barcodes(const std::vector<filtration_type> &basepoints,
   return out;
 }
 
-std::vector<int>
-Module::euler_curve(const std::vector<filtration_type> &points) const {
+template <typename value_type>
+std::vector<int> Module<value_type>::euler_curve(
+    const std::vector<filtration_type> &points) const {
   unsigned int npts = points.size();
   std::vector<int> out(npts);
   // #pragma omp parallel for
@@ -1216,7 +1322,7 @@ Module::euler_curve(const std::vector<filtration_type> &points) const {
                       auto &euler_char = out[i];
                       const filtration_type &point = points[i];
                       /* #pragma omp parallel for reduction(+ : euler_char) */
-                      for (const Summand &I : this->module_) {
+                      for (const Summand<value_type> &I : this->module_) {
                         if (I.contains(point)) {
                           int sign = I.get_dimension() % 2 ? -1 : 1;
                           euler_char += sign;
@@ -1226,8 +1332,9 @@ Module::euler_curve(const std::vector<filtration_type> &points) const {
   return out;
 }
 
-inline Box<value_type> Module::get_bounds() const {
-  dimension_type num_parameters = box_.get_bottom_corner().size();
+template <typename value_type>
+inline Box<value_type> Module<value_type>::get_bounds() const {
+  dimension_type num_parameters = box_.get_bottom_corner().num_parameters();
   filtration_type lower_bound(num_parameters,
                               std::numeric_limits<value_type>::infinity());
   filtration_type upper_bound(num_parameters,
@@ -1242,14 +1349,18 @@ inline Box<value_type> Module::get_bounds() const {
   }
   return Box(lower_bound, upper_bound);
 }
-inline void Module::rescale(const std::vector<value_type> &rescale_factors,
+template <typename value_type>
+inline void
+Module<value_type>::rescale(const std::vector<value_type> &rescale_factors,
                             int degree) {
   for (auto &summand : module_) {
     if (degree == -1 or summand.get_dimension() == degree)
       summand.rescale(rescale_factors);
   }
 }
-inline void Module::translate(const std::vector<value_type> &translation,
+template <typename value_type>
+inline void
+Module<value_type>::translate(const std::vector<value_type> &translation,
                               int degree) {
   for (auto &summand : module_) {
     if (degree == -1 or summand.get_dimension() == degree)
@@ -1257,10 +1368,11 @@ inline void Module::translate(const std::vector<value_type> &translation,
   }
 }
 
-inline std::vector<value_type> Module::compute_pixels_of_degree(
-    const module_type::iterator start, const module_type::iterator end,
-    const value_type delta, const value_type p, const bool normalize,
-    const Box<value_type> &box,
+template <typename value_type>
+inline std::vector<value_type> Module<value_type>::compute_pixels_of_degree(
+    const typename module_type::iterator start,
+    const typename module_type::iterator end, const value_type delta,
+    const value_type p, const bool normalize, const Box<value_type> &box,
     const std::vector<std::vector<value_type>> &coordinates, const int n_jobs) {
   unsigned int num_pixels = coordinates.size();
   std::vector<value_type> out(num_pixels);
@@ -1314,15 +1426,151 @@ inline std::vector<value_type> Module::compute_pixels_of_degree(
   });
   return out;
 }
+template <typename value_type>
+inline Module<int64_t> Module<value_type>::grid_squeeze(
+    const std::vector<std::vector<value_type>> &grid) const {
+  auto dimension = this->get_dimension();
+  Module<int64_t> out(this->size());
+  for (auto i = 0u; i < this->size(); ++i) {
+    const auto &interval = this->operator[](i);
+    out[i] = interval.grid_squeeze(grid);
+  }
+  return out;
+}
+template <typename value_type>
+inline Summand<int64_t> Summand<value_type>::grid_squeeze(
+    const std::vector<std::vector<value_type>> &grid) const {
+  auto dimension = this->get_dimension();
+  Summand<int64_t> out(this->birth_corners_.coordinates_in_grid(grid),this->death_corners_.coordinates_in_grid(grid), this->dimension_);
+  return out;
 
-inline void Module::_compute_2D_image(Module::image_type &image,
-                                      const module_type::iterator start,
-                                      const module_type::iterator end,
-                                      const value_type delta,
-                                      const value_type p, const bool normalize,
-                                      const Box<value_type> &box,
-                                      const unsigned int horizontalResolution,
-                                      const unsigned int verticalResolution) {
+
+}
+
+template <typename value_type>
+inline typename Module<value_type>::idx_dump_type Module<value_type>::to_idx(
+    const std::vector<std::vector<value_type>> &grid) const {
+  unsigned int num_parameters = grid.size();
+  auto dimension = this->get_dimension();
+  idx_dump_type out(dimension + 1);
+  for (auto i = 0u; i < this->size(); ++i) {
+    auto &interval = this->operator[](i);
+    auto &out_of_dim = out[interval.get_dimension()];
+    out_of_dim.reserve(this->size());
+    std::pair<std::vector<std::vector<int>>, std::vector<std::vector<int>>>
+        interval_idx;
+
+    auto &birth_idx = interval_idx.first;
+    birth_idx.reserve(interval.get_birth_list().size());
+    auto &death_idx = interval_idx.second;
+    death_idx.reserve(interval.get_death_list().size());
+
+    for (const auto &pt : interval.get_birth_list()) {
+      std::vector<int> pt_idx(pt.size());
+      for (auto i = 0u; i < num_parameters; ++i) {
+        pt_idx[i] = std::distance(
+            grid[i].begin(),
+            std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+      }
+      birth_idx.push_back(pt_idx);
+    }
+    for (const auto &pt : interval.get_death_list()) {
+      std::vector<int> pt_idx(pt.size());
+      for (auto i = 0u; i < num_parameters; ++i) {
+        pt_idx[i] = std::distance(
+            grid[i].begin(),
+            std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+      }
+      death_idx.push_back(pt_idx);
+    }
+    out_of_dim.push_back(interval_idx);
+  }
+  return out;
+}
+
+template <typename value_type>
+std::vector<int> inline to_grid_coord(const multi_filtrations::Finitely_critical_multi_filtration<value_type>& pt, const std::vector<std::vector<value_type>>& grid){
+  std::size_t num_parameters = grid.size();
+  std::vector<int> out(num_parameters);
+  if (pt.is_inf() || pt.is_nan())[[unlikely]]{
+    for (size_t i =0; i<num_parameters; ++i)
+      out[i] = grid[i].size() -1;
+    return out;
+  }
+  if (pt.is_minus_inf()) [[unlikely]]{
+    for (size_t i =0; i<num_parameters; ++i)
+      out[i] =0;
+    return out;
+  }
+  // pt has to be of size num_parameters now
+  for (size_t i = 0u; i < num_parameters; ++i) {
+    if (pt[i] >= grid[i].back())[[unlikely]]
+      out[i] = grid[i].size()-1;
+    else if (pt[i]<= grid[i][0]) [[unlikely]] {
+      out[i] = 0;
+    }
+    else
+      out[i] = std::distance(
+          grid[i].begin(),
+          std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+  }
+  return out;
+  
+
+}
+
+
+template <typename value_type>
+std::vector<std::vector<std::vector<int>>> inline Module<value_type>::
+    to_flat_idx(const std::vector<std::vector<value_type>> &grid) const {
+  std::vector<std::vector<std::vector<int>>> out(3);
+  auto &idx = out[0];
+  auto &births = out[1];
+  auto &deaths = out[2];
+
+  idx.resize(2);
+  idx[0].resize(this->size());
+  idx[1].resize(this->size());
+
+  // some heuristic: usually 
+  births.reserve(2*this->size());
+  deaths.reserve(2*this->size());
+  for (auto i = 0u; i < this->size(); ++i) {
+    auto &interval = this->operator[](i);
+    idx[0][i] = interval.get_birth_list().size();
+    for (const auto &pt : interval.get_birth_list()) {
+      births.push_back(to_grid_coord(pt, grid));
+    }
+    idx[1][i] = interval.get_death_list().size();
+    for (const auto &pt : interval.get_death_list()) {
+      deaths.push_back(to_grid_coord(pt, grid));
+    }
+  }
+  return out;
+}
+
+
+template <typename value_type>
+std::vector<int> inline Module<value_type>::get_degree_splits() const {
+  std::vector<int> splits = {};
+  int current_degree = 0;
+  for (auto i = 0u; i < this->size(); ++i) {
+    const auto &summand = this->operator[](i);
+    while (summand.get_dimension() > current_degree) [[unlikely]] {
+      current_degree++;
+      splits.push_back(i);
+    }
+  }
+  return splits;
+}
+
+template <typename value_type>
+inline void Module<value_type>::_compute_2D_image(
+    Module::image_type &image, const typename module_type::iterator start,
+    const typename module_type::iterator end, const value_type delta,
+    const value_type p, const bool normalize, const Box<value_type> &box,
+    const unsigned int horizontalResolution,
+    const unsigned int verticalResolution) {
   image.resize(horizontalResolution,
                std::vector<value_type>(verticalResolution));
   value_type moduleWeight = 0;
@@ -1398,10 +1646,11 @@ inline void Module::_compute_2D_image(Module::image_type &image,
   } // Timer death
 }
 
-inline void Module::_compute_2D_image(
-    Module::image_type &image, const module_type::const_iterator start,
-    const module_type::const_iterator end, unsigned int horizontalResolution,
-    unsigned int verticalResolution,
+template <typename value_type>
+inline void Module<value_type>::_compute_2D_image(
+    Module::image_type &image, const typename module_type::const_iterator start,
+    const typename module_type::const_iterator end,
+    unsigned int horizontalResolution, unsigned int verticalResolution,
     get_2dpixel_value_function_type get_pixel_value) const {
   image.resize(horizontalResolution,
                std::vector<value_type>(verticalResolution));
@@ -1439,10 +1688,12 @@ inline void Module::_compute_2D_image(
   } // Timer death
 }
 
-inline value_type Module::_get_pixel_value(
-    const module_type::iterator start, const module_type::iterator end,
-    const filtration_type x, const value_type delta, const value_type p,
-    const bool normalize, const value_type moduleWeight) const {
+template <typename value_type>
+inline value_type Module<value_type>::_get_pixel_value(
+    const typename module_type::iterator start,
+    const typename module_type::iterator end, const filtration_type x,
+    const value_type delta, const value_type p, const bool normalize,
+    const value_type moduleWeight) const {
   value_type value = 0;
   if (p == 0) {
     /* #pragma omp parallel for reduction(+ : value) */
@@ -1473,14 +1724,17 @@ inline value_type Module::_get_pixel_value(
 }
 /////////////////////////////////////////////////
 
-inline Summand::Summand() : distanceTo0_(-1), dimension_(-1) {}
+template <typename value_type>
+inline Summand<value_type>::Summand() :  birth_corners_(1, births_type::T_inf), death_corners_(1, -births_type::T_inf), distanceTo0_(-1), dimension_(-1){}
 
-inline Summand::Summand(std::vector<filtration_type> &birth_corners,
-                        std::vector<filtration_type> &death_corners,
-                        dimension_type dimension)
+template <typename value_type>
+inline Summand<value_type>::Summand(const typename std::vector<typename Summand<value_type>::filtration_type> &birth_corners,
+                                    const typename std::vector<typename Summand<value_type>::filtration_type> &death_corners,
+                                    dimension_type dimension)
     : birth_corners_(birth_corners), death_corners_(death_corners),
       distanceTo0_(-1), dimension_(dimension) {}
-inline bool Summand::contains(const filtration_type &x) const {
+template <typename value_type>
+inline bool Summand<value_type>::contains(const filtration_type &x) const {
   bool out = false;
   for (const auto &birth :
        this->birth_corners_) { // checks if there exists a birth smaller than x
@@ -1500,37 +1754,49 @@ inline bool Summand::contains(const filtration_type &x) const {
   }
   return out;
 }
+template <typename value_type>
+inline Summand<value_type>::Summand(const typename Summand<value_type>::births_type &birth_corners,
+                                    const typename Summand<value_type>::deaths_type &death_corners,
+                                    dimension_type dimension)
+    : birth_corners_(birth_corners), death_corners_(death_corners),
+      distanceTo0_(-1), dimension_(dimension) {}
 
-inline value_type Summand::get_interleaving(const Box<value_type> &box) {
+template <typename value_type>
+inline value_type
+Summand<value_type>::get_interleaving(const Box<value_type> &box) {
   _compute_interleaving(box);
   return distanceTo0_;
 }
 
-inline value_type Summand::get_interleaving() const { return distanceTo0_; }
+template <typename value_type>
+inline value_type Summand<value_type>::get_interleaving() const {
+  return distanceTo0_;
+}
 
-inline value_type Summand::get_local_weight(const filtration_type &x,
-                                            const value_type delta) const {
+template <typename value_type>
+inline value_type
+Summand<value_type>::get_local_weight(const filtration_type &x,
+                                      const value_type delta) const {
   bool rectangle = delta <= 0;
 
-  filtration_type mini(x.size());
-  filtration_type maxi(x.size());
+  filtration_type mini(x.num_parameters());
+  filtration_type maxi(x.num_parameters());
 
   // box on which to compute the local weight
-  /* #pragma omp simd */
   for (unsigned int i = 0; i < x.size(); i++) {
     mini[i] = delta <= 0 ? x[i] + delta : x[i] - delta;
     maxi[i] = delta <= 0 ? x[i] - delta : x[i] + delta;
   }
 
   // Pre-allocating
-  std::vector<filtration_type> birthList(birth_corners_.size());
-  std::vector<filtration_type> deathList(death_corners_.size());
+  std::vector<filtration_type> birthList(birth_corners_.num_generators());
+  std::vector<filtration_type> deathList(death_corners_.num_generators());
   unsigned int lastEntry = 0;
   for (const filtration_type &birth : birth_corners_) {
     if (birth <= maxi) {
-      filtration_type tmpBirth(birth.size());
+      filtration_type tmpBirth(birth.num_parameters());
       // WARNING should crash here if birth and x aren't of the same size.
-      for (unsigned int i = 0; i < birth.size(); i++)
+      for (unsigned int i = 0; i < birth.num_parameters(); i++)
         tmpBirth[i] = std::max(birth[i], mini[i]);
       birthList[lastEntry].swap(tmpBirth);
       lastEntry++;
@@ -1542,9 +1808,9 @@ inline value_type Summand::get_local_weight(const filtration_type &x,
   lastEntry = 0;
   for (const filtration_type &death : death_corners_) {
     if (death >= mini) {
-      filtration_type tmpDeath(death.size());
+      filtration_type tmpDeath(death.num_parameters());
       // WARNING should crash here if birth and x aren't of the same size.
-      for (unsigned int i = 0; i < death.size(); i++)
+      for (unsigned int i = 0; i < death.num_parameters(); i++)
         tmpDeath[i] = std::min(death[i], maxi[i]);
       deathList[lastEntry].swap(tmpDeath);
       lastEntry++;
@@ -1557,10 +1823,10 @@ inline value_type Summand::get_local_weight(const filtration_type &x,
     // #pragma omp parallel for reduction(std::max: local_weight)
     Box<value_type> trivial_box;
     for (const filtration_type &birth : birthList) {
-      if (birth.size() == 0)
+      if (birth.num_parameters() == 0)
         continue;
       for (const filtration_type &death : deathList) {
-        if (death.size() > 0)
+        if (death.num_parameters() > 0)
           local_weight =
               std::max(local_weight,
                        _get_max_diagonal(
@@ -1574,19 +1840,157 @@ inline value_type Summand::get_local_weight(const filtration_type &x,
     // local weight is the volume of the largest rectangle in the restricted
     // module #pragma omp parallel for reduction(std::max: local_weight)
     for (const filtration_type &birth : birthList) {
-      if (birth.size() == 0)
+      if (birth.num_parameters() == 0)
         continue;
       for (const filtration_type &death : deathList) {
-        if (death.size() > 0)
+        if (death.num_parameters() > 0)
           local_weight =
               std::max(local_weight, _rectangle_volume(birth, death));
       }
     }
-    return local_weight / std::pow(2 * std::abs(delta), x.size());
+    return local_weight / std::pow(2 * std::abs(delta), x.num_parameters());
   }
 }
-inline std::pair<filtration_type, filtration_type>
-Summand::get_bar(const Line<value_type> &l) const {
+
+template <typename value_type>
+inline std::tuple<int, int>
+Summand<value_type>::distance_idx_to_lower(const filtration_type &x) const {
+  value_type distance_to_lower = std::numeric_limits<value_type>::infinity();
+  int b_idx = -1; // argmin_b max_i (b-x)_x
+  int param = 0;
+  auto count = 0u;
+  for (const auto &birth : birth_corners_) {
+    value_type temp =
+        -std::numeric_limits<value_type>::infinity(); // max_i(birth - x)_+
+    int temp_idx = 0;
+    for (auto i = 0u; i < birth.size(); ++i) {
+      auto plus = birth[i] - x[i];
+      if (plus > temp) {
+        temp_idx = i;
+        temp = plus;
+      }
+    }
+    if (temp < distance_to_lower) {
+      distance_to_lower = temp;
+      param = temp_idx;
+      b_idx = count;
+    }
+    ++count;
+  }
+  return {b_idx, param};
+}
+
+template <typename value_type>
+inline std::tuple<int, int>
+Summand<value_type>::distance_idx_to_upper(const filtration_type &x) const {
+  value_type distance_to_upper = std::numeric_limits<value_type>::infinity();
+  int d_idx = -1; // argmin_d max_i (x-death)
+  int param = 0;
+  auto count = 0u;
+  for (const auto &death : death_corners_) {
+    value_type temp =
+        -std::numeric_limits<value_type>::infinity(); // max_i(death-x)_+
+    int temp_idx = 0;
+    for (auto i = 0u; i < death.size(); ++i) {
+      auto plus = x[i] - death[i];
+      if (plus > temp) {
+        temp_idx = i;
+        temp = plus;
+      }
+    }
+    if (temp < distance_to_upper) {
+      distance_to_upper = temp;
+      param = temp_idx;
+      d_idx = count;
+    }
+    ++count;
+  }
+  return {d_idx, param};
+}
+
+template <typename value_type>
+inline std::vector<int>
+Summand<value_type>::distance_idx_to(const filtration_type &x,
+                                     bool full) const {
+  const auto &[a, b] = Summand::distance_idx_to_lower(x);
+  const auto &[c, d] = Summand::distance_idx_to_upper(x);
+  if (full) [[unlikely]]
+    return {a, b, c, d};
+  else {
+    return {a, c};
+  }
+}
+template <typename value_type>
+inline value_type
+Summand<value_type>::distance_to_lower(const filtration_type &x,
+                                       bool negative) const {
+  value_type distance_to_lower = std::numeric_limits<value_type>::infinity();
+  for (const auto &birth : birth_corners_) {
+    value_type temp =
+        negative ? -std::numeric_limits<value_type>::infinity() : 0;
+    for (auto i = 0u; i < birth.size(); ++i) {
+      temp = std::max(temp, birth[i] - x[i]);
+    }
+    distance_to_lower = std::min(distance_to_lower, temp);
+  }
+  return distance_to_lower;
+}
+
+template <typename value_type>
+inline value_type
+Summand<value_type>::distance_to_upper(const filtration_type &x,
+                                       bool negative) const {
+  value_type distance_to_upper = std::numeric_limits<value_type>::infinity();
+  for (const auto &death : death_corners_) {
+    value_type temp =
+        negative ? -std::numeric_limits<value_type>::infinity() : 0;
+    for (auto i = 0u; i < death.size(); ++i) {
+      temp = std::max(temp, x[i] - death[i]);
+    }
+    distance_to_upper = std::min(distance_to_upper, temp);
+  }
+  return distance_to_upper;
+}
+template <typename value_type>
+inline value_type Summand<value_type>::distance_to(const filtration_type &x,
+                                                   bool negative) const {
+  return std::max(Summand::distance_to_lower(x, negative),
+                  Summand::distance_to_upper(x, negative));
+}
+
+template <typename value_type>
+inline std::pair<value_type, value_type>
+Summand<value_type>::get_bar2(const Line<value_type> &l) const {
+  const bool verbose = false;
+  if constexpr (verbose)
+    std::cout << "Computing bar of this summand of dimension "
+              << this->get_dimension() << std::endl;
+  value_type pushed_birth = std::numeric_limits<value_type>::infinity();
+  value_type pushed_death = -pushed_birth;
+  for (filtration_type birth : this->get_birth_list()) {
+    value_type pb = l.push_forward2(birth);
+    pushed_birth = std::min(pb, pushed_birth);
+  }
+  //
+  for (const filtration_type &death : this->get_death_list()) {
+    value_type pd = l.push_back2(death);
+    pushed_death = std::max(pd, pushed_death);
+  }
+
+  if (!(pushed_birth <= pushed_death)) {
+    if constexpr (verbose)
+      std::cout << "Birth <!= Death ! Ignoring this value" << std::endl;
+    return {inf, inf};
+  }
+  if constexpr (verbose) {
+    std::cout << "Final values" << pushed_birth << " ----- " << pushed_death
+              << std::endl;
+  }
+  return {pushed_birth, pushed_death};
+}
+template <typename value_type>
+inline std::pair<typename Summand<value_type>::filtration_type,typename Summand<value_type>::filtration_type>
+Summand<value_type>::get_bar(const Line<value_type> &l) const {
   const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing bar of this summand of dimension "
@@ -1627,8 +2031,8 @@ Summand::get_bar(const Line<value_type> &l) const {
   if (!(pushed_birth <= pushed_death)) {
     if constexpr (verbose)
       std::cout << "Birth <!= Death ! Ignoring this value" << std::endl;
-    return {filtration_type(this->get_dimension(), inf),
-            filtration_type(this->get_dimension(), inf)};
+    return {std::numeric_limits<filtration_type>::infinity(),
+            std::numeric_limits<filtration_type>::infinity()};
   }
   if constexpr (verbose) {
     std::cout << "Final values" << pushed_birth << " ----- " << pushed_death
@@ -1653,7 +2057,9 @@ Summand::get_bar(const Line<value_type> &l) const {
  * @param box p_box: Only useful if @p threshold is set to true.
  */
 
-inline void Summand::add_bar(value_type baseBirth, value_type baseDeath,
+template <typename value_type>
+inline void
+Summand<value_type>::add_bar(value_type baseBirth, value_type baseDeath,
                              const filtration_type &basepoint,
                              filtration_type &birth, filtration_type &death,
                              const bool threshold, const Box<value_type> &box) {
@@ -1690,13 +2096,16 @@ inline void Summand::add_bar(value_type baseBirth, value_type baseDeath,
   _add_birth(birth);
   _add_death(death);
 }
-inline void Summand::add_bar(const filtration_type &birth,
-                             const filtration_type &death) {
+template <typename value_type>
+inline void Summand<value_type>::add_bar(const filtration_type &birth,
+                                         const filtration_type &death) {
   _add_birth(birth);
   _add_death(death);
 }
-inline void Summand::add_bar(const filtration_type &basepoint, value_type birth,
-                             value_type death, const Box<value_type> &box) {
+template <typename value_type>
+inline void Summand<value_type>::add_bar(const filtration_type &basepoint,
+                                         value_type birth, value_type death,
+                                         const Box<value_type> &box) {
   const bool verbose = false;
   if (birth >= death)
     return;
@@ -1726,24 +2135,53 @@ inline void Summand::add_bar(const filtration_type &basepoint, value_type birth,
  * @return bool
  */
 
-inline bool Summand::is_empty() const {
+template <typename value_type>
+inline bool Summand<value_type>::is_empty() const {
   return birth_corners_.empty() || death_corners_.empty();
 }
 
-inline const std::vector<filtration_type> &Summand::get_birth_list() const {
+template <typename value_type>
+inline const std::vector<typename Summand<value_type>::filtration_type> &
+Summand<value_type>::get_birth_list() const {
+  return birth_corners_.as_vector();
+}
+
+template <typename value_type>
+inline const std::vector<typename Summand<value_type>::filtration_type> &
+Summand<value_type>::get_death_list() const {
+  return death_corners_.as_vector();
+}
+
+template <typename value_type>
+const multi_filtrations::KCriticalFiltration<value_type> &
+Summand<value_type>::get_upset() const {
   return birth_corners_;
 }
-
-inline const std::vector<filtration_type> &Summand::get_death_list() const {
+template <typename value_type>
+const multi_filtrations::KCriticalFiltration<value_type> &
+Summand<value_type>::get_downset() const {
   return death_corners_;
+};
+
+template <typename value_type> inline void Summand<value_type>::clean() {
+  // birth_corners_.erase(
+  //     std::remove_if(birth_corners_.begin(), birth_corners_.end(),
+  //                    [](const std::vector<value_type> &bp) {
+  //                      return std::any_of(
+  //                          bp.begin(), bp.end(),
+  //                          [](float value) { return !std::isfinite(value); });
+  //                    }),
+  //     birth_corners_.end());
+  // TODO : clean 
 }
 
-inline void Summand::complete_birth(const value_type precision) {
+template <typename value_type>
+inline void Summand<value_type>::complete_birth(const value_type precision) {
   if (birth_corners_.empty())
     return;
 
-  for (unsigned int i = 0; i < birth_corners_.size(); i++) {
-    for (unsigned int j = i + 1; j < birth_corners_.size(); j++) {
+  for (std::size_t i = 0; i < birth_corners_.num_generators(); i++) {
+    for (std::size_t j = i + 1; j < birth_corners_.num_generators(); j++) {
       value_type dinf = d_inf(birth_corners_[i], birth_corners_[j]);
       if (dinf < 1.1 * precision) {
         _factorize_min(birth_corners_[i], birth_corners_[j]);
@@ -1754,12 +2192,13 @@ inline void Summand::complete_birth(const value_type precision) {
   _clean(birth_corners_);
 }
 
-inline void Summand::complete_death(const value_type precision) {
+template <typename value_type>
+inline void Summand<value_type>::complete_death(const value_type precision) {
   if (death_corners_.empty())
     return;
 
-  for (unsigned int i = 0; i < death_corners_.size(); i++) {
-    for (unsigned int j = i + 1; j < death_corners_.size(); j++) {
+  for (std::size_t i = 0; i < death_corners_.num_generators(); i++) {
+    for (std::size_t j = i + 1; j < death_corners_.num_generators(); j++) {
       value_type d = d_inf(death_corners_[i], death_corners_[j]);
       if (d < 1.1 * precision) {
         _factorize_max(death_corners_[i], death_corners_[j]);
@@ -1770,10 +2209,14 @@ inline void Summand::complete_death(const value_type precision) {
   _clean(death_corners_);
 }
 
-inline dimension_type Summand::get_dimension() const { return dimension_; }
+template <typename value_type>
+inline dimension_type Summand<value_type>::get_dimension() const {
+  return dimension_;
+}
 
-inline value_type
-Summand::get_landscape_value(const std::vector<value_type> &x) const {
+template <typename value_type>
+inline value_type Summand<value_type>::get_landscape_value(
+    const std::vector<value_type> &x) const {
   value_type out = 0;
   Box<value_type> trivial_box;
   for (const filtration_type &b : this->birth_corners_) {
@@ -1786,11 +2229,14 @@ Summand::get_landscape_value(const std::vector<value_type> &x) const {
   return out;
 }
 
-inline void Summand::set_dimension(dimension_type dimension) {
+template <typename value_type>
+inline void Summand<value_type>::set_dimension(dimension_type dimension) {
   dimension_ = dimension;
 }
 
-inline void Summand::_compute_interleaving(const Box<value_type> &box) {
+template <typename value_type>
+inline void
+Summand<value_type>::_compute_interleaving(const Box<value_type> &box) {
   distanceTo0_ = 0;
   /* #pragma omp parallel for reduction(max : distanceTo0_) */
   for (const std::vector<value_type> &birth : birth_corners_) {
@@ -1811,26 +2257,32 @@ inline void Summand::_compute_interleaving(const Box<value_type> &box) {
  * @param birth p_birth: birth to add to the summand
  */
 
-inline void Summand::_add_birth(const filtration_type &birth) {
+template <typename value_type>
+inline void Summand<value_type>::_add_birth(const filtration_type &birth) {
+  
+  birth_corners_.add_point(birth);
+  return;
+
+  // TODO : DEPRECATE THIS OLD CODE
   if (birth_corners_.empty()) {
     birth_corners_.push_back(birth);
     return;
   }
 
-  bool isUseful = true;
-  for (unsigned int i = 0; i < birth_corners_.size(); i++) {
-    if ((birth >= birth_corners_[i])) {
-      isUseful = false;
-      break;
+  for (const auto &current_birth : birth_corners_) {
+    if (birth >= current_birth) {
+      return;
     }
-    if (!birth_corners_[i].empty() && (birth <= birth_corners_[i])) {
-      birth_corners_[i].clear();
+  }
+  // this birth value is useful, we can now remove useless other filtrations
+  for (auto &current_birth : birth_corners_) {
+    if ((!current_birth.empty()) && (birth <= current_birth)) {
+      current_birth.clear();
     }
   }
 
   _clean(birth_corners_);
-  if (isUseful)
-    birth_corners_.push_back(birth);
+  birth_corners_.push_back(birth);
 }
 
 /**
@@ -1843,43 +2295,37 @@ inline void Summand::_add_birth(const filtration_type &birth) {
  * @param death p_death: deathpoint to add to this list
  */
 
-inline void Summand::_add_death(const filtration_type &death) {
+template <typename value_type>
+inline void Summand<value_type>::_add_death(const filtration_type &death) {
+
+  death_corners_.add_point(death);
+  return;
+  // TODO:  Deprecate this old code
   if (death_corners_.empty()) {
     death_corners_.push_back(death);
     return;
   }
 
-  // // as drawn in a slope 1 line being equal to -\infty is the same as the
-  // // first coordinate being equal to -\infty
-  // if (death_corners_.front().front() == inf)
-  // 	return;
-  //
-  // // when a birth is infinite, we store the summand like this
-  // if (death.front() == inf)
-  // {
-  // 	death_corners_ = {{inf}};
-  // 	return;
-  // }
-
-  bool isUseful = true;
-  for (unsigned int i = 0; i < death_corners_.size(); i++) {
-    if ((death <= death_corners_[i])) {
-      isUseful = false;
-      break;
-    }
-    if (!death_corners_[i].empty() && (death >= death_corners_[i])) {
-      death_corners_[i].clear();
+  for (const auto &current_death : death_corners_) {
+    if (death <= current_death) {
+      return;
     }
   }
-
+  // this death value is useful, we can now remove useless other filtrations
+  for (auto &current_death : death_corners_) {
+    if (!current_death.empty() && (death >= current_death)) {
+      current_death.clear();
+    }
+  }
   _clean(death_corners_);
-  if (isUseful)
-    death_corners_.push_back(death);
+  death_corners_.push_back(death);
 }
 
-inline value_type Summand::_get_max_diagonal(const filtration_type &birth,
-                                             const filtration_type &death,
-                                             const Box<value_type> &box) const {
+template <typename value_type>
+inline value_type
+Summand<value_type>::_get_max_diagonal(const filtration_type &birth,
+                                       const filtration_type &death,
+                                       const Box<value_type> &box) const {
   if constexpr (Debug::debug)
     assert(birth.size() == death.size() && "Inputs must be of the same size !");
   value_type s = inf;
@@ -1902,8 +2348,10 @@ inline value_type Summand::_get_max_diagonal(const filtration_type &birth,
   return s;
 }
 
-inline value_type Summand::_rectangle_volume(const filtration_type &a,
-                                             const filtration_type &b) const {
+template <typename value_type>
+inline value_type
+Summand<value_type>::_rectangle_volume(const filtration_type &a,
+                                       const filtration_type &b) const {
   if constexpr (Debug::debug)
     assert(a.size() == b.size() && "Inputs must be of the same size !");
   value_type s = b[0] - a[0];
@@ -1913,8 +2361,9 @@ inline value_type Summand::_rectangle_volume(const filtration_type &a,
   return s;
 }
 
-inline value_type Summand::d_inf(const filtration_type &a,
-                                 const filtration_type &b) const {
+template <typename value_type>
+inline value_type Summand<value_type>::d_inf(const filtration_type &a,
+                                             const filtration_type &b) const {
   if (a.empty() || b.empty() || a.size() != b.size())
     return inf;
 
@@ -1925,8 +2374,9 @@ inline value_type Summand::d_inf(const filtration_type &a,
   return d;
 }
 
-inline void Summand::_factorize_min(filtration_type &a,
-                                    const filtration_type &b) {
+template <typename value_type>
+inline void Summand<value_type>::_factorize_min(filtration_type &a,
+                                                const filtration_type &b) {
   /* if (Debug::debug && (a.empty() || b.empty())) */
   /* { */
   /* 	std::cout << "Empty corners ??\n"; */
@@ -1937,8 +2387,9 @@ inline void Summand::_factorize_min(filtration_type &a,
     a[i] = std::min(a[i], b[i]);
 }
 
-inline void Summand::_factorize_max(filtration_type &a,
-                                    const filtration_type &b) {
+template <typename value_type>
+inline void Summand<value_type>::_factorize_max(filtration_type &a,
+                                                const filtration_type &b) {
 
   /* if (Debug::debug && (a.empty() || b.empty())) */
   /* { */
@@ -1959,24 +2410,20 @@ inline void Summand::_factorize_max(filtration_type &a,
  */
 // WARNING Does permute the output.
 
-inline void Summand::_clean(std::vector<filtration_type> &list, bool keep_inf) {
-  unsigned int i = 0;
-  while (i < list.size()) {
-    while (!list.empty() && ((*(list.rbegin())).empty() ||
-                             (!keep_inf && ((*(list.rbegin()))[0] == inf ||
-                                            (*(list.rbegin()))[0] == negInf))))
-      list.pop_back();
-    if (i < list.size() &&
-        (list[i].empty() ||
-         (!keep_inf && (list[i][0] == inf || list[i][0] == negInf)))) {
-      list[i].swap(*(list.rbegin()));
-      list.pop_back();
-    }
-    i++;
-  }
+template <typename value_type>
+inline void Summand<value_type>::_clean(std::vector<filtration_type> &list,
+                                        bool keep_inf) {
+  list.erase(std::remove_if(list.begin(), list.end(),
+                            [keep_inf](filtration_type &a) {
+                              return a.empty() ||
+                                     ((!keep_inf) &&
+                                      (a.is_inf() || a.is_minus_inf()));
+                            }),
+             list.end());
 }
 
-inline void swap(Summand &sum1, Summand &sum2) {
+template <typename value_type>
+inline void swap(Summand<value_type> &sum1, Summand<value_type> &sum2) {
   std::swap(sum1.birth_corners_, sum2.birth_corners_);
   std::swap(sum1.death_corners_, sum2.death_corners_);
   std::swap(sum1.distanceTo0_, sum2.distanceTo0_);

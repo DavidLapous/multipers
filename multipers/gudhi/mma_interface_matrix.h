@@ -31,35 +31,31 @@ namespace Gudhi::multiparameter::interface {
 template <Gudhi::persistence_matrix::Column_types column_type =
               Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_options
-    : Gudhi::persistence_matrix::Default_options<
-          true, Gudhi::persistence_matrix::Z2_field_element, column_type,
-          false> {
+    : Gudhi::persistence_matrix::Default_options<column_type, true> {
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = true;
+  static const bool can_retrieve_representative_cycles = true;
 };
 
 template <Gudhi::persistence_matrix::Column_types column_type =
               Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_Clement_options
-    : Gudhi::persistence_matrix::Default_options<
-          true, Gudhi::persistence_matrix::Z2_field_element, column_type,
-          false> {
+    : Gudhi::persistence_matrix::Default_options<column_type, true> {
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = true;
   static const bool is_of_boundary_type = false;
-  static const bool is_indexed_by_position =
-      true; // useless if has_vine_update = false, as the two indexing
-            // strategies only differ when swaps occur.
+  static const Gudhi::persistence_matrix::Column_indexation_types
+      column_indexation_type =
+          Gudhi::persistence_matrix::Column_indexation_types::POSITION;
+  static const bool can_retrieve_representative_cycles = true;
 };
 
 template <Gudhi::persistence_matrix::Column_types column_type =
               Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct No_vine_multi_persistence_options
-    : Gudhi::persistence_matrix::Default_options<
-          true, Gudhi::persistence_matrix::Z2_field_element, column_type,
-          false> {
+    : Gudhi::persistence_matrix::Default_options<column_type, true> {
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = false;
@@ -67,11 +63,17 @@ struct No_vine_multi_persistence_options
 
 template <class Matrix_options, class Boundary_matrix_type>
 class Persistence_backend_matrix {
-private:
-  using matrix_type = Gudhi::persistence_matrix::Matrix<Matrix_options>;
 
 public:
+  using matrix_type = Gudhi::persistence_matrix::Matrix<Matrix_options>;
+  using cycle_type = typename matrix_type::cycle_type;
+  static const bool is_vine  = Matrix_options::has_vine_update;
+
   using bar = typename matrix_type::Bar;
+  //   using index = typename matrix_type::index;
+  //   using id_index = typename matrix_type::id_index;
+  using pos_index = typename matrix_type::pos_index;
+  using dimension_type = typename matrix_type::dimension_type;
 
   class Barcode_iterator
       : public boost::iterator_facade<Barcode_iterator, const bar &,
@@ -84,7 +86,9 @@ public:
       auto &b = barcode_->operator[](currPos_);
       currBar_.dim = b.dim;
       currBar_.birth = perm_->operator[](b.birth);
-      currBar_.death = b.death == -1 ? -1 : perm_->operator[](b.death);
+      currBar_.death = b.death == static_cast<pos_index>(-1)
+                           ? -1
+                           : perm_->operator[](b.death);
     }
 
     Barcode_iterator() : barcode_(nullptr), perm_(nullptr), currPos_(0) {}
@@ -115,7 +119,9 @@ public:
         auto &b = barcode_->operator[](currPos_);
         currBar_.dim = b.dim;
         currBar_.birth = perm_->operator[](b.birth);
-        currBar_.death = b.death == -1 ? -1 : perm_->operator[](b.death);
+        currBar_.death = b.death == static_cast<pos_index>(-1)
+                             ? -1
+                             : perm_->operator[](b.death);
       }
     }
   };
@@ -129,6 +135,10 @@ public:
 
     iterator end() const { return Barcode_iterator(); }
 
+    /* using bar = typename matrix_type::Bar; */
+    /* const bar& operator[](std::size_t i){ */
+    /*   return barcode_->at(); */
+    /* } */
     std::size_t size() const { return barcode_->size(); }
 
     inline friend std::ostream &operator<<(std::ostream &stream,
@@ -152,23 +162,28 @@ public:
   Persistence_backend_matrix(Boundary_matrix_type &boundaries,
                              std::vector<std::size_t> &permutation)
       : matrix_(boundaries.size()), permutation_(&permutation) {
+
     const bool verbose = false;
     if constexpr (verbose)
       std::cout << "Constructing matrix..." << std::endl;
-    std::vector<std::size_t> permutationInv(permutation.size());
+    std::vector<std::size_t> permutationInv(permutation_->size());
     std::vector<std::size_t> boundary_container;
     std::size_t c = 0;
-    for (std::size_t i : permutation) {
+    for (std::size_t i : *permutation_) {
+      // BUG : This segfaults
+      if (i == static_cast<std::size_t>(-1))
+        { c++;continue; }
+      // possible solution : std::erase std::remove_if in perm / perm_inv, as the order in matrix will be this one. But need to check the rest of the interface
       permutationInv[i] = c++;
       boundary_container.resize(boundaries[i].size());
       if constexpr (verbose)
-        std::cout << i << "/" << permutation.size() << " dimension "
+        std::cout << i << "/" << permutation_->size() << " dimension "
                   << boundaries.dimension(i) << "..." << std::endl
                   << std::flush;
       for (std::size_t j = 0; j < boundaries[i].size(); ++j) {
         boundary_container[j] = permutationInv[boundaries[i][j]];
       }
-      matrix_.insert_boundary(boundary_container, boundaries.dimension(i));
+      matrix_.insert_boundary(c-1,boundary_container, boundaries.dimension(i));
     }
   }
   Persistence_backend_matrix(const Persistence_backend_matrix &toCopy)
@@ -190,11 +205,13 @@ public:
     be1.permutationInv_.swap(be2.permutationInv_);
   }
 
-  int get_dimension(int i) { return matrix_.get_column_dimension(i); }
+  inline dimension_type get_dimension(pos_index i) {
+    return matrix_.get_column_dimension(i);
+  }
 
-  void vine_swap(int i) { matrix_.vine_swap(i); }
+  inline void vine_swap(pos_index i) { matrix_.vine_swap(i); }
 
-  Barcode get_barcode() { return Barcode(matrix_, permutation_); }
+  inline Barcode get_barcode() { return Barcode(matrix_, permutation_); }
 
   inline friend std::ostream &
   operator<<(std::ostream &stream, Persistence_backend_matrix &structure) {
@@ -208,6 +225,15 @@ public:
 
     stream << "]\n";
     return stream;
+  }
+
+  inline std::vector<cycle_type> get_representative_cycles(bool update) {
+    if (update) [[likely]]
+      matrix_.update_representative_cycles();
+    return matrix_.get_representative_cycles();
+  }
+  inline void _update_permutation_ptr(std::vector<std::size_t> &perm) {
+    permutation_ = &perm;
   }
 
 private:

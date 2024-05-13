@@ -24,15 +24,81 @@ ctypedef fused some_float:
     double
 
 
-
-
 def compute_grid(
-        filtrations_values,
-        resolutions=None, 
+        x,
+        resolution=None, 
         strategy:Lstrategies="exact", 
         bool unique=True, 
         some_float _q_factor=1., 
-        drop_quantiles=[0,0]
+        drop_quantiles=[0,0],
+        bool dense = False,
+        ):
+    """
+    Computes a grid from filtration values, using some strategy.
+
+    Input
+    -----
+    
+    - `filtrations_values`: `Iterable[filtration of parameter for parameter]`
+       where `filtration_of_parameter` is a array[float, ndim=1]
+     - `resolution`:Optional[int|tuple[int]]
+     - `strategy`: either exact, regular, regular_closest, regular_left, partition, quantile, or precomputed.
+     - `unique`: if true, doesn't repeat values in the output grid.
+     - `drop_quantiles` : drop some filtration values according to these quantiles
+    Output
+    ------
+
+    Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
+    """
+
+    from multipers.slicer import is_slicer
+    from multipers.simplex_tree_multi import is_simplextree_multi
+    
+    cdef bool is_numpy_compatible = True
+    if is_slicer(x):
+        initial_grid = x.get_filtrations_values().T
+    elif is_simplextree_multi(x):
+        initial_grid = x.get_filtration_grid()
+    elif isinstance(x, np.ndarray):
+        initial_grid = x
+    else:
+        x = tuple(x)
+        if len(x) == 0: return []
+        first = x[0]
+        if isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
+            initial_grid = tuple(np.asarray(f) for f in x)
+        else:
+            is_numpy_compatible = False
+            import torch
+            assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
+            initial_grid = x
+
+    if is_numpy_compatible:
+        return _compute_grid_numpy(
+        initial_grid,
+        resolution=resolution, 
+        strategy = strategy, 
+        unique = unique, 
+        _q_factor=_q_factor, 
+        drop_quantiles=drop_quantiles,
+        dense = dense,
+        )
+    from multipers.torch.diff_grids import get_grid
+    return get_grid(strategy)(initial_grid,resolution)
+
+
+
+
+
+
+def _compute_grid_numpy(
+        filtrations_values,
+        resolution=None, 
+        strategy:Lstrategies="exact", 
+        bool unique=True, 
+        some_float _q_factor=1., 
+        drop_quantiles=[0,0],
+        bool dense = False,
         ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -41,7 +107,7 @@ def compute_grid(
     -----
      - `filtrations_values`: `Iterable[filtration of parameter for parameter]`
        where `filtration_of_parameter` is a array[float, ndim=1]
-     - `resolutions`:Optional[int|tuple[int]]
+     - `resolution`:Optional[int|tuple[int]]
      - `strategy`: either exact, regular, regular_closest, regular_left, partition, quantile, or precomputed.
      - `unique`: if true, doesn't repeat values in the output grid.
      - `drop_quantiles` : drop some filtration values according to these quantiles
@@ -50,12 +116,12 @@ def compute_grid(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
-    if resolutions is None and strategy not in ["exact", "precomputed"]:
-        raise ValueError("Resolutions must be provided for this strategy.")
-    elif resolutions is not None:
+    if resolution is None and strategy not in ["exact", "precomputed"]:
+        raise ValueError("Resolution must be provided for this strategy.")
+    elif resolution is not None:
         try:
-            int(resolutions)
-            resolutions = [resolutions]*num_parameters
+            int(resolution)
+            resolution = [resolution]*num_parameters
         except:
             pass
     try:
@@ -71,39 +137,52 @@ def compute_grid(
                 for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
                 ]
 
+    to_unique = lambda f : np.unique(f) if isinstance(f,np.ndarray) else f.unique()
     ## match doesn't work with cython BUG
     if strategy == "exact":
-        to_unique = lambda f : np.unique(f) if isinstance(f,np.ndarray) else f.unique()
-        F=[to_unique(f) for f in filtrations_values]
+        F=tuple(to_unique(f) for f in filtrations_values)
     elif strategy == "quantile":
-        F = [f.unique() for f in filtrations_values]
-        max_resolution = [min(len(f),r) for f,r in zip(F,resolutions)]
-        F = [np.quantile(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0, method='closest_observation') for f,r in zip(F, resolutions)]
+        F = tuple(to_unique(f) for f in filtrations_values)
+        max_resolution = [min(len(f),r) for f,r in zip(F,resolution)]
+        F = tuple( np.quantile(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0, method='closest_observation') for f,r in zip(F, resolution) )
         if unique:
-            F = [np.unique(f) for f in F]
+            F = tuple(to_unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
-                return compute_grid(filtrations_values=filtrations_values, resolutions=resolutions, strategy="quantile",_q_factor=1.5*_q_factor)
+                return _compute_grid_numpy(filtrations_values=filtrations_values, resolution=resolution, strategy="quantile",_q_factor=1.5*_q_factor)
     elif strategy == "regular":
-        F = [np.linspace(f.min(),f.max(),num=r) for f,r in zip(filtrations_values, resolutions)]
+        F = tuple(np.linspace(f.min(),f.max(),num=r, dtype=f.dtype) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_closest":
-        F = [_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+        F = tuple(_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_left":
-        F = [_todo_regular_left(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+        F = tuple(_todo_regular_left(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "torch_regular_closest":
-        F = [_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+        F = tuple(_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "partition":
-        F = [_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+        F = tuple(_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "precomputed":
         F=filtrations_values
     else:
         raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
+    if dense:
+        mesh = np.meshgrid(*F)
+        coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1)
+        return coordinates 
     return F
 
+def todense(grid):
+    if len(grid) == 0:
+        return np.empty(0)
+    dtype = grid[0].dtype
+    mesh = np.meshgrid(*grid)
+    coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1, dtype=dtype)
+    return coordinates
 
 
+
+## TODO : optimize. Pykeops ?
 def _todo_regular_closest(some_float[:] f, int r, bool unique):
     f_array = np.asarray(f)
-    cdef float[:] f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=np.float32)
+    f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
     f_regular_closest = np.asarray([f[<long>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)])
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
@@ -117,7 +196,7 @@ def _todo_regular_left(some_float[:] f, int r, bool unique):
 
 def _torch_regular_closest(f, int r, bool unique=True):
     import torch
-    f_regular = torch.linspace(f.min(),f.max(), r)
+    f_regular = torch.linspace(f.min(),f.max(), r, dtype=f.dtype)
     f_regular_closest =torch.tensor([f[(f-x).abs().argmin()] for x in f_regular]) 
     if unique: f_regular_closest = f_regular_closest.unique()
     return f_regular_closest
@@ -148,16 +227,48 @@ def push_to_grid(some_float[:,:] points, grid, bool return_coordinate=False):
     return out
 
 
-def coarsen_points(some_float[:,:] points, strategy="exact", int resolutions=-1, bool coordinate=False):
-    grid = compute_grid(points.T, strategy=strategy, resolutions=resolutions)
+def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, bool coordinate=False):
+    grid = _compute_grid_numpy(points.T, strategy=strategy, resolution=resolution)
     if coordinate:
         return push_to_grid(points, grid, coordinate), grid
     return push_to_grid(points, grid, coordinate)
 
 
 
+def sm_in_grid(pts, weights, grid_conversion, int num_parameters=-1):
+    """Given a measure whose points are coordinates,
+    pushes this measure in this grid.
+    Input
+    -----
+     - pts: of the form array[int, ndim=2]
+     - weights: array[int, ndim=1]
+     - grid_conversion of the form Iterable[array[float, ndim=1]]
+     - num_parameters: number of parameters
+    """
+    first_filtration = grid_conversion[0]
+    dtype = first_filtration.dtype
+    def to_int(x):
+        return np.asarray(x,dtype=np.int64)
+    if isinstance(first_filtration, np.ndarray):
+        def empty_like(x, weights):
+            return np.empty_like(x, dtype=dtype), np.asarray(weights)
+    else: 
+        import torch
+        # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
+        def empty_like(x, weights):
+            return torch.empty(x.shape,dtype=dtype), torch.from_numpy(weights).type(torch.int64)
+
+    pts = to_int(pts)
+    coords,weights = empty_like(pts,weights)
+    for i in range(coords.shape[1]):
+        if num_parameters > 0:
+            coords[:,i] = grid_conversion[i%num_parameters][pts[:,i]]
+        else:
+            coords[:,i] = grid_conversion[i][pts[:,i]]
+    return (coords, weights)
+
 # TODO : optimize with memoryviews / typing
-def sms_in_grid(sms, grid_conversion):
+def sms_in_grid(sms, grid_conversion, int num_parameters=-1):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
     Input
@@ -166,19 +277,5 @@ def sms_in_grid(sms, grid_conversion):
        where signed_measure_like = tuple(array[int, ndim=2], array[int])
      - grid_conversion of the form Iterable[array[float, ndim=1]]
     """
-    first_filtration = grid_conversion[0]
-    dtype = first_filtration.dtype
-    def to_int(x):
-        return np.asarray(x,dtype=np.int64)
-    def empty_like(x, weights):
-        return np.empty_like(x, dtype=dtype), np.asarray(weights)
-
-    for degree_index,(pts,weights) in enumerate(sms):
-        # print(pts.shape,weights.shape)
-        # assert (pts>=0).all(), f"{degree_index=}, {pts=}, {weights=}"
-        pts = to_int(pts)
-        coords,weights = empty_like(pts,weights)
-        for i in range(coords.shape[1]):
-            coords[:,i] = grid_conversion[i][pts[:,i]]
-        sms[degree_index]=(coords, weights)
+    sms = tuple(sm_in_grid(pts,weights,grid_conversion,num_parameters) for pts,weights in sms)
     return sms

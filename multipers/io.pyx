@@ -1,26 +1,67 @@
-from multipers.simplex_tree_multi import SimplexTreeMulti
 import re
 from gudhi import SimplexTree
 import multipers.slicer as mps
 import gudhi as gd
 import numpy as np
 import os
-from libcpp cimport bool 
 from shutil import which
-
+from libcpp cimport bool
 from typing import Optional, Literal
 from collections import defaultdict
+import itertools
+import threading
+
+# from multipers.filtration_conversions cimport *
+# from multipers.mma_structures cimport boundary_matrix,float,pair,vector,intptr_t
+cimport numpy as cnp
+
 doc_soft_urls = {
         "mpfree":"https://bitbucket.org/mkerber/mpfree/",
         "multi_chunk":"",
         "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
-        "2pac":"https://gitlab.com/flenzen/2-parameter-persistent-cohomology",
+        "2pac":"https://gitlab.com/flenzen/2pac",
         }
-doc_soft_urls = defaultdict(lambda:"<Unknown url>")
-doc_soft_urls["mpfree"]= "https://bitbucket.org/mkerber/mpfree/"
-doc_soft_urls["multi_chunk"]= "https://bitbucket.org/mkerber/multi_chunk"
-doc_soft_urls["function_delaunay"]= "https://bitbucket.org/mkerber/function_delaunay/"
-doc_soft_urls["twopac"]= "https://gitlab.com/flenzen/2-parameter-persistent-cohomology"
+doc_soft_easy_install = {
+        "mpfree":f"""
+```sh
+git clone {doc_soft_urls["mpfree"]}
+cd mpfree
+sudo cp mpfree /usr/bin/
+cd .. 
+rm -rf mpfree
+```
+        """,
+        "multi_chunk":f"""
+```sh
+git clone {doc_soft_urls["multi_chunk"]}
+cd multi_chunk
+sudo cp multi_chunk /usr/bin/
+cd .. 
+rm -rf multi_chunk
+```
+        """,
+        "function_delaunay":f"""
+```sh
+git clone {doc_soft_urls["function_delaunay"]}
+cd function_delaunay
+sudo cp main /usr/bin/function_delaunay
+cd ..
+rm -rf function_delaunay
+```
+        """,
+        "2pac":f"""
+```sh
+git clone {doc_soft_urls["2pac"]} 2pac
+cd 2pac && mkdir build && cd build
+cmake ..
+make
+sudo cp 2pac /usr/bin
+```
+""",
+        }
+doc_soft_urls = defaultdict(lambda:"<Unknown url>", doc_soft_urls)
+doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
+
 available_reduce_softs = Literal["mpfree","multi_chunk","2pac"]
 
 
@@ -51,7 +92,36 @@ pathes = {
 input_path:str|os.PathLike = "multipers_input.scc"
 output_path:str|os.PathLike = "multipers_output.scc"
 
-def scc_parser(path: str):
+
+
+## TODO : optimize with Python.h ?
+def scc_parser(path: str| os.PathLike):
+    """
+    Parse an scc file into the scc python format, aka blocks.
+    """
+    pass_line_regex = re.compile(r"^\s*$|^#|^scc2020$")
+    def valid_line(line):
+        return pass_line_regex.match(line) is None
+    parse_line_regex = re.compile(r"^(?P<filtration>[^;]+);(?P<boundary>[^;]*)$")
+    cdef tuple[tuple[str,str]] clines 
+    with open(path, "r") as f:
+        lines =(x.strip() for x in f if valid_line(x))
+        num_parameters = int(next(lines))
+        sizes = np.cumsum([0] + next(lines).split(), dtype=np.int32)
+        lines = (parse_line_regex.match(a) for a in lines)
+        clines = tuple((a.group("filtration"),a.group("boundary")) for a in lines)
+    F = np.fromiter((a[0].split() for a in clines), dtype=np.dtype((np.float32,2)), count = sizes[-1])
+    
+    B = tuple(np.asarray(a[1].split(), dtype=np.int32) if len(a[1])>0 else np.empty(0, dtype=np.int32) for a in clines) ## TODO : this is very slow : optimize 
+    # block_lines = (tuple(get_bf(x, num_parameters) for x in lines[sizes[i]:sizes[i+1]]) for i in range(len(sizes)-1))
+
+    # blocks = [(np.asarray([x[0] for x in b if len(x)>0], dtype=float),tuple(x[1] for x in b))  for b in block_lines]
+    blocks = [(F[sizes[i]:sizes[i+1]], B[sizes[i]:sizes[i+1]]) for i in range(len(sizes)-1)]
+
+    return blocks
+
+
+def scc_parser__old(path: str):
     """
     Parse an scc file into the scc python format, aka blocks.
     """
@@ -115,6 +185,8 @@ def scc_parser(path: str):
 
     return blocks
 
+
+
 def _put_temp_files_to_ram():
     global input_path,output_path
     shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
@@ -139,6 +211,8 @@ def _init_external_softwares(requires=[]):
 Did not found {soft}.
 Install it from {doc_soft_urls[soft]}, and put it in your current directory,
 or in you $PATH.
+For instance:
+{doc_soft_easy_install[soft]}
                                  """)
 
 def scc_reduce_from_str(
@@ -146,7 +220,7 @@ def scc_reduce_from_str(
         bool full_resolution=True,
         int dimension: int | np.int64 = 1,
         bool clear: bool = True,
-        id: str = "",  # For parallel stuff
+        id: Optional[str] = None,  # For parallel stuff
         bool verbose:bool=False,
         backend:Literal["mpfree","multi_chunk","twopac"]="mpfree"
         ):
@@ -169,6 +243,8 @@ def scc_reduce_from_str(
 
     resolution_str = "--resolution" if full_resolution else ""
     # print(mpfree_in_path + id, mpfree_out_path + id)
+    if id is None:
+        id = str(threading.get_native_id())
     if not os.path.exists(path):
         raise ValueError(f"No file found at {path}.")
     if os.path.exists(output_path + id):
@@ -203,7 +279,7 @@ def reduce_complex(
         bool full_resolution: bool = True,
         int dimension: int | np.int64 = 1,
         bool clear: bool = True,
-        id: str = "",  # For parallel stuff
+        id: Optional[str]=None,  # For parallel stuff
         bool verbose:bool=False,
         backend:available_reduce_softs="mpfree"
         ):
@@ -219,8 +295,11 @@ def reduce_complex(
     verbose: bool
     """
 
+    from multipers.simplex_tree_multi import is_simplextree_multi
+    if id is None:
+        id = str(threading.get_native_id())
     path = input_path+id
-    if isinstance(complex, SimplexTreeMulti):
+    if is_simplextree_multi(complex):
         complex.to_scc(
                 path=path,
                 rivet_compatible=False,
@@ -256,7 +335,7 @@ def reduce_complex(
 def function_delaunay_presentation(
         point_cloud:np.ndarray,
         function_values:np.ndarray,
-        id:str = "",
+        id:Optional[str] = None,
         bool clear:bool = True,
         bool verbose:bool=False,
         int degree = -1,
@@ -272,6 +351,8 @@ def function_delaunay_presentation(
     degree: computes minimal presentation of this degree if given
     verbose : bool
     """
+    if id is None:
+        id = str(threading.get_native_id())
     global input_path, output_path, pathes
     backend = "function_delaunay"
     if  pathes[backend] is None :
@@ -297,6 +378,7 @@ def function_delaunay_presentation(
 
 
 def clear_io(*args):
+    """Removes temporary files"""
     global input_path,output_path
     for x in [input_path,output_path] + list(args):
         if os.path.exists(x):
@@ -306,63 +388,73 @@ def clear_io(*args):
 
 
 
-from multipers.mma_structures cimport Finitely_critical_multi_filtration,uintptr_t,boundary_matrix,float,pair,vector,intptr_t
-cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
-    pair[boundary_matrix, vector[Finitely_critical_multi_filtration]] simplextree_to_boundary_filtration(uintptr_t)
-    vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(uintptr_t)
-    pair[vector[vector[float]],boundary_matrix ] simplextree_to_ordered_bf(uintptr_t)
 
-def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree):
-    """Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
+# cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
+    # pair[boundary_matrix, vector[Finitely_critical_multi_filtration[double]]] simplextree_to_boundary_filtration(intptr_t)
+    # vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(intptr_t)
+    # vector[pair[ vector[vector[vector[float]]],boundary_matrix]] function_simplextree_to_scc(intptr_t)
+    # pair[vector[vector[float]],boundary_matrix ] simplextree_to_ordered_bf(intptr_t)
 
-    Parameters
-    ----------
-    simplextree: Gudhi or mma simplextree
-        The simplextree defining the filtration to convert to boundary-filtration.
+# def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree):
+#     """Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
+#
+#     Parameters
+#     ----------
+#     simplextree: Gudhi or mma simplextree
+#         The simplextree defining the filtration to convert to boundary-filtration.
+#
+#     Returns
+#     -------
+#     B:List of lists of ints
+#         The boundary matrix.
+#     F: List of 1D filtration
+#         The filtrations aligned with B; the i-th simplex of this simplextree has boundary B[i] and filtration(s) F[i].
+#
+#     """
+#     cdef intptr_t cptr
+#     if isinstance(simplextree, SimplexTreeMulti):
+#         cptr = simplextree.thisptr
+#     elif isinstance(simplextree, SimplexTree):
+#         temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
+#         cptr = temp_st.thisptr
+#     else:
+#         raise TypeError("Has to be a simplextree")
+#     cdef pair[boundary_matrix, vector[Finitely_critical_multi_filtration[double]]] cboundary_filtration = simplextree_to_boundary_filtration(cptr)
+#     boundary = cboundary_filtration.first
+#     # multi_filtrations = np.array(<vector[vector[float]]>Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
+#     cdef cnp.ndarray[double, ndim=2] multi_filtrations = _fmf2numpy_f64(cboundary_filtration.second)
+#     return boundary, multi_filtrations
 
-    Returns
-    -------
-    B:List of lists of ints
-        The boundary matrix.
-    F: List of 1D filtration
-        The filtrations aligned with B; the i-th simplex of this simplextree has boundary B[i] and filtration(s) F[i].
-
-    """
-    cdef intptr_t cptr
-    if isinstance(simplextree, SimplexTreeMulti):
-        cptr = simplextree.thisptr
-    elif isinstance(simplextree, SimplexTree):
-        temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
-        cptr = temp_st.thisptr
-    else:
-        raise TypeError("Has to be a simplextree")
-    cdef pair[boundary_matrix, vector[Finitely_critical_multi_filtration]] cboundary_filtration = simplextree_to_boundary_filtration(cptr)
-    boundary = cboundary_filtration.first
-    multi_filtrations = np.array(Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
-    return boundary, multi_filtrations
-
-def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32, bool flattened=False):
-    """
-    Turns a simplextree into a (simplicial) module presentation.
-    """
-    cdef intptr_t cptr
-    if isinstance(simplextree, SimplexTreeMulti):
-        cptr = simplextree.thisptr
-    elif isinstance(simplextree, SimplexTree):
-        temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
-        cptr = temp_st.thisptr
-    else:
-        raise TypeError("Has to be a simplextree")
-    
-    cdef pair[vector[vector[float]], boundary_matrix] out
-    if flattened:
-        out = simplextree_to_ordered_bf(cptr)
-        return np.asarray(out.first,dtype=filtration_dtype), tuple(out.second)
-
-    blocks = simplextree_to_scc(cptr)
-    # reduces the space in memory
-    blocks = [(np.asarray(f,dtype=filtration_dtype), tuple(b)) for f,b in blocks[::-1]] ## presentation is on the other order 
-    return blocks
+# def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32, bool flattened=False):
+#     """
+#     Turns a simplextree into a (simplicial) module presentation.
+#     """
+#     cdef intptr_t cptr
+#     cdef bool is_function_st = False
+#     if isinstance(simplextree, SimplexTreeMulti):
+#         cptr = simplextree.thisptr
+#         is_function_st = simplextree._is_function_simplextree
+#     elif isinstance(simplextree, SimplexTree):
+#         temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
+#         cptr = temp_st.thisptr
+#     else:
+#         raise TypeError("Has to be a simplextree")
+#     
+#     cdef pair[vector[vector[float]], boundary_matrix] out
+#     if flattened:
+#         out = simplextree_to_ordered_bf(cptr)
+#         return np.asarray(out.first,dtype=filtration_dtype), tuple(out.second)
+#
+#     if is_function_st:
+#         blocks = function_simplextree_to_scc(cptr)
+#     else:
+#         blocks = simplextree_to_scc(cptr)
+#     # reduces the space in memory
+#     if is_function_st:
+#         blocks = [(tuple(f), tuple(b)) for f,b in blocks[::-1]]
+#     else:
+#         blocks = [(np.asarray(f,dtype=filtration_dtype), tuple(b)) for f,b in blocks[::-1]] ## presentation is on the other order 
+#     return blocks+[(np.empty(0,dtype=filtration_dtype),[])]
 
 def scc2disk(
         stuff,
@@ -399,10 +491,81 @@ def scc2disk(
         if not strip_comments: f.write("# Sizes of generating sets\n")
         for block in stuff: f.write(f"{len(block[0])} ")
         f.write("\n")
-
         for i,block in enumerate(stuff):
             if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
             if not strip_comments: f.write(f"# Block of dimension {len(stuff)-1-i}\n")
-            for filtration,boundary in zip(*block):
-                line = " ".join(tuple(str(x) for x in filtration)) + " ; " + " ".join(tuple(str(x) for x in boundary)) +"\n"
-                f.write(line)
+            filtration, boundary = block
+            filtration = np.asarray(filtration).astype(str)
+            # boundary = tuple(x.astype(str) for x in boundary)
+            f.write(" ".join(itertools.chain.from_iterable(
+                ((*(f.tolist()),";",*(np.asarray(b).astype(str).tolist()),"\n") for f,b in zip(filtration, boundary))
+                )
+            ))
+            # for j in range(<int>len(filtration)):
+            #     line = " ".join((
+            #         *filtration[j], 
+            #         ";", 
+            #         *boundary[j], 
+            #         "\n",
+            #     ))
+            #     f.write(line)
+
+def scc2disk_old(
+        stuff,
+        path:str|os.PathLike,
+        num_parameters = -1,
+        reverse_block = False,
+        rivet_compatible = False,
+        ignore_last_generators = False,
+        strip_comments = False,
+        ):
+    """
+    Writes a scc python format / blocks into a file.
+    """
+    if num_parameters == -1:
+        for block in stuff:
+            if len(block[0]) == 0:
+                continue
+            num_gens, num_parameters_= np.asarray(block[0]).shape 
+            num_parameters = num_parameters_
+            break
+    assert num_parameters > 0, f"Invalid number of parameters {num_parameters}"
+
+    if reverse_block:	stuff.reverse()
+    out = []
+    if rivet_compatible:
+        out.append(r"firep")
+    else:
+        out.append(r"scc2020")
+    if not strip_comments and not rivet_compatible: 
+        out.append(r"# Number of parameters")
+    if rivet_compatible:
+        out.append("Filtration 1")
+        out.append("Filtration 2\n")
+    else:
+        out.append(f"{num_parameters}")
+
+    if not strip_comments: 
+        out.append("# Sizes of generating sets")
+        
+    # for block in stuff: 
+    #     f.write(f"{len(block[0])} ")
+    out.append(" ".join(str(len(block[0])) for block in stuff))
+    str_blocks = [out]
+    for i,block in enumerate(stuff):
+        if (rivet_compatible or ignore_last_generators) and i == len(stuff)-1: continue
+        if not strip_comments: 
+            str_blocks.append([f"# Block of dimension {len(stuff)-1-i}"])
+        filtration, boundary = block
+        if len(filtration) == 0:
+            continue
+        filtration = filtration.astype(str)
+        C = filtration[:,0]
+        for i in range(1,filtration.shape[1]):
+            C = np.char.add(C," ")
+            C = np.char.add(C,filtration[:,i])
+        C = np.char.add(C, ";")
+        D = np.fromiter((" ".join(b.astype(str).tolist()) for b in boundary), dtype="<U11") #int32-> str is "<U11" #check np.array(1, dtype=np.int32).astype(str)
+        str_blocks.append(np.char.add(C,D))
+    
+    np.savetxt("test.scc", np.concatenate(str_blocks), delimiter="", fmt="%s")

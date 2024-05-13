@@ -9,9 +9,6 @@ import multipers as mp
 from multipers.simplex_tree_multi import SimplexTreeMulti
 
 
-reduce_grid = SimplexTreeMulti._reduce_grid
-
-
 def get_simplex_tree_from_delayed(x) -> mp.SimplexTreeMulti:
     f, args, kwargs = x
     return f(*args, **kwargs)

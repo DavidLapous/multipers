@@ -11,8 +11,8 @@
 #ifndef PM_BASE_SWAP_H
 #define PM_BASE_SWAP_H
 
-#include <utility>	//std::swap, std::move & std::exchange
-#include <vector>
+#include <utility>		//std::swap, std::move & std::exchange
+#include <algorithm>	//std::max
 
 namespace Gudhi {
 namespace persistence_matrix {
@@ -33,6 +33,7 @@ class Base_swap
 public:
 	using matrix_type = typename Master_matrix::column_container_type;
 	using index = typename Master_matrix::index;
+	using id_index = typename Master_matrix::id_index;
 
 	Base_swap();
 	Base_swap(unsigned int numberOfColumns);
@@ -40,8 +41,7 @@ public:
 	Base_swap(Base_swap&& other) noexcept;
 
 	void swap_columns(index columnIndex1, index columnIndex2);
-	void swap_rows(index rowIndex1, index rowIndex2);
-	void swap_at_indices(index index1, index index2);
+	void swap_rows(id_index rowIndex1, id_index rowIndex2);
 
 	Base_swap& operator=(Base_swap other);
 	friend void swap(Base_swap& base1, Base_swap& base2){
@@ -51,8 +51,8 @@ public:
 	}
 
 protected:
-	using index_dictionnary_type = typename Master_matrix::template dictionnary_type<unsigned int>;
-	using row_dictionnary_type = typename Master_matrix::template dictionnary_type<index>;
+	using index_dictionnary_type = typename Master_matrix::template dictionnary_type<index>;
+	using row_dictionnary_type = typename Master_matrix::template dictionnary_type<id_index>;
 
 	index_dictionnary_type indexToRow_;
 	row_dictionnary_type rowToIndex_;
@@ -75,7 +75,7 @@ inline Base_swap<Master_matrix,Base_matrix>::Base_swap(unsigned int numberOfColu
 	  rowToIndex_(numberOfColumns),
 	  rowSwapped_(false)
 {
-	for (unsigned int i = 0; i < numberOfColumns; i++){
+	for (index i = 0; i < numberOfColumns; i++){
 		indexToRow_[i] = i;
 		rowToIndex_[i] = i;
 	}
@@ -102,18 +102,38 @@ inline void Base_swap<Master_matrix,Base_matrix>::swap_columns(index columnIndex
 }
 
 template<class Master_matrix, class Base_matrix>
-inline void Base_swap<Master_matrix,Base_matrix>::swap_rows(index rowIndex1, index rowIndex2)
+inline void Base_swap<Master_matrix,Base_matrix>::swap_rows(id_index rowIndex1, id_index rowIndex2)
 {
 	rowSwapped_ = true;
-	std::swap(rowToIndex_[indexToRow_[rowIndex1]], rowToIndex_[indexToRow_[rowIndex2]]);
-	std::swap(indexToRow_[rowIndex1], indexToRow_[rowIndex2]);
-}
 
-template<class Master_matrix, class Base_matrix>
-inline void Base_swap<Master_matrix,Base_matrix>::swap_at_indices(index index1, index index2)
-{
-	swap_columns(index1, index2);
-	swap_rows(index1, index2);
+	if constexpr (Master_matrix::Option_list::has_map_column_container){
+		auto it1 = indexToRow_.find(rowIndex1);
+		auto it2 = indexToRow_.find(rowIndex2);
+
+		if (it1 == indexToRow_.end() && it2 == indexToRow_.end()) return;
+
+		if (it1 == indexToRow_.end()) {
+			indexToRow_.emplace(rowIndex1, it2->second);
+			rowToIndex_.at(it2->second) = rowIndex1;
+			indexToRow_.erase(it2->second);
+			return;
+		}
+
+		if (it2 == indexToRow_.end()) {
+			indexToRow_.emplace(rowIndex2, it1->second);
+			rowToIndex_.at(it1->second) = rowIndex2;
+			indexToRow_.erase(it1);
+			return;
+		}
+
+		std::swap(rowToIndex_.at(it1->second), rowToIndex_.at(it2->second));
+		std::swap(it1->second, it2->second);
+	} else {
+		for (auto i = indexToRow_.size(); i <= std::max(rowIndex1, rowIndex2); ++i) indexToRow_.push_back(i);
+
+		std::swap(rowToIndex_[indexToRow_[rowIndex1]], rowToIndex_[indexToRow_[rowIndex2]]);
+		std::swap(indexToRow_[rowIndex1], indexToRow_[rowIndex2]);
+	}
 }
 
 template<class Master_matrix, class Base_matrix>
@@ -131,7 +151,7 @@ inline void Base_swap<Master_matrix,Base_matrix>::_orderRows()
 	for (unsigned int i = 0; i < _matrix()->get_number_of_columns(); i++){
 		_matrix()->matrix_.at(i).reorder(rowToIndex_);
 	}
-	for (unsigned int i = 0; i < _matrix()->get_number_of_columns(); i++){
+	for (index i = 0; i < _matrix()->get_number_of_columns(); i++){
 		indexToRow_[i] = i;
 		rowToIndex_[i] = i;
 	}

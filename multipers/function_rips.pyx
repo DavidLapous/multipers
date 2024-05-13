@@ -9,8 +9,8 @@ import numpy as np
 cimport numpy as cnp
 cnp.import_array()
 
-ctypedef float value_type 
-python_value_type=np.float32
+ctypedef double value_type 
+python_value_type=np.float64
 
 ctypedef int32_t indices_type # uint fails for some reason
 python_indices_type=np.int32
@@ -21,7 +21,7 @@ python_tensor_dtype = np.int32
 ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure_type
 
 
-from multipers.simplex_tree_multi import SimplexTreeMulti
+from multipers.simplex_tree_multi import SimplexTreeMulti_Ff64
 from gudhi.simplex_tree import SimplexTree
 
 cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::multiparameter::function_rips":
@@ -37,7 +37,7 @@ import multipers.grids as mpg
 def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0):
 	assert isinstance(st,SimplexTree), "Input has to be a Gudhi simplextree for now."
 	assert st.dimension() == 1, "Simplextree has to be of dimension 1. You can use the `prune_above_dimension` method."
-	degree_rips_st = SimplexTreeMulti(num_parameters=degrees.size())
+	degree_rips_st = SimplexTreeMulti_Ff64(num_parameters=degrees.size())
 	cdef intptr_t simplextree_ptr = st.thisptr
 	cdef intptr_t st_multi_ptr = degree_rips_st.thisptr
 	cdef pair[vector[value_type],int] out
@@ -48,12 +48,12 @@ def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0
 	cdef bool inf_flag = filtrations[-1] == np.inf
 	if inf_flag:
 		filtrations = filtrations[:-1]
-	filtrations, = mpg.compute_grid([filtrations],strategy=grid_strategy,resolutions=resolution)
+	filtrations, = mpg.compute_grid([filtrations],strategy=grid_strategy,resolution=resolution)
 	if inf_flag:
 		filtrations = np.concatenate([filtrations, [np.inf]])
-	degree_rips_st.grid_squeeze([filtrations]*degree_rips_st.num_parameters)
+	degree_rips_st.grid_squeeze([filtrations]*degree_rips_st.num_parameters, inplace=True, coordinate_values=True)
 	degree_rips_st.filtration_grid = [filtrations, np.asarray(degrees)[::-1]]
-	degree_rips_st._is_function_simplextree= True
+	degree_rips_st._is_function_simplextree=True
 	return degree_rips_st,max_degree
 
 def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0):

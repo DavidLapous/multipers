@@ -1,26 +1,21 @@
 from typing import Optional, Union
 
-from collections import defaultdict
 import numpy as np
 
-from multipers.grids import sms_in_grid
+from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
+from multipers.point_measure_integration import clean_sms
+from multipers.rank_invariant import rank_from_slicer
 from multipers.simplex_tree_multi import (
-    SimplexTreeMulti,  # Typing hack
+    SimplexTreeMulti_type,
     _available_strategies,
+    is_simplextree_multi,
 )
-from multipers.slicer import (
-    Slicer,
-    SlicerClement,
-    SlicerVineGraph,
-    SlicerVineSimplicial,
-)
+from multipers.slicer import Slicer_type, is_slicer
 
 
 def signed_measure(
-    simplextree: Union[
-        SimplexTreeMulti, Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial
-    ],
+    simplextree: Union[SimplexTreeMulti_type, Slicer_type],
     degree: Optional[int] = None,
     degrees=[None],
     mass_default=None,
@@ -38,7 +33,7 @@ def signed_measure(
     num_collapses: int = 0,
     clean: bool = False,
     **infer_grid_kwargs,
-):
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """
     Computes the signed measures given by the decomposition of the hilbert
     function or the euler characteristic.
@@ -61,10 +56,44 @@ def signed_measure(
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
-    if not isinstance(simplextree, SimplexTreeMulti):
+    if len(degrees) == 1 and degrees[0] is None and degree is not None:
+        degrees = [degree]
+    if None in degrees:
+        assert len(degrees) == 1
+    if len(degrees) == 0:
+        return []
+    if is_slicer(simplextree):
+        if grid_conversion is None and not simplextree.is_squeezed:
+            grid_conversion = compute_grid(
+                simplextree.get_filtrations_values().T,
+                strategy=grid_strategy,
+                **infer_grid_kwargs,
+            )
+        if not simplextree.is_squeezed:
+            simplextree_ = simplextree.grid_squeeze(grid_conversion, coordinates=True)
+        else:
+            simplextree_ = simplextree
+            if grid_conversion is None:
+                grid_conversion = tuple(
+                    np.asarray(f, dtype=np.float64) for f in simplextree.filtration_grid
+                )
+        if invariant == "rank":  # TODO Hilbert from slicer
+            degrees = np.asarray(degrees, dtype=int)
+            return rank_from_slicer(
+                simplextree_,
+                degrees=degrees,
+                n_jobs=n_jobs,
+                grid_shape=tuple(len(g) for g in grid_conversion),
+                grid_conversion=grid_conversion,
+                plot=plot,
+            )
         return _signed_measure_from_slicer(
-            simplextree, plot=plot, grid_conversion=grid_conversion, clean=clean
+            simplextree_,
+            plot=plot,
+            grid_conversion=grid_conversion,
+            clean=clean,
         )
+    assert is_simplextree_multi(simplextree), "Input has to be simplextree or slicer."
     assert invariant is None or invariant in [
         "hilbert",
         "rank_invariant",
@@ -74,24 +103,17 @@ def signed_measure(
         "hilbert_function",
     ]
     assert not plot or simplextree.num_parameters == 2, "Can only plot 2d measures."
-    if len(degrees) == 1 and degrees[0] is None and degree is not None:
-        degrees = [degree]
-    if None in degrees:
-        assert len(degrees) == 1
-
-    if len(degrees) == 0:
-        return []
 
     if not simplextree._is_squeezed:
-        simplextree_ = SimplexTreeMulti(simplextree)
         if grid_conversion is None:
-            grid_conversion = simplextree_.get_filtration_grid(
+            grid_conversion = simplextree.get_filtration_grid(
                 grid_strategy=grid_strategy,
                 **infer_grid_kwargs,
             )  # put a warning ?
-        simplextree_.grid_squeeze(
+        simplextree_ = simplextree.grid_squeeze(
             grid_conversion,
             coordinate_values=True,
+            inplace=False,
             **infer_grid_kwargs,
         )
         if num_collapses != 0:
@@ -154,7 +176,7 @@ def signed_measure(
             simplextree.num_parameters == 2
         ), "Rank invariant only implemented for 2-parameter modules."
         assert not coordinate_measure, "Not implemented"
-        from multipers.rank_invariant import signed_measure as smri
+        from multipers.simplex_tree_multi import _rank_signed_measure as smri
 
         sms = smri(
             simplextree_,
@@ -169,10 +191,10 @@ def signed_measure(
             "euler_characteristic",
         ], "Provide a degree to compute hilbert function."
         # assert not coordinate_measure, "Not implemented"
-        from multipers.euler_characteristic import euler_signed_measure
+        from multipers.simplex_tree_multi import _euler_signed_measure
 
         sms = [
-            euler_signed_measure(
+            _euler_signed_measure(
                 simplextree_,
                 mass_default=mass_default,
                 verbose=verbose,
@@ -185,7 +207,9 @@ def signed_measure(
             "hilbert",
             "hilbert_function",
         ], "Found homological degrees for euler computation."
-        from multipers.hilbert_function import hilbert_signed_measure
+        from multipers.simplex_tree_multi import (
+            _hilbert_signed_measure as hilbert_signed_measure,
+        )
 
         sms = hilbert_signed_measure(
             simplextree_,
@@ -199,11 +223,13 @@ def signed_measure(
         )
 
     if clean:
-        sms = clean_signed_measure(sms)
+        sms = clean_sms(sms)
     return sms
 
 
-def _signed_measure_from_scc(minimal_presentation, grid_conversion=None):
+def _signed_measure_from_scc(
+    minimal_presentation, grid_conversion=None
+) -> list[tuple[np.ndarray, np.ndarray]]:
     pts = np.concatenate([b[0] for b in minimal_presentation if len(b[0]) > 0])
     weights = np.concatenate(
         [
@@ -218,43 +244,25 @@ def _signed_measure_from_scc(minimal_presentation, grid_conversion=None):
 
 
 def _signed_measure_from_slicer(
-    slicer: Union[Slicer, SlicerClement, SlicerVineGraph, SlicerVineSimplicial],
+    slicer: Slicer_type,
     plot: bool = False,
     grid_conversion=None,
     clean: bool = False,
-):
+) -> list[tuple[np.ndarray, np.ndarray]]:
     pts = slicer.get_filtrations()
     dims = slicer.get_dimensions()
     weights = 1 - 2 * (
         (1 + dims) % 2
     )  # dim 0 is always empty : TODO : make that more clean
     sm = [(pts, weights)]
+    if slicer.is_squeezed and grid_conversion is None:
+        grid_conversion = [
+            np.asarray(f, dtype=np.float64) for f in slicer.filtration_grid
+        ]
     if grid_conversion is not None:
         sm = sms_in_grid(sm, grid_conversion)
+    if clean:
+        sm = clean_sms(sm)
     if plot:
         plot_signed_measures(sm)
-    if clean:
-        sm = clean_signed_measure(sm)
     return sm
-
-
-def clean_signed_measure(sms):
-    """
-    Sum the diracs at the same locations. i.e.,
-    returns the minimal sized measure to represent the input.
-    Mostly useful for, e.g., euler_characteristic from simplical complexes.
-    """
-    new_sms = []
-    for pts, weights in sms:
-        out = defaultdict(lambda: 0)
-        for pt, w in zip(
-            pts, weights
-        ):  ## this is slow. but not a bottleneck TODO: optimize
-            out[tuple(pt)] += w
-        pts = np.fromiter(out.keys(), dtype=np.dtype((np.float32, 2)))
-        weights = np.fromiter(out.values(), dtype=int)
-        idx = np.nonzero(weights)
-        pts = pts[idx]
-        weights = weights[idx]
-        new_sms.append(tuple((pts, weights)))
-    return new_sms

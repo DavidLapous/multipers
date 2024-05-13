@@ -1,0 +1,83 @@
+{{py:
+
+"""
+Filtrations conversions between python and C++
+"""
+
+## Value types : CTYPE, PYTHON_TYPE, short
+value_types = [
+  ("int32_t", "np.int32", "i32"),
+  ("int64_t", "np.int64", "i64"),
+  ("float", "np.float32", "f32"),
+  ("double", "np.float64", "f64"),
+]
+
+}}
+
+# Python to C++ conversions
+from multipers.filtrations cimport Finitely_critical_multi_filtration,KCriticalFiltration
+from libcpp.vector cimport vector
+from libcpp cimport bool
+cimport numpy as cnp
+import numpy as np
+from libc.stdint cimport int32_t, int64_t
+from cython.operator cimport dereference
+
+{{for CTYPE, PYTYPE, SHORT in value_types}}
+###### ------------------- PY TO CPP
+#### ---------- 
+
+cdef inline KCriticalFiltration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrations_):
+    cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+    cdef KCriticalFiltration[{{CTYPE}}] out
+    with nogil:
+      out.set_num_generators(filtrations.shape[0])
+      for i in range(filtrations.shape[0]):
+          out[i].resize(filtrations.shape[1])
+          for j in range(filtrations.shape[1]):
+              out[i][j] = filtrations[i,j]
+    return out
+
+cdef inline Finitely_critical_multi_filtration[{{CTYPE}}] _py21c_{{SHORT}}(object filtration_):
+    cdef {{CTYPE}}[:] filtration = np.asarray(filtration_, dtype={{PYTYPE}})
+    cdef Finitely_critical_multi_filtration[{{CTYPE}}] out
+    with nogil:
+      out.reserve(len(filtration))
+      for i in range(len(filtration)):
+          out.push_back(filtration[i])
+    return out
+
+
+cdef inline vector[Finitely_critical_multi_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}(object filtrations_):
+    cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] out
+    out.reserve(filtrations.shape[0])
+    for i in range(filtrations.shape[0]):
+        out.push_back(_py21c_{{SHORT}}(filtrations[i,:]))
+    return out
+
+
+###### ------------------- CPP to PY
+
+
+## CYTHON BUG: using tuples here will cause some weird issues. 
+cdef inline _ff21cview_{{SHORT}}(Finitely_critical_multi_filtration[{{CTYPE}}]* x, bool copy=False):
+  cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
+  cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(&(dereference(x)[0]))
+  return np.array(x_view) if copy else np.asarray(x_view)
+
+cdef inline  _ff2kcview_{{SHORT}}(KCriticalFiltration[{{CTYPE}}]* x, bool copy=False):
+  cdef Py_ssize_t k = dereference(x).num_generators()
+  return [_ff21cview_{{SHORT}}(&(dereference(x)[i]), copy=copy) for i in range(k)]
+
+
+cdef inline  _vff21cview_{{SHORT}}(vector[Finitely_critical_multi_filtration[{{CTYPE}}]]& x, bool copy = False):
+  cdef Py_ssize_t num_stuff = x.size()
+  return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
+
+cdef inline  _vff2kcview_{{SHORT}}(vector[KCriticalFiltration[{{CTYPE}}]]& x, bool copy = False):
+  cdef Py_ssize_t num_stuff = x.size()
+  return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
+
+{{endfor}}
+

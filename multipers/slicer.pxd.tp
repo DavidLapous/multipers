@@ -1,0 +1,224 @@
+{{py:
+"""
+Vine and non-vine slicers.
+both type have the same interface, defined the slicer.pyx file
+"""
+
+
+# ""
+global slicers
+##  Slicers : CPP NAME, CTYPE, PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, CVALUE_TYPE, PYVALUE_TYPE, COLUMN_TYPE, SHORT_DTYPE
+slicers = [ # this is temporarily necessary
+  ("GeneralVineClementTruc<>", "GeneralVineClementTruc","_SlicerClement", False, True,False, "float", "np.float32", None, "f32", "Finitely_critical_multi_filtration[float]"),
+  ("SimplicialVineGraphTruc", "SimplicialVineGraphTruc","_SlicerVineGraph", True,True,False, "float", "np.float32",None, "f32", "Finitely_critical_multi_filtration[float]"),
+  ("SimplicialVineMatrixTruc<>", "SimplicialVineMatrixTruc","_SlicerVineSimplicial", True, True,False, "float", "np.float32",None, "f32", "Finitely_critical_multi_filtration[float]"),
+  ("SimplicialNoVineMatrixTruc<>", "SimplicialNoVineMatrixTruc", "_SlicerNoVineSimplicial",True,False,False, "float", "np.float32",None, "f32", "Finitely_critical_multi_filtration[float]"),
+]
+columns_name=[ # only one column is necessary
+  "Available_columns::"+stuff
+  for stuff in (
+  "INTRUSIVE_SET",
+  # "LIST",
+  # "SET",
+  # "HEAP",
+  # "VECTOR",
+  # "NAIVE_VECTOR",
+  # "UNORDERED_SET",
+  # "INTRUSIVE_LIST",
+  )
+]
+
+## Value types : CTYPE, PYTHON_TYPE, short
+value_types = [
+  ("int32_t", "np.int32",   "i32"), # necessary
+  # ("int64_t", "np.int64",   "i64"), 
+  ("float",   "np.float32", "f32"), # necessary for mma (TODO: fixme)
+  ("double",  "np.float64", "f64"), # necessary
+]
+from itertools import product
+def get_slicer(is_vine, is_kcritical, value_type, column_type):
+  ctype, pytype, short_type = value_type
+  col_idx, col = column_type
+  PYTHON_TYPE = f"_{'K' if is_kcritical else ''}Slicer{col_idx}{"_vine" if is_vine else ""}_{short_type}"
+  CTYPE = f"MatrixTrucPythonInterface<{"true" if is_vine else "false"},{"true" if is_kcritical else "false"},{ctype},{col}>"
+  IS_SIMPLICIAL = False
+  IS_VINE = is_vine
+  IS_KCRITICAL = is_kcritical
+  FILTRATION_TYPE = ("KCriticalFiltration" if is_kcritical else "Finitely_critical_multi_filtration") + "[" + ctype + "]"
+  return (CTYPE,"C"+PYTHON_TYPE, PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, ctype, pytype, col.split("::")[1], short_type, FILTRATION_TYPE)
+
+matrix_slicers = [
+  get_slicer(is_vine, is_kcritical, value_type, column_type)
+  for is_vine, is_kcritical, value_type, column_type in product([True,False], [True,False], value_types, enumerate(columns_name))
+]
+
+slicers += matrix_slicers
+import pickle
+
+with open("_slicer_names.pkl", "wb") as f:
+  pickle.dump(slicers, f)
+
+}}
+
+cimport numpy as cnp
+
+# SequentialDataset and its two concrete subclasses are (optionally randomized)
+# iterators over the rows of a matrix X and corresponding target values y.
+
+from libcpp.utility cimport pair 
+from libcpp cimport bool, int, float
+from libcpp.vector cimport vector
+from libcpp cimport tuple
+
+
+from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t, uint64_t, int64_t
+from cython cimport uint
+
+import numpy as np
+python_value_type=np.float32
+
+from libcpp.string cimport string
+
+cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparameter::python_interface":
+    cdef cppclass Simplex_tree_multi_interface[F=*, value_type=*]:
+        pass
+
+from multipers.filtrations cimport *
+ctypedef  vector[uint] cycle_type ## its the cycle type of matrix
+
+
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+
+#------------------------------------------------------------------------------
+cdef extern from "Persistence_slices_interface.h":
+  cdef cppclass {{CTYPE}} "{{CTYPE_H}}":
+      ctypedef {{C_VALUE_TYPE}} value_type
+
+      {{CTYPE}}()
+
+      {{if IS_SIMPLICIAL}}
+      {{CTYPE}}(Simplex_tree_multi_interface[{{FILTRATION_TYPE}}, {{C_VALUE_TYPE}}]*)
+      {{else}}
+      {{CTYPE}}(const vector[vector[unsigned int]]&, const vector[int]&, const vector[{{FILTRATION_TYPE}}]&)
+      {{endif}}
+
+      {{CTYPE}}& operator=(const {{CTYPE}}&)
+      vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]] get_barcode() nogil
+      void push_to(const Line[{{C_VALUE_TYPE}}]&) nogil
+      void set_one_filtration(const vector[{{C_VALUE_TYPE}}]&) nogil
+
+      vector[{{C_VALUE_TYPE}}] get_one_filtration()
+      void compute_persistence() nogil
+      uint32_t num_generators() nogil
+      uint32_t num_parameters() nogil
+      string to_str() nogil
+      pair[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}], Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] get_bounding_box() except + nogil
+      vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] get_filtration_values() nogil
+      vector[int] get_dimensions() nogil
+      vector[vector[uint]] get_boundaries() nogil
+      void coarsen_on_grid_inplace(vector[vector[{{C_VALUE_TYPE}}]], bool) nogil
+      vector[{{FILTRATION_TYPE}}]& get_filtrations() nogil
+      {{if COL is not None}}
+      {{CTYPE[:-3]+"i32"}} coarsen_on_grid(vector[vector[{{C_VALUE_TYPE}}]]) nogil
+      {{endif}}
+      {{if IS_VINE}}
+      void vineyard_update() nogil
+      vector[cycle_type] get_representative_cycles(bool) nogil
+      vector[size_t] get_current_order() nogil
+      {{endif}}
+
+      {{if IS_KCRITICAL}}
+      void add_point(const Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}] &) nogil
+      {{endif}}
+{{endfor}}
+
+
+
+#### MMA Stuff
+
+from multipers.mma_structures cimport Module
+cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
+  {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  {{if IS_VINE and SHORT[0]=='f'}}
+  Module[{{C_VALUE_TYPE}}] multiparameter_module_approximation({{CTYPE}}&, Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]&, {{C_VALUE_TYPE}}, Box[{{C_VALUE_TYPE}}]&, bool, bool, bool) except + nogil
+  {{endif}}
+  {{endfor}}
+
+
+
+
+import multipers.slicer as mps
+from cython.operator cimport dereference
+{{for ctype,pytype, short in value_types}}
+{{if short[0]=='f'}}
+cdef inline Module[{{ctype}}] _multiparameter_module_approximation_{{short}}(object slicer, Finitely_critical_multi_filtration[{{ctype}}]& direction, {{ctype}} max_error, Box[{{ctype}}] box, bool threshold, bool complete, bool verbose):
+  import multipers.slicer as mps
+  cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
+  cdef Module[{{ctype}}] mod
+  if False:
+    pass
+  {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  {{if IS_VINE and SHORT == short}} 
+  elif isinstance(slicer, mps.{{PYTHON_TYPE}}):
+    with nogil:
+      mod = multiparameter_module_approximation(dereference(<{{CTYPE}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose)
+  {{endif}}
+  {{endfor}}
+  else:
+    raise ValueError(f"Unsupported slicer type {type(slicer)}")
+
+  return mod
+{{endif}}
+{{endfor}}
+
+###### RANK INVARIANT
+from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t, int16_t, int8_t
+ctypedef int32_t tensor_dtype
+ctypedef int32_t indices_type
+
+
+
+
+ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure_type
+
+
+
+cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gudhi::multiparameter::rank_invariant":
+  ## from slicers
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+    void compute_rank_invariant_python({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type) except + nogil
+    signed_measure_type compute_rank_signed_measure({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type, bool) except + nogil
+  {{endfor}}
+
+
+
+
+
+cdef inline void _compute_rank_invariant(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs):
+  import multipers.slicer as mps
+  cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+    with nogil:
+      compute_rank_invariant_python(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs)
+      return
+  {{endfor}}
+  raise ValueError(f"Unsupported slicer type {type(slicer)}")
+
+
+
+cdef inline  _compute_rank_sm(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs, bool verbose):
+  import multipers.slicer as mps
+  cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
+  cdef signed_measure_type sm
+  cdef cnp.ndarray[indices_type, ndim=2] pts
+  cdef cnp.ndarray[tensor_dtype, ndim=1] weights
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+    with nogil:
+      sm = compute_rank_signed_measure(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs, verbose)
+    pts = sm.first
+    weights = sm.second
+    return (pts,weights)
+  {{endfor}}
+  raise ValueError(f"Unsupported slicer type {type(slicer)}")

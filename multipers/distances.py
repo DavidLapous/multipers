@@ -1,30 +1,36 @@
-import torch
-import ot
 import numpy as np
-from multipers.simplex_tree_multi import SimplexTreeMulti
-from multipers.multiparameter_module_approximation import PyModule
-from multipers.mma_structures import PyMultiDiagrams
+import ot
+
+from multipers.mma_structures import PyMultiDiagrams_type
+from multipers.multiparameter_module_approximation import PyModule_type
+from multipers.simplex_tree_multi import SimplexTreeMulti_type
 
 
 def sm2diff(sm1, sm2):
-    if isinstance(sm1[0], np.ndarray):
+    pts = sm1[0]
+    dtype = pts.dtype
+    if isinstance(pts, np.ndarray):
 
         def backend_concatenate(a, b):
-            return np.concatenate([a, b], axis=0)
+            return np.concatenate([a, b], axis=0, dtype=dtype)
 
         def backend_tensor(x):
             return np.asarray(x, dtype=int)
-    elif isinstance(sm1[0], torch.Tensor):
+
+    else:
+        import torch
+
+        assert isinstance(pts, torch.Tensor), "Invalid backend. Numpy or torch."
 
         def backend_concatenate(a, b):
             return torch.concatenate([a, b], dim=0)
 
         def backend_tensor(x):
             return torch.tensor(x).type(torch.int)
-    else:
-        raise Exception("Invalid backend. Numpy or torch.")
+
     pts1, w1 = sm1
     pts2, w2 = sm2
+    ## TODO: optimize this
     pos_indices1 = backend_tensor(
         [i for i, w in enumerate(w1) for _ in range(w) if w > 0]
     )
@@ -42,17 +48,37 @@ def sm2diff(sm1, sm2):
     return x, y
 
 
-def sm_distance(sm1, sm2, reg=0, reg_m=0, numItermax=10000, p=1):
+def sm_distance(
+    sm1: tuple,
+    sm2: tuple,
+    reg: float = 0,
+    reg_m: float = 0,
+    numItermax: int = 10000,
+    p: float = 1,
+):
+    """
+    Computes the wasserstein distances between two signed measures,
+    of the form
+     - (pts,weights)
+    with
+     - pts : (num_pts, dim) float array
+     - weights : (num_pts,) int array
+
+    Regularisation:
+     - sinkhorn if reg != 0
+     - sinkhorn unbalanced if reg_m != 0
+    """
     x, y = sm2diff(sm1, sm2)
     loss = ot.dist(
-        x, y, metric="sqeuclidean", p=2
+        x, y, metric="sqeuclidean", p=p
     )  # only euc + sqeuclidian are implemented in pot for the moment with torch backend # TODO : check later
     if isinstance(x, np.ndarray):
         empty_tensor = np.array([])  # uniform weights
-    elif isinstance(x, torch.Tensor):
-        empty_tensor = torch.tensor([])  # uniform weights
     else:
-        raise ValueError("Unimplemented backend.")
+        import torch
+
+        assert isinstance(x, torch.Tensor), "Unimplemented backend."
+        empty_tensor = torch.tensor([])  # uniform weights
 
     if reg == 0:
         return ot.lp.emd2(empty_tensor, empty_tensor, M=loss) * len(x)
@@ -72,11 +98,11 @@ def sm_distance(sm1, sm2, reg=0, reg_m=0, numItermax=10000, p=1):
     # return ot.bregman.empirical_sinkhorn2(x,y,reg=reg)
 
 
-def estimate_matching(b1: PyMultiDiagrams, b2: PyMultiDiagrams):
+def estimate_matching(b1: PyMultiDiagrams_type, b2: PyMultiDiagrams_type):
     assert len(b1) == len(b2)
     from gudhi.bottleneck import bottleneck_distance
 
-    def get_bc(b: PyMultiDiagrams, i: int) -> np.ndarray:
+    def get_bc(b: PyMultiDiagrams_type, i: int) -> np.ndarray:
         temp = b[i].get_points()
         out = (
             np.array(temp)[:, :, 0] if len(temp) > 0 else np.empty((0, 2))
@@ -84,15 +110,14 @@ def estimate_matching(b1: PyMultiDiagrams, b2: PyMultiDiagrams):
         return out
 
     return max(
-        (bottleneck_distance(get_bc(b1, i), get_bc(b2, i))
-         for i in range(len(b1)))
+        (bottleneck_distance(get_bc(b1, i), get_bc(b2, i)) for i in range(len(b1)))
     )
 
 
 # Functions to estimate precision
 def estimate_error(
-    st: SimplexTreeMulti,
-    module: PyModule,
+    st: SimplexTreeMulti_type,
+    module: PyModule_type,
     degree: int,
     nlines: int = 100,
     verbose: bool = False,
@@ -102,15 +127,16 @@ def estimate_error(
 
     Parameters
     ----------
-    st:SimplexTree
-            The simplextree representing the n-filtered complex. Used to define the gudhi simplextrees on different lines.
-    module:PyModule
-            The module on which to estimate approximation error, w.r.t. the original simplextree st.
-    degree: The homology degree to consider
+     - st:SimplexTree
+        The simplextree representing the n-filtered complex. Used to define the gudhi simplextrees on different lines.
+     - module:PyModule
+        The module on which to estimate approximation error, w.r.t. the original simplextree st.
+     - degree:int
+        The homology degree to consider
 
     Returns
     -------
-    The estimation of the matching distance, i.e., the maximum of the sampled bottleneck distances.
+     - float:The estimation of the matching distance, i.e., the maximum of the sampled bottleneck distances.
 
     """
     from time import perf_counter
@@ -131,13 +157,11 @@ def estimate_error(
 
     low, high = module.get_box()
     nfiltration = len(low)
-    basepoints = np.random.uniform(
-        low=low, high=high, size=(nlines, nfiltration))
+    basepoints = np.random.uniform(low=low, high=high, size=(nlines, nfiltration))
     # barcodes from module
     print("Computing mma barcodes...", flush=1, end="") if verbose else None
     time = perf_counter()
-    bcs_from_mod = module.barcodes(
-        degree=degree, basepoints=basepoints).get_points()
+    bcs_from_mod = module.barcodes(degree=degree, basepoints=basepoints).get_points()
     print(f"Done. {perf_counter() - time}s.") if verbose else None
 
     def clean(dgm):

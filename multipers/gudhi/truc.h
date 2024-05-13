@@ -1,11 +1,13 @@
 #pragma once
 #include "multiparameter_module_approximation/format_python-cpp.h"
 #include <algorithm>
+#include <boost/mpl/aux_/na_fwd.hpp>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <oneapi/tbb/task_group.h>
 #include <sstream>
@@ -15,8 +17,8 @@
 
 namespace Gudhi::multiparameter::interface {
 
-using Filtration_value =
-    multi_filtrations::Finitely_critical_multi_filtration<float>;
+// using Filtration_value =
+//     multi_filtrations::Finitely_critical_multi_filtration<float>;
 
 class PresentationStructure {
 public:
@@ -32,13 +34,18 @@ public:
       if (stuff == 0)
         num_vertices_++;
     }
+    max_dimension_ = generator_dimensions.size() > 0 ? *std::max_element(generator_dimensions.begin(),
+                                         generator_dimensions.end()) : 0;
+
   };
 
   PresentationStructure(const PresentationStructure &other)
       : generators(other.generators),
         generator_dimensions(other.generator_dimensions),
         num_vertices_(other.num_vertices_),
-        max_dimension_(other.max_dimension_) {}
+        max_dimension_(other.max_dimension_) {
+
+  }
   /* PresentationStructure &operator=(const PresentationStructure &other) { */
   /*   generators = other.generators; */
   /*   generator_dimensions = other.generator_dimensions; */
@@ -92,11 +99,7 @@ public:
   }
   inline std::size_t size() const { return generators.size(); };
   unsigned int num_vertices() const { return num_vertices_; };
-  unsigned int max_dimension() {
-    if (max_dimension_ < 0) {
-      max_dimension_ = *std::max_element(generator_dimensions.begin(),
-                                         generator_dimensions.end());
-    }
+  unsigned int max_dimension() const {
     return max_dimension_;
   }
 
@@ -162,7 +165,7 @@ public:
   }
   inline std::size_t size() const { return boundaries.size(); };
   inline unsigned int num_vertices() { return num_vertices_; }
-  inline unsigned int max_dimension() { return max_dimension_; }
+  inline unsigned int max_dimension() const { return max_dimension_; }
 
 private:
   std::vector<std::vector<unsigned int>> boundaries;
@@ -171,20 +174,27 @@ private:
 };
 
 template <class PersBackend, class Structure,
-          class MultiFiltration = Gudhi::multiparameter::multi_filtrations::
-              Finitely_critical_multi_filtration<float>>
+          class MultiFiltration>
 class Truc {
 public:
   using Filtration_value = MultiFiltration;
   using value_type = typename MultiFiltration::value_type;
+  using split_barcode =
+      std::vector<std::vector<std::pair<typename MultiFiltration::value_type,
+                                        typename MultiFiltration::value_type>>>;
+  template <typename value_type = value_type>
+  using flat_barcode =
+      std::vector<std::pair<int, std::pair<value_type, value_type>>>;
 
+  template <typename value_type = value_type>
+  using flat_nodim_barcode = std::vector<std::pair<value_type, value_type>>;
   // CONSTRUCTORS.
   //  - Need everything of the same size, generator order is a PERMUTATION
   //
   Truc(const Structure &structure,
        const std::vector<MultiFiltration> &generator_filtration_values)
       : generator_filtration_values(generator_filtration_values),
-        structure(structure), generator_order(structure.size()),
+        generator_order(structure.size()), structure(structure),
         filtration_container(structure.size()) {
     std::iota(generator_order.begin(), generator_order.end(), 0); // range
   };
@@ -219,27 +229,37 @@ public:
     structure = other.structure;
     persistence = other.persistence;
     filtration_container = other.filtration_container;
+    persistence._update_permutation_ptr(generator_order);
     return *this;
   };
 
   inline std::size_t num_generators() const { return structure.size(); }
+  inline std::size_t num_parameters() const { return num_generators() == 0 ? 0 : this->generator_filtration_values[0].num_parameters(); }
 
   template <class SubFiltration, bool original_order = true>
-  inline void push_to(const SubFiltration &f) {
+  inline void push_to_out(
+      const SubFiltration &f,
+      std::vector<typename MultiFiltration::value_type> &filtration_container,
+      const std::vector<std::size_t> &generator_order) const {
 
     /* std::vector<NewFilrationType> out(this->num_generators()); */
-    auto &out = this->filtration_container;
 
-    out.resize(
-        this->num_generators()); // for some reasons it is necessary FIXME
-    for (auto i = 0u; i < out.size(); i++) {
+    // filtration_container.resize(
+    //     this->num_generators()); // for some reasons it is necessary FIXME
+    for (std::size_t i = 0u; i < this->num_generators(); i++) {
       if constexpr (original_order) {
-        out[i] = f.push_one_filtration(generator_filtration_values[i]);
+        filtration_container[i] =
+            f.push_forward2(generator_filtration_values[i]);
       } else {
-        out[i] = f.push_one_filtration(
-            generator_filtration_values[generator_order[i]]);
+        filtration_container[i] =
+            f.push_forward2(generator_filtration_values[generator_order[i]]);
       }
     }
+  }
+  template <class SubFiltration, bool original_order = true>
+  inline void push_to(const SubFiltration &f) {
+    this->push_to_out<SubFiltration, original_order>(
+        f, this->filtration_container, this->generator_order);
   }
   template <class array1d> inline void set_one_filtration(const array1d &truc) {
     assert(truc.size() == this->num_generators());
@@ -253,7 +273,7 @@ public:
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
       std::vector<std::size_t>
-          &out_gen_order) { // needed ftm as PersBackend only points there
+          &out_gen_order)  { // needed ftm as PersBackend only points there
 
     if (one_filtration.size() != this->num_generators()) {
       throw;
@@ -261,7 +281,6 @@ public:
     out_gen_order.resize(this->num_generators());
     std::iota(out_gen_order.begin(), out_gen_order.end(),
               0); // we have to reset here, even though we're already doing this
-
     std::sort(out_gen_order.begin(), out_gen_order.end(),
               [&](std::size_t i, std::size_t j) {
                 if (structure.dimension(i) > structure.dimension(j))
@@ -270,6 +289,11 @@ public:
                   return true;
                 return one_filtration[i] < one_filtration[j];
               });
+    // BUG : THIS SEGFAULTS, BUT IS A NICE OPTIMIZATION ! 
+    // if constexpr (!PersBackend::is_vine)
+    //   for (std::size_t& i : out_gen_order)
+    //     if (one_filtration[i] == MultiFiltration::T_inf)
+    //       i = static_cast<std::size_t>(-1); // max
     if constexpr (false) {
       std::cout << "[";
       for (auto i : out_gen_order) {
@@ -289,50 +313,16 @@ public:
         out_gen_order); // FIXME : PersBackend is not const on struct
   }
 
-  void compute_persistence() {
-    auto &f = this->filtration_container;
-    if (f.size() != this->num_generators()) {
-      std::cerr << "Filtration is of the wrong size. Not computing."
-                << std::endl;
-      return;
-    }
-    /* generator_order = std::vector<std::size_t>( */
-    /*     this->num_generators()); // not necessary, as its size should be
-     * defined */
-    /*                              // at construction time */
-    generator_order.resize(this->num_generators());
-    std::iota(generator_order.begin(), generator_order.end(),
-              0); // we have to reset here, even though we're already doing
-                  // this at construction time
-    // We sort by dimension as this will imply less vine swaps
-    std::sort(generator_order.begin(), generator_order.end(),
-              [&](std::size_t i, std::size_t j) {
-                if (structure.dimension(i) > structure.dimension(j))
-                  return false;
-                if (structure.dimension(i) < structure.dimension(j))
-                  return true;
-                return f[i] < f[j]
-                    /*  || */
-                    /* (f[i] == f[j] && */
-                    /*  structure.dimension(i) < structure.dimension(j)) */
-                    ;
-              });
-    /* int dimension = structure.dimension(generator_order[0]); */
-    /* for (auto stuff : generator_order) { */
-    /*   auto b = structure.dimension(stuff); */
-    /*   if (dimension > b) { */
-    /*     throw; */
-    /*   } else { */
-    /*     dimension = b; */
-    /*   } */
-    /* } */
-
-    this->persistence = PersBackend(structure, generator_order);
-    /* persistence.initialize_persistence(); */
+  inline void compute_persistence() {
+    this->persistence = this->compute_persistence_out(
+        this->filtration_container, this->generator_order);
   };
 
-  void vineyard_update() {
-    auto &one_filtration = this->filtration_container;
+  // TODO : static ?
+  inline void vineyard_update(
+      PersBackend &persistence,
+      const std::vector<typename MultiFiltration::value_type> &one_filtration,
+      std::vector<std::size_t> &generator_order) const  {
     const bool verbose = false;
     /* static_assert(PersBackend::has_vine_update); */
     // the first false is to get the generator order
@@ -359,9 +349,10 @@ public:
       std::cout << std::endl;
     }
   }
-  using split_barcode =
-      std::vector<std::vector<std::pair<typename MultiFiltration::value_type,
-                                        typename MultiFiltration::value_type>>>;
+  inline void vineyard_update() {
+    vineyard_update(this->persistence, this->filtration_container,
+                    this->generator_order);
+  }
   inline split_barcode
   get_barcode(PersBackend &persistence,
               const std::vector<typename MultiFiltration::value_type>
@@ -376,7 +367,7 @@ public:
 
       auto birth_filtration = filtration_container[bar.birth];
       auto death_filtration = inf;
-      if (bar.death != -1)
+      if (bar.death != static_cast<typename PersBackend::pos_index>(-1))
         death_filtration = filtration_container[bar.death];
 
       if constexpr (verbose) {
@@ -397,25 +388,68 @@ public:
     return get_barcode(this->persistence, this->filtration_container);
   }
 
-  using flat_barcode =
-      std::vector<std::pair<int, std::pair<value_type, value_type>>>;
-  flat_barcode get_flat_barcode() {
+  template <typename value_type = value_type>
+  static inline flat_nodim_barcode<value_type> get_flat_nodim_barcode(
+      PersBackend &persistence,
+      std::vector<typename MultiFiltration::value_type> &filtration_container) {
     const bool verbose = false;
-    const auto &barcode_indices = this->persistence.get_barcode();
+    const auto &barcode_indices = persistence.get_barcode();
     auto num_bars = barcode_indices.size();
-    flat_barcode out(num_bars);
+    flat_nodim_barcode<value_type> out(num_bars);
     if (num_bars <= 0)
       return out;
     auto idx = 0u;
-    auto inf = MultiFiltration::T_inf;
+    value_type inf = std::numeric_limits<value_type>::has_infinity
+                   ? std::numeric_limits<value_type>::infinity()
+                   : std::numeric_limits<value_type>::max();
     for (const auto &bar : barcode_indices) {
-      typename MultiFiltration::value_type birth_filtration = inf;
-      auto death_filtration = -birth_filtration;
-      if (bar.death == -1)
+      value_type birth_filtration = inf;
+      value_type death_filtration = -birth_filtration;
+      if (bar.death == static_cast<typename PersBackend::pos_index>(-1))
         death_filtration = inf;
       else
-        death_filtration = this->filtration_container[bar.death];
-      birth_filtration = this->filtration_container[bar.birth];
+        death_filtration = static_cast<value_type>(filtration_container[bar.death]);
+      birth_filtration = static_cast<value_type>(filtration_container[bar.birth]);
+      if constexpr (verbose) {
+        std::cout << "PAIRING : " << bar.birth << " / " << bar.death << " dim "
+                  << bar.dim << std::endl;
+      }
+      if constexpr (verbose) {
+        std::cout << "PAIRING filtration : " << birth_filtration << " "
+                  << death_filtration << " dim " << bar.dim << std::endl;
+      }
+
+      if (birth_filtration < death_filtration)
+        out[idx] = {birth_filtration, death_filtration};
+      else {
+        out[idx] = {inf, inf};
+      }
+      idx++;
+    }
+    return out;
+  }
+  template <typename value_type = value_type>
+  static inline flat_barcode<value_type> get_flat_barcode(
+      PersBackend &persistence,
+      std::vector<typename MultiFiltration::value_type> &filtration_container) {
+    const bool verbose = false;
+    const auto &barcode_indices = persistence.get_barcode();
+    auto num_bars = barcode_indices.size();
+    flat_barcode<value_type> out(num_bars);
+    if (num_bars <= 0)
+      return out;
+    auto idx = 0u;
+    value_type inf = std::numeric_limits<value_type>::has_infinity
+                   ? std::numeric_limits<value_type>::infinity()
+                   : std::numeric_limits<value_type>::max();
+    for (const auto &bar : barcode_indices) {
+      value_type birth_filtration = inf;
+      value_type death_filtration = -birth_filtration;
+      if (bar.death == static_cast<typename PersBackend::pos_index>(-1))
+        death_filtration = inf;
+      else
+        death_filtration = static_cast<value_type>(filtration_container[bar.death]);
+      birth_filtration = static_cast<value_type>(filtration_container[bar.birth]);
       if constexpr (verbose) {
         std::cout << "PAIRING : " << bar.birth << " / " << bar.death << " dim "
                   << bar.dim << std::endl;
@@ -433,6 +467,15 @@ public:
       idx++;
     }
     return out;
+  }
+  template <typename value_type = value_type>
+  inline flat_barcode<value_type> get_flat_barcode() {
+    return get_flat_barcode(this->persistence, this->filtration_container);
+  }
+  template <typename value_type = value_type>
+  inline flat_nodim_barcode<value_type> get_flat_nodim_barcode() {
+    return get_flat_nodim_barcode(this->persistence,
+                                  this->filtration_container);
   }
 
   inline friend std::ostream &operator<<(std::ostream &stream, Truc &truc) {
@@ -477,18 +520,44 @@ public:
     stream << *this;
     return stream.str();
   }
-  inline std::pair<MultiFiltration, MultiFiltration> get_bounding_box() const {
-    auto out = std::pair(generator_filtration_values[0],
-                         generator_filtration_values[0]);
-    auto &a = out.first;
-    auto &b = out.second;
+  inline std::pair<typename MultiFiltration::OneCritical,
+                   typename MultiFiltration::OneCritical>
+  get_bounding_box() const {
+    using OC = typename MultiFiltration::OneCritical;
+    assert(!generator_filtration_values.empty());
+    OC a = std::numeric_limits<OC>::infinity();
+    OC b = -1*a;
     for (const auto &filtration_value : generator_filtration_values) {
-      a.pull_to(filtration_value);
-      b.push_to(filtration_value);
+      if constexpr (MultiFiltration::is_multi_critical) {
+        a.pull_to(filtration_value.factorize_below());
+        b.push_to(filtration_value.factorize_above());
+      } else {
+        a.pull_to(filtration_value);
+        b.push_to(filtration_value);
+      }
     }
-    return out;
+    return {a, b};
   }
-  const std::vector<MultiFiltration> &get_filtration_values() const {
+  std::vector<typename MultiFiltration::OneCritical>
+  get_filtration_values() const {
+    if constexpr (MultiFiltration::is_multi_critical) {
+      std::vector<typename MultiFiltration::OneCritical> out;
+      out.reserve(generator_filtration_values
+                      .size()); // at least this, will dooble later
+      for (std::size_t i = 0; i < generator_filtration_values.size(); ++i) {
+        for (const auto &f : generator_filtration_values[i]) {
+          out.push_back(f);
+        }
+      }
+      return out;
+    } else {
+      return generator_filtration_values; // copy not necessary for Onecritical
+    }                                     // (could return const&)
+  }
+  std::vector<MultiFiltration>& get_filtrations() {
+    return generator_filtration_values;
+  }
+  const std::vector<MultiFiltration>& get_filtrations() const {
     return generator_filtration_values;
   }
   const std::vector<int> get_dimensions() const {
@@ -508,34 +577,128 @@ public:
     return out;
   }
 
-  Truc<PersBackend, Structure,
-       multi_filtrations::Finitely_critical_multi_filtration<std::int32_t>>
+  Truc<PersBackend, Structure, typename MultiFiltration::template Base<int32_t>>
   coarsen_on_grid(
       const std::vector<std::vector<typename MultiFiltration::value_type>>
           grid) {
-    Structure structure_copy = structure;
-    std::vector<
-        multi_filtrations::Finitely_critical_multi_filtration<std::int32_t>>
-        coords(this->num_generators());
-    for (auto gen = 0u; gen < coords.size(); ++gen) {
+    std::vector<typename MultiFiltration::template Base<int32_t>> coords(
+        this->num_generators());
+    for (std::size_t gen = 0u; gen < coords.size(); ++gen) {
       coords[gen] = generator_filtration_values[gen].coordinates_in_grid(grid);
     }
-    return Truc(structure, coords);
+    return Truc<PersBackend, Structure,
+                typename MultiFiltration::template Base<int32_t>>(structure,
+                                                                  coords);
   }
   inline void coarsen_on_grid_inplace(
       const std::vector<std::vector<typename MultiFiltration::value_type>>
           &grid,
       bool coordinate = true) {
     for (auto gen = 0u; gen < this->num_generators(); ++gen) {
-      generator_filtration_values[gen].coordinates_in_grid_inplace(grid);
-      if (!coordinate) {
-        for (auto parameter = 0u; parameter < grid.size(); ++parameter)
-          generator_filtration_values[gen][parameter] =
-              grid[parameter][static_cast<std::size_t>(
-                  generator_filtration_values[gen][parameter])];
-      }
+      generator_filtration_values[gen].coordinates_in_grid_inplace(grid,
+                                                                   coordinate);
     }
   }
+
+  std::vector<typename PersBackend::cycle_type>
+  get_representative_cycles(bool update = true) {
+    return persistence.get_representative_cycles(update);
+  }
+  const std::vector<std::size_t> get_current_order() const {
+    return generator_order;
+  }
+  const PersBackend &get_persistence() const { return persistence; }
+  PersBackend &get_persistence() { return persistence; }
+
+  // TrucThread get_safe_thread() { return TrucThread(*this); }
+
+  class TrucThread {
+
+  public:
+    using Filtration_value = MultiFiltration;
+    using value_type = typename MultiFiltration::value_type;
+    using ThreadSafe = TrucThread;
+    inline TrucThread(const Truc &truc)
+        : truc_ptr(&truc), generator_order(truc.get_current_order()),
+          filtration_container(truc.get_one_filtration()),
+          persistence(truc.get_persistence()) {
+      persistence._update_permutation_ptr(generator_order);
+    };
+    inline TrucThread(const TrucThread &truc)
+        : truc_ptr(truc.truc_ptr), generator_order(truc.get_current_order()),
+          filtration_container(truc.get_one_filtration()),
+          persistence(truc.get_persistence()) {
+      persistence._update_permutation_ptr(generator_order);
+    };
+    inline TrucThread weak_copy() const { return TrucThread(*truc_ptr); }
+
+    inline std::pair<MultiFiltration, MultiFiltration>
+    get_bounding_box() const {
+      return truc_ptr->get_bounding_box();
+    }
+    inline const std::vector<MultiFiltration> &get_filtration_values() const {
+      return truc_ptr->get_filtration_values();
+    }
+    inline const std::vector<int> &get_dimensions() const {
+      return truc_ptr->get_dimensions();
+    }
+    inline const std::vector<std::vector<unsigned int>> &
+    get_boundaries() const {
+      return truc_ptr->get_boundaries();
+    }
+    inline void coarsen_on_grid_inplace(
+        const std::vector<std::vector<typename MultiFiltration::value_type>>
+            &grid,
+        bool coordinate = true) {
+      truc_ptr->coarsen_on_grid_inplace(grid, coordinate);
+    }
+    template <typename Subfiltration>
+    inline void push_to(const Subfiltration &f) {
+      truc_ptr->push_to_out(f, this->filtration_container,
+                            this->generator_order);
+    }
+
+    inline std::vector<typename PersBackend::cycle_type>
+    get_representative_cycles(bool update = true) {
+      return truc_ptr->get_representative_cycles(update);
+    }
+    inline void compute_persistence() {
+      persistence = this->truc_ptr->compute_persistence_out(
+          this->persistence, this->generator_order);
+    }
+    inline void vineyard_update() {
+      truc_ptr->vineyard_update(this->persistence, this->filtration_container,
+                                this->generator_order);
+    }
+    template <typename value_type = value_type>
+    inline flat_barcode<value_type> get_flat_barcode() {
+      return truc_ptr->get_flat_barcode(this->persistence,
+                                        this->filtration_container);
+    }
+    template <typename value_type = value_type>
+    inline flat_nodim_barcode<value_type> get_flat_nodim_barcode() {
+      return truc_ptr->get_flat_nodim_barcode(this->persistence,
+                                              this->filtration_container);
+    }
+    inline split_barcode get_barcode() {
+      return truc_ptr->get_barcode(this->persistence,
+                                   this->filtration_container);
+    }
+
+  private:
+    const Truc *truc_ptr;
+    std::vector<std::size_t>
+        generator_order; // size fixed at construction time,
+    std::vector<typename MultiFiltration::value_type>
+        filtration_container; // filtration of the current slice
+    PersBackend persistence; // generated by the structure, and generator_order.
+
+  }; // class TrucThread
+
+public:
+  using ThreadSafe = TrucThread; // for outside
+
+  TrucThread weak_copy() const { return TrucThread(*this); }
 
 private:
   std::vector<MultiFiltration>
@@ -545,6 +708,7 @@ private:
   std::vector<typename MultiFiltration::value_type>
       filtration_container; // filtration of the current slice
   PersBackend persistence;  // generated by the structure, and generator_order.
-};
+
+}; // class Truc
 
 } // namespace Gudhi::multiparameter::interface

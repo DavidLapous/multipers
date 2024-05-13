@@ -1,1 +1,1 @@
-recursive-include multipers *.h *.py *.pyx *.pyi
+recursive-include multipers *.py *.pyx

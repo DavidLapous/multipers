@@ -9,3 +9,4 @@ gudhi
 torch
 pykeops
 filtration-domination
+pot

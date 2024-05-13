@@ -6,8 +6,9 @@
 #include <gudhi/Simplex_tree/Simplex_tree_multi.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 
+template <typename Filtration>
 using SimplexTreeMultiOptions =
-    Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
+    Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<Filtration>;
 
 enum Column_types_strs {
   LIST,
@@ -83,3 +84,30 @@ using SimplicialVineMatrixTruc = Gudhi::multiparameter::interface::Truc<
     MatrixBackendVine<col>, SimplicialStructure, Filtration_value>;
 using SimplicialVineGraphTruc = Gudhi::multiparameter::interface::Truc<
     GraphBackendVine, SimplicialStructure, Filtration_value>;
+
+// multicrititcal
+using KCriticalFiltrationValue =
+    Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<float>;
+template <Available_columns col = Available_columns::INTRUSIVE_SET>
+using KCriticalVineTruc = Gudhi::multiparameter::interface::Truc<
+    MatrixBackendVine<col, PresentationStructure>, PresentationStructure,
+    KCriticalFiltrationValue>;
+
+template <bool is_vine,
+          Available_columns col = Available_columns::INTRUSIVE_SET>
+using Matrix_interface =
+    std::conditional_t<is_vine, MatrixBackendVine<col, PresentationStructure>,
+                       MatrixBackendNoVine<col, PresentationStructure>>;
+
+template <bool is_kcritical, typename value_type>
+using filtration_options = std::conditional_t<
+    is_kcritical,
+    Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<value_type>,
+    Gudhi::multiparameter::multi_filtrations::
+        Finitely_critical_multi_filtration<value_type>>;
+
+template <bool is_vine, bool is_kcritical, typename value_type,
+          Available_columns col = Available_columns::INTRUSIVE_SET>
+using MatrixTrucPythonInterface = Gudhi::multiparameter::interface::Truc<
+    Matrix_interface<is_vine, col>, PresentationStructure,
+    filtration_options<is_kcritical, value_type>>;

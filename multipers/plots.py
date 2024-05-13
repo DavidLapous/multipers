@@ -1,5 +1,6 @@
-import matplotlib.pyplot as plt
 from typing import Optional
+
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -11,9 +12,12 @@ def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
     plt.plot(x_axis, y_axis, c=color, **plt_kwargs)
 
 
-def _plot_signed_measure_2(pts, weights, temp_alpha=0.7, **plt_kwargs):
+def _plot_signed_measure_2(
+    pts, weights, temp_alpha=0.7, threshold=(np.inf, np.inf), **plt_kwargs
+):
     import matplotlib.colors
 
+    pts = np.clip(pts, a_min=-np.inf, a_max=np.asarray(threshold)[None, :])
     weights = np.asarray(weights)
     color_weights = np.array(weights, dtype=float)
     neg_idx = weights < 0
@@ -51,9 +55,15 @@ def _plot_signed_measure_2(pts, weights, temp_alpha=0.7, **plt_kwargs):
 
 
 def _plot_signed_measure_4(
-    pts, weights, x_smoothing: float = 1, area_alpha: bool = True
+    pts,
+    weights,
+    x_smoothing: float = 1,
+    area_alpha: bool = True,
+    threshold=(np.inf, np.inf),
+    **plt_kwargs,  # ignored ftm
 ):
     # compute the maximal rectangle area
+    pts = np.clip(pts, a_min=-np.inf, a_max=np.array((*threshold, *threshold))[None, :])
     alpha_rescaling = 0
     for rectangle, weight in zip(pts, weights):
         if rectangle[2] > x_smoothing * rectangle[0]:
@@ -93,14 +103,24 @@ def _plot_signed_measure_4(
                 )
 
 
-def plot_signed_measure(signed_measure, ax=None, **plt_kwargs):
+def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
     if ax is None:
         ax = plt.gca()
     else:
         plt.sca(ax)
     pts, weights = signed_measure
+    pts = np.asarray(pts)
+    num_pts = pts.shape[0]
     num_parameters = pts.shape[1]
-
+    if threshold is None:
+        if num_pts == 0:
+            threshold = (np.inf, np.inf)
+        else:
+            if num_parameters == 4:
+                pts_ = np.concatenate([pts[:, :2], pts[:, 2:]], axis=0)
+            else:
+                pts_ = pts
+            threshold = np.max(np.ma.masked_invalid(pts_), axis=0)
     if isinstance(pts, np.ndarray):
         pass
     else:
@@ -113,12 +133,16 @@ def plot_signed_measure(signed_measure, ax=None, **plt_kwargs):
 
     assert num_parameters in (2, 4)
     if num_parameters == 2:
-        _plot_signed_measure_2(pts=pts, weights=weights, **plt_kwargs)
+        _plot_signed_measure_2(
+            pts=pts, weights=weights, threshold=threshold, **plt_kwargs
+        )
     else:
-        _plot_signed_measure_4(pts=pts, weights=weights, **plt_kwargs)
+        _plot_signed_measure_4(
+            pts=pts, weights=weights, threshold=threshold, **plt_kwargs
+        )
 
 
-def plot_signed_measures(signed_measures, size=4):
+def plot_signed_measures(signed_measures, threshold=None, size=4):
     num_degrees = len(signed_measures)
     fig, axes = plt.subplots(
         nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
@@ -126,7 +150,7 @@ def plot_signed_measures(signed_measures, size=4):
     if num_degrees == 1:
         axes = [axes]
     for ax, signed_measure in zip(axes, signed_measures):
-        plot_signed_measure(signed_measure=signed_measure, ax=ax)
+        plot_signed_measure(signed_measure=signed_measure, ax=ax, threshold=threshold)
     plt.tight_layout()
 
 
@@ -137,6 +161,7 @@ def plot_surface(
     ax=None,
     cmap: Optional[str] = None,
     discrete_surface=False,
+    has_negative_values=False,
     **plt_args,
 ):
     import matplotlib
@@ -155,7 +180,10 @@ def plot_surface(
         else:
             cmap = matplotlib.colormaps["plasma"]
     if discrete_surface:
-        bounds = np.arange(0, 11, 1, dtype=int)
+        if has_negative_values:
+            bounds = np.arange(-5, 6, 1, dtype=int)
+        else:
+            bounds = np.arange(0, 11, 1, dtype=int)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend="max")
         im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, norm=norm, **plt_args)
         cbar = fig.colorbar(
@@ -166,6 +194,7 @@ def plot_surface(
         cbar.set_ticks(ticks=bounds, labels=bounds)
         return
     im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
+    return im
 
 
 def plot_surfaces(HF, size=4, **plt_args):
@@ -204,7 +233,7 @@ def _d_inf(a, b):
 
 def plot2d_PyModule(
     corners,
-    box=[],
+    box,
     *,
     dimension=-1,
     separated=False,
@@ -221,12 +250,12 @@ def plot2d_PyModule(
     import matplotlib
 
     try:
+        from shapely import union_all
         from shapely.geometry import Polygon as _Polygon
         from shapely.geometry import box as _rectangle_box
-        from shapely import union_all
 
         shapely = True and shapely
-    except:
+    except ImportError:
         from warnings import warn
 
         shapely = False
@@ -236,6 +265,7 @@ def plot2d_PyModule(
     cmap = (
         matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
     )
+    box = list(box)
     if not (separated):
         # fig, ax = plt.subplots()
         ax = plt.gca()
@@ -245,9 +275,13 @@ def plot2d_PyModule(
         trivial_summand = True
         list_of_rect = []
         for birth in corners[i][0]:
+            if len(birth) == 1:
+                birth = np.asarray([birth[0]] * 2)
+            birth = np.asarray(birth).clip(min=box[0])
             for death in corners[i][1]:
-                death[0] = min(death[0], box[1][0])
-                death[1] = min(death[1], box[1][1])
+                if len(death) == 1:
+                    death = np.asarray([death[0]] * 2)
+                death = np.asarray(death).clip(max=box[1])
                 if death[1] > birth[1] and death[0] > birth[0]:
                     if trivial_summand and _d_inf(birth, death) > min_persistence:
                         trivial_summand = False

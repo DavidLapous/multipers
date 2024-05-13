@@ -3,10 +3,6 @@
 #include <iostream>
 #include <vector>
 #include <utility>  // std::pair
-#include <tuple>
-#include <iterator>  // for std::distance
-#include <numeric>
-#include <algorithm>
 #include "Simplex_tree_multi_interface.h"
 #include "multi_parameter_rank_invariant/persistence_slices.h"
 
@@ -18,9 +14,9 @@
 namespace Gudhi::multiparameter::euler_characteristic{
 
 
-template<typename dtype=int, typename index_type=std::uint16_t>
+template<typename Filtration, typename dtype=int, typename index_type=std::uint16_t>
 void get_euler_surface(
-	Simplex_tree_multi &st_multi,
+	python_interface::Simplex_tree_multi_interface<Filtration, typename Filtration::value_type> &st_multi,
 	const tensor::static_tensor_view<dtype, index_type>& out, // assumes its a zero tensor
 	bool mobius_inversion,
 	bool zero_pad
@@ -43,15 +39,14 @@ void get_euler_surface(
 }
 
 
-template<typename dtype=int, typename indices_type=uint16_t>
+template<typename Filtration, typename dtype=int, typename indices_type=uint16_t>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_euler_signed_measure(
-	const intptr_t simplextree_ptr, 
+	python_interface::Simplex_tree_multi_interface<Filtration, typename Filtration::value_type>& st_multi, 
 	dtype* data_ptr, 
 	std::vector<indices_type> grid_shape,
 	bool zero_pad,
 	const bool verbose = false){
 	// const bool verbose = false;
-	auto &st_multi = get_simplextree_from_pointer<interface_multi>(simplextree_ptr);
 	tensor::static_tensor_view<dtype, indices_type> container(data_ptr,grid_shape); // assumes its a zero tensor
 	if (verbose){
 		std::cout << "Container shape : ";
@@ -72,7 +67,7 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_euler_
 }
 
 
-template<typename dtype, typename indices_type, typename ... Args>
+template<typename Filtration, typename dtype, typename indices_type, typename ... Args>
 void get_euler_surface_python(
 	const intptr_t simplextree_ptr, 
 	dtype* data_ptr, 
@@ -80,7 +75,7 @@ void get_euler_surface_python(
 	bool mobius_inversion=false, 
 	bool zero_pad = false, 
 	bool verbose=false){
-	auto &st_multi = get_simplextree_from_pointer<interface_multi>(simplextree_ptr);
+	auto &st_multi = get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
 	tensor::static_tensor_view<dtype, indices_type> container(data_ptr,grid_shape); // assumes its a zero tensor
 	if (verbose){
 		std::cout << "Container shape : ";

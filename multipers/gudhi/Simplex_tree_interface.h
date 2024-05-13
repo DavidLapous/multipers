@@ -17,11 +17,9 @@
 #include <gudhi/Points_off_io.h>
 #include <gudhi/Flag_complex_edge_collapser.h>
 
-#include <iostream>
 #include <vector>
 #include <utility>  // std::pair
 #include <tuple>
-#include <iterator>  // for std::distance
 
 namespace Gudhi {
 

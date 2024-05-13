@@ -1,15 +1,15 @@
 from typing import Callable, Iterable, List, Optional
-import multipers as mp
-from multipers.ml.tools import filtration_grid_to_coordinates
+
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, TransformerMixin
-from multipers.mma_structures import PyModule, PyBox
 from tqdm import tqdm
-import multipers.simplex_tree_multi
-from multipers.simplex_tree_multi import SimplexTreeMulti
 
+import multipers as mp
+import multipers.simplex_tree_multi
 from multipers.grids import compute_grid as reduce_grid
+from multipers.ml.tools import filtration_grid_to_coordinates
+from multipers.mma_structures import PyBox_f64, PyModule_type
 
 
 class SimplexTree2MMA(BaseEstimator, TransformerMixin):
@@ -39,7 +39,7 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         if len(X) == 0:
             return self
-        self._has_axis = not isinstance(X[0], mp.SimplexTreeMulti)
+        self._has_axis = not mp.simplex_tree_multi.is_simplextree_multi(X[0])
         if self._has_axis:
             try:
                 X[0][0]
@@ -50,9 +50,7 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
                         "No simplextree found, maybe you forgot to give a filtration parameter to the previous pipeline"
                     )
                 raise IndexError
-            assert isinstance(
-                X[0][0], mp.SimplexTreeMulti
-            ), f"X[0] is not a simplextre, {X[0]=}, and X[0][0] neither."
+            assert mp.simplex_tree_multi.is_simplextree_multi(X[0][0]), f"X[0] is not a simplextre, {X[0]=}, and X[0][0] neither."
             self._num_axis = len(X[0])
             filtration_values = np.asarray(
                 [
@@ -117,7 +115,7 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
                         self.prune_degrees_above
                     )  # we only do for H0 for computational ease
 
-        def todo1(x: mp.SimplexTreeMulti, box):
+        def todo1(x: mp.simplex_tree_multi.SimplexTreeMulti_type, box):
             # print(x.get_filtration_grid(resolution=3, grid_strategy="regular"))
             # print("TEST BOX",box)
             if self.expand_dim is not None:
@@ -126,11 +124,11 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
                 box=box, verbose=False, **self.persistence_args
             )
 
-        def todo(sts: List[SimplexTreeMulti] | SimplexTreeMulti):
+        def todo(sts: List[mp.simplex_tree_multi.SimplexTreeMulti_type] | mp.simplex_tree_multi.SimplexTreeMulti_type):
             if self._has_axis:
-                assert not isinstance(sts, SimplexTreeMulti)
+                assert not mp.simplex_tree_multi.is_simplextree_multi(sts)
                 return [todo1(st, box) for st, box in zip(sts, self._boxes)]
-            assert isinstance(sts, SimplexTreeMulti)
+            assert mp.simplex_tree_multi.is_simplextree_multi(sts)
             return todo1(sts, self._boxes)
 
         return Parallel(n_jobs=self.n_jobs, backend="threading")(
@@ -187,8 +185,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         filtration_values = x.get_module_of_degree(degree).get_filtration_values(
             unique=True
         )
-        out = np.array([[f[0], f[-1]]
-                       for f in filtration_values if len(f) > 0]).T
+        out = np.array([[f[0], f[-1]] for f in filtration_values if len(f) > 0]).T
         if len(out) != 2:
             print(f"Missing degree {degree} here !")
             m = M = [np.nan for _ in range(x.num_parameters)]
@@ -200,8 +197,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def _infer_axis(X):
-        has_axis = not isinstance(X[0], PyModule)
-        assert not has_axis or isinstance(X[0][0], PyModule)
+        has_axis = not isinstance(X[0], PyModule_type)
+        assert not has_axis or isinstance(X[0][0], PyModule_type)
         return has_axis
 
     @staticmethod
@@ -292,7 +289,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         return (m, M)
 
     @staticmethod
-    def _infer_grid(X: List[PyModule], strategy: str, resolution: int, degrees=None):
+    def _infer_grid(X: List[PyModule_type], strategy: str, resolution: int, degrees=None):
         """
         Given a list of PyModules, computes a multiparameter discrete grid,
         with a given strategy,
@@ -306,8 +303,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             )
         else:
             filtration_values = tuple(
-                mod.get_module_of_degrees(
-                    degrees).get_filtration_values(unique=True)
+                mod.get_module_of_degrees(degrees).get_filtration_values(unique=True)
                 for mod in X
             )
 
@@ -325,8 +321,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         else:
             filtration_values = [
                 np.unique(
-                    np.concatenate([f[parameter]
-                                   for f in filtration_values], axis=0)
+                    np.concatenate([f[parameter] for f in filtration_values], axis=0)
                 )
                 for parameter in range(num_parameters)
             ]
@@ -348,8 +343,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         if self.axis is None and self._has_axis:
             self.axis = -1
         if self.axis is not None and not (self._has_axis):
-            raise Exception(
-                f"SMF didn't find an axis, but requested axis {self.axis}")
+            raise Exception(f"SMF didn't find an axis, but requested axis {self.axis}")
         if self._has_axis:
             self._num_axis = len(X[0])
         if self.verbose:
@@ -372,8 +366,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 X, self.degrees, self._axis, self.quantiles
             )
         else:
-            m = np.zeros((self._num_axis, len(
-                self.degrees), self._num_parameters))
+            m = np.zeros((self._num_axis, len(self.degrees), self._num_parameters))
             M = m + 1
             self._module_bounds = (m, M)
         assert self._num_parameters == self._module_bounds[0].shape[-1]
@@ -395,13 +388,11 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         if np.any(zero_normalizer):
             from warnings import warn
 
-            warn(
-                f"Encountered empty bounds. Please fix me. \n M-m = {normalizer}")
+            warn(f"Encountered empty bounds. Please fix me. \n M-m = {normalizer}")
         normalizer[zero_normalizer] = 1
         self._normalization_factors = w / normalizer
         if self.verbose:
-            print("-- Normalization factors:",
-                  self._normalization_factors.shape)
+            print("-- Normalization factors:", self._normalization_factors.shape)
             print(self._normalization_factors)
 
         if self.verbose:
@@ -409,8 +400,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             for ax in self._axis:
                 print(f"- Axis {ax}")
                 for degree in self.degrees:
-                    sizes = [len(x[ax].get_module_of_degree(degree))
-                             for x in X]
+                    sizes = [len(x[ax].get_module_of_degree(degree)) for x in X]
                     print(
                         f" - Degree {degree} size \
                         {np.mean(sizes).round(decimals=2)}\
@@ -440,7 +430,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 if self.weights is None
                 else np.asarray(self.weights)
             )
-            standard_box = PyBox([0] * self._num_parameters, w)
+            standard_box = PyBox_f64([0] * self._num_parameters, w)
 
             X_copy = [
                 [
@@ -478,10 +468,12 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         resolution: list | int = 50,
         plot: bool = False,
         box=None,
-        n_jobs=1,
+        n_jobs=-1,
         flatten=False,
         progress=False,
         grid_strategy="regular",
+        kernel="linear",
+        signed:bool=False,
     ):
         self.bandwidth = bandwidth
         self.degrees = degrees
@@ -500,6 +492,8 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         self._num_axis = None
         self._coords_to_compute = None
         self._new_resolutions = None
+        self.kernel=kernel
+        self.signed = signed
 
     def fit(self, X, y=None):
         # TODO infer box
@@ -508,7 +502,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         if self._has_axis:
             self._num_axis = len(X[0])
         if self.box is None:
-            self._box = [[0], [1, 1]]
+            self._box = [[0,0], [1, 1]]
         else:
             self._box = self.box
         if self._has_axis:
@@ -533,7 +527,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         img_args = {
-            "delta": self.bandwidth,
+            "bandwidth": self.bandwidth,
             "p": self.power,
             "normalize": self.normalize,
             # "plot":self.plot,
@@ -543,22 +537,24 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
             "degrees": self.degrees,
             # num_jobs is better for parallel over modules.
             "n_jobs": self.n_jobs,
+            "kernel":self.kernel,
+            "signed":self.signed,
+            "flatten":True, # custom coordinates
         }
         if self._has_axis:
 
             def todo1(x, c):
-                return x._compute_pixels(c, **img_args)
+                return x.representation(coordinates=c, **img_args)
         else:
 
             def todo1(x):
-                return x._compute_pixels(self._coords_to_compute, **img_args)[
+                return x.representation(coordinates = self._coords_to_compute, **img_args)[
                     None, :
                 ]  # shape same as has_axis
 
         if self._has_axis:
-
             def todo2(mods):
-                return [todo1(mod, c) for mod, c in zip(mods, self._coords_to_compute)]
+                return tuple(todo1(mod, c) for mod, c in zip(mods, self._coords_to_compute))
         else:
             todo2 = todo1
 
@@ -569,10 +565,10 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         else:
 
             def todo(mods):
-                return [
+                return tuple(
                     img.reshape(len(img_args["degrees"]), *r)
                     for img, r in zip(todo2(mods), self._new_resolutions)
-                ]
+                )
 
         return Parallel(n_jobs=self.n_jobs, backend="threading")(
             delayed(todo)(x)

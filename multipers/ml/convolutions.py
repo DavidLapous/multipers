@@ -1,90 +1,8 @@
 from collections.abc import Callable
-from typing import Iterable, Literal
-from matplotlib.pyplot import grid
-import numpy as np
 from itertools import product
+from typing import Any, Iterable, Literal
 
-from numpy.core.multiarray import dtype
-
-# from numba import njit, prange
-# import numba.np.unsafe.ndarray ## WORKAROUND FOR NUMBA
-
-# @njit(nogil=True,fastmath=True,inline="always", cache=True)
-# def _pts_convolution_gaussian_pt(pts, weights, pt, bandwidth):
-# 	"""
-# 	Evaluates the convolution of the signed measure (pts, weights) with a gaussian meaasure of bandwidth bandwidth, at point pt
-
-# 	Parameters
-# 	----------
-
-# 	 - pts : (npts) x (num_parameters)
-# 	 - weight : (npts)
-# 	 - pt : (num_parameters)
-# 	 - bandwidth : real
-
-# 	Outputs
-# 	-------
-
-# 	The float value
-# 	"""
-# 	num_parameters = pts.shape[1]
-# 	distances = np.empty(len(pts), dtype=float)
-# 	for i in prange(len(pts)):
-# 		distances[i] = np.sum((pt - pts[i])**2)/(2*bandwidth**2)
-# 	distances = np.exp(-distances)*weights / (np.sqrt(2*np.pi)*(bandwidth**(num_parameters / 2))) # This last renormalization is not necessary
-# 	return np.mean(distances)
-
-
-# @njit(nogil=True,fastmath=True,inline="always", cache=True)
-# def _pts_convolution_exponential_pt(pts, weights, pt, bandwidth):
-# 	"""
-# 	Evaluates the convolution of the signed measure (pts, weights) with a gaussian meaasure of bandwidth bandwidth, at point pt
-
-# 	Parameters
-# 	----------
-
-# 	 - pts : (npts) x (num_parameters)
-# 	 - weight : (npts)
-# 	 - pt : (num_parameters)
-# 	 - bandwidth : real
-
-# 	Outputs
-# 	-------
-
-# 	The float value
-# 	"""
-# 	num_parameters = pts.shape[1]
-# 	distances = np.empty(len(pts), dtype=float)
-# 	for i in prange(len(pts)):
-# 		distances[i] = np.linalg.norm(pt - pts[i])
-# 	# distances = np.linalg.norm(pts-pt, axis=1)
-# 	distances = np.exp(-distances/bandwidth)*weights / (bandwidth**num_parameters) # This last renormalization is not necessary
-# 	return np.mean(distances)
-
-# @njit(nogil=True, cache=True) # not sure if parallel here is worth it...
-# def _pts_convolution_sparse_pts(pts:np.ndarray, weights:np.ndarray, pt_list:np.ndarray, bandwidth, kernel:int=0):
-# 	"""
-# 	Evaluates the convolution of the signed measure (pts, weights) with a gaussian meaasure of bandwidth bandwidth, at points pt_list
-
-# 	Parameters
-# 	----------
-
-# 	 - pts : (npts) x (num_parameters)
-# 	 - weight : (npts)
-# 	 - pt : (n)x(num_parameters)
-# 	 - bandwidth : real
-
-# 	Outputs
-# 	-------
-
-# 	The values : (n)
-# 	"""
-# 	if kernel == 0:
-# 		return np.array([_pts_convolution_gaussian_pt(pts,weights,pt_list[i],bandwidth) for i in prange(pt_list.shape[0])])
-# 	elif kernel == 1:
-# 		return np.array([_pts_convolution_exponential_pt(pts,weights,pt_list[i],bandwidth) for i in prange(pt_list.shape[0])])
-# 	else:
-# 		raise Exception("Unsupported kernel")
+import numpy as np
 
 
 def convolution_signed_measures(
@@ -118,7 +36,7 @@ def convolution_signed_measures(
         case "sklearn":
 
             def convolution_signed_measures_on_grid(
-                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]]
+                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
             ):
                 return np.concatenate(
                     [
@@ -134,16 +52,11 @@ def convolution_signed_measures(
                     ],
                     axis=0,
                 )
-        # case "numba":
-        # 	kernel2int = {"gaussian":0, "exponential":1, "other":2}
-        # 	def convolution_signed_measures_on_grid(signed_measures:Iterable[tuple[np.ndarray,np.ndarray]]):
-        # 		return np.concatenate([
-        # 				_pts_convolution_sparse_pts(pts,weights, grid_iterator, bandwidth, kernel=kernel2int[kernel]) for pts,weights in signed_measures
-        # 			], axis=0)
+
         case "pykeops":
 
             def convolution_signed_measures_on_grid(
-                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]]
+                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
             ):
                 return np.concatenate(
                     [
@@ -251,10 +164,56 @@ def _pts_convolution_pykeops(
     """
     Pykeops convolution
     """
-    kde = KDE(kernel=kernel, bandwidth=bandwidth, return_log=False, **more_kde_args)
+    kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
     return kde.fit(
         pts, sample_weights=np.asarray(pts_weights, dtype=pts.dtype)
     ).score_samples(np.asarray(grid_iterator, dtype=pts.dtype))
+
+
+def gaussian_kernel(x_i, y_j, bandwidth):
+    exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=-1) / 2
+    # float is necessary for some reason (pykeops fails)
+    kernel = (exponent).exp() / (bandwidth * float(np.sqrt(2 * np.pi)))
+    return kernel
+
+
+def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
+    # 1 / \sqrt(2 \pi^dim * \Sigma.det()) * exp( -(x-y).T @ \Sigma ^{-1} @ (x-y))
+    # CF https://www.kernel-operations.io/keops/_auto_examples/pytorch/plot_anisotropic_kernels.html#sphx-glr-auto-examples-pytorch-plot-anisotropic-kernels-py
+    #    and https://www.kernel-operations.io/keops/api/math-operations.html
+    dim = x_i.shape[-1]
+    z = x_i - y_j
+    exponent = -(z.weightedsqnorm(covariance_matrix_inverse.flatten()) / 2)
+    return (
+        float((2 * np.pi) ** (-dim / 2))
+        * (covariance_matrix_inverse.det().sqrt())
+        * exponent.exp()
+    )
+
+
+def exponential_kernel(x_i, y_j, bandwidth):
+    exponent = -(((((x_i - y_j) ** 2).sum()) ** 1 / 2) / bandwidth).sum(dim=-1)
+    kernel = exponent.exp() / bandwidth
+    return kernel
+
+
+def _kernel(
+    kernel: (
+        Literal["gaussian", "exponential", "multivariate_gaussian"] | Callable
+    ) = "gaussian",
+):
+    match kernel:
+        case "gaussian":
+            return gaussian_kernel
+        case "exponential":
+            return exponential_kernel
+        case "multivariate_gaussian":
+            return multivariate_gaussian_kernel
+        case _:
+            assert callable(
+                kernel
+            ), f"--------------------------\nUnknown kernel {kernel}.\n--------------------------\n Custom kernel has to be callable, (x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix"
+            return kernel
 
 
 # TODO : multiple bandwidths at once with lazy tensors
@@ -265,9 +224,11 @@ class KDE:
 
     def __init__(
         self,
-        bandwidth: float = 1,
-        kernel: Literal["gaussian", "exponential"] | Callable = "gaussian",
-        return_log=True,
+        bandwidth: Any = 1,
+        kernel: (
+            Literal["m_gaussian", "gaussian", "exponential"] | Callable
+        ) = "gaussian",
+        return_log=False,
     ):
         """
         bandwidth : numeric
@@ -296,12 +257,20 @@ class KDE:
         match self.kernel:
             case "gaussian":
                 self._kernel = self.gaussian_kernel
+            case "m_gaussian":
+                self._kernel = self.multivariate_gaussian_kernel
             case "exponential":
                 self._kernel = self.exponential_kernel
             case _:
                 assert callable(
                     self.kernel
-                ), f"--------------------------\nUnknown kernel {self.kernel}.\n--------------------------\n Custom kernel has to be callable, (x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix"
+                ), f"""
+--------------------------
+Unknown kernel {self.kernel}.
+--------------------------
+Custom kernel has to be callable,
+(x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix
+"""
                 self._kernel = self.kernel
         return self
 
@@ -311,6 +280,20 @@ class KDE:
         # float is necessary for some reason (pykeops fails)
         kernel = (exponent).exp() / (bandwidth * float(np.sqrt(2 * np.pi)))
         return kernel
+
+    @staticmethod
+    def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
+        # 1 / \sqrt(2 \pi^dim * \Sigma.det()) * exp( -(x-y).T @ \Sigma ^{-1} @ (x-y))
+        # CF https://www.kernel-operations.io/keops/_auto_examples/pytorch/plot_anisotropic_kernels.html#sphx-glr-auto-examples-pytorch-plot-anisotropic-kernels-py
+        #    and https://www.kernel-operations.io/keops/api/math-operations.html
+        dim = x_i.shape[-1]
+        z = x_i - y_j
+        exponent = -(z.weightedsqnorm(covariance_matrix_inverse.flatten()) / 2)
+        return (
+            float((2 * np.pi) ** (-dim / 2))
+            * (covariance_matrix_inverse.det().sqrt())
+            * exponent.exp()
+        )
 
     @staticmethod
     def exponential_kernel(x_i, y_j, bandwidth):
@@ -366,6 +349,8 @@ class KDE:
                 log probability densities for each of the queried points in `Y`
         """
         X = self.X if X is None else X
+        if X.shape[0] == 0:
+            return self._backend.zeros((Y.shape[0]))
         assert Y.shape[1] == X.shape[1] and X.ndim == Y.ndim == 2
         lazy_x, lazy_y, w = self.to_lazy(X, Y, x_weights=self._sample_weights)
         kernel = self._kernel(lazy_x, lazy_y, self.bandwidth)
@@ -381,11 +366,54 @@ class KDE:
         )
 
 
-class DTM:
-
+def batch_signed_measure_convolutions(
+    signed_measures,  # array of shape (num_data,num_pts,D)
+    x,  # array of shape (num_x, D) or (num_data, num_x, D)
+    bandwidth,  # either float or matrix if multivariate kernel
+    kernel,
+):
     """
-    Fast, scikit-style, and differentiable DTM density estimation, using PyKeops.
-    Tuned version of KNN from
+    Input
+    -----
+     - signed_measures: unragged, of shape (num_data, num_pts, D+1)
+       where last coord is weights, (0 for dummy points)
+     - x : the points to convolve (num_x,D)
+     - bandwidth : the bandwidths or covariance matrix inverse or ... of the kernel
+     - kernel : "gaussian", "multivariate_gaussian", "exponential", or Callable (x_i, y_i, bandwidth)->float
+
+    Output
+    ------
+    Array of shape (num_convolutions, (num_axis), num_data,
+    Array of shape (num_convolutions, (num_axis), num_data, max_x_size)
+    """
+    if signed_measures.ndim == 2:
+        signed_measures = signed_measures[None, :, :]
+    sms = signed_measures[..., :-1]
+    weights = signed_measures[..., -1]
+    if isinstance(signed_measures, np.ndarray):
+        from pykeops.numpy import LazyTensor
+    else:
+        import torch
+
+        assert isinstance(signed_measures, torch.Tensor)
+        from pykeops.torch import LazyTensor
+
+    _sms = LazyTensor(sms[..., None, :].contiguous())
+    _x = x[..., None, :, :].contiguous()
+
+    sms_kernel = _kernel(kernel)(_sms, _x, bandwidth)
+    out = (sms_kernel * weights[..., None, None].contiguous()).sum(
+        signed_measures.ndim - 2
+    )
+    assert out.shape[-1] == 1, "Pykeops bug fixed, TODO : refix this "
+    out = out[..., 0]  ## pykeops bug + ensures its a tensor
+    # assert out.shape == (x.shape[0], x.shape[1]), f"{x.shape=}, {out.shape=}"
+    return out
+
+
+class DTM:
+    """
+    Distance To Measure
     """
 
     def __init__(self, masses=[0.1], metric: str = "euclidean", **_kdtree_kwargs):

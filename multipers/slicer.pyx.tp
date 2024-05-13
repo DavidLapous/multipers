@@ -1,0 +1,471 @@
+{{py:
+
+"""
+Vine and non-vine slicers.
+both type have the same interface, defined the slicer.pyx file
+"""
+
+
+import pickle
+
+with open("_slicer_names.pkl", "rb") as f:
+  slicers=pickle.load(f)
+
+
+}}
+
+from multipers.simplex_tree_multi import SimplexTreeMulti
+import multipers
+from typing import Optional,Literal
+import multipers.io as mio
+import multipers.grids as mpg
+import threading
+import os 
+
+from multipers.slicer cimport *
+from multipers.filtrations cimport *
+from multipers.filtration_conversions cimport *
+import numpy as np
+cimport cython
+# python_value_type = np.float32
+from typing import Union
+
+global available_slicers
+available_slicers = tuple((
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+  {{PYTHON_TYPE}},
+{{endfor}}
+))
+global _slicers_type
+Slicer_type = Union[
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+  {{PYTHON_TYPE}},
+{{endfor}}
+
+]
+
+
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+
+#------------------------------------------------------------------------------
+cdef class {{PYTHON_TYPE}}:
+    cdef {{CTYPE}} truc
+    cdef public vector[vector[double]] filtration_grid
+    @property
+    def is_squeezed(self)->bool:
+        return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
+
+    def get_ptr(self):
+        """
+        Returns a pointer to the underlying C++ slicer.
+        """
+        return <intptr_t>(&self.truc)
+    {{if IS_SIMPLICIAL}}
+    def __init__(self, st=None):
+        """
+        Constructs a slicer from a simplex tree.
+        """
+        pass
+    def __cinit__(self, st=None):
+        if st is None:
+            return
+        cdef intptr_t ptr = st.thisptr
+        cdef Simplex_tree_multi_interface[{{FILTRATION_TYPE}},{{C_VALUE_TYPE}}]* st_ptr = <Simplex_tree_multi_interface[{{FILTRATION_TYPE}},{{C_VALUE_TYPE}}]*>(ptr)
+        self.truc = {{CTYPE}}(st_ptr)
+    {{elif IS_KCRITICAL}}
+    def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
+        """
+        Constructs a slicer from
+         - scc-like blocks 
+         or 
+         - generator maps (Iterable of list of ints)
+         - generator dimensions (Iterable of int)
+         - filtration values (Iterable of filtration values)
+        """
+        pass
+    def __cinit__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):
+        """
+        Cython constructor
+        """
+        if len(generator_maps)>0 and len(generator_dimensions) == 0 and len(filtration_values) == 0:
+          from multipers._slicer_meta import _blocks2boundary_dimension_grades
+          generator_maps, generator_dimensions, filtration_values = _blocks2boundary_dimension_grades(
+                  generator_maps,
+                  inplace=False,
+              )
+        cdef uint32_t num_generators = len(generator_maps)
+        cdef vector[vector[uint32_t]] c_generator_maps
+        cdef vector[KCriticalFiltration[{{C_VALUE_TYPE}}]] c_filtration_values
+        for stuff in generator_maps:
+            c_generator_maps.push_back(<vector[uint32_t]>(stuff))
+        cdef KCriticalFiltration[{{C_VALUE_TYPE}}] cf
+        for F in filtration_values:
+            cf.clear()
+            for f in F:
+                cf.add_point(_py21c_{{SHORT}}(f))
+            c_filtration_values.push_back(cf)
+        cdef vector[int] c_generator_dimensions = generator_dimensions
+        assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
+        self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
+    {{else}}
+    def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
+        """
+        Constructs a slicer from
+         - generator maps (Iterable of list of ints)
+         - generator dimensions (Iterable of int)
+         - filtration values (Iterable of filtration values)
+        """
+        pass
+    def __cinit__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):
+        """
+        Cython constructor
+        """
+        cdef uint32_t num_generators = len(generator_maps)
+        cdef vector[vector[uint32_t]] c_generator_maps
+        cdef vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] c_filtration_values
+        for stuff in generator_maps:
+            c_generator_maps.push_back(<vector[uint32_t]>(stuff))
+        for f in filtration_values:
+            # cf.clear()
+            # for truc in f:
+            #     cf.push_back(truc)
+            c_filtration_values.push_back(_py21c_{{SHORT}}(f))
+        cdef vector[int] c_generator_dimensions = generator_dimensions
+        assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
+        self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
+    {{endif}}
+    def copy(self):
+        """
+        Returns a copy of the slicer.
+        """
+        copy_ = {{PYTHON_TYPE}}()
+        copy_.truc = self.truc
+        return copy_
+    def get_barcode(self):
+        """
+        Returns the current barcode.
+        """
+        return self.truc.get_barcode()
+    def push_to_line(self, basepoint, direction=None):
+        """
+        Pushes the current slicer to the line
+        """
+        cdef Line[{{C_VALUE_TYPE}}] line
+        if direction is None:
+            line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint))
+        else:
+            line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint),_py21c_{{SHORT}}(direction))
+        self.truc.push_to(line)        
+        return self
+
+    def persistence_on_line(self,basepoint,direction=None):
+        """
+        Computes the persistence on a line L defined by 
+         - a basepoint (num_parameters,) array
+         - an optional direction (num_parameters,) array
+        """
+        self.push_to_line(basepoint,direction)
+        self.truc.compute_persistence()
+        return self.truc.get_barcode()
+    def compute_persistence(self,one_filtration=None):
+        """
+        Computes the current persistence, or the persistence
+        given by the filtration one_filtration (num_generators,).
+        """
+        if one_filtration is not None:
+            self.truc.set_one_filtration(one_filtration)
+        self.truc.compute_persistence()
+        # return self.truc.get_barcode()
+    def get_barcode(self):
+        """
+        Returns the barcode of the current 1d-persistence.
+        """
+        return self.truc.get_barcode()
+    def sliced_filtration(self,basepoint, direction=None):
+        """
+        Computes the filtration on a line L defined by 
+         - a basepoint (num_parameters,) array
+         - an optional direction (num_parameters,) array
+        """
+        self.push_to_line(basepoint,direction)
+        return np.asarray(self.truc.get_one_filtration())
+    def __len__(self):
+        return self.truc.num_generators()
+    @property
+    def num_generators(self):
+        return self.truc.num_generators()
+    @property
+    def num_parameters(self):
+        return self.truc.num_parameters()
+    def info(self):
+        return self.truc.to_str().decode()
+    def compute_box(self):
+        """
+        Computes the bounding box of the current persistence.
+        """
+        cdef pair[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}],Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] box = self.truc.get_bounding_box()
+        cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] a = _ff21cview_{{SHORT}}(&box.first)
+        cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] b = _ff21cview_{{SHORT}}(&box.second)
+        return np.asarray([a,b])
+    def get_filtrations_values(self):
+        """
+        Returns the current filtration values of the slicer.
+        """
+        cdef vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] v = self.truc.get_filtration_values()
+        out = _vff21cview_{{SHORT}}(v, copy=True)
+        return np.asarray(out)
+    def get_filtrations(self):
+        {{if IS_KCRITICAL}}
+        return _vff2kcview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
+        {{else}}
+        return _vff21cview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
+        {{endif}}
+
+    def get_dimensions(self):
+        """
+        Returns the ordered dimensions of the generators.
+        """
+        return np.asarray(self.truc.get_dimensions())
+    def get_boundaries(self):
+        """
+        Returns the boundaries of the generators.
+        """
+        return tuple(tuple(b) for b in self.truc.get_boundaries())
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True, bool inplace = False, bool force=False):
+        """
+        Squeeze the filtration values on a grid.
+        """
+        if force and self.is_squeezed:
+            raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
+        if filtration_grid is None:
+            filtration_grid = mpg.compute_grid(
+                    self.get_filtrations_values().T,
+                    strategy=grid_strategy,
+                    resolution=resolution)
+        cdef vector[vector[{{C_VALUE_TYPE}}]] grid = filtration_grid
+        if inplace or not coordinates:
+            self.truc.coarsen_on_grid_inplace(grid, coordinates)
+            self.filtration_grid = filtration_grid
+        else:
+          {{if COL is None}}
+          raise ValueError("WIP")
+          {{else}}
+          out = {{PYTHON_TYPE[:-3]+"i32"}}()
+          out.truc = self.truc.coarsen_on_grid(grid)
+          out.filtration_grid = filtration_grid
+          return out
+          {{endif}}
+        return self
+    def minpres(self,
+        int degree = 1, 
+        list[int] degrees=[],
+        str backend:Literal["mpfree", "2pac"]="mpfree", 
+        str slicer_backend:Literal["matrix","clement","graph"]="matrix",
+        bool vineyard={{IS_VINE}}, 
+        id :Optional[str] = None,
+        dtype = {{PY_VALUE_TYPE}},
+        **minpres_kwargs
+        ):
+        """
+        Computes the minimal presentation of the slicer, and returns it as a new slicer.
+        """
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
+        return new_slicer
+
+    @property
+    def dtype(self)->type:
+      return {{PY_VALUE_TYPE}}
+    @property
+    def col_type(self)->str:
+      return "{{COL}}"
+    @property
+    def is_vine(self)->bool:
+      return {{IS_VINE}}
+    @property
+    def is_kcritical(self)->bool:
+      return {{IS_KCRITICAL}}
+
+
+    {{if IS_VINE}}
+    def vine_update(self,basepoint,direction=None):
+        """
+        Updates the barcode, on a line, using the vineyard algorithm.
+        """
+        self.push_to_line(basepoint,direction)
+        self.truc.vineyard_update()
+        return self
+    def get_representative_cycles(self, bool update=True):
+        """
+        Returns the representative cycles of the current barcode.
+        Recomputes the generators if update=True
+        """
+        return self.truc.get_representative_cycles(update)
+    def get_permutation(self):
+        """
+        Returns the current generator permutation (w.r.t. vineyard).
+        """
+        return self.truc.get_current_order()
+    {{endif}}
+
+    @staticmethod
+    def from_bitmap(self):
+      raise ValueError("Not implemented.")
+
+{{endfor}}
+
+
+def from_function_delaunay(
+    points,
+    grades,
+    int degree=-1,
+    str backend: Literal["matrix", "clement"] = "matrix",
+    bool vineyard=True,
+    bool verbose = False,
+    bool clear = True,
+):
+    """
+    Given points in $\mathbb R^n$ and function grades, compute the function-delaunay
+    bifiltration as a in an scc format, and converts it into a slicer.
+
+    points : (num_pts, n) float array
+    grades : (num_pts,) float array
+    degree (opt) : if given, computes a minimal presentation of this homological degree first
+    backend : slicer backend, e.g. "matrix", "clement"
+    vineyard : bool, use a vineyard-compatible backend
+    """
+    blocks = mio.function_delaunay_presentation(points, grades, degree=degree, verbose=verbose,clear=clear)
+    return multipers.Slicer(blocks, backend=backend, vineyard=vineyard)
+
+def slicer2blocks(slicer, int degree = -1, bool reverse=True):
+    """
+    Convert any slicer to the block format a.k.a. scc format for python
+    """
+    dims = slicer.get_dimensions()
+    num_empty_blocks_to_add = 1 if degree == -1 else dims.min()-degree +1
+    _,counts = np.unique(dims, return_counts=True, )
+    indices = np.concatenate([[0],counts], dtype=np.int32).cumsum()
+    filtration_values = slicer.get_filtrations()
+    filtration_values = [filtration_values[indices[i]:indices[i+1]] for i in range(len(indices)-1)]
+    boundaries = slicer.get_boundaries()
+    boundaries = [boundaries[indices[i]:indices[i+1]] for i in range(len(indices)-1)]
+    shift = np.concatenate([[0], indices], dtype=np.int32)
+    boundaries = [tuple(np.asarray(x-s, dtype=np.int32) for x in block)  for s,block in zip(shift,boundaries)]
+    blocks = [tuple((f,tuple(b))) for b,f in zip(boundaries,filtration_values)]
+    blocks = ([(np.empty((0,)),[])]*num_empty_blocks_to_add) + blocks
+    if reverse:
+        blocks.reverse()
+    return blocks
+
+def minimal_presentation(
+        slicer,
+        int degree = 1, 
+        list[int] degrees=[],
+        str backend:Literal["mpfree", "2pac"]="mpfree", 
+        str slicer_backend:Literal["matrix","clement","graph"]="matrix",
+        bool vineyard=True, 
+        id :Optional[str] =None,
+        dtype=None,
+        **minpres_kwargs
+        ):
+    """
+    Computes a minimal presentation of the multifiltered complex given by the slicer,
+    and returns it as a slicer.
+    Only works for mpfree for the moment.
+    """
+    if len(degrees)>0:
+        return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+    filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+    blocks = to_blocks(slicer)
+    if id is None:
+        id = str(threading.get_native_id())
+    if dtype is None:
+        dtype = slicer.dtype
+    mio._init_external_softwares(requires=[backend])
+    mio.scc2disk(blocks,path=mio.input_path+id, strip_comments=True)
+    dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
+    new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
+    new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    if filtration_grid is not None:
+      new_slicer.filtration_grid = filtration_grid
+    return new_slicer
+
+
+def to_simplextree(s:Slicer_type, max_dim:int=-1):
+    """
+    Turns a --simplicial-- slicer into a simplextree.
+
+    Warning: Won't work for non-simplicial complexes, 
+    i.e., complexes $K$ not satisfying 
+    $\forall \sigma \in K,\, \mathrm{dim}(\sigma) = |\partial \sigma|-1$
+    """
+    dims = s.get_dimensions()
+    assert np.all(dims[:-1] <= dims[1:]), "Dims is not sorted."
+    idx = np.searchsorted(dims, np.unique(dims))
+    idx = np.concatenate([idx, [dims.shape[0]]])
+    if max_dim>=0:
+        idx = idx[:max_dim+2]
+
+    cdef vector[vector[int]] boundaries_ = s.get_boundaries()
+    cdef int a
+    cdef int b
+    if len(idx)>2:
+        a = idx[2]
+        b = idx[-1]
+        for i in range(a, b):
+            boundaries_[i] = np.unique(np.concatenate([boundaries_[k] for k in boundaries_[i]]))
+    boundaries = [np.asarray(boundaries_[idx[i]:idx[i+1]]).T for i in range(len(idx)-1)]
+    boundaries[0] = np.arange(boundaries[0].shape[1])[None,:]
+    filtrations = s.get_filtrations()
+    num_parameters  = s.num_parameters
+    filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(len(idx)-1)) # TODO : optimize ?
+    st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype)
+    for i in range(len(filtrations)):
+        if s.is_kcritical:
+          for f in filtrations[i]:
+            st.insert(np.asarray(boundaries[i], dtype = np.int32),np.asarray(f, dtype=s.dtype))
+        else:
+          st.insert_batch(np.asarray(boundaries[i], dtype= np.int32),np.asarray(filtrations[i], dtype=s.dtype))
+    return st
+
+
+def is_slicer(object input)->bool:
+    return (False 
+        {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+        or isinstance(input, {{PYTHON_TYPE}})
+        {{endfor}}
+      )
+
+
+def to_blocks(input):
+    """
+    Converts input to blocks, if possible.
+    """
+    if is_slicer(input):
+      return slicer2blocks(input)
+    if isinstance(input, list) or isinstance(input, tuple):
+      return input
+    if isinstance(input, multipers.simplex_tree_multi.SimplexTreeMulti):
+      return mio.simplextree2scc(input)
+    if isinstance(input, str) or isinstance(input, os.PathLike):
+      return mio.scc_parser(input)
+    raise ValueError("Input cannot be converted to blocks.")
+
+
+
+cdef dict[tuple[bool,bool,type],object] slicer_dict = {
+  {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  {{if not IS_SIMPLICIAL}}
+  ({{IS_VINE}}, {{IS_KCRITICAL}}, np.dtype({{PY_VALUE_TYPE}}), "{{COL}}"): {{PYTHON_TYPE}},
+  {{endif}}
+  {{endfor}}
+}
+
+def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col):
+  slicer = slicer_dict.get((is_vineyard, is_k_critical, np.dtype(dtype), col), None)
+  if slicer is None:
+    raise ValueError(f"Unimplemented combo for Matrix : {is_vineyard=}, {is_k_critical=}, {dtype=}")
+  return slicer
+
+
+
+

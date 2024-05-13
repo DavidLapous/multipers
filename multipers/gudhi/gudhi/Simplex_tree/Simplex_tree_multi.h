@@ -12,7 +12,6 @@
 #define SIMPLEX_TREE_MULTI_H_
 
 #include <algorithm>
-#include <cstddef>
 #include <gudhi/Simplex_tree.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Line.h>
@@ -20,13 +19,13 @@
 
 namespace Gudhi::multiparameter {
 /** Model of SimplexTreeOptions, with a multiparameter filtration. */
+template <typename Filtration>
 struct Simplex_tree_options_multidimensional_filtration {
 public:
   typedef linear_indexing_tag Indexing_tag;
   typedef int Vertex_handle;
-  typedef float value_type;
-  using Filtration_value =
-      multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+  using Filtration_value = Filtration;
+  typedef typename Filtration::value_type value_type;
   typedef std::uint32_t Simplex_key;
   static const bool store_key = true;
   static const bool store_filtration = true;
@@ -36,13 +35,30 @@ public:
   static const bool is_multi_parameter = true;
 };
 
-using options_multi = Simplex_tree_options_multidimensional_filtration;
+template <
+    typename Filtration =
+        typename multi_filtrations::Finitely_critical_multi_filtration<float>>
+using options_multi =
+    Simplex_tree_options_multidimensional_filtration<Filtration>;
 using options_std = Simplex_tree_options_full_featured;
 using simplextree_std = Simplex_tree<options_std>;
-using simplextree_multi = Simplex_tree<options_multi>;
-using value_type = Simplex_tree_options_multidimensional_filtration::value_type;
-using multi_filtration_type = std::vector<options_multi::value_type>;
-using multi_filtration_grid = std::vector<multi_filtration_type>;
+template <
+    typename Filtration =
+        typename multi_filtrations::Finitely_critical_multi_filtration<float>>
+using simplextree_multi = Simplex_tree<options_multi<Filtration>>;
+// template <typename Filtration = typename
+// multi_filtrations::Finitely_critical_multi_filtration<float>> using
+// value_type =
+// Simplex_tree_options_multidimensional_filtration<Filtration>::value_type;
+template <
+    typename Filtration =
+        typename multi_filtrations::Finitely_critical_multi_filtration<float>>
+using multi_filtration_type =
+    std::vector<typename options_multi<Filtration>::value_type>;
+template <
+    typename Filtration =
+        typename multi_filtrations::Finitely_critical_multi_filtration<float>>
+using multi_filtration_grid = std::vector<multi_filtration_type<Filtration>>;
 
 /**
  * \brief Turns a 1-parameter simplextree into a multiparameter simplextree,
@@ -67,11 +83,23 @@ void multify(simplextree_std &st, simplextree_multi &st_multi,
       !simplextree_std::Options::is_multi_parameter &&
           simplextree_multi::Options::is_multi_parameter,
       "Can only convert non-multiparameter to multiparameter simplextree.");
-  for (auto i = 0u;
-       i < std::min(static_cast<unsigned int>(default_values.size()),
-                    static_cast<unsigned int>(num_parameters - 1));
+  unsigned int num_default_values;
+  if constexpr (simplextree_multi::Options::Filtration_value::
+                    is_multi_critical) {
+    num_default_values = default_values[0].size();
+  } else {
+    num_default_values = default_values.size();
+  }
+  for (auto i = 0u; i < std::min(num_default_values,
+                                 static_cast<unsigned int>(num_parameters - 1));
        i++)
-    f[i + 1] = default_values[i];
+    if constexpr (simplextree_multi::Options::Filtration_value::
+                      is_multi_critical) {
+      f[0][i + 1] = default_values[0][i];
+    } else {
+      f[i + 1] = default_values[i];
+    }
+
   std::vector<int> simplex;
   simplex.reserve(st.dimension() + 1);
   for (auto &simplex_handle : st.complex_simplex_range()) {
@@ -79,8 +107,14 @@ void multify(simplextree_std &st, simplextree_multi &st_multi,
     for (auto vertex : st.simplex_vertex_range(simplex_handle))
       simplex.push_back(vertex);
 
-    if (num_parameters > 0)
-      f[0] = st.filtration(simplex_handle);
+    if (num_parameters > 0) {
+      if constexpr (simplextree_multi::Options::Filtration_value::
+                        is_multi_critical) {
+        f[0][0] = st.filtration(simplex_handle);
+      } else {
+        f[0] = st.filtration(simplex_handle);
+      }
+    }
     st_multi.insert_simplex(simplex, f);
   }
   st_multi.set_number_of_parameters(num_parameters);
@@ -103,10 +137,15 @@ void flatten(simplextree_std &st, simplextree_multi &st_multi,
       "Can only convert multiparameter to non-multiparameter simplextree.");
   for (const auto &simplex_handle : st_multi.complex_simplex_range()) {
     std::vector<int> simplex;
+    typename simplextree_multi::Options::value_type f;
     for (auto vertex : st_multi.simplex_vertex_range(simplex_handle))
       simplex.push_back(vertex);
-    typename simplextree_multi::Options::value_type f =
-        dimension >= 0 ? st_multi.filtration(simplex_handle)[dimension] : 0;
+    if constexpr (simplextree_multi::Filtration_value::is_multi_critical) {
+      f = dimension >= 0 ? st_multi.filtration(simplex_handle)[0][dimension]
+                         : 0;
+    } else {
+      f = dimension >= 0 ? st_multi.filtration(simplex_handle)[dimension] : 0;
+    }
     st.insert_simplex(simplex, f);
   }
 }
@@ -122,10 +161,8 @@ void flatten(simplextree_std &st, simplextree_multi &st_multi,
  * the linear form to apply.
  * */
 template <class simplextree_std, class simplextree_multi>
-void linear_projection(
-    simplextree_std &st, simplextree_multi &st_multi,
-    const std::vector<typename simplextree_multi::Options::value_type>
-        &linear_form) {
+void linear_projection(simplextree_std &st, simplextree_multi &st_multi,
+                       const std::vector<double> &linear_form) {
   static_assert(
       !simplextree_std::Options::is_multi_parameter &&
           simplextree_multi::Options::is_multi_parameter,
@@ -186,50 +223,38 @@ void flatten_diag(
  * \param grid The multiparameter grid. A vector of size `num_parameters`, whose
  * elements are the elements of the grid for this axis.
  * */
-template <typename vector_like>
-inline void find_coordinates(vector_like &x,
-                             const multi_filtration_grid &grid) {
-    for (auto parameter = 0u; parameter < grid.size(); parameter++) {
-
-    // my guess is that it's memory bottlenecked, so parallel not useful.
-    /* tbb::parallel_for( */
-    /*     static_cast<std::size_t>(0u), grid.size(), [&](std::size_t parameter)
-     * { */
-    const auto &filtration = grid[parameter]; // assumes its sorted
-    const auto to_project = x[parameter];
-    if constexpr (std::numeric_limits<
-                      typename vector_like::value_type>::has_infinity)
-      if (to_project ==
-          std::numeric_limits<typename vector_like::value_type>::infinity()) {
-        x[parameter] =
-            std::numeric_limits<typename vector_like::value_type>::infinity();
-        continue;
-/* return; */
-      }
-    if (to_project >= filtration.back()) {
-      x[parameter] = filtration.size() - 1;
-      continue;
-/* return; */
-    } // deals with infinite value at the end of the grid
-
-    /* unsigned int i = 0; */
-    /* while (to_project > filtration[i] && i < filtration.size()) { */
-    /*   i++; */
-    /* } */
-    /* if (i == 0) */
-    /*   x[parameter] = 0; */
-    /* else if (i < filtration.size()) { */
-    /*   typename vector_like::value_type d1, d2; */
-    /*   d1 = std::abs(filtration[i - 1] - to_project); */
-    /*   d2 = std::abs(filtration[i] - to_project); */
-    /*   x[parameter] = d1 < d2 ? i - 1 : i; */
-    /* } */
-    x[parameter] = std::distance(
-        filtration.begin(),
-        std::lower_bound(filtration.begin(), filtration.end(), to_project));
-    /* }); */
-  }
-}
+// DEPRECATED : replaced by Filtration::coordinate_in_grid{,_inplace}
+// template <typename U, typename T>
+// inline std::vector<int64_t> find_coordinates(const std::vector<U> &x,
+//                              const std::vector<std::vector<T>> &grid) {
+//   std::vector<int64_t> coordinates(x.size());
+//   for (auto parameter = 0u; parameter < grid.size(); parameter++) {
+//     // my guess is that it's memory bottlenecked, so parallel not useful.
+//     /* tbb::parallel_for( */
+//     /*     static_cast<std::size_t>(0u), grid.size(), [&](std::size_t
+//     parameter)
+//      * { */
+//     const auto &filtration = grid[parameter]; // assumes its sorted
+//     const T to_project = static_cast<T>(x[parameter]);
+//     if constexpr (std::numeric_limits<T>::has_infinity)
+//       if (to_project ==
+//           std::numeric_limits<T>::infinity()) {
+//         coordinates[parameter] =
+//             std::numeric_limits<int64_t>::max();
+//         continue;
+//         /* return; */
+//       }
+//     if (to_project >= filtration.back()) [[unlikely]] {
+//       coordinates[parameter] = filtration.size() - 1;
+//       continue;
+//     } // deals with infinite value at the end of the grid
+//
+//     coordinates[parameter] = std::distance(
+//         filtration.begin(),
+//         std::lower_bound(filtration.begin(), filtration.end(), to_project));
+//   }
+//     return coordinates;
+// }
 
 /**
  * \brief Pushes all of the filtration values of a simplextree onto a grid, c.f.
@@ -239,10 +264,13 @@ inline void find_coordinates(vector_like &x,
  * for this axis. \param coordinate_values If set to true the filtration values
  * will be turned into coordinates in this grid instead of points in this grid.
  * */
+
 template <class simplextree_multi>
-void squeeze_filtration(simplextree_multi &st_multi,
-                        const multi_filtration_grid &grid,
-                        bool coordinate_values = true) {
+void squeeze_filtration(
+    simplextree_multi &st_multi,
+    const multi_filtration_grid<
+        typename simplextree_multi::Options::Filtration_value> &grid,
+    bool coordinate_values = true) {
   static_assert(simplextree_multi::Options::is_multi_parameter,
                 "Only works for multiparameter simplextrees.");
   auto num_parameters =
@@ -274,9 +302,12 @@ void squeeze_filtration(simplextree_multi &st_multi,
  * Useful for, e.g., Rips filtrations.
  * */
 template <class simplextree_multi>
-std::vector<multi_filtration_grid>
+std::vector<multi_filtration_grid<
+    typename simplextree_multi::Options::Filtration_value>>
 get_filtration_values(simplextree_multi &st_multi,
                       const std::vector<int> &degrees) {
+  using multi_filtration_grid = multi_filtration_grid<
+      typename simplextree_multi::Options::Filtration_value>;
   static_assert(simplextree_multi::Options::is_multi_parameter,
                 "Only works for multiparameter simplextrees.");
   int num_parameters = st_multi.get_number_of_parameters();

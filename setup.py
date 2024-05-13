@@ -1,14 +1,17 @@
 import contextlib
 import site
-from setuptools import Extension, setup, find_packages
+
 import numpy as np
+import sklearn._build_utils
 from Cython.Build import cythonize
 from Cython.Compiler import Options
+from setuptools import Extension, find_packages, setup
 
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
+
 
 cython_modules = [
     "simplex_tree_multi",
@@ -17,13 +20,28 @@ cython_modules = [
     "function_rips",
     "mma_structures",
     "multiparameter_module_approximation",
-    "hilbert_function",
-    "euler_characteristic",
+    # "diff_helper",
+    # "hilbert_function",
+    # "euler_characteristic",
     # 'cubical_multi_complex',
     "point_measure_integration",
-    "slicer",
     "grids",
+    "slicer",
 ]
+
+
+templated_cython_modules = [
+    "filtration_conversions.pxd",
+    "slicer.pxd",
+    "mma_structures.pyx",
+    "simplex_tree_multi.pyx",
+    "slicer.pyx",
+]
+sklearn._build_utils.gen_from_templates(
+    (f"multipers/{mod}.tp" for mod in templated_cython_modules)
+)
+
+
 n_jobs = 1
 with contextlib.suppress(ImportError):
     import joblib
@@ -71,8 +89,8 @@ library_dirs = [
     LIBRARY_PATH,
 ]
 
-python_dependencies = [
-    "gudhi",  # Waiting for gudhi with python 3.12
+build_dependencies = [
+    "gudhi",
     "numpy",
     "Cython",  # needed for compilation
     # "scikit-learn",
@@ -81,7 +99,17 @@ python_dependencies = [
     # boost,
     # boost-cpp,
     # "tqdm",
+    "scikit-learn",
     "setuptools",
+    # "joblib",
+]
+python_dependencies = [
+    "gudhi",
+    "numpy",
+    "filtration-domination",
+    "pykeops",
+    "scikit-learn",
+    "joblib",
 ]
 
 
@@ -96,49 +124,55 @@ extensions = [
             "-Ofast",
             # "-g",
             # "-march=native",
-            # Windows doesn't support this yet. TODO: Wait (haha).
-            "-std=c++20",
+            "-std=c++20",  # Windows doesn't support this yet. TODO: Wait (haha).
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
         ],
+        extra_link_args=[],  ## mvec for python312
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb", "tbbmalloc"],
+        libraries=["tbb", "tbbmalloc", "m"],
         library_dirs=library_dirs,
     )
     for module in cython_modules
 ]
-setup(
-    name="multipers",
-    author="David Loiseaux",
-    author_email="david.loiseaux@inria.fr",
-    description="Scikit-style Multiparameter persistence toolkit",
-    url="https://github.com/DavidLapous/multipers",
-    # long_description=long_description,
-    # long_description_content_type='text/markdown'
-    version="1.2.2",
-    license="MIT",
-    keywords="TDA Persistence Multiparameter sklearn",
-    ext_modules=cythonize(
-        extensions, compiler_directives=cython_compiler_directives, **cythonize_flags
-    ),
-    packages=find_packages(),
-    package_data={
-        "multipers": ["*.pyi", "*.pyx", "*.pxd"],
-    },
-    python_requires=">=3.10",
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: Implementation :: CPython",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",
-        "Topic :: Scientific/Engineering :: Mathematics",
-        "Topic :: Scientific/Engineering :: Visualization",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "License :: OSI Approved :: MIT License",
-    ],
-    setup_requires=["numpy>=1.24", "gudhi>=3.9", "cython>=3.0", "joblib"],
-    install_requires=["numpy>=1.24", "gudhi>=3.9", "cython>=3.0", "joblib"],
-)
+
+if __name__ == "__main__":
+    # os.system("rm *.pkl")
+    setup(
+        name="multipers",
+        author="David Loiseaux",
+        author_email="david.loiseaux@inria.fr",
+        description="Scikit-style Multiparameter persistence toolkit",
+        url="https://github.com/DavidLapous/multipers",
+        # long_description=long_description,
+        # long_description_content_type='text/markdown'
+        version="1.2.2",
+        license="MIT",
+        keywords="TDA Persistence Multiparameter sklearn",
+        ext_modules=cythonize(
+            extensions,
+            compiler_directives=cython_compiler_directives,
+            **cythonize_flags,
+        ),
+        packages=find_packages(),
+        package_data={
+            "multipers": ["*.pyi", "*.pyx", "*.pxd"],
+        },
+        python_requires=">=3.10",
+        classifiers=[
+            "Development Status :: 5 - Production/Stable",
+            "Programming Language :: Python :: 3.10",
+            "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
+            "Programming Language :: Python :: Implementation :: CPython",
+            "Topic :: Scientific/Engineering :: Artificial Intelligence",
+            "Topic :: Scientific/Engineering :: Mathematics",
+            "Topic :: Scientific/Engineering :: Visualization",
+            "Topic :: Software Development :: Libraries :: Python Modules",
+            "License :: OSI Approved :: MIT License",
+        ],
+        install_requires=python_dependencies,
+        setup_requires=build_dependencies,
+    )
+    # os.system("rm *.pkl")

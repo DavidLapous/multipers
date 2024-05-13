@@ -26,9 +26,18 @@
 #include <boost/iterator/iterator_facade.hpp>
 
 #include <naive_merge_tree.h>
+
 namespace Gudhi::multiparameter::interface {
 template <class Boundary_matrix_type> class Persistence_backend_h0 {
 public:
+  using pos_index = int;
+  using dimension_type = int;
+  using cycle_type = std::vector<unsigned int>;
+  static const bool is_vine  = true;
+  std::vector<cycle_type> get_representative_cycles(bool update = true) const {
+    throw "Unimplemented";
+  }
+
   class Barcode_iterator
       : public boost::iterator_facade<Barcode_iterator, const Bar &,
                                       boost::forward_traversal_tag> {
@@ -112,9 +121,13 @@ public:
                          std::vector<std::size_t> &permutation)
       : pers_(boundaries.size(), boundaries.num_vertices()),
         boundaries_(&boundaries), permutation_(&permutation),
-        permutationInv_(permutation.size()) {
+        permutationInv_(permutation_->size()) {
     unsigned int c = 0;
-    for (std::size_t i : permutation) {
+    for (std::size_t i : *permutation_) {
+      if (i == static_cast<std::size_t>(-1)) {
+        c++;
+        continue;
+      }
       permutationInv_[i] = c;
       if (boundaries.dimension(i) == 0) {
         pers_.add_vertex(c++);
@@ -151,9 +164,9 @@ public:
     be1.permutationInv_.swap(be2.permutationInv_);
   }
 
-  int get_dimension(int i) { return pers_.get_dimension(i); }
+  dimension_type get_dimension(pos_index i) { return pers_.get_dimension(i); }
 
-  void vine_swap(int i) {
+  void vine_swap(pos_index i) {
     if (pers_.get_dimension(i) == 0) {
       if (pers_.get_dimension(i + 1) == 1) {
         const auto &boundary =
@@ -190,13 +203,16 @@ public:
               permutationInv_[permutation_->operator[](i + 1)]);
   }
 
-  Barcode get_barcode() { return Barcode(pers_, permutation_); }
+  Barcode get_barcode()  { return Barcode(pers_, permutation_); }
 
   inline friend std::ostream &operator<<(std::ostream &stream,
                                          Persistence_backend_h0 &structure) {
     stream << structure.pers_;
     stream << std::endl;
     return stream;
+  }
+  inline void _update_permutation_ptr(std::vector<std::size_t> &perm) {
+    permutation_ = &perm;
   }
 
 private:

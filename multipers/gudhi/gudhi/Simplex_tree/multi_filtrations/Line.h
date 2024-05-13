@@ -3,7 +3,7 @@
  * https://gudhi.inria.fr/licensing/ for full license details. Author(s): David
  * Loiseaux
  *
- *    Copyright (C) 2023 Inria
+ *    tCopyright (C) 2023 Inria
  *
  *    Modification(s):
  *      - YYYY/MM Author: Description of the modification
@@ -14,19 +14,28 @@
 
 #include "Box.h"
 #include "Finitely_critical_filtrations.h"
+#include <cstddef>
 
 namespace Gudhi::multiparameter::multi_filtrations {
 
 template <typename T> class Line {
 public:
   using point_type = Finitely_critical_multi_filtration<T>;
+  using kcritical_point_type = KCriticalFiltration<T>;
   Line();
   Line(const point_type &x);
   Line(point_type &&x);
   Line(const point_type &x, const point_type &v);
   inline point_type push_forward(point_type x) const;
-  inline T push_one_filtration(point_type x) const;
+  template <typename U=T>
+  inline U push_forward2(const point_type &x) const;
+  template <typename U=T>
+  inline U push_forward2(const kcritical_point_type &x) const;
   inline point_type push_back(point_type x) const;
+  template <typename U=T>
+  inline U push_back2(const point_type &x) const;
+  template <typename U=T>
+  inline U push_back2(const kcritical_point_type &x) const;
   inline int get_dim() const;
   std::pair<point_type, point_type> get_bounds(const Box<T> &box) const;
 
@@ -58,57 +67,148 @@ inline typename Line<T>::point_type
 Line<T>::push_forward(point_type x) const { // TODO remove copy
   if (x.is_inf() || x.is_nan() || x.is_minus_inf())
     return x;
-  if constexpr (true) {
-    if (basepoint_.size() != x.size()) {
-      std::cout << "Invalid sizes. Line is " << basepoint_ << ", x is " << x
-                << std::endl;
-    }
-    return x;
+  T t = this->push_forward2<T>(x);
+  if (direction_.size() > 0) {
+    for (std::size_t i = 0; i < x.size(); i++)
+      x[i] = basepoint_[i] + t * direction_[i];
+  } else {
+    for (std::size_t i = 0; i < x.size(); i++)
+      x[i] = basepoint_[i] + t;
   }
-  x -= basepoint_;
-  T t = -std::numeric_limits<T>::infinity();
-  ;
-  for (std::size_t i = 0; i < x.size(); i++) {
-    T dir = this->direction_.size() == basepoint_.size() ? direction_[i] : 1;
-    t = std::max(t, x[i] / dir);
-  }
-  point_type out(basepoint_.size());
-  for (unsigned int i = 0; i < out.size(); i++)
-    out[i] =
-        basepoint_[i] +
-        t * (this->direction_.size() == basepoint_.size() ? direction_[i] : 1);
-  return out;
+  return x;
 }
 template <typename T>
-inline T Line<T>::push_one_filtration(point_type x) const {
-  // we only need one coord here, lets say the first.
-  T inf = std::numeric_limits<T>::infinity();
+template <typename U>
+inline U Line<T>::push_forward2(const point_type &x) const {
+  constexpr const U inf = std::numeric_limits<U>::infinity(); // This disable it for e.g.
+                                                    // ints, but that's good
   if (x.is_inf() || x.is_nan())
     return inf;
   if (x.is_minus_inf())
     return -inf;
-  x -= basepoint_;
-  T t = -std::numeric_limits<T>::infinity();
-  for (std::size_t i = 0; i < x.size(); i++) {
-    T dir = this->direction_.size() > i ? direction_[i] : 1;
-    t = std::max(t, x[i] / dir);
+  // x -= basepoint_;
+  U t = -inf;
+  if (direction_.size()) {
+    for (std::size_t i = 0; i < x.size(); i++) {
+      if (direction_[i] == 0) [[unlikely]] {
+        if (x[i] < basepoint_[i])
+          continue;
+        else {
+          return inf;
+        }
+      } else [[likely]] {
+        // the cast float -> float should not be a overhead (if compiler is not
+        // stupid)
+        t = std::max(t, (static_cast<U>(x[i]) - static_cast<U>(basepoint_[i])) / static_cast<U>((direction_[i])));
+      }
+    }
+  } else {
+    for (std::size_t i = 0; i < x.size(); i++)
+      t = std::max(t, static_cast<U>(x[i]) - static_cast<U>(basepoint_[i]));
   }
+
+  // for (std::size_t i = 0; i < x.size(); i++) {
+  //   T dir = this->direction_.size() > i ? direction_[i] : 1;
+  //   T scaled_coord;
+  //   if (dir == 0) [[unlikely]] {
+  //     scaled_coord = x[i] > basepoint_[i] ? inf : -inf;
+  //   } else [[likely]] {
+  //     scaled_coord = (x[i] - basepoint_[i]) / dir;
+  //   }
+  //   t = std::max(t, scaled_coord);
+  // }
   return t;
 }
 template <typename T>
-inline typename Line<T>::point_type Line<T>::push_back(point_type x) const {
-  x -= basepoint_;
-  T t = std::numeric_limits<T>::infinity();
-  for (unsigned int i = 0; i < x.size(); i++) {
-    T dir = this->direction_.size() > i ? direction_[i] : 1;
-    t = std::min(t, x[i] / dir);
+template <typename U>
+inline U Line<T>::push_forward2(const kcritical_point_type &x) const {
+  constexpr const U inf = std::numeric_limits<U>::infinity();
+  if (x.is_inf() || x.is_nan())
+    return inf;
+  if (x.is_minus_inf())
+    return -inf;
+  U t = inf;
+  for (const auto &y : x) {
+    t = std::min(t, this->push_forward2<U>(y));
   }
-  point_type out(basepoint_.size());
-  for (unsigned int i = 0; i < out.size(); i++)
-    out[i] =
-        basepoint_[i] + t * (this->direction_.size() > i ? direction_[i] : 1);
-  return out;
+  return t;
 }
+
+template <typename T>
+inline typename Line<T>::point_type Line<T>::push_back(point_type x) const {
+  if (x.is_inf() || x.is_nan() || x.is_minus_inf())
+    return x;
+
+  T t = this->push_back2(x);
+  if (direction_.size() > 0) {
+    for (std::size_t i = 0; i < x.size(); i++)
+      x[i] = basepoint_[i] + t * direction_[i];
+  } else
+    for (std::size_t i = 0; i < x.size(); i++)
+      x[i] = basepoint_[i] + t;
+
+  // for (std::size_t i = 0; i < x.size(); i++)
+  //   x[i] =
+  //       basepoint_[i] + t * (this->direction_.size() > i ? direction_[i] :
+  //       1);
+  return x;
+}
+
+template <typename T>
+template <typename U> inline U Line<T>::push_back2(const point_type &x) const {
+  constexpr const  U inf = std::numeric_limits<U>::infinity();
+  if (x.is_inf())
+    return inf;
+  if (x.is_minus_inf() || x.is_nan())
+    return -inf;
+  U t = inf;
+  // x -= basepoint_;
+
+  if (direction_.size()) {
+    for (std::size_t i = 0; i < x.size(); i++) {
+      if (direction_[i] == 0) [[unlikely]] {
+        if (x[i] > basepoint_[i])
+          continue;
+        else {
+          return -inf;
+        }
+      } else [[likely]] {
+        t = std::min(t, (static_cast<U>(x[i])  - static_cast<U>(basepoint_[i])) / static_cast<U>(direction_[i]));
+      }
+    }
+  } else {
+    for (std::size_t i = 0; i < x.size(); i++)
+      t = std::min(t, static_cast<U>(x[i] - basepoint_[i]));
+  }
+  // for (std::size_t i = 0; i < x.size(); i++) {
+  //   T dir = this->direction_.size() > i ? direction_[i] : 1;
+  //   T scaled_coord;
+  //   if (dir == 0) [[unlikely]] {
+  //     scaled_coord = x[i] > basepoint_[i] ? inf : -inf;
+  //   } else [[likely]] {
+  //     scaled_coord = (x[i] - basepoint_[i]) / dir;
+  //   }
+  //   t = std::min(t, scaled_coord);
+  // }
+  return t;
+}
+
+template <typename T>
+
+template <typename U>
+inline U Line<T>::push_back2(const kcritical_point_type &x) const {
+  constexpr const U inf = std::numeric_limits<U>::infinity();
+  if (x.is_inf())
+    return inf;
+  if (x.is_minus_inf() || x.is_nan())
+    return -inf;
+  U t = -inf;
+  for (const auto &y : x) {
+    t = std::max(t, this->push_back2<U>(y));
+  }
+  return t;
+}
+
 template <typename T> inline int Line<T>::get_dim() const {
   return basepoint_.size();
 }

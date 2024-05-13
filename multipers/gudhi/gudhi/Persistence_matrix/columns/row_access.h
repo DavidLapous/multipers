@@ -30,15 +30,16 @@ class Row_access
 {
 public:
 	using index = typename Master_matrix::index;
+	using id_index = typename Master_matrix::id_index;
 	using Cell_type = typename Master_matrix::Cell_type;
 	using Row_container_type = typename Master_matrix::row_container_type;
 
 	Row_access();
-	Row_access(index columnIndex, Row_container_type& rows);
+	Row_access(index columnIndex, Row_container_type* rows);
 	Row_access(Row_access&& other) noexcept;
 
-	void insert_cell(index rowIndex, Cell_type *cell);
-	void insert_cell(index rowIndex, const Cell_type &cell);	//still used??
+	void insert_cell(id_index rowIndex, Cell_type *cell);
+	void insert_cell(id_index rowIndex, const Cell_type &cell);	//still used??
 	void unlink(Cell_type *cell);
 	void unlink(const Cell_type &cell);							//still used??
 	void update_cell(const Cell_type &cell);
@@ -49,7 +50,7 @@ public:
 		std::swap(r1.columnIndex_, r2.columnIndex_);
 	}
 
-	void set_rows(Row_container_type *rows);
+	// void set_rows(Row_container_type *rows);
 
 protected:
 	index columnIndex_;
@@ -64,8 +65,8 @@ inline Row_access<Master_matrix>::Row_access() : columnIndex_(-1), rows_(nullptr
 {}
 
 template<class Master_matrix>
-inline Row_access<Master_matrix>::Row_access(index columnIndex, Row_container_type &rows)
-	: columnIndex_(columnIndex), rows_(&rows)
+inline Row_access<Master_matrix>::Row_access(index columnIndex, Row_container_type* rows)
+	: columnIndex_(columnIndex), rows_(rows)
 {}
 
 template<class Master_matrix>
@@ -75,7 +76,7 @@ inline Row_access<Master_matrix>::Row_access(Row_access &&other) noexcept
 {}
 
 template<class Master_matrix>
-inline void Row_access<Master_matrix>::insert_cell(index rowIndex, Cell_type *cell)
+inline void Row_access<Master_matrix>::insert_cell(id_index rowIndex, Cell_type *cell)
 {
 	if (rows_ == nullptr) return;
 
@@ -93,7 +94,7 @@ inline void Row_access<Master_matrix>::insert_cell(index rowIndex, Cell_type *ce
 }
 
 template<class Master_matrix>
-inline void Row_access<Master_matrix>::insert_cell(index rowIndex, const Cell_type &cell)
+inline void Row_access<Master_matrix>::insert_cell(id_index rowIndex, const Cell_type &cell)
 {
 	static_assert(!Master_matrix::Option_list::has_intrusive_rows, "Cannot insert const cell in intrusive container.");
 
@@ -159,11 +160,11 @@ inline typename Row_access<Master_matrix>::index Row_access<Master_matrix>::get_
 	return columnIndex_;
 }
 
-template<class Master_matrix>
-inline void Row_access<Master_matrix>::set_rows(Row_container_type *rows)
-{
-	rows_ = rows;
-}
+// template<class Master_matrix>
+// inline void Row_access<Master_matrix>::set_rows(Row_container_type *rows)
+// {
+// 	rows_ = rows;
+// }
 
 } //namespace persistence_matrix
 } //namespace Gudhi

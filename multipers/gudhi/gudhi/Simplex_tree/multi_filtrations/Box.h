@@ -18,7 +18,6 @@
 #define BOX_H_INCLUDED
 
 #include <gudhi/Debug_utils.h>
-#include <cassert>
 #include <ostream>
 #include <vector>
 
