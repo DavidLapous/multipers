@@ -30,6 +30,7 @@ jobs:
         python-version:  ${{ matrix.python-version }}
         activate-environment: build_test_env
         channels: conda-forge
+        miniforge-version: latest
         # channel-priority: true
     - name: Install build and test dependencies
       shell: bash -el {0}

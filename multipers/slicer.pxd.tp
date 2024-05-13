@@ -39,7 +39,7 @@ from itertools import product
 def get_slicer(is_vine, is_kcritical, value_type, column_type):
   ctype, pytype, short_type = value_type
   col_idx, col = column_type
-  PYTHON_TYPE = f"_{'K' if is_kcritical else ''}Slicer{col_idx}{"_vine" if is_vine else ""}_{short_type}"
+  PYTHON_TYPE = f"_{'K' if is_kcritical else ''}Slicer{col_idx}{'_vine' if is_vine else ''}_{short_type}"
   CTYPE = f"MatrixTrucPythonInterface<{"true" if is_vine else "false"},{"true" if is_kcritical else "false"},{ctype},{col}>"
   IS_SIMPLICIAL = False
   IS_VINE = is_vine
