@@ -35,20 +35,20 @@ jobs:
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
+        conda install mamba -c conda-forge
+        mamba install python=${{matrix.python-version}} pip -c conda-forge
+        mamba install boost-cpp  gudhi numpy cython pytest scikit-learn matplotlib joblib tqdm scipy pot
+
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          conda install mamba -c conda-forge
-          mamba install python=${{matrix.python-version}} pip -c conda-forge
-          mamba install cxx-compiler patchelf numpy gudhi cython boost boost-cpp tbb tbb-devel pytest scikit-learn matplotlib build joblib tqdm scipy -c conda-forge
+          mamba install cxx-compiler patchelf boost tbb tbb-devel build  -c conda-forge
         fi
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           brew update || true
           ## boost doesn't need to be linked so brew is fine
           brew install boost || true
           ## for some reason, brew's boost doesn't contain some files
-          conda install boost-cpp 
-          pip install numpy cython gudhi pytest scikit-learn matplotlib joblib tqdm scipy --upgrade
 
-          ### Installs TBB in the conda env for both archs (brew doesn't propose universal/fat builds)
+          ### Installs TBB in the conda env for both archs (brew/conda don't propose universal/fat builds)
           export ARCHFLAGS="-arch arm64 -arch x86_64"
           git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
           cd oneTBB
