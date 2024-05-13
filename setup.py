@@ -1,4 +1,5 @@
 import contextlib
+import os
 import site
 
 import numpy as np
@@ -38,8 +39,8 @@ templated_cython_modules = [
     "slicer.pyx",
 ]
 
-import os
-os.system("python _template_helpers.py") ## generates some parameter files
+
+os.system("_tempita_grid_gen.py")  ## generates some parameter files
 sklearn._build_utils.gen_from_templates(
     (f"multipers/{mod}.tp" for mod in templated_cython_modules)
 )
