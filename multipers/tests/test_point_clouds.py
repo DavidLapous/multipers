@@ -5,6 +5,7 @@ import multipers.ml.point_clouds as mmp
 from multipers.tests import assert_sm
 
 mp.simplex_tree_multi.SAFE_CONVERSION = True
+np.random.seed(0)
 
 
 def test_throw_test():
