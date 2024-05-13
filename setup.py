@@ -98,7 +98,7 @@ build_dependencies = [
     "numpy",
     "Cython",  # needed for compilation
     # "scikit-learn",
-    "tbb",  # needed for compilation
+    # "tbb",  # needed for compilation, but doesn't exist on mac
     # "tbb-devel", # needed for compilation
     # boost,
     # boost-cpp,
