@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: ["ubuntu-latest", "macos-13"] # windows fails, macos13 is x86_64 and macos-latest=14 is arm64, TODO: build directly with M1 procs.
+        os: ["ubuntu-latest", "macos-13", "macos-14"] # windows fails, macos13 is x86_64 and macos-latest=14 is arm64, TODO: build directly with M1 procs.
         # monitor  https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
     runs-on: ${{ matrix.os }}
     steps:
@@ -38,28 +38,32 @@ jobs:
       run: |
         conda install mamba -c conda-forge
         mamba install python=${{matrix.python-version}} pip -c conda-forge
-        mamba install boost-cpp  gudhi numpy cython pytest scikit-learn matplotlib joblib tqdm scipy pot
+        ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
+        mamba install boost-cpp  gudhi numpy cython pytest scikit-learn matplotlib boost joblib tqdm scipy pot tbb tbb-devel -c conda-forge
 
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          mamba install cxx-compiler patchelf boost tbb tbb-devel build  -c conda-forge
+          mamba install cxx-compiler patchelf -c conda-forge
         fi
-        if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
-          brew update || true
-          ## boost doesn't need to be linked so brew is fine
-          brew install boost || true
+        ## use default macos compiler
+
+        # if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
+          ##
+          # brew update || true
+          # ## boost doesn't need to be linked so brew is fine
+          # brew install boost || true
           ## for some reason, brew's boost doesn't contain some files
 
           ### Installs TBB in the conda env for both archs (brew/conda don't propose universal/fat builds)
-          export ARCHFLAGS="-arch arm64 -arch x86_64"
-          git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
-          cd oneTBB
-          mkdir build && cd build
-          cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DTBB_TEST=OFF ..
-          cmake --build . -j4
-          cmake --install .
-          cd ../..
+          # export ARCHFLAGS="-arch arm64 -arch x86_64"
+          # git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
+          # cd oneTBB
+          # mkdir build && cd build
+          # cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DTBB_TEST=OFF ..
+          # cmake --build . -j4
+          # cmake --install .
+          # cd ../..
           ####
-        fi
+        # fi
         pip install pykeops filtration-domination --upgrade
     - name: Build package
       shell: bash -el {0}
@@ -69,8 +73,9 @@ jobs:
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           ## should compile for both architecture
-          export MACOSX_DEPLOYMENT_TARGET="13.0"
-          export _PYTHON_HOST_PLATFORM="macosx-13.0-universal2"
+          ## initialize below ?
+          # export MACOSX_DEPLOYMENT_TARGET="13.0"
+          # export _PYTHON_HOST_PLATFORM="macosx-13.0-universal2"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
@@ -96,18 +101,29 @@ jobs:
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
         fi
-        if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
+        if [[ ${{ matrix.os }} == "macos-13" ]]; then
           cd dist
           pip install delocate --upgrade
-          for wheel_file in multipers*macosx*.whl; do
+          for wheel_file in multipers*macosx*x86*.whl; do
             delocate-listdeps $wheel_file
-            delocate-wheel --require-archs universal2 -w wheelhouse -v $wheel_file
+            delocate-wheel --require-archs x86_64 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
         fi
 
+        if [[ ${{ matrix.os }} == "macos-14" ]]; then
+          cd dist
+          pip install delocate --upgrade
+          for wheel_file in multipers*macosx*arm64*.whl; do
+            delocate-listdeps $wheel_file
+            delocate-wheel --require-archs arm64 -w wheelhouse -v $wheel_file
+            rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
       with:
