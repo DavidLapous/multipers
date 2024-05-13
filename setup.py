@@ -40,7 +40,7 @@ templated_cython_modules = [
 ]
 
 
-os.system("_tempita_grid_gen.py")  ## generates some parameter files
+os.system("python _tempita_grid_gen.py")  ## generates some parameter files
 sklearn._build_utils.gen_from_templates(
     (f"multipers/{mod}.tp" for mod in templated_cython_modules)
 )
