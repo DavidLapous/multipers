@@ -44,6 +44,8 @@ jobs:
           brew update || true
           ## boost doesn't need to be linked so brew is fine
           brew install boost || true
+          ## for some reason, brew's boost doesn't contain some files
+          conda install boost-cpp 
           pip install numpy cython gudhi pytest scikit-learn matplotlib joblib tqdm scipy --upgrade
 
           ### Installs TBB in the conda env for both archs (brew doesn't propose universal/fat builds)
