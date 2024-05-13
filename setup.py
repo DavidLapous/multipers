@@ -37,6 +37,9 @@ templated_cython_modules = [
     "simplex_tree_multi.pyx",
     "slicer.pyx",
 ]
+
+import os
+os.system("python _template_helpers.py") ## generates some parameter files
 sklearn._build_utils.gen_from_templates(
     (f"multipers/{mod}.tp" for mod in templated_cython_modules)
 )
