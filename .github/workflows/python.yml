@@ -24,7 +24,7 @@ jobs:
         # monitor  https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup miniconda
       uses: conda-incubator/setup-miniconda@v3
       with:
@@ -125,7 +125,7 @@ jobs:
           cd ..
         fi
     - name: Upload sources and wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: sources
         path: dist
