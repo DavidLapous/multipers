@@ -138,7 +138,7 @@ extensions = [
         extra_link_args=[],  ## mvec for python312
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb", "tbbmalloc", "m"],
+        libraries=["tbb", "m"],
         library_dirs=library_dirs,
     )
     for module in cython_modules
