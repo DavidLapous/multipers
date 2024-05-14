@@ -1,4 +1,4 @@
-# Multipers
+# multipers : Multiparameter Persistence for Machine Learning
 [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers)
 [![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
 <br>
