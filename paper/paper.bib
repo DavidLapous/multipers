@@ -59,6 +59,7 @@
   year = {2023},
   month = mar,
   journal = {arXiv.org},
+  doi = {10.48550/arxiv.2303.14040},
   urldate = {2024-04-16},
   abstract = {In this article, we study Euler characteristic techniques in topological data analysis. Pointwise computing the Euler characteristic of a family of simplicial complexes built from data gives rise to the so-called Euler characteristic profile. We show that this simple descriptor achieve state-of-the-art performance in supervised tasks at a very low computational cost. Inspired by signal analysis, we compute hybrid transforms of Euler characteristic profiles. These integral transforms mix Euler characteristic techniques with Lebesgue integration to provide highly efficient compressors of topological signals. As a consequence, they show remarkable performances in unsupervised settings. On the qualitative side, we provide numerous heuristics on the topological and geometric information captured by Euler profiles and their hybrid transforms. Finally, we prove stability results for these descriptors as well as asymptotic guarantees in random settings.},
   langid = {english},
@@ -77,16 +78,19 @@
   file = {/user/dloiseau/home/Zotero/storage/WWRX5EQI/Alonso et al. - Filtration-domination in bifiltered graphs.pdf}
 }
 
-@inproceedings{function_delaunay,
+@incollection{function_delaunay,
   title = {Delaunay {{Bifiltrations}} of {{Functions}} on {{Point Clouds}}},
-  booktitle = {2024 {{Joint Mathematics Meetings}} ({{JMM}} 2024)},
-  author = {Alonso, Angel Javier and Kerber, Michael and Lam, Tung and Lesnick, Michael},
+  booktitle = {Proceedings of the 2024 {{Annual ACM-SIAM Symposium}} on {{Discrete Algorithms}} ({{SODA}})},
+  author = {Alonso, {\'A}ngel Javier and Kerber, Michael and Lam, Tung and Lesnick, Michael},
   year = {2024},
   month = jan,
-  publisher = {AMS},
-  urldate = {2024-04-16},
-  abstract = {The Delaunay filtration  {\textbackslash}mathcal \{D\}(X)          of a point cloud  X{\textbackslash}s...},
-  file = {/user/dloiseau/home/Zotero/storage/NFBJ3KVV/32354.html}
+  series = {Proceedings},
+  pages = {4872--4891},
+  publisher = {{Society for Industrial and Applied Mathematics}},
+  doi = {10.1137/1.9781611977912.173},
+  urldate = {2024-05-14},
+  abstract = {The Delaunay filtration D.(X) of a point cloud X {$\subset$} {$\mathbb{R}$}d is a central tool of computational topology. Its use is justified by the topological equivalence of D. (X) and the offset (i.e., union-of-balls) filtration of X. Given a function {$\gamma$} : X {$\rightarrow$} {$\mathbb{R}$}, we introduce a Delaunay bifiltration DC.({$\gamma$}) that satisfies an analogous topological equivalence, ensuring that DC. ({$\gamma$}) topologically encodes the offset filtrations of all sublevel sets of {$\gamma$}, as well as the topological relations between them. DC.({$\gamma$}) is of size , which for d odd matches the worst-case size of D. (X). Adapting the Bowyer-Watson algorithm for computing Delaunay triangulations, we give a simple, practical algorithm to compute DC.({$\gamma$}) in time  Our implementation, based on CGAL, computes DC. ({$\gamma$}) with modest overhead compared to computing D. (X), and handles tens of thousands of points in {$\mathbb{R}$}3 within seconds.},
+  file = {/user/dloiseau/home/Zotero/storage/ZBKCZ9GJ/Alonso et al. - 2024 - Delaunay Bifiltrations of Functions on Point Cloud.pdf}
 }
 
 @inproceedings{gril,
@@ -134,10 +138,9 @@
   author = {Loiseaux, David and Carri{\`e}re, Mathieu and Blumberg, Andrew J.},
   year = {2022},
   month = jun,
-  journal = {arXiv.org},
+  doi = {10.48550/arXiv.2206.02026},
   urldate = {2024-04-16},
   abstract = {In this article, we introduce a new parameterized family of topological invariants, taking the form of candidate decompositions, for multi-parameter persistence modules. We prove that our candidate decompositions are controllable approximations: when restricting to modules that can be decomposed into interval summands, we establish theoretical results about the approximation error between our candidate decompositions and the true underlying module in terms of the standard interleaving and bottleneck distances. Moreover, even when the underlying module does not admit such a decomposition, our candidate decompositions are nonetheless stable invariants; small perturbations in the underlying module lead to small perturbations in the candidate decomposition. Then, we introduce MMA (Multipersistence Module Approximation): an algorithm for computing stable instances of such invariants, which is based on fibered barcodes and exact matchings, two constructions that stem from the theory of single-parameter persistence. By design, MMA can handle an arbitrary number of filtrations, and has bounded complexity and running time. Finally, we present empirical evidence validating the generalization capabilities and running time speed-ups of MMA on several data sets.},
-  howpublished = {https://arxiv.org/abs/2206.02026v3},
   langid = {english},
   file = {/user/dloiseau/home/Zotero/storage/WUSW534K/Loiseaux et al. - 2022 - Fast, Stable and Efficient Approximation of Multi-.pdf}
 }
@@ -164,6 +167,7 @@
   journal = {arXiv:2010.15623 [cs, math]},
   eprint = {2010.15623},
   primaryclass = {cs, math},
+  doi = {10.1137/1.9781611976472.16},
   urldate = {2021-07-21},
   abstract = {Multi-parameter persistent homology is a recent branch of topological data analysis. In this area, data sets are investigated through the lens of homology with respect to two or more scale parameters. The high computational cost of many algorithms calls for a preprocessing step to reduce the input size. In general, a minimal presentation is the smallest possible representation of a persistence module. Lesnick and Wright [28] proposed recently an algorithm (the LW-algorithm) for computing minimal presentations based on matrix reduction.},
   archiveprefix = {arxiv},
@@ -173,14 +177,15 @@
 }
 
 @article{mpl,
-  ids = {Vipond2020MultiparameterPL},
   title = {Multiparameter Persistence Landscapes},
   author = {Vipond, Oliver},
   year = {2020},
-  journal = {J. Mach. Learn. Res.},
-  abstract = {It is shown that multiparameter landscapes are stable with respect to the interleaving distance and persistence weighted Wasserstein distance, and that the collection of multiparameters landscapes faithfully represents the rank invariant. An important problem in the field of Topological Data Analysis is defining topological summaries which can be combined with traditional data analytic tools. In recent work Bubenik introduced the persistence landscape, a stable representation of persistence diagrams amenable to statistical analysis and machine learning tools. In this paper we generalise the persistence landscape to multiparameter persistence modules providing a stable representation of the rank invariant. We show that multiparameter landscapes are stable with respect to the interleaving distance and persistence weighted Wasserstein distance, and that the collection of multiparameter landscapes faithfully represents the rank invariant. Finally we provide example calculations and statistical tests to demonstrate a range of potential applications and how one can interpret the landscapes associated to a multiparameter module.},
+  journal = {Journal of Machine Learning Research},
+  volume = {21},
+  pages = {61:1--61:38},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
   keywords = {No DOI found},
-  file = {/home/dadou/Documents/Stages/TDA/Vipond_Multiparameter Persistence Landscapes.pdf;/user/dloiseau/home/Zotero/storage/KQKLZVZ4/Vipond_2020_Multiparameter Persistence Landscapes.pdf}
+  timestamp = {Thu, 18 Jun 2020 22:13:22 +0200}
 }
 
 @article{persistable,
@@ -189,6 +194,7 @@
   year = {2020},
   month = may,
   journal = {arXiv.org},
+  doi = {10.48550/arXiv.2005.09048},
   urldate = {2024-04-16},
   abstract = {We consider the degree-Rips construction from topological data analysis, which provides a density-sensitive, multiparameter hierarchical clustering algorithm. We analyze its stability to perturbations of the input data using the correspondence-interleaving distance, a metric for hierarchical clusterings that we introduce. Taking certain one-parameter slices of degree-Rips recovers well-known methods for density-based clustering, but we show that these methods are unstable. However, we prove that degree-Rips, as a multiparameter object, is stable, and we propose an alternative approach for taking slices of degree-Rips, which yields a one-parameter hierarchical clustering algorithm with better stability properties. We prove that this algorithm is consistent, using the correspondence-interleaving distance. We provide an algorithm for extracting a single clustering from one-parameter hierarchical clusterings, which is stable with respect to the correspondence-interleaving distance. And, we integrate these methods into a pipeline for density-based clustering, which we call Persistable. Adapting tools from multiparameter persistent homology, we propose visualization tools that guide the selection of all parameters of the pipeline. We demonstrate Persistable on benchmark datasets, showing that it identifies multi-scale cluster structure in data.},
   langid = {english},
@@ -250,6 +256,7 @@
   journal = {arXiv:1512.00180 [cs, math]},
   eprint = {1512.00180},
   primaryclass = {cs, math},
+  doi = {10.48550/arXiv.1512.00180},
   abstract = {The goal of this work is to extend the standard persistent homology pipeline for exploratory data analysis to the 2-D persistence setting, in a practical, computationally efficient way. To this end, we introduce RIVET, a software tool for the visualization of 2-D persistence modules, and present mathematical foundations for this tool. RIVET provides an interactive visualization of the barcodes of 1-D affine slices of a 2-D persistence module M . It also computes and visualizes the dimension of each vector space in M and the bigraded Betti numbers of M . At the heart of our computational approach is a novel data structure based on planar line arrangements, on which we can perform fast queries to find the barcode of any slice of M . We present an efficient algorithm for constructing this data structure and establish bounds on its complexity.},
   archiveprefix = {arxiv},
   langid = {english},
@@ -307,19 +314,19 @@
 }
 
 @article{signed_betti,
-  title = {On the Stability of Multigraded {{Betti}} Numbers and {{Hilbert}} Functions},
+  title = {On the {{Stability}} of {{Multigraded Betti Numbers}} and {{Hilbert Functions}}},
   author = {Oudot, Steve and Scoccola, Luis},
-  year = {2021},
-  month = dec,
-  journal = {arXiv:2112.11901 [cs, math]},
-  eprint = {2112.11901},
-  primaryclass = {cs, math},
-  urldate = {2022-01-07},
-  abstract = {Multigraded Betti numbers are one of the simplest invariants of multiparameter persistence modules. This invariant is useful in theory---it completely determines the Hilbert function of the module and the isomorphism type of the free modules in its minimal free resolution---as well as in practice---it is sometimes easy to visualize and it is one of the main outputs of current multiparameter persistent homology software, such as RIVET. However, to the best of our knowledge, no bottleneck stability result with respect to the interleaving distance has been established for this invariant so far, and this potential lack of stability limits its practical applications. We prove a stability result for multigraded Betti numbers, using an efficiently computable bottleneck-type dissimilarity function we introduce. Our notion of matching is inspired by recent work on signed barcodes, and allows matching of bars of the same module in homological degrees of different parity, as well as for matchings of bars of different modules in homological degrees of the same parity. Our stability result is a combination of Hilbert's syzygy theorem, Bjerkevik's bottleneck stability for free modules, and a novel stability result for projective resolutions. We also prove, in the 2-parameter case, a 1-Wasserstein stability result for Hilbert functions with respect to the 1-presentation distance of Bjerkevik and Lesnick.},
-  archiveprefix = {arxiv},
-  langid = {english},
-  keywords = {55N31 62R40,Computer Science - Computational Geometry,Mathematics - Algebraic Topology,Mathematics - Representation Theory,No DOI found},
-  file = {/user/dloiseau/home/Zotero/storage/PI2D6T4L/Oudot et Scoccola - 2021 - On the stability of multigraded Betti numbers and .pdf}
+  year = {2024},
+  month = mar,
+  journal = {SIAM Journal on Applied Algebra and Geometry},
+  volume = {8},
+  number = {1},
+  pages = {54--88},
+  publisher = {{Society for Industrial and Applied Mathematics}},
+  doi = {10/gtt7dq},
+  urldate = {2024-05-14},
+  abstract = {.We introduce harmonic persistent homology spaces for filtrations of finite simplicial complexes. As a result, we can associate concrete subspaces of cycles to each bar of the barcode of the filtration. We prove stability of the harmonic persistent homology subspaces as well as the subspaces associated to the bars of the barcodes under small perturbations of functions defining them. We relate the notion of ``essential simplices'' introduced in an earlier work to identify simplices which play a significant role in the birth of a bar with that of harmonic persistent homology. We prove that the harmonic representatives of simple bars maximize the ``relative essential content'' among all representatives of the bar, where the relative essential content is the weight a particular cycle puts on the set of essential simplices.},
+  file = {/user/dloiseau/home/Zotero/storage/S64MVWN2/Oudot and Scoccola - 2024 - On the Stability of Multigraded Betti Numbers and .pdf}
 }
 
 @inproceedings{sm_diff,
