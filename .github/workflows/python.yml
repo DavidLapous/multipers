@@ -125,7 +125,7 @@ jobs:
           cd ..
         fi
     - name: Upload sources and wheel
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: sources
         path: dist
