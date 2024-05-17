@@ -91,11 +91,11 @@ public:
   inline bool is_minus_inf() const {
     if constexpr (std::is_same<T, bool>::value) {
       return false; // suppresses a warning
+    } else {
+      if (this->size() != 1)
+        return false;
+      return (this->operator[](0) == -T_inf);
     }
-    
-    if (this->size() != 1)
-      return false;
-    return (this->operator[](0) == -T_inf);
   }
   inline bool is_nan() const {
     if (this->size() != 1)

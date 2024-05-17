@@ -170,10 +170,8 @@ public:
     std::vector<std::size_t> boundary_container;
     std::size_t c = 0;
     for (std::size_t i : *permutation_) {
-      // BUG : This segfaults
       if (i == static_cast<std::size_t>(-1))
         { c++;continue; }
-      // possible solution : std::erase std::remove_if in perm / perm_inv, as the order in matrix will be this one. But need to check the rest of the interface
       permutationInv[i] = c++;
       boundary_container.resize(boundaries[i].size());
       if constexpr (verbose)
@@ -183,6 +181,7 @@ public:
       for (std::size_t j = 0; j < boundaries[i].size(); ++j) {
         boundary_container[j] = permutationInv[boundaries[i][j]];
       }
+      std::sort(boundary_container.begin(), boundary_container.end());
       matrix_.insert_boundary(c-1,boundary_container, boundaries.dimension(i));
     }
   }

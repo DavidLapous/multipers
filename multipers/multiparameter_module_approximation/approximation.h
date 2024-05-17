@@ -262,7 +262,12 @@ public:
 
   value_type get_landscape_value(const std::vector<value_type> &x) const;
 
-  friend void swap(Summand<value_type> &sum1, Summand<value_type> &sum2);
+  friend void swap(Summand &sum1, Summand &sum2){
+    std::swap(sum1.birth_corners_, sum2.birth_corners_);
+    std::swap(sum1.death_corners_, sum2.death_corners_);
+    std::swap(sum1.distanceTo0_, sum2.distanceTo0_);
+    // 	std::swap(sum1.updateDistance_, sum2.updateDistance_);
+  };
 
   bool contains(const filtration_type &x) const;
 
@@ -2422,14 +2427,7 @@ inline void Summand<value_type>::_clean(std::vector<filtration_type> &list,
              list.end());
 }
 
-template <typename value_type>
-inline void swap(Summand<value_type> &sum1, Summand<value_type> &sum2) {
-  std::swap(sum1.birth_corners_, sum2.birth_corners_);
-  std::swap(sum1.death_corners_, sum2.death_corners_);
-  std::swap(sum1.distanceTo0_, sum2.distanceTo0_);
-  // 	std::swap(sum1.updateDistance_, sum2.updateDistance_);
-}
 
 } // namespace Gudhi::multiparameter::mma
 
-#endif // APPROXIMATION_H_INCLUDED
+#endif // APPR

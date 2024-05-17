@@ -56,17 +56,21 @@ slicers = [  # this is temporarily necessary
         "Finitely_critical_multi_filtration[float]",
     ),
 ]
+
+
+## Columns of the matrix backend.
+# with ordered by their performance on some synthetic benchmarks.
 columns_name = [  # only one column is necessary
     "Available_columns::" + stuff
     for stuff in (
         "INTRUSIVE_SET",
-        # "LIST",
         # "SET",
-        # "HEAP",
-        # "VECTOR",
-        # "NAIVE_VECTOR",
+        "HEAP",
         # "UNORDERED_SET",
+        "NAIVE_VECTOR",
+        # "VECTOR",
         # "INTRUSIVE_LIST",
+        # "LIST",
     )
 ]
 
