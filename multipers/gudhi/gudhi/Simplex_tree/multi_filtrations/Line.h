@@ -38,6 +38,7 @@ public:
   inline U push_back2(const kcritical_point_type &x) const;
   inline int get_dim() const;
   std::pair<point_type, point_type> get_bounds(const Box<T> &box) const;
+  std::pair<T,T> get_bounds2(const Box<T> &box) const;
 
   // translation
   inline friend Line &operator+=(Line &to_translate, const point_type &x) {
@@ -212,6 +213,15 @@ inline U Line<T>::push_back2(const kcritical_point_type &x) const {
 template <typename T> inline int Line<T>::get_dim() const {
   return basepoint_.size();
 }
+
+template <typename T>
+inline std::pair<T,T>
+Line<T>::get_bounds2(const Box<T> &box) const {
+  return {this->push_forward2(box.get_bottom_corner()),
+          this->push_back2(box.get_upper_corner())};
+}
+
+
 template <typename T>
 inline std::pair<typename Line<T>::point_type, typename Line<T>::point_type>
 Line<T>::get_bounds(const Box<T> &box) const {

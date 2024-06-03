@@ -1,24 +1,51 @@
 # multipers : Multiparameter Persistence for Machine Learning
 [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers)
 [![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
+[Documentation](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html)
 <br>
-Scikit-style multiparameter persistent homology python library. 
+Scikit-style PyTorch-autodiff multiparameter persistent homology python library. 
 This library aims to provide easy to use and performant strategies for applied multiparameter topology.
-A non-exhaustive list of features can be found in the **Features** section.
-<br> Documentation is available [here](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
 <br> Meant to be integrated in [the Gudhi library](https://gudhi.inria.fr/).
 
+## Multiparameter Persistence
+This library allows to compute several representation from "geometrical datasets", e.g., point clouds, images, graphs, that have multiple scales. A well known example is is the following one. 
+<br>
+Pick a point cloud that has diffuse noise, or on which the sampling measure has some interesting properties, e.g., in the following example the measure has three modes.
+<br>
+Now define a two parameter grid (filtration) of topological spaces (on the left) from a point cloud $P$ on which we will compute the persistence of some topological structures (homological cycles).
+This filtration $X$, indexed over a radius parameter $r$ and a codensity parameter $s$ is defined as follows
 
-## Quickstart
+$$ X_{r,s} = \bigcup_{x \in P, \, \mathrm{density}(x) \ge s} B(x,r) = \{ x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r \}$$
+
+The green shape on the left represent the lifetime of the biggest annulus. On the right, each cycle appearing on the left gets a colored shape (the color is only a label) and the shape of this colored shape represents the lifetime of this cycle.
+<br>
+In our case, the big green shape on the left corresponds to the largest green shape appearing on the right, recovering the structure of the annulus here.
+![Alt text](docs/1.png)
+
+The **magic** part is that we never had to choose any parameter to remove the noise in this construction, but the annulus still naturally appears!
+<br>A more strinking example is the following one.
+Using the same constructions, we can identify topological structure, and their size, in a parameter free approach, even though the majority of the sampling measure's mass is noise.
+<br> In this example, the lifetime shape associated to each cycle can be identified from 
+ - Their radius : the smaller cycle will naturally live more this shape will appear on the "left" (smaller radius)
+ - Their concentration : Cycles having more concentration will appear lower than others (smaller co-density)
+
+Notice that this construction is also very stable w.r.t. the noise. The more noise is added the smaller the "rainbow strip" is, and the more the "large shape" are visible.
+![alt text](docs/2.png)
+We also provide several other descriptors, as well as associated Machine Learning technics and pipelines. In the following example from the same dataset, the *Hilbert decomposition signed measure*, the *Euler decomposition signed measure* and the *rank decomposition signed measure*.
+![alt text](docs/3.png)
+
+
+A non-exhaustive list of features can be found in the **Features** section, and in the [documentation](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
+## Quick start
+
 
 This library is available [on PyPI](https://pypi.org/project/multipers/) for Linux and macOS, via
 ```sh
 pip install multipers
 ```
-
-A documentation and building instructions are available [here](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
+We recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/). 
 <br>
-Some more jupyter notebooks are available in the `tutorial` folder, but may be outdated.
+A documentation and building instructions are available [here](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html).
 
 ## Features, and linked projects
 This library features a bunch of different functions and helpers. See below for a non-exhaustive list.
