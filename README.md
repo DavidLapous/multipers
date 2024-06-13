@@ -15,7 +15,7 @@ Pick a point cloud that has diffuse noise, or on which the sampling measure has 
 Now define a two parameter grid (filtration) of topological spaces (on the left) from a point cloud $P$ on which we will compute the persistence of some topological structures (homological cycles).
 This filtration $X$, indexed over a radius parameter $r$ and a codensity parameter $s$ is defined as follows
 
-$$ X_{r,s} = \bigcup_{x \in P, \, \mathrm{density}(x) \ge s} B(x,r) = \{ x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r \}$$
+$$ X_{r,s} = \bigcup_{x \in P, \, \mathrm{density}(x) \ge s} B(x,r) = \lbrace x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r \rbrace$$
 
 The green shape on the left represent the lifetime of the biggest annulus. On the right, each cycle appearing on the left gets a colored shape (the color is only a label) and the shape of this colored shape represents the lifetime of this cycle.
 <br>
@@ -50,17 +50,19 @@ A documentation and building instructions are available [here](https://www-sop.i
 ## Features, and linked projects
 This library features a bunch of different functions and helpers. See below for a non-exhaustive list.
 <br>Filled box refers to implemented or interfaced code.
- - [x] [Multiparameter Module Approximation](https://arxiv.org/abs/2206.02026) provides the multiparameter simplicial structure, aswell as technics of approximating modules, via interval decompostion modules. It is also very useful for visualization.
- - [x] [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](https://proceedings.neurips.cc/paper_files/paper/2023/hash/d75c474bc01735929a1fab5d0de3b189-Abstract-Conference.html) provides fast representations of multiparameter persistence modules, by using their signed barcodes decompositions, and encoding it into signed measures. Implemented decompositions : Euler surfaces, Hilbert function, rank invariant (i.e. rectangles). It also provides representation technics for Machine Learning, i.e., Sliced Wasserstein kernels, Vectorizations.
- - [x] [A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions](https://proceedings.neurips.cc/paper_files/paper/2023/hash/702b67152ec4435795f681865b67999c-Abstract-Conference.html) Provides a vectorization framework for interval decomposable modules, for Machine Learning. Currently implemented as an extension of MMA.
- - [x] [Multiparameter Persistence Landscapes](https://jmlr.org/papers/v21/19-054.html) A vectoriazation technic for multiparameter persistence modules.
- - [x] [Filtration-Domination in Bifiltered Graphs](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. **Very useful** to speed up, e.g., Rips-Codensity bifiltrations.
- - [x] [Chunk Reduction for Multi-Parameter Persistent Homology](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm.
- - [x] [Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology](https://arxiv.org/abs/1902.05708) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
- - [x] [Delaunay Bifiltrations of Functions on Point Clouds](https://arxiv.org/abs/2310.15902) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bi-filtrations.
- - [x] [Rivet](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
- - [ ] [Backend only] [Projected distances for multi-parameter persistence modules](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
- - [ ] [Partial, and experimental] [Efficient Two-Parameter Persistence Computation via Cohomology](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
+ - [x] [[Multiparameter Module Approximation]](https://arxiv.org/abs/2206.02026) provides the multiparameter simplicial structure, as well as technics for approximating modules, via interval-decomposable modules. It is also very useful for visualization.
+ - [x] [[Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures, NeurIPS2023]](https://proceedings.neurips.cc/paper_files/paper/2023/hash/d75c474bc01735929a1fab5d0de3b189-Abstract-Conference.html) provides fast representations of multiparameter persistence modules, by using their signed barcodes decompositions encoded into signed measures. Implemented decompositions : Euler surfaces, Hilbert function, rank invariant (i.e. rectangles). It also provides representation technics for Machine Learning, i.e., Sliced Wasserstein kernels, and Vectorizations.
+ - [x] [[A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions, NeurIPS2023]](https://proceedings.neurips.cc/paper_files/paper/2023/hash/702b67152ec4435795f681865b67999c-Abstract-Conference.html) Provides a vectorization framework for interval decomposable modules, for Machine Learning. Currently implemented as an extension of MMA.
+ - [x] [[Differentiability and Optimization of Multiparameter Persistent Homology, ICML2024]](https://openreview.net/forum?id=ixdfvnO0uy) An approach to compute a (clarke) gradient for any reasonable multiparameter persistent invariant. Currently, any `multipers` computation is auto-differentiable using this strategy, provided that the input are pytorch gradient capable tensor.
+ - [x] [[Multiparameter Persistence Landscapes, JMLR]](https://jmlr.org/papers/v21/19-054.html) A vectorization technic for multiparameter persistence modules.
+ - [x] [[Filtration-Domination in Bifiltered Graphs, ALENEX2023]](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. Very useful to speed up, e.g., Rips-Codensity bifiltrations.
+ - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SOCG20219]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
+ - [x] [[Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology, JAAG]](https://doi.org/10.1137/20M1388425) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert, Rank Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
+ - [x] [[Delaunay Bifiltrations of Functions on Point Clouds, SODA2024]](https://epubs.siam.org/doi/10.1137/1.9781611977912.173) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bi-filtrations.
+ - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
+ - [x] [[Kernel Operations on the GPU, with Autodiff, without Memory Overflows, JMLR]](http://jmlr.org/papers/v22/20-275.html) Although not linked, at first glance, to persistence in any way, this library allows to compute blazingly fast signed measures  convolutions (and more!) with custom kernels. 
+ - [ ] [Backend only] [[Projected distances for multi-parameter persistence modules]](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
+ - [ ] [Partial, and experimental] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
 
 If I missed something, or you want to add something, feel free to open an issue.
 
@@ -72,7 +74,6 @@ If I missed something, or you want to add something, feel free to open an issue.
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein)<br>
 
 ## Contributions
-
 Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
-
+In particular, if you have a nice example or application that is not taken care in the documentation (see the ./docs/notebooks/ folder), please contact me to add it there.
 
