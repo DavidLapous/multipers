@@ -59,40 +59,93 @@ def test_3():
 
 
 def test_4():
-    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype = np.float64)
-    st.insert([0,1,2], [0,1])
-    st.insert([0,1,2], [1,0])
-    st.remove_maximal_simplex([0,1,2])
-    st.insert([0,1,2], [1,2])
-    st.insert([0,1,2], [2,1])
-    st.insert([0,1,2],[1.5,1.5])
-    st.insert([0,1,2], [2.5,.5])
-    st.insert([0,1,2], [.5,2.5])
+    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
+    st.insert([0, 1, 2], [0, 1])
+    st.insert([0, 1, 2], [1, 0])
+    st.remove_maximal_simplex([0, 1, 2])
+    st.insert([0, 1, 2], [1, 2])
+    st.insert([0, 1, 2], [2, 1])
+    st.insert([0, 1, 2], [1.5, 1.5])
+    st.insert([0, 1, 2], [2.5, 0.5])
+    st.insert([0, 1, 2], [0.5, 2.5])
 
     s = mp.Slicer(st, is_kcritical=True)
 
-    assert np.array_equal(s.get_filtrations_values(),    array([[0. , 1. ],
-       [1. , 0. ],
-       [0. , 1. ],
-       [1. , 0. ],
-       [0. , 1. ],
-       [1. , 0. ],
-       [0. , 1. ],
-       [1. , 0. ],
-       [0. , 1. ],
-       [1. , 0. ],
-       [0. , 1. ],
-       [1. , 0. ],
-       [1. , 2. ],
-       [2. , 1. ],
-       [1.5, 1.5],
-       [2.5, 0.5],
-       [0.5, 2.5]])), "Invalid conversion from kcritical st to kcritical slicer."
-    death_curve = np.asarray(mp.module_approximation(s, box = [[0,0],[3,3]]).get_module_of_degree(1)[0].get_death_list())
-    assert np.array_equal(death_curve, array([[2. , 1.5],
-       [2.5, 1. ],
-       [np.inf, 0.5],
-       [1.5, 2. ],
-       [1. , 2.5],
-       [0.5, np.inf]]))
+    assert np.array_equal(
+        s.get_filtrations_values(),
+        array(
+            [
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [1.0, 2.0],
+                [2.0, 1.0],
+                [1.5, 1.5],
+                [2.5, 0.5],
+                [0.5, 2.5],
+            ]
+        ),
+    ), "Invalid conversion from kcritical st to kcritical slicer."
+    death_curve = np.asarray(
+        mp.module_approximation(s, box=[[0, 0], [3, 3]])
+        .get_module_of_degree(1)[0]
+        .get_death_list()
+    )
+    assert np.array_equal(
+        death_curve,
+        array(
+            [
+                [2.0, 1.5],
+                [2.5, 1.0],
+                [np.inf, 0.5],
+                [1.5, 2.0],
+                [1.0, 2.5],
+                [0.5, np.inf],
+            ]
+        ),
+    )
 
+
+def test_make_filtration_non_decreasing():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [1, 2])
+    st.insert([1], [2, 3])
+    st.insert([2], [3, 2])
+
+    st.insert([0, 1], [10, 21])
+    st.insert([2, 0], [11, 20])
+
+    st.insert([0, 1, 2], [-np.inf, -np.inf])
+    assert (st.filtration([1, 2]) == -np.inf).all()
+    st.make_filtration_non_decreasing()
+    assert (st.filtration([1, 2]) == 3).all()
+    assert (st.filtration([0, 1, 2]) == [11, 21]).all()
+
+
+def test_flagify():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+
+    st.insert([0], [1, 4])
+    st.insert([1], [2, 3])
+    st.insert([2], [3, 2])
+
+    st.insert([0, 1], [21, 20])
+    st.insert([2, 0], [20, 21])
+    st.insert([1, 2])
+    st.insert([0, 1, 2], [41, 55])
+
+    st.flagify(2)
+    assert (st.filtration([0, 1, 2]) == 21).all()
+    st.flagify(1)
+    assert (np.array([f for s, f in st]).max(axis=0) == [3, 4]).all()
+    st.flagify(0)
+    assert (np.array([f for s, f in st]) == -np.inf).all()

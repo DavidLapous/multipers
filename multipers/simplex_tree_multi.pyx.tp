@@ -317,6 +317,30 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
       for stuff in self.get_simplices():
         yield stuff
 
+    def flagify(self, const int dim=2):
+        """
+        Turns this simplicial complex into a flag
+        complex by resetting filtration values of
+        simplices of dimension > `dim` by 
+        lower-star values.
+        """
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
+
+        cdef Finitely_critical_multi_filtration[{{CTYPE}}] minf = Finitely_critical_multi_filtration[{{CTYPE}}](self.get_ptr().get_number_of_parameters())
+        cdef int simplex_dimension
+        with nogil:
+            while it != end:
+                pair_sf =<pair[simplex_type, {{FSHORT}}*]> self.get_ptr().get_simplex_and_filtration(dereference(it))
+                simplex_dimension = <int>(pair_sf.first.size())-1
+                if simplex_dimension<dim:
+                  preincrement(it)
+                  continue
+                dereference(pair_sf.second).pull_to(minf)
+                preincrement(it)
+        self.make_filtration_non_decreasing()
+        return self
+
     def set_dimension(self, int dimension)->None:
         """This function sets the dimension of the simplicial complex.
 

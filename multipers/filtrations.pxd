@@ -172,6 +172,14 @@ cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrat
         vector[vector[value_type]] to_python(vector[Finitely_critical_multi_filtration]&) nogil const 
         @staticmethod
         vector[value_type]& vector[value_type]() nogil
+        # overloading += not yet supported.
+        # Finitely_critical_multi_filtration[T]& operator+=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
+        #
+        # Finitely_critical_multi_filtration[T]& operator-=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
+        # Finitely_critical_multi_filtration[T]& operator*=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
+        
+        void push_to(Finitely_critical_multi_filtration[T]&) nogil
+        void pull_to(Finitely_critical_multi_filtration[T]&) nogil
 
         
 
@@ -196,6 +204,13 @@ cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrat
         # vector[value_type]& _convert_back() nogil
         # filtration_type __filtration_type__(self):
         #     return self.get_vector()
+        # KCriticalFiltration[T]& operator+=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
+        #
+        # KCriticalFiltration[T]& operator-=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
+        # KCriticalFiltration[T]& operator*=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
+
+        void push_to(Finitely_critical_multi_filtration[T]&) except + nogil
+        void pull_to(Finitely_critical_multi_filtration[T]&) except + nogil
 
 cdef extern from "gudhi/Simplex_tree/multi_filtrations/Box.h" namespace "Gudhi::multiparameter::multi_filtrations":
     cdef cppclass Box[T=*]:
