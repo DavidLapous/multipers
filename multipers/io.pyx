@@ -271,7 +271,7 @@ def scc_reduce_from_str(
 
     blocks = scc_parser(output_path + id)
     if clear:
-        clear_io(output_path + id)
+        clear_io(input_path+id, output_path + id)
     return blocks
 
 def reduce_complex(
