@@ -155,18 +155,20 @@ def function_rips_signed_measure_old(
 def function_rips_signed_measure(
     x,
     theta: Optional[float] = None,
-    function: Literal["dtm", "gaussian", "exponential"] | Callable = "dtm",
-    threshold: float = np.inf,
-    grid_strategy: Literal["regular_closest", "exact", "quantile"] = "exact",
+    function: Literal["dtm", "gaussian", "exponential"] | Callable = "gaussian",
+    threshold: Optional[float] = None,
+    grid_strategy: Literal["regular_closest", "exact", "quantile", "regular_left"] = "exact",
+    complex:Literal["rips", "delaunay"] = "rips",
     resolution: int = 100,
     safe_conversion: bool = False,
-    num_collapses: int = -1,
+    num_collapses: Optional[int] = None,
     expand_collapse: bool = False,
     dtype=torch.float32,
     plot=False,
-    return_st: bool = False,
+    # return_st: bool = False,
     *,
     log_density: bool = True,
+    vineyard:bool = False,
     **sm_kwargs,
 ):
     """
@@ -185,6 +187,8 @@ def function_rips_signed_measure(
      - safe_conversion : Activate this if you encounter crashes.
      - **kwargs : for the signed measure computation.
     """
+    if num_collapses is None:
+        num_collapses = -1 if complex == "rips" else None
     assert isinstance(x, torch.Tensor)
     if function == "dtm":
         assert theta is not None, "Provide a theta to compute DTM"
@@ -201,6 +205,11 @@ def function_rips_signed_measure(
             .score_samples(x)
             .type(dtype)
         )
+    elif isinstance(function, torch.Tensor):
+        assert function.ndim == 1 and codensity.shape[0] == x.shape[0], """
+        When function is a tensor, it is interpreted as the value of some function over x. 
+        """
+        codensity = function
     else:
         assert callable(function), "Function has to be callable"
         if theta is None:
@@ -208,41 +217,54 @@ def function_rips_signed_measure(
         else:
             codensity = function(x, theta=theta).type(dtype)
 
+    
     distance_matrix = torch.cdist(x, x).type(dtype)
-
-    st = RipsComplex(
-        distance_matrix=distance_matrix.detach(), max_edge_length=threshold
-    ).create_simplex_tree()
-    # detach makes a new (reference) tensor, without tracking the gradient
-    st = mp.SimplexTreeMulti(st, num_parameters=2, safe_conversion=safe_conversion)
-    st.fill_lowerstar(
-        codensity.detach(), parameter=1
-    )  # fills the codensity in the second parameter of the simplextree
+    distances = distance_matrix.ravel()
+    if threshold is None and complex == "rips":
+        threshold = distance_matrix.max(axis=1).values.min()
+        distances = distances[distances <= threshold]
+    if complex == "delaunay":
+        distances /= 2
 
     # simplificates the simplextree for computation, the signed measure will be recovered from the copy afterward
-    distances = distance_matrix.ravel()
-    if threshold < np.inf:
-        distances = distances[distances < threshold]
     reduced_grid = get_grid(strategy=grid_strategy)((distances, codensity), resolution)
 
-    st = st.grid_squeeze(reduced_grid, coordinate_values=True)
-    if sm_kwargs.get("degree", None) is None and sm_kwargs.get("degrees", [None]) == [
-        None
-    ]:
-        expansion_degree = st.num_vertices
-    else:
-        expansion_degree = (
-            max(np.max(sm_kwargs.get("degrees", 1)), sm_kwargs.get("degree", 1)) + 1
-        )
-    st.collapse_edges(num=num_collapses)
-    if not expand_collapse:
-        st.expansion(expansion_degree)  # edge collapse
-
-    s = mp.Slicer(st)
-    degrees = sm_kwargs.get("degrees", [])
+    degrees = sm_kwargs.pop("degrees", [])
     if sm_kwargs.get("degree", None) is not None:
-        degrees = [sm_kwargs.get("degree", None)] + degrees
-    s = mp.slicer.minimal_presentation(s, degrees=degrees)
+        degrees = [sm_kwargs.pop("degree", None)] + degrees
+    if complex == "rips":
+        st = RipsComplex(
+            distance_matrix=distance_matrix.detach(), max_edge_length=threshold
+        ).create_simplex_tree()
+        # detach makes a new (reference) tensor, without tracking the gradient
+        st = mp.SimplexTreeMulti(st, num_parameters=2, safe_conversion=safe_conversion)
+        st.fill_lowerstar(
+            codensity.detach(), parameter=1
+        )  # fills the codensity in the second parameter of the simplextree
+        st = st.grid_squeeze(reduced_grid, coordinate_values=True)
+        if None in degrees:
+            expansion_degree = st.num_vertices
+        else:
+            expansion_degree = (
+                max(degrees) + 1
+            )
+        st.collapse_edges(num=num_collapses)
+        if not expand_collapse:
+            st.expansion(expansion_degree)  # edge collapse
+
+        s = mp.Slicer(st, vineyard=vineyard)
+    elif complex == "delaunay":
+        s = mp.slicer.from_function_delaunay(x.detach().numpy(),codensity.detach().numpy())
+        st = mp.slicer.to_simplextree(s)
+        st.flagify(2)
+        s = mp.Slicer(st, vineyard=vineyard)
+    
+    if None not in degrees:
+        s = s.minpres(degrees=degrees)
+    else:
+        from joblib import Parallel, delayed
+        s = tuple(Parallel(n_jobs = -1, backend="threading")(delayed(lambda d : s if d is None else s.minpres(degree=d))(d) for d in degrees))
+
     sms = tuple(
         sm 
         for slicer_of_degree in s
@@ -252,6 +274,4 @@ def function_rips_signed_measure(
         mp.plots.plot_signed_measures(
             tuple((sm.detach().numpy(), w.detach().numpy()) for sm, w in sms)
         )
-    if return_st:
-        sms = (sms, st)
     return sms
