@@ -154,7 +154,7 @@ if __name__ == "__main__":
         url="https://github.com/DavidLapous/multipers",
         # long_description=long_description,
         # long_description_content_type='text/markdown'
-        version="2.0.0",
+        version="2.0.1",
         license="MIT",
         keywords="TDA Persistence Multiparameter sklearn",
         ext_modules=cythonize(
