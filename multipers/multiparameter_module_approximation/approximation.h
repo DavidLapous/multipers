@@ -115,7 +115,7 @@ public:
   get_landscapes(const dimension_type dimension,
                  const std::vector<unsigned int> ks, const Box<value_type> &box,
                  const std::vector<unsigned int> &resolution) const;
-  void add_summand(Summand<value_type> summand);
+  void add_summand(Summand<value_type> summand, int degree = -1);
   Box<value_type> get_box() const;
   void set_box(Box<value_type> box);
   unsigned int size() const;
@@ -424,6 +424,7 @@ inline void __add_vineyard_trajectory_to_module(
     if constexpr (verbose)
       std::cout << "Line basepoint " << new_line.basepoint() << std::endl;
     slicer.push_to(new_line);
+
     slicer.vineyard_update();
     if constexpr (verbose2)
       std::cout << slicer << std::endl;
@@ -833,7 +834,9 @@ Module<value_type>::end() {
 }
 
 template <typename value_type>
-inline void Module<value_type>::add_summand(Summand<value_type> summand) {
+inline void Module<value_type>::add_summand(Summand<value_type> summand, int degree) {
+  if (degree >= 0)
+    summand.set_dimension(degree);
   module_.push_back(summand);
 }
 

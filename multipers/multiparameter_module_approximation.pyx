@@ -148,7 +148,7 @@ def module_approximation(
     """
     if isinstance(input, tuple) or isinstance(input, list):
         if len(input) == 0:
-            return PyModule()
+            return PyModule_f64()
         if n_jobs <= 1: 
             modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warning, id, direction, swap_box_coords) for slicer in input)
         else:
@@ -157,9 +157,9 @@ def module_approximation(
                 delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warning, id, direction, swap_box_coords)
                 for slicer in input
             ))
-        mod = modules[0]
-        for m in modules[1:]:
-            mod.merge(m)
+        mod = PyModule_f64().set_box(PyBox_f64(*modules[0].get_box()))
+        for dim,m in enumerate(modules):
+            mod.merge(m, dim)
         return mod
     if box is None:
         if is_simplextree_multi(input):

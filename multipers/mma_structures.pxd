@@ -93,6 +93,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         # vector[image_type] get_vectorization(const T,const T, unsigned int,unsigned int,const Box&)
         # image_type get_vectorization_in_dimension(const int,const T,unsigned int,unsigned int,const Box&)
         void add_summand(Summand[T])  nogil
+        void add_summand(Summand[T], int)  nogil
         unsigned int size() const  
         Box[T] get_box() const  
         Box[T] get_bounds() nogil const

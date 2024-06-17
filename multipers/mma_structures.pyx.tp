@@ -147,14 +147,14 @@ cdef class PyModule_{{SHORT}}:
 
     cdef set(self, Module[{{CTYPE}}] m):
         self.cmod = m
-    def merge(self, PyModule_{{SHORT}} other):
+    def merge(self, PyModule_{{SHORT}} other, int dim=-1):
         """
         Merges two modules into one
         """
         cdef Module[{{CTYPE}}] c_other = other.cmod
         with nogil:
             for summand in c_other:
-                self.cmod.add_summand(summand)
+                self.cmod.add_summand(summand, dim)
         return self
 
     def _set_from_ptr(self, intptr_t module_ptr):
