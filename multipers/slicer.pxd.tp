@@ -74,7 +74,7 @@ cdef extern from "Persistence_slices_interface.h":
       {{endif}}
       {{if IS_VINE}}
       void vineyard_update() nogil
-      vector[cycle_type] get_representative_cycles(bool) nogil
+      vector[vector[vector[vector[unsigned int]]]] get_representative_cycles(bool) nogil
       vector[size_t] get_current_order() nogil
       {{endif}}
 

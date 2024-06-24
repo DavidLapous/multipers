@@ -310,9 +310,7 @@ cdef class {{PYTHON_TYPE}}:
     @staticmethod
     def from_bitmap(self):
       raise ValueError("Not implemented.")
-
 {{endfor}}
-
 
 def from_function_delaunay(
     points,

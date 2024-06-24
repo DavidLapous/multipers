@@ -220,12 +220,14 @@ def function_rips_signed_measure(
     
     distance_matrix = torch.cdist(x, x).type(dtype)
     distances = distance_matrix.ravel()
-    if threshold is None and complex == "rips":
-        threshold = distance_matrix.max(axis=1).values.min()
+    if  complex == "rips":
+        threshold = distance_matrix.max(axis=1).values.min() if threshold is None else threshold
         distances = distances[distances <= threshold]
-    if complex == "delaunay":
+    elif complex == "delaunay":
         distances /= 2
-
+    else:
+        raise ValueError(f"Unimplemented with complex {complex}. You can use rips or delaunay ftm.")
+    
     # simplificates the simplextree for computation, the signed measure will be recovered from the copy afterward
     reduced_grid = get_grid(strategy=grid_strategy)((distances, codensity), resolution)
 

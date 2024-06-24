@@ -186,10 +186,11 @@ public:
     }
   }
   Persistence_backend_matrix(const Persistence_backend_matrix &toCopy)
-      : matrix_(toCopy.matrix_), permutation_(toCopy.permutation_) {}
+      : matrix_(toCopy.matrix_), permutation_(toCopy.permutation_){}
   Persistence_backend_matrix(Persistence_backend_matrix &&other) noexcept
       : matrix_(std::move(other.matrix_)),
-        permutation_(std::exchange(other.permutation_, nullptr)) {}
+        permutation_(std::exchange(other.permutation_, nullptr))
+  {}
 
   Persistence_backend_matrix &operator=(Persistence_backend_matrix other) {
     swap(matrix_, other.matrix_);
@@ -227,9 +228,22 @@ public:
   }
 
   inline std::vector<cycle_type> get_representative_cycles(bool update) {
+    const bool verbose = false;
     if (update) [[likely]]
       matrix_.update_representative_cycles();
-    return matrix_.get_representative_cycles();
+    auto current_cycles = matrix_.get_representative_cycles();
+    for(auto& truc : current_cycles){
+      if constexpr (verbose)
+        std::cout << "Cycle (matrix_ order): " ;
+      for(auto& machin : truc){
+        if constexpr (verbose){
+          std::cout<< "   matrix order: "<<machin;
+          std::cout << ", structure order : " << permutation_[machin] << std::endl;
+        }
+        machin = permutation_->operator[](machin);
+      }
+    }
+    return current_cycles;
   }
   inline void _update_permutation_ptr(std::vector<std::size_t> &perm) {
     permutation_ = &perm;
