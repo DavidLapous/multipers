@@ -61,3 +61,45 @@ def test_3():
     assert_sm(sm, it)
     assert_sm(sm2, it)
     assert_sm(sm3, it)
+
+
+def test_representative_cycles():
+    truc = [
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {2, 3},
+        {4, 5},
+        {0, 2},
+        {0, 1},
+        {1, 3},
+        {1, 2},
+        {7, 11, 12},
+        {9, 10, 12},
+        {5, 6},
+        {2, 4},
+        {4, 6},
+        {8, 15, 17},
+        {3, 6},
+    ]
+    truc = [list(machin) for machin in truc]
+    slicer = mp.slicer._Slicer0_vine_f64(
+        truc,
+        np.array([max(len(x) - 1, 0) for x in truc]),
+        np.array([list(range(len(truc))), list(range(len(truc)))]).T,
+    )
+    slicer.compute_persistence(one_filtration=list(range(len(truc))))
+    cycles = slicer.get_representative_cycles()
+    assert len(cycles) == 3, f"There should be 3 dimensions here, found {len(cycles)}"
+    assert (
+        np.asarray(cycles[0]).size == 7
+    ), f"Invalid number of 0-cycles, got {np.asarray(cycles[0]).size}"
+    for c in cycles[1]:
+        assert (
+            np.unique(cycles[1][0], return_counts=1)[1] == 2
+        ).all(), f"Found a non-cycle, {cycles[1][0]}"
+    assert len(cycles[2]) == 0, "Found a 2-cycle, which should not exist"
