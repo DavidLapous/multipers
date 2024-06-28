@@ -13,7 +13,7 @@ import threading
 
 # from multipers.filtration_conversions cimport *
 # from multipers.mma_structures cimport boundary_matrix,float,pair,vector,intptr_t
-cimport numpy as cnp
+# cimport numpy as cnp
 
 doc_soft_urls = {
         "mpfree":"https://bitbucket.org/mkerber/mpfree/",
@@ -107,7 +107,7 @@ def scc_parser(path: str| os.PathLike):
     with open(path, "r") as f:
         lines =(x.strip() for x in f if valid_line(x))
         num_parameters = int(next(lines))
-        sizes = np.cumsum([0] + next(lines).split(), dtype=np.int32)
+        sizes = np.cumsum(np.asarray([0] + next(lines).split(), dtype=np.int32))
         lines = (parse_line_regex.match(a) for a in lines)
         clines = tuple((a.group("filtration"),a.group("boundary")) for a in lines)
     F = np.fromiter((a[0].split() for a in clines), dtype=np.dtype((np.float32,2)), count = sizes[-1])
