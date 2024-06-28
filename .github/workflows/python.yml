@@ -39,7 +39,8 @@ jobs:
         conda install mamba -c conda-forge
         mamba install python=${{matrix.python-version}} pip -c conda-forge
         ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
-        mamba install boost-cpp  gudhi numpy cython pytest scikit-learn matplotlib boost joblib tqdm scipy pot tbb tbb-devel -c conda-forge
+        mamba install boost-cpp  gudhi numpy=2 cython pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        pip install pykeops filtration-domination pot --upgrade # pot conda not yet available # TODO : fix that when possible
 
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           mamba install cxx-compiler patchelf -c conda-forge
@@ -64,7 +65,6 @@ jobs:
           # cd ../..
           ####
         # fi
-        pip install pykeops filtration-domination --upgrade
     - name: Build package
       shell: bash -el {0}
       run: |
