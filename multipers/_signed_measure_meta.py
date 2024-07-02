@@ -6,16 +6,14 @@ from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure_integration import clean_sms
 from multipers.rank_invariant import rank_from_slicer
-from multipers.simplex_tree_multi import (
-    SimplexTreeMulti_type,
-    _available_strategies,
-    is_simplextree_multi,
-)
+from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
+                                          _available_strategies,
+                                          is_simplextree_multi)
 from multipers.slicer import Slicer_type, is_slicer
 
 
 def signed_measure(
-    simplextree: Union[SimplexTreeMulti_type, Slicer_type],
+    filtered_complex: Union[SimplexTreeMulti_type, Slicer_type],
     degree: Optional[int] = None,
     degrees=[None],
     mass_default=None,
@@ -31,28 +29,37 @@ def signed_measure(
     grid_conversion: Optional[list] = None,
     coordinate_measure: bool = False,
     num_collapses: int = 0,
-    clean: bool = False,
+    clean: Optional[bool] = None,
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
     Computes the signed measures given by the decomposition of the hilbert
-    function or the euler characteristic.
+    function or the euler characteristic, or the rank invariant.
 
     Input
     -----
-     - simplextree:SimplexTreeMulti, the multifiltered simplicial complex.
-       Its recommended to squeeze the simplextree first.
-     - mass_default: Either None, or 'auto' or 'inf', or array-like of floats.
-       Where to put the default mass to get a zero-mass measure.
+     - filtered_complex: given by a simplextree or a slicer.
      - degree:int|None / degrees:list[int] the degrees to compute.
        None represents the euler characteristic.
+     - mass_default: Either None, or 'auto' or 'inf', or array-like of floats.
+       Where to put the default mass to get a zero-mass measure.
+     - grid_strategy: If not squeezed yet, the strategy to coarsen the grid; see ``strategy`` in :func:`multipers.grids.compute_grid`.
+     - invariant: The invariant to use, either "hilbert", "rank", or "euler".
      - plot:bool, plots the computed measures if true.
      - n_jobs:int, number of jobs.
        Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
      - verbose:bool, prints c++ logs.
+     - expand_collapse: when the input is a simplextree, only expands the complex when computing 1-dimensional slices. Meant to reduce memory footprint at some computational expense.
+     - backend:str when the input is a simplextree, reduce first the filtered complex using an external library
+     see ``backend`` in :func:`multipers.io.reduce_complex`.
+     - grid_conversion: If given, re-evaluates the final signed measure in this grid.
+     - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid_conversion.
+     - num_collapses: int, if `filtered_complex` is a simplextree, does some collapses if possible.
+     - clean: reduces the output signed measure. Only useful for euler computations.
 
     Output
     ------
+
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
@@ -62,20 +69,22 @@ def signed_measure(
         assert len(degrees) == 1
     if len(degrees) == 0:
         return []
-    if is_slicer(simplextree):
-        if grid_conversion is None and not simplextree.is_squeezed:
+    if clean is None:
+        clean = None in degrees
+    if is_slicer(filtered_complex):
+        if grid_conversion is None and not filtered_complex.is_squeezed:
             grid_conversion = compute_grid(
-                simplextree.get_filtrations_values().T,
+                filtered_complex.get_filtrations_values().T,
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
             )
-        if not simplextree.is_squeezed:
-            simplextree_ = simplextree.grid_squeeze(grid_conversion, coordinates=True)
+        if not filtered_complex.is_squeezed:
+            simplextree_ = filtered_complex.grid_squeeze(grid_conversion, coordinates=True)
         else:
-            simplextree_ = simplextree
+            simplextree_ = filtered_complex
             if grid_conversion is None:
                 grid_conversion = tuple(
-                    np.asarray(f, dtype=np.float64) for f in simplextree.filtration_grid
+                    np.asarray(f, dtype=np.float64) for f in filtered_complex.filtration_grid
                 )
         if invariant == "rank":  # TODO Hilbert from slicer
             degrees = np.asarray(degrees, dtype=int)
@@ -93,7 +102,7 @@ def signed_measure(
             grid_conversion=grid_conversion,
             clean=clean,
         )
-    assert is_simplextree_multi(simplextree), "Input has to be simplextree or slicer."
+    assert is_simplextree_multi(filtered_complex), "Input has to be simplextree or slicer."
     assert invariant is None or invariant in [
         "hilbert",
         "rank_invariant",
@@ -102,15 +111,15 @@ def signed_measure(
         "euler_characteristic",
         "hilbert_function",
     ]
-    assert not plot or simplextree.num_parameters == 2, "Can only plot 2d measures."
+    assert not plot or filtered_complex.num_parameters == 2, "Can only plot 2d measures."
 
-    if not simplextree._is_squeezed:
+    if not filtered_complex._is_squeezed:
         if grid_conversion is None:
-            grid_conversion = simplextree.get_filtration_grid(
+            grid_conversion = filtered_complex.get_filtration_grid(
                 grid_strategy=grid_strategy,
                 **infer_grid_kwargs,
             )  # put a warning ?
-        simplextree_ = simplextree.grid_squeeze(
+        simplextree_ = filtered_complex.grid_squeeze(
             grid_conversion,
             coordinate_values=True,
             inplace=False,
@@ -119,7 +128,7 @@ def signed_measure(
         if num_collapses != 0:
             simplextree_.collapse_edges(num_collapses)
     else:
-        simplextree_ = simplextree
+        simplextree_ = filtered_complex
         if grid_conversion is None:
             grid_conversion = [np.asarray(f) for f in simplextree_.filtration_grid]
     if coordinate_measure:
@@ -157,7 +166,7 @@ def signed_measure(
     if mass_default is None:
         mass_default = mass_default
     elif mass_default == "inf":
-        mass_default = np.array([np.inf] * simplextree.num_parameters)
+        mass_default = np.array([np.inf] * filtered_complex.num_parameters)
     elif mass_default == "auto":
         grid_conversion = [np.asarray(f) for f in simplextree_.filtration_grid]
         mass_default = np.array(
@@ -167,13 +176,13 @@ def signed_measure(
         mass_default = np.asarray(mass_default)
         assert (
             mass_default.ndim == 1
-            and mass_default.shape[0] == simplextree.num_parameters
+            and mass_default.shape[0] == filtered_complex.num_parameters
         )
     # assert not coordinate_measure or grid_conversion is None
 
     if invariant in ["rank_invariant", "rank"]:
         assert (
-            simplextree.num_parameters == 2
+            filtered_complex.num_parameters == 2
         ), "Rank invariant only implemented for 2-parameter modules."
         assert not coordinate_measure, "Not implemented"
         from multipers.simplex_tree_multi import _rank_signed_measure as smri
@@ -207,9 +216,8 @@ def signed_measure(
             "hilbert",
             "hilbert_function",
         ], "Found homological degrees for euler computation."
-        from multipers.simplex_tree_multi import (
-            _hilbert_signed_measure as hilbert_signed_measure,
-        )
+        from multipers.simplex_tree_multi import \
+            _hilbert_signed_measure as hilbert_signed_measure
 
         sms = hilbert_signed_measure(
             simplextree_,
