@@ -98,7 +98,7 @@ def signed_measure(
         mass_default = mass_default
     elif mass_default == "inf":
         mass_default = np.array([np.inf] * filtered_complex.num_parameters)
-    elif mass_default == "auto":
+    elif mass_default == "auto": # this will not work with torch, but we don't want to autodiff this anyway
         mass_default = np.array(
             [1.1 * np.max(f) - 0.1 * np.min(f) for f in grid_conversion]
         )
@@ -273,6 +273,7 @@ def _signed_measure_from_scc(
 def _signed_measure_from_slicer(
     slicer: Slicer_type,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
+    assert not slicer.is_kcritical, "Not implemented for k-critical filtrations yet."
     pts = np.array(slicer.get_filtrations())
     dims = slicer.get_dimensions()
     weights = 1 - 2 * (
