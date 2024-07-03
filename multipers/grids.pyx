@@ -26,7 +26,7 @@ ctypedef fused some_float:
 
 def compute_grid(
         x,
-        resolution=None, 
+        resolution:Optional[int|Iterable[int]]=None, 
         strategy:Lstrategies="exact", 
         bool unique=True, 
         some_float _q_factor=1., 
@@ -53,7 +53,13 @@ def compute_grid(
 
     from multipers.slicer import is_slicer
     from multipers.simplex_tree_multi import is_simplextree_multi
-    
+
+    if resolution is not None and strategy == "exact":
+        raise ValueError("The 'exact' strategy does not support resolution.")
+    if strategy != "exact":
+        assert resolution is not None, "A resolution is required for non-exact strategies"
+
+
     cdef bool is_numpy_compatible = True
     if is_slicer(x):
         initial_grid = x.get_filtrations_values().T
@@ -235,7 +241,7 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
 
 
 
-def sm_in_grid(pts, weights, grid_conversion, int num_parameters=-1):
+def sm_in_grid(pts, weights, grid_conversion, int num_parameters=-1, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
     Input
@@ -250,13 +256,17 @@ def sm_in_grid(pts, weights, grid_conversion, int num_parameters=-1):
     def to_int(x):
         return np.asarray(x,dtype=np.int64)
     if isinstance(first_filtration, np.ndarray):
+        if mass_default is not None:
+            grid_conversion = tuple(np.concatenate([g, [m]]) for g,m in zip(grid_conversion, mass_default))
         def empty_like(x, weights):
             return np.empty_like(x, dtype=dtype), np.asarray(weights)
     else: 
         import torch
         # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid_conversion[0])}, expected numpy or torch array."
+        if mass_default is not None:
+            grid_conversion = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid_conversion, mass_default))
         def empty_like(x, weights):
-            return torch.empty(x.shape,dtype=dtype), torch.from_numpy(weights).type(torch.int64)
+            return torch.empty(x.shape,dtype=dtype), torch.from_numpy(weights)
 
     pts = to_int(pts)
     coords,weights = empty_like(pts,weights)
@@ -268,7 +278,7 @@ def sm_in_grid(pts, weights, grid_conversion, int num_parameters=-1):
     return (coords, weights)
 
 # TODO : optimize with memoryviews / typing
-def sms_in_grid(sms, grid_conversion, int num_parameters=-1):
+def sms_in_grid(sms, grid_conversion, int num_parameters=-1, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
     Input
@@ -277,5 +287,5 @@ def sms_in_grid(sms, grid_conversion, int num_parameters=-1):
        where signed_measure_like = tuple(array[int, ndim=2], array[int])
      - grid_conversion of the form Iterable[array[float, ndim=1]]
     """
-    sms = tuple(sm_in_grid(pts,weights,grid_conversion,num_parameters) for pts,weights in sms)
+    sms = tuple(sm_in_grid(pts,weights,grid_conversion=grid_conversion,num_parameters=num_parameters, mass_default=mass_default) for pts,weights in sms)
     return sms

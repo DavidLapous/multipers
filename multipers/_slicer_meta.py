@@ -141,7 +141,7 @@ def Slicer(
             slicer.filtration_grid = st.filtration_grid
     elif is_simplextree_multi(st) and backend == "graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
-        if st._is_squeezed:
+        if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
     elif backend == "graph":
         raise ValueError(
@@ -153,7 +153,7 @@ You can try using `multipers.slicer.to_simplextree`."""
         filtration_grid = None
         if is_simplextree_multi(st):
             blocks = st._to_scc()
-            if st._is_squeezed:
+            if st.is_squeezed:
                 filtration_grid = st.filtration_grid
         elif isinstance(st, str):
             blocks = mio.scc_parser(st)

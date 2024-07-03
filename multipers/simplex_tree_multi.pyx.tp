@@ -580,8 +580,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if propagate: self.make_filtration_non_decreasing()
         return self
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
     def euler_characteristic(self, dtype = {{PYTYPE}}):
         """This function returns a generator with simplices and their given
         filtration values.
@@ -1223,7 +1221,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         :param coordinate_values: If true, the filtrations values of the simplices will be set to the coordinate of the filtration grid.
         :type coordinate_values: bool
         """
-        if not force and self._is_squeezed:
+        if not force and self.is_squeezed:
             raise Exception("SimplexTree already squeezed, use `force=True` if that's really what you want to do.") 
         #TODO : multi-critical
         if filtration_grid is None:  
@@ -1243,7 +1241,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         return self
 
     @property
-    def _is_squeezed(self)->bool:
+    def is_squeezed(self)->bool:
         return self.num_vertices > 0 and len(self.filtration_grid)>0 and len(self.filtration_grid[0]) > 0
 
     @property
@@ -1533,7 +1531,8 @@ def _hilbert_signed_measure(simplextree,
     indices_type n_jobs=0, 
     bool verbose=False,
     bool expand_collapse=False, 
-    grid_conversion = None):
+    # grid_conversion = None,
+    ):
   """
   Computes the signed measures given by the decomposition of the hilbert function.
 
@@ -1554,7 +1553,7 @@ def _hilbert_signed_measure(simplextree,
   with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
   """
 
-  assert simplextree._is_squeezed, "Squeeze grid first."
+  assert simplextree.is_squeezed, "Squeeze grid first."
   cdef bool zero_pad = mass_default is not None
   # assert simplextree.num_parameters == 2
   grid_shape = np.array([len(f) for f in simplextree.filtration_grid])
@@ -1566,8 +1565,8 @@ def _hilbert_signed_measure(simplextree,
   if zero_pad:
     for i, _ in enumerate(grid_shape):
       grid_shape[i] += 1 # adds a 0
-    if grid_conversion is not None:
-      grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
+    # if grid_conversion is not None:
+    #   grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
   assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."
   grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape]), dtype=python_indices_type)
   container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).flatten())
@@ -1583,12 +1582,12 @@ def _hilbert_signed_measure(simplextree,
       (pts[slices[i]:slices[i+1],1:],weights[slices[i]:slices[i+1]])
       for i in range(slices.shape[0]-1)
   ]
-  if grid_conversion is not None:
-    sms = sms_in_grid(sms,grid_conversion)
+  # if grid_conversion is not None:
+  #   sms = sms_in_grid(sms,grid_conversion)
 
-  if plot:
-    from multipers.plots import plot_signed_measures
-    plot_signed_measures(sms)
+  # if plot:
+  #   from multipers.plots import plot_signed_measures
+  #   plot_signed_measures(sms)
   return sms
 
 
@@ -1617,7 +1616,7 @@ cdef inline signed_measure_type _euler_sm_from_simplextree(object simplextree, t
     raise ValueError("Input {simplextree} not supported.")
 
 
-def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False, bool plot=False, grid_conversion=None):
+def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False):
   """
   Computes the signed measures given by the decomposition of the hilbert function.
 
@@ -1649,8 +1648,8 @@ def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False, bo
   if zero_pad:
     for i, _ in enumerate(grid_shape):
       grid_shape[i] += 1 # adds a 0
-    if grid_conversion is not None:
-      grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
+    # if grid_conversion is not None:
+    #   grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
   assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."
   container_array = np.ascontiguousarray(np.zeros(grid_shape, dtype=python_tensor_dtype).flatten())
   assert len(container_array) < np.iinfo(python_indices_type).max, "Too large container. Raise an issue on github if you encounter this issue. (Due to tensor's operator[])"
@@ -1666,11 +1665,6 @@ def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False, bo
   # return pts, weights
   sm = (pts,weights)
 
-  if grid_conversion is not None:
-    sm, = sms_in_grid([sm], grid_conversion)
-  if plot:
-    from multipers.plots import plot_signed_measures
-    plot_signed_measures([sm])
   return sm
 
 
@@ -1723,11 +1717,12 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
-    assert simplextree._is_squeezed, "Squeeze grid first."
+    assert simplextree.is_squeezed, "Squeeze grid first."
     cdef bool zero_pad = mass_default is not None
-    grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
+    # grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
     # assert simplextree.num_parameters == 2
-    grid_shape = np.array([len(f) for f in grid_conversion])
+    # grid_shape = np.array([len(f) for f in grid_conversion])
+    grid_shape = np.array([len(f) for f in simplextree.filtration_grid])
 
     if mass_default is None:
         mass_default = mass_default
@@ -1737,7 +1732,7 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
     if zero_pad:
         for i, _ in enumerate(grid_shape):
             grid_shape[i] += 1 # adds a 0
-        grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
+        # grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
 
     assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."
     grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape, grid_shape]), dtype=python_indices_type)
@@ -1760,16 +1755,16 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
         coords = coords[correct_indices]
         weights = weights[correct_indices]
         if len(correct_indices) == 0:
-            pts, weights = np.empty((0, 2*num_parameters)), np.empty((0))
-        else:
-            pts = np.empty(shape=coords.shape, dtype=grid_conversion[0].dtype)
-            for i in range(pts.shape[1]):
-                pts[:,i] = grid_conversion[i % num_parameters][coords[:,i]]
-        rank_decomposition = (pts,weights)
+            coords, weights = np.empty((0, 2*num_parameters)), np.empty((0))
+        # else:
+        #     pts = np.empty(shape=coords.shape, dtype=grid_conversion[0].dtype)
+        #     for i in range(pts.shape[1]):
+        #         pts[:,i] = grid_conversion[i % num_parameters][coords[:,i]]
+        rank_decomposition = (coords,weights)
         out.append(rank_decomposition)
 
-    if plot:
-        from multipers.plots import plot_signed_measures
-        plot_signed_measures(out)
+    #  if plot:
+    #      from multipers.plots import plot_signed_measures
+    #      plot_signed_measures(out)
     return out
 

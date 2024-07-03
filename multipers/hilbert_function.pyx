@@ -54,7 +54,7 @@ def hilbert_signed_measure(
 	`[signed_measure_of_degree for degree in degrees]`
 	with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
 	"""
-	assert simplextree._is_squeezed, "Squeeze grid first."
+	assert simplextree.is_squeezed, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
 	# assert simplextree.num_parameters == 2
 	grid_shape = np.array([len(f) for f in simplextree.filtration_grid])
@@ -120,7 +120,7 @@ def hilbert_surface(simplextree, vector[indices_type] degrees, mass_default=None
 	------
 	Integer array of the form `(num_degrees, num_filtration_values_of_parameter 1, ..., num_filtration_values_of_parameter n)`
 	"""
-	assert simplextree._is_squeezed > 0, "Squeeze grid first."
+	assert simplextree.is_squeezed > 0, "Squeeze grid first."
 	cdef bool zero_pad = mass_default is not None
 	grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
 	grid_shape = np.array([len(f) for f in grid_conversion])

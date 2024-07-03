@@ -51,9 +51,13 @@ Slicer_type = Union[
 cdef class {{PYTHON_TYPE}}:
     cdef {{CTYPE}} truc
     cdef public vector[vector[double]] filtration_grid
+    cdef public int minpres_degree ## TODO : maybe change directly the degree in the minpres ?
     @property
     def is_squeezed(self)->bool:
         return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
+    @property
+    def is_minpres(self)->bool:
+        return self.minpres_degree>0
 
     def get_ptr(self):
         """
@@ -72,6 +76,7 @@ cdef class {{PYTHON_TYPE}}:
         cdef intptr_t ptr = st.thisptr
         cdef Simplex_tree_multi_interface[{{FILTRATION_TYPE}},{{C_VALUE_TYPE}}]* st_ptr = <Simplex_tree_multi_interface[{{FILTRATION_TYPE}},{{C_VALUE_TYPE}}]*>(ptr)
         self.truc = {{CTYPE}}(st_ptr)
+        self.minpres_degree = -1
     {{elif IS_KCRITICAL}}
     def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
         """
@@ -214,6 +219,12 @@ cdef class {{PYTHON_TYPE}}:
         cdef vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] v = self.truc.get_filtration_values()
         out = _vff21cview_{{SHORT}}(v, copy=True)
         return np.asarray(out)
+    def get_filtration_grid(self,grid_strategy:str="exact", **infer_grid_kwargs):
+        return mpg.compute_grid(
+                self.get_filtrations_values().T,
+                strategy=grid_strategy,
+                **infer_grid_kwargs,
+            )
     def get_filtrations(self):
         {{if IS_KCRITICAL}}
         return _vff2kcview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
@@ -332,7 +343,10 @@ def from_function_delaunay(
     vineyard : bool, use a vineyard-compatible backend
     """
     blocks = mio.function_delaunay_presentation(points, grades, degree=degree, verbose=verbose,clear=clear)
-    return multipers.Slicer(blocks, backend=backend, vineyard=vineyard)
+    s= multipers.Slicer(blocks, backend=backend, vineyard=vineyard)
+    if degree >0:
+        s.minpres_degree = degree
+    return s
 
 def slicer2blocks(slicer, int degree = -1, bool reverse=True):
     """
@@ -358,11 +372,12 @@ def minimal_presentation(
         slicer,
         int degree = 1, 
         list[int] degrees=[],
-        str backend:Literal["mpfree", "2pac"]="mpfree", 
+        str backend:Literal["mpfree", "2pac", ""]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard=True, 
         id :Optional[str] =None,
         dtype=None,
+        int n_jobs = -1,
         **minpres_kwargs
         ):
     """
@@ -371,7 +386,15 @@ def minimal_presentation(
     Only works for mpfree for the moment.
     """
     if len(degrees)>0:
-        return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+        from joblib import Parallel, delayed
+        def todo(int degree):
+            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
+        return tuple(
+          Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
+        )
+        # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+    if backend == "":
+        return slicer
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     blocks = to_blocks(slicer)
     if id is None:
@@ -383,6 +406,7 @@ def minimal_presentation(
     dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
     new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
     new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    new_slicer.minpres_degree = degree
     if filtration_grid is not None:
       new_slicer.filtration_grid = filtration_grid
     return new_slicer
@@ -463,7 +487,4 @@ def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col)
   if slicer is None:
     raise ValueError(f"Unimplemented combo for Matrix : {is_vineyard=}, {is_k_critical=}, {dtype=}")
   return slicer
-
-
-
 

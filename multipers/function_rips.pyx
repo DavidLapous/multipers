@@ -57,7 +57,7 @@ def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0
 	return degree_rips_st,max_degree
 
 def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0):
-	assert st_multi._is_squeezed, "Squeeze first !"
+	assert st_multi.is_squeezed, "Squeeze first !"
 	cdef intptr_t st_multi_ptr = st_multi.thisptr
 	cdef indices_type I = len(st_multi.filtration_grid[0])
 	cdef indices_type J = st_multi.num_parameters
@@ -76,7 +76,7 @@ def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bo
 
 
 def function_rips_signed_measure(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0, bool reconvert = True):
-	assert st_multi._is_squeezed
+	assert st_multi.is_squeezed
 	cdef intptr_t st_multi_ptr = st_multi.thisptr
 	cdef indices_type I = len(st_multi.filtration_grid[0])
 	cdef indices_type J = st_multi.num_parameters

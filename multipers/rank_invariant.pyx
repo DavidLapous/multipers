@@ -54,7 +54,7 @@ from multipers.point_measure_integration import sparsify
 #     `[signed_measure_of_degree for degree in degrees]`
 #     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
 #     """
-#     assert simplextree._is_squeezed, "Squeeze grid first."
+#     assert simplextree.is_squeezed, "Squeeze grid first."
 #     assert simplextree.dtype == np.int32
 #     cdef bool zero_pad = mass_default is not None
 #     grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
@@ -107,7 +107,7 @@ from multipers.point_measure_integration import sparsify
 #     `[signed_measure_of_degree for degree in degrees]`
 #     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
 #     """
-#     assert simplextree._is_squeezed, "Squeeze grid first."
+#     assert simplextree.is_squeezed, "Squeeze grid first."
 #     cdef bool zero_pad = mass_default is not None
 #     grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
 #     # assert simplextree.num_parameters == 2
@@ -170,7 +170,6 @@ def rank_from_slicer(
         indices_type n_jobs=1,
         mass_default = None,
         grid_shape=None,
-        grid_conversion=None,
         bool plot=False,
         bool return_raw=False,
         ):
@@ -188,8 +187,8 @@ def rank_from_slicer(
     if zero_pad:
         for i, _ in enumerate(grid_shape):
             grid_shape[i] += 1 # adds a 0
-        for i,f in enumerate(grid_conversion):
-            grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
+        # for i,f in enumerate(grid_conversion):
+        #     grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
 
     grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape, grid_shape]), dtype=python_indices_type)
     container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).flatten())
@@ -215,11 +214,7 @@ def rank_from_slicer(
         weights = weights[correct_indices]
         return coords, weights
 
-    out = mpg.sms_in_grid(tuple(clean_rank(rank_decomposition) for rank_decomposition in rank), grid_conversion, num_parameters=num_parameters)
-
-    if plot:
-        from multipers.plots import plot_signed_measures
-        plot_signed_measures(out)
+    out = tuple(clean_rank(rank_decomposition) for rank_decomposition in rank)
     return out
 
 
