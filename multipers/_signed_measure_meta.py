@@ -67,7 +67,7 @@ def signed_measure(
     if len(degrees) == 1 and degrees[0] is None and degree is not None:
         degrees = [degree]
     if None in degrees:
-        assert len(degrees) == 1
+        assert len(degrees) == 1 and (invariant is None or invariant == "euler"), "Can only compute one invariant at the time."
         invariant = "euler"
     if len(degrees) == 0:
         return []
