@@ -242,7 +242,7 @@ cdef class {{PYTHON_TYPE}}:
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution=-1, bool coordinates=True, bool inplace = False, bool force=False):
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False):
         """
         Squeeze the filtration values on a grid.
         """
@@ -385,6 +385,7 @@ def minimal_presentation(
     and returns it as a slicer.
     Only works for mpfree for the moment.
     """
+    mio._init_external_softwares(requires=[backend])
     if len(degrees)>0:
         from joblib import Parallel, delayed
         def todo(int degree):
@@ -401,7 +402,6 @@ def minimal_presentation(
         id = str(threading.get_native_id())
     if dtype is None:
         dtype = slicer.dtype
-    mio._init_external_softwares(requires=[backend])
     mio.scc2disk(blocks,path=mio.input_path+id, strip_comments=True)
     dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
     new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
