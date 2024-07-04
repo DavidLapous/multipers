@@ -50,7 +50,7 @@ def signed_measure(
        Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
      - verbose:bool, prints c++ logs.
      - expand_collapse: when the input is a simplextree, only expands the complex when computing 1-dimensional slices. Meant to reduce memory footprint at some computational expense.
-     - backend:str when the input is a simplextree, reduce first the filtered complex using an external library
+     - backend:str  reduces first the filtered complex using an external library, 
      see ``backend`` in :func:`multipers.io.reduce_complex`.
      - grid_conversion: If given, re-evaluates the final signed measure in this grid.
      - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid_conversion.
@@ -157,7 +157,7 @@ def signed_measure(
                     grid_shape=tuple(len(g) for g in grid_conversion),
                     plot=plot,
                 )
-            elif invariant is None or "euler" in invariant:
+            elif (invariant is None or "euler" in invariant) and (len(degrees) == 1 and degrees[0] is None):
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
                 )
@@ -168,6 +168,7 @@ def signed_measure(
 
                 else:
                     from multipers.slicer import minimal_presentation
+                    backend = "mpfree" ## TODO : make a non-mpfree backend
                     reduced_complex = minimal_presentation(filtered_complex_, degrees=degrees, backend=backend, vineyard=vineyard)
                     sms = [_signed_measure_from_slicer(s)[0]
                         for s in reduced_complex
