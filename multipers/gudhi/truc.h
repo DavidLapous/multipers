@@ -524,8 +524,8 @@ public:
                    typename MultiFiltration::OneCritical>
   get_bounding_box() const {
     using OC = typename MultiFiltration::OneCritical;
-    assert(!generator_filtration_values.empty());
-    OC a = std::numeric_limits<OC>::infinity();
+    // assert(!generator_filtration_values.empty());
+    OC a = OC::inf();
     OC b = -1*a;
     for (const auto &filtration_value : generator_filtration_values) {
       if constexpr (MultiFiltration::is_multi_critical) {
