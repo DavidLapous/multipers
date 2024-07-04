@@ -138,10 +138,9 @@ def signed_measure(
                         degrees=[1],
                         n_jobs=n_jobs,
                         grid_shape=tuple(len(g) for g in grid_conversion),
-                        plot=plot,
                     )
                     for s, d in zip(reduced_complex, degrees)
-                ]
+               ]
             else:
                 sms = [
                     _signed_measure_from_slicer(s)[0]
@@ -155,7 +154,6 @@ def signed_measure(
                     degrees=degrees,
                     n_jobs=n_jobs,
                     grid_shape=tuple(len(g) for g in grid_conversion),
-                    plot=plot,
                 )
             elif (invariant is None or "euler" in invariant) and (len(degrees) == 1 and degrees[0] is None):
                 sms = _signed_measure_from_slicer(
@@ -204,7 +202,6 @@ def signed_measure(
                 filtered_complex_,
                 mass_default=mass_default,
                 degrees=degrees,
-                plot=plot,
                 expand_collapse=expand_collapse,
             )
             fix_mass_default = False
