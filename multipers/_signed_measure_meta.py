@@ -149,7 +149,7 @@ def signed_measure(
         else: # No backend
             if invariant in ("rank", "rank_invariant"):  # TODO Hilbert from slicer
                 degrees = np.asarray(degrees, dtype=int)
-                return rank_from_slicer(
+                sms = rank_from_slicer(
                     filtered_complex_,
                     degrees=degrees,
                     n_jobs=n_jobs,
