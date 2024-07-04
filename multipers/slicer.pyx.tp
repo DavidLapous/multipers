@@ -466,7 +466,8 @@ def to_blocks(input):
       return slicer2blocks(input)
     if isinstance(input, list) or isinstance(input, tuple):
       return input
-    if isinstance(input, multipers.simplex_tree_multi.SimplexTreeMulti):
+    from multipers.simplex_tree_multi import is_simplextree_multi
+    if is_simplextree_multi(input):
       return mio.simplextree2scc(input)
     if isinstance(input, str) or isinstance(input, os.PathLike):
       return mio.scc_parser(input)
