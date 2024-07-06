@@ -2,13 +2,16 @@ from typing import Iterable, Optional, Union
 
 import numpy as np
 
+import multipers as mp
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure_integration import clean_sms, zero_out_sms
 from multipers.rank_invariant import rank_from_slicer
-from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
-                                          _available_strategies,
-                                          is_simplextree_multi)
+from multipers.simplex_tree_multi import (
+    SimplexTreeMulti_type,
+    _available_strategies,
+    is_simplextree_multi,
+)
 from multipers.slicer import Slicer_type, is_slicer
 
 
@@ -29,7 +32,7 @@ def signed_measure(
     coordinate_measure: bool = False,
     num_collapses: int = 0,
     clean: Optional[bool] = None,
-    vineyard:bool=False,
+    vineyard: bool = False,
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
@@ -50,7 +53,7 @@ def signed_measure(
        Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
      - verbose:bool, prints c++ logs.
      - expand_collapse: when the input is a simplextree, only expands the complex when computing 1-dimensional slices. Meant to reduce memory footprint at some computational expense.
-     - backend:str  reduces first the filtered complex using an external library, 
+     - backend:str  reduces first the filtered complex using an external library,
      see ``backend`` in :func:`multipers.io.reduce_complex`.
      - grid_conversion: If given, re-evaluates the final signed measure in this grid.
      - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid_conversion.
@@ -67,7 +70,9 @@ def signed_measure(
     if len(degrees) == 1 and degrees[0] is None and degree is not None:
         degrees = [degree]
     if None in degrees:
-        assert len(degrees) == 1 and (invariant is None or invariant == "euler"), "Can only compute one invariant at the time."
+        assert len(degrees) == 1 and (
+            invariant is None or invariant == "euler"
+        ), "Can only compute one invariant at the time."
         invariant = "euler"
     if len(degrees) == 0:
         return []
@@ -96,20 +101,25 @@ def signed_measure(
 
     if mass_default is None:
         mass_default = mass_default
-    elif mass_default == "inf":
-        mass_default = np.array([np.inf] * filtered_complex.num_parameters)
-    elif mass_default == "auto": # this will not work with torch, but we don't want to autodiff this anyway
-        mass_default = np.array(
-            [1.1 * np.max(f) - 0.1 * np.min(f) for f in grid_conversion]
-        )
+    elif isinstance(mass_default, str):
+        if mass_default == "auto":
+            mass_default = np.array(
+                [1.1 * np.max(f) - 0.1 * np.min(f) for f in grid_conversion]
+            )
+        elif mass_default == "inf":
+            mass_default = np.array([np.inf] * filtered_complex.num_parameters)
+        else:
+            raise NotImplementedError
     else:
         mass_default = np.asarray(mass_default)
         assert (
             mass_default.ndim == 1
             and mass_default.shape[0] == filtered_complex.num_parameters
         )
-    
+
     INPUT_ARGS = locals()
+    INPUT_ARGS.pop("filtered_complex")
+
     if not filtered_complex.is_squeezed:
         filtered_complex_ = filtered_complex.grid_squeeze(
             grid_conversion, coordinates=True
@@ -122,15 +132,28 @@ def signed_measure(
         grid_conversion
     ), f"Number of parameter do not coincide. Got (grid_conversion) {len(grid_conversion)} and (filtered complex) {num_parameters}."
 
+    if is_simplextree_multi(filtered_complex_):
+        if num_collapses != 0:
+            filtered_complex_.collapse_edges(num_collapses)
+        if backend is not None:
+            filtered_complex_ = mp.Slicer(filtered_complex_, vineyard=vineyard)
+
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
-        if backend is not None:
+        if backend is not None and not filtered_complex_.is_minpres:
             from multipers.slicer import minimal_presentation
+
             assert (
                 invariant != "euler"
             ), "Euler Characteristic cannot be speed up by a backend"
             # This returns a list of reduced complexes
-            reduced_complex = minimal_presentation(filtered_complex_, degrees=degrees, backend=backend, vineyard = vineyard)
+            reduced_complex = minimal_presentation(
+                filtered_complex_,
+                degrees=degrees,
+                backend=backend,
+                vineyard=vineyard,
+                verbose=verbose,
+            )
             if invariant in ("rank", "rank_invariant"):
                 sms = [
                     rank_from_slicer(
@@ -140,13 +163,10 @@ def signed_measure(
                         grid_shape=tuple(len(g) for g in grid_conversion),
                     )
                     for s, d in zip(reduced_complex, degrees)
-               ]
-            else:
-                sms = [
-                    _signed_measure_from_slicer(s)[0]
-                    for s in reduced_complex
                 ]
-        else: # No backend
+            else:
+                sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
+        else:  # No backend
             if invariant in ("rank", "rank_invariant"):  # TODO Hilbert from slicer
                 degrees = np.asarray(degrees, dtype=int)
                 sms = rank_from_slicer(
@@ -155,7 +175,9 @@ def signed_measure(
                     n_jobs=n_jobs,
                     grid_shape=tuple(len(g) for g in grid_conversion),
                 )
-            elif (invariant is None or "euler" in invariant) and (len(degrees) == 1 and degrees[0] is None):
+            elif (invariant is None or "euler" in invariant) and (
+                len(degrees) == 1 and degrees[0] is None
+            ):
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
                 )
@@ -166,37 +188,24 @@ def signed_measure(
 
                 else:
                     from multipers.slicer import minimal_presentation
-                    backend = "mpfree" ## TODO : make a non-mpfree backend
-                    reduced_complex = minimal_presentation(filtered_complex_, degrees=degrees, backend=backend, vineyard=vineyard)
-                    sms = [_signed_measure_from_slicer(s)[0]
-                        for s in reduced_complex
-                    ]
-        
+
+                    backend = "mpfree"  ## TODO : make a non-mpfree backend
+                    reduced_complex = minimal_presentation(
+                        filtered_complex_,
+                        degrees=degrees,
+                        backend=backend,
+                        vineyard=vineyard,
+                    )
+                    sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
 
     elif is_simplextree_multi(filtered_complex_):
-        if num_collapses != 0:
-            filtered_complex_.collapse_edges(num_collapses)
-        if backend is not None:
-            from multipers.slicer import minimal_presentation
-            reduced_complex = minimal_presentation(filtered_complex_, degrees=degrees, backend=backend, vineyard=vineyard)
-            # this is a list of slicer -> need to go back 
-            INPUT_ARGS.pop('filtered_complex')
-            INPUT_ARGS.pop('degrees')
-            INPUT_ARGS.pop('degree')
-            INPUT_ARGS.pop('backend')
-            plot = INPUT_ARGS.pop('plot') ## plot has to be dealt with later
-            output = [_signed_measure_from_slicer(s, degree=d, **INPUT_ARGS)[0] for s,d in zip(reduced_complex, degrees)]
-            if plot:
-                plot_signed_measures(output)
-            return output
         ## we still have a simplextree here
         if invariant in ["rank_invariant", "rank"]:
             assert (
                 filtered_complex.num_parameters == 2
             ), "Rank invariant only implemented for 2-parameter modules."
             assert not coordinate_measure, "Not implemented"
-            from multipers.simplex_tree_multi import \
-                _rank_signed_measure as smri
+            from multipers.simplex_tree_multi import _rank_signed_measure as smri
 
             sms = smri(
                 filtered_complex_,
@@ -226,8 +235,9 @@ def signed_measure(
                 "hilbert",
                 "hilbert_function",
             ], "Found homological degrees for euler computation."
-            from multipers.simplex_tree_multi import \
-                _hilbert_signed_measure as hilbert_signed_measure
+            from multipers.simplex_tree_multi import (
+                _hilbert_signed_measure as hilbert_signed_measure,
+            )
 
             sms = hilbert_signed_measure(
                 filtered_complex_,
@@ -244,7 +254,12 @@ def signed_measure(
     if clean:
         sms = clean_sms(sms)
     if grid_conversion is not None and not coordinate_measure:
-        sms = sms_in_grid(sms, grid_conversion=grid_conversion, mass_default=mass_default, num_parameters=num_parameters)
+        sms = sms_in_grid(
+            sms,
+            grid_conversion=grid_conversion,
+            mass_default=mass_default,
+            num_parameters=num_parameters,
+        )
 
     if fix_mass_default:
         # TODO : some methods need to use this, this could be optimized
