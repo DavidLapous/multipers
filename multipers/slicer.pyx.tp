@@ -264,6 +264,7 @@ cdef class {{PYTHON_TYPE}}:
           out = {{PYTHON_TYPE[:-3]+"i32"}}()
           out.truc = self.truc.coarsen_on_grid(grid)
           out.filtration_grid = filtration_grid
+          out.minpres_degree = self.minpres_degree
           return out
           {{endif}}
         return self
@@ -385,6 +386,10 @@ def minimal_presentation(
     and returns it as a slicer.
     Only works for mpfree for the moment.
     """
+    if slicer.is_minpres:
+        from warnings import warn
+        warn(f"The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
+        return slicer
     mio._init_external_softwares(requires=[backend])
     if len(degrees)>0:
         from joblib import Parallel, delayed
@@ -468,7 +473,7 @@ def to_blocks(input):
       return input
     from multipers.simplex_tree_multi import is_simplextree_multi
     if is_simplextree_multi(input):
-      return mio.simplextree2scc(input)
+      return input._to_scc()
     if isinstance(input, str) or isinstance(input, os.PathLike):
       return mio.scc_parser(input)
     raise ValueError("Input cannot be converted to blocks.")
