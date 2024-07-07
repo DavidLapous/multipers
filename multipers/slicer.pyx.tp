@@ -57,7 +57,7 @@ cdef class {{PYTHON_TYPE}}:
         return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
     @property
     def is_minpres(self)->bool:
-        return self.minpres_degree>0
+        return self.minpres_degree>=0
 
     def get_ptr(self):
         """
@@ -399,8 +399,6 @@ def minimal_presentation(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
         # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
-    if backend == "":
-        return slicer
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     blocks = to_blocks(slicer)
     if id is None:

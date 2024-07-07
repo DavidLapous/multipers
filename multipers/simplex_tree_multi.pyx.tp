@@ -1744,7 +1744,7 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
     cdef tensor_dtype* container_ptr = &container[0]
     _rank_sm_from_simplextree(simplextree, container_ptr,c_grid_shape,degrees, n_jobs, expand_collapse)
     rank = container_array.reshape(grid_shape_with_degree)
-    rank = tuple(rank_decomposition_by_rectangles(rank_of_degree) for rank_of_degree in rank)
+    rank = tuple(rank_decomposition_by_rectangles(rank_of_degree, threshold = zero_pad) for rank_of_degree in rank)
     out = []
     cdef int num_parameters = simplextree.num_parameters
     for rank_decomposition in rank:
