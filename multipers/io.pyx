@@ -73,6 +73,17 @@ def _path_init(soft:str|os.PathLike):
     elif b:
         pathes[soft] = b
 
+    if pathes[soft] is not None:
+        verbose_arg = "> /dev/null 2>&1"
+        test = os.system(pathes[soft] + " --help " + verbose_arg)
+        if test:
+            from warnings import warn
+            warn(f"""
+            Found external software {soft} at {pathes[soft]}
+            but may not behave well.
+            """)
+
+
 
 pathes = {
         "mpfree":None,
