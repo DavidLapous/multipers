@@ -112,6 +112,7 @@ cdef class {{PYTHON_TYPE}}:
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
         self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
+        self.minpres_degree = -1
     {{else}}
     def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
         """
@@ -138,6 +139,7 @@ cdef class {{PYTHON_TYPE}}:
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
         self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
+        self.minpres_degree = -1
     {{endif}}
     def copy(self):
         """
@@ -145,6 +147,8 @@ cdef class {{PYTHON_TYPE}}:
         """
         copy_ = {{PYTHON_TYPE}}()
         copy_.truc = self.truc
+        copy_.minpres_degree = self.minpres_degree
+        copy_.filtration_grid = self.filtration_grid
         return copy_
     def get_barcode(self):
         """

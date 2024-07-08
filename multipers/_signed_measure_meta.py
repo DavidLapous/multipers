@@ -167,7 +167,7 @@ def signed_measure(
             else:
                 sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
         else:  # No backend
-            if invariant in ("rank", "rank_invariant"):  # TODO Hilbert from slicer
+            if "rank" in invariant:  # TODO Hilbert from slicer
                 degrees = np.asarray(degrees, dtype=int)
                 sms = rank_from_slicer(
                     filtered_complex_,
