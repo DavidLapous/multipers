@@ -15,7 +15,7 @@ x = noisy_annulus(50, 1)
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
 mass_defaults = [None, "auto"]
-strats = [("regular_closest", 20), ("quantile", 20)]
+strats = [("regular_closest", 20), ("quantile", 20), ("regular", 17)]
 
 mio._init_external_softwares()
 mpfree_flag = mio.pathes["mpfree"] is not None
