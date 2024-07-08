@@ -17,7 +17,9 @@
 #ifndef MMA_INTERFACE_MATRIX_H
 #define MMA_INTERFACE_MATRIX_H
 
+#include <algorithm>
 #include <cstddef>
+#include <iostream>
 #include <ostream>
 #include <utility>
 #include <vector>
