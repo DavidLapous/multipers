@@ -82,6 +82,12 @@ value_types = [
     ("double", "np.float64", "f64"),  # necessary
 ]
 
+## True, False necessary
+vineyards_values = [True, False]
+
+## Kcritical Filtrations
+kcritical_options = [True, False]
+
 
 def get_slicer(is_vine, is_kcritical, value_type, column_type):
     ctype, pytype, short_type = value_type
@@ -119,7 +125,7 @@ def get_slicer(is_vine, is_kcritical, value_type, column_type):
 matrix_slicers = [
     get_slicer(is_vine, is_kcritical, value_type, column_type)
     for is_vine, is_kcritical, value_type, column_type in product(
-        [True, False], [True, False], value_types, enumerate(columns_name)
+        vineyards_values, kcritical_options, value_types, enumerate(columns_name)
     )
 ]
 
