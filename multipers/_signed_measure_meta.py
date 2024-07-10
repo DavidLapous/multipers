@@ -152,7 +152,7 @@ def signed_measure(
                 vineyard=vineyard,
                 verbose=verbose,
             )
-            if "rank" in invariant:
+            if invariant is not None and "rank" in invariant:
                 sms = [
                     rank_from_slicer(
                         s,
@@ -167,7 +167,7 @@ def signed_measure(
             else:
                 sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
         else:  # No backend
-            if "rank" in invariant:  # TODO Hilbert from slicer
+            if invariant is not None and "rank" in invariant:
                 degrees = np.asarray(degrees, dtype=int)
                 sms = rank_from_slicer(
                     filtered_complex_,
