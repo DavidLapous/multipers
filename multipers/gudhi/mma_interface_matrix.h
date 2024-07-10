@@ -17,9 +17,7 @@
 #ifndef MMA_INTERFACE_MATRIX_H
 #define MMA_INTERFACE_MATRIX_H
 
-#include <algorithm>
 #include <cstddef>
-#include <iostream>
 #include <ostream>
 #include <utility>
 #include <vector>
@@ -85,12 +83,14 @@ public:
                      const std::vector<std::size_t> *inv)
         : barcode_(barcode->size() == 0 ? nullptr : barcode),
           perm_(barcode->size() == 0 ? nullptr : inv), currPos_(0) {
-      auto &b = barcode_->operator[](currPos_);
-      currBar_.dim = b.dim;
-      currBar_.birth = perm_->operator[](b.birth);
-      currBar_.death = b.death == static_cast<pos_index>(-1)
-                           ? -1
-                           : perm_->operator[](b.death);
+      if (barcode_ != nullptr && perm_ != nullptr) {
+        auto &b = barcode_->operator[](currPos_);
+        currBar_.dim = b.dim;
+        currBar_.birth = perm_->operator[](b.birth);
+        currBar_.death = b.death == static_cast<pos_index>(-1)
+                             ? -1
+                             : perm_->operator[](b.death);
+      }
     }
 
     Barcode_iterator() : barcode_(nullptr), perm_(nullptr), currPos_(0) {}
@@ -131,9 +131,24 @@ public:
   public:
     using iterator = Barcode_iterator;
     Barcode(matrix_type &matrix, const std::vector<std::size_t> *perm)
-        : barcode_(&matrix.get_current_barcode()), perm_(perm) {}
+        : barcode_(&matrix.get_current_barcode()) {
+      if constexpr(Matrix_options::has_vine_update){
+        perm_ = perm;
+      } else {
+        perm_.reserve(perm->size());
+        for (const auto &stuff : *perm)
+          if (stuff != static_cast<std::size_t>(-1))
+            perm_.push_back(stuff);
+      }
+    }
 
-    iterator begin() const { return Barcode_iterator(barcode_, perm_); }
+    iterator begin() const { 
+      if constexpr(Matrix_options::has_vine_update){
+        return Barcode_iterator(barcode_, perm_);
+      }
+      else{
+        return Barcode_iterator(barcode_, &this->perm_); 
+      }}
 
     iterator end() const { return Barcode_iterator(); }
 
@@ -157,7 +172,7 @@ public:
 
   private:
     const typename matrix_type::barcode_type *barcode_;
-    const std::vector<std::size_t> *perm_;
+    typename std::conditional<Matrix_options::has_vine_update, const std::vector<std::size_t>*, std::vector<std::size_t>>::type perm_;
   };
 
   Persistence_backend_matrix() : permutation_(nullptr){};
@@ -204,7 +219,6 @@ public:
                    Persistence_backend_matrix &be2) {
     swap(be1.matrix_, be2.matrix_);
     std::swap(be1.permutation_, be2.permutation_);
-    be1.permutationInv_.swap(be2.permutationInv_);
   }
 
   inline dimension_type get_dimension(pos_index i) {
@@ -230,6 +244,9 @@ public:
   }
 
   inline std::vector<cycle_type> get_representative_cycles(bool update) {
+    // Only used when vineyard, so shrinked permutation i.e. 
+    // without the -1, is permutation as we keep inf values (they can become finite)
+    // cf barcode perm which is copied to remove the -1
     const bool verbose = false;
     if (update) [[likely]]
       matrix_.update_representative_cycles();

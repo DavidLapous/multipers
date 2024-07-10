@@ -289,11 +289,10 @@ public:
                   return true;
                 return one_filtration[i] < one_filtration[j];
               });
-    // BUG : THIS SEGFAULTS, BUT IS A NICE OPTIMIZATION ! 
-    // if constexpr (!PersBackend::is_vine)
-    //   for (std::size_t& i : out_gen_order)
-    //     if (one_filtration[i] == MultiFiltration::T_inf)
-    //       i = static_cast<std::size_t>(-1); // max
+    if constexpr (!PersBackend::is_vine)
+      for (std::size_t& i : out_gen_order)
+        if (one_filtration[i] == MultiFiltration::T_inf)
+          i = static_cast<std::size_t>(-1); // max
     if constexpr (false) {
       std::cout << "[";
       for (auto i : out_gen_order) {
@@ -358,12 +357,27 @@ public:
               const std::vector<typename MultiFiltration::value_type>
                   &filtration_container) {
     auto barcode_indices = persistence.get_barcode();
-    split_barcode out(this->structure.max_dimension() + 1);
+    split_barcode out(this->structure.max_dimension() + 1); // TODO : This doesn't allow for negative dimensions
     const bool verbose = false;
+    const bool debug = false;
     auto inf = MultiFiltration::T_inf;
     for (const auto &bar : barcode_indices) {
       if constexpr (verbose)
         std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
+      if constexpr (debug){
+        if (bar.birth >= filtration_container.size() || bar.birth < 0) {
+          std::cout << "Trying to add an incompatible birth... ";
+          std::cout << bar.birth << std::endl;
+          std::cout << "Death is "<< bar.death << std::endl;
+          std::cout << "Max size is "<< filtration_container.size() << std::endl;
+          continue;
+        }
+        if (bar.dim > static_cast<int>(this->structure.max_dimension())){
+          std::cout << "Incompatible dimension detected... " << bar.dim << std::endl;
+          std::cout << "While max dim is " << this->structure.max_dimension() << std::endl;
+          continue;
+        }
+      }
 
       auto birth_filtration = filtration_container[bar.birth];
       auto death_filtration = inf;
@@ -372,7 +386,6 @@ public:
 
       if constexpr (verbose) {
         std::cout << "BAR: " << bar.birth << "(" << birth_filtration << ")"
-
                   << " --" << bar.death << "(" << death_filtration << ")"
                   << " dim " << bar.dim << std::endl;
       }
