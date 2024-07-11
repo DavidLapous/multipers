@@ -141,7 +141,7 @@ cdef class {{PYTHON_TYPE}}:
         self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.minpres_degree = -1
     {{endif}}
-    def copy(self):
+    def copy(self)->{{PYTHON_TYPE}}:
         """
         Returns a copy of the slicer.
         """
@@ -155,7 +155,7 @@ cdef class {{PYTHON_TYPE}}:
         Returns the current barcode.
         """
         return self.truc.get_barcode()
-    def push_to_line(self, basepoint, direction=None):
+    def push_to_line(self, basepoint, direction=None)->{{PYTHON_TYPE}}:
         """
         Pushes the current slicer to the line
         """
@@ -176,7 +176,7 @@ cdef class {{PYTHON_TYPE}}:
         self.push_to_line(basepoint,direction)
         self.truc.compute_persistence()
         return self.truc.get_barcode()
-    def compute_persistence(self,one_filtration=None):
+    def compute_persistence(self,one_filtration=None)->{{PYTHON_TYPE}}:
         """
         Computes the current persistence, or the persistence
         given by the filtration one_filtration (num_generators,).
@@ -184,6 +184,7 @@ cdef class {{PYTHON_TYPE}}:
         if one_filtration is not None:
             self.truc.set_one_filtration(one_filtration)
         self.truc.compute_persistence()
+        return self
         # return self.truc.get_barcode()
     def get_barcode(self):
         """
@@ -207,7 +208,7 @@ cdef class {{PYTHON_TYPE}}:
     def num_parameters(self):
         return self.truc.num_parameters()
     def info(self):
-        return self.truc.to_str().decode()
+        print(self.truc.to_str().decode())
     def compute_box(self):
         """
         Computes the bounding box of the current persistence.
@@ -216,7 +217,7 @@ cdef class {{PYTHON_TYPE}}:
         cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] a = _ff21cview_{{SHORT}}(&box.first)
         cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] b = _ff21cview_{{SHORT}}(&box.second)
         return np.asarray([a,b])
-    def get_filtrations_values(self):
+    def get_filtrations_values(self)->np.ndarray:
         """
         Returns the current filtration values of the slicer.
         """
@@ -236,29 +237,29 @@ cdef class {{PYTHON_TYPE}}:
         return _vff21cview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
         {{endif}}
 
-    def get_dimensions(self):
+    def get_dimensions(self)-> np.ndarray:
         """
         Returns the ordered dimensions of the generators.
         """
         return np.asarray(self.truc.get_dimensions())
     @property 
-    def dimension(self):
+    def dimension(self)-> int:
         """
         Returns the maximum dimension of the complex.
         """
         return self.get_dimensions()[-1]
-    def prune_above_dimension(self,int max_dimension):
+    def prune_above_dimension(self,int max_dimension)->{{PYTHON_TYPE}}:
         """
         Prunes the generators above a given dimension.
         """
         self.truc.prune_above_dimension(max_dimension)
         return self
-    def get_boundaries(self):
+    def get_boundaries(self)->tuple[tuple]:
         """
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False):
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{PYTHON_TYPE[:-3]+"i32"}}:
         """
         Squeeze the filtration values on a grid.
         """
@@ -293,7 +294,7 @@ cdef class {{PYTHON_TYPE}}:
         id :Optional[str] = None,
         dtype = {{PY_VALUE_TYPE}},
         **minpres_kwargs
-        ):
+        )->Slicer_type:
         """
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         """
@@ -315,7 +316,7 @@ cdef class {{PYTHON_TYPE}}:
 
 
     {{if IS_VINE}}
-    def vine_update(self,basepoint,direction=None):
+    def vine_update(self,basepoint,direction=None)->{{PYTHON_TYPE}}:
         """
         Updates the barcode, on a line, using the vineyard algorithm.
         """
