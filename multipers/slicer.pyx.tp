@@ -52,6 +52,10 @@ cdef class {{PYTHON_TYPE}}:
     cdef {{CTYPE}} truc
     cdef public vector[vector[double]] filtration_grid
     cdef public int minpres_degree ## TODO : maybe change directly the degree in the minpres ?
+
+    def __repr__(self):
+        return f"slicer[type={self.dtype},num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},max_dim={self.dimension}]" 
+
     @property
     def is_squeezed(self)->bool:
         return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
@@ -157,7 +161,8 @@ cdef class {{PYTHON_TYPE}}:
         return self.truc.get_barcode()
     def push_to_line(self, basepoint, direction=None)->{{PYTHON_TYPE}}:
         """
-        Pushes the current slicer to the line
+        Pushes the current slicer to the line defined by a basepoint and an optional direction.
+        If the direction is not provided, it is assumed to be diagonal.
         """
         cdef Line[{{C_VALUE_TYPE}}] line
         if direction is None:
@@ -207,11 +212,12 @@ cdef class {{PYTHON_TYPE}}:
     @property
     def num_parameters(self):
         return self.truc.num_parameters()
+    @property
     def info(self):
         print(self.truc.to_str().decode())
     def compute_box(self):
         """
-        Computes the bounding box of the current persistence.
+        Computes the bounding box of the current multifiltration.
         """
         cdef pair[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}],Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] box = self.truc.get_bounding_box()
         cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] a = _ff21cview_{{SHORT}}(&box.first)
@@ -231,6 +237,9 @@ cdef class {{PYTHON_TYPE}}:
                 **infer_grid_kwargs,
             )
     def get_filtrations(self):
+        """
+        Returns a view of the filtration values, as a list of numpy arrays.
+        """
         {{if IS_KCRITICAL}}
         return _vff2kcview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
         {{else}}
@@ -261,7 +270,14 @@ cdef class {{PYTHON_TYPE}}:
         return tuple(tuple(b) for b in self.truc.get_boundaries())
     def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{PYTHON_TYPE[:-3]+"i32"}}:
         """
-        Squeeze the filtration values on a grid.
+        Coarsen the filtration values on a grid. This is necessary to compute some invariants.
+
+        If the filtration grid is not given, it is infered from filtration values,
+        using the :func:`multipers.grids.compute_grid` function, whose args are
+          - grid_strategy:str see `multipers.grids.available_strategies`. Defaults to exact.
+          - resolution:int if strategy is not exact.
+
+         - inplace:bool if true, does the operation inplace, i.e., doesn't return a copy.
         """
         if force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
@@ -297,6 +313,7 @@ cdef class {{PYTHON_TYPE}}:
         )->Slicer_type:
         """
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
+        See :func:`multipers.slicer.minimal_presentation`.
         """
         new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
         return new_slicer
@@ -401,7 +418,7 @@ def minimal_presentation(
     """
     Computes a minimal presentation of the multifiltered complex given by the slicer,
     and returns it as a slicer.
-    Only works for mpfree for the moment.
+    Backends differents than `mpfree` are unstable.
     """
     if slicer.is_minpres:
         from warnings import warn
@@ -471,6 +488,9 @@ def to_simplextree(s:Slicer_type, max_dim:int=-1):
 
 
 def is_slicer(object input)->bool:
+    """
+    Checks if the input is a slicer. Equivalent (but faster) to `isinstance(input, multipers.slicer.Slicer_type)`.
+    """
     return (False 
         {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
         or isinstance(input, {{PYTHON_TYPE}})
@@ -504,6 +524,9 @@ cdef dict[tuple[bool,bool,type],object] slicer_dict = {
 }
 
 def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col):
+  """
+  Given various parameters, returns the specific slicer type associated with them.
+  """
   slicer = slicer_dict.get((is_vineyard, is_k_critical, np.dtype(dtype), col), None)
   if slicer is None:
     raise ValueError(f"Unimplemented combo for Matrix : {is_vineyard=}, {is_k_critical=}, {dtype=}")
