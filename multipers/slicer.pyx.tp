@@ -241,6 +241,18 @@ cdef class {{PYTHON_TYPE}}:
         Returns the ordered dimensions of the generators.
         """
         return np.asarray(self.truc.get_dimensions())
+    @property 
+    def dimension(self):
+        """
+        Returns the maximum dimension of the complex.
+        """
+        return self.get_dimensions()[-1]
+    def prune_above_dimension(self,int max_dimension):
+        """
+        Prunes the generators above a given dimension.
+        """
+        self.truc.prune_above_dimension(max_dimension)
+        return self
     def get_boundaries(self):
         """
         Returns the boundaries of the generators.
