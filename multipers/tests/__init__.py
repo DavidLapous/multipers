@@ -41,3 +41,17 @@ def assert_sm(*args, exact=True, max_error=1e-5, reg=0.1):
     sms = tuple(args)
     for i in range(len(sms) - 1):
         assert_sm_pair(sms[i], sms[i + 1], exact=exact, max_error=max_error, reg=reg)
+
+
+def random_st(npts=100, num_parameters=2, max_dim=2):
+    import gudhi as gd
+
+    import multipers as mp
+    from multipers.data import noisy_annulus
+
+    x = noisy_annulus(npts, 5, dim=max_dim)
+    st = gd.AlphaComplex(points=x).create_simplex_tree()
+    st = mp.SimplexTreeMulti(st, num_parameters=num_parameters)
+    for p in range(num_parameters):
+        st.fill_lowerstar(np.random.uniform(size=npts + 5), p)
+    return st
