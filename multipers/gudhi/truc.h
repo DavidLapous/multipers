@@ -34,18 +34,17 @@ public:
       if (stuff == 0)
         num_vertices_++;
     }
-    max_dimension_ = generator_dimensions.size() > 0 ? *std::max_element(generator_dimensions.begin(),
-                                         generator_dimensions.end()) : 0;
-
+    max_dimension_ = generator_dimensions.size() > 0
+                         ? *std::max_element(generator_dimensions.begin(),
+                                             generator_dimensions.end())
+                         : 0;
   };
 
   PresentationStructure(const PresentationStructure &other)
       : generators(other.generators),
         generator_dimensions(other.generator_dimensions),
         num_vertices_(other.num_vertices_),
-        max_dimension_(other.max_dimension_) {
-
-  }
+        max_dimension_(other.max_dimension_) {}
   /* PresentationStructure &operator=(const PresentationStructure &other) { */
   /*   generators = other.generators; */
   /*   generator_dimensions = other.generator_dimensions; */
@@ -69,8 +68,7 @@ public:
         stream << truc << ", ";
 
       if (!stuff.empty())
-        stream << "\b"
-               << "\b ";
+        stream << "\b" << "\b ";
 
       stream << "},\n";
     }
@@ -80,8 +78,7 @@ public:
     for (const auto &stuff : structure.generator_dimensions)
       stream << stuff << ", ";
     if (structure.size() > 0) {
-      stream << "\b"
-             << "\b";
+      stream << "\b" << "\b";
     }
     stream << "}\n";
     return stream;
@@ -99,8 +96,16 @@ public:
   }
   inline std::size_t size() const { return generators.size(); };
   unsigned int num_vertices() const { return num_vertices_; };
-  unsigned int max_dimension() const {
-    return max_dimension_;
+  unsigned int max_dimension() const { return max_dimension_; }
+  int prune_above_dimension(int dim) {
+    int idx = std::lower_bound(generator_dimensions.begin(),
+                               generator_dimensions.end(), dim + 1) -
+              generator_dimensions.begin();
+    generators.resize(idx);
+    generator_dimensions.resize(idx);
+    max_dimension_ =
+        generator_dimensions.size() ? generator_dimensions.back() : -1;
+    return idx;
   }
 
 private:
@@ -144,8 +149,7 @@ public:
         stream << truc << ", ";
 
       if (!stuff.empty())
-        stream << "\b"
-               << "\b ";
+        stream << "\b" << "\b ";
 
       stream << "},\n";
     }
@@ -167,14 +171,15 @@ public:
   inline unsigned int num_vertices() { return num_vertices_; }
   inline unsigned int max_dimension() const { return max_dimension_; }
 
+  int prune_above_dimension(int dim) { throw; }
+
 private:
   std::vector<std::vector<unsigned int>> boundaries;
   unsigned int num_vertices_;
   unsigned int max_dimension_;
 };
 
-template <class PersBackend, class Structure,
-          class MultiFiltration>
+template <class PersBackend, class Structure, class MultiFiltration>
 class Truc {
 public:
   using Filtration_value = MultiFiltration;
@@ -234,7 +239,11 @@ public:
   };
 
   inline std::size_t num_generators() const { return structure.size(); }
-  inline std::size_t num_parameters() const { return num_generators() == 0 ? 0 : this->generator_filtration_values[0].num_parameters(); }
+  inline std::size_t num_parameters() const {
+    return num_generators() == 0
+               ? 0
+               : this->generator_filtration_values[0].num_parameters();
+  }
 
   template <class SubFiltration, bool original_order = true>
   inline void push_to_out(
@@ -273,7 +282,7 @@ public:
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
       std::vector<std::size_t>
-          &out_gen_order)  { // needed ftm as PersBackend only points there
+          &out_gen_order) { // needed ftm as PersBackend only points there
 
     if (one_filtration.size() != this->num_generators()) {
       throw;
@@ -289,10 +298,13 @@ public:
                   return true;
                 return one_filtration[i] < one_filtration[j];
               });
-    if constexpr (!PersBackend::is_vine)
-      for (std::size_t& i : out_gen_order)
-        if (one_filtration[i] == MultiFiltration::T_inf)
-          i = static_cast<std::size_t>(-1); // max
+    if constexpr (!PersBackend::is_vine) {
+      for (std::size_t &i : out_gen_order)
+        if (one_filtration[i] == MultiFiltration::T_inf) {
+          // i = static_cast<std::size_t>(-1); // max
+          i = std::numeric_limits<std::size_t>::max();
+        }
+    }
     if constexpr (false) {
       std::cout << "[";
       for (auto i : out_gen_order) {
@@ -321,7 +333,7 @@ public:
   inline void vineyard_update(
       PersBackend &persistence,
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
-      std::vector<std::size_t> &generator_order) const  {
+      std::vector<std::size_t> &generator_order) const {
     const bool verbose = false;
     /* static_assert(PersBackend::has_vine_update); */
     // the first false is to get the generator order
@@ -357,24 +369,28 @@ public:
               const std::vector<typename MultiFiltration::value_type>
                   &filtration_container) {
     auto barcode_indices = persistence.get_barcode();
-    split_barcode out(this->structure.max_dimension() + 1); // TODO : This doesn't allow for negative dimensions
+    split_barcode out(this->structure.max_dimension() +
+                      1); // TODO : This doesn't allow for negative dimensions
     const bool verbose = false;
     const bool debug = false;
     auto inf = MultiFiltration::T_inf;
     for (const auto &bar : barcode_indices) {
       if constexpr (verbose)
         std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
-      if constexpr (debug){
+      if constexpr (debug) {
         if (bar.birth >= filtration_container.size() || bar.birth < 0) {
           std::cout << "Trying to add an incompatible birth... ";
           std::cout << bar.birth << std::endl;
-          std::cout << "Death is "<< bar.death << std::endl;
-          std::cout << "Max size is "<< filtration_container.size() << std::endl;
+          std::cout << "Death is " << bar.death << std::endl;
+          std::cout << "Max size is " << filtration_container.size()
+                    << std::endl;
           continue;
         }
-        if (bar.dim > static_cast<int>(this->structure.max_dimension())){
-          std::cout << "Incompatible dimension detected... " << bar.dim << std::endl;
-          std::cout << "While max dim is " << this->structure.max_dimension() << std::endl;
+        if (bar.dim > static_cast<int>(this->structure.max_dimension())) {
+          std::cout << "Incompatible dimension detected... " << bar.dim
+                    << std::endl;
+          std::cout << "While max dim is " << this->structure.max_dimension()
+                    << std::endl;
           continue;
         }
       }
@@ -413,16 +429,18 @@ public:
       return out;
     auto idx = 0u;
     value_type inf = std::numeric_limits<value_type>::has_infinity
-                   ? std::numeric_limits<value_type>::infinity()
-                   : std::numeric_limits<value_type>::max();
+                         ? std::numeric_limits<value_type>::infinity()
+                         : std::numeric_limits<value_type>::max();
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
       if (bar.death == static_cast<typename PersBackend::pos_index>(-1))
         death_filtration = inf;
       else
-        death_filtration = static_cast<value_type>(filtration_container[bar.death]);
-      birth_filtration = static_cast<value_type>(filtration_container[bar.birth]);
+        death_filtration =
+            static_cast<value_type>(filtration_container[bar.death]);
+      birth_filtration =
+          static_cast<value_type>(filtration_container[bar.birth]);
       if constexpr (verbose) {
         std::cout << "PAIRING : " << bar.birth << " / " << bar.death << " dim "
                   << bar.dim << std::endl;
@@ -453,16 +471,18 @@ public:
       return out;
     auto idx = 0u;
     value_type inf = std::numeric_limits<value_type>::has_infinity
-                   ? std::numeric_limits<value_type>::infinity()
-                   : std::numeric_limits<value_type>::max();
+                         ? std::numeric_limits<value_type>::infinity()
+                         : std::numeric_limits<value_type>::max();
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
       if (bar.death == static_cast<typename PersBackend::pos_index>(-1))
         death_filtration = inf;
       else
-        death_filtration = static_cast<value_type>(filtration_container[bar.death]);
-      birth_filtration = static_cast<value_type>(filtration_container[bar.birth]);
+        death_filtration =
+            static_cast<value_type>(filtration_container[bar.death]);
+      birth_filtration =
+          static_cast<value_type>(filtration_container[bar.birth]);
       if constexpr (verbose) {
         std::cout << "PAIRING : " << bar.birth << " / " << bar.death << " dim "
                   << bar.dim << std::endl;
@@ -513,8 +533,7 @@ public:
     stream << "{";
     for (const auto &stuff : truc.filtration_container)
       stream << stuff << ", ";
-    stream << "\b"
-           << "\b";
+    stream << "\b" << "\b";
     stream << "}" << std::endl;
 
     stream << "--- Filtrations \n";
@@ -539,7 +558,7 @@ public:
     using OC = typename MultiFiltration::OneCritical;
     // assert(!generator_filtration_values.empty());
     OC a = OC::inf();
-    OC b = -1*a;
+    OC b = -1 * a;
     for (const auto &filtration_value : generator_filtration_values) {
       if constexpr (MultiFiltration::is_multi_critical) {
         a.pull_to(filtration_value.factorize_below());
@@ -565,12 +584,12 @@ public:
       return out;
     } else {
       return generator_filtration_values; // copy not necessary for Onecritical
-    }                                     // (could return const&)
+    } // (could return const&)
   }
-  std::vector<MultiFiltration>& get_filtrations() {
+  std::vector<MultiFiltration> &get_filtrations() {
     return generator_filtration_values;
   }
-  const std::vector<MultiFiltration>& get_filtrations() const {
+  const std::vector<MultiFiltration> &get_filtrations() const {
     return generator_filtration_values;
   }
   const std::vector<int> get_dimensions() const {
@@ -581,6 +600,14 @@ public:
     }
     return out;
   }
+
+  inline void prune_above_dimension(int max_dim) {
+    int idx = structure.prune_above_dimension(max_dim);
+    generator_filtration_values.resize(idx);
+    generator_order.resize(idx);
+    filtration_container.resize(idx); 
+  }
+
   const std::vector<std::vector<unsigned int>> get_boundaries() {
     std::size_t n = this->num_generators();
     std::vector<std::vector<unsigned int>> out(n);
@@ -614,34 +641,37 @@ public:
   }
 
   // dim, num_cycle_of_dim, num_faces_in_cycle, vertices_in_face
-  std::vector<std::vector<std::vector<std::vector< unsigned int >>>>
-  get_representative_cycles(bool update = true, const std::set<int>& dims={}) {
+  std::vector<std::vector<std::vector<std::vector<unsigned int>>>>
+  get_representative_cycles(bool update = true,
+                            const std::set<int> &dims = {}) {
     // iterable iterable simplex key
     auto cycles_key = persistence.get_representative_cycles(update);
     auto num_cycles = cycles_key.size();
-    std::vector<std::vector<std::vector<std::vector< unsigned int >>>> out(structure.max_dimension()+1);
-    for (auto& cycles_of_dim : out)
+    std::vector<std::vector<std::vector<std::vector<unsigned int>>>> out(
+        structure.max_dimension() + 1);
+    for (auto &cycles_of_dim : out)
       cycles_of_dim.reserve(num_cycles);
-    for (auto& cycle : cycles_key) {
-      if (structure.dimension(cycle[0]) == 0 && (dims.size() == 0 || dims.contains(0))){
-        out[0].push_back({{static_cast<unsigned int >(cycle[0])}});
+    for (auto &cycle : cycles_key) {
+      if (structure.dimension(cycle[0]) == 0 &&
+          (dims.size() == 0 || dims.contains(0))) {
+        out[0].push_back({{static_cast<unsigned int>(cycle[0])}});
         continue;
       }
-      int cycle_dim = structure.dimension(cycle[0]); // all faces have the same dim
+      int cycle_dim =
+          structure.dimension(cycle[0]); // all faces have the same dim
       // if (!(dims.size() == 0 || dims.contains(cycle_dim)))
       //   continue;
       std::vector<std::vector<unsigned int>> cycle_faces(cycle.size());
-      for (std::size_t i=0; i<cycle_faces.size(); ++i ){
-        const auto& B = structure[cycle[i]];
+      for (std::size_t i = 0; i < cycle_faces.size(); ++i) {
+        const auto &B = structure[cycle[i]];
         cycle_faces[i].resize(B.size());
-        for (std::size_t j=0; j < B.size(); ++j){
+        for (std::size_t j = 0; j < B.size(); ++j) {
           cycle_faces[i][j] = static_cast<unsigned int>(B[j]);
         }
       }
       out[cycle_dim].push_back(cycle_faces);
     }
     return out;
-
   }
   const std::vector<std::size_t> get_current_order() const {
     return generator_order;

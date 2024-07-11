@@ -18,6 +18,7 @@
 #define MMA_INTERFACE_MATRIX_H
 
 #include <cstddef>
+#include <limits>
 #include <ostream>
 #include <utility>
 #include <vector>
@@ -112,6 +113,7 @@ public:
     const bar &dereference() const { return currBar_; }
 
     void increment() {
+      constexpr const bool debug = false;
       ++currPos_;
       if (currPos_ == barcode_->size()) {
         barcode_ = nullptr;
@@ -121,6 +123,11 @@ public:
         auto &b = barcode_->operator[](currPos_);
         currBar_.dim = b.dim;
         currBar_.birth = perm_->operator[](b.birth);
+        if (debug && currBar_.birth > std::numeric_limits<decltype(currBar_.birth)>::max()/2){
+          std::cout <<currBar_ << std::endl;
+          std::cout <<"while "  <<  b.birth;
+          std::cout <<"  "<<  perm_->size();
+        }
         currBar_.death = b.death == static_cast<pos_index>(-1)
                              ? -1
                              : perm_->operator[](b.death);
@@ -132,13 +139,18 @@ public:
     using iterator = Barcode_iterator;
     Barcode(matrix_type &matrix, const std::vector<std::size_t> *perm)
         : barcode_(&matrix.get_current_barcode()) {
+      const bool debug = false;
       if constexpr(Matrix_options::has_vine_update){
         perm_ = perm;
       } else {
         perm_.reserve(perm->size());
         for (const auto &stuff : *perm)
-          if (stuff != static_cast<std::size_t>(-1))
+          if (stuff < perm->size()) // number of generators
             perm_.push_back(stuff);
+      }
+      if constexpr (debug) {
+        std::cout << "Built matrix of size " << matrix.get_number_of_columns() << " / " << perm->size() 
+                  << std::endl;
       }
     }
 
@@ -187,12 +199,12 @@ public:
     std::vector<std::size_t> boundary_container;
     std::size_t c = 0;
     for (std::size_t i : *permutation_) {
-      if (i == static_cast<std::size_t>(-1))
+      if (i >= boundaries.size())
         { c++;continue; }
       permutationInv[i] = c++;
       boundary_container.resize(boundaries[i].size());
       if constexpr (verbose)
-        std::cout << i << "/" << permutation_->size() << " dimension "
+        std::cout << i << "/" << permutation_->size() << " c= "<< c << " dimension "
                   << boundaries.dimension(i) << "..." << std::endl
                   << std::flush;
       for (std::size_t j = 0; j < boundaries[i].size(); ++j) {
@@ -242,6 +254,7 @@ public:
     stream << "]\n";
     return stream;
   }
+
 
   inline std::vector<cycle_type> get_representative_cycles(bool update) {
     // Only used when vineyard, so shrinked permutation i.e. 
