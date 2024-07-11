@@ -1,5 +1,18 @@
+## temp/cache files
 *.DS_Store
+.vscode
 __pycache__
+*.scc
+*.dmp
+_*.pkl
+.ipynb_checkpoints
+.pytest_cache
+.virtual_documents
+
+# bear
+compile_commands.json
+
+## build files
 build
 dist
 *.egg-info
@@ -7,17 +20,22 @@ dist
 *.so
 *.o
 *.whl
-.vscode
+
+## docs folders
+docs/_build/
+docs/source/
+
+## templated files
+multipers/slicer.pyx
+multipers/slicer.pxd
+multipers/simplex_tree_multi.pyx
+multipers/mma_structures.pyx
+multipers/filtration_conversions.pxd
+
+## Hidden files
 .*
+
+## Notebook-generated
 *.png
 *.svg
 *.csv
-build
-dist
-.ipynb_checkpoints
-.pytest_cache
-.virtual_documents
-*.egg-info
-*.scc
-*.dmp
-_*.pkl
