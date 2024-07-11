@@ -213,6 +213,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             :func:`compute_persistence` on it even if you had already computed it in the original.
         """
         stree = SimplexTreeMulti_{{FSHORT}}(self,num_parameters=self.num_parameters)
+        stree.filtration_grid = self.filtration_grid
+        stree._is_function_simplextree  = self._is_function_simplextree
         return stree
 
     def __deepcopy__(self):
