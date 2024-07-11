@@ -7,11 +7,9 @@ from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure_integration import clean_sms, zero_out_sms
 from multipers.rank_invariant import rank_from_slicer
-from multipers.simplex_tree_multi import (
-    SimplexTreeMulti_type,
-    _available_strategies,
-    is_simplextree_multi,
-)
+from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
+                                          _available_strategies,
+                                          is_simplextree_multi)
 from multipers.slicer import Slicer_type, is_slicer
 
 
@@ -119,20 +117,40 @@ def signed_measure(
     # INPUT_ARGS.pop("filtered_complex")
 
     if not filtered_complex.is_squeezed:
+        if verbose:
+            print("Coarsening complex...", end="")
         filtered_complex_ = filtered_complex.grid_squeeze(
-            grid_conversion, coordinates=True
+            grid_conversion
         )
+        if verbose:
+            print("Done.")
     else:
-        filtered_complex_ = filtered_complex
+        filtered_complex_ = filtered_complex.copy()
+
+    
+    # assert filtered_complex_.is_squeezed
+    if None not in degrees:
+        max_degree = np.max(degrees) + 1 
+        if verbose:
+            print(f"Pruning simplicies up to {max_degree}...", end="")
+        if filtered_complex_.dimension > max_degree:
+            filtered_complex_.prune_above_dimension(max_degree)
+        if verbose:
+            print("Done.")
 
     num_parameters = filtered_complex.num_parameters
     assert num_parameters == len(
         grid_conversion
     ), f"Number of parameter do not coincide. Got (grid_conversion) {len(grid_conversion)} and (filtered complex) {num_parameters}."
 
+
     if is_simplextree_multi(filtered_complex_):
         if num_collapses != 0:
+            if verbose:
+                print("Collapsing edges...", end="")
             filtered_complex_.collapse_edges(num_collapses)
+            if verbose:
+                print("Done.")
         if backend is not None:
             filtered_complex_ = mp.Slicer(filtered_complex_, vineyard=vineyard)
 
@@ -145,6 +163,8 @@ def signed_measure(
                 invariant != "euler"
             ), "Euler Characteristic cannot be speed up by a backend"
             # This returns a list of reduced complexes
+            if verbose:
+                print("Reducing complex...", end="")
             reduced_complex = minimal_presentation(
                 filtered_complex_,
                 degrees=degrees,
@@ -152,13 +172,15 @@ def signed_measure(
                 vineyard=vineyard,
                 verbose=verbose,
             )
+            if verbose:
+                print("Done.")
             if invariant is not None and "rank" in invariant:
                 sms = [
                     rank_from_slicer(
                         s,
                         degrees=[1],
                         n_jobs=n_jobs,
-                        grid_shape=tuple(len(g) for g in grid_conversion),
+                        # grid_shape=tuple(len(g) for g in grid_conversion),
                         zero_pad=fix_mass_default,
                     )[0]
                     for s, d in zip(reduced_complex, degrees)
@@ -174,7 +196,7 @@ def signed_measure(
                     degrees=degrees,
                     n_jobs=n_jobs,
                     zero_pad=fix_mass_default,
-                    grid_shape=tuple(len(g) for g in grid_conversion),
+                    # grid_shape=tuple(len(g) for g in grid_conversion),
                 )
                 fix_mass_default = False
             elif filtered_complex_.is_minpres:
@@ -191,12 +213,16 @@ def signed_measure(
                 from multipers.slicer import minimal_presentation
 
                 backend = "mpfree"  ## TODO : make a non-mpfree backend
+                if verbose:
+                    print("Reducing complex...", end="")
                 reduced_complex = minimal_presentation(
                     filtered_complex_,
                     degrees=degrees,
                     backend=backend,
                     vineyard=vineyard,
                 )
+                if verbose:
+                    print("Done.")
                 sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
 
     elif is_simplextree_multi(filtered_complex_):
@@ -206,7 +232,8 @@ def signed_measure(
                 num_parameters == 2
             ), "Rank invariant only implemented for 2-parameter modules."
             assert not coordinate_measure, "Not implemented"
-            from multipers.simplex_tree_multi import _rank_signed_measure as smri
+            from multipers.simplex_tree_multi import \
+                _rank_signed_measure as smri
 
             sms = smri(
                 filtered_complex_,
@@ -236,9 +263,8 @@ def signed_measure(
                 "hilbert",
                 "hilbert_function",
             ], "Found homological degrees for euler computation."
-            from multipers.simplex_tree_multi import (
-                _hilbert_signed_measure as hilbert_signed_measure,
-            )
+            from multipers.simplex_tree_multi import \
+                _hilbert_signed_measure as hilbert_signed_measure
 
             sms = hilbert_signed_measure(
                 filtered_complex_,
@@ -253,18 +279,30 @@ def signed_measure(
         raise ValueError("Filtered complex has to be a SimplexTree or a Slicer.")
 
     if clean:
+        if verbose:
+            print("Cleaning measure...", end="")
         sms = clean_sms(sms)
+        if verbose:
+            print("Done.")
     if grid_conversion is not None and not coordinate_measure:
+        if verbose:
+            print("Pushing back the measure to the grid...", end="")
         sms = sms_in_grid(
             sms,
             grid_conversion=grid_conversion,
             mass_default=mass_default,
             num_parameters=num_parameters,
         )
+        if verbose:
+            print("Done.")
 
     if fix_mass_default:
         # TODO : some methods need to use this, this could be optimized
+        if verbose:
+            print("Seems that fixing mass default is necessary...", end="")
         sms = zero_out_sms(sms, mass_default=mass_default)
+        if verbose:
+            print("Done.")
     if plot:
         plot_signed_measures(sms)
     return sms

@@ -109,6 +109,7 @@ def Slicer(
     dtype=np.float64,
     is_kcritical: bool = False,
     column_type: str = "INTRUSIVE_SET",
+    max_dim: Optional[int] = None,
 ) -> mps.Slicer_type:
     """
     Given a simplextree or blocks (a.k.a scc for python),
@@ -134,8 +135,15 @@ def Slicer(
     The corresponding slicer.
     """
     if mps.is_slicer(st):
+        max_dim_idx = (
+            None
+            if max_dim is None
+            else np.searchsorted(st.get_dimensions(), max_dim + 1)
+        )
         slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, column_type)(
-            st.get_boundaries(), st.get_dimensions(), st.get_filtrations()
+            st.get_boundaries()[slice(None, max_dim_idx)],
+            st.get_dimensions()[slice(None, max_dim_idx)],
+            st.get_filtrations()[slice(None, max_dim_idx)],
         )
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
@@ -152,6 +160,8 @@ You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
         filtration_grid = None
+        if max_dim is not None:
+            st.prune_above_dimension(max_dim)
         if is_simplextree_multi(st):
             blocks = st._to_scc()
             if st.is_squeezed:
