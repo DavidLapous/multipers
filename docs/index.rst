@@ -24,7 +24,7 @@ Then, one can define a two-parameter grid (filtration) of topological spaces (on
 The filtration :math:`X`, indexed over a radius parameter :math:`r` and a codensity parameter :math:`s` is defined as follows:
 
 .. math::
-  X_{r,s} = \bigcup_{x \in P, , \mathrm{density}(x) \ge s} B(x,r) = { x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r }
+  X_{r,s} = \bigcup_{x \in P, \, \mathrm{density}(x) \ge s} B(x,r) = \{ x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r \}
 
 The green shape on the left represents the lifetime of the biggest annulus. On the right, each cycle appearing on the left gets a colored shape (the color is only a label), and the shape of this colored shape represents the lifetime of this cycle in this two-parameter grid.
 
@@ -94,9 +94,10 @@ Please cite `multipers` if using it in a research paper. You can use the key
   }
 
 For theoretical references,
- - Module Approximation :cite:p:`mma`
- - Module Decomposition Representations :cite:p:`mma_vect`
- - Signed Barcodes as Signed Measures :cite:p:`sb_as_sm`
+ - Module Approximation :cite:p:`loiseauxFastStableEfficient2022`
+ - Module Decomposition Representations :cite:p:`loiseauxFrameworkFastStable2023`
+ - Signed Barcodes as Signed Measures :cite:p:`loiseauxStableVectorizationMultiparameter2023`
+ - Differentiability and Multiparameter Persistence :cite:p:`scoccolaDifferentiabilityOptimizationMultiparameter2024`
 
 .. toctree::
   :caption: Introduction
