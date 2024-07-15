@@ -232,9 +232,18 @@ inline void compute_2d_rank_invariant_of_elbow(
     slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0)
         [[unlikely]] // this is dangerous, assumes it starts at 0 0
+    {
+      // TODO : This is a good optimization but needs a patch on PersistenceMatrix
+      // std::vector<bool> degrees_index(slicer.get_dimensions().back()+1, false);
+      // for (const auto &degree : degrees) {
+      //   if (degree <= slicer.get_dimensions())
+      //     degrees_index[degree] = true;
+      // }
+      // slicer.compute_persistence(degrees_index);
       slicer.compute_persistence();
-    else
+    } else {
       slicer.vineyard_update();
+    }
     barcodes = slicer.get_barcode();
   } else {
     PersBackend pers =

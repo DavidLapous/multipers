@@ -282,7 +282,8 @@ public:
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
       std::vector<std::size_t>
-          &out_gen_order) { // needed ftm as PersBackend only points there
+          &out_gen_order
+      ) { // needed ftm as PersBackend only points there
 
     if (one_filtration.size() != this->num_generators()) {
       throw;
@@ -301,7 +302,11 @@ public:
     if constexpr (!PersBackend::is_vine) {
       for (std::size_t &i : out_gen_order)
         if (one_filtration[i] == MultiFiltration::T_inf) {
-          // i = static_cast<std::size_t>(-1); // max
+          // TODO : later 
+          // int d = structure.dimension(i);
+          // d = d == 0 ? 1 : 0;
+          // if (degrees.size()>d || degrees[d] || degrees[d-1])
+          //   continue;
           i = std::numeric_limits<std::size_t>::max();
         }
     }
@@ -324,9 +329,9 @@ public:
         out_gen_order); // FIXME : PersBackend is not const on struct
   }
 
-  inline void compute_persistence() {
+  inline void compute_persistence(const std::vector<bool>& degrees = {}) {
     this->persistence = this->compute_persistence_out(
-        this->filtration_container, this->generator_order);
+        this->filtration_container, this->generator_order, degrees);
   };
 
   // TODO : static ?

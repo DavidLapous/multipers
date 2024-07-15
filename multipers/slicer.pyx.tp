@@ -188,6 +188,11 @@ cdef class {{PYTHON_TYPE}}:
         """
         if one_filtration is not None:
             self.truc.set_one_filtration(one_filtration)
+        # TODO: Later
+        # if len(degrees)>0:
+        #     self.truc.compute_persistence(degrees)
+        # else:
+        #     self.truc.compute_persistence()
         self.truc.compute_persistence()
         return self
         # return self.truc.get_barcode()
