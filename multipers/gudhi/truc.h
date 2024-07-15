@@ -329,9 +329,10 @@ public:
         out_gen_order); // FIXME : PersBackend is not const on struct
   }
 
-  inline void compute_persistence(const std::vector<bool>& degrees = {}) {
+  inline void compute_persistence() {
     this->persistence = this->compute_persistence_out(
-        this->filtration_container, this->generator_order, degrees);
+        // this->filtration_container, this->generator_order, degrees); // TODO : later
+        this->filtration_container, this->generator_order);
   };
 
   // TODO : static ?
