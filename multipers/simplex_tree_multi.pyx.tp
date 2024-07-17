@@ -158,7 +158,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
           {{else}}
       return <{{CTYPE}}>(np.iinfo({{PYTYPE}}).max)
           {{endif}}
-    @staticmethod
+    @property
     def is_kcritical()->bool:
       return {{is_kcritical}}
     # The real cython constructor
