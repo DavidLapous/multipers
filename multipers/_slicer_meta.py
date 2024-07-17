@@ -6,6 +6,7 @@ import numpy as np
 import multipers.io as mio
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
+from multipers.slicer import _column_type
 
 
 ## TODO : maybe optimize this with cython
@@ -81,7 +82,7 @@ def _slicer_from_blocks(
     vineyard: bool,
     is_kcritical: bool,
     dtype: type,
-    col: str,
+    col: _column_type,
 ):
     boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
         blocks,
@@ -108,7 +109,7 @@ def Slicer(
     reduce_backend: Optional[str] = None,
     dtype=np.float64,
     is_kcritical: bool = False,
-    column_type: str = "INTRUSIVE_SET",
+    column_type: _column_type = "INTRUSIVE_SET",
     max_dim: Optional[int] = None,
 ) -> mps.Slicer_type:
     """

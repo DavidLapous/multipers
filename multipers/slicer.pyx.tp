@@ -36,6 +36,21 @@ available_slicers = tuple((
   {{PYTHON_TYPE}},
 {{endfor}}
 ))
+
+global available_columns
+available_columns = tuple((
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+  "{{COL}}",
+{{endfor}}
+))
+
+global column_type
+_column_type = Literal[
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+  "{{COL}}",
+{{endfor}}
+]
+
 global _slicers_type
 Slicer_type = Union[
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
