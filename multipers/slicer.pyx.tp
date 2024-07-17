@@ -426,7 +426,7 @@ def slicer2blocks(slicer, int degree = -1, bool reverse=True):
 def minimal_presentation(
         slicer,
         int degree = 1, 
-        list[int] degrees=[],
+        degrees:Iterable[int]=[],
         str backend:Literal["mpfree", "2pac", ""]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard=True, 
