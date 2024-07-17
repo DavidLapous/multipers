@@ -199,7 +199,7 @@ def plot_surface(
             ax=ax,
         )
         cbar.set_ticks(ticks=bounds, labels=bounds)
-        return
+        return im
     im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
     return im
 
