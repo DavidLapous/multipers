@@ -159,7 +159,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
       return <{{CTYPE}}>(np.iinfo({{PYTYPE}}).max)
           {{endif}}
     @property
-    def is_kcritical()->bool:
+    def is_kcritical(self)->bool:
       return {{is_kcritical}}
     # The real cython constructor
     def __cinit__(self, other = None, int num_parameters=2, 
