@@ -193,7 +193,7 @@ Returning the trivial module."""
             blocks = mio.reduce_complex(mio.input_path+id, dimension=input.dimension-degree, backend=minpres)
         else:
             pass
-        input = multipers.Slicer(blocks,backend=slicer_backend, dtype = input.dtype, is_kcritical = input.is_kcritical())
+        input = multipers.Slicer(blocks,backend=slicer_backend, dtype = input.dtype, is_kcritical = input.is_kcritical)
     assert is_slicer(input), "First argument must be a simplextree or a slicer !"
     return module_approximation_from_slicer(
             slicer=input,
