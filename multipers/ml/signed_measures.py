@@ -79,7 +79,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
         enforce_null_mass: bool = False,
         flatten=True,
-        backend="multipers",
+        backend:Optional[str]=None,
     ):
         super().__init__()
         self.degrees = degrees
@@ -240,6 +240,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                     mass_default=self._default_mass_location,
                     invariant="euler",
                     thread_id=thread_id,
+                    backend=self.backend,
                 )[0]
                 if None in self.degrees
                 else []
@@ -253,7 +254,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 )  # no need to compute homology beyond this
             signed_measures_pers = (
                 mp.signed_measure(
-                    simplextree=st,
+                    st,
                     degrees=int_degrees,
                     mass_default=self._default_mass_location,
                     plot=self.plot,
@@ -274,12 +275,13 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 )  # no need to compute homology beyond this
             signed_measures_rank = (
                 mp.signed_measure(
-                    simplextree=st,
+                    st,
                     degrees=self.rank_degrees,
                     mass_default=self._default_mass_location,
                     plot=self.plot,
                     invariant="rank",
                     thread_id=thread_id,
+                    backend=self.backend,
                 )
                 if len(self.rank_degrees) > 0
                 else []

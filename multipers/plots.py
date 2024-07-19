@@ -60,6 +60,7 @@ def _plot_signed_measure_4(
     x_smoothing: float = 1,
     area_alpha: bool = True,
     threshold=(np.inf, np.inf),
+    alpha=None,
     **plt_kwargs,  # ignored ftm
 ):
     # compute the maximal rectangle area
@@ -86,9 +87,14 @@ def _plot_signed_measure_4(
                         rectangle[3],
                     ],
                     weight=weight,
-                    alpha=(rectangle[2] / x_smoothing - rectangle[0])
-                    * (rectangle[3] - rectangle[1])
-                    / alpha_rescaling,
+                    alpha=(
+                        (rectangle[2] / x_smoothing - rectangle[0])
+                        * (rectangle[3] - rectangle[1])
+                        / alpha_rescaling
+                        if alpha is None
+                        else alpha
+                    ),
+                    **plt_kwargs,
                 )
             else:
                 _plot_rectangle(
@@ -99,7 +105,8 @@ def _plot_signed_measure_4(
                         rectangle[3],
                     ],
                     weight=weight,
-                    alpha=1,
+                    alpha=1 if alpha is None else alpha,
+                    **plt_kwargs,
                 )
 
 
@@ -192,7 +199,7 @@ def plot_surface(
             ax=ax,
         )
         cbar.set_ticks(ticks=bounds, labels=bounds)
-        return
+        return im
     im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
     return im
 
