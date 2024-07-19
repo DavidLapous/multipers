@@ -14,7 +14,7 @@ with open("_slicer_names.pkl", "rb") as f:
 
 }}
 
-from multipers.simplex_tree_multi import SimplexTreeMulti
+from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 import multipers
 from typing import Optional,Literal
 import multipers.io as mio
@@ -470,7 +470,7 @@ def minimal_presentation(
     return new_slicer
 
 
-def to_simplextree(s:Slicer_type, max_dim:int=-1):
+def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
     """
     Turns a --simplicial-- slicer into a simplextree.
 
