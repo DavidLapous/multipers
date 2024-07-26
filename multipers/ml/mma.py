@@ -140,7 +140,7 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
 class MMAFormatter(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        degrees: list = [0, 1],
+        degrees: Optional[list[int]] = None,
         axis=None,
         verbose: bool = False,
         normalize: bool = False,
@@ -156,6 +156,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         self._has_axis = None
         self._num_axis = 0
         self.degrees = degrees
+        self._degrees = None
         self.normalize = normalize
         self._num_parameters = None
         self.weights = weights
@@ -334,6 +335,16 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         )
         return coordinates, new_resolution
 
+    def _infer_degrees(self, X):
+        if self.degrees is None:
+            max_degrees = [x[ax].max_degree
+                        for i, ax in enumerate(self._axis)
+                        for x in X
+                ] + [0]
+            self._degrees = np.arange(np.max(max_degrees) + 1)
+        else:
+            self._degrees = self.degrees
+        
     def fit(self, X_in, y=None):
         X = self._maybe_from_dump(X_in)
         if len(X) == 0:
@@ -358,15 +369,16 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             if self.axis == -1
             else [self.axis]
         )
+        self._infer_degrees(X)
 
         self._num_parameters = self._infer_num_parameters(X, ax=self._axis[0])
         if self.normalize:
             # print(self._axis)
             self._module_bounds = self._infer_bounds(
-                X, self.degrees, self._axis, self.quantiles
+                X, self._degrees, self._axis, self.quantiles
             )
         else:
-            m = np.zeros((self._num_axis, len(self.degrees), self._num_parameters))
+            m = np.zeros((self._num_axis, len(self._degrees), self._num_parameters))
             M = m + 1
             self._module_bounds = (m, M)
         assert self._num_parameters == self._module_bounds[0].shape[-1]
@@ -399,7 +411,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             print("---- Module size :")
             for ax in self._axis:
                 print(f"- Axis {ax}")
-                for degree in self.degrees:
+                for degree in self._degrees:
                     sizes = [len(x[ax].get_module_of_degree(degree)) for x in X]
                     print(
                         f" - Degree {degree} size \
@@ -436,7 +448,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 [
                     self.copy_transform(
                         mod=x[ax],
-                        degrees=self.degrees,
+                        degrees=self._degrees,
                         translation=-self._module_bounds[0][i],
                         rescale_factors=self._normalization_factors[i],
                         new_box=standard_box,
