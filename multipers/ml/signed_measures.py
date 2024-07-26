@@ -234,7 +234,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 st.expansion(st.num_vertices)
             signed_measures_euler = (
                 mp.signed_measure(
-                    simplextree=st,
+                    st,
                     degrees=[None],
                     plot=self.plot,
                     mass_default=self._default_mass_location,
