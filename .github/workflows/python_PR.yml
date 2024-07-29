@@ -1,0 +1,51 @@
+name: Build, test
+
+on: 
+  [pull_request_target,workflow_dispatch]
+
+jobs:
+  build_test:
+    name: Build and Test 
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: ["ubuntu-latest", "macos-13", "macos-14"] 
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version:  ${{ matrix.python-version }}
+        mamba-version: "*"
+        activate-environment: build_test_env
+        channels: conda-forge
+        channel-priority: true
+    - name: Install build and test dependencies
+      shell: bash -el {0}
+      run: |
+        # conda install mamba -c conda-forge
+        mamba install python=${{matrix.python-version}} pip -c conda-forge
+        mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        pip install pykeops filtration-domination --upgrade
+        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
+          mamba install cxx-compiler -c conda-forge
+        fi
+    - name: Build package
+      shell: bash -el {0}
+      run: |
+        if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
+          export CXXFLAGS="-fno-aligned-new" # Macos workaround
+          export CFLAGS="-fno-aligned-new" # Macos workaround
+          export MACOSX_DEPLOYMENT_TARGET="13.0"
+        fi
+        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
+          export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
+          export CFLAGS="-march=x86-64-v3"
+        fi
+        python setup.py build_ext -j4 --inplace bdist_wheel
+    - name: Install and Test
+      shell: bash -el {0}
+      run: |
+        pip install --no-build-isolation dist/*.whl
+        pytest multipers/tests
