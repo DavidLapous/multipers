@@ -1,7 +1,7 @@
 name: Build, test
 
 on: 
-  [pull_request_target,workflow_dispatch]
+  [pull_request_target,workflow_dispatch,push]
 
 jobs:
   build_test:

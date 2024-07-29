@@ -9,18 +9,17 @@
 name: Build, test, and Push to PyPI
 
 on: 
-  [workflow_dispatch, push]
+  [workflow_dispatch]
 
 
 
 jobs:
   build_test:
     name: Build and Test 
-    # container: gudhi/pip_for_gudhi:latest # container allows to compile for older abis, but is not easy to setup...
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: ["ubuntu-latest", "macos-13", "macos-14"] # windows fails, macos13 is x86_64 and macos-latest=14 is arm64, TODO: build directly with M1 procs.
+        os: ["ubuntu-latest", "macos-13", "macos-14"] # windows fails, macos13 is x86_64 and macos-latest=14 is arm64
         # monitor  https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
     runs-on: ${{ matrix.os }}
     steps:
@@ -29,14 +28,14 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         python-version:  ${{ matrix.python-version }}
+        mamba-version: "*"
         activate-environment: build_test_env
         channels: conda-forge
-        miniforge-version: latest
-        # channel-priority: true
+        channel-priority: true
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
-        conda install mamba -c conda-forge
+        # conda install mamba -c conda-forge
         mamba install python=${{matrix.python-version}} pip -c conda-forge
         ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
         mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
@@ -45,26 +44,6 @@ jobs:
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           mamba install cxx-compiler patchelf -c conda-forge
         fi
-        ## use default macos compiler
-
-        # if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
-          ##
-          # brew update || true
-          # ## boost doesn't need to be linked so brew is fine
-          # brew install boost || true
-          ## for some reason, brew's boost doesn't contain some files
-
-          ### Installs TBB in the conda env for both archs (brew/conda don't propose universal/fat builds)
-          # export ARCHFLAGS="-arch arm64 -arch x86_64"
-          # git clone --depth 1  https://github.com/oneapi-src/oneTBB.git
-          # cd oneTBB
-          # mkdir build && cd build
-          # cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DTBB_TEST=OFF ..
-          # cmake --build . -j4
-          # cmake --install .
-          # cd ../..
-          ####
-        # fi
     - name: Build package
       shell: bash -el {0}
       run: |
@@ -82,11 +61,6 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
         fi
         python setup.py build_ext -j4 --inplace bdist_wheel
-    - name: Install and Test
-      shell: bash -el {0}
-      run: |
-        pip install --no-build-isolation dist/*.whl
-        pytest multipers/tests
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
       run: |
@@ -124,6 +98,11 @@ jobs:
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
         fi
+    - name: Install and Test
+      shell: bash -el {0}
+      run: |
+        pip install --no-build-isolation *.whl
+        pytest multipers/tests
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
       with:
