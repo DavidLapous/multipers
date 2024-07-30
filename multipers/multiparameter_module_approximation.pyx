@@ -97,7 +97,7 @@ def module_approximation(
         list[float] direction = [],
         list[int] swap_box_coords = [],
         *,
-        int n_jobs = 1,
+        int n_jobs = -1,
         ):
     """Computes an interval module approximation of a multiparameter filtration.
 
