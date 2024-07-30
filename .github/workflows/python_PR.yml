@@ -31,6 +31,9 @@ jobs:
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           mamba install cxx-compiler -c conda-forge
         fi
+        if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
+          mamba install cxx-compiler -c conda-forge
+        fi
     - name: Build package
       shell: bash -el {0}
       run: |
