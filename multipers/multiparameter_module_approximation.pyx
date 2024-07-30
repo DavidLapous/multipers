@@ -147,6 +147,7 @@ def module_approximation(
         homology of this multi-filtration.
     """
     if isinstance(input, tuple) or isinstance(input, list):
+        assert all(s.is_minpres for s in input), "Modules cannot be merged unless they are minimal presentations."
         if len(input) == 0:
             return PyModule_f64()
         if n_jobs <= 1: 
@@ -159,7 +160,7 @@ def module_approximation(
             ))
         mod = PyModule_f64().set_box(PyBox_f64(*modules[0].get_box()))
         for dim,m in enumerate(modules):
-            mod.merge(m, dim)
+            mod.merge(m.get_module_of_degree(1), dim)
         return mod
     if box is None:
         if is_simplextree_multi(input):
