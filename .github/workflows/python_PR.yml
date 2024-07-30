@@ -46,6 +46,9 @@ jobs:
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
           export CFLAGS="-march=x86-64-v3"
         fi
+        if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
+          set LIBPATH=%LIBPATH%;C:\Miniconda\envs\build_test_env\Library\lib
+        fi
         python setup.py build_ext -j4 --inplace bdist_wheel
     - name: Install and Test
       shell: bash -el {0}
