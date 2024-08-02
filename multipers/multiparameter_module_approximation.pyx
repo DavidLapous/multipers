@@ -47,6 +47,8 @@ import multipers.io as mio
 from multipers.slicer cimport _multiparameter_module_approximation_f32, _multiparameter_module_approximation_f64
 
 
+PyModule_type = Union[PyModule_f32, PyModule_f64]
+
 def module_approximation_from_slicer(
         slicer:Slicer_type,
         box:Optional[np.ndarray]=None,
@@ -55,7 +57,7 @@ def module_approximation_from_slicer(
         bool threshold=False,
         bool verbose=False,
         list[float] direction = [],
-        ):
+        )->PyModule_type:
 
     cdef Module[float] mod_f32
     cdef Module[double] mod_f64
@@ -65,13 +67,13 @@ def module_approximation_from_slicer(
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
         if box is None:
-            box = slicer.compute_box()
+            box = slicer.filtration_bounds()
         mod_f32 = _multiparameter_module_approximation_f32(slicer,_py21c_f32(direction), max_error,Box[float](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f32)
     elif slicer.dtype == np.float64:
         approx_mod = PyModule_f64()
         if box is None:
-            box = slicer.compute_box()
+            box = slicer.filtration_bounds()
         mod_f64 = _multiparameter_module_approximation_f64(slicer,_py21c_f64(direction), max_error,Box[double](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f64)
     else:
@@ -98,7 +100,7 @@ def module_approximation(
         list[int] swap_box_coords = [],
         *,
         int n_jobs = -1,
-        ):
+        )->PyModule_type:
     """Computes an interval module approximation of a multiparameter filtration.
 
     Parameters
@@ -166,7 +168,7 @@ def module_approximation(
         if is_simplextree_multi(input):
             box = input.filtration_bounds()
         else:
-            box = input.compute_box()
+            box = input.filtration_bounds()
     box = np.asarray(box)
     for i in swap_box_coords:
         box[0,i], box[1,i] = box[1,i], box[0,i]

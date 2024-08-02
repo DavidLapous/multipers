@@ -235,7 +235,7 @@ cdef class {{PYTHON_TYPE}}:
     @property
     def info(self):
         print(self.truc.to_str().decode())
-    def compute_box(self):
+    def filtration_bounds(self) -> np.ndarray:
         """
         Computes the bounding box of the current multifiltration.
         """
@@ -441,7 +441,7 @@ def minimal_presentation(
     and returns it as a slicer.
     Backends differents than `mpfree` are unstable.
     """
-    if slicer.is_minpres and not force:
+    if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
         warn(f"The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
         return slicer

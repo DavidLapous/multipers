@@ -41,7 +41,7 @@ def rank_from_slicer(
         ):
     # cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
     if grid_shape is None:
-        grid_shape = (slicer.compute_box()[1]).astype(python_indices_type)
+        grid_shape = (slicer.filtration_bounds()[1]).astype(python_indices_type)
     grid_shape = np.asarray(grid_shape)+1
 
     cdef int num_parameters = len(grid_shape)
