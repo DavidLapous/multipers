@@ -1,16 +1,12 @@
 import numpy as np
 import multipers as mp
-import multipers.ml.point_clouds as mmp
-from multipers.data import noisy_annulus
 from multipers.tests import assert_sm
 import pytest
 import multipers.io as mio
-
+from multipers.tests import random_st
 np.random.seed(0)
-x = noisy_annulus(50, 1)
-(st,) = mmp.PointCloud2SimplexTree(
-    masses=[0.3], expand_dim=2, num_collapses=-2
-).fit_transform([x])[0]
+
+st = random_st(npts=50)
 
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
