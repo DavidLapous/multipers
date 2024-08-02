@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional, Union
 
 import numpy as np
 from joblib import Parallel, delayed
@@ -7,12 +7,15 @@ from tqdm import tqdm
 
 import multipers as mp
 import multipers.simplex_tree_multi
+import multipers.slicer
 from multipers.grids import compute_grid as reduce_grid
 from multipers.ml.tools import filtration_grid_to_coordinates
 from multipers.mma_structures import PyBox_f64, PyModule_type
 
 
-class SimplexTree2MMA(BaseEstimator, TransformerMixin):
+_FilteredComplexType=Union[mp.slicer.Slicer_type|mp.simplex_tree_multi.SimplexTreeMulti_type]
+
+class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
     """
     Turns a list of simplextrees to MMA approximations
     """
@@ -23,6 +26,7 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
         expand_dim: Optional[int] = None,
         prune_degrees_above: Optional[int] = None,
         progress=False,
+        minpres_degrees:Optional[Iterable[int]]=None,
         **persistence_kwargs,
     ) -> None:
         super().__init__()
@@ -34,24 +38,24 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
         self.progress = progress
         self.expand_dim = expand_dim
         self._boxes = None
+        self.minpres_degrees=minpres_degrees
         return
+    
+    @staticmethod
+    def _is_filtered_complex(input):
+        return mp.simplex_tree_multi.is_simplextree_multi(input) or mp.slicer.is_slicer(input)
 
-    def fit(self, X, y=None):
-        if len(X) == 0:
-            return self
-        self._has_axis = not mp.simplex_tree_multi.is_simplextree_multi(X[0])
+    def _input_checks(self, X):
+        self._has_axis = not self._is_filtered_complex(X[0])
         if self._has_axis:
-            try:
-                X[0][0]
-            except IndexError:
-                print(f"IndexError, {X[0]=}")
-                if len(X[0]) == 0:
-                    print(
-                        "No simplextree found, maybe you forgot to give a filtration parameter to the previous pipeline"
-                    )
-                raise IndexError
-            assert mp.simplex_tree_multi.is_simplextree_multi(X[0][0]), f"X[0] is not a simplextre, {X[0]=}, and X[0][0] neither."
+            assert len(X) > 0, "No filtered complex found. Cannot fit."
+            assert self._is_filtered_complex(X[0][0]), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
             self._num_axis = len(X[0])
+        first = X[0][0] if self._has_axis else X[0]
+        assert not mp.slicer.is_slicer(first) or self.expand_dim is None, "Cannot expand slicers."
+
+    def _infer_bounding_box(self,X):
+        if self._has_axis:
             filtration_values = np.asarray(
                 [
                     [x[axis].filtration_bounds() for x in X]
@@ -100,6 +104,12 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
                 ]
             )
             self._boxes = [m, M]
+
+    def fit(self, X, y=None):
+        if len(X) == 0:
+            return self
+        self._input_checks(X)
+        self._infer_bounding_box(X)
         return self
 
     def transform(self, X):
@@ -115,20 +125,18 @@ class SimplexTree2MMA(BaseEstimator, TransformerMixin):
                         self.prune_degrees_above
                     )  # we only do for H0 for computational ease
 
-        def todo1(x: mp.simplex_tree_multi.SimplexTreeMulti_type, box):
-            # print(x.get_filtration_grid(resolution=3, grid_strategy="regular"))
-            # print("TEST BOX",box)
+        def todo1(x, box):
             if self.expand_dim is not None:
                 x.expansion(self.expand_dim)
-            return x.persistence_approximation(
+            if self.minpres_degrees is not None:
+                x = mp.slicer.minimal_presentation(mp.Slicer(x), degrees=self.minpres_degrees)
+            return mp.module_approximation(x,
                 box=box, verbose=False, **self.persistence_args
             )
 
-        def todo(sts: List[mp.simplex_tree_multi.SimplexTreeMulti_type] | mp.simplex_tree_multi.SimplexTreeMulti_type):
+        def todo(sts: Iterable[_FilteredComplexType] | _FilteredComplexType):
             if self._has_axis:
-                assert not mp.simplex_tree_multi.is_simplextree_multi(sts)
-                return [todo1(st, box) for st, box in zip(sts, self._boxes)]
-            assert mp.simplex_tree_multi.is_simplextree_multi(sts)
+                return tuple(todo1(st, box) for st, box in zip(sts, self._boxes))
             return todo1(sts, self._boxes)
 
         return Parallel(n_jobs=self.n_jobs, backend="threading")(
