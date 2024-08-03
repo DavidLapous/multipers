@@ -30,6 +30,10 @@ cimport cython
 # python_value_type = np.float32
 from typing import Union
 
+## WARNING : This is repeated in the pxd file ...
+python_indices_type=np.int32
+python_tensor_dtype = np.int32
+
 global available_slicers
 available_slicers = tuple((
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
@@ -288,7 +292,7 @@ cdef class {{PYTHON_TYPE}}:
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{PYTHON_TYPE[:-3]+"i32"}}:
+    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{PYTHON_TYPE[:-3]+"i32"}}|{{PYTHON_TYPE}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
 
@@ -553,3 +557,52 @@ def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col)
     raise ValueError(f"Unimplemented combo for Matrix : {is_vineyard=}, {is_k_critical=}, {dtype=}")
   return slicer
 
+
+
+
+def _hilbert_signed_measure(slicer, 
+    vector[indices_type] degrees, 
+    bool zero_pad=False, 
+    indices_type n_jobs=0, 
+    bool verbose=False,
+    # bool expand_collapse=False, 
+    # grid_conversion = None,
+    ):
+  """
+  Computes the signed measures given by the decomposition of the hilbert function.
+
+  Input
+  -----
+
+   - simplextree:SimplexTreeMulti, the multifiltered simplicial complex
+   - degrees:array-like of ints, the degrees to compute
+   - n_jobs:int, number of jobs. Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
+   - verbose:bool, prints c++ logs.
+  
+  Output
+  ------
+  
+  `[signed_measure_of_degree for degree in degrees]`
+  with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
+  """
+
+  assert slicer.is_squeezed, "Squeeze grid first."
+  grid_shape = np.array([len(f) for f in slicer.filtration_grid])
+  if zero_pad:
+    for i, _ in enumerate(grid_shape):
+      grid_shape[i] += 1 # adds a 0
+  assert len(grid_shape) == slicer.num_parameters, "Grid shape size has to be the number of parameters."
+  grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape]), dtype=python_indices_type)
+  container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).flatten())
+  assert len(container_array) < np.iinfo(np.uint32).max, "Too large container. Raise an issue on github if you encounter this issue. (Due to tensor's operator[])"
+  cdef vector[indices_type] c_grid_shape = grid_shape_with_degree
+  cdef tensor_dtype[::1] container = container_array
+  cdef tensor_dtype* container_ptr = &container[0]
+  cdef signed_measure_type out = _compute_hilbert_sm(slicer, container_ptr, c_grid_shape, degrees,n_jobs, verbose, zero_pad)
+  pts, weights = np.asarray(out.first, dtype=int).reshape(-1, slicer.num_parameters+1), np.asarray(out.second, dtype=int)
+  slices = np.concatenate([np.searchsorted(pts[:,0], np.arange(degrees.size())), [pts.shape[0]] ])
+  sms = [
+      (pts[slices[i]:slices[i+1],1:],weights[slices[i]:slices[i+1]])
+      for i in range(slices.shape[0]-1)
+  ]
+  return sms

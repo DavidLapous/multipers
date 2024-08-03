@@ -68,7 +68,7 @@ class Persistence_backend_matrix {
 public:
   using matrix_type = Gudhi::persistence_matrix::Matrix<Matrix_options>;
   using cycle_type = typename matrix_type::cycle_type;
-  static const bool is_vine  = Matrix_options::has_vine_update;
+  static const bool is_vine = Matrix_options::has_vine_update;
 
   using bar = typename matrix_type::Bar;
   //   using index = typename matrix_type::index;
@@ -123,10 +123,12 @@ public:
         auto &b = barcode_->operator[](currPos_);
         currBar_.dim = b.dim;
         currBar_.birth = perm_->operator[](b.birth);
-        if (debug && currBar_.birth > std::numeric_limits<decltype(currBar_.birth)>::max()/2){
-          std::cout <<currBar_ << std::endl;
-          std::cout <<"while "  <<  b.birth;
-          std::cout <<"  "<<  perm_->size();
+        if (debug &&
+            currBar_.birth >
+                std::numeric_limits<decltype(currBar_.birth)>::max() / 2) {
+          std::cout << currBar_ << std::endl;
+          std::cout << "while " << b.birth;
+          std::cout << "  " << perm_->size();
         }
         currBar_.death = b.death == static_cast<pos_index>(-1)
                              ? -1
@@ -140,7 +142,7 @@ public:
     Barcode(matrix_type &matrix, const std::vector<std::size_t> *perm)
         : barcode_(&matrix.get_current_barcode()) {
       const bool debug = false;
-      if constexpr(Matrix_options::has_vine_update){
+      if constexpr (Matrix_options::has_vine_update) {
         perm_ = perm;
       } else {
         perm_.reserve(perm->size());
@@ -149,18 +151,18 @@ public:
             perm_.push_back(stuff);
       }
       if constexpr (debug) {
-        std::cout << "Built matrix of size " << matrix.get_number_of_columns() << " / " << perm->size() 
-                  << std::endl;
+        std::cout << "Built matrix of size " << matrix.get_number_of_columns()
+                  << " / " << perm->size() << std::endl;
       }
     }
 
-    iterator begin() const { 
-      if constexpr(Matrix_options::has_vine_update){
+    iterator begin() const {
+      if constexpr (Matrix_options::has_vine_update) {
         return Barcode_iterator(barcode_, perm_);
+      } else {
+        return Barcode_iterator(barcode_, &this->perm_);
       }
-      else{
-        return Barcode_iterator(barcode_, &this->perm_); 
-      }}
+    }
 
     iterator end() const { return Barcode_iterator(); }
 
@@ -184,11 +186,13 @@ public:
 
   private:
     const typename matrix_type::barcode_type *barcode_;
-    typename std::conditional<Matrix_options::has_vine_update, const std::vector<std::size_t>*, std::vector<std::size_t>>::type perm_;
+    typename std::conditional<Matrix_options::has_vine_update,
+                              const std::vector<std::size_t> *,
+                              std::vector<std::size_t>>::type perm_;
   };
 
   Persistence_backend_matrix() : permutation_(nullptr){};
-  Persistence_backend_matrix(Boundary_matrix_type &boundaries,
+  Persistence_backend_matrix(const Boundary_matrix_type &boundaries,
                              std::vector<std::size_t> &permutation)
       : matrix_(boundaries.size()), permutation_(&permutation) {
 
@@ -199,27 +203,30 @@ public:
     std::vector<std::size_t> boundary_container;
     std::size_t c = 0;
     for (std::size_t i : *permutation_) {
-      if (i >= boundaries.size())
-        { c++;continue; }
+      if (i >= boundaries.size()) {
+        c++;
+        continue;
+      }
       permutationInv[i] = c++;
       boundary_container.resize(boundaries[i].size());
       if constexpr (verbose)
-        std::cout << i << "/" << permutation_->size() << " c= "<< c << " dimension "
-                  << boundaries.dimension(i) << "..." << std::endl
+        std::cout << i << "/" << permutation_->size() << " c= " << c
+                  << " dimension " << boundaries.dimension(i) << "..."
+                  << std::endl
                   << std::flush;
       for (std::size_t j = 0; j < boundaries[i].size(); ++j) {
         boundary_container[j] = permutationInv[boundaries[i][j]];
       }
       std::sort(boundary_container.begin(), boundary_container.end());
-      matrix_.insert_boundary(c-1,boundary_container, boundaries.dimension(i));
+      matrix_.insert_boundary(c - 1, boundary_container,
+                              boundaries.dimension(i));
     }
   }
   Persistence_backend_matrix(const Persistence_backend_matrix &toCopy)
-      : matrix_(toCopy.matrix_), permutation_(toCopy.permutation_){}
+      : matrix_(toCopy.matrix_), permutation_(toCopy.permutation_) {}
   Persistence_backend_matrix(Persistence_backend_matrix &&other) noexcept
       : matrix_(std::move(other.matrix_)),
-        permutation_(std::exchange(other.permutation_, nullptr))
-  {}
+        permutation_(std::exchange(other.permutation_, nullptr)) {}
 
   Persistence_backend_matrix &operator=(Persistence_backend_matrix other) {
     swap(matrix_, other.matrix_);
@@ -240,6 +247,7 @@ public:
   inline void vine_swap(pos_index i) { matrix_.vine_swap(i); }
 
   inline Barcode get_barcode() { return Barcode(matrix_, permutation_); }
+  inline std::size_t size() { return this->matrix_.get_number_of_columns(); }
 
   inline friend std::ostream &
   operator<<(std::ostream &stream, Persistence_backend_matrix &structure) {
@@ -255,22 +263,22 @@ public:
     return stream;
   }
 
-
   inline std::vector<cycle_type> get_representative_cycles(bool update) {
-    // Only used when vineyard, so shrinked permutation i.e. 
-    // without the -1, is permutation as we keep inf values (they can become finite)
-    // cf barcode perm which is copied to remove the -1
+    // Only used when vineyard, so shrinked permutation i.e.
+    // without the -1, is permutation as we keep inf values (they can become
+    // finite) cf barcode perm which is copied to remove the -1
     const bool verbose = false;
     if (update) [[likely]]
       matrix_.update_representative_cycles();
     auto current_cycles = matrix_.get_representative_cycles();
-    for(auto& truc : current_cycles){
+    for (auto &truc : current_cycles) {
       if constexpr (verbose)
-        std::cout << "Cycle (matrix_ order): " ;
-      for(auto& machin : truc){
-        if constexpr (verbose){
-          std::cout<< "   matrix order: "<<machin;
-          std::cout << ", structure order : " << permutation_[machin] << std::endl;
+        std::cout << "Cycle (matrix_ order): ";
+      for (auto &machin : truc) {
+        if constexpr (verbose) {
+          std::cout << "   matrix order: " << machin;
+          std::cout << ", structure order : " << permutation_[machin]
+                    << std::endl;
         }
         machin = permutation_->operator[](machin);
       }

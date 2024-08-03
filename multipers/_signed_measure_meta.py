@@ -7,6 +7,7 @@ from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure_integration import clean_sms, zero_out_sms
 from multipers.rank_invariant import rank_from_slicer
+from multipers.slicer import _hilbert_signed_measure
 from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
                                           _available_strategies,
                                           is_simplextree_multi)
@@ -210,20 +211,28 @@ def signed_measure(
                     filtered_complex_,
                 )
             else:
-                from multipers.slicer import minimal_presentation
-
-                backend = "mpfree"  ## TODO : make a non-mpfree backend
-                if verbose:
-                    print("Reducing complex...", end="")
-                reduced_complex = minimal_presentation(
+                sms = _hilbert_signed_measure(
                     filtered_complex_,
-                    degrees=degrees,
-                    backend=backend,
-                    vineyard=vineyard,
+                    degrees=degrees, 
+                    zero_pad=fix_mass_default,
+                    n_jobs=n_jobs, 
+                    verbose=verbose,
                 )
-                if verbose:
-                    print("Done.")
-                sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
+                fix_mass_default = False
+                # from multipers.slicer import minimal_presentation
+                #
+                # backend = "mpfree"  ## TODO : make a non-mpfree backend
+                # if verbose:
+                #     print("Reducing complex...", end="")
+                # reduced_complex = minimal_presentation(
+                #     filtered_complex_,
+                #     degrees=degrees,
+                #     backend=backend,
+                #     vineyard=vineyard,
+                # )
+                # if verbose:
+                #     print("Done.")
+                # sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
 
     elif is_simplextree_multi(filtered_complex_):
         ## we still have a simplextree here

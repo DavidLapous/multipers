@@ -128,7 +128,8 @@ cdef inline Module[{{ctype}}] _multiparameter_module_approximation_{{short}}(obj
 from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t, int16_t, int8_t
 ctypedef int32_t tensor_dtype
 ctypedef int32_t indices_type
-
+python_indices_type=np.int32
+python_tensor_dtype = np.int32
 
 
 
@@ -170,8 +171,33 @@ cdef inline  _compute_rank_sm(object slicer, tensor_dtype* container_ptr, vector
   if isinstance(slicer, mps.{{PYTHON_TYPE}}):
     with nogil:
       sm = compute_rank_signed_measure(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs, verbose)
-    pts = sm.first
-    weights = sm.second
+    pts = np.asarray(sm.first,dtype=python_indices_type)
+    weights = np.asarray(sm.second,dtype=python_tensor_dtype)
+    return (pts,weights)
+  {{endfor}}
+  raise ValueError(f"Unsupported slicer type {type(slicer)}")
+
+
+
+#### Hilbert Function
+
+cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "Gudhi::multiparameter::hilbert_function":
+  ## from slicers
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+    signed_measure_type get_hilbert_signed_measure({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type],bool,indices_type, bool) except + nogil
+  {{endfor}}
+cdef inline  _compute_hilbert_sm(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs, bool verbose,bool zero_pad):
+  import multipers.slicer as mps
+  cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
+  cdef signed_measure_type sm
+  cdef cnp.ndarray[indices_type, ndim=2] pts
+  cdef cnp.ndarray[tensor_dtype, ndim=1] weights
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+    with nogil:
+      sm = get_hilbert_signed_measure(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, zero_pad, n_jobs, verbose)
+    pts = np.asarray(sm.first,dtype=python_indices_type)
+    weights = np.asarray(sm.second,dtype=python_tensor_dtype)
     return (pts,weights)
   {{endfor}}
   raise ValueError(f"Unsupported slicer type {type(slicer)}")

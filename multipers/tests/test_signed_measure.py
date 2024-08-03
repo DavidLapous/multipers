@@ -6,7 +6,7 @@ import multipers.io as mio
 from multipers.tests import random_st
 np.random.seed(0)
 
-st = random_st(npts=50)
+st = random_st(npts=50).collapse_edges(-2,ignore_warning=True)
 
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
@@ -45,16 +45,19 @@ def test_backends(invariant, degree, mass_default, S):
     )
     snv = mp.Slicer(st, vineyard=False)
     sv = mp.Slicer(st, vineyard=True)
+    for s in [sv, snv]:
+        sms.append(
+            mp.signed_measure(
+                s,
+                degree=1,
+                grid_strategy=strat,
+                resolution=r,
+                mass_default=mass_default,
+                invariant=invariant,
+            )[0]
+        )
     if invariant != "euler" and mpfree_flag:
         for s in [sv, snv]:
-            sms.append(
-                mp.signed_measure(
-                    s.grid_squeeze(grid_strategy=strat, resolution=r),
-                    degree=degree,
-                    mass_default=mass_default,
-                    invariant=invariant,
-                )[0]
-            )
             assert s.minpres(degree=degree).is_minpres, "minpres is not minpres"
             sms.append(
                 mp.signed_measure(

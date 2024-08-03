@@ -33,7 +33,7 @@ public:
   using pos_index = int;
   using dimension_type = int;
   using cycle_type = std::vector<unsigned int>;
-  static const bool is_vine  = true;
+  static const bool is_vine = true;
   std::vector<cycle_type> get_representative_cycles(bool update = true) const {
     throw "Unimplemented";
   }
@@ -117,7 +117,7 @@ public:
   };
 
   Persistence_backend_h0() {}
-  Persistence_backend_h0(Boundary_matrix_type &boundaries,
+  Persistence_backend_h0(const Boundary_matrix_type &boundaries,
                          std::vector<std::size_t> &permutation)
       : pers_(boundaries.size(), boundaries.num_vertices()),
         boundaries_(&boundaries), permutation_(&permutation),
@@ -203,7 +203,10 @@ public:
               permutationInv_[permutation_->operator[](i + 1)]);
   }
 
-  Barcode get_barcode()  { return Barcode(pers_, permutation_); }
+  Barcode get_barcode() { return Barcode(pers_, permutation_); }
+  std::size_t size() {
+    throw; // TODO:
+  }
 
   inline friend std::ostream &operator<<(std::ostream &stream,
                                          Persistence_backend_h0 &structure) {
@@ -217,7 +220,7 @@ public:
 
 private:
   Naive_merge_forest pers_;
-  Boundary_matrix_type *boundaries_;
+  const Boundary_matrix_type *boundaries_;
   std::vector<std::size_t> *permutation_;
   std::vector<std::size_t> permutationInv_;
 };

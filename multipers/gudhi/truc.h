@@ -54,7 +54,10 @@ public:
   /*   return *this; */
   /* } */
 
-  std::vector<unsigned int> operator[](std::size_t i) {
+  const std::vector<unsigned int> &operator[](std::size_t i) const {
+    return generators[i];
+  } // needs to be iterable (begin, end, size)
+  std::vector<unsigned int> &operator[](std::size_t i) {
     return generators[i];
   } // needs to be iterable (begin, end, size)
   inline int dimension(std::size_t i) const { return generator_dimensions[i]; };
@@ -134,7 +137,10 @@ public:
 
         };
 
-  std::vector<unsigned int> operator[](std::size_t i) {
+  const std::vector<unsigned int> &operator[](std::size_t i) const {
+    return boundaries[i];
+  } // needs to be iterable (begin, end, size)
+  std::vector<unsigned int> &operator[](std::size_t i) {
     return boundaries[i];
   } // needs to be iterable (begin, end, size)
   int dimension(std::size_t i) const {
@@ -168,7 +174,7 @@ public:
     /* return stream; */
   }
   inline std::size_t size() const { return boundaries.size(); };
-  inline unsigned int num_vertices() { return num_vertices_; }
+  inline unsigned int num_vertices() const { return num_vertices_; }
   inline unsigned int max_dimension() const { return max_dimension_; }
 
   int prune_above_dimension(int dim) { throw; }
@@ -281,9 +287,8 @@ public:
 
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
-      std::vector<std::size_t>
-          &out_gen_order
-      ) { // needed ftm as PersBackend only points there
+      std::vector<std::size_t> &out_gen_order)
+      const { // needed ftm as PersBackend only points there
 
     if (one_filtration.size() != this->num_generators()) {
       throw;
@@ -302,7 +307,7 @@ public:
     if constexpr (!PersBackend::is_vine) {
       for (std::size_t &i : out_gen_order)
         if (one_filtration[i] == MultiFiltration::T_inf) {
-          // TODO : later 
+          // TODO : later
           // int d = structure.dimension(i);
           // d = d == 0 ? 1 : 0;
           // if (degrees.size()>d || degrees[d] || degrees[d-1])
@@ -329,9 +334,11 @@ public:
         out_gen_order); // FIXME : PersBackend is not const on struct
   }
 
+  inline const bool has_persistence() { return this->persistence.size(); };
   inline void compute_persistence() {
     this->persistence = this->compute_persistence_out(
-        // this->filtration_container, this->generator_order, degrees); // TODO : later
+        // this->filtration_container, this->generator_order, degrees); // TODO
+        // : later
         this->filtration_container, this->generator_order);
   };
 
@@ -373,7 +380,7 @@ public:
   inline split_barcode
   get_barcode(PersBackend &persistence,
               const std::vector<typename MultiFiltration::value_type>
-                  &filtration_container) {
+                  &filtration_container) const {
     auto barcode_indices = persistence.get_barcode();
     split_barcode out(this->structure.max_dimension() +
                       1); // TODO : This doesn't allow for negative dimensions
@@ -611,7 +618,7 @@ public:
     int idx = structure.prune_above_dimension(max_dim);
     generator_filtration_values.resize(idx);
     generator_order.resize(idx);
-    filtration_container.resize(idx); 
+    filtration_container.resize(idx);
   }
 
   const std::vector<std::vector<unsigned int>> get_boundaries() {
@@ -707,12 +714,19 @@ public:
     };
     inline TrucThread weak_copy() const { return TrucThread(*truc_ptr); }
 
+    inline const bool has_persistence() { return this->persistence.size(); };
+    const PersBackend &get_persistence() const { return persistence; }
+    PersBackend &get_persistence() { return persistence; }
+
     inline std::pair<MultiFiltration, MultiFiltration>
     get_bounding_box() const {
       return truc_ptr->get_bounding_box();
     }
-    inline const std::vector<MultiFiltration> &get_filtration_values() const {
-      return truc_ptr->get_filtration_values();
+    const std::vector<std::size_t> get_current_order() const {
+      return generator_order;
+    }
+    const std::vector<MultiFiltration> &get_filtrations() const {
+      return truc_ptr->get_filtrations();
     }
     inline const std::vector<int> &get_dimensions() const {
       return truc_ptr->get_dimensions();
@@ -738,9 +752,9 @@ public:
       return truc_ptr->get_representative_cycles(update);
     }
     inline void compute_persistence() {
-      persistence = this->truc_ptr->compute_persistence_out(
-          this->persistence, this->generator_order);
-    }
+      this->persistence = this->truc_ptr->compute_persistence_out(
+          this->filtration_container, this->generator_order);
+    };
     inline void vineyard_update() {
       truc_ptr->vineyard_update(this->persistence, this->filtration_container,
                                 this->generator_order);
@@ -758,6 +772,23 @@ public:
     inline split_barcode get_barcode() {
       return truc_ptr->get_barcode(this->persistence,
                                    this->filtration_container);
+    }
+    inline std::size_t num_generators() const {
+      return this->truc_ptr->structure.size();
+    }
+    inline std::size_t num_parameters() const {
+      return num_generators() == 0
+                 ? 0
+                 : this->get_filtrations()[0].num_parameters();
+    }
+
+    inline const std::vector<typename MultiFiltration::value_type> &
+    get_one_filtration() const {
+      return this->filtration_container;
+    }
+    inline std::vector<typename MultiFiltration::value_type> &
+    get_one_filtration() {
+      return this->filtration_container;
     }
 
   private:
