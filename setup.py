@@ -130,7 +130,7 @@ extensions = [
         ],
         language="c++",
         extra_compile_args=[
-            "-Ofast",
+            "-O2",
             # "-g",
             # "-march=native",
             "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
