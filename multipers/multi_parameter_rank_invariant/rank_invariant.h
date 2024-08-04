@@ -52,7 +52,8 @@ get_coordinates(index_type in_slice_value, index_type I, index_type J) {
 
 template <typename dtype, typename index_type, typename Filtration>
 inline void compute_2d_rank_invariant_of_elbow(
-    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>> &st_multi,
+    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+        &st_multi,
     Simplex_tree_std &_st_container, // copy of st_multi
     const tensor::static_tensor_view<dtype, index_type>
         &out, // assumes its a zero tensor
@@ -60,7 +61,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     const std::vector<index_type> &grid_shape,
     const std::vector<index_type> &degrees,
     const int expand_collapse_max_dim = 0) {
-  // const bool verbose = false; // verbose 
+  // const bool verbose = false; // verbose
   using value_type = typename Simplex_tree_std::Filtration_value;
   constexpr const value_type inf = std::numeric_limits<value_type>::infinity();
 
@@ -88,7 +89,6 @@ inline void compute_2d_rank_invariant_of_elbow(
       filtration_in_slice = get_slice_rank_filtration(x, y, I, J);
     }
     _st_container.assign_filtration(*sh_standard, filtration_in_slice);
-
   }
   const std::vector<Barcode> &barcodes =
       compute_dgms(_st_container, degrees, expand_collapse_max_dim);
@@ -98,7 +98,8 @@ inline void compute_2d_rank_invariant_of_elbow(
       auto birth = static_cast<index_type>(bar.first);
       auto death = static_cast<index_type>(
           std::min(bar.second,
-                   static_cast<typename Simplex_tree_std::Filtration_value>(Y + I))); // I,J atteints, pas X ni Y
+                   static_cast<typename Simplex_tree_std::Filtration_value>(
+                       Y + I))); // I,J atteints, pas X ni Y
 
       // todo : optimize
       // auto [a,b] = get_coordinates(birth, I,J);
@@ -121,13 +122,13 @@ inline void compute_2d_rank_invariant_of_elbow(
 }
 
 template <typename dtype, typename index_type, typename Filtration>
-inline void
-compute_2d_rank_invariant(Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>> &st_multi,
-                          const tensor::static_tensor_view<dtype, index_type>
-                              &out, // assumes its a zero tensor
-                          const std::vector<index_type> &grid_shape,
-                          const std::vector<index_type> &degrees,
-                          bool expand_collapse) {
+inline void compute_2d_rank_invariant(
+    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+        &st_multi,
+    const tensor::static_tensor_view<dtype, index_type>
+        &out, // assumes its a zero tensor
+    const std::vector<index_type> &grid_shape,
+    const std::vector<index_type> &degrees, bool expand_collapse) {
   if (degrees.size() == 0)
     return;
   assert(st_multi.get_number_of_parameters() == 2);
@@ -144,18 +145,20 @@ compute_2d_rank_invariant(Simplex_tree<Simplex_tree_options_multidimensional_fil
   tbb::parallel_for(0, X, [&](index_type I) {
     tbb::parallel_for(0, Y, [&](index_type J) {
       auto &st_container = thread_simplex_tree.local();
-      compute_2d_rank_invariant_of_elbow<dtype, index_type, Filtration>(st_multi, st_container, out, I, J,
-                                         grid_shape, degrees, max_dim);
+      compute_2d_rank_invariant_of_elbow<dtype, index_type, Filtration>(
+          st_multi, st_container, out, I, J, grid_shape, degrees, max_dim);
     });
   });
 }
 
-template <typename Filtration, typename dtype, typename indices_type, typename... Args>
-void compute_rank_invariant_python(Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>& st_multi,
-                                   dtype *data_ptr,
-                                   const std::vector<indices_type> grid_shape,
-                                   const std::vector<indices_type> degrees,
-                                   indices_type n_jobs, bool expand_collapse) {
+template <typename Filtration, typename dtype, typename indices_type,
+          typename... Args>
+void compute_rank_invariant_python(
+    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+        &st_multi,
+    dtype *data_ptr, const std::vector<indices_type> grid_shape,
+    const std::vector<indices_type> degrees, indices_type n_jobs,
+    bool expand_collapse) {
   if (degrees.size() == 0)
     return;
   tensor::static_tensor_view<dtype, indices_type> container(
@@ -163,8 +166,8 @@ void compute_rank_invariant_python(Simplex_tree<Simplex_tree_options_multidimens
 
   oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
   arena.execute([&] {
-    compute_2d_rank_invariant<dtype, indices_type, Filtration>(st_multi, container, grid_shape, degrees,
-                              expand_collapse);
+    compute_2d_rank_invariant<dtype, indices_type, Filtration>(
+        st_multi, container, grid_shape, degrees, expand_collapse);
   });
 
   return;
@@ -184,8 +187,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     std::vector<std::size_t> &order_container, // constant size
     std::vector<typename MultiFiltration::value_type>
         &one_persistence, // constant size
-    const bool flip_death = false
-) {
+    const bool flip_death = false) {
   using value_type = typename MultiFiltration::value_type;
   const auto &filtrations_values = slicer.get_filtrations();
   auto num_generators = filtrations_values.size();
@@ -233,9 +235,10 @@ inline void compute_2d_rank_invariant_of_elbow(
     if (I == 0 && J == 0)
         [[unlikely]] // this is dangerous, assumes it starts at 0 0
     {
-      // TODO : This is a good optimization but needs a patch on PersistenceMatrix
-      // std::vector<bool> degrees_index(slicer.get_dimensions().back()+1, false);
-      // for (const auto &degree : degrees) {
+      // TODO : This is a good optimization but needs a patch on
+      // PersistenceMatrix std::vector<bool>
+      // degrees_index(slicer.get_dimensions().back()+1, false); for (const auto
+      // &degree : degrees) {
       //   if (degree <= slicer.get_dimensions())
       //     degrees_index[degree] = true;
       // }
@@ -270,7 +273,8 @@ inline void compute_2d_rank_invariant_of_elbow(
       auto birth = static_cast<index_type>(bar.first);
       auto death = static_cast<index_type>(
           std::min(bar.second,
-                   static_cast<typename MultiFiltration::value_type>(Y + I))); // I,J atteints, pas X ni Y
+                   static_cast<typename MultiFiltration::value_type>(
+                       Y + I))); // I,J atteints, pas X ni Y
       if constexpr (false)
         std::cout << "Birth " << birth << " Death " << death << std::endl;
       for (auto intermediate_birth = birth; intermediate_birth < death;
@@ -281,7 +285,7 @@ inline void compute_2d_rank_invariant_of_elbow(
           auto [k, l] = get_coordinates(intermediate_death, I, J);
           if (((i < k || j == J) && (j < l || k == I))) {
             if (flip_death)
-              out[{degree_index, i, j, I-k, J-l}]++;
+              out[{degree_index, i, j, I - 1 - k, J - 1 - l}]++;
             else
               out[{degree_index, i, j, k, l}]++;
           }
@@ -332,7 +336,7 @@ inline void compute_2d_rank_invariant(
       auto &[order_container, one_filtration_container] = thread_locals.local();
       compute_2d_rank_invariant_of_elbow(slicer, out, I, J, grid_shape, degrees,
                                          order_container,
-                                         one_filtration_container,flip_death);
+                                         one_filtration_container, flip_death);
       if constexpr (verbose)
         std::cout << "Done!" << std::endl;
     });
@@ -352,7 +356,8 @@ void compute_rank_invariant_python(
   tensor::static_tensor_view<dtype, indices_type> container(
       data_ptr, grid_shape); // assumes its a zero tensor
 
-  oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs); // limits the number of threads
+  oneapi::tbb::task_arena arena(
+      PersBackend::is_vine ? 1 : n_jobs); // limits the number of threads
   arena.execute([&] {
     compute_2d_rank_invariant(slicer, container, grid_shape, degrees, false);
   });
@@ -360,28 +365,24 @@ void compute_rank_invariant_python(
   return;
 }
 
-
-
-
-
-
-
-
-template <typename PersBackend,typename Structure, typename MultiFiltration, typename dtype = int, typename indices_type=int>
+template <typename PersBackend, typename Structure, typename MultiFiltration,
+          typename dtype = int, typename indices_type = int>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>>
- compute_rank_signed_measure(
+compute_rank_signed_measure(
     interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
     dtype *data_ptr, const std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees, indices_type n_jobs, bool verbose) {
+    const std::vector<indices_type> degrees, indices_type n_jobs,
+    bool verbose) {
 
   if (degrees.size() == 0)
-    return {{},{}};
+    return {{}, {}};
   tensor::static_tensor_view<dtype, indices_type> container(
-      data_ptr, grid_shape); // assumes its a zero tensor
+      data_ptr, grid_shape);             // assumes its a zero tensor
   oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
   constexpr bool flip_death = true;
   arena.execute([&] {
-    compute_2d_rank_invariant(slicer, container, grid_shape, degrees, flip_death);
+    compute_2d_rank_invariant(slicer, container, grid_shape, degrees,
+                              flip_death);
   });
 
   if (verbose) {
@@ -392,14 +393,13 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>>
   // for (indices_type axis :
   // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (std::size_t axis = 0u; axis < slicer.num_parameters()+ 1;
-       axis++)
+  for (std::size_t axis = 0u; axis < slicer.num_parameters() + 1; axis++)
     container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
   }
-  auto raw_signed_measure = container.sparsify({false,false,true,true}); 
+  auto raw_signed_measure = container.sparsify({false, false, true, true});
   if (verbose) {
     std::cout << "Done.\n";
   }

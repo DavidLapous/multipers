@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cstddef>
-#include <cstdint>
 #include <iostream>
 #include <numeric>
 #include <vector>
@@ -132,14 +131,16 @@ public:
 
   template <typename indice_type_like>
   inline std::vector<indices_type>
-  data_index_inverse(indice_type_like data_index, const std::vector<bool> flip_axes = {}) const {
+  data_index_inverse(indice_type_like data_index,
+                     const std::vector<bool> &flip_axes = {}) const {
     std::vector<indices_type> coordinates(resolution_.size());
     int data_index_ = data_index;
     for (int parameter = static_cast<int>(coordinates.size()) - 1;
          parameter >= 0; parameter--) {
       auto [q, r] =
           std::div(data_index_, static_cast<int>(resolution_[parameter]));
-      if (static_cast<int>(flip_axes.size()) > parameter && flip_axes[parameter])
+      if (static_cast<int>(flip_axes.size()) > parameter &&
+          flip_axes[parameter])
         coordinates[parameter] = resolution_[parameter] - r;
       else
         coordinates[parameter] = r;
@@ -239,7 +240,8 @@ public:
 
   void differentiate(indices_type axis);
 
-  inline sparse_type sparsify(const std::vector<bool>& flip_axes={}, bool verbose = false) const {
+  inline sparse_type sparsify(const std::vector<bool> &flip_axes = {},
+                              bool verbose = false) const {
     std::vector<std::vector<indices_type>> coordinates;
     std::vector<dtype> values;
     // for (indices_type i = 0; i < static_cast<indices_type>(this->size());
@@ -248,10 +250,10 @@ public:
       auto stuff = this->data_at(i);
       if (stuff == 0) [[likely]] // as this is sparse
         continue;
-      coordinates.push_back(this->data_index_inverse(i,  flip_axes));
+      coordinates.push_back(this->data_index_inverse(i, flip_axes));
       values.push_back(stuff);
     }
-    if (verbose) {
+    if (verbose) [[unlikely]] {
 
       // for (auto [pt,w] : std::views::zip(coordinates, values)){ NIK apple
       // clang

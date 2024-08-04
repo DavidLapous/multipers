@@ -17,12 +17,12 @@
 namespace Gudhi::multiparameter::hilbert_function {
 
 // TODO : this function is ugly
-template <typename value_type, typename indices_type>
-inline double
-horizontal_line_filtration2(const std::vector<value_type> &x,
-                            indices_type height, indices_type i, indices_type j,
+template <typename Filtration, typename indices_type>
+inline typename Filtration::value_type
+horizontal_line_filtration2(const Filtration &x, indices_type height,
+                            indices_type i, indices_type j,
                             const std::vector<indices_type> &fixed_values) {
-  constexpr const double inf = std::numeric_limits<double>::infinity();
+  const auto &inf = Filtration::T_inf;
   for (indices_type k = 0u; k < static_cast<indices_type>(x.size()); k++) {
     if (k == i || k == j)
       continue;                 // coordinate in the plane
@@ -488,11 +488,7 @@ inline void compute_2d_hilbert_surface(
     for (std::size_t k = 0; k < multi_filtration.size(); k++) {
       value_type horizontal_filtration;
       if constexpr (Filtration::is_multi_critical) {
-        horizontal_filtration =
-            std::numeric_limits<value_type>::has_infinity
-                ? std::numeric_limits<value_type>::infinity()
-                : std::numeric_limits<value_type>::max(); /**< Default infinite
-                                                             value. */
+        horizontal_filtration = Filtration::T_inf;
         for (const auto &stuff : multi_filtration[k])
           horizontal_filtration =
               std::min(horizontal_filtration,
@@ -522,7 +518,8 @@ inline void compute_2d_hilbert_surface(
       }
       barcodes = slicer.get_barcode();
     } else {
-      slicer.compute_persistence();
+      slicer.template compute_persistence<false>(); // BUG : cannot put this to
+                                                    // true ??
       barcodes = slicer.get_barcode();
     }
     index_type degree_index = 0;
@@ -796,7 +793,7 @@ get_hilbert_signed_measure(
   }
   auto raw_signed_measure = container.sparsify();
   if (verbose) {
-    std::cout << "Done.\n";
+    std::cout << "Done." << std::endl;
   }
   return raw_signed_measure;
 }

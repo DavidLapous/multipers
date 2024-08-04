@@ -285,6 +285,7 @@ public:
     return this->filtration_container;
   }
 
+  template <bool ignore_inf = true>
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
       std::vector<std::size_t> &out_gen_order)
@@ -304,7 +305,7 @@ public:
                   return true;
                 return one_filtration[i] < one_filtration[j];
               });
-    if constexpr (!PersBackend::is_vine) {
+    if constexpr (!PersBackend::is_vine && ignore_inf) {
       for (std::size_t &i : out_gen_order)
         if (one_filtration[i] == MultiFiltration::T_inf) {
           // TODO : later
@@ -329,9 +330,7 @@ public:
       }
       std::cout << "]" << std::endl;
     }
-    return PersBackend(
-        structure,
-        out_gen_order); // FIXME : PersBackend is not const on struct
+    return PersBackend(structure, out_gen_order);
   }
 
   inline const bool has_persistence() { return this->persistence.size(); };
@@ -386,7 +385,7 @@ public:
                       1); // TODO : This doesn't allow for negative dimensions
     const bool verbose = false;
     const bool debug = false;
-    auto inf = MultiFiltration::T_inf;
+    const auto inf = MultiFiltration::T_inf;
     for (const auto &bar : barcode_indices) {
       if constexpr (verbose)
         std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
@@ -441,9 +440,7 @@ public:
     if (num_bars <= 0)
       return out;
     auto idx = 0u;
-    value_type inf = std::numeric_limits<value_type>::has_infinity
-                         ? std::numeric_limits<value_type>::infinity()
-                         : std::numeric_limits<value_type>::max();
+    const value_type inf = MultiFiltration::T_inf;
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
@@ -483,9 +480,7 @@ public:
     if (num_bars <= 0)
       return out;
     auto idx = 0u;
-    value_type inf = std::numeric_limits<value_type>::has_infinity
-                         ? std::numeric_limits<value_type>::infinity()
-                         : std::numeric_limits<value_type>::max();
+    const value_type inf = MultiFiltration::T_inf;
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
@@ -583,7 +578,7 @@ public:
     }
     return {a, b};
   }
-  std::vector<typename MultiFiltration::OneCritical>
+  inline std::vector<typename MultiFiltration::OneCritical>
   get_filtration_values() const {
     if constexpr (MultiFiltration::is_multi_critical) {
       std::vector<typename MultiFiltration::OneCritical> out;
@@ -599,13 +594,13 @@ public:
       return generator_filtration_values; // copy not necessary for Onecritical
     } // (could return const&)
   }
-  std::vector<MultiFiltration> &get_filtrations() {
+  inline std::vector<MultiFiltration> &get_filtrations() {
     return generator_filtration_values;
   }
-  const std::vector<MultiFiltration> &get_filtrations() const {
+  inline const std::vector<MultiFiltration> &get_filtrations() const {
     return generator_filtration_values;
   }
-  const std::vector<int> get_dimensions() const {
+  inline const std::vector<int> get_dimensions() const {
     std::size_t n = this->num_generators();
     std::vector<int> out(n);
     for (std::size_t i = 0; i < n; ++i) {
@@ -621,7 +616,7 @@ public:
     filtration_container.resize(idx);
   }
 
-  const std::vector<std::vector<unsigned int>> get_boundaries() {
+  inline const std::vector<std::vector<unsigned int>> get_boundaries() {
     std::size_t n = this->num_generators();
     std::vector<std::vector<unsigned int>> out(n);
     for (auto i = 0u; i < n; ++i) {
@@ -654,7 +649,7 @@ public:
   }
 
   // dim, num_cycle_of_dim, num_faces_in_cycle, vertices_in_face
-  std::vector<std::vector<std::vector<std::vector<unsigned int>>>>
+  inline std::vector<std::vector<std::vector<std::vector<unsigned int>>>>
   get_representative_cycles(bool update = true,
                             const std::set<int> &dims = {}) {
     // iterable iterable simplex key
@@ -686,7 +681,7 @@ public:
     }
     return out;
   }
-  const std::vector<std::size_t> get_current_order() const {
+  const std::vector<std::size_t> &get_current_order() const {
     return generator_order;
   }
   const PersBackend &get_persistence() const { return persistence; }
@@ -715,17 +710,17 @@ public:
     inline TrucThread weak_copy() const { return TrucThread(*truc_ptr); }
 
     inline const bool has_persistence() { return this->persistence.size(); };
-    const PersBackend &get_persistence() const { return persistence; }
-    PersBackend &get_persistence() { return persistence; }
+    inline const PersBackend &get_persistence() const { return persistence; }
+    inline PersBackend &get_persistence() { return persistence; }
 
     inline std::pair<MultiFiltration, MultiFiltration>
     get_bounding_box() const {
       return truc_ptr->get_bounding_box();
     }
-    const std::vector<std::size_t> get_current_order() const {
+    inline const std::vector<std::size_t> &get_current_order() const {
       return generator_order;
     }
-    const std::vector<MultiFiltration> &get_filtrations() const {
+    inline const std::vector<MultiFiltration> &get_filtrations() const {
       return truc_ptr->get_filtrations();
     }
     inline const std::vector<int> &get_dimensions() const {
@@ -751,8 +746,8 @@ public:
     get_representative_cycles(bool update = true) {
       return truc_ptr->get_representative_cycles(update);
     }
-    inline void compute_persistence() {
-      this->persistence = this->truc_ptr->compute_persistence_out(
+    template <bool ignore_inf = true> inline void compute_persistence() {
+      this->persistence = this->truc_ptr->compute_persistence_out<ignore_inf>(
           this->filtration_container, this->generator_order);
     };
     inline void vineyard_update() {
