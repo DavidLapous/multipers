@@ -747,8 +747,9 @@ public:
       return truc_ptr->get_representative_cycles(update);
     }
     template <bool ignore_inf = true> inline void compute_persistence() {
-      this->persistence = this->truc_ptr->compute_persistence_out<ignore_inf>(
-          this->filtration_container, this->generator_order);
+      this->persistence =
+          this->truc_ptr->template compute_persistence_out<ignore_inf>(
+              this->filtration_container, this->generator_order);
     };
     inline void vineyard_update() {
       truc_ptr->vineyard_update(this->persistence, this->filtration_container,
