@@ -502,7 +502,7 @@ def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
     filtrations = s.get_filtrations()
     num_parameters  = s.num_parameters
     filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(len(idx)-1)) # TODO : optimize ?
-    st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype)
+    st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype, kcritical=s.is_kcritical)
     for i in range(len(filtrations)):
         if s.is_kcritical:
           for f in filtrations[i]:
