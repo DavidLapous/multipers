@@ -396,11 +396,44 @@ cdef class PyModule_{{SHORT}}:
         out = PyMultiDiagram_{{SHORT}}()
         out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree, threshold))
         return out
-    def barcode2(self, basepoint, int degree = -1,*, bool threshold = False): # TODO direction vector interface
+    @staticmethod
+    cdef _threshold_bc(bc): 
+        return tuple(np.fromiter((a for a in stuff if a[0] < np.inf),  dtype=np.dtype(({{PYTYPE}},2)) ) for stuff in bc)
+    @staticmethod
+    def _bc_to_full(bcs, basepoint, direction=None):
+        # i, (b sv d), coords 
+        basepoint = np.asarray(basepoint)[None,None,:]
+        direction = 1 if direction is None else np.asarray(direction)[None,None,:]
+        return tuple(bc[:,:,None]*direction + basepoint for bc in bcs)
+    def barcode2(self, basepoint, direction=None, int degree = -1,*, bool threshold = False, bool keep_inf = True, bool full = False): # TODO direction vector interface
         """
-        Compute the 1d-barcode a diagonal line based on basepoint, with direction (1,1).
+        Compute the 1d-barcode a diagonal line based on basepoint, with some direction.
+        
+        Parameters
+        ----------
+
+         - basepoint: 1d array
+         - directiont: 1d array or None, if None: diagonal
+         - degree: int the degree to compute (-1 means all)
+         - threshold: bool if True, threshold the barcode to the modules box
+         - keep_inf: bool if False, removes trivial bars
+                     Note that this removes the order w.r.t. the summands in that case
+         - full:bool if True, returns the coordinates of the barcode instead of the coordinate in the line.
+
+        The output is of the form
+
+        tuple[np.ndarray of shape (num_bars,2)] or tuple[array of shape (num_bar, 2, num_parameters)]
         """
-        return tuple(np.asarray(x) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
+        if direction is None:
+            bc = tuple(np.asarray(x) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
+        else:
+            bc = tuple(np.asarray(x) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint), _py21c_{{SHORT}}(direction)), degree))
+        if not keep_inf:
+            bc = PyModule_{{SHORT}}._threshold_bc(bc)
+        if full:
+            bc = PyModule_{{SHORT}}._bc_to_full(bc, basepoint, direction)
+
+        return bc
 
     def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
         """Computes barcodes of module along a set of lines.
@@ -445,7 +478,7 @@ cdef class PyModule_{{SHORT}}:
         out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
         return out
 
-    def barcodes2(self, int degree = -1, basepoints = None, int num=100, box = None,threshold = False):
+    def barcodes2(self, int degree = -1, basepoints = None, int num=100, box = None, bool threshold = False):
         """Computes barcodes of module along a set of lines.
 
         Parameters
@@ -484,8 +517,7 @@ cdef class PyModule_{{SHORT}}:
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
             cbasepoints.push_back(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoints[i])))
-        
-        return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes2(cbasepoints, degree)) ###   
+        return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes2(cbasepoints, degree))   
 
     def landscape(self, degree:int, k:int=0,box:list|np.ndarray|None=None, resolution:List=[100,100], bool plot=False):
         """Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
