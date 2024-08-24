@@ -425,15 +425,16 @@ cdef class PyModule_{{SHORT}}:
         tuple[np.ndarray of shape (num_bars,2)] or tuple[array of shape (num_bar, 2, num_parameters)]
         """
         if direction is None:
-            bc = tuple(np.asarray(x) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
         else:
-            bc = tuple(np.asarray(x) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint), _py21c_{{SHORT}}(direction)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint), _py21c_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
         if full:
             bc = PyModule_{{SHORT}}._bc_to_full(bc, basepoint, direction)
 
         return bc
+
 
     def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
         """Computes barcodes of module along a set of lines.
