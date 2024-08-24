@@ -151,11 +151,12 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
 
 def plot_signed_measures(signed_measures, threshold=None, size=4):
     num_degrees = len(signed_measures)
-    fig, axes = plt.subplots(
-        nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
-    )
-    if num_degrees == 1:
-        axes = [axes]
+    if num_degrees <= 1:
+        axes = [plt.gca()]
+    else:
+        fig, axes = plt.subplots(
+            nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
+        )
     for ax, signed_measure in zip(axes, signed_measures):
         plot_signed_measure(signed_measure=signed_measure, ax=ax, threshold=threshold)
     plt.tight_layout()
