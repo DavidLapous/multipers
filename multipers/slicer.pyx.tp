@@ -194,18 +194,67 @@ cdef class {{PYTHON_TYPE}}:
         self.truc.push_to(line)        
         return self
 
-    def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True):
+    @staticmethod
+    cdef _threshold_bcs(vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]] bcs):
+        return tuple(np.fromiter((a for a in stuff if a.first < {{PYTHON_TYPE}}._inf_value()),  dtype=np.dtype(({{PY_VALUE_TYPE}},2))) for stuff in bcs)
+    @staticmethod
+    def _bc_to_full(bcs, basepoint, direction=None):
+        # i, (b sv d), coords 
+        basepoint = np.asarray(basepoint)[None,None,:]
+        direction = 1 if direction is None else np.asarray(direction)[None,None,:]
+        return tuple(bc[:,:,None]*direction + basepoint for bc in bcs)
+
+    def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True, bool full=False):
         """
         Computes the persistence on a line L defined by 
          - a basepoint (num_parameters,) array
          - an optional direction (num_parameters,) array
+        
+        Warning: This is not parallelizable. Use `persitence_on_lines`.
         """
         self.push_to_line(basepoint,direction)
         self.truc.compute_persistence()
         if keep_inf:
-            return tuple(np.asarray(stuff, dtype = {{PY_VALUE_TYPE}}) for stuff in self.truc.get_barcode())
+            bcs = tuple(np.asarray(stuff, dtype = {{PY_VALUE_TYPE}}) for stuff in self.truc.get_barcode())
         else:
-            return tuple(np.fromiter((a for a in stuff if a.first < self._inf_value()),  dtype=np.dtype(({{PY_VALUE_TYPE}},2)) ) for stuff in self.truc.get_barcode())
+            bcs = {{PYTHON_TYPE}}._threshold_bcs(self.truc.get_barcode())
+
+        if full:
+            bcs = {{PYTHON_TYPE}}._bc_to_full(bcs, basepoint, direction)
+        return bcs
+
+    def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False):
+        """
+        Same as `persistence_on_line`, but with vineyards operation between
+        lines if `self.is_vine`, and in parallel otherwise.
+        """
+        cdef vector[vector[{{C_VALUE_TYPE}}]] c_basepoints
+        cdef vector[pair[vector[{{C_VALUE_TYPE}}], vector[{{C_VALUE_TYPE}}]]] c_truc
+        cdef vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] c_out 
+        if directions is None:
+            c_basepoints = basepoints
+            with nogil:
+                c_out = self.truc.persistence_on_lines(c_basepoints)
+        else:
+            c_truc = zip(basepoints,directions)
+            with nogil:
+                c_out = self.truc.persistence_on_lines(c_truc)
+        cdef int num_bc = c_basepoints.size()
+        
+        if keep_inf:
+            out = tuple(tuple(np.asarray(y, dtype = {{PY_VALUE_TYPE}}) for y in x) for x in c_out)
+        else:
+            out = tuple({{PYTHON_TYPE}}._threshold_bcs(x) for x in c_out)
+
+        if full:
+            _dirs = [None]*len(basepoints) if directions is None else directions 
+            out = tuple({{PYTHON_TYPE}}._bc_to_full(bcs, bp, dir) for bcs, bp, dir in zip(out,basepoints,_dirs))
+        return out
+
+
+
+
+
     def compute_persistence(self,one_filtration=None)->{{PYTHON_TYPE}}:
         """
         Computes the current persistence, or the persistence

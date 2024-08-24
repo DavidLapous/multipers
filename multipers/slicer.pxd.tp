@@ -83,6 +83,10 @@ cdef extern from "Persistence_slices_interface.h":
       {{if IS_KCRITICAL}}
       void add_point(const Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}] &) nogil
       {{endif}}
+
+
+      vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[vector[{{C_VALUE_TYPE}}]]) nogil
+      vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[pair[vector[{{C_VALUE_TYPE}}],vector[{{C_VALUE_TYPE}}]]]) nogil
 {{endfor}}
 
 
