@@ -222,16 +222,17 @@ def persistence_on_line_from_rank_sm(
     else:
         xs = xa
         ys = ya
-    out = np.concatenate([xs, ys], axis=1)
+    out = np.concatenate([xs, ys], axis=1,dtype=np.float64)
 
     ## TODO: check if this is faster than doing a np.repeat on x ?
     cdef dict[dict,tuple] d = {}
-    cdef some_float[:,:] c_out = out # view
-    cdef some_float[:] c_w = w
+    cdef double[:,:] c_out = out # view
+    cdef int64_t[:] c_w = np.asarray(w,dtype=np.int64)
+    cdef int num_pts = out.shape[0]
     # for i, stuff in enumerate(out):
     #     if stuff[0] < np.inf:
     #         d[tuple(stuff)] = d.get(tuple(stuff), 0) + w[i]
-    for i in range(c_out.shape[0]):
+    for i in range(num_pts):
         if c_out[i][0] < np.inf:
             machin = tuple(c_out[i])
             d[machin] = d.get(machin, 0) + c_w[i]
