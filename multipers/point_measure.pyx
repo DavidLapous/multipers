@@ -174,3 +174,93 @@ def zero_out_sms(sms, mass_default):
     """
     return tuple(zero_out_sm(pts,weights, mass_default) for pts,weights in sms)
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def persistence_on_line_from_rank_sm(
+    sm: tuple[np.ndarray, np.ndarray],
+    basepoint: np.ndarray,
+    direction: Optional[np.ndarray] = None,
+    bool full = False,
+):
+    """
+    Given a rank signed measure `sm` and a line with basepoint `basepoint` (1darray) and
+    direction `direction` (1darray), projects the rank signed measure on the given line,
+    and returns the associated estimated barcode.
+    If full is True, the barcode is given as coordinates in R^{`num_parameters`} instead
+    of coordinates w.r.t. the line.
+    """
+    basepoint = np.asarray(basepoint)
+    num_parameters = basepoint.shape[0]
+    x, w = sm
+    assert (
+        x.shape[1] // 2 == num_parameters
+    ), f"Incoherent number of parameters. sm:{x.shape[1]//2} vs {num_parameters}"
+    x, y = x[:, :num_parameters], x[:, num_parameters:]
+    if direction is not None:
+        direction = np.asarray(direction)
+        ok_idx = direction > 0
+        if ok_idx.sum() == 0:
+            raise ValueError(f"Got invalid direction {direction}")
+        zero_idx = None if np.all(ok_idx) else direction == 0
+    else:
+        direction = np.asarray([1], dtype=int)
+        ok_idx = slice(None)
+        zero_idx = None
+    xa = np.max(
+        (x[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=1
+    )
+    ya = np.min(
+        (y[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=1
+    )
+    if zero_idx is not None:
+        xb = np.where(x[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
+        yb = np.where(y[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
+        xs = np.max(np.concatenate([xa, xb], axis=1), axis=1, keepdims=1)
+        ys = np.min(np.concatenate([ya, yb], axis=1), axis=1, keepdims=1)
+    else:
+        xs = xa
+        ys = ya
+    out = np.concatenate([xs, ys], axis=1)
+
+    ## TODO: check if this is faster than doing a np.repeat on x ?
+    cdef dict[dict,tuple] d = {}
+    cdef some_float[:,:] c_out = out # view
+    cdef some_float[:] c_w = w
+    # for i, stuff in enumerate(out):
+    #     if stuff[0] < np.inf:
+    #         d[tuple(stuff)] = d.get(tuple(stuff), 0) + w[i]
+    for i in range(c_out.shape[0]):
+        if c_out[i][0] < np.inf:
+            machin = tuple(c_out[i])
+            d[machin] = d.get(machin, 0) + c_w[i]
+
+    out = np.fromiter(
+        itertools.chain.from_iterable(([x] * w for x, w in d.items() if x[0] < x[1])),
+        dtype=np.dtype((np.float64, 2)),
+    )
+    if full:
+        out = basepoint[None, None] + out[..., None] * direction[None, None]
+    return out
+
+
+def estimate_rank_from_rank_sm(sm:tuple, a, b) -> int:
+    """
+    Given a rank signed measure (sm) and two points (a) and (b),
+    estimates the rank between these two points.
+    """
+    a = np.asarray(a)
+    b = np.asarray(b)
+    if not (a <= b).all():
+        return 0
+    x, w = sm
+    num_parameters = x.shape[1] // 2
+    assert (
+        a.shape[0] == b.shape[0] == num_parameters
+    ), f"Incoherent number of parameters. sm:{num_parameters} vs {a.shape[0]} and {b.shape[0]}"
+    idx = (
+        (x[:, :num_parameters] <= a[None]).all(1)
+        * (x[:, num_parameters:] >= b[None]).all(1)
+    ).ravel()
+    return w[idx].sum()
+
+
