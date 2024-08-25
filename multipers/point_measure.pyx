@@ -178,7 +178,7 @@ def zero_out_sms(sms, mass_default):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def persistence_on_line_from_rank_sm(
+def barcode_from_rank_sm(
     sm: tuple[np.ndarray, np.ndarray],
     basepoint: np.ndarray,
     direction: Optional[np.ndarray] = None,
