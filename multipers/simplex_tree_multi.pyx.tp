@@ -90,7 +90,7 @@ from tqdm import tqdm
 import multipers.grids as mpg
 
 from multipers.ml.signed_betti import rank_decomposition_by_rectangles
-from multipers.point_measure_integration import sparsify
+from multipers.point_measure import sparsify
 
 from warnings import warn
 

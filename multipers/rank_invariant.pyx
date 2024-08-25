@@ -23,7 +23,7 @@ import multipers.slicer as mps
 from multipers.slicer cimport *
 
 from multipers.ml.signed_betti import rank_decomposition_by_rectangles
-from multipers.point_measure_integration import sparsify
+from multipers.point_measure import sparsify
 
 
 

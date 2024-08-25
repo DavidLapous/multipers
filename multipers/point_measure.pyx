@@ -4,6 +4,8 @@ from libcpp.vector cimport vector
 from libcpp cimport bool, int, float
 import numpy as np
 cimport numpy as cnp
+import itertools
+from typing import Optional
 
 from collections import defaultdict
 cnp.import_array()

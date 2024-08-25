@@ -820,7 +820,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def _integrate_measure(sm, filtrations):
-        from multipers.point_measure_integration import integrate_measure
+        from multipers.point_measure import integrate_measure
 
         return integrate_measure(sm[0], sm[1], filtrations)
 

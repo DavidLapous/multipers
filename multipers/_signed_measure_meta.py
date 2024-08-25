@@ -5,7 +5,7 @@ import numpy as np
 import multipers as mp
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
-from multipers.point_measure_integration import clean_sms, zero_out_sms
+from multipers.point_measure import clean_sms, zero_out_sms
 from multipers.rank_invariant import rank_from_slicer
 from multipers.slicer import _hilbert_signed_measure
 from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
