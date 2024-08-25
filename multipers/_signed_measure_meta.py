@@ -8,9 +8,11 @@ from multipers.plots import plot_signed_measures
 from multipers.point_measure import clean_sms, zero_out_sms
 from multipers.rank_invariant import rank_from_slicer
 from multipers.slicer import _hilbert_signed_measure
-from multipers.simplex_tree_multi import (SimplexTreeMulti_type,
-                                          _available_strategies,
-                                          is_simplextree_multi)
+from multipers.simplex_tree_multi import (
+    SimplexTreeMulti_type,
+    _available_strategies,
+    is_simplextree_multi,
+)
 from multipers.slicer import Slicer_type, is_slicer
 
 
@@ -120,18 +122,15 @@ def signed_measure(
     if not filtered_complex.is_squeezed:
         if verbose:
             print("Coarsening complex...", end="")
-        filtered_complex_ = filtered_complex.grid_squeeze(
-            grid_conversion
-        )
+        filtered_complex_ = filtered_complex.grid_squeeze(grid_conversion)
         if verbose:
             print("Done.")
     else:
         filtered_complex_ = filtered_complex.copy()
 
-    
     # assert filtered_complex_.is_squeezed
     if None not in degrees:
-        max_degree = np.max(degrees) + 1 
+        max_degree = np.max(degrees) + 1
         if verbose:
             print(f"Pruning simplicies up to {max_degree}...", end="")
         if filtered_complex_.dimension > max_degree:
@@ -143,7 +142,6 @@ def signed_measure(
     assert num_parameters == len(
         grid_conversion
     ), f"Number of parameter do not coincide. Got (grid_conversion) {len(grid_conversion)} and (filtered complex) {num_parameters}."
-
 
     if is_simplextree_multi(filtered_complex_):
         if num_collapses != 0:
@@ -157,6 +155,8 @@ def signed_measure(
 
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
+        if verbose:
+            print("Input is a slicer.")
         if backend is not None and not filtered_complex_.is_minpres:
             from multipers.slicer import minimal_presentation
 
@@ -176,6 +176,8 @@ def signed_measure(
             if verbose:
                 print("Done.")
             if invariant is not None and "rank" in invariant:
+                if verbose:
+                    print("Computing rank...", end="")
                 sms = [
                     rank_from_slicer(
                         s,
@@ -187,11 +189,19 @@ def signed_measure(
                     for s, d in zip(reduced_complex, degrees)
                 ]
                 fix_mass_default = False
+                if verbose:
+                    print("Done.")
             else:
+                if verbose:
+                    print("Reduced slicer. Retrieving measure from it...", end="")
                 sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
+                if verbose:
+                    print("Done.")
         else:  # No backend
             if invariant is not None and "rank" in invariant:
                 degrees = np.asarray(degrees, dtype=int)
+                if verbose:
+                    print("Computing rank...", end="")
                 sms = rank_from_slicer(
                     filtered_complex_,
                     degrees=degrees,
@@ -200,49 +210,52 @@ def signed_measure(
                     # grid_shape=tuple(len(g) for g in grid_conversion),
                 )
                 fix_mass_default = False
+                if verbose:
+                    print("Done.")
             elif filtered_complex_.is_minpres:
+                if verbose:
+                    print("Reduced slicer. Retrieving measure from it...", end="")
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
                 )
+                if verbose:
+                    print("Done.")
             elif (invariant is None or "euler" in invariant) and (
                 len(degrees) == 1 and degrees[0] is None
             ):
+                if verbose:
+                    print("Retrieving measure from slicer...", end="")
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
                 )
+                if verbose:
+                    print("Done.")
             else:
+                if verbose:
+                    print("Computing Hilbert function...", end="")
                 sms = _hilbert_signed_measure(
                     filtered_complex_,
-                    degrees=degrees, 
+                    degrees=degrees,
                     zero_pad=fix_mass_default,
-                    n_jobs=n_jobs, 
+                    n_jobs=n_jobs,
                     verbose=verbose,
                 )
                 fix_mass_default = False
-                # from multipers.slicer import minimal_presentation
-                #
-                # backend = "mpfree"  ## TODO : make a non-mpfree backend
-                # if verbose:
-                #     print("Reducing complex...", end="")
-                # reduced_complex = minimal_presentation(
-                #     filtered_complex_,
-                #     degrees=degrees,
-                #     backend=backend,
-                #     vineyard=vineyard,
-                # )
-                # if verbose:
-                #     print("Done.")
-                # sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
+                if verbose:
+                    print("Done.")
 
     elif is_simplextree_multi(filtered_complex_):
+        if verbose:
+            print("Input is a simplextree.")
         ## we still have a simplextree here
         if invariant in ["rank_invariant", "rank"]:
+            if verbose:
+                print("Computing rank invariant...", end="")
             assert (
                 num_parameters == 2
             ), "Rank invariant only implemented for 2-parameter modules."
             assert not coordinate_measure, "Not implemented"
-            from multipers.simplex_tree_multi import \
-                _rank_signed_measure as smri
+            from multipers.simplex_tree_multi import _rank_signed_measure as smri
 
             sms = smri(
                 filtered_complex_,
@@ -251,7 +264,11 @@ def signed_measure(
                 expand_collapse=expand_collapse,
             )
             fix_mass_default = False
+            if verbose:
+                print("Done.")
         elif len(degrees) == 1 and degrees[0] is None:
+            if verbose:
+                print("Computing Euler Characteristic...", end="")
             assert invariant is None or invariant in [
                 "euler",
                 "euler_characteristic",
@@ -267,13 +284,18 @@ def signed_measure(
                 )
             ]
             fix_mass_default = False
+            if verbose:
+                print("Done.")
         else:
+            if verbose:
+                print("Computing Hilbert Function...", end="")
             assert invariant is None or invariant in [
                 "hilbert",
                 "hilbert_function",
             ], "Found homological degrees for euler computation."
-            from multipers.simplex_tree_multi import \
-                _hilbert_signed_measure as hilbert_signed_measure
+            from multipers.simplex_tree_multi import (
+                _hilbert_signed_measure as hilbert_signed_measure,
+            )
 
             sms = hilbert_signed_measure(
                 filtered_complex_,
@@ -284,6 +306,8 @@ def signed_measure(
                 expand_collapse=expand_collapse,
             )
             fix_mass_default = False
+            if verbose:
+                print("Done.")
     else:
         raise ValueError("Filtered complex has to be a SimplexTree or a Slicer.")
 
