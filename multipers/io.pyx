@@ -283,6 +283,12 @@ def scc_reduce_from_str(
     blocks = scc_parser(output_path + id)
     if clear:
         clear_io(input_path+id, output_path + id)
+
+
+    ## mpfree workaround: last size is 0 but shouldn't...
+    if len(blocks) and not len(blocks[-1][1]):
+        blocks=blocks[:-1]
+
     return blocks
 
 def reduce_complex(
@@ -384,6 +390,10 @@ def function_delaunay_presentation(
     blocks = scc_parser(output_path + id)
     if clear:
         clear_io(output_path + id, input_path + id)
+    ## Function Delaunay workaround: last size is 0 but shouldn't...
+    if len(blocks) and not len(blocks[-1][1]):
+        blocks=blocks[:-1]
+
     return blocks
 
 
@@ -467,6 +477,8 @@ def clear_io(*args):
 #         blocks = [(np.asarray(f,dtype=filtration_dtype), tuple(b)) for f,b in blocks[::-1]] ## presentation is on the other order 
 #     return blocks+[(np.empty(0,dtype=filtration_dtype),[])]
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def scc2disk(
         stuff,
         path:str|os.PathLike,
@@ -509,7 +521,8 @@ def scc2disk(
             filtration = np.asarray(filtration).astype(str)
             # boundary = tuple(x.astype(str) for x in boundary)
             f.write(" ".join(itertools.chain.from_iterable(
-                ((*(f.tolist()),";",*(np.asarray(b).astype(str).tolist()),"\n") for f,b in zip(filtration, boundary))
+                ((*(f.tolist()),  ";",  *(np.asarray(b).astype(str).tolist()), "\n")
+                    for f,b in zip(filtration, boundary))
                 )
             ))
             # for j in range(<int>len(filtration)):
