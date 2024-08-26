@@ -163,13 +163,16 @@ def signed_measure(
 
     # assert filtered_complex_.is_squeezed
     if None not in degrees:
-        max_degree = np.max(degrees) + 1
-        if verbose:
-            print(f"Pruning simplicies up to {max_degree}...", end="")
-        if filtered_complex_.dimension > max_degree:
-            filtered_complex_.prune_above_dimension(max_degree)
-        if verbose:
-            print("Done.")
+        if is_slicer(filtered_complex_) and filtered_complex_.is_minpres:
+            pass
+        else:
+            max_degree = np.max(degrees) + 1
+            if verbose:
+                print(f"Pruning simplicies up to {max_degree}...", end="")
+            if filtered_complex_.dimension > max_degree:
+                filtered_complex_.prune_above_dimension(max_degree)
+            if verbose:
+                print("Done.")
 
     num_parameters = filtered_complex.num_parameters
     assert num_parameters == len(
