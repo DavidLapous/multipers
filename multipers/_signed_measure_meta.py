@@ -277,7 +277,7 @@ def signed_measure(
                     print("Retrieving measure from slicer...", end="")
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
-                    shift=(filtered_complex_.minpres_degree % 2),
+                    shift=0,  # no minpres
                 )
                 if verbose:
                     print("Done.")
