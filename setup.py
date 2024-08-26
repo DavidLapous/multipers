@@ -25,7 +25,7 @@ cython_modules = [
     # "hilbert_function",
     # "euler_characteristic",
     # 'cubical_multi_complex',
-    "point_measure_integration",
+    "point_measure",
     "grids",
     "slicer",
 ]
