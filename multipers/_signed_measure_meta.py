@@ -37,7 +37,7 @@ def signed_measure(
     grid_conversion: Optional[Iterable] = None,
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
-    """
+    r"""
     Computes the signed measures given by the decomposition of the hilbert
     function or the euler characteristic, or the rank invariant.
 
@@ -48,7 +48,7 @@ def signed_measure(
        None represents the euler characteristic.
      - mass_default: Either None, or 'auto' or 'inf', or array-like of floats.
        Where to put the default mass to get a zero-mass measure.
-       This corresponds to zero-out the filtered complex outside of \{ x\in \mathbb R^n \mid x\le `mass_default`\}
+       This corresponds to zero-out the filtered complex outside of $\{ x\in \mathbb R^n \mid x\le `mass_default`\}$
      - invariant: The invariant to use, either "hilbert", "rank", or "euler".
      - plot:bool, plots the computed measures if true.
      - n_jobs:int, number of jobs. Defaults to #cpu.
@@ -109,6 +109,9 @@ def signed_measure(
         assert (
             len(degrees) == 1
         ), f"Can only compute one invariant at the time. Got {degrees=}, {invariant=}."
+        assert invariant is None or not (
+            "hilbert" in invariant or "rank" in invariant
+        ), f"Hilbert and Rank cannot compute `None` degree. got {degrees=}, {invariant=}."
         invariant = "euler"
     if clean is None:
         clean = True if None in degrees else False
