@@ -5,7 +5,7 @@ from libcpp cimport bool, int, float
 import numpy as np
 cimport numpy as cnp
 import itertools
-from typing import Optional
+from typing import Optional,Iterable
 
 from collections import defaultdict
 cnp.import_array()
@@ -34,7 +34,7 @@ cimport cython
 def integrate_measure(
         some_float[:,:] pts, 
         some_int[:] weights, 
-        filtration_grid:Optional[list[np.ndarray]]=None,
+        filtration_grid:Optional[Iterable[np.ndarray]]=None,
         grid_strategy:str="regular",
         resolution:int|list[int]=100,
         bool return_grid=False,
