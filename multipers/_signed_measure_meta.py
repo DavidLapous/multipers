@@ -29,11 +29,12 @@ def signed_measure(
     expand_collapse: bool = False,
     backend: Optional[str] = None,
     thread_id: str = "",
-    grid_conversion: Optional[list] = None,
+    grid: Optional[Iterable] = None,
     coordinate_measure: bool = False,
     num_collapses: int = 0,
     clean: Optional[bool] = None,
     vineyard: bool = False,
+    grid_conversion: Optional[Iterable] = None,
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
@@ -56,8 +57,8 @@ def signed_measure(
      - expand_collapse: when the input is a simplextree, only expands the complex when computing 1-dimensional slices. Meant to reduce memory footprint at some computational expense.
      - backend:str  reduces first the filtered complex using an external library,
      see ``backend`` in :func:`multipers.io.reduce_complex`.
-     - grid_conversion: If given, re-evaluates the final signed measure in this grid.
-     - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid_conversion.
+     - grid: If given, re-evaluates the final signed measure in this grid.
+     - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid.
      - num_collapses: int, if `filtered_complex` is a simplextree, does some collapses if possible.
      - clean: reduces the output signed measure. Only useful for euler computations.
 
@@ -67,6 +68,15 @@ def signed_measure(
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
     """
+    ## TODO : add timings in verbose
+    if grid_conversion is not None:
+        grid = tuple(f for f in grid_conversion)
+        raise DeprecationWarning(
+            """
+                Parameter `grid_conversion` is deprecated. Use `grid` instead. 
+                Most of the time there is no conversion anymore.
+                """
+        )
 
     if degree is not None or len(degrees) == 0:
         degrees = list(degrees) + [degree]
@@ -91,20 +101,18 @@ def signed_measure(
         not plot or filtered_complex.num_parameters == 2
     ), "Can only plot 2d measures."
 
-    if grid_conversion is None and not filtered_complex.is_squeezed:
-        grid_conversion = compute_grid(
+    if grid is None and not filtered_complex.is_squeezed:
+        grid = compute_grid(
             filtered_complex, strategy=grid_strategy, **infer_grid_kwargs
         )
-    if filtered_complex.is_squeezed and grid_conversion is None:
-        grid_conversion = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
+    if filtered_complex.is_squeezed and grid is None:
+        grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
 
     if mass_default is None:
         mass_default = mass_default
     elif isinstance(mass_default, str):
         if mass_default == "auto":
-            mass_default = np.array(
-                [1.1 * np.max(f) - 0.1 * np.min(f) for f in grid_conversion]
-            )
+            mass_default = np.array([1.1 * np.max(f) - 0.1 * np.min(f) for f in grid])
         elif mass_default == "inf":
             mass_default = np.array([np.inf] * filtered_complex.num_parameters)
         else:
@@ -116,13 +124,10 @@ def signed_measure(
             and mass_default.shape[0] == filtered_complex.num_parameters
         )
 
-    # INPUT_ARGS = locals()
-    # INPUT_ARGS.pop("filtered_complex")
-
     if not filtered_complex.is_squeezed:
         if verbose:
             print("Coarsening complex...", end="")
-        filtered_complex_ = filtered_complex.grid_squeeze(grid_conversion)
+        filtered_complex_ = filtered_complex.grid_squeeze(grid)
         if verbose:
             print("Done.")
     else:
@@ -140,8 +145,8 @@ def signed_measure(
 
     num_parameters = filtered_complex.num_parameters
     assert num_parameters == len(
-        grid_conversion
-    ), f"Number of parameter do not coincide. Got (grid_conversion) {len(grid_conversion)} and (filtered complex) {num_parameters}."
+        grid
+    ), f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
 
     if is_simplextree_multi(filtered_complex_):
         if num_collapses != 0:
@@ -183,7 +188,7 @@ def signed_measure(
                         s,
                         degrees=[1],
                         n_jobs=n_jobs,
-                        # grid_shape=tuple(len(g) for g in grid_conversion),
+                        # grid_shape=tuple(len(g) for g in grid),
                         zero_pad=fix_mass_default,
                     )[0]
                     for s, d in zip(reduced_complex, degrees)
@@ -207,7 +212,7 @@ def signed_measure(
                     degrees=degrees,
                     n_jobs=n_jobs,
                     zero_pad=fix_mass_default,
-                    # grid_shape=tuple(len(g) for g in grid_conversion),
+                    # grid_shape=tuple(len(g) for g in grid),
                 )
                 fix_mass_default = False
                 if verbose:
@@ -317,12 +322,12 @@ def signed_measure(
         sms = clean_sms(sms)
         if verbose:
             print("Done.")
-    if grid_conversion is not None and not coordinate_measure:
+    if grid is not None and not coordinate_measure:
         if verbose:
             print("Pushing back the measure to the grid...", end="")
         sms = sms_in_grid(
             sms,
-            grid_conversion=grid_conversion,
+            grid=grid,
             mass_default=mass_default,
             num_parameters=num_parameters,
         )
@@ -342,7 +347,7 @@ def signed_measure(
 
 
 def _signed_measure_from_scc(
-    minimal_presentation, grid_conversion=None
+    minimal_presentation,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     pts = np.concatenate([b[0] for b in minimal_presentation if len(b[0]) > 0])
     weights = np.concatenate(
