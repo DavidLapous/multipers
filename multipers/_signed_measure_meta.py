@@ -48,25 +48,50 @@ def signed_measure(
        None represents the euler characteristic.
      - mass_default: Either None, or 'auto' or 'inf', or array-like of floats.
        Where to put the default mass to get a zero-mass measure.
-     - grid_strategy: If not squeezed yet, the strategy to coarsen the grid; see ``strategy`` in :func:`multipers.grids.compute_grid`.
+       This corresponds to zero-out the filtered complex outside of \{ x\in \mathbb R^n \mid x\le `mass_default`\}
      - invariant: The invariant to use, either "hilbert", "rank", or "euler".
      - plot:bool, plots the computed measures if true.
-     - n_jobs:int, number of jobs.
-       Defaults to #cpu, but when doing parallel computations of signed measures, we recommend setting this to 1.
+     - n_jobs:int, number of jobs. Defaults to #cpu.
      - verbose:bool, prints c++ logs.
-     - expand_collapse: when the input is a simplextree, only expands the complex when computing 1-dimensional slices. Meant to reduce memory footprint at some computational expense.
-     - backend:str  reduces first the filtered complex using an external library,
-     see ``backend`` in :func:`multipers.io.reduce_complex`.
-     - grid: If given, re-evaluates the final signed measure in this grid.
+     - expand_collapse: when the input is a simplextree,
+       only expands the complex when computing 1-dimensional slices.
+       Meant to reduce memory footprint at some computational expense.
+     - backend:str  reduces first the filtered complex using an external library `backend`,
+         see ``backend`` in :func:`multipers.io.reduce_complex`.
+     - grid: If given, the computations will be done on the restriction of the filtered complex to this grid.
+        It can also be used for auto-differentiation, i.e., if the grid is a list of pytorch tensors,
+        then the output measure will be pytorch-differentiable.
+     - grid_strategy: If not squeezed yet, and no grid is given,
+       the strategy to coarsen the grid; see ``strategy`` in :func:`multipers.grids.compute_grid`.
      - coordinate_measure: bool, if True, compute the signed measure as a coordinates given in grid.
      - num_collapses: int, if `filtered_complex` is a simplextree, does some collapses if possible.
-     - clean: reduces the output signed measure. Only useful for euler computations.
+     - clean: if True, reduces the measure. It is not necessary in general.
 
     Output
     ------
 
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
+
+    Notes on computational backends
+    -------------------------------
+    There are several backends for each of these computations.
+    The backend for computations used can be displayed with `verbose=True`, use it!
+    Also note that if `backend` is given, then the input will be converted to a slicer.
+     - Euler: is always computed by summing the weights of the simplices
+     - Hilbert: is computed by computing persistence on slices, and a Möbius inversion,
+       unless the detected input is a minimal presentation (i.e., `filtered_complex.is_minpres`),
+       which in that case, doesn't need any computation.
+       - If the input is a simplextree, this is done via a the standard Gudhi implementation,
+         with parallel (TBB) computations of slices.
+       - If the input is a slicer then
+         - If the input is vineyard-capable, then slices are computed via vineyards updates.
+           It is slower in general, but faster if single threaded.
+           In particular, it is usually faster to use this backend if you want to compute the
+           signed measure of multiple datasets in a parallel context.
+         - Otherwise, slices are computed in parallel.
+           It is usually faster to use this backend if not in a parallel context.
+     - Rank: Same as Hilbert.
     """
     ## TODO : add timings in verbose
     if grid_conversion is not None:
