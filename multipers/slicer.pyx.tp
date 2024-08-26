@@ -381,7 +381,7 @@ cdef class {{PYTHON_TYPE}}:
           {{endif}}
         return self
     def minpres(self,
-        int degree = 1, 
+        int degree=-1, 
         list[int] degrees=[],
         str backend:Literal["mpfree", "2pac"]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
@@ -484,7 +484,7 @@ def slicer2blocks(slicer, int degree = -1, bool reverse=True):
 
 def minimal_presentation(
         slicer,
-        int degree = 1, 
+        int degree = -1, 
         degrees:Iterable[int]=[],
         str backend:Literal["mpfree", "2pac", ""]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
@@ -513,6 +513,7 @@ def minimal_presentation(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
         # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+    assert degree>=0, f"Degree not provided."
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     blocks = to_blocks(slicer)
     if id is None:
@@ -522,6 +523,7 @@ def minimal_presentation(
     mio.scc2disk(blocks,path=mio.input_path+id, strip_comments=True)
     dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
     new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
+    new_blocks = new_blocks +  [(np.empty(0, dtype=np.float64),tuple())]*degree  ## Aligns back to the old degree
     new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
     new_slicer.minpres_degree = degree
     if filtration_grid is not None:

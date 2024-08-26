@@ -4,9 +4,10 @@ from multipers.tests import assert_sm
 import pytest
 import multipers.io as mio
 from multipers.tests import random_st
+
 np.random.seed(0)
 
-st = random_st(npts=50).collapse_edges(-2,ignore_warning=True)
+st = random_st(npts=50).collapse_edges(-2, ignore_warning=True)
 
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
@@ -62,7 +63,7 @@ def test_backends(invariant, degree, mass_default, S):
             sms.append(
                 mp.signed_measure(
                     s.minpres(degree=degree),
-                    degree=1,
+                    degree=degree,
                     grid_strategy=strat,
                     resolution=r,
                     mass_default=mass_default,

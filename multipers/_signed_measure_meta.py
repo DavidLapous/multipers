@@ -214,7 +214,7 @@ def signed_measure(
                 sms = [
                     rank_from_slicer(
                         s,
-                        degrees=[1],
+                        degrees=[d],
                         n_jobs=n_jobs,
                         # grid_shape=tuple(len(g) for g in grid),
                         zero_pad=fix_mass_default,
@@ -227,7 +227,15 @@ def signed_measure(
             else:
                 if verbose:
                     print("Reduced slicer. Retrieving measure from it...", end="")
-                sms = [_signed_measure_from_slicer(s)[0] for s in reduced_complex]
+                sms = [
+                    _signed_measure_from_slicer(
+                        s,
+                        shift=(
+                            reduced_complex.minpres_degree % 2 if d is None else d % 2
+                        ),
+                    )[0]
+                    for s, d in zip(reduced_complex, degrees)
+                ]
                 if verbose:
                     print("Done.")
         else:  # No backend
@@ -248,9 +256,15 @@ def signed_measure(
             elif filtered_complex_.is_minpres:
                 if verbose:
                     print("Reduced slicer. Retrieving measure from it...", end="")
-                sms = _signed_measure_from_slicer(
-                    filtered_complex_,
-                )
+                sms = [
+                    _signed_measure_from_slicer(
+                        filtered_complex_,
+                        shift=(
+                            filtered_complex_.minpres_degree % 2 if d is None else d % 2
+                        ),
+                    )[0]
+                    for d in degrees
+                ]
                 if verbose:
                     print("Done.")
             elif (invariant is None or "euler" in invariant) and (
@@ -260,6 +274,7 @@ def signed_measure(
                     print("Retrieving measure from slicer...", end="")
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
+                    shift=(filtered_complex_.minpres_degree % 2),
                 )
                 if verbose:
                     print("Done.")
@@ -377,7 +392,7 @@ def signed_measure(
 def _signed_measure_from_scc(
     minimal_presentation,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
-    pts = np.concatenate([b[0] for b in minimal_presentation if len(b[0]) > 0])
+    pts = np.concatenate([b[0] for b in minimal_presentation])
     weights = np.concatenate(
         [
             (1 - 2 * (i % 2)) * np.ones(len(b[0]))
@@ -390,12 +405,13 @@ def _signed_measure_from_scc(
 
 def _signed_measure_from_slicer(
     slicer: Slicer_type,
+    shift: int = 0,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     assert not slicer.is_kcritical, "Not implemented for k-critical filtrations yet."
     pts = np.array(slicer.get_filtrations())
     dims = slicer.get_dimensions()
-    weights = 1 - 2 * (
-        (1 + dims) % 2
-    )  # dim 0 is always empty : TODO : make that more clean
+    if shift:
+        dims += shift
+    weights = 1 - 2 * (dims % 2)
     sm = [(pts, weights)]
     return sm
