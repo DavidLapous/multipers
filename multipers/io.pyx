@@ -10,6 +10,8 @@ from typing import Optional, Literal
 from collections import defaultdict
 import itertools
 import threading
+import cython
+cimport cython
 
 # from multipers.filtration_conversions cimport *
 # from multipers.mma_structures cimport boundary_matrix,float,pair,vector,intptr_t
@@ -121,9 +123,11 @@ def scc_parser(path: str| os.PathLike):
         sizes = np.cumsum(np.asarray([0] + next(lines).split(), dtype=np.int32))
         lines = (parse_line_regex.match(a) for a in lines)
         clines = tuple((a.group("filtration"),a.group("boundary")) for a in lines)
-    F = np.fromiter((a[0].split() for a in clines), dtype=np.dtype((np.float32,2)), count = sizes[-1])
+    # F = np.fromiter((a[0].split() for a in clines), dtype=np.dtype((np.float64,2)), count = sizes[-1])
+    F = np.fromiter((np.fromstring(a[0], sep=r' ', dtype=np.float64) for a in clines), dtype=np.dtype((np.float64,num_parameters)), count = sizes[-1])
     
-    B = tuple(np.asarray(a[1].split(), dtype=np.int32) if len(a[1])>0 else np.empty(0, dtype=np.int32) for a in clines) ## TODO : this is very slow : optimize 
+    # B = tuple(np.asarray(a[1].split(), dtype=np.int32) if len(a[1])>0 else np.empty(0, dtype=np.int32) for a in clines) ## TODO : this is very slow : optimize 
+    B = tuple(np.fromstring(a[1], sep=' ', dtype=np.int32) for a in clines)
     # block_lines = (tuple(get_bf(x, num_parameters) for x in lines[sizes[i]:sizes[i+1]]) for i in range(len(sizes)-1))
 
     # blocks = [(np.asarray([x[0] for x in b if len(x)>0], dtype=float),tuple(x[1] for x in b))  for b in block_lines]
