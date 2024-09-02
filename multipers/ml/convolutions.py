@@ -1,8 +1,13 @@
 from collections.abc import Callable
 from itertools import product
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Union
 
 import numpy as np
+
+global available_kernels
+available_kernels = Union[
+    Literal["gaussian", "exponential", "exponential_kernel"], Callable
+]
 
 
 def convolution_signed_measures(
@@ -12,7 +17,7 @@ def convolution_signed_measures(
     flatten: bool = True,
     n_jobs: int = 1,
     backend="pykeops",
-    kernel="gaussian",
+    kernel: available_kernels = "gaussian",
     **kwargs,
 ):
     """
@@ -57,7 +62,7 @@ def convolution_signed_measures(
 
             def convolution_signed_measures_on_grid(
                 signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
-            ):
+            ) -> np.ndarray:
                 return np.concatenate(
                     [
                         _pts_convolution_pykeops(
@@ -119,7 +124,7 @@ def _pts_convolution_sparse_old(
     pts: np.ndarray,
     pts_weights: np.ndarray,
     grid_iterator,
-    kernel="gaussian",
+    kernel: available_kernels = "gaussian",
     bandwidth=0.1,
     **more_kde_args,
 ):
@@ -157,7 +162,7 @@ def _pts_convolution_pykeops(
     pts: np.ndarray,
     pts_weights: np.ndarray,
     grid_iterator,
-    kernel="gaussian",
+    kernel: available_kernels = "gaussian",
     bandwidth=0.1,
     **more_kde_args,
 ):
@@ -198,9 +203,7 @@ def exponential_kernel(x_i, y_j, bandwidth):
 
 
 def _kernel(
-    kernel: (
-        Literal["gaussian", "exponential", "multivariate_gaussian"] | Callable
-    ) = "gaussian",
+    kernel: available_kernels = "gaussian",
 ):
     match kernel:
         case "gaussian":
@@ -225,9 +228,7 @@ class KDE:
     def __init__(
         self,
         bandwidth: Any = 1,
-        kernel: (
-            Literal["m_gaussian", "gaussian", "exponential"] | Callable
-        ) = "gaussian",
+        kernel: available_kernels = "gaussian",
         return_log=False,
     ):
         """
@@ -348,6 +349,7 @@ Custom kernel has to be callable,
         log_probs : tensor (m)
                 log probability densities for each of the queried points in `Y`
         """
+        assert self._backend is not None, "Fit first."
         X = self.X if X is None else X
         if X.shape[0] == 0:
             return self._backend.zeros((Y.shape[0]))
@@ -370,7 +372,7 @@ def batch_signed_measure_convolutions(
     signed_measures,  # array of shape (num_data,num_pts,D)
     x,  # array of shape (num_x, D) or (num_data, num_x, D)
     bandwidth,  # either float or matrix if multivariate kernel
-    kernel,
+    kernel: available_kernels,
 ):
     """
     Input
@@ -416,7 +418,7 @@ class DTM:
     Distance To Measure
     """
 
-    def __init__(self, masses=[0.1], metric: str = "euclidean", **_kdtree_kwargs):
+    def __init__(self, masses=[], metric: str = "euclidean", **_kdtree_kwargs):
         """
         mass : float in [0,1]
                 The mass threshold
@@ -465,6 +467,9 @@ class DTM:
         -------
         the DTMs of Y, for each mass in masses.
         """
+        assert (
+            self._ks is not None and self._kdtree is not None and self._X is not None
+        ), "Fit first."
         if len(self.masses) == 0:
             return np.empty((0, len(Y)))
         assert Y.ndim == 2
@@ -499,6 +504,9 @@ class DTM:
 
         assert Y.ndim == 2
         assert self._backend == "torch", "Use the non-diff version with numpy."
+        assert (
+            self._ks is not None and self._kdtree is not None and self._X is not None
+        ), "Fit first."
         if len(self.masses) == 0:
             return torch.empty(0, len(Y))
         NN = self._kdtree.query(Y.detach(), self._ks.max(), return_distance=False)

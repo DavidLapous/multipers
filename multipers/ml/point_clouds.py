@@ -1,4 +1,5 @@
-from typing import Iterable, Literal, Optional
+from collections.abc import Callable, Iterable
+from typing import Literal, Optional
 
 import gudhi as gd
 import numpy as np
@@ -9,7 +10,7 @@ from tqdm import tqdm
 
 import multipers as mp
 import multipers.slicer as mps
-from multipers.ml.convolutions import DTM, KDE
+from multipers.ml.convolutions import DTM, KDE, available_kernels
 
 
 def _throw_nofit(any):
@@ -25,7 +26,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         complex: Literal["alpha", "rips", "delaunay"] = "rips",
         sparse: float | None = None,
         num_collapses: int = -2,
-        kernel: str = "gaussian",
+        kernel: available_kernels = "gaussian",
         log_density: bool = True,
         expand_dim: int = 1,
         progress: bool = False,
@@ -108,6 +109,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         return self._scale
 
     def _get_sts_rips(self, x):
+        assert self._output_type is not None and self._vineyard is not None
         st_init = gd.RipsComplex(
             points=x, max_edge_length=self._threshold, sparse=self.sparse
         ).create_simplex_tree(max_dimension=1)
@@ -142,7 +144,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             if self._output_type == "slicer":
                 st = mp.Slicer(st, vineyard=self._vineyard)
                 if self.reduce_degrees is not None:
-                    st = mp.minimal_presentation(st, degrees=self.reduce_degrees)
+                    st = mp.slicer.minimal_presentation(st, degrees=self.reduce_degrees)
             return st
 
         return Parallel(backend="threading", n_jobs=self.n_jobs)(
@@ -150,6 +152,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         )
 
     def _get_sts_alpha(self, x: np.ndarray, return_alpha=False):
+        assert self._output_type is not None and self._vineyard is not None
         alpha_complex = gd.AlphaComplex(points=x)
         st = alpha_complex.create_simplex_tree(max_alpha_square=self._threshold**2)
         vertices = np.array([i for (i,), _ in st.get_skeleton(0)])
@@ -170,7 +173,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             alligned_codensity[vertices] = codensity
             # alligned_codensity = np.array([codensity[i] if i in vertices else np.nan for i in range(max_vertices)])
             st_copy.fill_lowerstar(alligned_codensity, parameter=1)
-        if self._output_type == "slicer":
+        if "slicer" in self._output_type:
             sts2 = (mp.Slicer(st, vineyard=self._vineyard) for st in sts)
             if self.reduce_degrees is not None:
                 sts = tuple(
@@ -270,7 +273,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
     def transform(self, X):
         # precompile first
         # self._get_sts(X[0][:5])
-        self._get_codensities(X[0][:4], X[0][:4])
+        self._get_codensities(X[0][:2], X[0][:2])
         with tqdm(
             X, desc="Filling simplextrees", disable=not self.progress, total=len(X)
         ) as data:
