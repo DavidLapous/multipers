@@ -69,10 +69,12 @@ def _slicer_from_simplextree(st, backend, vineyard):
     else:
         if backend == "matrix":
             slicer = mps._SlicerNoVineSimplicial(st)
-        if backend == "clement":
+        elif backend == "clement":
             raise ValueError("Clement is Vineyard")
-        if backend == "graph":
+        elif backend == "graph":
             raise ValueError("Graph is Vineyard")
+        else:
+            raise ValueError(f"Inimplemented backend {backend}.")
     return slicer
 
 
