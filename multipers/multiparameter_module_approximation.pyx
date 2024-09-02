@@ -150,6 +150,7 @@ def module_approximation(
     """
     if isinstance(input, tuple) or isinstance(input, list):
         assert all(s.is_minpres for s in input), "Modules cannot be merged unless they are minimal presentations."
+        assert np.unique([s.minpres_degree for s in input]).shape[0] == len(input), "Multiple modules are at the same degree, cannot merge modules" 
         if len(input) == 0:
             return PyModule_f64()
         if n_jobs <= 1: 
@@ -161,8 +162,8 @@ def module_approximation(
                 for slicer in input
             ))
         mod = PyModule_f64().set_box(PyBox_f64(*modules[0].get_box()))
-        for dim,m in enumerate(modules):
-            mod.merge(m.get_module_of_degree(1), dim)
+        for i,m in enumerate(modules):
+            mod.merge(m, input[i].minpres_degree)
         return mod
     if box is None:
         if is_simplextree_multi(input):
