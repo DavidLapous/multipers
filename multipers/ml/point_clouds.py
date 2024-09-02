@@ -1,4 +1,4 @@
-from typing import Literal, Optional,Iterable
+from typing import Iterable, Literal, Optional
 
 import gudhi as gd
 import numpy as np
@@ -24,7 +24,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         threshold: float = np.inf,
         complex: Literal["alpha", "rips", "delaunay"] = "rips",
         sparse: float | None = None,
-        num_collapses:int= -2,
+        num_collapses: int = -2,
         kernel: str = "gaussian",
         log_density: bool = True,
         expand_dim: int = 1,
@@ -33,8 +33,10 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         fit_fraction: float = 1,
         verbose: bool = False,
         safe_conversion: bool = False,
-        output_type:Optional[Literal["slicer","simplextree", "slicer_vine", "slicer_novine"]]=None,
-        reduce_degrees:Optional[Iterable[int]]=None,
+        output_type: Optional[
+            Literal["slicer", "simplextree", "slicer_vine", "slicer_novine"]
+        ] = None,
+        reduce_degrees: Optional[Iterable[int]] = None,
     ) -> None:
         """
         (Rips or Alpha or Delaunay) + (Density Estimation or DTM) 1-critical 2-filtration.
@@ -78,9 +80,11 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.output_type = output_type
         self._output_type = None
         self.reduce_degrees = reduce_degrees
-        self._vineyard=None
-        
-        assert output_type != "simplextree" or reduce_degrees is None, "Reduced complex are not simplicial. Cannot return a simplextree."
+        self._vineyard = None
+
+        assert (
+            output_type != "simplextree" or reduce_degrees is None
+        ), "Reduced complex are not simplicial. Cannot return a simplextree."
         return
 
     def _get_distance_quantiles(self, X, qs):
@@ -169,7 +173,10 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         if self._output_type == "slicer":
             sts2 = (mp.Slicer(st, vineyard=self._vineyard) for st in sts)
             if self.reduce_degrees is not None:
-                sts = tuple(mp.slicer.minimal_presentation(s, degrees=self.reduce_degrees) for s in sts2)
+                sts = tuple(
+                    mp.slicer.minimal_presentation(s, degrees=self.reduce_degrees)
+                    for s in sts2
+                )
             else:
                 sts = tuple(sts2)
         if return_alpha:
@@ -186,16 +193,17 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             if self._output_type == "simplextree":
                 slicer = mps.to_simplextree(slicer)
             elif self.reduce_degrees is not None:
-                slicer = mp.minimal_presentation(slicer, degrees=self.reduce_degrees)
+                slicer = mp.slicer.minimal_presentation(
+                    slicer, degrees=self.reduce_degrees
+                )
             else:
-                slicer=slicer
+                slicer = slicer
             return slicer
 
         sts = Parallel(backend="threading", n_jobs=self.n_jobs)(
             delayed(get_st)(c) for c in codensities
         )
         return sts
-        
 
     def _get_codensities(self, x_fit, x_sample):
         x_fit = np.asarray(x_fit, dtype=np.float32)
@@ -232,9 +240,13 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 {self.complex}. Possible choises are rips, delaunay, or alpha."
                 )
         self._vineyard = not (self.output_type == "slicer_novine")
-        self._output_type = None if self.output_type is None else "simplextree" if self.output_type == "simplextree" else "slicer"
+        self._output_type = (
+            None
+            if self.output_type is None
+            else "simplextree" if self.output_type == "simplextree" else "slicer"
+        )
 
-    def _define_bandwidths(self,X):
+    def _define_bandwidths(self, X):
         qs = [
             q for q in [*-np.asarray(self.bandwidths), -self.threshold] if 0 <= q <= 1
         ]
