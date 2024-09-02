@@ -41,7 +41,7 @@ templated_cython_modules = [
 
 
 os.system(
-    "python _tempita_grid_gen.py"
+    "rm _simplextrees_.pkl _slicer_names.pkl & python _tempita_grid_gen.py"
 )  ## generates some parameter files (Tempita fails with python<3.12)
 sklearn._build_utils.gen_from_templates(
     (f"multipers/{mod}.tp" for mod in templated_cython_modules)
