@@ -144,7 +144,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             if self._output_type == "slicer":
                 st = mp.Slicer(st, vineyard=self._vineyard)
                 if self.reduce_degrees is not None:
-                    st = mp.slicer.minimal_presentation(st, degrees=self.reduce_degrees)
+                    st = mp.slicer.minimal_presentation(
+                        st, degrees=self.reduce_degrees, vineyard=self._vineyard
+                    )
             return st
 
         return Parallel(backend="threading", n_jobs=self.n_jobs)(
@@ -177,7 +179,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             sts2 = (mp.Slicer(st, vineyard=self._vineyard) for st in sts)
             if self.reduce_degrees is not None:
                 sts = tuple(
-                    mp.slicer.minimal_presentation(s, degrees=self.reduce_degrees)
+                    mp.slicer.minimal_presentation(
+                        s, degrees=self.reduce_degrees, vineyard=self._vineyard
+                    )
                     for s in sts2
                 )
             else:
@@ -191,13 +195,19 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 
         def get_st(c):
             slicer = mps.from_function_delaunay(
-                x, c, verbose=self.verbose, clear=not self.verbose
+                x,
+                c,
+                verbose=self.verbose,
+                clear=not self.verbose,
+                vineyard=self._vineyard,
             )
             if self._output_type == "simplextree":
                 slicer = mps.to_simplextree(slicer)
             elif self.reduce_degrees is not None:
                 slicer = mp.slicer.minimal_presentation(
-                    slicer, degrees=self.reduce_degrees
+                    slicer,
+                    degrees=self.reduce_degrees,
+                    vineyard=self._vineyard,
                 )
             else:
                 slicer = slicer

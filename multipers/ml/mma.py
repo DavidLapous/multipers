@@ -12,12 +12,15 @@ from multipers.grids import compute_grid as reduce_grid
 from multipers.ml.tools import filtration_grid_to_coordinates
 from multipers.mma_structures import PyBox_f64, PyModule_type
 
+_FilteredComplexType = Union[
+    mp.slicer.Slicer_type, mp.simplex_tree_multi.SimplexTreeMulti_type
+]
 
-_FilteredComplexType=Union[mp.slicer.Slicer_type|mp.simplex_tree_multi.SimplexTreeMulti_type]
 
 class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
     """
-    Turns a list of simplextrees to MMA approximations
+    Turns a list of list of simplextrees or slicers to MMA approximations.
+
     """
 
     def __init__(
@@ -26,84 +29,86 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
         expand_dim: Optional[int] = None,
         prune_degrees_above: Optional[int] = None,
         progress=False,
-        minpres_degrees:Optional[Iterable[int]]=None,
+        minpres_degrees: Optional[Iterable[int]] = None,
         **persistence_kwargs,
     ) -> None:
         super().__init__()
         self.persistence_args = persistence_kwargs
         self.n_jobs = n_jobs
-        self._has_axis = None
         self._num_axis = None
         self.prune_degrees_above = prune_degrees_above
         self.progress = progress
         self.expand_dim = expand_dim
         self._boxes = None
-        self.minpres_degrees=minpres_degrees
+        self._is_minpres = None
+        self.minpres_degrees = minpres_degrees
         return
-    
+
     @staticmethod
     def _is_filtered_complex(input):
-        return mp.simplex_tree_multi.is_simplextree_multi(input) or mp.slicer.is_slicer(input)
+        return mp.simplex_tree_multi.is_simplextree_multi(input) or mp.slicer.is_slicer(
+            input, allow_minpres=True
+        )
 
     def _input_checks(self, X):
-        self._has_axis = not self._is_filtered_complex(X[0])
-        if self._has_axis:
-            assert len(X) > 0, "No filtered complex found. Cannot fit."
-            assert self._is_filtered_complex(X[0][0]), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
-            self._num_axis = len(X[0])
-        first = X[0][0] if self._has_axis else X[0]
-        assert not mp.slicer.is_slicer(first) or self.expand_dim is None, "Cannot expand slicers."
+        assert len(X) > 0, "No filtered complex found. Cannot fit."
+        assert self._is_filtered_complex(
+            X[0][0]
+        ), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        self._num_axis = len(X[0])
+        first = X[0][0]
+        assert (
+            not mp.slicer.is_slicer(first) or self.expand_dim is None
+        ), "Cannot expand slicers."
+        self._is_minpres = mp.slicer.is_slicer(first) and isinstance(
+            first, Union[tuple, list]
+        )
+        assert not (
+            self._is_minpres and self.minpres_degrees is not None
+        ), "Input is already a minpres. Cannot reduce again."
 
-    def _infer_bounding_box(self,X):
-        if self._has_axis:
-            filtration_values = np.asarray(
+    def _infer_bounding_box(self, X):
+        assert self._num_axis is not None, "Fit first"
+        filtration_values = (
+            np.asarray(
+                [
+                    [s.filtration_bounds() for x in X for s in x[axis]]
+                    for axis in range(self._num_axis)
+                ]
+            )
+            if self._is_minpres
+            else np.asarray(
                 [
                     [x[axis].filtration_bounds() for x in X]
                     for axis in range(self._num_axis)
                 ]
             )
-            num_parameters = filtration_values.shape[-1]
-            # Output : axis, data, min/max, num_parameters
-            # print("TEST : NUM PARAMETERS ", num_parameters)
-            m = np.asarray(
+        )
+        num_parameters = filtration_values.shape[-1]
+        # Output : axis, data, min/max, num_parameters
+        # print("TEST : NUM PARAMETERS ", num_parameters)
+        m = np.asarray(
+            [
                 [
-                    [
-                        filtration_values[axis, :, 0, parameter].min()
-                        for parameter in range(num_parameters)
-                    ]
-                    for axis in range(self._num_axis)
+                    filtration_values[axis, :, 0, parameter].min()
+                    for parameter in range(num_parameters)
                 ]
-            )
-            M = np.asarray(
-                [
-                    [
-                        filtration_values[axis, :, 1, parameter].max()
-                        for parameter in range(num_parameters)
-                    ]
-                    for axis in range(self._num_axis)
-                ]
-            )
-            # shape of m/M axis,num_parameters
-            self._boxes = [
-                np.array([m_of_axis, M_of_axis]) for m_of_axis, M_of_axis in zip(m, M)
+                for axis in range(self._num_axis)
             ]
-        else:
-            filtration_values = np.asarray([x.filtration_bounds() for x in X])
-            num_parameters = filtration_values.shape[-1]
-            # print("TEST : NUM PARAMETERS ", num_parameters)
-            m = np.asarray(
+        )
+        M = np.asarray(
+            [
                 [
-                    filtration_values[:, 0, parameter].min()
+                    filtration_values[axis, :, 1, parameter].max()
                     for parameter in range(num_parameters)
                 ]
-            )
-            M = np.asarray(
-                [
-                    filtration_values[:, 1, parameter].max()
-                    for parameter in range(num_parameters)
-                ]
-            )
-            self._boxes = [m, M]
+                for axis in range(self._num_axis)
+            ]
+        )
+        # shape of m/M axis,num_parameters
+        self._boxes = [
+            np.array([m_of_axis, M_of_axis]) for m_of_axis, M_of_axis in zip(m, M)
+        ]
 
     def fit(self, X, y=None):
         if len(X) == 0:
@@ -115,29 +120,30 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
     def transform(self, X):
         if self.prune_degrees_above is not None:
             for x in X:
-                if self._has_axis:
-                    for x_ in x:
+                for x_ in x:
+                    if self._is_minpres:
+                        for s_ in x_:
+                            s_.prune_above_dimension(
+                                self.prune_degrees_above
+                            )  # we only do for H0 for computational ease
+                    else:
                         x_.prune_above_dimension(
                             self.prune_degrees_above
                         )  # we only do for H0 for computational ease
-                else:
-                    x.prune_above_dimension(
-                        self.prune_degrees_above
-                    )  # we only do for H0 for computational ease
 
         def todo1(x, box):
             if self.expand_dim is not None:
                 x.expansion(self.expand_dim)
             if self.minpres_degrees is not None:
-                x = mp.slicer.minimal_presentation(mp.Slicer(x), degrees=self.minpres_degrees)
-            return mp.module_approximation(x,
-                box=box, verbose=False, **self.persistence_args
+                x = mp.slicer.minimal_presentation(
+                    mp.Slicer(x), degrees=self.minpres_degrees
+                )
+            return mp.module_approximation(
+                x, box=box, verbose=False, **self.persistence_args
             )
 
-        def todo(sts: Iterable[_FilteredComplexType] | _FilteredComplexType):
-            if self._has_axis:
-                return tuple(todo1(st, box) for st, box in zip(sts, self._boxes))
-            return todo1(sts, self._boxes)
+        def todo(sts: Iterable[_FilteredComplexType]):
+            return tuple(todo1(st, box) for st, box in zip(sts, self._boxes))
 
         return Parallel(n_jobs=self.n_jobs, backend="threading")(
             delayed(todo)(x)
@@ -298,7 +304,9 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         return (m, M)
 
     @staticmethod
-    def _infer_grid(X: List[PyModule_type], strategy: str, resolution: int, degrees=None):
+    def _infer_grid(
+        X: List[PyModule_type], strategy: str, resolution: int, degrees=None
+    ):
         """
         Given a list of PyModules, computes a multiparameter discrete grid,
         with a given strategy,
@@ -345,14 +353,13 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
 
     def _infer_degrees(self, X):
         if self.degrees is None:
-            max_degrees = [x[ax].max_degree
-                        for i, ax in enumerate(self._axis)
-                        for x in X
-                ] + [0]
+            max_degrees = [
+                x[ax].max_degree for i, ax in enumerate(self._axis) for x in X
+            ] + [0]
             self._degrees = np.arange(np.max(max_degrees) + 1)
         else:
             self._degrees = self.degrees
-        
+
     def fit(self, X_in, y=None):
         X = self._maybe_from_dump(X_in)
         if len(X) == 0:
@@ -373,9 +380,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         self._axis = (
             [slice(None)]
             if self.axis is None
-            else range(self._num_axis)
-            if self.axis == -1
-            else [self.axis]
+            else range(self._num_axis) if self.axis == -1 else [self.axis]
         )
         self._infer_degrees(X)
 
@@ -493,7 +498,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         progress=False,
         grid_strategy="regular",
         kernel="linear",
-        signed:bool=False,
+        signed: bool = False,
     ):
         self.bandwidth = bandwidth
         self.degrees = degrees
@@ -512,7 +517,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         self._num_axis = None
         self._coords_to_compute = None
         self._new_resolutions = None
-        self.kernel=kernel
+        self.kernel = kernel
         self.signed = signed
 
     def fit(self, X, y=None):
@@ -522,7 +527,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         if self._has_axis:
             self._num_axis = len(X[0])
         if self.box is None:
-            self._box = [[0,0], [1, 1]]
+            self._box = [[0, 0], [1, 1]]
         else:
             self._box = self.box
         if self._has_axis:
@@ -557,24 +562,31 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
             "degrees": self.degrees,
             # num_jobs is better for parallel over modules.
             "n_jobs": self.n_jobs,
-            "kernel":self.kernel,
-            "signed":self.signed,
-            "flatten":True, # custom coordinates
+            "kernel": self.kernel,
+            "signed": self.signed,
+            "flatten": True,  # custom coordinates
         }
         if self._has_axis:
 
             def todo1(x, c):
                 return x.representation(coordinates=c, **img_args)
+
         else:
 
             def todo1(x):
-                return x.representation(coordinates = self._coords_to_compute, **img_args)[
+                return x.representation(
+                    coordinates=self._coords_to_compute, **img_args
+                )[
                     None, :
                 ]  # shape same as has_axis
 
         if self._has_axis:
+
             def todo2(mods):
-                return tuple(todo1(mod, c) for mod, c in zip(mods, self._coords_to_compute))
+                return tuple(
+                    todo1(mod, c) for mod, c in zip(mods, self._coords_to_compute)
+                )
+
         else:
             todo2 = todo1
 
@@ -582,6 +594,7 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
 
             def todo(mods):
                 return np.concatenate(todo2(mods), axis=1).flatten()
+
         else:
 
             def todo(mods):
