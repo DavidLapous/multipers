@@ -4,34 +4,13 @@
 Templated simplextree multi
 """
 
-## Value types : CTYPE, PYTHON_TYPE, short
-value_types = [
-  ("int32_t", "np.int32", "i32"), # necessary
-  ("int64_t", "np.int64", "i64"),
-  ("float", "np.float32", "f32"),
-  ("double", "np.float64", "f64"), # necessary
-]
-
-Filtrations_types = [
-  ("Finitely_critical_multi_filtration", False),
-  ("KCriticalFiltration", True)
-]
-
-
-from itertools import product
-## CTYPE, PYTYPE, SHORT, FILTRATION
-to_iter = [
-  (CTYPE,PYTYPE, SHORT,Filtration+"["+CTYPE+"]", is_kcritical, ("K" if is_kcritical else "") + "F" + SHORT) for (CTYPE,PYTYPE, SHORT),(Filtration, is_kcritical) in product(value_types, Filtrations_types)
-]
-
 import pickle 
-with open("_simplextrees_.pkl", "wb") as f:
-    pickle.dump(to_iter, f)
+with open("_simplextrees_.pkl", "rb") as f:
+    to_iter = pickle.load(f)
 
 st_map = {}
 for CTYPE,PYTYPE, SHORT,Filtration, is_kcritical, FSHORT in to_iter:
     st_map[PYTYPE, is_kcritical] = CTYPE
-
 
 }}
 

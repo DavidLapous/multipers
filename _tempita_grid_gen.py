@@ -1,8 +1,55 @@
 import pickle
 from itertools import product
 
+### OPTIONS
+
+## Columns of the matrix backend.
+# with ordered by their performance on some synthetic benchmarks.
+columns_name = [  # only one column is necessary
+    "Available_columns::" + stuff
+    for stuff in (
+        "INTRUSIVE_SET",
+        # "SET",
+        # "HEAP",
+        # "UNORDERED_SET",
+        # "NAIVE_VECTOR",
+        # "VECTOR",
+        # "INTRUSIVE_LIST",
+        # "LIST",
+    )
+]
+
+## Value types : CTYPE, PYTHON_TYPE, short
+value_types = [
+    ("int32_t", "np.int32", "i32"),  # necessary
+    # ("int64_t", "np.int64", "i64"),
+    # ("float", "np.float32", "f32"),  # necessary for mma (TODO: fixme)
+    ("double", "np.float64", "f64"),  # necessary
+]
+
+## True, False necessary
+vineyards_values = [
+    #
+    True,
+    False,
+]
+
+## Kcritical Filtrations
+kcritical_options = [
+    #
+    # True,
+    False
+]
+
+##
+matrix_types = [
+    #
+    "RU",
+    # "Clement"
+]
+
 ##  Slicers : CPP NAME, CTYPE, PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, CVALUE_TYPE, PYVALUE_TYPE, COLUMN_TYPE, SHORT_DTYPE
-slicers = [  # this is temporarily necessary
+clement_slicers = [  # this is temporarily necessary
     (
         "GeneralVineClementTruc<>",
         "GeneralVineClementTruc",
@@ -58,37 +105,6 @@ slicers = [  # this is temporarily necessary
 ]
 
 
-## Columns of the matrix backend.
-# with ordered by their performance on some synthetic benchmarks.
-columns_name = [  # only one column is necessary
-    "Available_columns::" + stuff
-    for stuff in (
-        "INTRUSIVE_SET",
-        # "SET",
-        "HEAP",
-        # "UNORDERED_SET",
-        "NAIVE_VECTOR",
-        # "VECTOR",
-        # "INTRUSIVE_LIST",
-        # "LIST",
-    )
-]
-
-## Value types : CTYPE, PYTHON_TYPE, short
-value_types = [
-    ("int32_t", "np.int32", "i32"),  # necessary
-    ("int64_t", "np.int64", "i64"),
-    ("float", "np.float32", "f32"),  # necessary for mma (TODO: fixme)
-    ("double", "np.float64", "f64"),  # necessary
-]
-
-## True, False necessary
-vineyards_values = [True, False]
-
-## Kcritical Filtrations
-kcritical_options = [True, False]
-
-
 def get_slicer(is_vine, is_kcritical, value_type, column_type):
     ctype, pytype, short_type = value_type
     col_idx, col = column_type
@@ -128,8 +144,42 @@ matrix_slicers = [
         vineyards_values, kcritical_options, value_types, enumerate(columns_name)
     )
 ]
-
-slicers += matrix_slicers
+slicers = []
+if "clement" in matrix_types:
+    slicers += clement_slicers
+if "RU" in matrix_types:
+    slicers += matrix_slicers
 
 with open("_slicer_names.pkl", "wb") as f:
     pickle.dump(slicers, f)
+
+## Simplextree
+
+Filtrations_types = [
+    (
+        ("KCriticalFiltration", True)
+        if kcritical
+        else ("Finitely_critical_multi_filtration", False)
+    )
+    for kcritical in kcritical_options
+]
+
+
+## CTYPE, PYTYPE, SHORT, FILTRATION
+to_iter = [
+    (
+        CTYPE,
+        PYTYPE,
+        SHORT,
+        Filtration + "[" + CTYPE + "]",
+        is_kcritical,
+        ("K" if is_kcritical else "") + "F" + SHORT,
+    )
+    for (CTYPE, PYTYPE, SHORT), (Filtration, is_kcritical) in product(
+        value_types, Filtrations_types
+    )
+]
+
+
+with open("_simplextrees_.pkl", "wb") as f:
+    pickle.dump(to_iter, f)
