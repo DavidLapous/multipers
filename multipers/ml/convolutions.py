@@ -349,7 +349,7 @@ Custom kernel has to be callable,
         log_probs : tensor (m)
                 log probability densities for each of the queried points in `Y`
         """
-        assert self._backend is not None, "Fit first."
+        assert self._backend is not None and self._kernel is not None, "Fit first."
         X = self.X if X is None else X
         if X.shape[0] == 0:
             return self._backend.zeros((Y.shape[0]))
@@ -418,7 +418,7 @@ class DTM:
     Distance To Measure
     """
 
-    def __init__(self, masses=[], metric: str = "euclidean", **_kdtree_kwargs):
+    def __init__(self, masses, metric: str = "euclidean", **_kdtree_kwargs):
         """
         mass : float in [0,1]
                 The mass threshold

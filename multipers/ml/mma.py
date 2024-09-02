@@ -25,7 +25,7 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        n_jobs: int = 1,
+        n_jobs: int = -1,
         expand_dim: Optional[int] = None,
         prune_degrees_above: Optional[int] = None,
         progress=False,
