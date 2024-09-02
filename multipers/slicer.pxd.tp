@@ -119,12 +119,11 @@ cdef inline Module[{{ctype}}] _multiparameter_module_approximation_{{short}}(obj
   elif isinstance(slicer, mps.{{PYTHON_TYPE}}):
     with nogil:
       mod = multiparameter_module_approximation(dereference(<{{CTYPE}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose)
+    return mod
   {{endif}}
   {{endfor}}
   else:
     raise ValueError(f"Unsupported slicer type {type(slicer)}")
-
-  return mod
 {{endif}}
 {{endfor}}
 
