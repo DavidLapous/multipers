@@ -160,7 +160,7 @@ def function_rips_signed_measure(
     grid_strategy: Literal[
         "regular_closest", "exact", "quantile", "regular_left"
     ] = "exact",
-    complex: Literal["rips", "delaunay"] = "rips",
+    complex: Literal["rips", "delaunay", "weak_delaunay"] = "rips",
     resolution: int = 100,
     safe_conversion: bool = False,
     num_collapses: Optional[int] = None,
@@ -228,7 +228,8 @@ def function_rips_signed_measure(
             distance_matrix.max(axis=1).values.min() if threshold is None else threshold
         )
         distances = distances[distances <= threshold]
-    elif complex == "delaunay":
+    elif complex in ["delaunay", "weak_delaunay:"]:
+        complex = "delaunay"
         distances /= 2
     else:
         raise ValueError(
