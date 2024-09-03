@@ -219,8 +219,8 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         return sts
 
     def _get_codensities(self, x_fit, x_sample):
-        x_fit = np.asarray(x_fit, dtype=np.float32)
-        x_sample = np.asarray(x_sample, dtype=np.float32)
+        x_fit = np.asarray(x_fit, dtype=np.float64)
+        x_sample = np.asarray(x_sample, dtype=np.float64)
         codensities_kde = np.asarray(
             [
                 -KDE(
@@ -243,18 +243,21 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         match self.complex:
             case "rips":
                 self._get_sts = self._get_sts_rips
+                _pref_output = "simplextree"
             case "alpha":
                 self._get_sts = self._get_sts_alpha
+                _pref_output = "simplextree"
             case "delaunay":
                 self._get_sts = self._get_sts_delaunay
+                _pref_output = "slicer"
             case _:
                 raise ValueError(
                     f"Invalid complex \
                 {self.complex}. Possible choises are rips, delaunay, or alpha."
                 )
-        self._vineyard = not (self.output_type == "slicer_novine")
+        self._vineyard = self.output_type in ["slicer", "slicer_vine"]
         self._output_type = (
-            None
+            _pref_output
             if self.output_type is None
             else "simplextree" if self.output_type == "simplextree" else "slicer"
         )

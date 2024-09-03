@@ -467,11 +467,11 @@ class DTM:
         -------
         the DTMs of Y, for each mass in masses.
         """
-        assert (
-            self._ks is not None and self._kdtree is not None and self._X is not None
-        ), "Fit first."
         if len(self.masses) == 0:
             return np.empty((0, len(Y)))
+        assert (
+            self._ks is not None and self._kdtree is not None and self._X is not None
+        ), f"Fit first. Got {self._ks=}, {self._kdtree=}, {self._X=}."
         assert Y.ndim == 2
         if self._backend == "torch":
             _Y = Y.detach().numpy()
@@ -502,13 +502,14 @@ class DTM:
         """
         import torch
 
+        if len(self.masses) == 0:
+            return torch.empty(0, len(Y))
+
         assert Y.ndim == 2
         assert self._backend == "torch", "Use the non-diff version with numpy."
         assert (
             self._ks is not None and self._kdtree is not None and self._X is not None
-        ), "Fit first."
-        if len(self.masses) == 0:
-            return torch.empty(0, len(Y))
+        ), f"Fit first. Got {self._ks=}, {self._kdtree=}, {self._X=}."
         NN = self._kdtree.query(Y.detach(), self._ks.max(), return_distance=False)
         DTMs = tuple(
             (((self._X[NN] - Y[:, None, :]) ** 2)[:, :k].sum(dim=(1, 2)) / k) ** 0.5
