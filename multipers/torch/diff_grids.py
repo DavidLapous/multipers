@@ -31,7 +31,7 @@ Available ones : exact, regular_closest, regular_left, quantile.
 
 
 def todense(grid: list[torch.Tensor]):
-    return torch.cartesian_product(*grid)
+    return torch.cartesian_prod(*grid)
 
 
 def _exact_grid(filtration_values, r=None):
