@@ -17,7 +17,7 @@ Options.fast_fail = True
 cython_modules = [
     "simplex_tree_multi",
     "io",
-    "rank_invariant",
+    # "rank_invariant",
     "function_rips",
     "mma_structures",
     "multiparameter_module_approximation",

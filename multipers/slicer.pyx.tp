@@ -25,6 +25,10 @@ import os
 from multipers.slicer cimport *
 from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
+## TODO: these two are not needed, remove that by updating rank code.
+from multipers.point_measure import sparsify
+from multipers.ml.signed_betti import rank_decomposition_by_rectangles
+
 import numpy as np
 cimport cython
 # python_value_type = np.float32
@@ -60,9 +64,14 @@ Slicer_type = Union[
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
   {{PYTHON_TYPE}},
 {{endfor}}
-
 ]
 
+global _valid_dtypes
+_valid_dtype = Union[
+{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
+  {{PY_VALUE_TYPE}},
+{{endfor}}
+]
 
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
 
@@ -651,7 +660,10 @@ def _hilbert_signed_measure(slicer,
   """
 
   assert slicer.is_squeezed, "Squeeze grid first."
-  grid_shape = np.array([len(f) for f in slicer.filtration_grid])
+  if slicer.is_squeezed:
+    grid_shape = np.array([len(f) for f in slicer.filtration_grid])
+  else:
+      grid_shape = (slicer.filtration_bounds()[1]).astype(python_indices_type)+1
   if zero_pad:
     for i, _ in enumerate(grid_shape):
       grid_shape[i] += 1 # adds a 0
@@ -670,3 +682,62 @@ def _hilbert_signed_measure(slicer,
       for i in range(slices.shape[0]-1)
   ]
   return sms
+
+
+## Rank invariant
+
+
+## TODO : It is not necessary to do the Möbius inversion in python.
+## fill rank in flipped death, then differentiate in cpp, then reflip with numpy.
+def _rank_from_slicer(
+        slicer, 
+        vector[indices_type] degrees,
+        bool verbose=False,
+        indices_type n_jobs=1,
+        bool zero_pad = False,
+        grid_shape=None,
+        bool plot=False,
+        bool return_raw=False,
+        ):
+    # cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
+    if grid_shape is None:
+        if slicer.is_squeezed:
+          grid_shape = np.array([len(f) for f in slicer.filtration_grid])
+        else:
+            grid_shape = (slicer.filtration_bounds()[1]).astype(python_indices_type)+1
+    grid_shape = np.asarray(grid_shape)
+
+    cdef int num_parameters = len(grid_shape)
+
+    if zero_pad:
+        for i, _ in enumerate(grid_shape):
+            grid_shape[i] += 1 # adds a 0
+        # for i,f in enumerate(grid_conversion):
+        #     grid_conversion[i] = np.concatenate([f, [mass_default[i]]])
+
+    grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape, grid_shape]), dtype=python_indices_type)
+    container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).ravel())
+    assert len(container_array) < np.iinfo(python_indices_type).max, "Too large container. Raise an issue on github if you encounter this issue. (Due to tensor's operator[])"
+    cdef vector[indices_type] c_grid_shape = grid_shape_with_degree
+    cdef tensor_dtype[::1] container = container_array
+    cdef tensor_dtype* container_ptr = &container[0]
+
+    ## SLICERS
+    _compute_rank_invariant(slicer, container_ptr, c_grid_shape, degrees, n_jobs)
+
+    rank = container_array.reshape(grid_shape_with_degree)
+    rank = tuple(rank_decomposition_by_rectangles(rank_of_degree, threshold = zero_pad) for rank_of_degree in rank)
+    if return_raw:
+        return rank
+    out = []
+    def clean_rank(rank_decomposition):
+        (coords, weights) = sparsify(np.ascontiguousarray(rank_decomposition))
+        births = coords[:,:num_parameters]
+        deaths = coords[:,num_parameters:]
+        correct_indices = np.all(births<=deaths, axis=1)
+        coords = coords[correct_indices]
+        weights = weights[correct_indices]
+        return coords, weights
+
+    out = tuple(clean_rank(rank_decomposition) for rank_decomposition in rank)
+    return out
