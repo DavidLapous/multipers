@@ -6,7 +6,7 @@ import numpy as np
 import multipers.io as mio
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
-from multipers.slicer import _column_type
+from multipers.slicer import _column_type, _valid_dtype
 
 
 ## TODO : maybe optimize this with cython
@@ -109,7 +109,7 @@ def Slicer(
     vineyard: bool = True,
     reduce: bool = False,
     reduce_backend: Optional[str] = None,
-    dtype=np.float64,
+    dtype: _valid_dtype = np.float64,
     is_kcritical: bool = False,
     column_type: _column_type = "INTRUSIVE_SET",
     max_dim: Optional[int] = None,

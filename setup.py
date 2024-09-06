@@ -54,7 +54,7 @@ def process_tempita(fromfile):
 cython_modules = [
     "simplex_tree_multi",
     "io",
-    "rank_invariant",
+    # "rank_invariant",
     "function_rips",
     "mma_structures",
     "multiparameter_module_approximation",

@@ -1,4 +1,5 @@
-from typing import Iterable, Optional, Union
+from collections.abc import Iterable, Sequence
+from typing import Optional, Union
 
 import numpy as np
 
@@ -6,20 +7,23 @@ import multipers as mp
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure import clean_sms, zero_out_sms
-from multipers.rank_invariant import rank_from_slicer
-from multipers.slicer import _hilbert_signed_measure
 from multipers.simplex_tree_multi import (
     SimplexTreeMulti_type,
     _available_strategies,
     is_simplextree_multi,
 )
-from multipers.slicer import Slicer_type, is_slicer
+from multipers.slicer import (
+    Slicer_type,
+    _hilbert_signed_measure,
+    _rank_from_slicer,
+    is_slicer,
+)
 
 
 def signed_measure(
     filtered_complex: Union[SimplexTreeMulti_type, Slicer_type],
     degree: Optional[int] = None,
-    degrees: Iterable[int | None] = [],
+    degrees: Sequence[int | None] = [],
     mass_default=None,
     grid_strategy: _available_strategies = "exact",
     invariant: Optional[str] = None,
@@ -129,12 +133,13 @@ def signed_measure(
         not plot or filtered_complex.num_parameters == 2
     ), "Can only plot 2d measures."
 
-    if grid is None and not filtered_complex.is_squeezed:
-        grid = compute_grid(
-            filtered_complex, strategy=grid_strategy, **infer_grid_kwargs
-        )
-    if filtered_complex.is_squeezed and grid is None:
-        grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
+    if grid is None:
+        if not filtered_complex.is_squeezed:
+            grid = compute_grid(
+                filtered_complex, strategy=grid_strategy, **infer_grid_kwargs
+            )
+        else:
+            grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
 
     if mass_default is None:
         mass_default = mass_default
@@ -215,7 +220,7 @@ def signed_measure(
                 if verbose:
                     print("Computing rank...", end="")
                 sms = [
-                    rank_from_slicer(
+                    _rank_from_slicer(
                         s,
                         degrees=[d],
                         n_jobs=n_jobs,
@@ -246,7 +251,7 @@ def signed_measure(
                 degrees = np.asarray(degrees, dtype=int)
                 if verbose:
                     print("Computing rank...", end="")
-                sms = rank_from_slicer(
+                sms = _rank_from_slicer(
                     filtered_complex_,
                     degrees=degrees,
                     n_jobs=n_jobs,
