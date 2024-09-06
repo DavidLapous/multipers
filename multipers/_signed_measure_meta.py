@@ -1,4 +1,5 @@
-from typing import Iterable, Optional, Union
+from collections.abc import Iterable, Sequence
+from typing import Optional, Union
 
 import numpy as np
 
