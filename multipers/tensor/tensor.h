@@ -683,12 +683,12 @@ void inline static_tensor_view<dtype, indices_type>::differentiate(
     }
   }
   // iterate over coordinate of this axis with ab -> b-a -> ab=b[newslice]
-  free_coordinates[axis] = {0};
+  free_coordinates[axis] = {{0}};
   static_tensor_view_view<dtype, indices_type> x_i(*this, free_coordinates);
   std::vector<dtype> a, b;
   a = x_i.copy_data();
   for (indices_type h = 1; h < this->get_resolution()[axis]; h++) {
-    free_coordinates[axis] = {h};
+    free_coordinates[axis] = {{h}};
     // x_i = static_tensor_view_view<dtype,
     // indices_type>(*this,free_coordinates);
     x_i.shift_coordinate(axis, 1);
