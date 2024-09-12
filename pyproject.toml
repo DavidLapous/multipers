@@ -11,12 +11,10 @@ version = "2.0.5"
 description = "Scikit-style Multiparameter persistence toolkit"
 readme = "README.md"
 authors = [
-  { name = "David Loiseaux", email = "david.loiseaux@inria.fr" },
+  { name = "David Loiseaux", email = "david.lapous@proton.me" },
   { name = "Hannah Schreiber" },
-  { name = "Luis Scoccola" },
-  { name = "Mathieu Carrière" },
 ]
-maintainers = [{ name = "David Loiseaux", email = "david.loiseaux@inria.fr" }]
+maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
 dependencies = [
   #for setup.py, eventhough has to be already installed to call the setup in the first place
   "numpy",
@@ -62,6 +60,8 @@ include = ["multipers*"]
 exclude = [
   "multipers.gudhi",
   "multipers.multi_parameter_rank_invariant",
-  "multipers.multiparameter_module_approximation"
+  "multipers.multiparameter_module_approximation",
+  "multipers.tensor",
+  "multipers.tests",
 ]
 

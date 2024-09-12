@@ -120,6 +120,7 @@ cpp_dirs = [
     "multipers",
     "multipers/multiparameter_module_approximation",
     "multipers/multi_parameter_rank_invariant",
+    "multipers/tensor",
     np.get_include(),
     INCLUDE_PATH,
 ]
