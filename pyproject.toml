@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "multipers"
 version = "2.0.5"
-description = "Scikit-style Multiparameter persistence toolkit"
+description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
   { name = "David Loiseaux", email = "david.lapous@proton.me" },
@@ -19,8 +19,6 @@ dependencies = [
   #for setup.py, eventhough has to be already installed to call the setup in the first place
   "numpy",
   #to do `import multipers`
-  "tbb",
-  "tbb-devel",
   "gudhi",
   "tqdm",
   "scipy",
