@@ -6,7 +6,7 @@ both type have the same interface, defined the slicer.pyx file
 
 ## generation with another file as Tempita is slightly bugged for python <3.12
 import pickle
-with open("_slicer_names.pkl", "rb") as f:
+with open("build/tmp/_slicer_names.pkl", "rb") as f:
   slicers = pickle.load(f)
 
 }}
