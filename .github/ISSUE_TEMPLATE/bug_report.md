@@ -27,5 +27,7 @@ instead of
 
 
 **Setup:**
- - OS[e.g., macOS 14 on arm, fedora]:
+ - OS [e.g., macOS 14 on arm, fedora]:
  - version [e.g. 2.0, or commit hash if compiled]:
+ - C++ compiler (if compiled from source) [e.g., gcc 12.1, clang 18.1]:
+ - dependencies versions or `.yml` file [e.g., numpy=1.24, gudhi=3.9]
