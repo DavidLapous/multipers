@@ -8,7 +8,7 @@ both type have the same interface, defined the slicer.pyx file
 
 import pickle
 
-with open("_slicer_names.pkl", "rb") as f:
+with open("build/tmp/_slicer_names.pkl", "rb") as f:
   slicers=pickle.load(f)
 
 

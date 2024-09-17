@@ -34,6 +34,7 @@ multipers/filtration_conversions.pxd
 
 ## Hidden files
 .*
+!.clang-format
 
 ## Notebook-generated
 *.png

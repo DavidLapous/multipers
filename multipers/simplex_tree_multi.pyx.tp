@@ -5,7 +5,7 @@ Templated simplextree multi
 """
 
 import pickle 
-with open("_simplextrees_.pkl", "rb") as f:
+with open("build/tmp/_simplextrees_.pkl", "rb") as f:
     to_iter = pickle.load(f)
 
 st_map = {}

@@ -1,18 +1,55 @@
 import contextlib
 import os
 import site
+import shutil
+import filecmp
 
 import numpy as np
-import sklearn._build_utils
 from Cython.Build import cythonize
 from Cython.Compiler import Options
-from setuptools import Extension, find_packages, setup
+from Cython import Tempita
+from setuptools import Extension, setup
 
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
+os.system("mkdir -p ./build/tmp")
+
+def was_modified(file):
+    tail = os.path.basename(file)
+    new_file = "build/tmp/" + tail
+    if not os.path.isfile(new_file):
+        shutil.copyfile(file, new_file)
+        return True
+    else:
+        res = not filecmp.cmp(new_file, file, shallow=False)
+        if res:
+            shutil.copyfile(file, new_file)
+        return res
+
+# credit to sklearn with just a few modifications:
+# https://github.com/scikit-learn/scikit-learn/blob/156ef1b7fe9bc0ee5b281634cfd56b9c54e83277/sklearn/_build_utils/tempita.py
+# took it out to not having to depend on a sklearn version in addition to a cython version
+def process_tempita(fromfile):
+    """Process tempita templated file and write out the result.
+
+    The template file is expected to end in `.c.tp` or `.pyx.tp`:
+    E.g. processing `template.c.tp` generates `template.c`.
+
+    """
+    if not was_modified(fromfile):
+        return
+    with open(fromfile, "r", encoding="utf-8") as f:
+        template_content = f.read()
+
+    template = Tempita.Template(template_content)
+    content = template.substitute()
+
+    outfile = os.path.splitext(fromfile)[0]
+    with open(outfile, "w", encoding="utf-8") as f:
+        f.write(content)
 
 cython_modules = [
     "simplex_tree_multi",
@@ -21,15 +58,10 @@ cython_modules = [
     "function_rips",
     "mma_structures",
     "multiparameter_module_approximation",
-    # "diff_helper",
-    # "hilbert_function",
-    # "euler_characteristic",
-    # 'cubical_multi_complex',
     "point_measure",
     "grids",
     "slicer",
 ]
-
 
 templated_cython_modules = [
     "filtration_conversions.pxd",
@@ -39,25 +71,23 @@ templated_cython_modules = [
     "slicer.pyx",
 ]
 
+## generates some parameter files (Tempita fails with python<3.12)
+# TODO: see if there is a way to avoid _tempita_grid_gen.py or a nicer way to do it
+os.system("python _tempita_grid_gen.py")
 
-os.system(
-    "rm _simplextrees_.pkl _slicer_names.pkl & python _tempita_grid_gen.py"
-)  ## generates some parameter files (Tempita fails with python<3.12)
-sklearn._build_utils.gen_from_templates(
-    (f"multipers/{mod}.tp" for mod in templated_cython_modules)
-)
+[process_tempita(f"multipers/{mod}.tp") for mod in templated_cython_modules]
 
+## Broken on mac
+# n_jobs = 1
+# with contextlib.suppress(ImportError):
+#     import joblib
 
-n_jobs = 1
-with contextlib.suppress(ImportError):
-    import joblib
-
-    n_jobs = joblib.cpu_count()
+#     n_jobs = joblib.cpu_count()
 
 cythonize_flags = {
-    # "depfile":True,
+    # "depfile": True,
     # "nthreads": n_jobs,  # Broken on mac
-    # "show_all_warnings":True,
+    # "show_all_warnings": True,
 }
 
 cython_compiler_directives = {
@@ -88,39 +118,16 @@ LIBRARY_PATH = PYTHON_ENV_PATH + "/lib/"
 cpp_dirs = [
     "multipers/gudhi",
     "multipers",
+    "multipers/multiparameter_module_approximation",
+    "multipers/multi_parameter_rank_invariant",
+    "multipers/tensor",
     np.get_include(),
     INCLUDE_PATH,
 ]
+
 library_dirs = [
     LIBRARY_PATH,
 ]
-
-build_dependencies = [
-    "gudhi",
-    "numpy",
-    "Cython",  # needed for compilation
-    # "scikit-learn",
-    # "tbb",  # needed for compilation, but doesn't exist on mac
-    # "tbb-devel", # needed for compilation
-    # boost,
-    # boost-cpp,
-    # "tqdm",
-    "scikit-learn",
-    "setuptools",
-    # "joblib",
-]
-python_dependencies = [
-    "gudhi",
-    "numpy",
-    "filtration-domination",
-    "pykeops",
-    "scikit-learn",
-    "joblib",
-    "pot",
-    "tqdm",
-    "matplotlib",
-]
-
 
 extensions = [
     Extension(
@@ -130,7 +137,7 @@ extensions = [
         ],
         language="c++",
         extra_compile_args=[
-            "-O2",
+            "-O3",  #-Ofast disables infinity values for filtration values
             # "-g",
             # "-march=native",
             "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
@@ -147,41 +154,11 @@ extensions = [
 ]
 
 if __name__ == "__main__":
-    # os.system("rm *.pkl")
     setup(
         name="multipers",
-        author="David Loiseaux",
-        author_email="david.loiseaux@inria.fr",
-        description="Scikit-style Multiparameter persistence toolkit",
-        url="https://github.com/DavidLapous/multipers",
-        # long_description=long_description,
-        # long_description_content_type='text/markdown'
-        version="2.0.5",
-        license="MIT",
-        keywords="TDA Persistence Multiparameter sklearn",
         ext_modules=cythonize(
             extensions,
             compiler_directives=cython_compiler_directives,
             **cythonize_flags,
         ),
-        packages=find_packages(),
-        package_data={
-            "multipers": ["*.pyi", "*.pyx", "*.pxd"],
-        },
-        python_requires=">=3.10",
-        classifiers=[
-            "Development Status :: 5 - Production/Stable",
-            "Programming Language :: Python :: 3.10",
-            "Programming Language :: Python :: 3.11",
-            "Programming Language :: Python :: 3.12",
-            "Programming Language :: Python :: Implementation :: CPython",
-            "Topic :: Scientific/Engineering :: Artificial Intelligence",
-            "Topic :: Scientific/Engineering :: Mathematics",
-            "Topic :: Scientific/Engineering :: Visualization",
-            "Topic :: Software Development :: Libraries :: Python Modules",
-            "License :: OSI Approved :: MIT License",
-        ],
-        install_requires=python_dependencies,
-        setup_requires=build_dependencies,
     )
-    # os.system("rm *.pkl")

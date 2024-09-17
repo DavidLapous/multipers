@@ -150,7 +150,7 @@ if "clement" in matrix_types:
 if "RU" in matrix_types:
     slicers += matrix_slicers
 
-with open("_slicer_names.pkl", "wb") as f:
+with open("build/tmp/_slicer_names.pkl", "wb") as f:
     pickle.dump(slicers, f)
 
 ## Simplextree
@@ -181,5 +181,5 @@ to_iter = [
 ]
 
 
-with open("_simplextrees_.pkl", "wb") as f:
+with open("build/tmp/_simplextrees_.pkl", "wb") as f:
     pickle.dump(to_iter, f)
