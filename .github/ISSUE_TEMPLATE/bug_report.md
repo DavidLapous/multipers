@@ -31,3 +31,8 @@ instead of
  - version [e.g. 2.0, or commit hash if compiled]:
  - C++ compiler (if compiled from source) [e.g., gcc 12.1, clang 18.1]:
  - dependencies versions or `.yml` file [e.g., numpy=1.24, gudhi=3.9]
+
+**Checks.**
+ - [ ] I have a working environment (i.e., `pytest multipers` passes)
+ - [ ] I have checked that the bug is not already present in the issue tracker
+ - [ ] I am willing to do a PR to fix this issue (Thank you!)
