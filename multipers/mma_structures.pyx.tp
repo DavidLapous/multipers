@@ -104,13 +104,13 @@ cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     v = summand.get_death_list()
     deaths = _vff21cview_{{SHORT}}(v, copy=True)
 
-    if len(births) == 1 and births[0].size == 1 and math.isinf(births[0][0]):
-        if len(deaths) == 1 and deaths[0].size == 1 and math.isinf(deaths[0][0]):
+    if len(births) == 1 and births[0].size == 1 and isinf(births[0][0]):
+        if len(deaths) == 1 and deaths[0].size == 1 and isinf(deaths[0][0]):
             return []
         else:
             pts = np.array(deaths)
     else:
-        if len(deaths) == 1 and deaths[0].size == 1 and math.isinf(deaths[0][0]):
+        if len(deaths) == 1 and deaths[0].size == 1 and isinf(deaths[0][0]):
             pts = np.array(births)
         else:
             pts = np.concatenate([births,deaths],axis=0)
