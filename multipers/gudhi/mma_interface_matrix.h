@@ -24,7 +24,7 @@
 #include <vector>
 
 #include <gudhi/Fields/Z2_field.h>
-#include <gudhi/matrix.h>
+#include <gudhi/Matrix.h>
 #include <gudhi/persistence_matrix_options.h>
 
 namespace Gudhi::multiparameter::interface {
@@ -67,20 +67,20 @@ class Persistence_backend_matrix {
 
 public:
   using matrix_type = Gudhi::persistence_matrix::Matrix<Matrix_options>;
-  using cycle_type = typename matrix_type::cycle_type;
+  using cycle_type = typename matrix_type::Cycle;
   static const bool is_vine = Matrix_options::has_vine_update;
 
   using bar = typename matrix_type::Bar;
   //   using index = typename matrix_type::index;
   //   using id_index = typename matrix_type::id_index;
-  using pos_index = typename matrix_type::pos_index;
-  using dimension_type = typename matrix_type::dimension_type;
+  using pos_index = typename matrix_type::Pos_index;
+  using dimension_type = typename matrix_type::Dimension;
 
   class Barcode_iterator
       : public boost::iterator_facade<Barcode_iterator, const bar &,
                                       boost::forward_traversal_tag> {
   public:
-    Barcode_iterator(const typename matrix_type::barcode_type *barcode,
+    Barcode_iterator(const typename matrix_type::Barcode *barcode,
                      const std::vector<std::size_t> *inv)
         : barcode_(barcode->size() == 0 ? nullptr : barcode),
           perm_(barcode->size() == 0 ? nullptr : inv), currPos_(0) {
@@ -100,7 +100,7 @@ public:
     // mandatory for the boost::iterator_facade inheritance.
     friend class boost::iterator_core_access;
 
-    const typename matrix_type::barcode_type *barcode_;
+    const typename matrix_type::Barcode *barcode_;
     const std::vector<std::size_t> *perm_;
     std::size_t currPos_;
     bar currBar_;
@@ -185,7 +185,7 @@ public:
     }
 
   private:
-    const typename matrix_type::barcode_type *barcode_;
+    const typename matrix_type::Barcode *barcode_;
     typename std::conditional<Matrix_options::has_vine_update,
                               const std::vector<std::size_t> *,
                               std::vector<std::size_t>>::type perm_;

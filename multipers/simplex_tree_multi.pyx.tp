@@ -308,7 +308,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
 
-        cdef Finitely_critical_multi_filtration[{{CTYPE}}] minf = Finitely_critical_multi_filtration[{{CTYPE}}](self.get_ptr().get_number_of_parameters())
+        cdef One_critical_filtration[{{CTYPE}}] minf = One_critical_filtration[{{CTYPE}}](self.get_ptr().get_number_of_parameters())
         cdef int simplex_dimension
         with nogil:
             while it != end:
@@ -317,7 +317,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                 if simplex_dimension<dim:
                   preincrement(it)
                   continue
-                dereference(pair_sf.second).pull_to(minf)
+                dereference(pair_sf.second).pull_to_greatest_common_lower_bound(minf)
                 preincrement(it)
         self.make_filtration_non_decreasing()
         return self
@@ -394,7 +394,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if self.get_ptr().find_simplex(simplex):
           for i in range(simplices_filtration_to_insert.size()):
             current_filtration_ptr = self.get_ptr().simplex_filtration(simplices_filtration_to_insert[i])
-            dereference(current_filtration_ptr).add_point(_py21c_{{SHORT}}(filtration))
+            dereference(current_filtration_ptr).add_generator(_py21c_{{SHORT}}(filtration))
           return True ## TODO : we may want to return false if this birth wasn't necessary
         cdef {{Filtration}} cfiltration = _py2kc_{{SHORT}}(np.asarray(filtration, dtype = {{PYTYPE}})[None,:])
         {{else}}
@@ -424,6 +424,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t n = vertex_array.shape[1]
         cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
         cdef bool empty_filtration = (filtrations.size == 0)
+
         if not empty_filtration :
             assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
                     Filtrations should be of shape ({n},{self.num_parameters})"
@@ -432,11 +433,13 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        cdef Finitely_critical_multi_filtration[{{CTYPE}}] w
+        cdef One_critical_filtration[{{CTYPE}}] w
         if empty_filtration:
-            w = Finitely_critical_multi_filtration[{{CTYPE}}](num_parameters) # at -inf by default
+            w = One_critical_filtration[{{CTYPE}}](num_parameters) # at -inf by default
         with nogil:
             for i in range(n):
+                if not empty_filtration:
+                    w.clear()
                 # vertex
                 for j in range(k):
                     v.push_back(vertex_array[j, i])
@@ -446,8 +449,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                         w.push_back(<{{CTYPE}}>filtrations[i,j])
                 self.get_ptr().insert(v, w)
                 v.clear()
-                if not empty_filtration:
-                    w.clear()
         #repair filtration if necessary
         if empty_filtration:
             self.make_filtration_non_decreasing()
@@ -547,7 +548,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        cdef Finitely_critical_multi_filtration[{{CTYPE}}] w
+        cdef One_critical_filtration[{{CTYPE}}] w
         cdef int n_parameters = self.num_parameters
         with nogil:
             for i in range(n):
@@ -1308,8 +1309,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if direction is None:
           direction = np.array([0]*self.get_ptr().get_number_of_parameters())
           direction[parameter] = 1
-        cdef Finitely_critical_multi_filtration[double] c_basepoint = _py21c_f64(basepoint)
-        cdef Finitely_critical_multi_filtration[double] c_direction = _py21c_f64(direction)
+        cdef One_critical_filtration[double] c_basepoint = _py21c_f64(basepoint)
+        cdef One_critical_filtration[double] c_direction = _py21c_f64(direction)
         cdef Line[double] c_line = Line[double](c_basepoint, c_direction)
         with nogil:
             self.get_ptr().to_std(new_ptr, c_line, c_parameter)

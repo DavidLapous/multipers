@@ -19,9 +19,9 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/intrusive/list.hpp>
 
+#include <iostream>
 #include <map>
 #include <unordered_map>
-#include <iostream>
 #include <utility>
 #include <list>
 #include <vector>

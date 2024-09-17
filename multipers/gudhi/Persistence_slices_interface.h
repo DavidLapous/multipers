@@ -3,12 +3,13 @@
 #include "mma_interface_h0.h"
 #include "mma_interface_matrix.h"
 #include "truc.h"
-#include <gudhi/Simplex_tree/Simplex_tree_multi.h>
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+#include <gudhi/Simplex_tree_multi.h>
+#include <gudhi/One_critical_filtration.h>
+#include <gudhi/Multi_critical_filtration.h>
 
 template <typename Filtration>
 using SimplexTreeMultiOptions =
-    Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<Filtration>;
+    Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>;
 
 enum Column_types_strs {
   LIST,
@@ -57,8 +58,8 @@ using GraphBackendVine =
     Gudhi::multiparameter::interface::Persistence_backend_h0<
         SimplicialStructure>;
 
-using Filtration_value = Gudhi::multiparameter::multi_filtrations::
-    Finitely_critical_multi_filtration<float>;
+using Filtration_value = Gudhi::multi_filtration::
+    One_critical_filtration<float>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using SimplicialNoVineMatrixTruc = Gudhi::multiparameter::interface::Truc<
@@ -86,12 +87,12 @@ using SimplicialVineGraphTruc = Gudhi::multiparameter::interface::Truc<
     GraphBackendVine, SimplicialStructure, Filtration_value>;
 
 // multicrititcal
-using KCriticalFiltrationValue =
-    Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<float>;
+using Multi_critical_filtrationValue =
+    Gudhi::multi_filtration::Multi_critical_filtration<float>;
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using KCriticalVineTruc = Gudhi::multiparameter::interface::Truc<
     MatrixBackendVine<col, PresentationStructure>, PresentationStructure,
-    KCriticalFiltrationValue>;
+    Multi_critical_filtrationValue>;
 
 template <bool is_vine,
           Available_columns col = Available_columns::INTRUSIVE_SET>
@@ -102,9 +103,9 @@ using Matrix_interface =
 template <bool is_kcritical, typename value_type>
 using filtration_options = std::conditional_t<
     is_kcritical,
-    Gudhi::multiparameter::multi_filtrations::KCriticalFiltration<value_type>,
-    Gudhi::multiparameter::multi_filtrations::
-        Finitely_critical_multi_filtration<value_type>>;
+    Gudhi::multi_filtration::Multi_critical_filtration<value_type>,
+    Gudhi::multi_filtration::
+        One_critical_filtration<value_type>>;
 
 template <bool is_vine, bool is_kcritical, typename value_type,
           Available_columns col = Available_columns::INTRUSIVE_SET>

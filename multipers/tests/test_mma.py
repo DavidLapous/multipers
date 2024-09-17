@@ -14,8 +14,8 @@ def test_1():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     mma_pymodule = st.persistence_approximation()
-    assert np.array_equal(mma_pymodule[0].get_birth_list(), [[1.0, 0.0], [0.0, 1.0]])
-    assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf, np.inf]])
+    assert np.array_equal(mma_pymodule[0].get_birth_list(), [[0.0, 1.0], [1.0, 0.0]])
+    assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf]])
 
 
 def test_img():

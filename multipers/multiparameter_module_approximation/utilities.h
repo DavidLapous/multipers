@@ -12,7 +12,9 @@
 #define UTILITIES_H
 
 #include <cassert>
-#include <gudhi/Simplex_tree/Simplex_tree_multi.h>
+#include <gudhi/Simplex_tree_multi.h>
+#include <gudhi/One_critical_filtration.h>
+#include <gudhi/Multi_persistence/Box.h>
 #include <limits>
 #include <vector>
 
@@ -22,8 +24,8 @@ const bool verbose = false;
 
 using index = unsigned int;
 using value_type = double;
-using filtration_type = Gudhi::multiparameter::multi_filtrations::
-    Finitely_critical_multi_filtration<value_type>;
+using filtration_type = Gudhi::multi_filtration::
+    One_critical_filtration<value_type>;
 using multifiltration_type = std::vector<filtration_type>;
 using python_filtration_type = std::vector<value_type>;
 using python_multifiltration_type = std::vector<python_filtration_type>;
@@ -33,10 +35,10 @@ using persistence_pair = std::pair<value_type, value_type>;
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
 using permutation_type = std::vector<std::size_t>;
-using point_type = Gudhi::multiparameter::multi_filtrations::
-    Finitely_critical_multi_filtration<value_type>;
-using corner_type = Gudhi::multiparameter::multi_filtrations::
-    Finitely_critical_multi_filtration<value_type>;
+using point_type = Gudhi::multi_filtration::
+    One_critical_filtration<value_type>;
+using corner_type = Gudhi::multi_filtration::
+    One_critical_filtration<value_type>;
 using corners_type =
     std::pair<std::vector<corner_type>, std::vector<corner_type>>;
 // using python_bar =
@@ -125,7 +127,7 @@ public:
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
         if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 &&
-            !pt.get_birth().is_inf() && !pt.get_death().is_minus_inf())
+            !pt.get_birth().is_plus_inf() && !pt.get_death().is_minus_inf())
           out.push_back({pt.get_birth(), pt.get_death()});
       }
     }
@@ -138,9 +140,9 @@ public:
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        const auto &b = pt.get_birth().template astype<double>();
-        const auto &d = pt.get_death().template astype<double>();
-        assert(!(b.is_inf() || b.is_minus_inf() || d.is_inf() ||
+        const auto &b = pt.get_birth().template as_type<double>();
+        const auto &d = pt.get_death().template as_type<double>();
+        assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() ||
                  d.is_minus_inf()));
         out.push_back({b[0], d[0], b[1], d[1]});
       }
@@ -189,12 +191,12 @@ public:
       for (unsigned int j = 0; j < nlines; j++) {
         const MultiDiagram_point<filtration_type> &pt =
             this->multiDiagrams[j][i];
-        /* if(pt.get_birth().is_inf() || pt.get_death().is_minus_inf()) */
+        /* if(pt.get_birth().is_plus_inf() || pt.get_death().is_minus_inf()) */
         /*     out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)}); */
         /* else */
         double a, b, c, d;
         double inf = std::numeric_limits<double>::infinity();
-        if (pt.get_birth().is_inf()) {
+        if (pt.get_birth().is_plus_inf()) {
           a = 0;
           b = 0;
         } else if (pt.get_birth().is_minus_inf()) {
@@ -204,7 +206,7 @@ public:
           a = pt.get_birth()[0];
           b = pt.get_birth()[1];
         }
-        if (pt.get_death().is_inf()) {
+        if (pt.get_death().is_plus_inf()) {
           c = inf;
           d = inf;
         }
@@ -238,8 +240,8 @@ public:
          this->multiDiagrams) {
       unsigned int count = 0;
       for (const MultiDiagram_point<filtration_type> &bar : multiDiagram) {
-        const auto &birth = bar.get_birth().template astype<double>();
-        const auto &death = bar.get_death().template astype<double>();
+        const auto &birth = bar.get_birth().template as_type<double>();
+        const auto &death = bar.get_death().template as_type<double>();
         if ((dimension == -1 || bar.get_dimension() == dimension) &&
             birth.size() > 1 && death.size() > 1 &&
             (death[0] > birth[0] + min_persistence)) {
@@ -301,9 +303,9 @@ private:
 };
 
 void inline threshold_up(point_type &point,
-                  const multi_filtrations::Box<value_type> &box,
+                  const Gudhi::multi_persistence::Box<value_type> &box,
                   const point_type &basepoint) {
-  Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration
+  Gudhi::multi_filtration::One_critical_filtration
       point_(point);
   // if (is_smaller(point, box.get_upper_corner())) return;
   if (point_ <= box.get_upper_corner())
@@ -329,8 +331,8 @@ void inline threshold_up(point_type &point,
     return;
   }
 
-  // if (!is_greater(point, box.get_bottom_corner())) {
-  if (box.get_bottom_corner() <= point_) {
+  // if (!is_greater(point, box.get_lower_corner())) {
+  if (box.get_lower_corner() <= point_) {
     point[0] = inf; // puts point to infinity
     //        if  (verbose) std::cout << "buggy point" << std::endl;
     return;
@@ -366,7 +368,7 @@ void inline threshold_up(point_type &point,
  */
 
 void inline threshold_down(point_type &point,
-                    const multi_filtrations::Box<value_type> &box,
+                    const Gudhi::multi_persistence::Box<value_type> &box,
                     const point_type &basepoint) {
   if (basepoint[0] == negInf) [[unlikely]]
     return;
@@ -376,8 +378,8 @@ void inline threshold_down(point_type &point,
     return;
   }
 
-  // if (is_greater(point, box.get_bottom_corner())) return;
-  if (point >= box.get_bottom_corner())
+  // if (is_greater(point, box.get_lower_corner())) return;
+  if (point >= box.get_lower_corner())
     return;
 
   // if (!is_smaller(point, box.get_upper_corner())) {
@@ -386,9 +388,9 @@ void inline threshold_down(point_type &point,
     return;
   }
 
-  value_type threshold = box.get_bottom_corner()[0] - point[0];
+  value_type threshold = box.get_lower_corner()[0] - point[0];
   for (unsigned int i = 1; i < point.size(); i++) {
-    threshold = std::max(threshold, box.get_bottom_corner()[i] - point[i]);
+    threshold = std::max(threshold, box.get_lower_corner()[i] - point[i]);
   }
   for (unsigned int i = 0; i < point.size(); i++)
     point[i] += threshold;

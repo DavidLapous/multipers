@@ -41,11 +41,11 @@
 /*#include "vector_column.h"*/
 /*#include "set_column.h"*/
 /*#include "unordered_set_column.h"*/
-#include <gudhi/Simplex_tree/multi_filtrations/Box.h>
+#include <gudhi/Multi_persistence/Box.h>
 
 namespace Gudhi::multiparameter::mma {
 
-using Gudhi::multiparameter::multi_filtrations::Box;
+using Gudhi::multi_persistence::Box;
 std::vector<std::vector<std::vector<interval_type>>>
 compute_vineyard_barcode(boundary_matrix &boundaryMatrix,
                          const std::vector<filtration_type> &filtersList,
@@ -148,7 +148,7 @@ compute_vineyard_barcode(boundary_matrix &boundaryMatrix,
   Gudhi::multiparameter::mma::verbose = verbose;
   // Checks if dimensions are compatibles
   assert(!filtersList.empty() && "A non trivial filters list is needed !");
-  assert(filtersList.size() == box.get_bottom_corner().size() &&
+  assert(filtersList.size() == box.get_lower_corner().size() &&
          filtersList.size() == box.get_upper_corner().size() &&
          "Filtration and box must be of the same dimension");
   if constexpr (Debug::debug) {
@@ -171,8 +171,8 @@ compute_vineyard_barcode(boundary_matrix &boundaryMatrix,
   std::vector<unsigned int> sizeLine(filtrationDimension - 1);
   for (unsigned int i = 0; i < filtrationDimension - 1; i++)
     sizeLine[i] = static_cast<unsigned int>(std::ceil(
-        std::abs(box.get_upper_corner()[i] - box.get_bottom_corner().back() -
-                 box.get_bottom_corner()[i] + box.get_upper_corner().back()) /
+        std::abs(box.get_upper_corner()[i] - box.get_lower_corner().back() -
+                 box.get_lower_corner()[i] + box.get_upper_corner().back()) /
         precision));
 
   unsigned int numberOfLines = Combinatorics::prod(sizeLine);
@@ -181,7 +181,7 @@ compute_vineyard_barcode(boundary_matrix &boundaryMatrix,
   if (verbose)
     std::cout << "Number of lines : " << numberOfLines << std::endl;
 
-  auto basePoint = box.get_bottom_corner();
+  auto basePoint = box.get_lower_corner();
   for (unsigned int i = 0; i < basePoint.size() - 1; i++)
     basePoint[i] -= box.get_upper_corner().back();
   basePoint.back() = 0;
@@ -510,11 +510,11 @@ void get_filter_from_line(const point_type &lineBasepoint,
 
   unsigned int dimension = lineBasepoint.size() + 1 - ignoreLast;
 
-  // 	value_type minLength = box.get_bottom_corner().back();
+  // 	value_type minLength = box.get_lower_corner().back();
   // 	value_type maxLength = box.get_upper_corner().back();
   // // #pragma omp parallel for reduction(max : minLength)
   // 	for (unsigned int i = 0;  i<dimension-1; i++){
-  // 		minLength = std::max(minLength, box.get_bottom_corner()[i] -
+  // 		minLength = std::max(minLength, box.get_lower_corner()[i] -
   // lineBasepoint[i]);
   // 	}
   // // #pragma omp parallel for reduction(min : maxLength)
@@ -555,7 +555,7 @@ void get_filter_from_line(const point_type &lineBasepoint,
 
 void threshold_up(point_type &point, const Box<value_type> &box,
                   const point_type &basepoint) {
-  Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration
+  Gudhi::multi_filtration::One_critical_filtration
       point_(point);
   // if (is_smaller(point, box.get_upper_corner())) return;
   if (point_ <= box.get_upper_corner())
@@ -581,8 +581,8 @@ void threshold_up(point_type &point, const Box<value_type> &box,
     return;
   }
 
-  // if (!is_greater(point, box.get_bottom_corner())) {
-  if (box.get_bottom_corner() <= point_) {
+  // if (!is_greater(point, box.get_lower_corner())) {
+  if (box.get_lower_corner() <= point_) {
     point[0] = inf; // puts point to infinity
     //        if  (verbose) std::cout << "buggy point" << std::endl;
     return;
@@ -626,8 +626,8 @@ void threshold_down(point_type &point, const Box<value_type> &box,
     return;
   }
 
-  // if (is_greater(point, box.get_bottom_corner())) return;
-  if (point >= box.get_bottom_corner())
+  // if (is_greater(point, box.get_lower_corner())) return;
+  if (point >= box.get_lower_corner())
     return;
 
   // if (!is_smaller(point, box.get_upper_corner())) {
@@ -636,9 +636,9 @@ void threshold_down(point_type &point, const Box<value_type> &box,
     return;
   }
 
-  value_type threshold = box.get_bottom_corner()[0] - point[0];
+  value_type threshold = box.get_lower_corner()[0] - point[0];
   for (unsigned int i = 1; i < point.size(); i++) {
-    threshold = std::max(threshold, box.get_bottom_corner()[i] - point[i]);
+    threshold = std::max(threshold, box.get_lower_corner()[i] - point[i]);
   }
   for (unsigned int i = 0; i < point.size(); i++)
     point[i] += threshold;

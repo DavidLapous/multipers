@@ -6,8 +6,8 @@ from libc.stdint cimport uintptr_t,intptr_t
 from cpython cimport Py_buffer
 
 
-cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h" namespace "Gudhi::multiparameter::multi_filtrations":
-    cdef cppclass Finitely_critical_multi_filtration[T=*]:
+cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtration":
+    cdef cppclass One_critical_filtration[T=*]:
         ## Copied from cython vector
         ctypedef size_t size_type
         ctypedef ptrdiff_t difference_type
@@ -162,79 +162,78 @@ cdef extern from "gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrat
 
         ## end of copied from cython vector
 
-        Finitely_critical_multi_filtration()  except + nogil
-        Finitely_critical_multi_filtration(vector[value_type]&) except + nogil
-        Finitely_critical_multi_filtration(Finitely_critical_multi_filtration&) except + nogil
+        One_critical_filtration()  except + nogil
+        One_critical_filtration(vector[value_type]&) except + nogil
+        One_critical_filtration(One_critical_filtration&) except + nogil
 
-        Finitely_critical_multi_filtration(int) nogil
-        Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&) except +
+        One_critical_filtration(int) nogil
+        One_critical_filtration& operator=(const One_critical_filtration&) except +
         @staticmethod
-        vector[vector[value_type]] to_python(vector[Finitely_critical_multi_filtration]&) nogil const 
+        vector[vector[value_type]] to_python(vector[One_critical_filtration]&) nogil const 
         @staticmethod
         vector[value_type]& vector[value_type]() nogil
         # overloading += not yet supported.
-        # Finitely_critical_multi_filtration[T]& operator+=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
+        # One_critical_filtration[T]& operator+=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
         #
-        # Finitely_critical_multi_filtration[T]& operator-=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
-        # Finitely_critical_multi_filtration[T]& operator*=(Finitely_critical_multi_filtration[T]&, const Finitely_critical_multi_filtration[T]&)
+        # One_critical_filtration[T]& operator-=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
+        # One_critical_filtration[T]& operator*=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
         
-        void push_to(Finitely_critical_multi_filtration[T]&) nogil
-        void pull_to(Finitely_critical_multi_filtration[T]&) nogil
+        void push_to_least_common_upper_bound(One_critical_filtration[T]&) nogil
+        void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) nogil
 
         
-
-    cdef cppclass KCriticalFiltration[T=*]:
+cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_filtration":
+    cdef cppclass Multi_critical_filtration[T=*]:
         ctypedef size_t size_type
-        ctypedef Finitely_critical_multi_filtration[T] filtration_type
-        KCriticalFiltration()  except + nogil
-        KCriticalFiltration(Finitely_critical_multi_filtration[T]) except +
-        KCriticalFiltration[T]& operator=(const KCriticalFiltration[T]&) except +
+        ctypedef One_critical_filtration[T] filtration_type
+        Multi_critical_filtration()  except + nogil
+        Multi_critical_filtration(One_critical_filtration[T]) except +
+        Multi_critical_filtration[T]& operator=(const Multi_critical_filtration[T]&) except +
         size_type num_parameters()
         size_type num_generators()
-        void clear() nogil
-        void push_back(T) nogil
-        void add_point(Finitely_critical_multi_filtration[T]) nogil
+        void add_guaranteed_generator(One_critical_filtration[T]) nogil
+        void add_generator(One_critical_filtration[T]) nogil
         void reserve(size_t) nogil
         void set_num_generators(size_t) nogil
-        Finitely_critical_multi_filtration[T]& operator[](int) nogil
+        One_critical_filtration[T]& operator[](int) nogil
         # @staticmethod
-        # multifiltration& to_python(vector[KCriticalFiltration]&) nogil const 
+        # multifiltration& to_python(vector[Multi_critical_filtration]&) nogil const 
         # @staticmethod
-        # vector[KCriticalFiltration]& from_python(multifiltration&) nogil const 
+        # vector[Multi_critical_filtration]& from_python(multifiltration&) nogil const 
         # vector[value_type]& _convert_back() nogil
         # filtration_type __filtration_type__(self):
         #     return self.get_vector()
-        # KCriticalFiltration[T]& operator+=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
+        # Multi_critical_filtration[T]& operator+=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
         #
-        # KCriticalFiltration[T]& operator-=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
-        # KCriticalFiltration[T]& operator*=(KCriticalFiltration[T]&, const KCriticalFiltration[T]&)
+        # Multi_critical_filtration[T]& operator-=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
+        # Multi_critical_filtration[T]& operator*=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
 
-        void push_to(Finitely_critical_multi_filtration[T]&) except + nogil
-        void pull_to(Finitely_critical_multi_filtration[T]&) except + nogil
+        void push_to_least_common_upper_bound(One_critical_filtration[T]&) except + nogil
+        void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) except + nogil
 
-cdef extern from "gudhi/Simplex_tree/multi_filtrations/Box.h" namespace "Gudhi::multiparameter::multi_filtrations":
+cdef extern from "gudhi/Multi_persistence/Box.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Box[T=*]:
         ctypedef vector[T] corner_type
         Box()   except +
         Box( vector[T]&,  vector[T]&) nogil 
         Box( pair[vector[T], vector[T]]&) nogil  
         void inflate(T)  nogil 
-        const Finitely_critical_multi_filtration[T]& get_bottom_corner()  nogil 
-        const Finitely_critical_multi_filtration[T]& get_upper_corner()  nogil 
+        const One_critical_filtration[T]& get_lower_corner()  nogil 
+        const One_critical_filtration[T]& get_upper_corner()  nogil 
         bool contains(vector[T]&)  nogil
-        pair[Finitely_critical_multi_filtration[T], Finitely_critical_multi_filtration[T]] get_pair() nogil
+        pair[One_critical_filtration[T], One_critical_filtration[T]] get_bounding_corners() nogil
 
-cdef extern from "gudhi/Simplex_tree/multi_filtrations/Line.h" namespace "Gudhi::multiparameter::multi_filtrations":
+cdef extern from "gudhi/Multi_persistence/Line.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Line[T=*]:
-        ctypedef Finitely_critical_multi_filtration[T] point_type
+        ctypedef One_critical_filtration[T] point_type
         Line()   except + nogil
-        Line(Finitely_critical_multi_filtration[T]&)   except + nogil
-        Line(Finitely_critical_multi_filtration[T]&, Finitely_critical_multi_filtration[T]&)   except + nogil
+        Line(One_critical_filtration[T]&)   except + nogil
+        Line(One_critical_filtration[T]&, One_critical_filtration[T]&)   except + nogil
 
 
 
 
 
 # ------ useful types:
-# ctypedef Finitely_critical_multi_filtration[float] onecritical
-# ctypedef KCriticalFiltration[float] kcritical
+# ctypedef One_critical_filtration[float] Generator
+# ctypedef Multi_critical_filtration[float] kcritical

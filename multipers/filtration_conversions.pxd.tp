@@ -15,7 +15,7 @@ value_types = [
 }}
 
 # Python to C++ conversions
-from multipers.filtrations cimport Finitely_critical_multi_filtration,KCriticalFiltration
+from multipers.filtrations cimport One_critical_filtration,Multi_critical_filtration
 from libcpp.vector cimport vector
 from libcpp cimport bool
 cimport numpy as cnp
@@ -27,9 +27,9 @@ from cython.operator cimport dereference
 ###### ------------------- PY TO CPP
 #### ---------- 
 
-cdef inline KCriticalFiltration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrations_):
+cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrations_):
     cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
-    cdef KCriticalFiltration[{{CTYPE}}] out
+    cdef Multi_critical_filtration[{{CTYPE}}] out
     with nogil:
       out.set_num_generators(filtrations.shape[0])
       for i in range(filtrations.shape[0]):
@@ -38,9 +38,9 @@ cdef inline KCriticalFiltration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrations_)
               out[i][j] = filtrations[i,j]
     return out
 
-cdef inline Finitely_critical_multi_filtration[{{CTYPE}}] _py21c_{{SHORT}}(object filtration_):
+cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}(object filtration_):
     cdef {{CTYPE}}[:] filtration = np.asarray(filtration_, dtype={{PYTYPE}})
-    cdef Finitely_critical_multi_filtration[{{CTYPE}}] out
+    cdef One_critical_filtration[{{CTYPE}}] out = One_critical_filtration[{{CTYPE}}](0)
     with nogil:
       out.reserve(len(filtration))
       for i in range(len(filtration)):
@@ -48,9 +48,9 @@ cdef inline Finitely_critical_multi_filtration[{{CTYPE}}] _py21c_{{SHORT}}(objec
     return out
 
 
-cdef inline vector[Finitely_critical_multi_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}(object filtrations_):
+cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}(object filtrations_):
     cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] out
+    cdef vector[One_critical_filtration[{{CTYPE}}]] out
     out.reserve(filtrations.shape[0])
     for i in range(filtrations.shape[0]):
         out.push_back(_py21c_{{SHORT}}(filtrations[i,:]))
@@ -61,21 +61,21 @@ cdef inline vector[Finitely_critical_multi_filtration[{{CTYPE}}]] _py2v1c_{{SHOR
 
 
 ## CYTHON BUG: using tuples here will cause some weird issues. 
-cdef inline _ff21cview_{{SHORT}}(Finitely_critical_multi_filtration[{{CTYPE}}]* x, bool copy=False):
+cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool copy=False):
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
   cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(&(dereference(x)[0]))
   return np.array(x_view) if copy else np.asarray(x_view)
 
-cdef inline  _ff2kcview_{{SHORT}}(KCriticalFiltration[{{CTYPE}}]* x, bool copy=False):
+cdef inline  _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False):
   cdef Py_ssize_t k = dereference(x).num_generators()
   return [_ff21cview_{{SHORT}}(&(dereference(x)[i]), copy=copy) for i in range(k)]
 
 
-cdef inline  _vff21cview_{{SHORT}}(vector[Finitely_critical_multi_filtration[{{CTYPE}}]]& x, bool copy = False):
+cdef inline  _vff21cview_{{SHORT}}(vector[One_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
   cdef Py_ssize_t num_stuff = x.size()
   return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
 
-cdef inline  _vff2kcview_{{SHORT}}(vector[KCriticalFiltration[{{CTYPE}}]]& x, bool copy = False):
+cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
   cdef Py_ssize_t num_stuff = x.size()
   return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
 

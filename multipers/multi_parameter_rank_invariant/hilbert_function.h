@@ -4,7 +4,7 @@
 #include "multi_parameter_rank_invariant/persistence_slices.h"
 #include "tensor/tensor.h"
 #include <algorithm>
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+#include <gudhi/One_critical_filtration.h>
 #include <gudhi/truc.h>
 #include <iostream>
 #include <limits>
@@ -22,7 +22,7 @@ inline typename Filtration::value_type
 horizontal_line_filtration2(const Filtration &x, indices_type height,
                             indices_type i, indices_type j,
                             const std::vector<indices_type> &fixed_values) {
-  const auto &inf = Filtration::T_inf;
+  const auto &inf = Filtration::Generator::T_inf;
   for (indices_type k = 0u; k < static_cast<indices_type>(x.size()); k++) {
     if (k == i || k == j)
       continue;                 // coordinate in the plane
@@ -75,7 +75,7 @@ inline void compute_2d_hilbert_surface(
 
   // Simplex_tree_std _st;
   // flatten<Simplex_tree_float,
-  // Simplex_tree_options_multidimensional_filtration>(_st, st_multi,-1); //
+  // Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration>(_st, st_multi,-1); //
   // copies the st_multi to a standard 1-pers simplextree
   // tbb::enumerable_thread_specific<std::pair<Simplex_tree_std,
   // std::vector<index_type>>> thread_simplex_tree;
@@ -131,7 +131,7 @@ inline void compute_2d_hilbert_surface(
       st_std.assign_filtration(*sh_standard, horizontal_filtration);
 
       if constexpr (verbose) {
-        multi_filtrations::Finitely_critical_multi_filtration<int> splx;
+        Gudhi::multi_filtration::One_critical_filtration<int> splx;
         for (auto vertex : st_multi.simplex_vertex_range(*sh_multi))
           splx.push_back(vertex);
         std::cout << "Simplex " << splx << "/" << st_std.num_simplices()
@@ -308,7 +308,7 @@ void get_hilbert_surface(
                            "<2 parameters.");
 
   Simplex_tree_std _st;
-  flatten(_st, st_multi,
+  Gudhi::multi_persistence::flatten(_st, st_multi,
           -1); // copies the st_multi to a standard 1-pers simplextree
   std::vector<index_type> coordinates_container(
       st_multi.get_number_of_parameters() + 1); // +1 for degree
@@ -488,7 +488,7 @@ inline void compute_2d_hilbert_surface(
     for (std::size_t k = 0; k < multi_filtration.size(); k++) {
       value_type horizontal_filtration;
       if constexpr (Filtration::is_multi_critical) {
-        horizontal_filtration = Filtration::T_inf;
+        horizontal_filtration = Filtration::Generator::T_inf;
         for (const auto &stuff : multi_filtration[k])
           horizontal_filtration =
               std::min(horizontal_filtration,

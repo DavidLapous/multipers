@@ -1,12 +1,14 @@
 #pragma once
-#include "gudhi/Simplex_tree/multi_filtrations/Line.h"
+#include "gudhi/Multi_persistence/Line.h"
 #include "multiparameter_module_approximation/format_python-cpp.h"
+#include <gudhi/One_critical_filtration.h>
+#include <gudhi/Multi_critical_filtration.h>
 #include <algorithm>
 #include <boost/mpl/aux_/na_fwd.hpp>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+// #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -17,11 +19,12 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <type_traits>  //std::invoke_result
 
 namespace Gudhi::multiparameter::interface {
 
 // using Filtration_value =
-//     multi_filtrations::Finitely_critical_multi_filtration<float>;
+//     multi_filtration::One_critical_filtration<float>;
 
 class PresentationStructure {
 public:
@@ -266,16 +269,14 @@ public:
     //     this->num_generators()); // for some reasons it is necessary FIXME
     for (std::size_t i = 0u; i < this->num_generators(); i++) {
       if constexpr (original_order) {
-        filtration_container[i] =
-            f.push_forward2(generator_filtration_values[i]);
+        filtration_container[i] = f.compute_forward_intersection(generator_filtration_values[i]);
       } else {
-        filtration_container[i] =
-            f.push_forward2(generator_filtration_values[generator_order[i]]);
+        filtration_container[i] = f.compute_forward_intersection(generator_filtration_values[generator_order[i]]);
       }
     }
   }
   template <class SubFiltration, bool original_order = true>
-  inline void push_to(const SubFiltration &f) {
+  inline void push_to_least_common_upper_bound(const SubFiltration &f) {
     this->push_to_out<SubFiltration, original_order>(
         f, this->filtration_container, this->generator_order);
   }
@@ -310,7 +311,7 @@ public:
               });
     if constexpr (!PersBackend::is_vine && ignore_inf) {
       for (std::size_t &i : out_gen_order)
-        if (one_filtration[i] == MultiFiltration::T_inf) {
+        if (one_filtration[i] == MultiFiltration::Generator::T_inf) {
           // TODO : later
           // int d = structure.dimension(i);
           // d = d == 0 ? 1 : 0;
@@ -388,7 +389,7 @@ public:
                       1); // TODO : This doesn't allow for negative dimensions
     const bool verbose = false;
     const bool debug = false;
-    const auto inf = MultiFiltration::T_inf;
+    const auto inf = MultiFiltration::Generator::T_inf;
     for (const auto &bar : barcode_indices) {
       if constexpr (verbose)
         std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
@@ -443,7 +444,7 @@ public:
     if (num_bars <= 0)
       return out;
     auto idx = 0u;
-    const value_type inf = MultiFiltration::T_inf;
+    const value_type inf = MultiFiltration::Generator::T_inf;
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
@@ -483,7 +484,7 @@ public:
     if (num_bars <= 0)
       return out;
     auto idx = 0u;
-    const value_type inf = MultiFiltration::T_inf;
+    const value_type inf = MultiFiltration::Generator::T_inf;
     for (const auto &bar : barcode_indices) {
       value_type birth_filtration = inf;
       value_type death_filtration = -birth_filtration;
@@ -563,28 +564,28 @@ public:
     stream << *this;
     return stream.str();
   }
-  inline std::pair<typename MultiFiltration::OneCritical,
-                   typename MultiFiltration::OneCritical>
+  inline std::pair<typename MultiFiltration::Generator,
+                   typename MultiFiltration::Generator>
   get_bounding_box() const {
-    using OC = typename MultiFiltration::OneCritical;
+    using OC = typename MultiFiltration::Generator;
     // assert(!generator_filtration_values.empty());
     OC a = OC::inf();
     OC b = -1 * a;
     for (const auto &filtration_value : generator_filtration_values) {
       if constexpr (MultiFiltration::is_multi_critical) {
-        a.pull_to(filtration_value.factorize_below());
-        b.push_to(filtration_value.factorize_above());
+        a.pull_to_greatest_common_lower_bound(factorize_below(filtration_value));
+        b.push_to_least_common_upper_bound(factorize_above(filtration_value));
       } else {
-        a.pull_to(filtration_value);
-        b.push_to(filtration_value);
+        a.pull_to_greatest_common_lower_bound(filtration_value);
+        b.push_to_least_common_upper_bound(filtration_value);
       }
     }
     return {a, b};
   }
-  inline std::vector<typename MultiFiltration::OneCritical>
+  inline std::vector<typename MultiFiltration::Generator>
   get_filtration_values() const {
     if constexpr (MultiFiltration::is_multi_critical) {
-      std::vector<typename MultiFiltration::OneCritical> out;
+      std::vector<typename MultiFiltration::Generator> out;
       out.reserve(generator_filtration_values
                       .size()); // at least this, will dooble later
       for (std::size_t i = 0; i < generator_filtration_values.size(); ++i) {
@@ -594,7 +595,7 @@ public:
       }
       return out;
     } else {
-      return generator_filtration_values; // copy not necessary for Onecritical
+      return generator_filtration_values; // copy not necessary for Generator
     } // (could return const&)
   }
   inline std::vector<MultiFiltration> &get_filtrations() {
@@ -628,25 +629,22 @@ public:
     return out;
   }
 
-  Truc<PersBackend, Structure, typename MultiFiltration::template Base<int32_t>>
-  coarsen_on_grid(
-      const std::vector<std::vector<typename MultiFiltration::value_type>>
-          grid) {
-    std::vector<typename MultiFiltration::template Base<int32_t>> coords(
-        this->num_generators());
+  auto coarsen_on_grid(
+      const std::vector<std::vector<typename MultiFiltration::value_type>> grid)
+  {
+    using return_type = decltype(std::declval<MultiFiltration>().template as_type<std::int32_t>());
+    std::vector<return_type> coords(this->num_generators());
     for (std::size_t gen = 0u; gen < coords.size(); ++gen) {
-      coords[gen] = generator_filtration_values[gen].coordinates_in_grid(grid);
+      coords[gen] = compute_coordinates_in_grid<int32_t>(generator_filtration_values[gen], grid);
     }
-    return Truc<PersBackend, Structure,
-                typename MultiFiltration::template Base<int32_t>>(structure,
-                                                                  coords);
+    return Truc<PersBackend, Structure, return_type>(structure, coords);
   }
   inline void coarsen_on_grid_inplace(
       const std::vector<std::vector<typename MultiFiltration::value_type>>
           &grid,
       bool coordinate = true) {
     for (auto gen = 0u; gen < this->num_generators(); ++gen) {
-      generator_filtration_values[gen].coordinates_in_grid_inplace(grid,
+      generator_filtration_values[gen].project_onto_grid(grid,
                                                                    coordinate);
     }
   }
@@ -740,7 +738,7 @@ public:
       truc_ptr->coarsen_on_grid_inplace(grid, coordinate);
     }
     template <typename Subfiltration>
-    inline void push_to(const Subfiltration &f) {
+    inline void push_to_least_common_upper_bound(const Subfiltration &f) {
       truc_ptr->push_to_out(f, this->filtration_container,
                             this->generator_order);
     }
@@ -813,11 +811,11 @@ public:
     std::vector<split_barcode> out(args.size());
 
     if constexpr (PersBackend::is_vine) {
-      this->push_to(f(args[0]));
+      this->push_to_least_common_upper_bound(f(args[0]));
       this->compute_persistence();
       out[0] = this->get_barcode();
       for (auto i = 1u; i < args.size(); ++i) {
-        this->push_to(f(args[i]));
+        this->push_to_least_common_upper_bound(f(args[i]));
         this->vineyard_update();
         out[i] = this->get_barcode();
       }
@@ -828,7 +826,7 @@ public:
       tbb::parallel_for(static_cast<std::size_t>(0), args.size(),
                         [&](const std::size_t &i) {
                           ThreadSafe &s = thread_locals.local();
-                          s.push_to(f(args[i]));
+                          s.push_to_least_common_upper_bound(f(args[i]));
                           s.compute_persistence();
                           out[i] = s.get_barcode();
                         });
@@ -841,7 +839,7 @@ public:
   persistence_on_lines(const std::vector<std::vector<value_type>> &basepoints) {
     return barcodes(
         [](const std::vector<value_type> &basepoint) {
-          return multi_filtrations::Line<value_type>(basepoint);
+          return Gudhi::multi_persistence::Line<value_type>(basepoint);
         },
         basepoints);
   }
@@ -851,7 +849,7 @@ public:
     return barcodes(
         [](const std::pair<std::vector<value_type>, std::vector<value_type>>
                &bpdir) {
-          return multi_filtrations::Line<value_type>(bpdir.first, bpdir.second);
+          return Gudhi::multi_persistence::Line<value_type>(bpdir.first, bpdir.second);
         },
         bp_dirs);
   }

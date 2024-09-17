@@ -6,7 +6,7 @@
 #include "Simplex_tree_multi_interface.h"
 #include "multi_parameter_rank_invariant/persistence_slices.h"
 
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+// #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 
 #include "tensor/tensor.h"
 
