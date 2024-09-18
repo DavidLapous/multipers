@@ -172,11 +172,6 @@ cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtr
         vector[vector[value_type]] to_python(vector[One_critical_filtration]&) nogil const 
         @staticmethod
         vector[value_type]& vector[value_type]() nogil
-        # overloading += not yet supported.
-        # One_critical_filtration[T]& operator+=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
-        #
-        # One_critical_filtration[T]& operator-=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
-        # One_critical_filtration[T]& operator*=(One_critical_filtration[T]&, const One_critical_filtration[T]&)
         
         void push_to_least_common_upper_bound(One_critical_filtration[T]&) nogil
         void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) nogil
@@ -196,17 +191,6 @@ cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_fil
         void reserve(size_t) nogil
         void set_num_generators(size_t) nogil
         One_critical_filtration[T]& operator[](int) nogil
-        # @staticmethod
-        # multifiltration& to_python(vector[Multi_critical_filtration]&) nogil const 
-        # @staticmethod
-        # vector[Multi_critical_filtration]& from_python(multifiltration&) nogil const 
-        # vector[value_type]& _convert_back() nogil
-        # filtration_type __filtration_type__(self):
-        #     return self.get_vector()
-        # Multi_critical_filtration[T]& operator+=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
-        #
-        # Multi_critical_filtration[T]& operator-=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
-        # Multi_critical_filtration[T]& operator*=(Multi_critical_filtration[T]&, const Multi_critical_filtration[T]&)
 
         void push_to_least_common_upper_bound(One_critical_filtration[T]&) except + nogil
         void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) except + nogil

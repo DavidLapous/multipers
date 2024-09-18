@@ -23,9 +23,6 @@
 
 namespace Gudhi::multiparameter::interface {
 
-// using Filtration_value =
-//     multi_filtration::One_critical_filtration<float>;
-
 class PresentationStructure {
 public:
   PresentationStructure() {}

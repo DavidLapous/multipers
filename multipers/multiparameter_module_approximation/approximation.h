@@ -1406,7 +1406,7 @@ inline std::vector<value_type> Module<value_type>::compute_pixels_of_degree(
   } // Timer death
   if (verbose)
     std::cout << "Module " << start->get_dimension()
-              << " has weight : " << moduleWeight << std::endl;
+              << " has weight : " << moduleWeight << "\n";
   if (!moduleWeight)
     return out;
 
@@ -1625,19 +1625,6 @@ inline void Module<value_type>::_compute_2D_image(
   { // for Timer
     Debug::Timer timer("Computing pixel values ...", verbose);
 
-    // #pragma omp parallel for collapse(2)
-    // for (unsigned int i = 0; i < horizontalResolution; i++)
-    // {
-    // 	for (unsigned int j = 0; j < verticalResolution; j++)
-    // 	{
-    // 		image[i][j] = _get_pixel_value(
-    // 			start,
-    // 			end,
-    // 			{box.get_lower_corner()[0] + stepX * i,
-    // box.get_lower_corner()[1] + stepY * j}, 			delta,
-    // p, 			normalize, 			moduleWeight);
-    // 	}
-    // }
     tbb::parallel_for(0U, horizontalResolution, [&](unsigned int i) {
       tbb::parallel_for(0U, verticalResolution, [&](unsigned int j) {
         image[i][j] = _get_pixel_value(start, end,
