@@ -16,5 +16,7 @@ Ideally, this could take the form of
 ```python
 import multipers as mp
 [...]
-mp.stuff.new_function(something) # should return `stuff`
+mp.stuff.new_function(something) # should ideally return `stuff`
 ```
+**Checks.**
+ - [ ] I have checked the issue tracker and the example zoo (in the documentation), and this idea is not covered
