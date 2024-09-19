@@ -169,12 +169,12 @@ cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtr
         One_critical_filtration(int) nogil
         One_critical_filtration& operator=(const One_critical_filtration&) except +
         @staticmethod
-        vector[vector[value_type]] to_python(vector[One_critical_filtration]&) nogil const 
-        @staticmethod
         vector[value_type]& vector[value_type]() nogil
         
         void push_to_least_common_upper_bound(One_critical_filtration[T]&) nogil
         void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) nogil
+
+        bool is_finite() nogil
 
         
 cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_filtration":

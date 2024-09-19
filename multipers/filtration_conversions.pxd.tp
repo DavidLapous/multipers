@@ -61,23 +61,25 @@ cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}(object 
 
 
 ## CYTHON BUG: using tuples here will cause some weird issues. 
-cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool copy=False):
+cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
+  if copy and duplicate and not dereference(x).is_finite():
+    return np.full(shape=duplicate, fill_value=dereference(x)[0])
   cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(&(dereference(x)[0]))
   return np.array(x_view) if copy else np.asarray(x_view)
 
-cdef inline  _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False):
+cdef inline  _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
   cdef Py_ssize_t k = dereference(x).num_generators()
-  return [_ff21cview_{{SHORT}}(&(dereference(x)[i]), copy=copy) for i in range(k)]
+  return [_ff21cview_{{SHORT}}(&(dereference(x)[i]), copy=copy, duplicate=duplicate) for i in range(k)]
 
 
-cdef inline  _vff21cview_{{SHORT}}(vector[One_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
+cdef inline  _vff21cview_{{SHORT}}(vector[One_critical_filtration[{{CTYPE}}]]& x, bool copy = False, int duplicate=0):
   cdef Py_ssize_t num_stuff = x.size()
-  return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
+  return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy, duplicate=duplicate) for i in range(num_stuff)]
 
-cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
+cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]& x, bool copy = False, int duplicate=0):
   cdef Py_ssize_t num_stuff = x.size()
-  return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
+  return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy, duplicate=duplicate) for i in range(num_stuff)]
 
 {{endfor}}
 

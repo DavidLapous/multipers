@@ -33,7 +33,6 @@ import gudhi as gd
 import numpy as np
 from typing import List, Union
 import pickle as pk
-from math import isinf
 
 ###########################################################################
 ## CPP CLASSES
@@ -74,11 +73,11 @@ cdef class PySummand_{{SHORT}}:
 
     def get_birth_list(self): 
         cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
 
     def get_death_list(self):
         cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_death_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
     @property
     def degree(self)->int:
         return self.sum.get_dimension()
@@ -95,25 +94,31 @@ cdef class PySummand_{{SHORT}}:
     def dtype(self):
       return {{PYTYPE}}
 
+    def num_parameters(self):
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
+        if v[0].is_finite():
+            return v[0].num_parameters()
+        v = self.sum.get_death_list()
+        return v[0].num_parameters()
+
 cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     """
     Returns a list (over parameter) of the filtrations values of this parameter.
     """
-    cdef vector[One_critical_filtration[{{CTYPE}}]] v = summand.get_birth_list()
-    births = _vff21cview_{{SHORT}}(v, copy=True)
-    v = summand.get_death_list()
-    deaths = _vff21cview_{{SHORT}}(v, copy=True)
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.get_birth_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vd = summand.get_death_list()
 
-    if len(births) == 1 and births[0].size == 1 and isinf(births[0][0]):
-        if len(deaths) == 1 and deaths[0].size == 1 and isinf(deaths[0][0]):
-            return []
+    if vb[0].is_finite():
+        if vd[0].is_finite():
+            pts = np.concatenate([_vff21cview_{{SHORT}}(vb, copy=True),
+                                  _vff21cview_{{SHORT}}(vd, copy=True)],axis=0)
         else:
-            pts = np.array(deaths)
+            pts = np.array(_vff21cview_{{SHORT}}(vb, copy=True))
     else:
-        if len(deaths) == 1 and deaths[0].size == 1 and isinf(deaths[0][0]):
-            pts = np.array(births)
+        if vd[0].is_finite():
+            pts = np.array(_vff21cview_{{SHORT}}(vd, copy=True))
         else:
-            pts = np.concatenate([births,deaths],axis=0)
+            return []
     
     num_parameters = pts.shape[1]
     out = [np.unique(pts[:,parameter]) for parameter in range(num_parameters)]
