@@ -742,21 +742,40 @@ inline void Module<value_type>::_add_bar_with_threshold(const Line<value_type> &
   if (birth_filtration >= death_filtration) return;
 
   if constexpr (verbose) {
-    std::cout << "--BAR (" << birth_filtration << ", " << death_filtration << ") at basepoint " << line.basepoint()
-              << " direction " << line.direction();
+    std::cout << "--BAR (" << birth_filtration << ", " << death_filtration << ") at basepoint " << line.base_point()
+              << " direction " << line.direction() << std::endl;
   }
 
-  auto bounds = line.get_bounds(box_);
-  if (bounds.first == filtration_type::T_inf && bounds.second == -filtration_type::T_inf) return;  // no intersection
-
-  if (bounds.first > birth_filtration) birth_filtration = threshold_in ? bounds.first : -filtration_type::T_inf;
-  if (bounds.second < death_filtration) death_filtration = threshold_in ? bounds.second : filtration_type::T_inf;
-
-  if (birth_filtration < death_filtration) {
-    if constexpr (verbose)
-      std::cout << " BT: " << line[birth_filtration] << " DT: " << line[death_filtration] << std::endl;
-    summand.add_bar(line[birth_filtration], line[death_filtration]);
+  auto birth_container = line[birth_filtration];
+  if constexpr (verbose) std::cout << " B: " << birth_container << " B*d: " << birth_filtration * line.direction();
+  if (birth_container.is_minus_inf()){
+    if (threshold_in) birth_container = box_.get_lower_corner();
+  } else {
+    bool allInf = true;
+    for (std::size_t i = 0U; i < birth_container.num_parameters(); i++) {
+      auto t = box_.get_lower_corner()[i];
+      if (birth_container[i] < t - 1e-10) birth_container[i] = threshold_in ? t : -filtration_type::T_inf;
+      if (birth_container[i] != -filtration_type::T_inf) allInf = false;
+    }
+    if (allInf) birth_container = filtration_type::minus_inf();
   }
+
+  auto death_container = line[death_filtration];
+  if constexpr (verbose) std::cout << " D: " << death_container;
+  if (death_container.is_plus_inf()){
+    if (threshold_in) death_container = box_.get_upper_corner();
+  } else {
+    bool allInf = true;
+    for (std::size_t i = 0U; i < death_container.num_parameters(); i++) {
+      auto t = box_.get_upper_corner()[i];
+      if (death_container[i] > t + 1e-10) death_container[i] = threshold_in ? t : filtration_type::T_inf;
+      if (death_container[i] != filtration_type::T_inf) allInf = false;
+    }
+    if (allInf) death_container = filtration_type::inf();
+  }
+
+  if constexpr (verbose) std::cout << " BT: " << birth_container << " DT: " << death_container << std::endl;
+  summand.add_bar(birth_container, death_container);
 }
 
 template <typename value_type> inline Module<value_type>::Module() {}
