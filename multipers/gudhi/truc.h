@@ -273,7 +273,7 @@ public:
     }
   }
   template <class SubFiltration, bool original_order = true>
-  inline void push_to_least_common_upper_bound(const SubFiltration &f) {
+  inline void push_to(const SubFiltration &f) {
     this->push_to_out<SubFiltration, original_order>(
         f, this->filtration_container, this->generator_order);
   }
@@ -735,7 +735,7 @@ public:
       truc_ptr->coarsen_on_grid_inplace(grid, coordinate);
     }
     template <typename Subfiltration>
-    inline void push_to_least_common_upper_bound(const Subfiltration &f) {
+    inline void push_to(const Subfiltration &f) {
       truc_ptr->push_to_out(f, this->filtration_container,
                             this->generator_order);
     }
@@ -808,11 +808,11 @@ public:
     std::vector<split_barcode> out(args.size());
 
     if constexpr (PersBackend::is_vine) {
-      this->push_to_least_common_upper_bound(f(args[0]));
+      this->push_to(f(args[0]));
       this->compute_persistence();
       out[0] = this->get_barcode();
       for (auto i = 1u; i < args.size(); ++i) {
-        this->push_to_least_common_upper_bound(f(args[i]));
+        this->push_to(f(args[i]));
         this->vineyard_update();
         out[i] = this->get_barcode();
       }
@@ -823,7 +823,7 @@ public:
       tbb::parallel_for(static_cast<std::size_t>(0), args.size(),
                         [&](const std::size_t &i) {
                           ThreadSafe &s = thread_locals.local();
-                          s.push_to_least_common_upper_bound(f(args[i]));
+                          s.push_to(f(args[i]));
                           s.compute_persistence();
                           out[i] = s.get_barcode();
                         });
@@ -832,20 +832,16 @@ public:
   }
   // FOR Python interface, but I'm not fan. Todo: do the lambda function in
   // cython?
-  inline std::vector<split_barcode>
-  persistence_on_lines(const std::vector<std::vector<value_type>> &basepoints) {
+  inline std::vector<split_barcode> persistence_on_lines(const std::vector<std::vector<value_type>> &basepoints) {
     return barcodes(
-        [](const std::vector<value_type> &basepoint) {
-          return Gudhi::multi_persistence::Line<value_type>(basepoint);
-        },
+        [](const std::vector<value_type> &basepoint) { return Gudhi::multi_persistence::Line<value_type>(basepoint); },
         basepoints);
   }
+
   inline std::vector<split_barcode> persistence_on_lines(
-      const std::vector<std::pair<std::vector<value_type>,
-                                  std::vector<value_type>>> &bp_dirs) {
+      const std::vector<std::pair<std::vector<value_type>, std::vector<value_type>>> &bp_dirs) {
     return barcodes(
-        [](const std::pair<std::vector<value_type>, std::vector<value_type>>
-               &bpdir) {
+        [](const std::pair<std::vector<value_type>, std::vector<value_type>> &bpdir) {
           return Gudhi::multi_persistence::Line<value_type>(bpdir.first, bpdir.second);
         },
         bp_dirs);

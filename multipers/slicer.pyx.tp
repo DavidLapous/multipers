@@ -202,7 +202,7 @@ cdef class {{PYTHON_TYPE}}:
             line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint))
         else:
             line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint),_py21c_{{SHORT}}(direction))
-        self.truc.push_to_least_common_upper_bound(line)        
+        self.truc.push_to(line)
         return self
 
     @staticmethod

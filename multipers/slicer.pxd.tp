@@ -55,7 +55,7 @@ cdef extern from "Persistence_slices_interface.h":
 
       {{CTYPE}}& operator=(const {{CTYPE}}&)
       vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]] get_barcode() nogil
-      void push_to_least_common_upper_bound(const Line[{{C_VALUE_TYPE}}]&) nogil
+      void push_to(const Line[{{C_VALUE_TYPE}}]&) nogil
       void set_one_filtration(const vector[{{C_VALUE_TYPE}}]&) nogil
       int prune_above_dimension(int) except + nogil 
 
