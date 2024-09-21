@@ -38,6 +38,7 @@
 #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <gudhi/Simplex_tree/multi_filtrations/Line.h>
 #include <tbb/parallel_for.h>
+#include <tensor/tensor.h>
 
 namespace Gudhi::multiparameter::mma {
 using Debug::Timer;
@@ -165,6 +166,11 @@ public:
   std::vector<std::vector<value_type>>
   compute_distances_to(const std::vector<std::vector<value_type>> &pt,
                        bool negative, int n_jobs) const;
+  template <typename dtype = value_type, typename indices_type = int32_t>
+  void inline compute_distances_to(dtype *data_ptr,
+                                   const std::vector<std::vector<value_type>> &pts,
+                                   bool negative,
+                                   int n_jobs) const;
   using distances_to_idx_type = std::vector<distance_to_idx_type>;
   distances_to_idx_type
   compute_distances_idx_to(const std::vector<std::vector<value_type>> &pt,
@@ -929,6 +935,24 @@ typename Module<value_type>::distances_to_idx_type inline Module<value_type>::
   Module::distances_to_idx_type out(
       pts.size(), Module::distance_to_idx_type(module_.size(),
                                                std::vector<int>(full ? 4 : 2)));
+template <typename dtype, typename indices_type>
+void inline Module<value_type>::compute_distances_to(dtype *data_ptr,
+                                                     const std::vector<std::vector<value_type>> &pts,
+                                                     bool negative,
+                                                     int n_jobs) const {
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, {pts.size(), this->size()});
+  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
+  arena.execute([&] {
+    tbb::parallel_for(std::size_t(0u), pts.size(), [&](std::size_t i) {
+      // tbb::parallel_for(std::size_t(0u), std::size_t(this->size()), [&](std::size_t j) {
+      dtype *current_ptr = &container[{i, 0}];
+      for (std::size_t j = 0u; j < this->size(); ++j) {
+        *(current_ptr + j) = module_[j].distance_to(pts[i], negative);
+      }
+    });
+    // });
+  });
+}
 
   oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
   arena.execute([&] {

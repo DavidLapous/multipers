@@ -591,7 +591,7 @@ cdef class PyModule_{{SHORT}}:
 
     def representation(self, degrees=None, double bandwidth=0.1,
             resolution:List[int]|int=50, 
-            str kernel = "gaussian",
+            kernel = "gaussian",
             bool signed=False,
             bool normalize=False, bool plot=False, 
             bool save=False, int dpi=200,double p=2., box=None, 
@@ -643,7 +643,7 @@ cdef class PyModule_{{SHORT}}:
         if coordinates is None:
           xx = [np.linspace(*np.asarray(box)[:,parameter], num=res) for parameter, res in zip(range(num_parameters), resolution)]
           mesh = np.meshgrid(*xx)
-          coordinates = np.concatenate([stuff.flatten()[:,None] for stuff in mesh], axis=1)
+          coordinates = np.concatenate([stuff.ravel()[:,None] for stuff in mesh], axis=1)
 
 
         if kernel == "linear":
@@ -665,7 +665,7 @@ cdef class PyModule_{{SHORT}}:
             
         else:
             concatenated_images = np.stack([
-                kernel((b:=self.get_module_of_degree(degree).distance_to(coordinates, signed=signed)), b.get_interleavings(), bandwidth, p)
+                kernel((b:=self.get_module_of_degree(degree)).distance_to(coordinates, signed=signed), b.get_interleavings(), bandwidth, p)
                 for degree in degrees
             ])
         if flatten:
@@ -754,7 +754,7 @@ cdef class PyModule_{{SHORT}}:
             out = self.cmod.compute_distances_idx_to(cpts,full, n_jobs)
         return np.asarray(out, dtype=np.int32)
 
-    def distance_to(self, pts, bool signed=False, int n_jobs = 1)->np.ndarray:
+    def distance_to(self, pts, bool signed=False, int n_jobs = 0)->np.ndarray:
         """
         Distance from a point to each summand's support. 
         Signed distance is the distance to the boundary,
@@ -769,10 +769,13 @@ cdef class PyModule_{{SHORT}}:
             pts = pts[None]
         assert pts.shape[-1] == self.num_parameters
         cdef vector[vector[{{CTYPE}}]] cpts = pts
-        cdef vector[vector[{{CTYPE}}]] out
+        # cdef vector[vector[{{CTYPE}}]] out
+        to_fill = np.empty(shape=(cpts.size(),len(self)), dtype = {{PYTYPE}})
+        cdef {{CTYPE}}[:,:] c_to_fill = to_fill
+        cdef {{CTYPE}}* data_ptr = &c_to_fill[0,0]
         with nogil:
-            out = self.cmod.compute_distances_to(cpts,signed, n_jobs)
-        return np.asarray(out)
+            self.cmod.compute_distances_to(data_ptr, cpts,signed, n_jobs)
+        return to_fill
 
     def get_interleavings(self,box=None):
         if box is None:
