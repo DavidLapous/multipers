@@ -1,12 +1,15 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from itertools import product
-from typing import Any, Iterable, Literal, Union
+from typing import Any, Literal, Union
 
 import numpy as np
 
 global available_kernels
 available_kernels = Union[
-    Literal["gaussian", "exponential", "exponential_kernel"], Callable
+    Literal[
+        "gaussian", "exponential", "exponential_kernel", "multivariate_gaussian", "sinc"
+    ],
+    Callable,
 ]
 
 
@@ -197,8 +200,16 @@ def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
 
 
 def exponential_kernel(x_i, y_j, bandwidth):
-    exponent = -(((((x_i - y_j) ** 2).sum()) ** 1 / 2) / bandwidth).sum(dim=-1)
+    # 1 / \sigma * exp( norm(x-y, dim=-1))
+    exponent = -(((((x_i - y_j) ** 2)).sum(dim=-1) ** 1 / 2) / bandwidth)
     kernel = exponent.exp() / bandwidth
+    return kernel
+
+
+def sinc_kernel(x_i, y_j, bandwidth):
+    norm = ((((x_i - y_j) ** 2)).sum(dim=-1) ** 1 / 2) / bandwidth
+    sinc = type(x_i).sinc
+    kernel = 2 * sinc(2 * norm) - sinc(norm)
     return kernel
 
 
@@ -212,10 +223,21 @@ def _kernel(
             return exponential_kernel
         case "multivariate_gaussian":
             return multivariate_gaussian_kernel
+        case "sinc":
+            return sinc_kernel
         case _:
             assert callable(
                 kernel
-            ), f"--------------------------\nUnknown kernel {kernel}.\n--------------------------\n Custom kernel has to be callable, (x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix"
+            ), f"""
+            --------------------------
+            Unknown kernel {kernel}.
+            -------------------------- 
+            Custom kernel has to be callable, 
+            (x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix
+
+            Valid operations are given here:
+            https://www.kernel-operations.io/keops/python/api/index.html
+            """
             return kernel
 
 
@@ -229,7 +251,7 @@ class KDE:
         self,
         bandwidth: Any = 1,
         kernel: available_kernels = "gaussian",
-        return_log=False,
+        return_log: bool = False,
     ):
         """
         bandwidth : numeric
@@ -237,7 +259,7 @@ class KDE:
         """
         self.X = None
         self.bandwidth = bandwidth
-        self.kernel = kernel
+        self.kernel: available_kernels = kernel
         self._kernel = None
         self._backend = None
         self._sample_weights = None
@@ -255,52 +277,8 @@ class KDE:
                 self._backend = torch
             else:
                 raise Exception("Unsupported backend.")
-        match self.kernel:
-            case "gaussian":
-                self._kernel = self.gaussian_kernel
-            case "m_gaussian":
-                self._kernel = self.multivariate_gaussian_kernel
-            case "exponential":
-                self._kernel = self.exponential_kernel
-            case _:
-                assert callable(
-                    self.kernel
-                ), f"""
---------------------------
-Unknown kernel {self.kernel}.
---------------------------
-Custom kernel has to be callable,
-(x:LazyTensor(n,1,D),y:LazyTensor(1,m,D),bandwidth:float) ---> kernel matrix
-"""
-                self._kernel = self.kernel
+        self._kernel = _kernel(self.kernel)
         return self
-
-    @staticmethod
-    def gaussian_kernel(x_i, y_j, bandwidth):
-        exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=2) / 2
-        # float is necessary for some reason (pykeops fails)
-        kernel = (exponent).exp() / (bandwidth * float(np.sqrt(2 * np.pi)))
-        return kernel
-
-    @staticmethod
-    def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
-        # 1 / \sqrt(2 \pi^dim * \Sigma.det()) * exp( -(x-y).T @ \Sigma ^{-1} @ (x-y))
-        # CF https://www.kernel-operations.io/keops/_auto_examples/pytorch/plot_anisotropic_kernels.html#sphx-glr-auto-examples-pytorch-plot-anisotropic-kernels-py
-        #    and https://www.kernel-operations.io/keops/api/math-operations.html
-        dim = x_i.shape[-1]
-        z = x_i - y_j
-        exponent = -(z.weightedsqnorm(covariance_matrix_inverse.flatten()) / 2)
-        return (
-            float((2 * np.pi) ** (-dim / 2))
-            * (covariance_matrix_inverse.det().sqrt())
-            * exponent.exp()
-        )
-
-    @staticmethod
-    def exponential_kernel(x_i, y_j, bandwidth):
-        exponent = -(((((x_i - y_j) ** 2).sum()) ** 1 / 2) / bandwidth).sum(dim=2)
-        kernel = exponent.exp() / bandwidth
-        return kernel
 
     @staticmethod
     def to_lazy(X, Y, x_weights):
@@ -360,7 +338,7 @@ Custom kernel has to be callable,
             kernel *= w
         if return_kernel:
             return kernel
-        density_estimation = kernel.sum(dim=0).flatten() / kernel.shape[0]  # mean
+        density_estimation = kernel.sum(dim=0).ravel() / kernel.shape[0]  # mean
         return (
             self._backend.log(density_estimation)
             if self.return_log
