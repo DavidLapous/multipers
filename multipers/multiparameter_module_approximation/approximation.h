@@ -897,12 +897,13 @@ void inline Module<value_type>::compute_distances_to(dtype *data_ptr,
                                                      const std::vector<std::vector<value_type>> &pts,
                                                      bool negative,
                                                      int n_jobs) const {
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, {pts.size(), this->size()});
+  tensor::static_tensor_view<dtype, indices_type> container(
+      data_ptr, {static_cast<int>(pts.size()), static_cast<int>(this->size())});
   oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
   arena.execute([&] {
     tbb::parallel_for(std::size_t(0u), pts.size(), [&](std::size_t i) {
       // tbb::parallel_for(std::size_t(0u), std::size_t(this->size()), [&](std::size_t j) {
-      dtype *current_ptr = &container[{i, 0}];
+      dtype *current_ptr = &container[{static_cast<int>(i), 0}];
       for (std::size_t j = 0u; j < this->size(); ++j) {
         *(current_ptr + j) = module_[j].distance_to(pts[i], negative);
       }
