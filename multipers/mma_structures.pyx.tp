@@ -647,27 +647,50 @@ cdef class PyModule_{{SHORT}}:
 
 
         if kernel == "linear":
+            assert not signed, "This kernel is not compatible with signed."
             concatenated_images = self._compute_pixels(coordinates, degrees=degrees, box=box, delta=bandwidth, p=p, normalize=normalize,n_jobs=n_jobs)
-        elif kernel == "gaussian":
-            def todo(PyModule_{{SHORT}} mod_degree):
-              return (
-                (np.exp(
-                -((b:=mod_degree).distance_to(coordinates, signed=signed)/bandwidth)**2)
-                *b.get_interleavings()[None]**p)
-                .sum(1)
-                )
+        else:
+            if kernel == "linear2":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  x = np.abs(x)
+                  return (s*np.where(x<bandwidth,(bandwidth-x)/bandwidth,0)*w).sum(1)
+            elif kernel == "gaussian":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  return (s*np.exp( -.5*((x/bandwidth)**2))*w).sum(1)
+            elif kernel == "exponential":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  x = np.abs(x)
+                  return (s*np.exp( -((np.abs(x)/bandwidth)))*w).sum(1)
+            else:
+                assert callable(kernel), """
+                    Kernel should be 
+                    gaussian, linear, linear2, exponential or callable,
+                    with signature
+                     (array[shape=(N, M)], array[shape=(M)])-> array(shape=(N)),
+                    the first argument being a distance matrix (pts) vs (summands of the module)
+                    and the second argument is a weight vector (weight(summand) for summand in module).
+                    Note that the distance can be signed.
+                    """
+                def todo(PyModule_{{SHORT}} mod_degree):
+                      x = mod_degree.distance_to(coordinates,signed=signed)
+                      w = mod_degree.get_interleavings()[None]**p
+                      return kernel(x/bandwidth,w)
             concatenated_images = np.stack(
                 Parallel(n_jobs = -1, backend= "threading")(
                   delayed(todo)(self.get_module_of_degree(degree))
                   for degree in degrees
                 )
               )
-            
-        else:
-            concatenated_images = np.stack([
-                kernel((b:=self.get_module_of_degree(degree)).distance_to(coordinates, signed=signed), b.get_interleavings(), bandwidth, p)
-                for degree in degrees
-            ])
+
         if flatten:
             image_vector = concatenated_images.reshape((len(degrees),-1))
             if plot:
