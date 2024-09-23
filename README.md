@@ -1,4 +1,5 @@
 # multipers : Multiparameter Persistence for Machine Learning
+[![Build, test](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml/badge.svg)](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml)
 [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers)
 [![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
 [Documentation](https://www-sop.inria.fr/members/David.Loiseaux/doc/multipers/index.html)
