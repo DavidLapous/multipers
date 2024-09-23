@@ -27,6 +27,7 @@
 #include <iterator>
 #include <limits>
 #include <oneapi/tbb/parallel_for.h>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -689,8 +690,8 @@ template <class Barcode>
 inline void Module<value_type>::add_barcode(const Barcode &barcode) {
   const bool verbose = false;
   if (barcode.size() != module_.size()) {
-    std::cerr << "Barcode sizes doesn't match. Module is " << module_.size() << " and barcode is " << barcode.size()
-              << std::endl;
+    std::cerr << "Barcode sizes doesn't match. Module is " << std::to_string(module_.size()) << " and barcode is "
+              << std::to_string(barcode.size()) << std::endl;
   }
   unsigned int count = 0;
   for (const auto &bar_ : barcode) {
@@ -708,7 +709,8 @@ inline void Module<value_type>::add_barcode(
     const std::vector<std::pair<int, std::pair<value_type, value_type>>> &barcode,
     const bool threshold_in) {
   assert(barcode.size() != module_.size() &&
-         ("Barcode sizes doesn't match. Module is " + module_.size() + " and barcode is " + barcode.size()));
+         ("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
+          std::to_string(barcode.size())));
 
   auto count = 0U;
   for (const auto &extBar : barcode) {
@@ -722,7 +724,8 @@ inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::pair<value_type, value_type>> &barcode,
                                             const bool threshold_in) {
   assert(barcode.size() != module_.size() &&
-         ("Barcode sizes doesn't match. Module is " + module_.size() + " and barcode is " + barcode.size()));
+         ("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
+          std::to_string(barcode.size())));
 
   auto count = 0U;
   for (const auto &bar : barcode) {
