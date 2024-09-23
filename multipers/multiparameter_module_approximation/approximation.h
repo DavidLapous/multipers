@@ -709,8 +709,9 @@ inline void Module<value_type>::add_barcode(
     const std::vector<std::pair<int, std::pair<value_type, value_type>>> &barcode,
     const bool threshold_in) {
   assert(barcode.size() != module_.size() &&
-         ("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
-          std::to_string(barcode.size())));
+         std::string("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
+                     std::to_string(barcode.size()))
+             .data());
 
   auto count = 0U;
   for (const auto &extBar : barcode) {
@@ -724,8 +725,9 @@ inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::pair<value_type, value_type>> &barcode,
                                             const bool threshold_in) {
   assert(barcode.size() != module_.size() &&
-         ("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
-          std::to_string(barcode.size())));
+         std::string("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
+                     std::to_string(barcode.size()))
+             .data());
 
   auto count = 0U;
   for (const auto &bar : barcode) {
