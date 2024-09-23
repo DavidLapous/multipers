@@ -117,6 +117,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[vector[T]] compute_distances_to(vector[vector[T]],bool, int) nogil
         vector[T] get_interleavings(Box[T]) nogil
         vector[int] get_degree_splits() nogil
+        void compute_distances_to(T*,vector[vector[T]],bool, int) nogil
         
 
 

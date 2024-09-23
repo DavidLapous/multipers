@@ -608,7 +608,7 @@ cdef class PyModule_{{SHORT}}:
 
     def representation(self, degrees=None, double bandwidth=0.1,
             resolution:List[int]|int=50, 
-            str kernel = "gaussian",
+            kernel = "gaussian",
             bool signed=False,
             bool normalize=False, bool plot=False, 
             bool save=False, int dpi=200,double p=2., box=None, 
@@ -660,31 +660,54 @@ cdef class PyModule_{{SHORT}}:
         if coordinates is None:
           xx = [np.linspace(*np.asarray(box)[:,parameter], num=res) for parameter, res in zip(range(num_parameters), resolution)]
           mesh = np.meshgrid(*xx)
-          coordinates = np.concatenate([stuff.flatten()[:,None] for stuff in mesh], axis=1)
+          coordinates = np.concatenate([stuff.ravel()[:,None] for stuff in mesh], axis=1)
 
 
         if kernel == "linear":
+            assert not signed, "This kernel is not compatible with signed."
             concatenated_images = self._compute_pixels(coordinates, degrees=degrees, box=box, delta=bandwidth, p=p, normalize=normalize,n_jobs=n_jobs)
-        elif kernel == "gaussian":
-            def todo(PyModule_{{SHORT}} mod_degree):
-              return (
-                (np.exp(
-                -((b:=mod_degree).distance_to(coordinates, signed=signed)/bandwidth)**2)
-                *b.get_interleavings()[None]**p)
-                .sum(1)
-                )
+        else:
+            if kernel == "linear2":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  x = np.abs(x)
+                  return (s*np.where(x<bandwidth,(bandwidth-x)/bandwidth,0)*w).sum(1)
+            elif kernel == "gaussian":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  return (s*np.exp( -.5*((x/bandwidth)**2))*w).sum(1)
+            elif kernel == "exponential":
+                def todo(PyModule_{{SHORT}} mod_degree):
+                  x = mod_degree.distance_to(coordinates,signed=signed)
+                  w = mod_degree.get_interleavings()[None]**p
+                  s = np.where(x>=0,1,-1) if signed else 1 
+                  x = np.abs(x)
+                  return (s*np.exp( -((np.abs(x)/bandwidth)))*w).sum(1)
+            else:
+                assert callable(kernel), """
+                    Kernel should be 
+                    gaussian, linear, linear2, exponential or callable,
+                    with signature
+                     (array[shape=(N, M)], array[shape=(M)])-> array(shape=(N)),
+                    the first argument being a distance matrix (pts) vs (summands of the module)
+                    and the second argument is a weight vector (weight(summand) for summand in module).
+                    Note that the distance can be signed.
+                    """
+                def todo(PyModule_{{SHORT}} mod_degree):
+                      x = mod_degree.distance_to(coordinates,signed=signed)
+                      w = mod_degree.get_interleavings()[None]**p
+                      return kernel(x/bandwidth,w)
             concatenated_images = np.stack(
                 Parallel(n_jobs = -1, backend= "threading")(
                   delayed(todo)(self.get_module_of_degree(degree))
                   for degree in degrees
                 )
               )
-            
-        else:
-            concatenated_images = np.stack([
-                kernel((b:=self.get_module_of_degree(degree).distance_to(coordinates, signed=signed)), b.get_interleavings(), bandwidth, p)
-                for degree in degrees
-            ])
+
         if flatten:
             image_vector = concatenated_images.reshape((len(degrees),-1))
             if plot:
@@ -771,7 +794,7 @@ cdef class PyModule_{{SHORT}}:
             out = self.cmod.compute_distances_idx_to(cpts,full, n_jobs)
         return np.asarray(out, dtype=np.int32)
 
-    def distance_to(self, pts, bool signed=False, int n_jobs = 1)->np.ndarray:
+    def distance_to(self, pts, bool signed=False, int n_jobs = 0)->np.ndarray:
         """
         Distance from a point to each summand's support. 
         Signed distance is the distance to the boundary,
@@ -786,10 +809,13 @@ cdef class PyModule_{{SHORT}}:
             pts = pts[None]
         assert pts.shape[-1] == self.num_parameters
         cdef vector[vector[{{CTYPE}}]] cpts = pts
-        cdef vector[vector[{{CTYPE}}]] out
+        # cdef vector[vector[{{CTYPE}}]] out
+        to_fill = np.empty(shape=(cpts.size(),len(self)), dtype = {{PYTYPE}})
+        cdef {{CTYPE}}[:,:] c_to_fill = to_fill
+        cdef {{CTYPE}}* data_ptr = &c_to_fill[0,0]
         with nogil:
-            out = self.cmod.compute_distances_to(cpts,signed, n_jobs)
-        return np.asarray(out)
+            self.cmod.compute_distances_to(data_ptr, cpts,signed, n_jobs)
+        return to_fill
 
     def get_interleavings(self,box=None):
         if box is None:
