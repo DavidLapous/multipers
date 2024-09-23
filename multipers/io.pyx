@@ -415,7 +415,7 @@ def clear_io(*args):
 
 
 # cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
-    # pair[boundary_matrix, vector[Finitely_critical_multi_filtration[double]]] simplextree_to_boundary_filtration(intptr_t)
+    # pair[boundary_matrix, vector[One_critical_filtration[double]]] simplextree_to_boundary_filtration(intptr_t)
     # vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(intptr_t)
     # vector[pair[ vector[vector[vector[float]]],boundary_matrix]] function_simplextree_to_scc(intptr_t)
     # pair[vector[vector[float]],boundary_matrix ] simplextree_to_ordered_bf(intptr_t)
@@ -444,9 +444,9 @@ def clear_io(*args):
 #         cptr = temp_st.thisptr
 #     else:
 #         raise TypeError("Has to be a simplextree")
-#     cdef pair[boundary_matrix, vector[Finitely_critical_multi_filtration[double]]] cboundary_filtration = simplextree_to_boundary_filtration(cptr)
+#     cdef pair[boundary_matrix, vector[One_critical_filtration[double]]] cboundary_filtration = simplextree_to_boundary_filtration(cptr)
 #     boundary = cboundary_filtration.first
-#     # multi_filtrations = np.array(<vector[vector[float]]>Finitely_critical_multi_filtration.to_python(cboundary_filtration.second))
+#     # multi_filtrations = np.array(<vector[vector[float]]>One_critical_filtration.to_python(cboundary_filtration.second))
 #     cdef cnp.ndarray[double, ndim=2] multi_filtrations = _fmf2numpy_f64(cboundary_filtration.second)
 #     return boundary, multi_filtrations
 

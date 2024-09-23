@@ -135,14 +135,16 @@ cdef class {{PYTHON_TYPE}}:
               )
         cdef uint32_t num_generators = len(generator_maps)
         cdef vector[vector[uint32_t]] c_generator_maps
-        cdef vector[KCriticalFiltration[{{C_VALUE_TYPE}}]] c_filtration_values
+        cdef vector[Multi_critical_filtration[{{C_VALUE_TYPE}}]] c_filtration_values
         for stuff in generator_maps:
             c_generator_maps.push_back(<vector[uint32_t]>(stuff))
-        cdef KCriticalFiltration[{{C_VALUE_TYPE}}] cf
+        cdef Multi_critical_filtration[{{C_VALUE_TYPE}}] cf
+        cdef One_critical_filtration[{{C_VALUE_TYPE}}] inf
+        inf[0] = -inf[0]
         for F in filtration_values:
-            cf.clear()
+            cf.push_to_least_common_upper_bound(inf)
             for f in F:
-                cf.add_point(_py21c_{{SHORT}}(f))
+                cf.add_generator(_py21c_{{SHORT}}(f))
             c_filtration_values.push_back(cf)
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
@@ -163,7 +165,7 @@ cdef class {{PYTHON_TYPE}}:
         """
         cdef uint32_t num_generators = len(generator_maps)
         cdef vector[vector[uint32_t]] c_generator_maps
-        cdef vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] c_filtration_values
+        cdef vector[One_critical_filtration[{{C_VALUE_TYPE}}]] c_filtration_values
         for stuff in generator_maps:
             c_generator_maps.push_back(<vector[uint32_t]>(stuff))
         for f in filtration_values:
@@ -200,7 +202,7 @@ cdef class {{PYTHON_TYPE}}:
             line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint))
         else:
             line = Line[{{C_VALUE_TYPE}}](_py21c_{{SHORT}}(basepoint),_py21c_{{SHORT}}(direction))
-        self.truc.push_to(line)        
+        self.truc.push_to(line)
         return self
 
     @staticmethod
@@ -307,7 +309,7 @@ cdef class {{PYTHON_TYPE}}:
         """
         Computes the bounding box of the current multifiltration.
         """
-        cdef pair[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}],Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] box = self.truc.get_bounding_box()
+        cdef pair[One_critical_filtration[{{C_VALUE_TYPE}}],One_critical_filtration[{{C_VALUE_TYPE}}]] box = self.truc.get_bounding_box()
         cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] a = _ff21cview_{{SHORT}}(&box.first)
         cdef cnp.ndarray[{{C_VALUE_TYPE}}, ndim=1] b = _ff21cview_{{SHORT}}(&box.second)
         return np.asarray([a,b])
@@ -315,8 +317,8 @@ cdef class {{PYTHON_TYPE}}:
         """
         Returns the current filtration values of the slicer.
         """
-        cdef vector[Finitely_critical_multi_filtration[{{C_VALUE_TYPE}}]] v = self.truc.get_filtration_values()
-        out = _vff21cview_{{SHORT}}(v, copy=True)
+        cdef vector[One_critical_filtration[{{C_VALUE_TYPE}}]] v = self.truc.get_filtration_values()
+        out = _vff21cview_{{SHORT}}(v, copy=True, duplicate=self.num_parameters)
         return np.asarray(out)
     def get_filtration_grid(self,grid_strategy:str="exact", **infer_grid_kwargs):
         return mpg.compute_grid(
@@ -329,9 +331,9 @@ cdef class {{PYTHON_TYPE}}:
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if IS_KCRITICAL}}
-        return _vff2kcview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
+        return _vff2kcview_{{SHORT}}(self.truc.get_filtrations(), copy=True, duplicate=self.num_parameters)
         {{else}}
-        return _vff21cview_{{SHORT}}(self.truc.get_filtrations(), copy=True)
+        return _vff21cview_{{SHORT}}(self.truc.get_filtrations(), copy=True, duplicate=self.num_parameters)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:

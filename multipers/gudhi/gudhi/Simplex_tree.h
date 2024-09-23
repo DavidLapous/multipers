@@ -104,6 +104,8 @@ class Simplex_tree {
    *
    * Must be an integer type. */
   typedef typename Options::Simplex_key Simplex_key;
+  /** \brief Extra data stored in each simplex. */
+  typedef typename Get_simplex_data_type<Options>::type Simplex_data;
   /** \brief Type for the vertex handle.
    *
    * Must be a signed integer type. It admits a total order <. */
@@ -653,6 +655,13 @@ class Simplex_tree {
     return -1;
   }
 
+  /** \brief Returns the extra data stored in a simplex. */
+  static Simplex_data& simplex_data(Simplex_handle sh) {
+    GUDHI_CHECK(sh != null_simplex(),
+                std::invalid_argument("Simplex_tree::simplex_data - no data associated to null_simplex"));
+    return sh->second.data();
+  }
+
   /** \brief Returns a Vertex_handle different from all Vertex_handles associated
    * to the vertices of the simplicial complex. */
   Vertex_handle null_vertex() const {
@@ -1114,6 +1123,7 @@ class Simplex_tree {
   /** Recursive search of cofaces
    * This function uses DFS
    *\param vertices contains a list of vertices, which represent the vertices of the simplex not found yet.
+   *\param curr_sib pointer to the siblings to iterate over for this iteration of the recursion.
    *\param curr_nbVertices represents the number of vertices of the simplex we reached by going through the tree.
    *\param cofaces contains a list of Simplex_handle, representing all the cofaces asked.
    *\param star true if we need the star of the simplex
@@ -1917,10 +1927,10 @@ class Simplex_tree {
       Boundary_simplex_range&& boundary = boundary_simplex_range(sh);
       Filtration_value max_filt_border_value;
       if constexpr (SimplexTreeOptions::is_multi_parameter) {
-        // in that case, we assume that Filtration_value has a `push_to` member to handle this.
+        // in that case, we assume that Filtration_value has a `push_to_least_common_upper_bound` member to handle this.
         max_filt_border_value = Filtration_value(number_of_parameters_); 
         for (auto& face_sh : boundary) {
-          max_filt_border_value.push_to(
+          max_filt_border_value.push_to_least_common_upper_bound(
               filtration(face_sh));  // pushes the value of max_filt_border_value to reach simplex' filtration
         }
       } else {
@@ -1937,7 +1947,7 @@ class Simplex_tree {
         modified = true;
         if constexpr (Options::is_multi_parameter){
           auto& to_increase_filtration = filtration_mutable(sh);
-          to_increase_filtration.push_to(max_filt_border_value);
+          to_increase_filtration.push_to_least_common_upper_bound(max_filt_border_value);
         }
         else{
          sh->second.assign_filtration(max_filt_border_value);
@@ -2611,6 +2621,7 @@ class Simplex_tree {
       return 1;
   }
 
+  // cannot be const due to `filtration_mutable`, TODO : find a proper way to make that const
   inline static Filtration_value inf_ = std::numeric_limits<Filtration_value>::has_infinity ? 
       std::numeric_limits<Filtration_value>::infinity() 
     : std::numeric_limits<Filtration_value>::max(); /**< Default infinite value. */

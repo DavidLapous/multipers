@@ -72,12 +72,12 @@ cdef class PySummand_{{SHORT}}:
     cdef Summand[{{CTYPE}}] sum
 
     def get_birth_list(self): 
-        cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
+        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
 
     def get_death_list(self):
-        cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] v = self.sum.get_death_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_death_list()
+        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
     @property
     def degree(self)->int:
         return self.sum.get_dimension()
@@ -86,23 +86,40 @@ cdef class PySummand_{{SHORT}}:
         self.sum = summand
         return self
     def get_bounds(self):
-        cdef pair[Finitely_critical_multi_filtration[{{CTYPE}}],Finitely_critical_multi_filtration[{{CTYPE}}]] cbounds
+        cdef pair[One_critical_filtration[{{CTYPE}}],One_critical_filtration[{{CTYPE}}]] cbounds
         with nogil:
-            cbounds = self.sum.get_bounds().get_pair()
+            cbounds = self.sum.get_bounds().get_bounding_corners()
         return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
     @property
     def dtype(self):
       return {{PYTYPE}}
 
+    def num_parameters(self):
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
+        if v[0].is_finite():
+            return v[0].num_parameters()
+        v = self.sum.get_death_list()
+        return v[0].num_parameters()
+
 cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     """
     Returns a list (over parameter) of the filtrations values of this parameter.
     """
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] v = summand.get_birth_list()
-    births = _vff21cview_{{SHORT}}(v, copy=True)
-    v = summand.get_death_list()
-    deaths = _vff21cview_{{SHORT}}(v, copy=True)
-    pts = np.concatenate([births,deaths],axis=0)
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.get_birth_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vd = summand.get_death_list()
+
+    if vb[0].is_finite():
+        if vd[0].is_finite():
+            pts = np.concatenate([_vff21cview_{{SHORT}}(vb, copy=True),
+                                  _vff21cview_{{SHORT}}(vd, copy=True)],axis=0)
+        else:
+            pts = np.array(_vff21cview_{{SHORT}}(vb, copy=True))
+    else:
+        if vd[0].is_finite():
+            pts = np.array(_vff21cview_{{SHORT}}(vd, copy=True))
+        else:
+            return []
+    
     num_parameters = pts.shape[1]
     out = [np.unique(pts[:,parameter]) for parameter in range(num_parameters)]
     out = [f[:-1] if f[-1] == np.inf else f for f in out]
@@ -115,7 +132,7 @@ cdef class PyBox_{{SHORT}}:
         self.box = Box[{{CTYPE}}](bottomCorner, topCorner)
     @property
     def num_parameters(self):
-        cdef size_t dim = self.box.get_bottom_corner().num_parameters()
+        cdef size_t dim = self.box.get_lower_corner().num_parameters()
         if dim == self.box.get_upper_corner().num_parameters():	return dim
         else:	print("Bad box definition.")
     def contains(self, x):
@@ -125,7 +142,7 @@ cdef class PyBox_{{SHORT}}:
         return self
 
     def get(self):
-        return [<vector[{{CTYPE}}]>self.box.get_bottom_corner(), <vector[{{CTYPE}}]>self.box.get_upper_corner()]
+        return [<vector[{{CTYPE}}]>self.box.get_lower_corner(), <vector[{{CTYPE}}]>self.box.get_upper_corner()]
     def to_multipers(self):
         #assert (self.get_dimension() == 2) "Multipers only works in dimension  2 !"
         return np.array(self.get()).flatten(order = 'F')
@@ -199,7 +216,7 @@ cdef class PyModule_{{SHORT}}:
         """
         Bottom of the box of the module
         """
-        return np.asarray(<vector[{{CTYPE}}]>(self.cmod.get_box().get_bottom_corner()))
+        return np.asarray(<vector[{{CTYPE}}]>(self.cmod.get_box().get_lower_corner()))
     def get_top(self)->np.ndarray:
         """
         Top of the box of the module
@@ -218,7 +235,7 @@ cdef class PyModule_{{SHORT}}:
         return self.cmod.get_dimension()
     @property
     def num_parameters(self)->int:
-        cdef size_t dim = self.cmod.get_box().get_bottom_corner().num_parameters()
+        cdef size_t dim = self.cmod.get_box().get_lower_corner().num_parameters()
         assert dim == self.cmod.get_box().get_upper_corner().num_parameters(), "Bad box definition, cannot infer num_parameters."
         return dim
     def dump(self, path:str|None=None):
@@ -261,9 +278,9 @@ cdef class PyModule_{{SHORT}}:
         Computes bounds from the summands' bounds.
         Useful to change this' box.
         """
-        cdef pair[Finitely_critical_multi_filtration[{{CTYPE}}],Finitely_critical_multi_filtration[{{CTYPE}}]] cbounds
+        cdef pair[One_critical_filtration[{{CTYPE}}],One_critical_filtration[{{CTYPE}}]] cbounds
         with nogil:
-            cbounds = self.cmod.get_bounds().get_pair()
+            cbounds = self.cmod.get_bounds().get_bounding_corners()
         return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
     def rescale(self,rescale_factors, int degree=-1):
         """
@@ -474,7 +491,7 @@ cdef class PyModule_{{SHORT}}:
             basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
         else :
             num=len(basepoints)
-        cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] cbasepoints = _py2v1c_{{SHORT}}(basepoints)
+        cdef vector[One_critical_filtration[{{CTYPE}}]] cbasepoints = _py2v1c_{{SHORT}}(basepoints)
 
         out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
         return out
@@ -742,8 +759,8 @@ cdef class PyModule_{{SHORT}}:
             assert len(points.shape) in [1,2]
             if len(points.shape) == 1:
                 points = [points]
-        cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] c_points = _py2v1c_{{SHORT}}(points)
-        # cdef Finitely_critical_multi_filtration temp
+        cdef vector[One_critical_filtration[{{CTYPE}}]] c_points = _py2v1c_{{SHORT}}(points)
+        # cdef One_critical_filtration temp
         # for point in points:
         #     temp.clear()
         #     for truc in point:
@@ -807,18 +824,18 @@ cdef class PyModule_{{SHORT}}:
         return np.asarray(self.cmod.get_interleavings(cbox))
 
 cdef class PyMultiDiagramPoint_{{SHORT}}:
-    cdef MultiDiagram_point[Finitely_critical_multi_filtration[{{CTYPE}}]] point
-    cdef set(self, MultiDiagram_point[Finitely_critical_multi_filtration[{{CTYPE}}]] pt):
+    cdef MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] point
+    cdef set(self, MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] pt):
         self.point = pt
         return self
 
     def get_degree(self):
         return self.point.get_dimension()
     def get_birth(self):
-        cdef Finitely_critical_multi_filtration[{{CTYPE}}] v = self.point.get_birth()
+        cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_birth()
         return _ff21cview_{{SHORT}}(&v, copy=True)
     def get_death(self):
-        cdef Finitely_critical_multi_filtration[{{CTYPE}}] v = self.point.get_death()
+        cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_death()
         return _ff21cview_{{SHORT}}(&v, copy=True)
 
 
@@ -826,8 +843,8 @@ cdef class PyMultiDiagram_{{SHORT}}:
     """
     Stores the diagram of a PyModule on a line
     """
-    cdef MultiDiagram[Finitely_critical_multi_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagram
-    cdef set(self, MultiDiagram[Finitely_critical_multi_filtration[{{CTYPE}}], {{CTYPE}}] m):
+    cdef MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagram
+    cdef set(self, MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
         self.multiDiagram = m
         return self
     def get_points(self, degree:int=-1) -> np.ndarray:
@@ -847,8 +864,8 @@ cdef class PyMultiDiagrams_{{SHORT}}:
     """
     Stores the barcodes of a PyModule on multiple lines
     """
-    cdef MultiDiagrams[Finitely_critical_multi_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagrams
-    cdef set(self,MultiDiagrams[Finitely_critical_multi_filtration[{{CTYPE}}], {{CTYPE}}] m):
+    cdef MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagrams
+    cdef set(self,MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
         self.multiDiagrams = m
         return self
     def to_multipers(self):
@@ -897,8 +914,8 @@ cdef class PyMultiDiagrams_{{SHORT}}:
 
 
 cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] births = summand.get_birth_list()
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] deaths = summand.get_death_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] births = summand.get_birth_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = summand.get_death_list()
     return (
             _vff21cview_{{SHORT}}(births, copy=True), ## copy as local variables
             _vff21cview_{{SHORT}}(deaths, copy=True),
@@ -906,15 +923,15 @@ cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
             )
 
 cdef Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] births = _py2v1c_{{SHORT}}(summand_dump[0])
-    cdef vector[Finitely_critical_multi_filtration[{{CTYPE}}]] deaths = _py2v1c_{{SHORT}}(summand_dump[1]) 
+    cdef vector[One_critical_filtration[{{CTYPE}}]] births = _py2v1c_{{SHORT}}(summand_dump[0])
+    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = _py2v1c_{{SHORT}}(summand_dump[1]) 
     cdef int dim = summand_dump[2]
     return Summand[{{CTYPE}}](births,deaths,dim)
 
 cdef dump_cmod_{{SHORT}}(Module[{{CTYPE}}]& mod):
     cdef Box[{{CTYPE}}] cbox = mod.get_box()
     cdef int dim = mod.get_dimension()
-    cdef cnp.ndarray[{{CTYPE}}, ndim=1] bottom_corner = _ff21cview_{{SHORT}}(&cbox.get_bottom_corner())
+    cdef cnp.ndarray[{{CTYPE}}, ndim=1] bottom_corner = _ff21cview_{{SHORT}}(&cbox.get_lower_corner())
     cdef cnp.ndarray[{{CTYPE}}, ndim=1] top_corner = _ff21cview_{{SHORT}}(&cbox.get_upper_corner())
     box = np.asarray([bottom_corner, top_corner])
     summands = tuple(dump_summand_{{SHORT}}(summand) for summand in mod)

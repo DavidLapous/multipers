@@ -32,7 +32,8 @@ namespace persistence_matrix {
  * Inherited instead of @ref RU_pairing, when the computation of the barcode was not enabled or if the pairing
  * is already managed by the vine update classes.
  */
-struct Dummy_ru_pairing {
+struct Dummy_ru_pairing
+{
   friend void swap([[maybe_unused]] Dummy_ru_pairing& d1, [[maybe_unused]] Dummy_ru_pairing& d2) {}
 };
 
@@ -47,57 +48,58 @@ struct Dummy_ru_pairing {
 template <class Master_matrix>
 class RU_pairing : public std::conditional<
                        Master_matrix::Option_list::has_removable_columns,
-                       Face_position_to_ID_mapper<typename Master_matrix::id_index, typename Master_matrix::pos_index>,
+                       Face_position_to_ID_mapper<typename Master_matrix::ID_index, typename Master_matrix::Pos_index>,
                        Dummy_pos_mapper
                     >::type
 {
  protected:
-  using pos_index = typename Master_matrix::pos_index;
-  using id_index = typename Master_matrix::id_index;
-  using RUM = typename std::conditional<Master_matrix::Option_list::has_removable_columns,
-                                        Face_position_to_ID_mapper<id_index, pos_index>,
+  using Pos_index = typename Master_matrix::Pos_index;
+  using ID_index = typename Master_matrix::ID_index;
+  //PIDM = Position to ID Map
+  using PIDM = typename std::conditional<Master_matrix::Option_list::has_removable_columns,
+                                        Face_position_to_ID_mapper<ID_index, Pos_index>,
                                         Dummy_pos_mapper
                                        >::type;
 
  public:
-  using barcode_type = typename Master_matrix::barcode_type;  /**< Barcode type. */
+  using Barcode = typename Master_matrix::Barcode;  /**< Barcode type. */
 
   /**
    * @brief Default constructor.
    */
-  RU_pairing() : RUM() {}
+  RU_pairing() : PIDM() {}
 
   /**
    * @brief Returns the current barcode which is maintained at any insertion, removal or vine swap.
    * 
    * @return Const reference to the barcode.
    */
-  const barcode_type& get_current_barcode() const { return barcode_; }
+  const Barcode& get_current_barcode() const { return barcode_; }
 
   /**
    * @brief Swap operator.
    */
   friend void swap(RU_pairing& pairing1, RU_pairing& pairing2) {
-    swap(static_cast<RUM&>(pairing1), static_cast<RUM&>(pairing2));
+    swap(static_cast<PIDM&>(pairing1), static_cast<PIDM&>(pairing2));
     pairing1.barcode_.swap(pairing2.barcode_);
     pairing1.indexToBar_.swap(pairing2.indexToBar_);
     pairing1.idToPosition_.swap(pairing2.idToPosition_);
   }
 
  protected:
-  using dimension_type = typename Master_matrix::dimension_type;
-  using dictionary_type = typename Master_matrix::bar_dictionary_type;
+  using Dimension = typename Master_matrix::Dimension;
+  using Dictionary = typename Master_matrix::Bar_dictionary;
 
-  barcode_type barcode_;        /**< Bar container. */
-  dictionary_type indexToBar_; /**< Map from @ref MatIdx index to bar index. */
+  Barcode barcode_;       /**< Bar container. */
+  Dictionary indexToBar_; /**< Map from @ref MatIdx index to bar index. */
   /**
    * @brief Map from face ID to face position. Only stores a pair if ID != position.
    */
-  std::unordered_map<id_index, pos_index> idToPosition_;  //TODO: test other map types
+  std::unordered_map<ID_index, Pos_index> idToPosition_;  //TODO: test other map types
 
-  void _update_barcode(id_index birthPivot, pos_index death) {
+  void _update_barcode(ID_index birthPivot, Pos_index death) {
     auto it = idToPosition_.find(birthPivot);
-    pos_index pivotBirth = it == idToPosition_.end() ? birthPivot : it->second;
+    Pos_index pivotBirth = it == idToPosition_.end() ? birthPivot : it->second;
     if constexpr (Master_matrix::hasFixedBarcode || !Master_matrix::Option_list::has_removable_columns) {
       barcode_[indexToBar_[pivotBirth]].death = death;
       indexToBar_.push_back(indexToBar_[pivotBirth]);
@@ -108,7 +110,7 @@ class RU_pairing : public std::conditional<
     }
   }
 
-  void _add_bar(dimension_type dim, pos_index birth) {
+  void _add_bar(Dimension dim, Pos_index birth) {
     barcode_.emplace_back(birth, -1, dim);
     if constexpr (Master_matrix::hasFixedBarcode || !Master_matrix::Option_list::has_removable_columns) {
       indexToBar_.push_back(barcode_.size() - 1);
@@ -117,12 +119,12 @@ class RU_pairing : public std::conditional<
     }
   }
 
-  void _remove_last(pos_index eventIndex) {
+  void _remove_last(Pos_index eventIndex) {
     static_assert(Master_matrix::Option_list::has_removable_columns, "_remove_last not available.");
 
     if constexpr (Master_matrix::hasFixedBarcode) {
       auto& bar = barcode_[indexToBar_[eventIndex]];
-      if (bar.death == static_cast<pos_index>(-1)) {  // birth
+      if (bar.death == static_cast<Pos_index>(-1)) {  // birth
         barcode_.pop_back();  // sorted by birth and eventIndex has to be the highest one
       } else {                // death
         bar.death = -1;
@@ -130,9 +132,9 @@ class RU_pairing : public std::conditional<
       indexToBar_.pop_back();
     } else {  // birth order eventually shuffled by vine updates. No sort possible to keep the matchings.
       auto it = indexToBar_.find(eventIndex);
-      typename barcode_type::iterator bar = it->second;
+      typename Barcode::iterator bar = it->second;
 
-      if (bar->death == static_cast<pos_index>(-1))
+      if (bar->death == static_cast<Pos_index>(-1))
         barcode_.erase(bar);
       else
         bar->death = -1;
@@ -140,10 +142,10 @@ class RU_pairing : public std::conditional<
       indexToBar_.erase(it);
     }
 
-    auto it = RUM::map_.find(eventIndex);
-    if (it != RUM::map_.end()){
+    auto it = PIDM::map_.find(eventIndex);
+    if (it != PIDM::map_.end()){
       idToPosition_.erase(it->second);
-      RUM::map_.erase(it);
+      PIDM::map_.erase(it);
     }
   }
 };

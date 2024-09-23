@@ -18,13 +18,12 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
         ctypedef pair[vector[T],vector[T]] interval
         Summand() except +
-        Summand(vector[Finitely_critical_multi_filtration[T]]&, vector[Finitely_critical_multi_filtration[T]]&, int)  except + nogil
+        Summand(vector[One_critical_filtration[T]]&, vector[One_critical_filtration[T]]&, int)  except + nogil
         T get_interleaving() nogil
         T get_local_weight(const vector[T]&, const T)  nogil
         void add_bar(T, T, const vector[T]&, vector[T]&, vector[T]&, const bool, const interval&) nogil
-        bool is_empty() nogil
-        vector[Finitely_critical_multi_filtration[T]] get_birth_list() nogil
-        vector[Finitely_critical_multi_filtration[T]] get_death_list() nogil
+        vector[One_critical_filtration[T]] get_birth_list() nogil
+        vector[One_critical_filtration[T]] get_death_list() nogil
         void complete_birth(const T)  nogil
         void complete_death(const T)  nogil
         int get_dimension()  nogil const 
@@ -40,7 +39,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::multiparameter::mma":
     cdef cppclass MultiDiagram_point[T=*]:
         ctypedef T value_type
-        ctypedef Finitely_critical_multi_filtration[double] filtration_type
+        ctypedef One_critical_filtration[double] filtration_type
         MultiDiagram_point()   except + nogil
         MultiDiagram_point(int , T , T )   except + nogil
         const T& get_birth()    nogil const
@@ -102,13 +101,13 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[pair[vector[vector[T]], vector[vector[T]]]] get_corners_of_dimension(unsigned int)  nogil
         image_type get_vectorization_in_dimension(const int, const T, const T, const bool, Box[T]&, unsigned int, unsigned int)  nogil
         vector[image_type] get_vectorization(const T, const T, const bool, Box[T], unsigned int, unsigned int)  nogil
-        MultiDiagram[Finitely_critical_multi_filtration[T], T] get_barcode(Line[T]&, const int, const bool)  nogil
+        MultiDiagram[One_critical_filtration[T], T] get_barcode(Line[T]&, const int, const bool)  nogil
         vector[vector[pair[T,T]]] get_barcode2(Line[T]&, const int)  nogil
-        MultiDiagrams[Finitely_critical_multi_filtration[T],T] get_barcodes(const vector[Finitely_critical_multi_filtration[T]]& , const int, const bool )  nogil
+        MultiDiagrams[One_critical_filtration[T],T] get_barcodes(const vector[One_critical_filtration[T]]& , const int, const bool )  nogil
         vector[vector[vector[pair[T,T]]]] get_barcodes2(const vector[Line[T]]& , const int, )  nogil
         image_type get_landscape(const int,const unsigned int,Box[T],const vector[unsigned int]&)  nogil
         vector[image_type] get_landscapes(const int,const vector[unsigned int],Box[T],const vector[unsigned int]&)  nogil
-        vector[int] euler_curve(const vector[Finitely_critical_multi_filtration[T]]&) nogil
+        vector[int] euler_curve(const vector[One_critical_filtration[T]]&) nogil
         void rescale(vector[T]&, int) nogil
         void translate(vector[T]&, int) nogil
         vector[vector[T]] compute_pixels(vector[vector[T]], vector[int], Box[T], T, T, bool,int) nogil

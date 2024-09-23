@@ -1,10 +1,11 @@
 #pragma once
+#include <gudhi/Simplex_tree_multi.h>
 #include "gudhi/truc.h"
 #include "multi_parameter_rank_invariant/persistence_slices.h"
 #include "tensor/tensor.h"
 #include <algorithm>
 #include <cstddef>
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+#include <gudhi/One_critical_filtration.h>
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <ostream>
@@ -52,7 +53,7 @@ get_coordinates(index_type in_slice_value, index_type I, index_type J) {
 
 template <typename dtype, typename index_type, typename Filtration>
 inline void compute_2d_rank_invariant_of_elbow(
-    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+    Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>>
         &st_multi,
     Simplex_tree_std &_st_container, // copy of st_multi
     const tensor::static_tensor_view<dtype, index_type>
@@ -123,7 +124,7 @@ inline void compute_2d_rank_invariant_of_elbow(
 
 template <typename dtype, typename index_type, typename Filtration>
 inline void compute_2d_rank_invariant(
-    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+    Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>>
         &st_multi,
     const tensor::static_tensor_view<dtype, index_type>
         &out, // assumes its a zero tensor
@@ -133,7 +134,7 @@ inline void compute_2d_rank_invariant(
     return;
   assert(st_multi.get_number_of_parameters() == 2);
   Simplex_tree_std st_;
-  flatten(st_, st_multi,
+  Gudhi::multi_persistence::flatten(st_, st_multi,
           0); // copies the st_multi to a standard 1-pers simplextree
   const int max_dim =
       expand_collapse ? *std::max_element(degrees.begin(), degrees.end()) + 1
@@ -154,7 +155,7 @@ inline void compute_2d_rank_invariant(
 template <typename Filtration, typename dtype, typename indices_type,
           typename... Args>
 void compute_rank_invariant_python(
-    Simplex_tree<Simplex_tree_options_multidimensional_filtration<Filtration>>
+    Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>>
         &st_multi,
     dtype *data_ptr, const std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees, indices_type n_jobs,
@@ -173,8 +174,7 @@ void compute_rank_invariant_python(
   return;
 }
 template <class PersBackend, class Structure,
-          class MultiFiltration = Gudhi::multiparameter::multi_filtrations::
-              Finitely_critical_multi_filtration<float>,
+          class MultiFiltration = Gudhi::multi_filtration::One_critical_filtration<float>,
           typename dtype, typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
     interface::Truc<PersBackend, Structure, MultiFiltration>
@@ -199,7 +199,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     std::cout << "filtration_in_slice : [ ";
   for (auto i = 0u; i < num_generators; ++i) {
     const auto &f = filtrations_values[i];
-    value_type filtration_in_slice = MultiFiltration::T_inf;
+    value_type filtration_in_slice = MultiFiltration::Generator::T_inf;
     if constexpr (MultiFiltration::is_multi_critical) {
       for (const auto &stuff : f) {
 
@@ -268,8 +268,8 @@ inline void compute_2d_rank_invariant_of_elbow(
         continue;
       if constexpr (verbose)
         std::cout << bar.first << " " << bar.second
-                  << "checkinf: " << MultiFiltration::T_inf << " ==? "
-                  << (bar.first == MultiFiltration::T_inf) << std::endl;
+                  << "checkinf: " << MultiFiltration::Generator::T_inf << " ==? "
+                  << (bar.first == MultiFiltration::Generator::T_inf) << std::endl;
       auto birth = static_cast<index_type>(bar.first);
       auto death = static_cast<index_type>(
           std::min(bar.second,
@@ -300,8 +300,8 @@ inline void compute_2d_rank_invariant_of_elbow(
 };
 
 template <class PersBackend, class Structure,
-          class MultiFiltration = Gudhi::multiparameter::multi_filtrations::
-              Finitely_critical_multi_filtration<float>,
+          class MultiFiltration = Gudhi::multi_filtration::
+              One_critical_filtration<float>,
           typename dtype, typename index_type>
 inline void compute_2d_rank_invariant(
     interface::Truc<PersBackend, Structure, MultiFiltration> &slicer,
@@ -344,8 +344,8 @@ inline void compute_2d_rank_invariant(
 }
 
 template <class PersBackend, class Structure,
-          class MultiFiltration = Gudhi::multiparameter::multi_filtrations::
-              Finitely_critical_multi_filtration<float>,
+          class MultiFiltration = Gudhi::multi_filtration::
+              One_critical_filtration<float>,
           typename dtype, typename indices_type>
 void compute_rank_invariant_python(
     interface::Truc<PersBackend, Structure, MultiFiltration> slicer,

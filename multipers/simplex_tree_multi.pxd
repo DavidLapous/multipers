@@ -117,7 +117,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     vector[vector[vector[value_type]]] get_filtration_values(const vector[int]&) nogil
 
 
-    pair[boundary_matrix, vector[Finitely_critical_multi_filtration[value_type]]] simplextree_to_boundary_filtration()
+    pair[boundary_matrix, vector[One_critical_filtration[value_type]]] simplextree_to_boundary_filtration()
     vector[pair[ vector[vector[value_type]],boundary_matrix]] simplextree_to_scc()
     vector[pair[ vector[vector[vector[value_type]]],boundary_matrix]] kcritical_simplextree_to_scc()
 

@@ -2,7 +2,8 @@
 
 #include "gudhi/Flag_complex_edge_collapser.h"
 #include <gudhi/Persistent_cohomology.h>
-#include <gudhi/Simplex_tree/Simplex_tree_multi.h>
+#include <gudhi/Simplex_tree_multi.h>
+#include <gudhi/Multi_persistence/Box.h>
 
 namespace Gudhi::multiparameter {
 
@@ -22,7 +23,7 @@ struct Simplex_tree_float { // smaller simplextrees
 };
 // using Simplex_tree_float = Simplex_tree_options_fast_persistence;
 
-using multi_filtrations::Box;
+using Gudhi::multi_persistence::Box;
 using Simplex_tree_std = Simplex_tree<Simplex_tree_float>;
 
 using Barcode = std::vector<std::pair<Simplex_tree_std::Filtration_value,

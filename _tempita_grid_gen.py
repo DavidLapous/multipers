@@ -61,7 +61,7 @@ clement_slicers = [  # this is temporarily necessary
         "np.float32",
         None,
         "f32",
-        "Finitely_critical_multi_filtration[float]",
+        "One_critical_filtration[float]",
     ),
     (
         "SimplicialVineGraphTruc",
@@ -74,7 +74,7 @@ clement_slicers = [  # this is temporarily necessary
         "np.float32",
         None,
         "f32",
-        "Finitely_critical_multi_filtration[float]",
+        "One_critical_filtration[float]",
     ),
     (
         "SimplicialVineMatrixTruc<>",
@@ -87,7 +87,7 @@ clement_slicers = [  # this is temporarily necessary
         "np.float32",
         None,
         "f32",
-        "Finitely_critical_multi_filtration[float]",
+        "One_critical_filtration[float]",
     ),
     (
         "SimplicialNoVineMatrixTruc<>",
@@ -100,7 +100,7 @@ clement_slicers = [  # this is temporarily necessary
         "np.float32",
         None,
         "f32",
-        "Finitely_critical_multi_filtration[float]",
+        "One_critical_filtration[float]",
     ),
 ]
 
@@ -115,9 +115,9 @@ def get_slicer(is_vine, is_kcritical, value_type, column_type):
     IS_KCRITICAL = is_kcritical
     FILTRATION_TYPE = (
         (
-            "KCriticalFiltration"
+            "Multi_critical_filtration"
             if is_kcritical
-            else "Finitely_critical_multi_filtration"
+            else "One_critical_filtration"
         )
         + "["
         + ctype
@@ -157,9 +157,9 @@ with open("build/tmp/_slicer_names.pkl", "wb") as f:
 
 Filtrations_types = [
     (
-        ("KCriticalFiltration", True)
+        ("Multi_critical_filtration", True)
         if kcritical
-        else ("Finitely_critical_multi_filtration", False)
+        else ("One_critical_filtration", False)
     )
     for kcritical in kcritical_options
 ]

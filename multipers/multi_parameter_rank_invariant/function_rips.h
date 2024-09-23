@@ -3,14 +3,15 @@
 #include "Simplex_tree_multi_interface.h"
 #include "multi_parameter_rank_invariant/persistence_slices.h"
 #include "tensor/tensor.h"
-#include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
+#include <gudhi/One_critical_filtration.h>
+#include <gudhi/Simplex_tree_multi.h>
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi::multiparameter::function_rips {
 
 using value_type = typename python_interface::interface_std::Filtration_value;
-using _multifiltration = typename multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using _multifiltration = typename Gudhi::multi_filtration::One_critical_filtration<value_type>;
 using _multist = python_interface::Simplex_tree_multi_interface<_multifiltration>;
 using interface_multi = _multist;
 
@@ -53,7 +54,7 @@ inline get_degree_filtrations( // also return max_degree,filtration_values
   int max_st_degree = 0;
 
   int num_degrees = degrees.size();
-  multify(st, st_multi, 0); // puts the st filtration in axis 0 + fitrations for
+  Gudhi::multi_persistence::multify(st, st_multi, 0); // puts the st filtration in axis 0 + fitrations for
                             // each degrees afterward
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
@@ -174,7 +175,7 @@ compute_2d_function_rips(_multist &st_multi, // Function rips
 
   // inits default simplextrees
   Simplex_tree_std _st;
-  flatten(_st, st_multi,
+  Gudhi::multi_persistence::flatten(_st, st_multi,
           -1); // copies the st_multi to a standard 1-pers simplextree
   tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree(_st);
   int max_simplex_dimension =

@@ -23,7 +23,7 @@
 
 #include "multiparameter_module_approximation/utilities.h"
 #include <gudhi/Simplex_tree.h>
-#include <gudhi/Simplex_tree/Simplex_tree_multi.h>
+#include <gudhi/Simplex_tree_multi.h>
 
 namespace Gudhi::multiparameter::mma {
 
@@ -47,7 +47,7 @@ bool inline is_strictly_smaller_simplex(const boundary_type &s1,
 // std::pair<boundary_matrix, multifiltration_type>
 // inline simplextree_to_boundary_filtration(const uintptr_t splxptr) {
 //   using option =
-//       Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<>;
+//       Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>;
 //   Gudhi::Simplex_tree<option> &simplexTree =
 //       *(Gudhi::Simplex_tree<option> *)(splxptr);
 //
@@ -126,7 +126,8 @@ inline scc_type<STOptions> simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st
     auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
     const typename STOptions::Filtration_value &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
-    block_filtrations.push_back(simplex_filtration);
+
+    block_filtrations.push_back(static_cast<typename STOptions::Filtration_value::Generator>(simplex_filtration));
   }
   return out;
 }
@@ -154,7 +155,9 @@ inline kscc_type<STOptions> kcritical_simplextree_to_scc(Gudhi::Simplex_tree<STO
     auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
     const typename STOptions::Filtration_value &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
-    block_filtrations.push_back(simplex_filtration.as_VECTOR());
+    block_filtrations.push_back(
+        std::vector<std::vector<typename STOptions::Filtration_value::value_type>>(
+            simplex_filtration.begin(), simplex_filtration.end()));
   }
   return out;
 }
@@ -197,13 +200,13 @@ function_simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
 
 // scc_type inline simplextree_to_scc(const uintptr_t splxptr) {
 //   using option =
-//       Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<>;
+//       Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>;
 //   Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option> *)(splxptr);
 //   return simplextree_to_scc<option>(st);
 // }
 // function_scc_type inline function_simplextree_to_scc(const uintptr_t splxptr) {
 //   using option =
-//       Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<>;
+//       Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>;
 //   Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option> *)(splxptr);
 //   return function_simplextree_to_scc<option>(st);
 // }
@@ -241,7 +244,7 @@ flattened_scc_type<Options> inline simplextree_to_ordered_bf(
 }
 // template <
 //     typename Options =
-//         Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration<>>
+//         Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>>
 // flattened_scc_type<Options> simplextree_to_ordered_bf(const uintptr_t splxptr) {
 //   Gudhi::Simplex_tree<Options> &st = *(Gudhi::Simplex_tree<Options> *)(splxptr);
 //   return simplextree_to_ordered_bf<Options>(st);
