@@ -255,7 +255,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                     f"Invalid complex \
                 {self.complex}. Possible choises are rips, delaunay, or alpha."
                 )
-        self._vineyard = self.output_type in ["slicer", "slicer_vine"]
+        self._vineyard = self.output_type is None or "novine" not in self.output_type
         self._output_type = (
             _pref_output
             if self.output_type is None
