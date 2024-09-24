@@ -27,6 +27,7 @@ def was_modified(file):
     else:
         res = not filecmp.cmp(new_file, file, shallow=False)
         if res:
+            print(f"File {file} was modified.")
             shutil.copyfile(file, new_file)
         return res
 
