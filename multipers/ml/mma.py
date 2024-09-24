@@ -136,7 +136,7 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
                 x.expansion(self.expand_dim)
             if self.minpres_degrees is not None:
                 x = mp.slicer.minimal_presentation(
-                    mp.Slicer(x), degrees=self.minpres_degrees
+                    mp.Slicer(x), degrees=self.minpres_degrees, vineyard=True
                 )
             return mp.module_approximation(
                 x, box=box, verbose=False, **self.persistence_args
