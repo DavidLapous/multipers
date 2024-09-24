@@ -1,13 +1,13 @@
-import contextlib
-import os
-import site
-import shutil
+# import contextlib
 import filecmp
+import os
+import shutil
+import site
 
 import numpy as np
+from Cython import Tempita
 from Cython.Build import cythonize
 from Cython.Compiler import Options
-from Cython import Tempita
 from setuptools import Extension, setup
 
 Options.docstrings = True
@@ -16,6 +16,7 @@ Options.fast_fail = True
 # Options.warning_errors = True
 
 os.system("mkdir -p ./build/tmp")
+
 
 def was_modified(file):
     tail = os.path.basename(file)
@@ -29,6 +30,12 @@ def was_modified(file):
             shutil.copyfile(file, new_file)
         return res
 
+
+full_build = False
+if was_modified("_tempita_grid_gen.py"):
+    full_build = True
+
+
 # credit to sklearn with just a few modifications:
 # https://github.com/scikit-learn/scikit-learn/blob/156ef1b7fe9bc0ee5b281634cfd56b9c54e83277/sklearn/_build_utils/tempita.py
 # took it out to not having to depend on a sklearn version in addition to a cython version
@@ -39,7 +46,7 @@ def process_tempita(fromfile):
     E.g. processing `template.c.tp` generates `template.c`.
 
     """
-    if not was_modified(fromfile):
+    if not was_modified(fromfile) and not full_build:
         return
     with open(fromfile, "r", encoding="utf-8") as f:
         template_content = f.read()
@@ -50,6 +57,7 @@ def process_tempita(fromfile):
     outfile = os.path.splitext(fromfile)[0]
     with open(outfile, "w", encoding="utf-8") as f:
         f.write(content)
+
 
 cython_modules = [
     "simplex_tree_multi",
@@ -75,13 +83,13 @@ templated_cython_modules = [
 # TODO: see if there is a way to avoid _tempita_grid_gen.py or a nicer way to do it
 os.system("python _tempita_grid_gen.py")
 
-[process_tempita(f"multipers/{mod}.tp") for mod in templated_cython_modules]
+for mod in templated_cython_modules:
+    process_tempita(f"multipers/{mod}.tp")
 
 ## Broken on mac
 # n_jobs = 1
 # with contextlib.suppress(ImportError):
 #     import joblib
-
 #     n_jobs = joblib.cpu_count()
 
 cythonize_flags = {
@@ -137,7 +145,7 @@ extensions = [
         ],
         language="c++",
         extra_compile_args=[
-            "-O3",  #-Ofast disables infinity values for filtration values
+            "-O3",  # -Ofast disables infinity values for filtration values
             # "-g",
             # "-march=native",
             "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
