@@ -599,6 +599,7 @@ Module<value_type> multiparameter_module_approximation(
      */
     /* threshold, box); */
   }
+  
   out.add_barcode(current_line, barcode, threshold);
 
   if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
@@ -708,10 +709,7 @@ inline void Module<value_type>::add_barcode(
     const Line<value_type> &line,
     const std::vector<std::pair<int, std::pair<value_type, value_type>>> &barcode,
     const bool threshold_in) {
-  assert(barcode.size() != module_.size() &&
-         std::string("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
-                     std::to_string(barcode.size()))
-             .data());
+  assert(barcode.size() == module_.size() && "Barcode sizes doesn't match.");
 
   auto count = 0U;
   for (const auto &extBar : barcode) {
@@ -724,10 +722,7 @@ template <typename value_type>
 inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::pair<value_type, value_type>> &barcode,
                                             const bool threshold_in) {
-  assert(barcode.size() != module_.size() &&
-         std::string("Barcode sizes doesn't match. Module is " + std::to_string(module_.size()) + " and barcode is " +
-                     std::to_string(barcode.size()))
-             .data());
+  assert(barcode.size() == module_.size() && "Barcode sizes doesn't match.");
 
   auto count = 0U;
   for (const auto &bar : barcode) {

@@ -511,7 +511,31 @@ class Multi_critical_filtration {
    * @return false Otherwise.
    */
   bool add_generator(const Generator &x) {
-    GUDHI_CHECK(x.num_parameters() == multi_filtration_[0].num_parameters() || !is_finite() || !x.is_finite(),
+    if constexpr (co){
+      if (is_plus_inf()){
+        return false;
+      }
+      if (is_minus_inf()){
+        if (x.is_minus_inf()){
+          return false;
+        }
+        multi_filtration_[0] = x;
+        return true;
+      }
+    } else {
+      if (is_minus_inf()){
+        return false;
+      }
+      if (is_plus_inf()){
+        if (x.is_plus_inf()){
+          return false;
+        }
+        multi_filtration_[0] = x;
+        return true;
+      }
+    }
+
+    GUDHI_CHECK(x.num_parameters() == multi_filtration_[0].num_parameters() || !x.is_finite(),
                 "Cannot add a generator with different number of parameters.");
 
     std::size_t end = multi_filtration_.size();
@@ -594,6 +618,8 @@ class Multi_critical_filtration {
    * constructor or with @ref add_guaranteed_generator "", etc.
    */
   void simplify() {
+    if (is_plus_inf() || is_minus_inf()) return;
+
     std::size_t end = 0;
 
     for (std::size_t curr = 0; curr < multi_filtration_.size(); ++curr) {
