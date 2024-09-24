@@ -9,7 +9,15 @@
 project = "multipers"
 copyright = "2024, David Loiseaux, Mathieu Carrière, Hannah Schreiber"
 author = "David Loiseaux, Hannah Schreiber"
-release = "2.0"
+# release = "2.0"
+
+html_context = {
+    "display_github": True,  # Integrate GitHub
+    "github_user": "DavidLapous",  # Username
+    "github_repo": "multipers",  # Repo name
+    "github_version": "main",  # Version
+    "conf_py_path": "/docs/",  # Path in the checkout to the docs root
+}
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -34,7 +42,14 @@ autodoc_typehints = "description"
 # -- Notebooks
 nb_execution_timeout = 10
 nb_execution_mode = "off"
-
+myst_enable_extensions = [
+    "amsmath",
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "html_image",
+]
+myst_url_schemes = ("http", "https", "mailto")
 
 # -- biblio
 bibtex_bibfiles = ["paper.bib"]

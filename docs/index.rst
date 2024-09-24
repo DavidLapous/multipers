@@ -105,6 +105,7 @@ For theoretical references,
   notebooks/multipers_intro
   notebooks/simplex_tree_by_hand
   compilation
+  contributions
   bibliography
 
 .. toctree::
