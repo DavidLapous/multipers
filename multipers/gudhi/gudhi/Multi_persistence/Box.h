@@ -51,9 +51,7 @@ class Box {
    * @param lowerCorner First corner of the box. Has to be smaller than `upperCorner`.
    * @param upperCorner Second corner of the box. Has to be greater than `lowerCorner`.
    */
-  Box(const Point &lowerCorner, const Point &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {
-    GUDHI_CHECK(lowerCorner.size() == upperCorner.size() && lowerCorner <= upperCorner, "This box is trivial !");
-  }
+  Box(const Point &lowerCorner, const Point &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {}
 
   /**
    * @brief Constructs a box from the two given corners. Assumes that \f$ box.first \le @p box.second \f$ and
