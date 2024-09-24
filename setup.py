@@ -22,6 +22,7 @@ def was_modified(file):
     tail = os.path.basename(file)
     new_file = "build/tmp/" + tail
     if not os.path.isfile(new_file):
+        print(f"File {file} was modified.")
         shutil.copyfile(file, new_file)
         return True
     else:
