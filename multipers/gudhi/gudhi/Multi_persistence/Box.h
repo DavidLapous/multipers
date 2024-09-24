@@ -51,7 +51,10 @@ class Box {
    * @param lowerCorner First corner of the box. Has to be smaller than `upperCorner`.
    * @param upperCorner Second corner of the box. Has to be greater than `lowerCorner`.
    */
-  Box(const Point &lowerCorner, const Point &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {}
+  Box(const Point &lowerCorner, const Point &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {
+    GUDHI_CHECK(lowerCorner.size() == upperCorner.size() || !lowerCorner.is_finite() || !upperCorner.is_finite(),
+                "The two corners of the box don't have the same dimension.");
+  }
 
   /**
    * @brief Constructs a box from the two given corners. Assumes that \f$ box.first \le @p box.second \f$ and
