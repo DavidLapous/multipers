@@ -3,7 +3,7 @@ Contributions
 
 Feel free to contribute, report a bug, or ask for documentation
 by `opening an issue <https://github.com/DavidLapous/multipers/issues>`_ or
-sending me a mail.
+sending me an email.
 
 Example zoo
 ***********
@@ -44,7 +44,7 @@ The :code:`multipers` library is meant to be a general multiparameter persistenc
 if you find an invariant that is not implemented in multipers, and want to help me 
 integrate it, your contribution is welcome!
 This library doesn't have a stable API, so the preferable 
-way to add features to this library is to contact me by mail.
+way to add features to this library is to contact me by email.
 
 
 Bug reports
