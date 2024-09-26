@@ -13,7 +13,7 @@ from multipers.grids import compute_grid as reduce_grid
 from multipers.ml.convolutions import convolution_signed_measures
 
 
-class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
+class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
     """
     Input
     -----
@@ -364,7 +364,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         return out
 
 
-class FilteredComplex2SignedMeasure(SimplexTree2SignedMeasure):
+class SimplexTree2SignedMeasure(FilteredComplex2SignedMeasure):
     def __init__(
         self,
         # homological degrees + None for euler
