@@ -259,7 +259,9 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         else:
             filtration_grid = self.filtration_grid[ax]
             _reconversion_grid = self._reconversion_grid[ax]
-            mass_default = self._default_mass_location[ax]
+            mass_default = (
+                self._default_mass_location[ax] if self.enforce_null_mass else None
+            )
 
         st = simplextree.grid_squeeze(filtration_grid=filtration_grid)
         if st.num_parameters == 2 and mp.simplex_tree_multi.is_simplextree_multi(st):
@@ -360,6 +362,54 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         #     )
         # )
         return out
+
+
+class FilteredComplex2SignedMeasure(SimplexTree2SignedMeasure):
+    def __init__(
+        self,
+        # homological degrees + None for euler
+        degrees: list[int | None] = [],
+        rank_degrees: list[int] = [],  # same for rank invariant
+        filtration_grid: (
+            Sequence[Sequence[np.ndarray]]
+            # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
+            | None
+        ) = None,
+        progress=False,  # tqdm
+        num_collapses: int | str = 0,  # edge collapses before computing
+        n_jobs=None,
+        resolution: (
+            Iterable[int] | int | None
+        ) = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
+        # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
+        plot: bool = False,
+        filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
+        # wether or not to do the möbius inversion (not recommended to touch)
+        # _möbius_inversion: bool = True,
+        expand=False,  # expand the simplextree befoe computing the homology
+        normalize_filtrations: bool = False,
+        # exact_computation:bool=False, # compute the exact signed measure.
+        grid_strategy: str = "exact",
+        seed: int = 0,  # if fit_fraction is not 1, the seed sampling
+        fit_fraction=1,  # the fraction of the data on which to fit
+        out_resolution: Iterable[int] | int | None = None,
+        individual_grid: Optional[
+            bool
+        ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
+        enforce_null_mass: bool = False,
+        flatten=True,
+        backend: Optional[str] = None,
+    ):
+        stuff = locals()
+        stuff.pop("self")
+        keys = list(stuff.keys())
+        for key in keys:
+            if key.startswith("__"):
+                stuff.pop(key)
+        super().__init__(**stuff)
+        from warnings import warn
+
+        warn("This class is deprecated, use FilteredComplex2SignedMeasure instead.")
 
 
 # class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
