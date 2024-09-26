@@ -1,9 +1,9 @@
 import numpy as np
-import multipers as mp
-from multipers.tests import assert_sm
 import pytest
+
+import multipers as mp
 import multipers.io as mio
-from multipers.tests import random_st
+from multipers.tests import assert_sm, random_st
 
 np.random.seed(0)
 
@@ -83,4 +83,4 @@ def test_backends(invariant, degree, mass_default, S):
             )
     if mass_default is not None and invariant != "rank":
         assert sms[0][1].sum() == 0, "Did not remove all of the mass"
-    assert_sm(*sms, exact=False, max_error=1)
+    assert_sm(*sms, exact=False, max_error=0.5)
