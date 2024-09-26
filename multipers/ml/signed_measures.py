@@ -1,6 +1,6 @@
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from itertools import product
-from typing import Optional
+from typing import Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,7 +55,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         degrees: list[int | None] = [],
         rank_degrees: list[int] = [],  # same for rank invariant
         filtration_grid: (
-            Iterable[np.ndarray]
+            Sequence[Sequence[np.ndarray]]
             # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
             | None
         ) = None,
@@ -100,8 +100,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self.normalize_filtrations = normalize_filtrations
         self.grid_strategy = grid_strategy
         self.num_parameter = None
-        self._is_input_delayed = None
-        self._möbius_inversion = _möbius_inversion
+        # self._möbius_inversion = _möbius_inversion
         self._reconversion_grid = None
         self.expand = expand
         # will only refit the grid if filtration_grid has never been given.
@@ -109,7 +108,6 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self.seed = seed
         self.fit_fraction = fit_fraction
         self._transform_st = None
-        self._to_simplex_tree: Callable
         self.out_resolution = out_resolution
         self.individual_grid = individual_grid
         self.enforce_null_mass = enforce_null_mass
@@ -135,59 +133,68 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         assert (
             not mp.slicer.is_slicer(first) or self.expand is None
         ), "Cannot expand slicers."
-        self._is_minpres = mp.slicer.is_slicer(first) and isinstance(
-            first, Union[tuple, list]
+        self._is_minpres = mp.slicer.is_slicer(first) and (
+            (first.is_minpres)
+            or (isinstance(first, Union[tuple, list]) and first[0].is_minpres)
         )
-        assert not (
-            self._is_minpres and self.minpres_degrees is not None
-        ), "Input is already a minpres. Cannot reduce again."
 
     def _infer_filtration(self, X):
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
 
-        def get_st_filtration(x) -> np.ndarray:
-            return self._to_simplex_tree(x).get_filtration_grid(grid_strategy="exact")
+        # def get_st_filtration(x) -> np.ndarray:
+        #     return x.get_filtration_grid(grid_strategy="exact")
 
-        filtrations: list = Parallel(n_jobs=self.n_jobs, backend="threading")(
-            delayed(get_st_filtration)(x) for x in (X[idx] for idx in indices)
+        # filtrations: list = Parallel(n_jobs=self.n_jobs, backend="threading")(
+        #     delayed(get_st_filtration)(x) for x in (X[idx] for idx in indices)
+        # )
+        ## ax, num_x
+        filtrations = tuple(
+            tuple(
+                reduce_grid(x, strategy="exact")
+                for x in (X[ax][idx] for idx in indices)
+                for ax in range(self._num_axis)
+            )
         )
-        num_parameters = len(filtrations[0])
+        num_parameters = len(filtrations[0][0])
+        assert num_parameters == self.num_parameters
+
         filtrations_values = [
-            np.unique(np.concatenate([x[i] for x in filtrations]))
-            for i in range(num_parameters)
+            [
+                np.unique(np.concatenate([x[i] for x in filtrations[ax]]))
+                for i in range(num_parameters)
+            ]
+            for ax in range(self._num_axis)
         ]
-        filtration_grid = reduce_grid(
-            filtrations_values, resolution=self.resolution, strategy=self.grid_strategy
+        ## ax, param, gridsize
+        filtration_grid = tuple(
+            reduce_grid(
+                filtrations_values[ax],
+                resolution=self.resolution,
+                strategy=self.grid_strategy,
+            )
+            for ax in range(self._num_axis)
         )  # TODO :use more parameters
         self.filtration_grid = filtration_grid
         return filtration_grid
 
-    def fit(self, X, y=None):  # Todo : infer filtration grid ? quantiles ?
-        # assert not self.normalize_filtrations or self.sparse, "Not able to normalize a matrix without losing information."
+    def _params_check(self):
         assert (
             self.resolution is not None
             or self.filtration_grid is not None
             or self.grid_strategy == "exact"
             or self.individual_grid
         ), "For non exact filtrations, a resolution has to be specified."
-        assert (
-            self._möbius_inversion or not self.individual_grid
-        ), "The grid has to be aligned when not using mobius inversion; disable individual_grid or enable mobius inversion."
-        # assert self.invariant != "_" or self._möbius_inversion
-        self._is_input_delayed = not mp.simplex_tree_multi.is_simplextree_multi(X[0])
-        if self._is_input_delayed:
-            from multipers.ml.tools import get_simplex_tree_from_delayed
 
-            self._to_simplex_tree = get_simplex_tree_from_delayed
-        else:
-            self._to_simplex_tree = lambda x: x
-        if isinstance(self.resolution, int) or self.resolution == np.inf:
-            self.resolution = [self.resolution] * self._to_simplex_tree(
-                X[0]
-            ).num_parameters
-        self.num_parameter = self._to_simplex_tree(X[0]).num_parameters
+    def fit(self, X, y=None):  # Todo : infer filtration grid ? quantiles ?
+        self._params_check()
+        self._input_checks(X)
+
+        self.num_parameter = X[0][0].num_parameters
+        if isinstance(self.resolution, int):
+            self.resolution = [self.resolution] * self.num_parameters
+
         self.individual_grid = (
             self.individual_grid
             if self.individual_grid is not None
@@ -208,166 +215,111 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             self._infer_filtration(X=X)
         if self.out_resolution is None:
             self.out_resolution = self.resolution
-        elif isinstance(self.out_resolution, int):
-            self.out_resolution = [self.out_resolution] * self.num_parameters
+        # elif isinstance(self.out_resolution, int):
+        #     self.out_resolution = [self.out_resolution] * self.num_parameters
         if self.normalize_filtrations and not self.individual_grid:
             # self._reconversion_grid = [np.linspace(0,1, num=len(f), dtype=float) for f in self.filtration_grid] ## This will not work for non-regular grids...
             self._reconversion_grid = [
-                f / np.std(f) for f in self.filtration_grid
+                [(f - np.min(f)) / np.std(f) for f in F] for F in self.filtration_grid
             ]  # not the best, but better than some weird magic
         # elif not self.sparse: # It actually renormalizes the filtration !!
         # self._reconversion_grid = [np.linspace(0,r, num=r, dtype=int) for r in self.out_resolution]
         else:
             self._reconversion_grid = self.filtration_grid
+        ## ax, num_param
         self._default_mass_location = (
-            [g[-1] for g in self._reconversion_grid] if self.enforce_null_mass else None
+            np.asarray([[g[-1] for g in F] for F in self.filtration_grid])
+            if self.enforce_null_mass
+            else None
         )
         return self
 
     def transform1(
         self,
         simplextree,
-        filtration_grid=None,
-        _reconversion_grid=None,
+        filtration_grid,
+        _reconversion_grid,
         thread_id: str = "",
     ):
-        if filtration_grid is None:
-            filtration_grid = self.filtration_grid
-        if _reconversion_grid is None:
-            _reconversion_grid = self._reconversion_grid
-        st = self._to_simplex_tree(simplextree)
         # st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  # COPY
         if self.individual_grid:
-            filtration_grid = st.get_filtration_grid(
-                grid_strategy=self.grid_strategy, resolution=self.resolution
+            filtration_grid = reduce_grid(
+                simplextree, strategy=self.grid_strategy, resolution=self.resolution
             )
             if self.enforce_null_mass:
                 filtration_grid = [
                     np.concatenate([f, [d]], axis=0)
                     for f, d in zip(filtration_grid, self._default_mass_location)
                 ]
-        st = st.grid_squeeze(filtration_grid=filtration_grid, coordinate_values=True)
-        if st.num_parameters == 2:
-            if self.num_collapses == "full":
-                st.collapse_edges(full=True, max_dimension=1)
-            elif isinstance(self.num_collapses, int):
-                st.collapse_edges(num=self.num_collapses, max_dimension=1)
-            else:
-                raise Exception("Bad edge collapse type. either 'full' or an int.")
-        int_degrees = np.asarray([d for d in self.degrees if d is not None])
-        if self._möbius_inversion:
-            # EULER. First as there is prune above dimension below
-            if self.expand and None in self.degrees:
-                st.expansion(st.num_vertices)
-            signed_measures_euler = (
-                mp.signed_measure(
-                    st,
-                    degrees=[None],
-                    plot=self.plot,
-                    mass_default=self._default_mass_location,
-                    invariant="euler",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )[0]
-                if None in self.degrees
-                else []
-            )
+        st = simplextree.grid_squeeze(
+            filtration_grid=filtration_grid, coordinate_values=True
+        )
+        if st.num_parameters == 2 and mp.simplex_tree_multi.is_simplextree_multi(st):
+            st.collapse_edges(num=self.num_collapses, max_dimension=1)
+        int_degrees = np.asarray([d for d in self.degrees if d is not None], dtype=int)
+        # EULER. First as there is prune above dimension below
+        if self.expand and None in self.degrees:
+            st.expansion(st.num_vertices)
+        signed_measures_euler = (
+            mp.signed_measure(
+                st,
+                degrees=[None],
+                plot=self.plot,
+                mass_default=self._default_mass_location,
+                invariant="euler",
+                # thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
+            )[0]
+            if None in self.degrees
+            else []
+        )
 
-            if self.expand and len(int_degrees) > 0:
-                st.expansion(np.max(int_degrees) + 1)
-            if len(int_degrees) > 0:
-                st.prune_above_dimension(
-                    np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
-                )  # no need to compute homology beyond this
-            signed_measures_pers = (
-                mp.signed_measure(
-                    st,
-                    degrees=int_degrees,
-                    mass_default=self._default_mass_location,
-                    plot=self.plot,
-                    invariant="hilbert",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )
-                if len(int_degrees) > 0
-                else []
+        if self.expand and len(int_degrees) > 0:
+            st.expansion(np.max(int_degrees) + 1)
+        if len(int_degrees) > 0:
+            st.prune_above_dimension(
+                np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
+            )  # no need to compute homology beyond this
+        signed_measures_pers = (
+            mp.signed_measure(
+                st,
+                degrees=int_degrees,
+                mass_default=self._default_mass_location,
+                plot=self.plot,
+                invariant="hilbert",
+                thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
             )
-            if self.plot:
-                plt.show()
-            if self.expand and len(self.rank_degrees) > 0:
-                st.expansion(np.max(self.rank_degrees) + 1)
-            if len(self.rank_degrees) > 0:
-                st.prune_above_dimension(
-                    np.max(self.rank_degrees) + 1
-                )  # no need to compute homology beyond this
-            signed_measures_rank = (
-                mp.signed_measure(
-                    st,
-                    degrees=self.rank_degrees,
-                    mass_default=self._default_mass_location,
-                    plot=self.plot,
-                    invariant="rank",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )
-                if len(self.rank_degrees) > 0
-                else []
+            if len(int_degrees) > 0
+            else []
+        )
+        if self.plot:
+            plt.show()
+        if self.expand and len(self.rank_degrees) > 0:
+            st.expansion(np.max(self.rank_degrees) + 1)
+        if len(self.rank_degrees) > 0:
+            st.prune_above_dimension(
+                np.max(self.rank_degrees) + 1
+            )  # no need to compute homology beyond this
+        signed_measures_rank = (
+            mp.signed_measure(
+                st,
+                degrees=self.rank_degrees,
+                mass_default=self._default_mass_location,
+                plot=self.plot,
+                invariant="rank",
+                thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
             )
-            if self.plot:
-                plt.show()
+            if len(self.rank_degrees) > 0
+            else []
+        )
+        if self.plot:
+            plt.show()
 
-        else:
-            raise ValueError("This is deprecated")
-            # from multipers.euler_characteristic import euler_surface
-            # from multipers.hilbert_function import hilbert_surface
-            # from multipers.rank_invariant import rank_invariant
-            #
-            # if self.expand and None in self.degrees:
-            #     st.expansion(st.num_vertices)
-            # signed_measures_euler = (
-            #     euler_surface(
-            #         simplextree=st,
-            #         plot=self.plot,
-            #     )[1][None]
-            #     if None in self.degrees
-            #     else []
-            # )
-            #
-            # if self.expand and len(int_degrees) > 0:
-            #     st.expansion(np.max(int_degrees) + 1)
-            # if len(int_degrees) > 0:
-            #     st.prune_above_dimension(
-            #         np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
-            #     )
-            #     # no need to compute homology beyond this
-            # signed_measures_pers = (
-            #     hilbert_surface(
-            #         simplextree=st,
-            #         degrees=int_degrees,
-            #         plot=self.plot,
-            #     )[1]
-            #     if len(int_degrees) > 0
-            #     else []
-            # )
-            # if self.plot:
-            #     plt.show()
-            #
-            # if self.expand and len(self.rank_degrees) > 0:
-            #     st.expansion(np.max(self.rank_degrees) + 1)
-            # if len(self.rank_degrees) > 0:
-            #     st.prune_above_dimension(
-            #         np.max(self.rank_degrees) + 1
-            #     )  # no need to compute homology beyond this
-            # signed_measures_rank = (
-            #     rank_invariant(
-            #         sieplextree=st,
-            #         degrees=self.rank_degrees,
-            #         plot=self.plot,
-            #     )
-            #     if len(self.rank_degrees) > 0
-            #     else []
-            # )
-            #
         count = 0
         signed_measures = []
         for d in self.degrees:
@@ -377,21 +329,37 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 signed_measures.append(signed_measures_pers[count])
                 count += 1
         signed_measures += signed_measures_rank
-        if not self._möbius_inversion and self.flatten:
-            signed_measures = np.asarray(signed_measures).flatten()
         return signed_measures
 
     def transform(self, X):
-        assert self.filtration_grid is not None or self.individual_grid, "Fit first"
-        prefer = "loky" if self._is_input_delayed else "threading"
-        out = Parallel(n_jobs=self.n_jobs, backend=prefer)(
-            delayed(self.transform1)(to_st, thread_id=str(thread_id))
-            for thread_id, to_st in tqdm(
-                enumerate(X),
-                disable=not self.progress,
-                desc="Computing signed measure decompositions",
+        ## X of shape (num_x, num_axis, filtered_complex
+        assert (
+            self.filtration_grid is not None and self._reconversion_grid is not None
+        ) or self.individual_grid, "Fit first"
+        # def todo_axis(x):
+        #
+        ## out shape num_x, num_axis, degree, sm
+        out = tuple(
+            tuple(
+                (
+                    self.transform1(x_axis, None, None)
+                    if self.individual_grid
+                    else self.transform1(
+                        x_axis, self.filtration_grid[j], self._reconversion_grid[j]
+                    )
+                )
+                for j, x_axis in enumerate(x)
             )
+            for i, x in enumerate(X)
         )
+        # out = Parallel(n_jobs=self.n_jobs, backend="threading")(
+        #     delayed(self.transform1)(to_st, thread_id=str(thread_id))
+        #     for thread_id, to_st in tqdm(
+        #         enumerate(X),
+        #         disable=not self.progress,
+        #         desc="Computing signed measure decompositions",
+        #     )
+        # )
         return out
 
 
