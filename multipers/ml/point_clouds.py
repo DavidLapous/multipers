@@ -294,3 +294,37 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 delayed(self._get_sts)(x) for x in data
             )
         return stss
+
+
+class PointCloud2SimplexTree(PointCloud2FilteredComplex):
+    def __init__(
+        self,
+        bandwidths=[],
+        masses=[],
+        threshold: float = np.inf,
+        complex: Literal["alpha", "rips", "delaunay"] = "rips",
+        sparse: float | None = None,
+        num_collapses: int = -2,
+        kernel: available_kernels = "gaussian",
+        log_density: bool = True,
+        expand_dim: int = 1,
+        progress: bool = False,
+        n_jobs: Optional[int] = None,
+        fit_fraction: float = 1,
+        verbose: bool = False,
+        safe_conversion: bool = False,
+        output_type: Optional[
+            Literal["slicer", "simplextree", "slicer_vine", "slicer_novine"]
+        ] = None,
+        reduce_degrees: Optional[Iterable[int]] = None,
+    ) -> None:
+        stuff = locals()
+        stuff.pop("self")
+        keys = list(stuff.keys())
+        for key in keys:
+            if key.startswith("__"):
+                stuff.pop(key)
+        super().__init__(**stuff)
+        from warnings import warn
+
+        warn("This class is deprecated, use PointCloud2FilteredComplex instead.")
