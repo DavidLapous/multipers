@@ -49,9 +49,9 @@ def random_st(npts=100, num_parameters=2, max_dim=2):
     import multipers as mp
     from multipers.data import noisy_annulus
 
-    x = noisy_annulus(npts, 5, dim=max_dim)
+    x = noisy_annulus(npts // 2, npts - npts // 2, dim=max_dim)
     st = gd.AlphaComplex(points=x).create_simplex_tree()
     st = mp.SimplexTreeMulti(st, num_parameters=num_parameters)
     for p in range(num_parameters):
-        st.fill_lowerstar(np.random.uniform(size=npts + 5), p)
+        st.fill_lowerstar(np.random.uniform(size=npts), p)
     return st
