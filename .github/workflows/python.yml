@@ -28,7 +28,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         python-version:  ${{ matrix.python-version }}
-        mamba-version: "*"
+        mamba-version: "1.5"
         activate-environment: build_test_env
         channels: conda-forge
         channel-priority: true
