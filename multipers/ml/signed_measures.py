@@ -69,8 +69,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         plot: bool = False,
         filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
         # wether or not to do the möbius inversion (not recommended to touch)
-        _möbius_inversion: bool = True,
-        expand=True,  # expand the simplextree befoe computing the homology
+        # _möbius_inversion: bool = True,
+        expand=False,  # expand the simplextree befoe computing the homology
         normalize_filtrations: bool = False,
         # exact_computation:bool=False, # compute the exact signed measure.
         grid_strategy: str = "exact",
@@ -99,7 +99,6 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         # Will only work for non sparse output. (discrete matrices cannot be "rescaled")
         self.normalize_filtrations = normalize_filtrations
         self.grid_strategy = grid_strategy
-        self.num_parameter = None
         # self._möbius_inversion = _möbius_inversion
         self._reconversion_grid = None
         self.expand = expand
@@ -131,7 +130,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self._num_axis = len(X[0])
         first = X[0][0]
         assert (
-            not mp.slicer.is_slicer(first) or self.expand is None
+            not mp.slicer.is_slicer(first) or not self.expand
         ), "Cannot expand slicers."
         self._is_minpres = mp.slicer.is_slicer(first) and (
             (first.is_minpres)
@@ -248,7 +247,9 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             filtration_grid = reduce_grid(
                 simplextree, strategy=self.grid_strategy, resolution=self.resolution
             )
-            mass_default = self._default_mass_location[ax]
+            mass_default = (
+                self._default_mass_location[ax] if self.enforce_null_mass else None
+            )
             if self.enforce_null_mass:
                 filtration_grid = [
                     np.concatenate([f, [d]], axis=0)
@@ -260,9 +261,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             _reconversion_grid = self._reconversion_grid[ax]
             mass_default = self._default_mass_location[ax]
 
-        st = simplextree.grid_squeeze(
-            filtration_grid=filtration_grid, coordinate_values=True
-        )
+        st = simplextree.grid_squeeze(filtration_grid=filtration_grid)
         if st.num_parameters == 2 and mp.simplex_tree_multi.is_simplextree_multi(st):
             st.collapse_edges(num=self.num_collapses, max_dimension=1)
         int_degrees = np.asarray([d for d in self.degrees if d is not None], dtype=int)
@@ -581,7 +580,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             for degree in range(self._num_degrees)
         ]
         sizes_ = np.array([len(x) == 0 for x in stuff])
-        assert np.all(1 - sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
+        assert np.all(~sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
         if self._backend == "numpy":
             filtrations_bounds = np.array(
                 [([f.min(axis=0), f.max(axis=0)]) for f in stuff]
@@ -932,7 +931,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
     Parameters
     ----------
      - filtration_grid : Iterable[array] For each filtration, the filtration values on which to evaluate the grid
-     - resolution : int or (num_parameter) : If filtration grid is not given, will infer a grid, with this resolution
+     - resolution : int or (num_parameters) : If filtration grid is not given, will infer a grid, with this resolution
      - grid_strategy : the strategy to generate the grid. Available ones are regular, quantile, exact
      - flatten : if true, the output will be flattened
      - kernel : kernel to used to convolve the images.
