@@ -101,7 +101,7 @@ jobs:
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install --no-build-isolation dist/*.whl
+        pip install dist/*.whl --force-reinstall ## tests the repaired wheel on a "fresh" env
         pytest multipers/tests
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
