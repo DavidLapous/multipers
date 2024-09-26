@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import multipers as mp
 from multipers.grids import compute_grid as reduce_grid
-from multipers.ml.convolutions import convolution_signed_measures
+from multipers.ml.convolutions import available_kernels, convolution_signed_measures
 
 
 class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
@@ -338,12 +338,15 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         assert (
             self.filtration_grid is not None and self._reconversion_grid is not None
         ) or self.individual_grid, "Fit first"
-        # def todo_axis(x):
-        #
+
+        def todo_x(x):
+            return tuple(self.transform1(x_axis, j) for j, x_axis in enumerate(x))
+
         ## out shape num_x, num_axis, degree, sm
         out = tuple(
-            tuple((self.transform1(x_axis, j)) for j, x_axis in enumerate(x))
-            for i, x in enumerate(X)
+            Parallel(n_jobs=self.n_jobs, backend="threading")(
+                delayed(todo_x)(x) for x in X
+            )
         )
         # out = Parallel(n_jobs=self.n_jobs, backend="threading")(
         #     delayed(self.transform1)(to_st, thread_id=str(thread_id))
@@ -991,7 +994,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         filtration_grid: Iterable[np.ndarray] = None,
-        kernel="gaussian",
+        kernel: available_kernels = "gaussian",
         bandwidth: float | Iterable[float] = 1.0,
         flatten: bool = False,
         n_jobs: int = 1,
@@ -1005,7 +1008,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         #   **kwargs ## DANGEROUS
     ):
         super().__init__()
-        self.kernel = kernel
+        self.kernel: available_kernels = kernel
         self.bandwidth = bandwidth
         # self.more_kde_kwargs=kwargs
         self.filtration_grid = filtration_grid
@@ -1072,9 +1075,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             if self.progress:
                 print(f"Computed a diameter of {self.diameter}")
         return self
-
-    def _sparsify(self, sm):
-        return tensor_möbius_inversion(input=sm, grid_conversion=self.filtration_grid)
 
     def _sm2smi(self, signed_measures: Iterable[np.ndarray]):
         # print(self._input_resolution, self.bandwidths, _bandwidths)
