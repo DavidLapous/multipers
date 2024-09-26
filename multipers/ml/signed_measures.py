@@ -113,7 +113,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         self._default_mass_location = None
         self.flatten = flatten
         self.num_parameters: int = 0
-        self._is_minpres: bool | None = None
+
         return
 
     @staticmethod
@@ -132,23 +132,15 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         assert (
             not mp.slicer.is_slicer(first) or not self.expand
         ), "Cannot expand slicers."
-        self._is_minpres = mp.slicer.is_slicer(first) and (
-            (first.is_minpres)
-            or (isinstance(first, Union[tuple, list]) and first[0].is_minpres)
-        )
+        assert not mp.slicer.is_slicer(first) or not (
+            isinstance(first, Union[tuple, list]) and first[0].is_minpres
+        ), "Multi-degree minpres are not supported yet as an input. This can still be computed by providing a backend."
 
     def _infer_filtration(self, X):
         self.num_parameters = X[0][0].num_parameters
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
-
-        # def get_st_filtration(x) -> np.ndarray:
-        #     return x.get_filtration_grid(grid_strategy="exact")
-
-        # filtrations: list = Parallel(n_jobs=self.n_jobs, backend="threading")(
-        #     delayed(get_st_filtration)(x) for x in (X[idx] for idx in indices)
-        # )
         ## ax, num_x
         filtrations = tuple(
             tuple(
