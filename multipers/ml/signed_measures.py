@@ -139,6 +139,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         )
 
     def _infer_filtration(self, X):
+        self.num_parameters = X[0][0].num_parameters
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
@@ -153,12 +154,14 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         filtrations = tuple(
             tuple(
                 reduce_grid(x, strategy="exact")
-                for x in (X[ax][idx] for idx in indices)
-                for ax in range(self._num_axis)
+                for x in (X[idx][ax] for idx in indices)
             )
+            for ax in range(self._num_axis)
         )
         num_parameters = len(filtrations[0][0])
-        assert num_parameters == self.num_parameters
+        assert (
+            num_parameters == self.num_parameters
+        ), f"Internal error, got {num_parameters=} and {self.num_parameters=}"
 
         filtrations_values = [
             [
@@ -191,7 +194,6 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self._params_check()
         self._input_checks(X)
 
-        self.num_parameter = X[0][0].num_parameters
         if isinstance(self.resolution, int):
             self.resolution = [self.resolution] * self.num_parameters
 
@@ -237,8 +239,8 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
     def transform1(
         self,
         simplextree,
-        filtration_grid,
-        _reconversion_grid,
+        ax,
+        # _reconversion_grid,
         thread_id: str = "",
     ):
         # st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  # COPY
@@ -246,11 +248,18 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             filtration_grid = reduce_grid(
                 simplextree, strategy=self.grid_strategy, resolution=self.resolution
             )
+            mass_default = self._default_mass_location[ax]
             if self.enforce_null_mass:
                 filtration_grid = [
                     np.concatenate([f, [d]], axis=0)
-                    for f, d in zip(filtration_grid, self._default_mass_location)
+                    for f, d in zip(filtration_grid, mass_default)
                 ]
+            _reconversion_grid = filtration_grid
+        else:
+            filtration_grid = self.filtration_grid[ax]
+            _reconversion_grid = self._reconversion_grid[ax]
+            mass_default = self._default_mass_location[ax]
+
         st = simplextree.grid_squeeze(
             filtration_grid=filtration_grid, coordinate_values=True
         )
@@ -265,7 +274,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 st,
                 degrees=[None],
                 plot=self.plot,
-                mass_default=self._default_mass_location,
+                mass_default=mass_default,
                 invariant="euler",
                 # thread_id=thread_id,
                 backend=self.backend,
@@ -285,7 +294,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             mp.signed_measure(
                 st,
                 degrees=int_degrees,
-                mass_default=self._default_mass_location,
+                mass_default=mass_default,
                 plot=self.plot,
                 invariant="hilbert",
                 thread_id=thread_id,
@@ -307,7 +316,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             mp.signed_measure(
                 st,
                 degrees=self.rank_degrees,
-                mass_default=self._default_mass_location,
+                mass_default=mass_default,
                 plot=self.plot,
                 invariant="rank",
                 thread_id=thread_id,
@@ -340,16 +349,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         #
         ## out shape num_x, num_axis, degree, sm
         out = tuple(
-            tuple(
-                (
-                    self.transform1(x_axis, None, None)
-                    if self.individual_grid
-                    else self.transform1(
-                        x_axis, self.filtration_grid[j], self._reconversion_grid[j]
-                    )
-                )
-                for j, x_axis in enumerate(x)
-            )
+            tuple((self.transform1(x_axis, j)) for j, x_axis in enumerate(x))
             for i, x in enumerate(X)
         )
         # out = Parallel(n_jobs=self.n_jobs, backend="threading")(
@@ -363,76 +363,76 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         return out
 
 
-class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
-    """
-    Input
-    -----
-
-    (data) x (axis, e.g. different bandwidths for simplextrees) x (simplextree)
-
-    Output
-    ------
-    (data) x (axis) x (degree) x (signed measure)
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._num_st_per_data = None
-        # self._super_model=SimplexTree2SignedMeasure(**kwargs)
-        self._filtration_grids = None
-        return
-
-    def fit(self, X, y=None):
-        if len(X) == 0:
-            return self
-        try:
-            self._num_st_per_data = len(X[0])
-        except:
-            raise Exception(
-                "Shape has to be (num_data, num_axis), dtype=SimplexTreeMulti"
-            )
-        self._filtration_grids = []
-        for axis in range(self._num_st_per_data):
-            self._filtration_grids.append(
-                super().fit([x[axis] for x in X]).filtration_grid
-            )
-            # self._super_fits.append(truc)
-        # self._super_fits_params = [super().fit([x[axis] for x in X]).get_params() for axis in range(self._num_st_per_data)]
-        return self
-
-    def transform(self, X):
-        if self.normalize_filtrations:
-            _reconversion_grids = [
-                [np.linspace(0, 1, num=len(f), dtype=float) for f in F]
-                for F in self._filtration_grids
-            ]
-        else:
-            _reconversion_grids = self._filtration_grids
-
-        def todo(x):
-            # return [SimplexTree2SignedMeasure().set_params(**transformer_params).transform1(x[axis]) for axis,transformer_params in enumerate(self._super_fits_params)]
-            out = [
-                self.transform1(
-                    x[axis],
-                    filtration_grid=filtration_grid,
-                    _reconversion_grid=_reconversion_grid,
-                )
-                for axis, filtration_grid, _reconversion_grid in zip(
-                    range(self._num_st_per_data),
-                    self._filtration_grids,
-                    _reconversion_grids,
-                )
-            ]
-            return out
-
-        return Parallel(n_jobs=self.n_jobs, backend="threading")(
-            delayed(todo)(x)
-            for x in tqdm(
-                X,
-                disable=not self.progress,
-                desc="Computing Signed Measures from simplextrees.",
-            )
-        )
+# class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
+#     """
+#     Input
+#     -----
+#
+#     (data) x (axis, e.g. different bandwidths for simplextrees) x (simplextree)
+#
+#     Output
+#     ------
+#     (data) x (axis) x (degree) x (signed measure)
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._num_st_per_data = None
+#         # self._super_model=SimplexTree2SignedMeasure(**kwargs)
+#         self._filtration_grids = None
+#         return
+#
+#     def fit(self, X, y=None):
+#         if len(X) == 0:
+#             return self
+#         try:
+#             self._num_st_per_data = len(X[0])
+#         except:
+#             raise Exception(
+#                 "Shape has to be (num_data, num_axis), dtype=SimplexTreeMulti"
+#             )
+#         self._filtration_grids = []
+#         for axis in range(self._num_st_per_data):
+#             self._filtration_grids.append(
+#                 super().fit([x[axis] for x in X]).filtration_grid
+#             )
+#             # self._super_fits.append(truc)
+#         # self._super_fits_params = [super().fit([x[axis] for x in X]).get_params() for axis in range(self._num_st_per_data)]
+#         return self
+#
+#     def transform(self, X):
+#         if self.normalize_filtrations:
+#             _reconversion_grids = [
+#                 [np.linspace(0, 1, num=len(f), dtype=float) for f in F]
+#                 for F in self._filtration_grids
+#             ]
+#         else:
+#             _reconversion_grids = self._filtration_grids
+#
+#         def todo(x):
+#             # return [SimplexTree2SignedMeasure().set_params(**transformer_params).transform1(x[axis]) for axis,transformer_params in enumerate(self._super_fits_params)]
+#             out = [
+#                 self.transform1(
+#                     x[axis],
+#                     filtration_grid=filtration_grid,
+#                     _reconversion_grid=_reconversion_grid,
+#                 )
+#                 for axis, filtration_grid, _reconversion_grid in zip(
+#                     range(self._num_st_per_data),
+#                     self._filtration_grids,
+#                     _reconversion_grids,
+#                 )
+#             ]
+#             return out
+#
+#         return Parallel(n_jobs=self.n_jobs, backend="threading")(
+#             delayed(todo)(x)
+#             for x in tqdm(
+#                 X,
+#                 disable=not self.progress,
+#                 desc="Computing Signed Measures from simplextrees.",
+#             )
+#         )
 
 
 def rescale_sparse_signed_measure(
