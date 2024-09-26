@@ -30,6 +30,7 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
         prune_degrees_above: Optional[int] = None,
         progress=False,
         minpres_degrees: Optional[Iterable[int]] = None,
+        plot: bool = False,
         **persistence_kwargs,
     ) -> None:
         super().__init__()
@@ -42,6 +43,7 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
         self._boxes = None
         self._is_minpres = None
         self.minpres_degrees = minpres_degrees
+        self.plot = plot
         return
 
     @staticmethod
@@ -138,9 +140,12 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
                 x = mp.slicer.minimal_presentation(
                     mp.Slicer(x), degrees=self.minpres_degrees, vineyard=True
                 )
-            return mp.module_approximation(
+            mod = mp.module_approximation(
                 x, box=box, verbose=False, **self.persistence_args
             )
+            if self.plot:
+                mod.plot()
+            return mod
 
         def todo(sts: Iterable[_FilteredComplexType]):
             return tuple(todo1(st, box) for st, box in zip(sts, self._boxes))
@@ -149,6 +154,28 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
             delayed(todo)(x)
             for x in tqdm(X, desc="Computing modules", disable=not self.progress)
         )
+
+
+class SimplexTree2MMA(FilteredComplex2MMA):
+    def __init__(
+        self,
+        n_jobs: int = -1,
+        expand_dim: Optional[int] = None,
+        prune_degrees_above: Optional[int] = None,
+        progress=False,
+        minpres_degrees: Optional[Iterable[int]] = None,
+        **persistence_kwargs,
+    ):
+        stuff = locals()
+        stuff.pop("self")
+        keys = list(stuff.keys())
+        for key in keys:
+            if key.startswith("__"):
+                stuff.pop(key)
+        super().__init__(**stuff)
+        from warnings import warn
+
+        warn("This class is deprecated, use FilteredComplex2MMA instead.")
 
 
 class MMAFormatter(BaseEstimator, TransformerMixin):
