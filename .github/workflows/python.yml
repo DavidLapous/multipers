@@ -40,10 +40,11 @@ jobs:
         ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
         mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
-
+        
+        mamba install cxx-compiler=1.6
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           # oldest supported gcc release; see https://gcc.gnu.org/
-          mamba install cxx-compiler=1.6 patchelf -c conda-forge
+          mamba install patchelf -c conda-forge
           gcc --version
         fi
     - name: Build package
