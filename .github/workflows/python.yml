@@ -42,7 +42,9 @@ jobs:
         pip install pykeops filtration-domination --upgrade
 
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          mamba install cxx-compiler patchelf -c conda-forge
+          # oldest supported gcc release; see https://gcc.gnu.org/
+          mamba install cxx-compiler=1.6 patchelf -c conda-forge
+          gcc --version
         fi
     - name: Build package
       shell: bash -el {0}
