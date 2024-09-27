@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 #include <type_traits>  //std::invoke_result
+#include "scc_io.h"
 
 namespace Gudhi::multiparameter::interface {
 
@@ -852,7 +853,18 @@ public:
 
   TrucThread weak_copy() const { return TrucThread(*this); }
 
-private:
+  //TODO: declare method here instead of scc_io.h
+  //it is just temporary, until Truc is cleaned up
+  friend void write_scc_file<Truc>(std::string outFilePath,
+                                   const Truc &slicer,
+                                   int numberOfParameters,
+                                   int degree,
+                                   bool rivetCompatible,
+                                   bool IgnoreLastGenerators,
+                                   bool stripComments,
+                                   bool reverse);
+
+ private:
   std::vector<MultiFiltration>
       generator_filtration_values; // defined at construction time. Const
   std::vector<std::size_t> generator_order; // size fixed at construction time,

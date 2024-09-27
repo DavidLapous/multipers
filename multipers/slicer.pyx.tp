@@ -33,6 +33,7 @@ import numpy as np
 cimport cython
 # python_value_type = np.float32
 from typing import Union
+from cython.operator cimport dereference
 
 ## WARNING : This is repeated in the pxd file ...
 python_indices_type=np.int32
@@ -99,6 +100,10 @@ cdef class {{PYTHON_TYPE}}:
         Returns a pointer to the underlying C++ slicer.
         """
         return <intptr_t>(&self.truc)
+    def _from_ptr(self, intptr_t slicer_ptr):
+        self.truc = dereference(<{{CTYPE}}*>(slicer_ptr))
+        return self
+
     {{if IS_SIMPLICIAL}}
     def __init__(self, st=None):
         """
@@ -178,6 +183,7 @@ cdef class {{PYTHON_TYPE}}:
         self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.minpres_degree = -1
     {{endif}}
+    
     def copy(self)->{{PYTHON_TYPE}}:
         """
         Returns a copy of the slicer.

@@ -597,3 +597,29 @@ def scc2disk_old(
         str_blocks.append(np.char.add(C,D))
     
     np.savetxt("test.scc", np.concatenate(str_blocks), delimiter="", fmt="%s")
+
+from multipers.slicer import Slicer_type
+from multipers.io cimport _write_scc_file_from_slicer, _read_scc_file_as_slicer
+
+def write_scc_file_from_slicer(
+        path:str|os.PathLike,
+        slicer:Slicer_type,
+        num_parameters = -1,
+        degree = -1,
+        rivet_compatible = False,
+        ignore_last_generators = False,
+        strip_comments = False,
+        reverse = False
+        ):
+
+    _write_scc_file_from_slicer(path.encode(encoding="utf-8"), slicer, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+
+def read_scc_file_as_slicer(
+        slicer:Slicer_type,
+        path:str|os.PathLike,
+        rivet_compatible = False
+        ):
+
+    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible)
+
+
