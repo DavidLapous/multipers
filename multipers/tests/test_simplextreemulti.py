@@ -75,22 +75,22 @@ def test_4():
         s.get_filtrations_values(),
         array(
             [
-                [0. , 1. ],
-                [1. , 0. ],
-                [0. , 1. ],
-                [1. , 0. ],
-                [0. , 1. ],
-                [1. , 0. ],
-                [0. , 1. ],
-                [1. , 0. ],
-                [0. , 1. ],
-                [1. , 0. ],
-                [0. , 1. ],
-                [1. , 0. ],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
                 [0.5, 2.5],
-                [1. , 2. ],
+                [1.0, 2.0],
                 [1.5, 1.5],
-                [2. , 1. ],
+                [2.0, 1.0],
                 [2.5, 0.5],
             ]
         ),
@@ -149,3 +149,16 @@ def test_flagify():
     assert (np.array([f for s, f in st]).max(axis=0) == [3, 4]).all()
     st.flagify(0)
     assert (np.array([f for s, f in st]) == -np.inf).all()
+
+
+def test_distance_matrix_filling():
+    X = np.random.uniform(size=(200, 2))
+    st = gd.RipsComplex(points=X).create_simplex_tree()
+    st = mp.SimplexTreeMulti(st, num_parameters=1)
+    st2 = mp.SimplexTreeMulti(st)
+    assert st2.num_parameters == 1
+    st2.fill_lowerstar(np.zeros(st.num_vertices), 0)
+    assert st2 != st
+    D = np.sqrt(((X[None] - X[:, None]) ** 2).sum(axis=-1))
+    st2.fill_distance_matrix(D, 0)
+    assert st2 == st
