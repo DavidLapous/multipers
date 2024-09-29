@@ -149,8 +149,8 @@ cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtr
         void resize(size_type) except + nogil
         void resize(size_type, value_type&) except +
         # size_type size()
-        size_type num_parameters()
-        size_type num_generators()
+        size_type num_parameters() nogil
+        size_type num_generators() nogil
         void swap(vector&)
 
         # C++11 methods
@@ -184,8 +184,8 @@ cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_fil
         Multi_critical_filtration()  except + nogil
         Multi_critical_filtration(One_critical_filtration[T]) except +
         Multi_critical_filtration[T]& operator=(const Multi_critical_filtration[T]&) except +
-        size_type num_parameters()
-        size_type num_generators()
+        size_type num_parameters() nogil
+        size_type num_generators() nogil
         void add_guaranteed_generator(One_critical_filtration[T]) nogil
         void add_generator(One_critical_filtration[T]) nogil
         void reserve(size_t) nogil

@@ -1274,6 +1274,65 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self.get_ptr().fill_lowerstar(c_F, parameter)
         return self
 
+    def fill_distance_matrix(self, distance_matrix, int parameter, {{CTYPE}} node_value = 0)->SimplexTreeMulti_{{FSHORT}}:
+        """
+        Fills a specific parameter with a rips filtration with the given matrix. 
+        
+        Warning. Undefined behaviour if `node_value` is not finite or not
+                smaller or equal to `min(distance_matrix)`.
+
+        Parameters:
+         - `distance_matrix`: a (N,N) matrix aligned with the vertices keys, i.e., 
+             `distance_matrix[i,j]` is the distance between simplices [i] and [j].
+         - `node_value`: a float giving the values to the nodes in this filtration.
+
+        Returns
+        self. The updated simplextree.
+        """
+        assert parameter < self.num_parameters, f"This simplextree has only {self.num_parameters} parameters. Cannot fill parameter {parameter}"
+        cdef {{CTYPE}}[:,:] c_distance_matrix = np.asarray(distance_matrix,dtype={{PYTYPE}})
+
+        ## Resets the filtration. should be optimizable
+        F = np.zeros(shape = self.num_vertices, dtype={{PYTYPE}}) + node_value
+        {{if is_kcritical}}
+        cdef {{FSHORT}} c_F = _py2kc_{{SHORT}}(F[None,:])
+        {{else}}
+        cdef {{FSHORT}} c_F = _py21c_{{SHORT}}(F)
+        {{endif}}
+        
+        with nogil:
+            self.get_ptr().fill_lowerstar(c_F, parameter)
+
+        ## Fills the matrix in the 1-skeleton
+        cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] it = self.get_ptr().get_skeleton_iterator_begin(1)
+        cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] end = self.get_ptr().get_skeleton_iterator_end(1)
+        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_generators
+        cdef int N = c_distance_matrix.shape[0]
+        with nogil:
+            while it != end:
+                pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
+                if pair.first.size() == 2:
+                    i = pair.first[0]
+                    j = pair.first[1]
+                    assert i<N, f"Got vertex {i} which is greater than the matrix's size {c_distance_matrix.shape}."
+                    assert j<N, f"Got vertex {j} which is greater than the matrix's size {c_distance_matrix.shape}."
+
+                    {{if is_kcritical}}
+                    num_generators =pair.second.num_generators() 
+                    for k in range(num_generators):
+                        dereference(pair.second)[k][parameter] = c_distance_matrix[i,j]
+                    {{else}}
+                    dereference(pair.second)[parameter] = c_distance_matrix[i,j]
+                    {{endif}}
+                preincrement(it)
+
+        self.make_filtration_non_decreasing()        
+        return self
+
+
+        
+
 
     def project_on_line(self, parameter:int=0, basepoint:None|list|np.ndarray= None, direction:None|list|np.ndarray= None)->SimplexTree:
         """Converts an multi simplextree to a gudhi simplextree.
