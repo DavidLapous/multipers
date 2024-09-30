@@ -593,7 +593,7 @@ def is_slicer(input, bool allow_minpres=True)->bool:
     if _is_slicer(input):
         return True
     if allow_minpres and isinstance(input, list) or isinstance(input, tuple):
-        if all((_is_slicer(s) and s.is_minpres for s in input)):
+        if len(input)>0 and all((_is_slicer(s) and s.is_minpres for s in input)):
             return True
     return False
 
