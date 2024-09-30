@@ -1010,3 +1010,9 @@ PyMultiDiagrams_type = Union[
 {{endfor}}
 ]
 
+def is_mma(stuff):
+    return (False 
+{{for CTYPE, PYTYPE, SHORT in value_types}}
+        or isinstance(stuff,PyModule_{{SHORT}})
+{{endfor}}
+    )
