@@ -1,6 +1,7 @@
 #ifndef MULTIPERS_SCC_IO_H
 #define MULTIPERS_SCC_IO_H
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <ostream>
@@ -13,29 +14,27 @@
 #include <iomanip>
 #include <cmath>
 
-// #include "truc.h"
-
-// using Gudhi::multiparameter::interface::Truc;
-
-bool is_comment_or_empty_line(const std::string& line) {
-  size_t current = line.find_first_not_of(' ', 0);
-  if (current == std::string::npos) return true;  // is empty line
-  if (line[current] == '#') return true;  // is comment
-  return false;
-}
-
 template <class Slicer>
-Slicer read_scc_file(std::string inFilePath, bool isRivetCompatible = false){
+Slicer read_scc_file(const std::string& inFilePath, bool isRivetCompatible = false, bool isReversed = false){
+  using Filtration_value = typename Slicer::Filtration_value;
+
   std::string line;
   std::ifstream file(inFilePath);
   Slicer slicer;
-
-  auto error = [&file](std::string msg){
-    file.close();
-    throw std::invalid_argument(msg);
-  };
+  unsigned int numberOfParameters;
 
   if (file.is_open()) {
+    auto error = [&file](std::string msg){
+      file.close();
+      throw std::invalid_argument(msg);
+    };
+    auto is_comment_or_empty_line = [](const std::string& line)->bool{
+      size_t current = line.find_first_not_of(' ', 0);
+      if (current == std::string::npos) return true;  // is empty line
+      if (line[current] == '#') return true;  // is comment
+      return false;
+    };
+
     while (getline(file, line, '\n') && is_comment_or_empty_line(line));
     if (!file) error("Empty file!");
 
@@ -45,33 +44,106 @@ Slicer read_scc_file(std::string inFilePath, bool isRivetCompatible = false){
     while (getline(file, line, '\n') && is_comment_or_empty_line(line));
     if (!file) error("Premature ending of the file. Stops before numbers of parameters.");
     
+    if (isRivetCompatible){
+      numberOfParameters = 2;
+      getline(file, line, '\n');  //second rivet label
+    } else {
+      std::size_t current = line.find_first_not_of(' ', 0);
+      std::size_t next = line.find_first_of(' ', current);
+      numberOfParameters = std::stoi(line.substr(current, next - current));
+    }
 
+    while (getline(file, line, '\n') && is_comment_or_empty_line(line));
+    if (!file) error("Premature ending of the file. Not a single cell was specified.");
 
-    // std::vector<ID_handle> data;
-    // unsigned int id = 0;
-    // double timestamp;
-    // lineType type;
+    std::vector<unsigned int> counts;
+    unsigned int numberOfCells = 0;
+    counts.reserve(line.size());
+    std::size_t current = line.find_first_not_of(' ', 0);
+    while (current != std::string::npos) {
+      std::size_t next = line.find_first_of(' ', current);
+      counts.push_back(std::stoi(line.substr(current, next - current)));
+      numberOfCells += counts.back();
+      current = line.find_first_not_of(' ', next);
+    }
 
-    // while (getline(file, line, '\n') && read_operation(line, data, timestamp) == COMMENT);
-    // double lastTimestamp = timestamp;
-    // // first operation has to be an insertion.
-    // zp.insert_face(id, data, 0, timestamp);
+    std::size_t dimIt = 0;
+    while (dimIt < counts.size() && counts[dimIt] == 0) ++dimIt;
 
-    // while (getline(file, line, '\n')) {
-    //   type = read_operation(line, data, timestamp);
-    //   if (type != COMMENT && lastTimestamp != timestamp) {
-    //     lastTimestamp = timestamp;
-    //   }
+    if (dimIt == counts.size()) return slicer;
 
-    //   if (type == INCLUSION) {
-    //     ++id;
-    //     int dim = data.size() == 0 ? 0 : data.size() - 1;
-    //     zp.insert_face(id, data, dim, timestamp);
-    //   } else if (type == REMOVAL) {
-    //     ++id;
-    //     zp.remove_face(data[0], timestamp);
-    //   }
-    // }
+    std::size_t shift = isReversed ? 0 : counts[0];
+    unsigned int nextShift = isReversed ? 0 : counts.size() == 1 ? 0 : counts[1];
+    unsigned int tmpNextShift = counts[0];
+
+    auto get_boundary = [&isReversed, &numberOfCells](const std::string& line,
+                                                      std::size_t start,
+                                                      std::size_t shift) -> std::vector<unsigned int> {
+      std::vector<unsigned int> res;
+      res.reserve(line.size() - start);
+      std::size_t current = line.find_first_not_of(' ', start);
+      while (current != std::string::npos) {
+        std::size_t next = line.find_first_of(' ', current);
+        unsigned int idx = std::stoi(line.substr(current, next - current)) + shift;
+        res.push_back(isReversed ? idx : numberOfCells - 1 - idx);
+        current = line.find_first_not_of(' ', next);
+      }
+      std::sort(res.begin(), res.end());
+      return res;
+    };
+    auto get_filtration_value = [](const std::string& line, std::size_t end)->Filtration_value{
+      Filtration_value res(0);
+      res.reserve(end);
+      bool isPlusInf = true;
+      bool isMinusInf = true;
+      std::size_t current = line.find_first_not_of(' ', 0);
+      while (current < end) {
+        std::size_t next = line.find_first_of(' ', current);
+        res.push_back(std::stod(line.substr(current, next - current)));
+        if (isPlusInf && res.back() != Filtration_value::T_inf) isPlusInf = false;
+        if (isMinusInf && res.back() != -Filtration_value::T_inf) isMinusInf = false;
+        current = line.find_first_not_of(' ', next);
+      }
+      if (isPlusInf) res = Filtration_value::inf();
+      if (isMinusInf) res = Filtration_value::minus_inf();
+      return res;
+    };
+
+    std::vector<std::vector<unsigned int> > generator_maps(numberOfCells);
+    std::vector<int> generator_dimensions(numberOfCells);
+    std::vector<typename Slicer::Filtration_value> generator_filtrations(numberOfCells);
+    std::size_t i = 0;
+    while (getline(file, line, '\n')){
+      if (dimIt == counts.size()) error("Wrong format. The number of cells in each dimension is wrong.");
+
+      if (!is_comment_or_empty_line(line)){
+        std::size_t sep = line.find_first_of(';', 0);
+        generator_filtrations[i] = get_filtration_value(line, sep);
+        if (generator_filtrations[i].is_finite() && generator_filtrations[i].num_parameters() != numberOfParameters)
+          error("Wrong format. The number of parameters does not match.");
+        generator_maps[i] = get_boundary(line, sep + 1, shift);
+        generator_dimensions[i] = isReversed ? dimIt : counts.size() - 1 - dimIt;
+
+        --counts[dimIt];
+        while (dimIt < counts.size() && counts[dimIt] == 0){
+          ++dimIt;
+          if (dimIt != counts.size()) {
+            shift += nextShift;
+            nextShift = isReversed ? tmpNextShift : dimIt < counts.size() - 1 ? counts[dimIt + 1] : 0;
+            tmpNextShift = counts[dimIt];
+          }
+        }
+        ++i;
+      }
+    }
+
+    if (!isReversed){ //to order by dimension
+      std::reverse(generator_dimensions.begin(), generator_dimensions.end());
+      std::reverse(generator_maps.begin(), generator_maps.end());
+      std::reverse(generator_filtrations.begin(), generator_filtrations.end());
+    }
+
+    slicer = Slicer(generator_maps, generator_dimensions, generator_filtrations);
 
     file.close();
   } else {
@@ -83,7 +155,7 @@ Slicer read_scc_file(std::string inFilePath, bool isRivetCompatible = false){
 };
 
 template <class Slicer>
-void write_scc_file(std::string outFilePath,
+void write_scc_file(const std::string& outFilePath,
                     const Slicer& slicer,
                     int numberOfParameters = -1,
                     int degree = -1,
@@ -194,109 +266,5 @@ void write_scc_file(std::string outFilePath,
     }
   }
 };
-
-// enum lineType : int { INCLUSION, REMOVAL, COMMENT };
-
-// lineType read_operation(std::string& line, std::vector<ID_handle>& faces, double& timestamp) {
-//   lineType type;
-//   faces.clear();
-//   ID_handle num;
-
-//   size_t current = line.find_first_not_of(' ', 0);
-//   if (current == std::string::npos) return COMMENT;
-
-//   if (line[current] == 'i')
-//     type = INCLUSION;
-//   else if (line[current] == 'r')
-//     type = REMOVAL;
-//   else if (line[current] == '#')
-//     return COMMENT;
-//   else {
-//     std::clog << "(1) Syntaxe error in file." << std::endl;
-//     exit(0);
-//   }
-
-//   current = line.find_first_not_of(' ', current + 1);
-//   if (current == std::string::npos) {
-//     std::clog << "(2) Syntaxe error in file." << std::endl;
-//     exit(0);
-//   }
-//   size_t next = line.find_first_of(' ', current);
-//   timestamp = std::stod(line.substr(current, next - current));
-
-//   current = line.find_first_not_of(' ', next);
-//   while (current != std::string::npos) {
-//     next = line.find_first_of(' ', current);
-//     num = std::stoi(line.substr(current, next - current));
-//     faces.push_back(num);
-//     current = line.find_first_not_of(' ', next);
-//   }
-
-//   return type;
-// }
-
-// //example of input file: example/zigzag_filtration_example.txt
-// int main(int argc, char* const argv[]) {
-//   if (argc != 2) {
-//     if (argc < 2)
-//       std::clog << "Missing argument: input file name is needed." << std::endl;
-//     else
-//       std::clog << "Too many arguments: only input file name is needed." << std::endl;
-//     return 0;
-//   }
-
-//   std::string line;
-//   std::ifstream file(argv[1]);
-
-//   //std::cout could be replaced by any other output stream
-//   ZP zp([](Dimension dim, Filtration_value birth, Filtration_value death) {
-//     std::cout << "[" << dim << "] ";
-//     std::cout << birth << " - " << death;
-//     std::cout << std::endl;
-//   });
-
-//   if (file.is_open()) {
-//     std::vector<ID_handle> data;
-//     unsigned int id = 0;
-//     double timestamp;
-//     lineType type;
-
-//     while (getline(file, line, '\n') && read_operation(line, data, timestamp) == COMMENT);
-//     double lastTimestamp = timestamp;
-//     // first operation has to be an insertion.
-//     zp.insert_face(id, data, 0, timestamp);
-
-//     while (getline(file, line, '\n')) {
-//       type = read_operation(line, data, timestamp);
-//       if (type != COMMENT && lastTimestamp != timestamp) {
-//         lastTimestamp = timestamp;
-//       }
-
-//       if (type == INCLUSION) {
-//         ++id;
-//         int dim = data.size() == 0 ? 0 : data.size() - 1;
-//         zp.insert_face(id, data, dim, timestamp);
-//       } else if (type == REMOVAL) {
-//         ++id;
-//         zp.remove_face(data[0], timestamp);
-//       }
-//     }
-
-//     file.close();
-//   } else {
-//     std::clog << "Unable to open input file." << std::endl;
-//     file.setstate(std::ios::failbit);
-//   }
-
-//   //retrieve infinite bars remaining at the end
-//   //again std::cout could be replaced by any other output stream
-//   zp.get_current_infinite_intervals([](Dimension dim, Filtration_value birth) {
-//     std::cout << "[" << dim << "] ";
-//     std::cout << birth << " - inf";
-//     std::cout << std::endl;
-//   });
-
-//   return 0;
-// }
 
 #endif // MULTIPERS_SCC_IO_H

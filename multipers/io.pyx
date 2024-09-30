@@ -617,9 +617,10 @@ def write_scc_file_from_slicer(
 def read_scc_file_as_slicer(
         slicer:Slicer_type,
         path:str|os.PathLike,
-        rivet_compatible = False
+        rivet_compatible = False,
+        reverse = False
         ):
 
-    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible)
+    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible, reverse)
 
 

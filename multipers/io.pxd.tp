@@ -45,25 +45,25 @@ cdef inline void _write_scc_file_from_slicer(string path, object slicer, int num
 cdef extern from "gudhi/scc_io.h":
     {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
     {{if not IS_KCRITICAL}}
-    {{CTYPE}} read_scc_file[{{CTYPE}}](string, bool) except + nogil
+    {{CTYPE}} read_scc_file[{{CTYPE}}](string&, bool, bool) except + nogil
     {{endif}}
     {{endfor}}
 
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
 {{if not IS_KCRITICAL}}
-cdef inline void _read_scc_file_{{PYTHON_TYPE}}(object slicer, string path, bool rivet_compatible):
-    cdef {{CTYPE}} cslicer = read_scc_file[{{CTYPE}}](path, rivet_compatible)
+cdef inline void _read_scc_file_{{PYTHON_TYPE}}(object slicer, string path, bool rivet_compatible, bool reverse):
+    cdef {{CTYPE}} cslicer = read_scc_file[{{CTYPE}}](path, rivet_compatible, reverse)
     slicer._from_ptr(<intptr_t>(&cslicer))
 {{endif}}
 {{endfor}}
 
-cdef inline void _read_scc_file_as_slicer(object slicer, string path, bool rivet_compatible):
+cdef inline void _read_scc_file_as_slicer(object slicer, string path, bool rivet_compatible, bool reverse):
     if False:   #just to enable the following loop
         pass
     {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
     {{if not IS_KCRITICAL}}
     elif isinstance(slicer, mps.{{PYTHON_TYPE}}):
-        _read_scc_file_{{PYTHON_TYPE}}(slicer, path, rivet_compatible)
+        _read_scc_file_{{PYTHON_TYPE}}(slicer, path, rivet_compatible, reverse)
     {{endif}}
     {{endfor}}
     else:

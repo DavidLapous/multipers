@@ -855,7 +855,7 @@ public:
 
   //TODO: declare method here instead of scc_io.h
   //it is just temporary, until Truc is cleaned up
-  friend void write_scc_file<Truc>(std::string outFilePath,
+  friend void write_scc_file<Truc>(const std::string& outFilePath,
                                    const Truc &slicer,
                                    int numberOfParameters,
                                    int degree,
