@@ -1,13 +1,14 @@
 [build-system]
 requires = [
+  "numpy",
   "Cython",
-  "setuptools"
+  "setuptools",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "multipers"
-version = "2.0.5"
+version = "2.1.0"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
@@ -16,15 +17,14 @@ authors = [
 ]
 maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
 dependencies = [
-  #for setup.py, eventhough has to be already installed to call the setup in the first place
+  #`import multipers`
   "numpy",
-  #to do `import multipers`
   "gudhi",
   "tqdm",
   "scipy",
   "joblib",
   "matplotlib",
-  #to do `pytest multipers`
+  #`pytest multipers`
   "scikit-learn",
   "filtration-domination",
   "pykeops",

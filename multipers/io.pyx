@@ -395,7 +395,7 @@ def function_delaunay_presentation(
     if clear:
         clear_io(output_path + id, input_path + id)
     ## Function Delaunay workaround: last size is 0 but shouldn't...
-    if len(blocks) and not len(blocks[-1][1]):
+    if degree==-1 and len(blocks) and not len(blocks[-1][1]):
         blocks=blocks[:-1]
 
     return blocks

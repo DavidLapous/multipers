@@ -1,5 +1,6 @@
+from collections.abc import Callable, Iterable, Sequence
 from itertools import product
-from typing import Callable, Iterable, Optional
+from typing import Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,10 +10,10 @@ from tqdm import tqdm
 
 import multipers as mp
 from multipers.grids import compute_grid as reduce_grid
-from multipers.ml.convolutions import convolution_signed_measures
+from multipers.ml.convolutions import available_kernels, convolution_signed_measures
 
 
-class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
+class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
     """
     Input
     -----
@@ -53,21 +54,23 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         # homological degrees + None for euler
         degrees: list[int | None] = [],
         rank_degrees: list[int] = [],  # same for rank invariant
-        filtration_grid: Iterable[np.ndarray]
-        # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
-        | None = None,
+        filtration_grid: (
+            Sequence[Sequence[np.ndarray]]
+            # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
+            | None
+        ) = None,
         progress=False,  # tqdm
         num_collapses: int | str = 0,  # edge collapses before computing
         n_jobs=None,
-        resolution: Iterable[int]
-        | int
-        | None = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
+        resolution: (
+            Iterable[int] | int | None
+        ) = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
         # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
         plot: bool = False,
         filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
         # wether or not to do the möbius inversion (not recommended to touch)
-        _möbius_inversion: bool = True,
-        expand=True,  # expand the simplextree befoe computing the homology
+        # _möbius_inversion: bool = True,
+        expand=False,  # expand the simplextree befoe computing the homology
         normalize_filtrations: bool = False,
         # exact_computation:bool=False, # compute the exact signed measure.
         grid_strategy: str = "exact",
@@ -79,7 +82,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
         enforce_null_mass: bool = False,
         flatten=True,
-        backend:Optional[str]=None,
+        backend: Optional[str] = None,
     ):
         super().__init__()
         self.degrees = degrees
@@ -96,9 +99,7 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         # Will only work for non sparse output. (discrete matrices cannot be "rescaled")
         self.normalize_filtrations = normalize_filtrations
         self.grid_strategy = grid_strategy
-        self.num_parameter = None
-        self._is_input_delayed = None
-        self._möbius_inversion = _möbius_inversion
+        # self._möbius_inversion = _möbius_inversion
         self._reconversion_grid = None
         self.expand = expand
         # will only refit the grid if filtration_grid has never been given.
@@ -106,61 +107,87 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
         self.seed = seed
         self.fit_fraction = fit_fraction
         self._transform_st = None
-        self._to_simplex_tree: Callable
         self.out_resolution = out_resolution
         self.individual_grid = individual_grid
         self.enforce_null_mass = enforce_null_mass
         self._default_mass_location = None
         self.flatten = flatten
         self.num_parameters: int = 0
+
         return
 
+    @staticmethod
+    def _is_filtered_complex(input):
+        return mp.simplex_tree_multi.is_simplextree_multi(input) or mp.slicer.is_slicer(
+            input, allow_minpres=True
+        )
+
+    def _input_checks(self, X):
+        assert len(X) > 0, "No filtered complex found. Cannot fit."
+        assert self._is_filtered_complex(
+            X[0][0]
+        ), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        self._num_axis = len(X[0])
+        first = X[0][0]
+        assert (
+            not mp.slicer.is_slicer(first) or not self.expand
+        ), "Cannot expand slicers."
+        assert not mp.slicer.is_slicer(first) or not (
+            isinstance(first, Union[tuple, list]) and first[0].is_minpres
+        ), "Multi-degree minpres are not supported yet as an input. This can still be computed by providing a backend."
+
     def _infer_filtration(self, X):
+        self.num_parameters = X[0][0].num_parameters
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
-
-        def get_st_filtration(x) -> np.ndarray:
-            return self._to_simplex_tree(x).get_filtration_grid(grid_strategy="exact")
-
-        filtrations: list = Parallel(n_jobs=self.n_jobs, backend="threading")(
-            delayed(get_st_filtration)(x) for x in (X[idx] for idx in indices)
+        ## ax, num_x
+        filtrations = tuple(
+            tuple(
+                reduce_grid(x, strategy="exact")
+                for x in (X[idx][ax] for idx in indices)
+            )
+            for ax in range(self._num_axis)
         )
-        num_parameters = len(filtrations[0])
+        num_parameters = len(filtrations[0][0])
+        assert (
+            num_parameters == self.num_parameters
+        ), f"Internal error, got {num_parameters=} and {self.num_parameters=}"
+
         filtrations_values = [
-            np.unique(np.concatenate([x[i] for x in filtrations]))
-            for i in range(num_parameters)
+            [
+                np.unique(np.concatenate([x[i] for x in filtrations[ax]]))
+                for i in range(num_parameters)
+            ]
+            for ax in range(self._num_axis)
         ]
-        filtration_grid = reduce_grid(
-            filtrations_values, resolution=self.resolution, strategy=self.grid_strategy
+        ## ax, param, gridsize
+        filtration_grid = tuple(
+            reduce_grid(
+                filtrations_values[ax],
+                resolution=self.resolution,
+                strategy=self.grid_strategy,
+            )
+            for ax in range(self._num_axis)
         )  # TODO :use more parameters
         self.filtration_grid = filtration_grid
         return filtration_grid
 
-    def fit(self, X, y=None):  # Todo : infer filtration grid ? quantiles ?
-        # assert not self.normalize_filtrations or self.sparse, "Not able to normalize a matrix without losing information."
+    def _params_check(self):
         assert (
             self.resolution is not None
             or self.filtration_grid is not None
             or self.grid_strategy == "exact"
             or self.individual_grid
         ), "For non exact filtrations, a resolution has to be specified."
-        assert (
-            self._möbius_inversion or not self.individual_grid
-        ), "The grid has to be aligned when not using mobius inversion; disable individual_grid or enable mobius inversion."
-        # assert self.invariant != "_" or self._möbius_inversion
-        self._is_input_delayed = not mp.simplex_tree_multi.is_simplextree_multi(X[0])
-        if self._is_input_delayed:
-            from multipers.ml.tools import get_simplex_tree_from_delayed
 
-            self._to_simplex_tree = get_simplex_tree_from_delayed
-        else:
-            self._to_simplex_tree = lambda x: x
-        if isinstance(self.resolution, int) or self.resolution == np.inf:
-            self.resolution = [self.resolution] * self._to_simplex_tree(
-                X[0]
-            ).num_parameters
-        self.num_parameter = self._to_simplex_tree(X[0]).num_parameters
+    def fit(self, X, y=None):  # Todo : infer filtration grid ? quantiles ?
+        self._params_check()
+        self._input_checks(X)
+
+        if isinstance(self.resolution, int):
+            self.resolution = [self.resolution] * self.num_parameters
+
         self.individual_grid = (
             self.individual_grid
             if self.individual_grid is not None
@@ -181,166 +208,120 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
             self._infer_filtration(X=X)
         if self.out_resolution is None:
             self.out_resolution = self.resolution
-        elif isinstance(self.out_resolution, int):
-            self.out_resolution = [self.out_resolution] * self.num_parameters
+        # elif isinstance(self.out_resolution, int):
+        #     self.out_resolution = [self.out_resolution] * self.num_parameters
         if self.normalize_filtrations and not self.individual_grid:
             # self._reconversion_grid = [np.linspace(0,1, num=len(f), dtype=float) for f in self.filtration_grid] ## This will not work for non-regular grids...
             self._reconversion_grid = [
-                f / np.std(f) for f in self.filtration_grid
+                [(f - np.min(f)) / np.std(f) for f in F] for F in self.filtration_grid
             ]  # not the best, but better than some weird magic
         # elif not self.sparse: # It actually renormalizes the filtration !!
         # self._reconversion_grid = [np.linspace(0,r, num=r, dtype=int) for r in self.out_resolution]
         else:
             self._reconversion_grid = self.filtration_grid
+        ## ax, num_param
         self._default_mass_location = (
-            [g[-1] for g in self._reconversion_grid] if self.enforce_null_mass else None
+            np.asarray([[g[-1] for g in F] for F in self.filtration_grid])
+            if self.enforce_null_mass
+            else None
         )
         return self
 
     def transform1(
         self,
         simplextree,
-        filtration_grid=None,
-        _reconversion_grid=None,
+        ax,
+        # _reconversion_grid,
         thread_id: str = "",
     ):
-        if filtration_grid is None:
-            filtration_grid = self.filtration_grid
-        if _reconversion_grid is None:
-            _reconversion_grid = self._reconversion_grid
-        st = self._to_simplex_tree(simplextree)
         # st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  # COPY
         if self.individual_grid:
-            filtration_grid = st.get_filtration_grid(
-                grid_strategy=self.grid_strategy, resolution=self.resolution
+            filtration_grid = reduce_grid(
+                simplextree, strategy=self.grid_strategy, resolution=self.resolution
+            )
+            mass_default = (
+                self._default_mass_location[ax] if self.enforce_null_mass else None
             )
             if self.enforce_null_mass:
                 filtration_grid = [
                     np.concatenate([f, [d]], axis=0)
-                    for f, d in zip(filtration_grid, self._default_mass_location)
+                    for f, d in zip(filtration_grid, mass_default)
                 ]
-        st = st.grid_squeeze(filtration_grid=filtration_grid, coordinate_values=True)
-        if st.num_parameters == 2:
-            if self.num_collapses == "full":
-                st.collapse_edges(full=True, max_dimension=1)
-            elif isinstance(self.num_collapses, int):
-                st.collapse_edges(num=self.num_collapses, max_dimension=1)
-            else:
-                raise Exception("Bad edge collapse type. either 'full' or an int.")
-        int_degrees = np.asarray([d for d in self.degrees if d is not None])
-        if self._möbius_inversion:
-            # EULER. First as there is prune above dimension below
-            if self.expand and None in self.degrees:
-                st.expansion(st.num_vertices)
-            signed_measures_euler = (
-                mp.signed_measure(
-                    st,
-                    degrees=[None],
-                    plot=self.plot,
-                    mass_default=self._default_mass_location,
-                    invariant="euler",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )[0]
-                if None in self.degrees
-                else []
-            )
-
-            if self.expand and len(int_degrees) > 0:
-                st.expansion(np.max(int_degrees) + 1)
-            if len(int_degrees) > 0:
-                st.prune_above_dimension(
-                    np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
-                )  # no need to compute homology beyond this
-            signed_measures_pers = (
-                mp.signed_measure(
-                    st,
-                    degrees=int_degrees,
-                    mass_default=self._default_mass_location,
-                    plot=self.plot,
-                    invariant="hilbert",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )
-                if len(int_degrees) > 0
-                else []
-            )
-            if self.plot:
-                plt.show()
-            if self.expand and len(self.rank_degrees) > 0:
-                st.expansion(np.max(self.rank_degrees) + 1)
-            if len(self.rank_degrees) > 0:
-                st.prune_above_dimension(
-                    np.max(self.rank_degrees) + 1
-                )  # no need to compute homology beyond this
-            signed_measures_rank = (
-                mp.signed_measure(
-                    st,
-                    degrees=self.rank_degrees,
-                    mass_default=self._default_mass_location,
-                    plot=self.plot,
-                    invariant="rank",
-                    thread_id=thread_id,
-                    backend=self.backend,
-                )
-                if len(self.rank_degrees) > 0
-                else []
-            )
-            if self.plot:
-                plt.show()
-
+            _reconversion_grid = filtration_grid
         else:
-            raise ValueError("This is deprecated")
-            # from multipers.euler_characteristic import euler_surface
-            # from multipers.hilbert_function import hilbert_surface
-            # from multipers.rank_invariant import rank_invariant
-            #
-            # if self.expand and None in self.degrees:
-            #     st.expansion(st.num_vertices)
-            # signed_measures_euler = (
-            #     euler_surface(
-            #         simplextree=st,
-            #         plot=self.plot,
-            #     )[1][None]
-            #     if None in self.degrees
-            #     else []
-            # )
-            #
-            # if self.expand and len(int_degrees) > 0:
-            #     st.expansion(np.max(int_degrees) + 1)
-            # if len(int_degrees) > 0:
-            #     st.prune_above_dimension(
-            #         np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
-            #     )
-            #     # no need to compute homology beyond this
-            # signed_measures_pers = (
-            #     hilbert_surface(
-            #         simplextree=st,
-            #         degrees=int_degrees,
-            #         plot=self.plot,
-            #     )[1]
-            #     if len(int_degrees) > 0
-            #     else []
-            # )
-            # if self.plot:
-            #     plt.show()
-            #
-            # if self.expand and len(self.rank_degrees) > 0:
-            #     st.expansion(np.max(self.rank_degrees) + 1)
-            # if len(self.rank_degrees) > 0:
-            #     st.prune_above_dimension(
-            #         np.max(self.rank_degrees) + 1
-            #     )  # no need to compute homology beyond this
-            # signed_measures_rank = (
-            #     rank_invariant(
-            #         sieplextree=st,
-            #         degrees=self.rank_degrees,
-            #         plot=self.plot,
-            #     )
-            #     if len(self.rank_degrees) > 0
-            #     else []
-            # )
-            #
+            filtration_grid = self.filtration_grid[ax]
+            _reconversion_grid = self._reconversion_grid[ax]
+            mass_default = (
+                self._default_mass_location[ax] if self.enforce_null_mass else None
+            )
+
+        st = simplextree.grid_squeeze(filtration_grid=filtration_grid)
+        if st.num_parameters == 2 and mp.simplex_tree_multi.is_simplextree_multi(st):
+            st.collapse_edges(num=self.num_collapses, max_dimension=1)
+        int_degrees = np.asarray([d for d in self.degrees if d is not None], dtype=int)
+        # EULER. First as there is prune above dimension below
+        if self.expand and None in self.degrees:
+            st.expansion(st.num_vertices)
+        signed_measures_euler = (
+            mp.signed_measure(
+                st,
+                degrees=[None],
+                plot=self.plot,
+                mass_default=mass_default,
+                invariant="euler",
+                # thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
+            )[0]
+            if None in self.degrees
+            else []
+        )
+
+        if self.expand and len(int_degrees) > 0:
+            st.expansion(np.max(int_degrees) + 1)
+        if len(int_degrees) > 0:
+            st.prune_above_dimension(
+                np.max(np.concatenate([int_degrees, self.rank_degrees])) + 1
+            )  # no need to compute homology beyond this
+        signed_measures_pers = (
+            mp.signed_measure(
+                st,
+                degrees=int_degrees,
+                mass_default=mass_default,
+                plot=self.plot,
+                invariant="hilbert",
+                thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
+            )
+            if len(int_degrees) > 0
+            else []
+        )
+        if self.plot:
+            plt.show()
+        if self.expand and len(self.rank_degrees) > 0:
+            st.expansion(np.max(self.rank_degrees) + 1)
+        if len(self.rank_degrees) > 0:
+            st.prune_above_dimension(
+                np.max(self.rank_degrees) + 1
+            )  # no need to compute homology beyond this
+        signed_measures_rank = (
+            mp.signed_measure(
+                st,
+                degrees=self.rank_degrees,
+                mass_default=mass_default,
+                plot=self.plot,
+                invariant="rank",
+                thread_id=thread_id,
+                backend=self.backend,
+                grid=_reconversion_grid,
+            )
+            if len(self.rank_degrees) > 0
+            else []
+        )
+        if self.plot:
+            plt.show()
+
         count = 0
         signed_measures = []
         for d in self.degrees:
@@ -350,94 +331,152 @@ class SimplexTree2SignedMeasure(BaseEstimator, TransformerMixin):
                 signed_measures.append(signed_measures_pers[count])
                 count += 1
         signed_measures += signed_measures_rank
-        if not self._möbius_inversion and self.flatten:
-            signed_measures = np.asarray(signed_measures).flatten()
         return signed_measures
 
     def transform(self, X):
-        assert self.filtration_grid is not None or self.individual_grid, "Fit first"
-        prefer = "loky" if self._is_input_delayed else "threading"
-        out = Parallel(n_jobs=self.n_jobs, backend=prefer)(
-            delayed(self.transform1)(to_st, thread_id=str(thread_id))
-            for thread_id, to_st in tqdm(
-                enumerate(X),
-                disable=not self.progress,
-                desc="Computing signed measure decompositions",
+        ## X of shape (num_x, num_axis, filtered_complex
+        assert (
+            self.filtration_grid is not None and self._reconversion_grid is not None
+        ) or self.individual_grid, "Fit first"
+
+        def todo_x(x):
+            return tuple(self.transform1(x_axis, j) for j, x_axis in enumerate(x))
+
+        ## out shape num_x, num_axis, degree, sm
+        out = tuple(
+            Parallel(n_jobs=self.n_jobs, backend="threading")(
+                delayed(todo_x)(x) for x in X
             )
         )
+        # out = Parallel(n_jobs=self.n_jobs, backend="threading")(
+        #     delayed(self.transform1)(to_st, thread_id=str(thread_id))
+        #     for thread_id, to_st in tqdm(
+        #         enumerate(X),
+        #         disable=not self.progress,
+        #         desc="Computing signed measure decompositions",
+        #     )
+        # )
         return out
 
 
-class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
-    """
-    Input
-    -----
+class SimplexTree2SignedMeasure(FilteredComplex2SignedMeasure):
+    def __init__(
+        self,
+        # homological degrees + None for euler
+        degrees: list[int | None] = [],
+        rank_degrees: list[int] = [],  # same for rank invariant
+        filtration_grid: (
+            Sequence[Sequence[np.ndarray]]
+            # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
+            | None
+        ) = None,
+        progress=False,  # tqdm
+        num_collapses: int | str = 0,  # edge collapses before computing
+        n_jobs=None,
+        resolution: (
+            Iterable[int] | int | None
+        ) = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
+        # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
+        plot: bool = False,
+        filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
+        # wether or not to do the möbius inversion (not recommended to touch)
+        # _möbius_inversion: bool = True,
+        expand=False,  # expand the simplextree befoe computing the homology
+        normalize_filtrations: bool = False,
+        # exact_computation:bool=False, # compute the exact signed measure.
+        grid_strategy: str = "exact",
+        seed: int = 0,  # if fit_fraction is not 1, the seed sampling
+        fit_fraction=1,  # the fraction of the data on which to fit
+        out_resolution: Iterable[int] | int | None = None,
+        individual_grid: Optional[
+            bool
+        ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
+        enforce_null_mass: bool = False,
+        flatten=True,
+        backend: Optional[str] = None,
+    ):
+        stuff = locals()
+        stuff.pop("self")
+        keys = list(stuff.keys())
+        for key in keys:
+            if key.startswith("__"):
+                stuff.pop(key)
+        super().__init__(**stuff)
+        from warnings import warn
 
-    (data) x (axis, e.g. different bandwidths for simplextrees) x (simplextree)
+        warn("This class is deprecated, use FilteredComplex2SignedMeasure instead.")
 
-    Output
-    ------
-    (data) x (axis) x (degree) x (signed measure)
-    """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._num_st_per_data = None
-        # self._super_model=SimplexTree2SignedMeasure(**kwargs)
-        self._filtration_grids = None
-        return
-
-    def fit(self, X, y=None):
-        if len(X) == 0:
-            return self
-        try:
-            self._num_st_per_data = len(X[0])
-        except:
-            raise Exception(
-                "Shape has to be (num_data, num_axis), dtype=SimplexTreeMulti"
-            )
-        self._filtration_grids = []
-        for axis in range(self._num_st_per_data):
-            self._filtration_grids.append(
-                super().fit([x[axis] for x in X]).filtration_grid
-            )
-            # self._super_fits.append(truc)
-        # self._super_fits_params = [super().fit([x[axis] for x in X]).get_params() for axis in range(self._num_st_per_data)]
-        return self
-
-    def transform(self, X):
-        if self.normalize_filtrations:
-            _reconversion_grids = [
-                [np.linspace(0, 1, num=len(f), dtype=float) for f in F]
-                for F in self._filtration_grids
-            ]
-        else:
-            _reconversion_grids = self._filtration_grids
-
-        def todo(x):
-            # return [SimplexTree2SignedMeasure().set_params(**transformer_params).transform1(x[axis]) for axis,transformer_params in enumerate(self._super_fits_params)]
-            out = [
-                self.transform1(
-                    x[axis],
-                    filtration_grid=filtration_grid,
-                    _reconversion_grid=_reconversion_grid,
-                )
-                for axis, filtration_grid, _reconversion_grid in zip(
-                    range(self._num_st_per_data),
-                    self._filtration_grids,
-                    _reconversion_grids,
-                )
-            ]
-            return out
-
-        return Parallel(n_jobs=self.n_jobs, backend="threading")(
-            delayed(todo)(x)
-            for x in tqdm(
-                X,
-                disable=not self.progress,
-                desc="Computing Signed Measures from simplextrees.",
-            )
-        )
+# class SimplexTrees2SignedMeasures(SimplexTree2SignedMeasure):
+#     """
+#     Input
+#     -----
+#
+#     (data) x (axis, e.g. different bandwidths for simplextrees) x (simplextree)
+#
+#     Output
+#     ------
+#     (data) x (axis) x (degree) x (signed measure)
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._num_st_per_data = None
+#         # self._super_model=SimplexTree2SignedMeasure(**kwargs)
+#         self._filtration_grids = None
+#         return
+#
+#     def fit(self, X, y=None):
+#         if len(X) == 0:
+#             return self
+#         try:
+#             self._num_st_per_data = len(X[0])
+#         except:
+#             raise Exception(
+#                 "Shape has to be (num_data, num_axis), dtype=SimplexTreeMulti"
+#             )
+#         self._filtration_grids = []
+#         for axis in range(self._num_st_per_data):
+#             self._filtration_grids.append(
+#                 super().fit([x[axis] for x in X]).filtration_grid
+#             )
+#             # self._super_fits.append(truc)
+#         # self._super_fits_params = [super().fit([x[axis] for x in X]).get_params() for axis in range(self._num_st_per_data)]
+#         return self
+#
+#     def transform(self, X):
+#         if self.normalize_filtrations:
+#             _reconversion_grids = [
+#                 [np.linspace(0, 1, num=len(f), dtype=float) for f in F]
+#                 for F in self._filtration_grids
+#             ]
+#         else:
+#             _reconversion_grids = self._filtration_grids
+#
+#         def todo(x):
+#             # return [SimplexTree2SignedMeasure().set_params(**transformer_params).transform1(x[axis]) for axis,transformer_params in enumerate(self._super_fits_params)]
+#             out = [
+#                 self.transform1(
+#                     x[axis],
+#                     filtration_grid=filtration_grid,
+#                     _reconversion_grid=_reconversion_grid,
+#                 )
+#                 for axis, filtration_grid, _reconversion_grid in zip(
+#                     range(self._num_st_per_data),
+#                     self._filtration_grids,
+#                     _reconversion_grids,
+#                 )
+#             ]
+#             return out
+#
+#         return Parallel(n_jobs=self.n_jobs, backend="threading")(
+#             delayed(todo)(x)
+#             for x in tqdm(
+#                 X,
+#                 disable=not self.progress,
+#                 desc="Computing Signed Measures from simplextrees.",
+#             )
+#         )
 
 
 def rescale_sparse_signed_measure(
@@ -586,7 +625,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             for degree in range(self._num_degrees)
         ]
         sizes_ = np.array([len(x) == 0 for x in stuff])
-        assert np.all(1 - sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
+        assert np.all(~sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
         if self._backend == "numpy":
             filtrations_bounds = np.array(
                 [([f.min(axis=0), f.max(axis=0)]) for f in stuff]
@@ -646,8 +685,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             self._num_axis = 1
             self._axis_iterator = [slice(None)]
             return
-        assert (  ## vaguely checks that its a signed measure
-            self._check_sm(_sm := X[0][0][0])
+        assert self._check_sm(  ## vaguely checks that its a signed measure
+            _sm := X[0][0][0]
         ), f"Cannot take this input. # data, axis, degrees, sm.\n Got {_sm} of type {type(_sm)}"
 
         self._has_axis = True
@@ -717,9 +756,11 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             filtration_values = [
                 np.concatenate(
                     [
-                        stuff
-                        if isinstance(stuff := x[ax][degree][0], np.ndarray)
-                        else stuff.detach().numpy()
+                        (
+                            stuff
+                            if isinstance(stuff := x[ax][degree][0], np.ndarray)
+                            else stuff.detach().numpy()
+                        )
                         for x in X
                         for degree in range(self._num_degrees)
                     ]
@@ -935,7 +976,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
     Parameters
     ----------
      - filtration_grid : Iterable[array] For each filtration, the filtration values on which to evaluate the grid
-     - resolution : int or (num_parameter) : If filtration grid is not given, will infer a grid, with this resolution
+     - resolution : int or (num_parameters) : If filtration grid is not given, will infer a grid, with this resolution
      - grid_strategy : the strategy to generate the grid. Available ones are regular, quantile, exact
      - flatten : if true, the output will be flattened
      - kernel : kernel to used to convolve the images.
@@ -953,7 +994,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         filtration_grid: Iterable[np.ndarray] = None,
-        kernel="gaussian",
+        kernel: available_kernels = "gaussian",
         bandwidth: float | Iterable[float] = 1.0,
         flatten: bool = False,
         n_jobs: int = 1,
@@ -967,7 +1008,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         #   **kwargs ## DANGEROUS
     ):
         super().__init__()
-        self.kernel = kernel
+        self.kernel: available_kernels = kernel
         self.bandwidth = bandwidth
         # self.more_kde_kwargs=kwargs
         self.filtration_grid = filtration_grid
@@ -1034,9 +1075,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             if self.progress:
                 print(f"Computed a diameter of {self.diameter}")
         return self
-
-    def _sparsify(self, sm):
-        return tensor_möbius_inversion(input=sm, grid_conversion=self.filtration_grid)
 
     def _sm2smi(self, signed_measures: Iterable[np.ndarray]):
         # print(self._input_resolution, self.bandwidths, _bandwidths)
@@ -1168,22 +1206,28 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         return
 
     def fit(self, X, y=None):
-        from multipers.ml.sliced_wasserstein import (SlicedWassersteinDistance,
-                                                     WassersteinDistance)
+        from multipers.ml.sliced_wasserstein import (
+            SlicedWassersteinDistance,
+            WassersteinDistance,
+        )
 
         # _DISTANCE = lambda : SlicedWassersteinDistance(num_directions=self.num_directions) if self._sliced else WassersteinDistance(epsilon=self.epsilon, ground_norm=self.ground_norm) # WARNING if _sliced is false, this distance is not CNSD
         if len(X) == 0:
             return self
         num_degrees = len(X[0])
         self._SWD_list = [
-            SlicedWassersteinDistance(
-                num_directions=self.num_directions,
-                n_jobs=self.n_jobs,
-                scales=self.scales,
-            )
-            if self._sliced
-            else WassersteinDistance(
-                epsilon=self.epsilon, ground_norm=self.ground_norm, n_jobs=self.n_jobs
+            (
+                SlicedWassersteinDistance(
+                    num_directions=self.num_directions,
+                    n_jobs=self.n_jobs,
+                    scales=self.scales,
+                )
+                if self._sliced
+                else WassersteinDistance(
+                    epsilon=self.epsilon,
+                    ground_norm=self.ground_norm,
+                    n_jobs=self.n_jobs,
+                )
             )
             for _ in range(num_degrees)
         ]

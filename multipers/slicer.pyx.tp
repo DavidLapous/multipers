@@ -352,7 +352,7 @@ cdef class {{PYTHON_TYPE}}:
         """
         Returns the maximum dimension of the complex.
         """
-        return self.get_dimensions()[-1]
+        return self.get_dimensions()[-1] if len(self)>0 else -np.inf
     def prune_above_dimension(self,int max_dimension)->{{PYTHON_TYPE}}:
         """
         Prunes the generators above a given dimension.
@@ -599,7 +599,7 @@ def is_slicer(input, bool allow_minpres=True)->bool:
     if _is_slicer(input):
         return True
     if allow_minpres and isinstance(input, list) or isinstance(input, tuple):
-        if all((_is_slicer(s) and s.is_minpres for s in input)):
+        if len(input)>0 and all((_is_slicer(s) and s.is_minpres for s in input)):
             return True
     return False
 

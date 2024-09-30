@@ -28,7 +28,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         python-version:  ${{ matrix.python-version }}
-        mamba-version: "*"
+        mamba-version: "1.5"
         activate-environment: build_test_env
         channels: conda-forge
         channel-priority: true
@@ -40,9 +40,12 @@ jobs:
         ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
         mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
-
+        
+        mamba install cxx-compiler=1.6
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          mamba install cxx-compiler patchelf -c conda-forge
+          # oldest supported gcc release; see https://gcc.gnu.org/
+          mamba install patchelf -c conda-forge
+          gcc --version
         fi
     - name: Build package
       shell: bash -el {0}
@@ -101,7 +104,7 @@ jobs:
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install --no-build-isolation dist/*.whl
+        pip install dist/*.whl --force-reinstall ## tests the repaired wheel on a "fresh" env
         pytest multipers/tests
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3

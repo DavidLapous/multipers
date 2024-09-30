@@ -33,6 +33,7 @@ import gudhi as gd
 import numpy as np
 from typing import List, Union
 import pickle as pk
+import multipers.grids as mpg
 
 ###########################################################################
 ## CPP CLASSES
@@ -613,7 +614,7 @@ cdef class PyModule_{{SHORT}}:
             bool normalize=False, bool plot=False, 
             bool save=False, int dpi=200,double p=2., box=None, 
             bool flatten=False, int n_jobs=0,
-            coordinates = None)->np.ndarray:
+            grid = None)->np.ndarray:
 
         """Computes a representation of the module, using 
 
@@ -657,11 +658,11 @@ cdef class PyModule_{{SHORT}}:
         except:
             pass
 
-        if coordinates is None:
-          xx = [np.linspace(*np.asarray(box)[:,parameter], num=res) for parameter, res in zip(range(num_parameters), resolution)]
-          mesh = np.meshgrid(*xx)
-          coordinates = np.concatenate([stuff.ravel()[:,None] for stuff in mesh], axis=1)
-
+        if grid is None:
+            grid = [np.linspace(*np.asarray(box)[:,parameter], num=res) for parameter, res in zip(range(num_parameters), resolution)]
+        else:
+            resolution = tuple(len(g) for g in grid)
+        coordinates = mpg.todense(grid)
 
         if kernel == "linear":
             assert not signed, "This kernel is not compatible with signed."
@@ -728,7 +729,7 @@ cdef class PyModule_{{SHORT}}:
               axs = [plt.gca()]
             for image, degree, i in zip(image_vector, degrees, range(num_degrees)):
                 ax = axs[i]
-                temp = multipers.plots.plot_surface(xx, image.T, ax=ax)
+                temp = multipers.plots.plot_surface(grid, image.T, ax=ax)
                 plt.colorbar(temp, ax = ax)
                 if degree < 0 :
                     ax.set_title(rf"$H_{i}$ $2$-persistence image")
@@ -1010,3 +1011,9 @@ PyMultiDiagrams_type = Union[
 {{endfor}}
 ]
 
+def is_mma(stuff):
+    return (False 
+{{for CTYPE, PYTYPE, SHORT in value_types}}
+        or isinstance(stuff,PyModule_{{SHORT}})
+{{endfor}}
+    )

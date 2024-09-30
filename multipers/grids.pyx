@@ -53,6 +53,7 @@ def compute_grid(
 
     from multipers.slicer import is_slicer
     from multipers.simplex_tree_multi import is_simplextree_multi
+    from multipers.mma_structures import is_mma
 
     if resolution is not None and strategy == "exact":
         raise ValueError("The 'exact' strategy does not support resolution.")
@@ -65,6 +66,8 @@ def compute_grid(
         initial_grid = x.get_filtrations_values().T
     elif is_simplextree_multi(x):
         initial_grid = x.get_filtration_grid()
+    elif is_mma(x):
+        initial_grid = x.get_filtration_values()
     elif isinstance(x, np.ndarray):
         initial_grid = x
     else:

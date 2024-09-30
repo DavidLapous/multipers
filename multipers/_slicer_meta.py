@@ -6,7 +6,7 @@ import numpy as np
 import multipers.io as mio
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
-from multipers.slicer import _column_type, _valid_dtype
+from multipers.slicer import _column_type, _valid_dtype, is_slicer
 
 
 ## TODO : maybe optimize this with cython
@@ -104,14 +104,14 @@ def _slicer_from_blocks(
 
 
 def Slicer(
-    st,
+    st=None,
     backend: Literal["matrix", "clement", "graph"] = "matrix",
-    vineyard: bool = True,
+    vineyard: Optional[bool] = None,
     reduce: bool = False,
     reduce_backend: Optional[str] = None,
-    dtype: _valid_dtype = np.float64,
-    is_kcritical: bool = False,
-    column_type: _column_type = "INTRUSIVE_SET",
+    dtype: Optional[_valid_dtype] = None,
+    is_kcritical: Optional[bool] = False,
+    column_type: Optional[_column_type] = None,
     max_dim: Optional[int] = None,
 ) -> mps.Slicer_type:
     """
@@ -137,13 +137,31 @@ def Slicer(
     ------
     The corresponding slicer.
     """
-    if mps.is_slicer(st):
+
+    if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
+        dtype = st.dtype if dtype is None else dtype
+        is_kcritical = st.is_kcritical if is_kcritical is None else is_kcritical
+    else:
+        dtype = np.float64
+        is_kcritical = False
+
+    if is_slicer(st, allow_minpres=False):
+        vineyard = st.is_vine if vineyard is None else vineyard
+        column_type = st.col_type if column_type is None else column_type
+    else:
+        vineyard = True if vineyard is None else vineyard
+        column_type = "INTRUSIVE_SET" if column_type is None else column_type
+
+    _Slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, column_type)
+    if st is None:
+        return _Slicer()
+    elif mps.is_slicer(st):
         max_dim_idx = (
             None
             if max_dim is None
             else np.searchsorted(st.get_dimensions(), max_dim + 1)
         )
-        slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, column_type)(
+        slicer = _Slicer(
             st.get_boundaries()[slice(None, max_dim_idx)],
             st.get_dimensions()[slice(None, max_dim_idx)],
             st.get_filtrations()[slice(None, max_dim_idx)],
