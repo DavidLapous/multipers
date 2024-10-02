@@ -699,7 +699,7 @@ cdef class PyModule_{{SHORT}}:
                     Note that the distance can be signed.
                     """
                 def todo(PyModule_{{SHORT}} mod_degree):
-                      x = mod_degree.distance_to(coordinates,signed=signed)
+                      x = mod_degree.distance_to(coordinates,signed=signed, n_jobs=n_jobs)
                       w = mod_degree.get_interleavings()[None]**p
                       return kernel(x/bandwidth,w)
             concatenated_images = np.stack(
