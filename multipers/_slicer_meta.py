@@ -149,7 +149,7 @@ def Slicer(
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
     else:
-        vineyard = True if vineyard is None else vineyard
+        vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
 
     _Slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, column_type)

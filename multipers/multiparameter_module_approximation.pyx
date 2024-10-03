@@ -13,6 +13,7 @@ import gudhi as gd
 import numpy as np
 from typing import List
 import pickle as pk
+import sys
 
 ###########################################################################
 ## CPP CLASSES
@@ -63,7 +64,9 @@ def module_approximation_from_slicer(
     cdef Module[double] mod_f64
     cdef intptr_t ptr
     if not slicer.is_vine:
-        raise ValueError(f"Slicer must be able to do vineyards. Got {slicer}")
+        print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
+        slicer = mp.Slicer(slicer, vineyard=True)
+
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
         if box is None:
