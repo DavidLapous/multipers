@@ -41,6 +41,7 @@ cimport numpy as cnp
 ## Small hack for typing
 from multipers.simplex_tree_multi import is_simplextree_multi, SimplexTreeMulti_type
 from multipers.slicer import Slicer_type, is_slicer
+from multipers._slicer_meta import Slicer
 from multipers.mma_structures import *
 from typing import Union
 import multipers
@@ -65,7 +66,7 @@ def module_approximation_from_slicer(
     cdef intptr_t ptr
     if not slicer.is_vine:
         print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
-        slicer = mp.Slicer(slicer, vineyard=True)
+        slicer = Slicer(slicer, vineyard=True)
 
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
