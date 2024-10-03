@@ -53,7 +53,7 @@ available_columns = tuple((
 ))
 
 global available_dtype
-available_columns = set([
+available_dtype = set([
 {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT,FILTRATION_TYPE  in slicers}}
   "{{PYTHON_TYPE}}",
 {{endfor}}
