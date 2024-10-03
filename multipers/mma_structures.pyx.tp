@@ -31,7 +31,8 @@ value_types = [
 ## PYTHON LIBRARIES
 import gudhi as gd
 import numpy as np
-from typing import List, Union
+from typing import Union, Literal
+from collections.abc import Callable, Iterable, Sequence
 import pickle as pk
 import multipers.grids as mpg
 
@@ -47,7 +48,6 @@ from libcpp.utility cimport pair
 #from libcpp.list cimport list as clist
 from libcpp cimport bool
 from libcpp cimport int
-from typing import Iterable
 from cython.operator cimport dereference
 from libcpp.utility cimport move
 #########################################################################
@@ -67,7 +67,7 @@ from joblib import Parallel, delayed
 
 {{for CTYPE, PYTYPE, SHORT in value_types}}
 cdef class PySummand_{{SHORT}}:
-    """
+    r"""
     Stores a Summand of a PyModule
     """
     cdef Summand[{{CTYPE}}] sum
@@ -103,7 +103,7 @@ cdef class PySummand_{{SHORT}}:
         return v[0].num_parameters()
 
 cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
-    """
+    r"""
     Returns a list (over parameter) of the filtrations values of this parameter.
     """
     cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.get_birth_list()
@@ -154,7 +154,7 @@ cdef class PyBox_{{SHORT}}:
 
 
 cdef class PyModule_{{SHORT}}:
-    """
+    r"""
     Stores a representation of a n-persistence module.
     """
     cdef Module[{{CTYPE}}] cmod
@@ -166,7 +166,7 @@ cdef class PyModule_{{SHORT}}:
     cdef set(self, Module[{{CTYPE}}] m):
         self.cmod = m
     def merge(self, PyModule_{{SHORT}} other, int dim=-1):
-        """
+        r"""
         Merges two modules into one
         """
         cdef Module[{{CTYPE}}] c_other = other.cmod
@@ -176,7 +176,7 @@ cdef class PyModule_{{SHORT}}:
         return self
 
     def _set_from_ptr(self, intptr_t module_ptr):
-        """
+        r"""
         Copy module from a memory pointer. Unsafe.
         """
         self.cmod = move(dereference(<Module[{{CTYPE}}]*>(module_ptr)))
@@ -186,7 +186,7 @@ cdef class PyModule_{{SHORT}}:
             self.cmod.set_box(cbox)
         return self
     def get_module_of_degree(self, int degree)->PyModule_{{SHORT}}: # TODO : in c++ ?
-        """
+        r"""
         Returns a copy of a module of fixed degree.
         """
         pmodule = PyModule_{{SHORT}}()
@@ -198,7 +198,7 @@ cdef class PyModule_{{SHORT}}:
                     pmodule.cmod.add_summand(summand)
         return pmodule
     def get_module_of_degrees(self, degrees:Iterable[int])->PyModule_{{SHORT}}: # TODO : in c++ ?
-        """
+        r"""
         Returns a copy of the summands of degrees in `degrees`
         """
         pmodule = PyModule_{{SHORT}}()
@@ -214,23 +214,23 @@ cdef class PyModule_{{SHORT}}:
     def __len__(self)->int:
         return self.cmod.size()
     def get_bottom(self)->np.ndarray:
-        """
+        r"""
         Bottom of the box of the module
         """
         return np.asarray(<vector[{{CTYPE}}]>(self.cmod.get_box().get_lower_corner()))
     def get_top(self)->np.ndarray:
-        """
+        r"""
         Top of the box of the module
         """
         return np.asarray(<vector[{{CTYPE}}]>(self.cmod.get_box().get_upper_corner()))
     def get_box(self)->np.ndarray:
-        """
+        r"""
         Returns the current bounding box of the module.
         """
         return np.asarray([self.get_bottom(), self.get_top()])
     @property
     def max_degree(self)->int:
-        """
+        r"""
         Returns the maximum degree of the module.
         """
         return self.cmod.get_dimension()
@@ -240,7 +240,7 @@ cdef class PyModule_{{SHORT}}:
         assert dim == self.cmod.get_box().get_upper_corner().num_parameters(), "Bad box definition, cannot infer num_parameters."
         return dim
     def dump(self, path:str|None=None):
-        """
+        r"""
         Dumps the module into a pickle-able format.
 
         Parameters
@@ -275,7 +275,7 @@ cdef class PyModule_{{SHORT}}:
             yield summand
 
     def get_bounds(self):
-        """
+        r"""
         Computes bounds from the summands' bounds.
         Useful to change this' box.
         """
@@ -284,14 +284,14 @@ cdef class PyModule_{{SHORT}}:
             cbounds = self.cmod.get_bounds().get_bounding_corners()
         return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
     def rescale(self,rescale_factors, int degree=-1):
-        """
+        r"""
         Rescales the fitlration values of the summands by this rescaling vector.
         """
         cdef vector[{{CTYPE}}] crescale_factors = rescale_factors
         with nogil:
             self.cmod.rescale(crescale_factors,degree)
     def translate(self,translation, int degree=-1):
-        """
+        r"""
         Translates the module in the filtration space by this vector.
         """
         cdef vector[{{CTYPE}}] ctranslation = translation
@@ -299,7 +299,7 @@ cdef class PyModule_{{SHORT}}:
             self.cmod.translate(ctranslation,degree)
 
     def get_filtration_values(self, bool unique=True):
-        """
+        r"""
         Retrieves all filtration values of the summands of the module.
 
         Output format 
@@ -323,7 +323,7 @@ cdef class PyModule_{{SHORT}}:
         return values
 
     def plot(self, int degree=-1,**kwargs)->None:
-        """Shows the module on a plot. Each color corresponds to an apprimation summand of the module, and its shape corresponds to its support.
+        r"""Shows the module on a plot. Each color corresponds to an apprimation summand of the module, and its shape corresponds to its support.
         Only works with 2-parameter modules.
 
         Parameters
@@ -373,7 +373,7 @@ cdef class PyModule_{{SHORT}}:
     def _compute_pixels(self,coordinates:np.ndarray,
                                          degrees=None, box=None, {{CTYPE}} delta=.1, 
                                          {{CTYPE}} p=1., bool normalize=False, int n_jobs=0):
-        """
+        r"""
         Computes the image of the module at the given coordinates
         """
         if degrees is not None: assert np.all(degrees[:-1] <= degrees[1:]), "Degrees have to be sorted"
@@ -386,7 +386,7 @@ cdef class PyModule_{{SHORT}}:
             out = self.cmod.compute_pixels(ccoords, cdegrees, cbox, delta, p, normalize, n_jobs)
         return np.asarray(out)
     def barcode(self, basepoint, int degree = -1,*, bool threshold = False): # TODO direction vector interface
-        """Computes the barcode of module along a lines.
+        r"""Computes the barcode of module along a lines.
 
         Parameters
         ----------
@@ -424,7 +424,7 @@ cdef class PyModule_{{SHORT}}:
         direction = 1 if direction is None else np.asarray(direction)[None,None,:]
         return tuple(bc[:,:,None]*direction + basepoint for bc in bcs)
     def barcode2(self, basepoint, direction=None, int degree = -1,*, bool threshold = False, bool keep_inf = True, bool full = False): # TODO direction vector interface
-        """
+        r"""
         Compute the 1d-barcode a diagonal line based on basepoint, with some direction.
         
         Parameters
@@ -455,7 +455,7 @@ cdef class PyModule_{{SHORT}}:
 
 
     def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
-        """Computes barcodes of module along a set of lines.
+        r"""Computes barcodes of module along a set of lines.
 
         Parameters
         ----------
@@ -498,7 +498,7 @@ cdef class PyModule_{{SHORT}}:
         return out
 
     def barcodes2(self, int degree = -1, basepoints = None, int num=100, box = None, bool threshold = False):
-        """Computes barcodes of module along a set of lines.
+        r"""Computes barcodes of module along a set of lines.
 
         Parameters
         ----------
@@ -538,8 +538,8 @@ cdef class PyModule_{{SHORT}}:
             cbasepoints.push_back(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoints[i])))
         return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes2(cbasepoints, degree))   
 
-    def landscape(self, degree:int, k:int=0,box:list|np.ndarray|None=None, resolution:List=[100,100], bool plot=False):
-        """Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
+    def landscape(self, degree:int, k:int=0,box:Sequence|np.ndarray|None=None, resolution:Sequence=[100,100], bool plot=False):
+        r"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
         Parameters
         ----------
@@ -573,7 +573,7 @@ cdef class PyModule_{{SHORT}}:
         return out
 
     def landscapes(self, degree:int, ks:list|np.ndarray=[0],box=None, resolution:list|np.ndarray=[100,100], bool plot=False):
-        """Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
+        r"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
         Parameters
         ----------
@@ -608,15 +608,14 @@ cdef class PyModule_{{SHORT}}:
 
 
     def representation(self, degrees=None, double bandwidth=0.1,
-            resolution:List[int]|int=50, 
-            kernel = "gaussian",
+            resolution:Sequence[int]|int=50, 
+            kernel:Literal["gaussian","linear","linear2","exponential"]|Callable = "gaussian",
             bool signed=False,
             bool normalize=False, bool plot=False, 
             bool save=False, int dpi=200,double p=2., box=None, 
             bool flatten=False, int n_jobs=0,
             grid = None)->np.ndarray:
-
-        """Computes a representation of the module, using 
+        r"""Computes a representation of the module, using 
 
         [A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions, Neurips2023]
 
@@ -689,7 +688,7 @@ cdef class PyModule_{{SHORT}}:
                   x = np.abs(x)
                   return (s*np.exp( -((np.abs(x)/bandwidth)))*w).sum(1)
             else:
-                assert callable(kernel), """
+                assert callable(kernel), r"""
                     Kernel should be 
                     gaussian, linear, linear2, exponential or callable,
                     with signature
@@ -738,7 +737,7 @@ cdef class PyModule_{{SHORT}}:
         return image_vector
 
     def euler_char(self, points:list|np.ndarray) -> np.ndarray:
-        """ Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
+        r""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
 
         Parameters
         ----------
@@ -796,7 +795,7 @@ cdef class PyModule_{{SHORT}}:
         return np.asarray(out, dtype=np.int32)
 
     def distance_to(self, pts, bool signed=False, int n_jobs = 0)->np.ndarray:
-        """
+        r"""
         Distance from a point to each summand's support. 
         Signed distance is the distance to the boundary,
         with negative values inside the summands.
@@ -841,7 +840,7 @@ cdef class PyMultiDiagramPoint_{{SHORT}}:
 
 
 cdef class PyMultiDiagram_{{SHORT}}:
-    """
+    r"""
     Stores the diagram of a PyModule on a line
     """
     cdef MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagram
@@ -949,7 +948,7 @@ cdef Module[{{CTYPE}}] cmod_from_dump_{{SHORT}}(module_dump):
 
 
 def from_dump_{{SHORT}}(dump)->PyModule_{{SHORT}}:
-    """Retrieves a PyModule from a previous dump.
+    r"""Retrieves a PyModule from a previous dump.
 
     Parameters
     ----------
