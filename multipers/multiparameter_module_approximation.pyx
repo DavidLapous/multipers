@@ -64,7 +64,7 @@ def module_approximation_from_slicer(
     cdef Module[double] mod_f64
     cdef intptr_t ptr
     if not slicer.is_vine:
-        print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
+        print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
         slicer = mp.Slicer(slicer, vineyard=True)
 
     if slicer.dtype == np.float32:
