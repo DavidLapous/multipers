@@ -219,6 +219,9 @@ def _todo_partition(some_float[:] data,int resolution, bool unique):
     return f
 
 
+def compute_bounding_box(stuff):
+    return np.array(compute_grid(stuff,strategy="regular",resolution=2))
+
 def push_to_grid(some_float[:,:] points, grid, bool return_coordinate=False):
     """
     Given points and a grid (list of one parameter grids),
