@@ -259,7 +259,13 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self._output_type = (
             _pref_output
             if self.output_type is None
-            else "simplextree" if self.output_type == "simplextree" else "slicer"
+            else (
+                "simplextree"
+                if (
+                    self.output_type == "simplextree" or self.reduce_degrees is not None
+                )
+                else "slicer"
+            )
         )
 
     def _define_bandwidths(self, X):
