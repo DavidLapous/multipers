@@ -27,8 +27,8 @@ available_dataset: dict[str, Callable] = {
 
 
 datasets: Sequence[str] = list(available_dataset.keys())
-degrees:Sequence[int] = [0, 1]
-num_pts:Sequence[int] = [200]
+degrees: Sequence[int] = [0, 1]
+num_pts: Sequence[int] = [200]
 complexes = ["delaunay", "rips"]
 invariants = ["mma", "slice", "hilbert", "rank"]
 vineyard = ["vine", "novine"]
@@ -48,9 +48,16 @@ def fill_timing(arg, f):
 
 
 for args in product(
-    num_pts, datasets, complexes, invariants, degrees, vineyard, available_dtype, available_columns
+    num_pts,
+    datasets,
+    complexes,
+    invariants,
+    degrees,
+    vineyard,
+    available_dtype,
+    available_columns,
 ):
-    n, dataset, cplx, inv, degree, vine, dtype,col = args
+    n, dataset, cplx, inv, degree, vine, dtype, col = args
     pts = np.asarray(available_dataset[dataset](n))
     s: Slicer_type = mmp.PointCloud2FilteredComplex(
         complex=cplx,
@@ -60,7 +67,7 @@ for args in product(
         reduce_degrees=[degree],
         expand_dim=degree + 1,
     ).fit_transform([pts])[0][0]
-    s = mp.Slicer(s, vineyard=vine == "vine", dtype=dtype,col)
+    s = mp.Slicer(s, vineyard=vine == "vine", dtype=dtype, column_type=col)
     box = mpg.compute_bounding_box(s)
     s.minpres_degree = -1  ## makes it non-minpres again
     if inv == "mma" and vine:
