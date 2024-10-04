@@ -64,11 +64,14 @@ for args in product(
         reduce_degrees=[degree],
         expand_dim=degree + 1,
     ).fit_transform([pts])[0][0]
-    s = mp.Slicer(s, vineyard=vine == "vine", dtype=dtype, column_type=col)
+    s = mp.Slicer(s, vineyard=(vine == "vine"), dtype=dtype, column_type=col)
     box = mpg.compute_bounding_box(s)
     s.minpres_degree = -1  ## makes it non-minpres again
-    if inv == "mma" and vine:
-        f = lambda: mp.module_approximation(mp.Slicer(s, vineyard=True))
+    if inv == "mma":
+        if vine == "vine":
+            f = lambda: mp.module_approximation(s)
+        else:
+            f = lambda: 1
     elif inv == "slice":
         basepoints = np.random.uniform(
             low=box[None, :, 0],
@@ -94,9 +97,6 @@ for args in product(
 
 
 pd.DataFrame(
-    [
-        (n, dataset, cplx, inv, degree, vine, dtype, t)
-        for (n, dataset, cplx, inv, degree, vine, dtype), t in timings.items()
-    ],
+    [(*args, t) for (args), t in timings.items()],
     columns=["npts", "dataset", "complex", "inv", "degree", "vine", "dtype", "timing"],
 ).to_csv(f"benchmark_v{mp.__version__}.csv", index=False)
