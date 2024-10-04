@@ -1,10 +1,8 @@
 import shutil
 from collections.abc import Callable, Sequence
-from importlib.metadata import version
 from itertools import product
 from timeit import timeit
 
-import gudhi as gd
 import numpy as np
 import pandas as pd
 
@@ -12,7 +10,6 @@ import multipers as mp
 import multipers.grids as mpg
 import multipers.ml.point_clouds as mmp
 from multipers.data import noisy_annulus, orbit, three_annulus
-from multipers.ml.convolutions import DTM, KDE
 from multipers.slicer import Slicer_type, available_columns
 
 np.random.seed(0)
