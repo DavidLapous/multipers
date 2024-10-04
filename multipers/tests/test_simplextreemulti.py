@@ -69,7 +69,7 @@ def test_4():
     st.insert([0, 1, 2], [2.5, 0.5])
     st.insert([0, 1, 2], [0.5, 2.5])
 
-    s = mp.Slicer(st, is_kcritical=True)
+    s = mp.Slicer(st, vineyard=True)
 
     assert np.array_equal(
         s.get_filtrations_values(),
