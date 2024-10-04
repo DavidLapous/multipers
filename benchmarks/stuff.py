@@ -41,8 +41,8 @@ def fill_timing(arg, f):
     terminal_width = shutil.get_terminal_size().columns
     left = str(args)
     right = f"{timings[arg]:.4f}"
-    dots = terminal_width - (len(left) + len(right) + 2)
-    print(f"{left} {'.' * dots} {right}", end="\n")
+    num_dots = max(terminal_width - (len(left) + len(right) + 2), 0)
+    print(f"{left} {'.' * num_dots} {right}", end="\n")
 
 
 for args in product(
@@ -112,5 +112,15 @@ for args in product(
 
 pd.DataFrame(
     [(*args, t) for (args), t in timings.items()],
-    columns=["npts", "dataset", "complex", "inv", "degree", "vine", "dtype", "timing"],
+    columns=[
+        "npts",
+        "dataset",
+        "complex",
+        "inv",
+        "degree",
+        "vine",
+        "dtype",
+        "column",
+        "timing",
+    ],
 ).to_csv(f"benchmark_v{mp.__version__}.csv", index=False)
