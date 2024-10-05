@@ -194,14 +194,7 @@ Try to increase the precision parameter, or set `ignore_warning=True` to compute
 Returning the trivial module."""
         )
     if is_simplextree_multi(input):
-        blocks = input._to_scc()
-        if minpres is not None:
-            assert not input.is_kcritical, "scc (and therefore mpfree, multi_chunk, 2pac, ...) format doesn't handle multi-critical filtrations."
-            mio.scc2disk(blocks, mio.input_path+id)
-            blocks = mio.reduce_complex(mio.input_path+id, dimension=input.dimension-degree, backend=minpres)
-        else:
-            pass
-        input = multipers.Slicer(blocks,backend=slicer_backend, dtype = input.dtype, is_kcritical = input.is_kcritical, vineyard=True)
+        input = multipers.Slicer(input,backend=slicer_backend, vineyard=True)
     assert is_slicer(input), "First argument must be a simplextree or a slicer !"
     return module_approximation_from_slicer(
             slicer=input,
