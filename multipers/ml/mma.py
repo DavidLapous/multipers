@@ -373,10 +373,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 filtration_values, resolution, strategy, unique=True
             )
 
-        coordinates, new_resolution = filtration_grid_to_coordinates(
-            reduced_grid, return_resolution=True
-        )
-        return coordinates, new_resolution
+        return reduced_grid
 
     def _infer_degrees(self, X):
         if self.degrees is None:
@@ -565,16 +562,16 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
                 )
                 for X_axis in its
             )
-            self._coords_to_compute = [
-                c for c, _ in crs
-            ]  # not the same resolutions, so cannot be put in an array
-            self._new_resolutions = np.asarray([r for _, r in crs])
+            self._coords_to_compute = (
+                crs  # not the same resolutions, so cannot be put in an array
+            )
+            self._new_resolutions = np.asarray([tuple(len(g) for g in G) for G in crs])
         else:
-            coords, new_resolution = MMAFormatter._infer_grid(
+            coords = MMAFormatter._infer_grid(
                 X, self.grid_strategy, self.resolution, degrees=self.degrees
             )
             self._coords_to_compute = coords
-            self._new_resolutions = new_resolution
+            self._new_resolutions = np.array([len(g) for g in coords])
         return self
 
     def transform(self, X):
@@ -596,14 +593,12 @@ class MMA2IMG(BaseEstimator, TransformerMixin):
         if self._has_axis:
 
             def todo1(x, c):
-                return x.representation(coordinates=c, **img_args)
+                return x.representation(grid=c, **img_args)
 
         else:
 
             def todo1(x):
-                return x.representation(
-                    coordinates=self._coords_to_compute, **img_args
-                )[
+                return x.representation(grid=self._coords_to_compute, **img_args)[
                     None, :
                 ]  # shape same as has_axis
 
@@ -696,7 +691,7 @@ class MMA2Landscape(BaseEstimator, TransformerMixin):
 
     def transform(self, X) -> list[np.ndarray]:
         if len(X) <= 0:
-            return
+            return []
 
         def todo(mod):
             return np.concatenate(
