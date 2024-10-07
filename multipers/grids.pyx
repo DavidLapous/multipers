@@ -173,9 +173,7 @@ def _compute_grid_numpy(
     else:
         raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
     if dense:
-        mesh = np.meshgrid(*F)
-        coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1)
-        return coordinates 
+        return todense(F)
     return F
 
 def todense(grid):
