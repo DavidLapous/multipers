@@ -220,7 +220,13 @@ def _todo_partition(some_float[:] data,int resolution, bool unique):
 
 
 def compute_bounding_box(stuff):
-    return np.array(compute_grid(stuff,strategy="regular",resolution=2))
+    r"""
+    Returns a array of shape (2, num_parameters)
+    such that for any filtration value $y$ of something in stuff,
+    then if (x,z) is the output of this function, we have
+    $x\le y \le z$.
+    """
+    return np.array(compute_grid(stuff,strategy="regular",resolution=2)).T
 
 def push_to_grid(some_float[:,:] points, grid, bool return_coordinate=False):
     """

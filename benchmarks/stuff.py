@@ -67,7 +67,7 @@ for args in product(
     s = mp.Slicer(st, vineyard=(vine == "vine"), dtype=dtype, column_type=col).minpres(
         degree=degree
     )
-    box = mpg.compute_bounding_box(s)
+    box = mpg.compute_bounding_box(s).T
     s.minpres_degree = -1  ## makes it non-minpres again
     if inv == "mma":
         if vine == "vine":
