@@ -380,7 +380,7 @@ class RU_matrix : public Master_matrix::RU_pairing_option,
     std::swap(matrix1.operators_, matrix2.operators_);
   }
 
-  void print();  // for debug
+  void print(Index startCol = 0, Index endCol = -1, Index startRow = 0, Index endRow = -1);  // for debug
 
  private:
   using Swap_opt = typename Master_matrix::RU_vine_swap_option;
@@ -538,7 +538,7 @@ inline void RU_matrix<Master_matrix>::insert_boundary(ID_index cellIndex,
   if constexpr (Master_matrix::Option_list::has_vine_update) {
     if (cellIndex != nextEventIndex_) {
       Swap_opt::_positionToRowIdx().emplace(nextEventIndex_, cellIndex);
-      if (Master_matrix::Option_list::has_column_pairings) {
+      if constexpr (Master_matrix::Option_list::has_column_pairings) {
         Swap_opt::template RU_pairing<Master_matrix>::idToPosition_.emplace(cellIndex, nextEventIndex_);
       }
     }
@@ -733,12 +733,12 @@ inline RU_matrix<Master_matrix>& RU_matrix<Master_matrix>::operator=(const RU_ma
 }
 
 template <class Master_matrix>
-inline void RU_matrix<Master_matrix>::print()
+inline void RU_matrix<Master_matrix>::print(Index startCol, Index endCol, Index startRow, Index endRow)
 {
   std::cout << "R_matrix:\n";
-  reducedMatrixR_.print();
+  reducedMatrixR_.print(startCol, endCol, startRow, endRow);
   std::cout << "U_matrix:\n";
-  mirrorMatrixU_.print();
+  mirrorMatrixU_.print(startCol, endCol, startCol, endCol);
 }
 
 template <class Master_matrix>
