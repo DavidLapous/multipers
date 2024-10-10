@@ -647,35 +647,19 @@ public:
   }
 
   // dim, num_cycle_of_dim, num_faces_in_cycle, vertices_in_face
-  inline std::vector<std::vector<std::vector<std::vector<unsigned int>>>>
-  get_representative_cycles(bool update = true,
-                            const std::set<int> &dims = {}) {
+  inline std::vector<std::vector<std::vector<std::vector<unsigned int>>>> get_representative_cycles(
+      bool update = true, bool detailed = false) {
     // iterable iterable simplex key
-    auto cycles_key = persistence.get_representative_cycles(update);
+    auto cycles_key = persistence.get_representative_cycles(update, detailed);
     auto num_cycles = cycles_key.size();
-    std::vector<std::vector<std::vector<std::vector<unsigned int>>>> out(
-        structure.max_dimension() + 1);
-    for (auto &cycles_of_dim : out)
-      cycles_of_dim.reserve(num_cycles);
-    for (auto &cycle : cycles_key) {
-      if (structure.dimension(cycle[0]) == 0 &&
-          (dims.size() == 0 || dims.contains(0))) {
-        out[0].push_back({{static_cast<unsigned int>(cycle[0])}});
-        continue;
+    std::vector<std::vector<std::vector<std::vector<unsigned int>>>> out(structure.max_dimension() + 1);
+    for (auto &cycles_of_dim : out) cycles_of_dim.reserve(num_cycles);
+    for (const auto &cycle : cycles_key) {
+      int cycle_dim = 0;        // for more generality, should be minimal dimension instead
+      if (!cycle[0].empty()) {  // if empty, cycle has no border -> assumes dimension 0 even if it could be min dim
+        cycle_dim = structure.dimension(cycle[0][0]) + 1;  // all faces have the same dim
       }
-      int cycle_dim =
-          structure.dimension(cycle[0]); // all faces have the same dim
-      // if (!(dims.size() == 0 || dims.contains(cycle_dim)))
-      //   continue;
-      std::vector<std::vector<unsigned int>> cycle_faces(cycle.size());
-      for (std::size_t i = 0; i < cycle_faces.size(); ++i) {
-        const auto &B = structure[cycle[i]];
-        cycle_faces[i].resize(B.size());
-        for (std::size_t j = 0; j < B.size(); ++j) {
-          cycle_faces[i][j] = static_cast<unsigned int>(B[j]);
-        }
-      }
-      out[cycle_dim].push_back(cycle_faces);
+      out[cycle_dim].push_back(cycle);
     }
     return out;
   }

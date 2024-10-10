@@ -316,7 +316,7 @@ class Base_matrix : public Master_matrix::template Base_swap_option<Base_matrix<
     }
   }
 
-  void print();  // for debug
+  void print(Index startCol = 0, Index endCol = -1, Index startRow = 0, Index endRow = -1);  // for debug
 
  private:
   using Swap_opt = typename Master_matrix::template Base_swap_option<Base_matrix<Master_matrix> >;
@@ -597,27 +597,32 @@ inline Base_matrix<Master_matrix>& Base_matrix<Master_matrix>::operator=(const B
 }
 
 template <class Master_matrix>
-inline void Base_matrix<Master_matrix>::print() 
+inline void Base_matrix<Master_matrix>::print(Index startCol, Index endCol, Index startRow, Index endRow) 
 {
   _orderRowsIfNecessary();
+  if (endCol == static_cast<Index>(-1)) endCol = nextInsertIndex_;
+  if (endRow == static_cast<Index>(-1)) endRow = nextInsertIndex_;
   std::cout << "Base_matrix:\n";
-  for (Index i = 0; i < nextInsertIndex_; ++i) {
+  for (Index i = startCol; i < endCol && i < nextInsertIndex_; ++i) {
     const Column& col = matrix_[i];
-    for (const auto& e : col.get_content(nextInsertIndex_)) {
-      if (e == 0u)
+    auto cont = col.get_content(endRow);
+    for (Index j = startRow; j < endRow; ++j) {
+      if (cont[j] == 0u)
         std::cout << "- ";
       else
-        std::cout << e << " ";
+        std::cout << cont[j] << " ";
     }
     std::cout << "\n";
   }
   std::cout << "\n";
   if constexpr (Master_matrix::Option_list::has_row_access) {
     std::cout << "Row Matrix:\n";
-    for (Index i = 0; i < nextInsertIndex_; ++i) {
+    for (Index i = startRow; i < endRow && i < nextInsertIndex_; ++i) {
       const auto& row = (*RA_opt::rows_)[i];
-      for (const auto& entry : row) {
-        std::cout << entry.get_column_index() << " ";
+      auto it = row.begin();
+      std::advance(it, startCol);
+      for (; it != row.end() && startCol < endCol; ++it, ++startCol) {
+        std::cout << it->get_column_index() << " ";
       }
       std::cout << "(" << i << ")\n";
     }
