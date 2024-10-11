@@ -48,7 +48,7 @@ In the same conda environment as above, execute
 .. code-block:: bash
    
    # more dependencies are needed
-   conda install llvm-openmp cgal cgal-cpp gmp mpfr -c conda-forge
+   conda install llvm-openmp cgal cgal-cpp gmp mpfr eigen cmake -c conda-forge
 
    # mpfree
    git clone https://bitbucket.org/mkerber/mpfree/

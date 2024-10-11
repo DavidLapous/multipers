@@ -583,26 +583,29 @@ Module<value_type> multiparameter_module_approximation(
   Line<value_type> current_line(basepoint, direction);
   if (verbose) std::cout << "First line basepoint " << basepoint << std::endl;
 
-  // fills the first barcode
-  slicer.push_to(current_line);
-  slicer.compute_persistence();
-  auto barcode = slicer.get_flat_barcode();
-  auto num_bars = barcode.size();
-  out.resize(num_bars);
-  /* Filtration_value birthContainer(num_parameters), */
-  /* deathContainer(num_parameters); */
-  for (size_t i = 0; i < num_bars; i++) {
-    const auto &[dim, bar] = barcode[i];
-    /* const auto &[birth, death] = bar; */
-    out[i].set_dimension(dim);
-    /* out[i].add_bar(birth, death, basepoint, birthContainer, deathContainer,
-     */
-    /* threshold, box); */
-  }
-  
-  out.add_barcode(current_line, barcode, threshold);
+  {
+    Timer timer("Initializing mma...\n", verbose);
+    // fills the first barcode
+    slicer.push_to(current_line);
+    slicer.compute_persistence();
+    auto barcode = slicer.get_flat_barcode();
+    auto num_bars = barcode.size();
+    out.resize(num_bars);
+    /* Filtration_value birthContainer(num_parameters), */
+    /* deathContainer(num_parameters); */
+    for (std::size_t i = 0; i < num_bars; i++) {
+      const auto &[dim, bar] = barcode[i];
+      /* const auto &[birth, death] = bar; */
+      out[i].set_dimension(dim);
+      /* out[i].add_bar(birth, death, basepoint, birthContainer, deathContainer,
+       */
+      /* threshold, box); */
+    }
 
-  if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
+    out.add_barcode(current_line, barcode, threshold);
+
+    if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
+  }
   // TODO : change here
   // std::vector<int> grid_size(num_parameters - 1);
   // auto h = box.get_upper_corner().back() - box.get_lower_corner().back();

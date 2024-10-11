@@ -39,13 +39,14 @@ jobs:
       shell: bash -el {0}
       run: |
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
-          export CXXFLAGS="-fno-aligned-new -g" # Macos workaround
-          export CFLAGS="-fno-aligned-new -g" # Macos workaround
+          export CXXFLAGS="-fno-aligned-new" # Macos workaround
+          export CFLAGS="-fno-aligned-new" # Macos workaround
           export MACOSX_DEPLOYMENT_TARGET="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          export CXXFLAGS="-march=x86-64-v3 -g" # post haswell, for avx
-          export CFLAGS="-march=x86-64-v3 -g"
+          export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
+          export CFLAGS="-march=x86-64-v3"
+          export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
         if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
           set LIBPATH=%LIBPATH%;C:\Miniconda\envs\build_test_env\Library\lib

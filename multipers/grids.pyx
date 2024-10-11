@@ -173,9 +173,7 @@ def _compute_grid_numpy(
     else:
         raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
     if dense:
-        mesh = np.meshgrid(*F)
-        coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1)
-        return coordinates 
+        return todense(F)
     return F
 
 def todense(grid):
@@ -218,6 +216,15 @@ def _todo_partition(some_float[:] data,int resolution, bool unique):
     if unique: f= np.unique(f)
     return f
 
+
+def compute_bounding_box(stuff):
+    r"""
+    Returns a array of shape (2, num_parameters)
+    such that for any filtration value $y$ of something in stuff,
+    then if (x,z) is the output of this function, we have
+    $x\le y \le z$.
+    """
+    return np.array(compute_grid(stuff,strategy="regular",resolution=2)).T
 
 def push_to_grid(some_float[:,:] points, grid, bool return_coordinate=False):
     """
