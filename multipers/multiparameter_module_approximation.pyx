@@ -13,6 +13,7 @@ import gudhi as gd
 import numpy as np
 from typing import List
 import pickle as pk
+import sys
 
 ###########################################################################
 ## CPP CLASSES
@@ -40,6 +41,7 @@ cimport numpy as cnp
 ## Small hack for typing
 from multipers.simplex_tree_multi import is_simplextree_multi, SimplexTreeMulti_type
 from multipers.slicer import Slicer_type, is_slicer
+from multipers._slicer_meta import Slicer
 from multipers.mma_structures import *
 from typing import Union
 import multipers
@@ -63,7 +65,9 @@ def module_approximation_from_slicer(
     cdef Module[double] mod_f64
     cdef intptr_t ptr
     if not slicer.is_vine:
-        raise ValueError(f"Slicer must be able to do vineyards. Got {slicer}")
+        print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
+        slicer = Slicer(slicer, vineyard=True)
+
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
         if box is None:
@@ -190,14 +194,7 @@ Try to increase the precision parameter, or set `ignore_warning=True` to compute
 Returning the trivial module."""
         )
     if is_simplextree_multi(input):
-        blocks = input._to_scc()
-        if minpres is not None:
-            assert not input.is_kcritical, "scc (and therefore mpfree, multi_chunk, 2pac, ...) format doesn't handle multi-critical filtrations."
-            mio.scc2disk(blocks, mio.input_path+id)
-            blocks = mio.reduce_complex(mio.input_path+id, dimension=input.dimension-degree, backend=minpres)
-        else:
-            pass
-        input = multipers.Slicer(blocks,backend=slicer_backend, dtype = input.dtype, is_kcritical = input.is_kcritical)
+        input = multipers.Slicer(input,backend=slicer_backend, vineyard=True)
     assert is_slicer(input), "First argument must be a simplextree or a slicer !"
     return module_approximation_from_slicer(
             slicer=input,

@@ -69,7 +69,7 @@ def test_4():
     st.insert([0, 1, 2], [2.5, 0.5])
     st.insert([0, 1, 2], [0.5, 2.5])
 
-    s = mp.Slicer(st, is_kcritical=True)
+    s = mp.Slicer(st, vineyard=True)
 
     assert np.array_equal(
         s.get_filtrations_values(),
@@ -153,12 +153,12 @@ def test_flagify():
 
 def test_distance_matrix_filling():
     X = np.random.uniform(size=(200, 2))
-    st = gd.RipsComplex(points=X).create_simplex_tree()
+    D = np.sqrt(((X[None] - X[:, None]) ** 2).sum(axis=-1))
+    st = gd.RipsComplex(distance_matrix=D).create_simplex_tree()
     st = mp.SimplexTreeMulti(st, num_parameters=1)
     st2 = mp.SimplexTreeMulti(st)
     assert st2.num_parameters == 1
     st2.fill_lowerstar(np.zeros(st.num_vertices), 0)
     assert st2 != st
-    D = np.sqrt(((X[None] - X[:, None]) ** 2).sum(axis=-1))
     st2.fill_distance_matrix(D, 0)
     assert st2 == st

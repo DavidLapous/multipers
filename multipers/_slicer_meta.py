@@ -80,7 +80,7 @@ def _slicer_from_simplextree(st, backend, vineyard):
 
 def _slicer_from_blocks(
     blocks,
-    backend,
+    backend: Literal["matrix", "clement"],
     vineyard: bool,
     is_kcritical: bool,
     dtype: type,
@@ -110,7 +110,7 @@ def Slicer(
     reduce: bool = False,
     reduce_backend: Optional[str] = None,
     dtype: Optional[_valid_dtype] = None,
-    is_kcritical: Optional[bool] = False,
+    is_kcritical: Optional[bool] = None,
     column_type: Optional[_column_type] = None,
     max_dim: Optional[int] = None,
 ) -> mps.Slicer_type:
@@ -149,10 +149,12 @@ def Slicer(
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
     else:
-        vineyard = True if vineyard is None else vineyard
+        vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
 
-    _Slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, column_type)
+    _Slicer = mps.get_matrix_slicer(
+        is_vineyard=vineyard, is_k_critical=is_kcritical, dtype=dtype, col=column_type
+    )
     if st is None:
         return _Slicer()
     elif mps.is_slicer(st):

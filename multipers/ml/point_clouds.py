@@ -5,7 +5,6 @@ import gudhi as gd
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
 
 import multipers as mp
@@ -13,18 +12,14 @@ import multipers.slicer as mps
 from multipers.ml.convolutions import DTM, KDE, available_kernels
 
 
-def _throw_nofit(any):
-    raise Exception("Fit first")
-
-
 class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         bandwidths=[],
         masses=[],
-        threshold: float = np.inf,
+        threshold: float = -np.inf,
         complex: Literal["alpha", "rips", "delaunay"] = "rips",
-        sparse: float | None = None,
+        sparse: Optional[float] = None,
         num_collapses: int = -2,
         kernel: available_kernels = "gaussian",
         log_density: bool = True,
@@ -76,7 +71,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.complex = complex
         self.threshold = threshold
         self.sparse = sparse
-        self._get_sts = _throw_nofit
+        self._get_sts = lambda: Exception("Fit first")
         self.safe_conversion = safe_conversion
         self.output_type = output_type
         self._output_type = None
@@ -88,22 +83,38 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         ), "Reduced complex are not simplicial. Cannot return a simplextree."
         return
 
-    def _get_distance_quantiles(self, X, qs):
-        if len(qs) == 0:
+    def _get_distance_quantiles_and_threshold(self, X, qs):
+        ## if we dont need to compute a distance matrix
+        if len(qs) == 0 and self.threshold >= 0:
             self._scale = []
             return []
         if self.progress:
             print("Estimating scale...", flush=True, end="")
+        ## subsampling
         indices = np.random.choice(
             len(X), min(len(X), int(self.fit_fraction * len(X)) + 1), replace=False
         )
-        # diameter = np.asarray([distance_matrix(x,x).max() for x in (X[i] for i in indices)]).max()
-        diameter = np.max(
-            [pairwise_distances(X=x).max() for x in (X[i] for i in indices)]
-        )
-        self._scale = diameter * np.asarray(qs)
+
+        def compute_max_scale(x):
+            from pykeops.numpy import LazyTensor
+
+            a = LazyTensor(x[None, :, :])
+            b = LazyTensor(x[:, None, :])
+            return np.sqrt(((a - b) ** 2).sum(2).max(1).min(0)[0])
+
+        diameter = np.max([compute_max_scale(x) for x in (X[i] for i in indices)])
+        self._scale = diameter * np.array(qs)
+
+        if self.threshold == -np.inf:
+            self._threshold = diameter
+        elif self.threshold > 0:
+            self._threshold = self.threshold
+        else:
+            self._threshold = -diameter * self.threshold
+
         if self.threshold > 0:
             self._scale[self._scale > self.threshold] = self.threshold
+
         if self.progress:
             print(f"Done. Chosen scales {qs} are {self._scale}", flush=True)
         return self._scale
@@ -259,21 +270,24 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self._output_type = (
             _pref_output
             if self.output_type is None
-            else "simplextree" if self.output_type == "simplextree" else "slicer"
+            else (
+                "simplextree"
+                if (
+                    self.output_type == "simplextree" or self.reduce_degrees is not None
+                )
+                else "slicer"
+            )
         )
 
     def _define_bandwidths(self, X):
-        qs = [
-            q for q in [*-np.asarray(self.bandwidths), -self.threshold] if 0 <= q <= 1
-        ]
-        self._get_distance_quantiles(X, qs=qs)
+        qs = [q for q in [*-np.asarray(self.bandwidths)] if 0 <= q <= 1]
+        self._get_distance_quantiles_and_threshold(X, qs=qs)
         self._bandwidths = np.array(self.bandwidths)
         count = 0
         for i in range(len(self._bandwidths)):
             if self.bandwidths[i] < 0:
                 self._bandwidths[i] = self._scale[count]
                 count += 1
-        self._threshold = self.threshold if self.threshold > 0 else self._scale[-1]
 
     def fit(self, X: np.ndarray | list, y=None):
         # self.bandwidth = "silverman" ## not good, as is can make bandwidth not constant
