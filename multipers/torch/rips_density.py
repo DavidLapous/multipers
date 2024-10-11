@@ -228,7 +228,7 @@ def function_rips_signed_measure(
             distance_matrix.max(axis=1).values.min() if threshold is None else threshold
         )
         distances = distances[distances <= threshold]
-    elif complex in ["delaunay", "weak_delaunay:"]:
+    elif complex in ["delaunay", "weak_delaunay"]:
         complex = "delaunay"
         distances /= 2
     else:
