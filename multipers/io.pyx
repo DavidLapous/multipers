@@ -311,6 +311,7 @@ def scc_reduce_from_str_to_slicer(
     using mpfree.
 
     path:PathLike
+    slicer: empty slicer to fill
     full_resolution: bool
     dimension: int, presentation dimension to consider
     clear: bool, removes temporary files if True
@@ -461,6 +462,48 @@ def function_delaunay_presentation(
         blocks=blocks[:-1]
 
     return blocks
+
+def function_delaunay_presentation_to_slicer(
+        slicer,
+        point_cloud:np.ndarray,
+        function_values:np.ndarray,
+        id:Optional[str] = None,
+        bool clear:bool = True,
+        bool verbose:bool=False,
+        int degree = -1,
+        bool multi_chunk = False,
+        ):
+    """
+    Computes a function delaunay presentation, and returns it as a slicer.
+
+    slicer: empty slicer to fill
+    points : (num_pts, n) float array
+    grades : (num_pts,) float array
+    degree (opt) : if given, computes a minimal presentation of this homological degree first
+    clear:bool, removes temporary files if true
+    degree: computes minimal presentation of this degree if given
+    verbose : bool
+    """
+    if id is None:
+        id = str(threading.get_native_id())
+    global input_path, output_path, pathes
+    backend = "function_delaunay"
+    if  pathes[backend] is None :
+        _init_external_softwares(requires=[backend])
+
+    to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
+    np.savetxt(input_path+id,to_write,delimiter=' ')
+    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+    degree_arg = f"--minpres {degree}" if degree > 0 else ""
+    multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
+    if os.path.exists(output_path + id):
+        os.remove(output_path+ id)
+    command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
+    if verbose:
+        print(command)
+    os.system(command)
+
+    slicer.build_from_scc_file(path=output_path+id, shift_dimension=-1)
 
 
 
