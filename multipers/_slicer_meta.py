@@ -181,19 +181,20 @@ You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
         filtration_grid = None
-        if max_dim is not None:
+        if max_dim is not None: #no test for simplex tree?
             st.prune_above_dimension(max_dim)
-        if is_simplextree_multi(st):
-            blocks = st._to_scc()
-            if st.is_squeezed:
-                filtration_grid = st.filtration_grid
-        elif isinstance(st, str):
-            blocks = mio.scc_parser(st)
+        if isinstance(st, str): #is_kcritical should be false
+            slicer = _Slicer().build_from_scc_file(st)
         else:
-            blocks = st
-        slicer = _slicer_from_blocks(
-            blocks, backend, vineyard, is_kcritical, dtype, column_type
-        )
+            if is_simplextree_multi(st):
+                blocks = st._to_scc()
+                if st.is_squeezed:
+                    filtration_grid = st.filtration_grid
+            else:
+                blocks = st
+            slicer = _slicer_from_blocks(
+                blocks, backend, vineyard, is_kcritical, dtype, column_type
+            )
         if filtration_grid is not None:
             slicer.filtration_grid = filtration_grid
     if reduce:

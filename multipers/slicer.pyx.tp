@@ -449,6 +449,28 @@ cdef class {{PYTHON_TYPE}}:
         return self.truc.get_current_order()
     {{endif}}
 
+    {{if not IS_KCRITICAL}}
+    def build_from_scc_file(self, path:str|os.PathLike, rivet_compatible = False, reverse = False, shift_dimension = 0):
+        """
+        Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
+        """
+        self.truc.build_from_scc_file(path.encode(encoding="utf-8"), rivet_compatible, reverse, shift_dimension)
+
+    def write_to_scc_file(
+            self,
+            path:str|os.PathLike,
+            num_parameters = -1,
+            degree = -1,
+            rivet_compatible = False,
+            ignore_last_generators = False,
+            strip_comments = False,
+            reverse = False):
+        """
+        Writes current slicer to a file in scc format.
+        """
+        self.truc.write_to_scc_file(path.encode(encoding="utf-8"), num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+    {{endif}}
+
     @staticmethod
     def from_bitmap(self):
       raise ValueError("Not implemented.")
@@ -532,16 +554,18 @@ def minimal_presentation(
         # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
     assert degree>=0, f"Degree not provided."
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-    blocks = to_blocks(slicer)
     if id is None:
         id = str(threading.get_native_id())
     if dtype is None:
         dtype = slicer.dtype
-    mio.scc2disk(blocks,path=mio.input_path+id, strip_comments=True)
-    dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
-    new_blocks = new_blocks +  [(np.empty(0, dtype=np.float64),tuple())]*degree  ## Aligns back to the old degree
-    new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
+    slicer.write_to_scc_file(path=mio.input_path+id, strip_comments=True, degree=degree-1)
+    new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    if backend=="mpfree":
+        shift_dimension=degree-1
+    else:
+        shift_dimension=degree
+    mio.scc_reduce_from_str_to_slicer(path=mio.input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
     new_slicer.minpres_degree = degree
     if filtration_grid is not None:
       new_slicer.filtration_grid = filtration_grid

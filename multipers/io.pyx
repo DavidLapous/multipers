@@ -295,6 +295,68 @@ def scc_reduce_from_str(
 
     return blocks
 
+def scc_reduce_from_str_to_slicer(
+        path:str|os.PathLike,
+        slicer,
+        bool full_resolution=True,
+        int dimension: int | np.int64 = 1,
+        bool clear: bool = True,
+        id: Optional[str] = None,  # For parallel stuff
+        bool verbose:bool=False,
+        backend:Literal["mpfree","multi_chunk","twopac"]="mpfree",
+        shift_dimension=0
+        ):
+    """
+    Computes a minimal presentation of the file in path,
+    using mpfree.
+
+    path:PathLike
+    full_resolution: bool
+    dimension: int, presentation dimension to consider
+    clear: bool, removes temporary files if True
+    id: str, temporary files are of this id, allowing for multiprocessing
+    verbose: bool
+    backend: "mpfree", "multi_chunk" or "2pac"
+    """
+    global pathes, input_path, output_path
+    if pathes[backend] is None:
+        _init_external_softwares(requires=[backend])
+
+
+    resolution_str = "--resolution" if full_resolution else ""
+    # print(mpfree_in_path + id, mpfree_out_path + id)
+    if id is None:
+        id = str(threading.get_native_id())
+    if not os.path.exists(path):
+        raise ValueError(f"No file found at {path}.")
+    if os.path.exists(output_path + id):
+        os.remove(output_path + id)
+    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+    if backend == "mpfree":
+        more_verbose = "-v" if verbose else ""
+        command = (
+                f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
+                )
+    elif backend == "multi_chunk":
+        command = (
+                f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
+                )
+    elif backend in ["twopac", "2pac"]:
+        command = (
+                f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
+                )
+    else:
+        raise ValueError(f"Unsupported backend {backend}.")
+    if verbose:
+        print(f"Calling :\n\n {command}")
+    os.system(command)
+
+    slicer.build_from_scc_file(path=output_path+id, shift_dimension=shift_dimension)
+
+    if clear:
+        clear_io(input_path+id, output_path + id)
+
+
 def reduce_complex(
         complex, # Simplextree, Slicer, or str
         bool full_resolution: bool = True,
@@ -618,9 +680,9 @@ def read_scc_file_as_slicer(
         slicer:Slicer_type,
         path:str|os.PathLike,
         rivet_compatible = False,
-        reverse = False
+        reverse = False,
+        shift_dimension = 0
         ):
-
-    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible, reverse)
+    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible, reverse, shift_dimension)
 
 
