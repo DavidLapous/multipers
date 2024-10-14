@@ -503,8 +503,6 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
-    # blocks = mio.function_delaunay_presentation(points, grades, degree=degree, verbose=verbose,clear=clear)
-    # s= multipers.Slicer(blocks, backend=backend, vineyard=vineyard)
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard)
     mio.function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >0:
