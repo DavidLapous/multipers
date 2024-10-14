@@ -19,6 +19,7 @@
 
 #include <cassert>
 #include <iostream> //print() only
+#include <iterator>
 #include <vector>
 #include <utility>  //std::swap, std::move & std::exchange
 
@@ -349,7 +350,7 @@ class Boundary_matrix : public Master_matrix::Matrix_dimension_option,
     }
   }
 
-  void print();  // for debug
+  void print(Index startCol = 0, Index endCol = -1, Index startRow = 0, Index endRow = -1);  // for debug
 
  private:
   using Dim_opt = typename Master_matrix::Matrix_dimension_option;
@@ -709,29 +710,34 @@ inline Boundary_matrix<Master_matrix>& Boundary_matrix<Master_matrix>::operator=
 }
 
 template <class Master_matrix>
-inline void Boundary_matrix<Master_matrix>::print() 
+inline void Boundary_matrix<Master_matrix>::print(Index startCol, Index endCol, Index startRow, Index endRow) 
 {
+  if (endCol == static_cast<Index>(-1)) endCol = nextInsertIndex_;
+  if (endRow == static_cast<Index>(-1)) endRow = nextInsertIndex_;
   if constexpr (activeSwapOption) {
     if (Swap_opt::rowSwapped_) Swap_opt::_orderRows();
   }
   std::cout << "Boundary_matrix:\n";
-  for (Index i = 0; i < nextInsertIndex_; ++i) {
+  for (Index i = startCol; i < endCol && i < nextInsertIndex_; ++i) {
     Column& col = matrix_[i];
-    for (auto e : col.get_content(nextInsertIndex_)) {
-      if (e == 0u)
+    auto cont = col.get_content(endRow);
+    for (Index j = startRow; j < endRow; ++j) {
+      if (cont[j] == 0u)
         std::cout << "- ";
       else
-        std::cout << e << " ";
+        std::cout << cont[j] << " ";
     }
     std::cout << "\n";
   }
   std::cout << "\n";
   if constexpr (Master_matrix::Option_list::has_row_access) {
     std::cout << "Row Matrix:\n";
-    for (ID_index i = 0; i < nextInsertIndex_; ++i) {
+    for (ID_index i = startRow; i < endRow && i < nextInsertIndex_; ++i) {
       const auto& row = (*RA_opt::rows_)[i];
-      for (const typename Column::Entry& entry : row) {
-        std::cout << entry.get_column_index() << " ";
+      auto it = row.begin();
+      std::advance(it, startCol);
+      for (; it != row.end() && startCol < endCol; ++it, ++startCol) {
+        std::cout << it->get_column_index() << " ";
       }
       std::cout << "(" << i << ")\n";
     }

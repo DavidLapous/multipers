@@ -23,7 +23,6 @@
 #include <utility>
 #include <vector>
 
-#include <gudhi/Fields/Z2_field.h>
 #include <gudhi/Matrix.h>
 #include <gudhi/persistence_matrix_options.h>
 
@@ -74,6 +73,7 @@ public:
   //   using index = typename matrix_type::index;
   //   using id_index = typename matrix_type::id_index;
   using pos_index = typename matrix_type::Pos_index;
+  using Index = typename matrix_type::Index;
   using dimension_type = typename matrix_type::Dimension;
 
   class Barcode_iterator
@@ -263,28 +263,37 @@ public:
     return stream;
   }
 
-  inline std::vector<cycle_type> get_representative_cycles(bool update) {
-    // Only used when vineyard, so shrinked permutation i.e.
+  inline std::vector<std::vector<std::vector<unsigned int>>> get_representative_cycles(bool update,
+                                                                                       bool detailed = false) {
+    // Only used when vineyard, so shrunk permutation i.e.
     // without the -1, is permutation as we keep inf values (they can become
     // finite) cf barcode perm which is copied to remove the -1
+    std::vector<unsigned int> permutation2;
+    permutation2.reserve(permutation_->size());
+    for (std::size_t i : *permutation_) {
+      if (i >= matrix_.get_number_of_columns()) {
+        continue;
+      }
+      permutation2.push_back(i);
+    }
     const bool verbose = false;
     if (update) [[likely]]
       matrix_.update_representative_cycles();
-    auto current_cycles = matrix_.get_representative_cycles();
-    for (auto &truc : current_cycles) {
-      if constexpr (verbose)
-        std::cout << "Cycle (matrix_ order): ";
-      for (auto &machin : truc) {
-        if constexpr (verbose) {
-          std::cout << "   matrix order: " << machin;
-          std::cout << ", structure order : " << permutation_[machin]
-                    << std::endl;
+    std::vector<std::vector<std::vector<unsigned int>>> current_cycles =
+        matrix_.get_representative_cycles_as_borders(detailed);
+    unsigned int i = 0;
+    for (auto &cycle : current_cycles) {
+      if constexpr (verbose) std::cout << "Cycle (matrix_ order): ";
+      for (auto &border : cycle) {
+        for (auto &b : border) {
+          b = permutation2[b];
         }
-        machin = permutation_->operator[](machin);
       }
+      ++i;
     }
     return current_cycles;
   }
+
   inline void _update_permutation_ptr(std::vector<std::size_t> &perm) {
     permutation_ = &perm;
   }

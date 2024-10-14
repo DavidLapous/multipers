@@ -1220,7 +1220,7 @@ class Matrix {
     std::swap(matrix1.colSettings_, matrix2.colSettings_);
   }
 
-  void print();  // for debug
+  void print(Index startCol = 0, Index endCol = -1, Index startRow = 0, Index endRow = -1);  // for debug
 
   //TODO: change the behaviour for boundary matrices.
   /**
@@ -1344,21 +1344,23 @@ class Matrix {
    * returned.
    */
   void update_representative_cycles();
-  /**
-   * @brief Only available if @ref PersistenceMatrixOptions::can_retrieve_representative_cycles is true.
-   * Returns all representative cycles of the current filtration.
-   * 
-   * @return A const reference to the vector of representative cycles.
-   */
-  const std::vector<Cycle>& get_representative_cycles();
-  /**
-   * @brief Only available if @ref PersistenceMatrixOptions::can_retrieve_representative_cycles is true.
-   * Returns the cycle representing the given bar.
-   * 
-   * @param bar A bar from the current barcode.
-   * @return A const reference to the cycle representing @p bar.
-   */
-  const Cycle& get_representative_cycle(const Bar& bar);
+  // /**
+  //  * @brief Only available if @ref PersistenceMatrixOptions::can_retrieve_representative_cycles is true.
+  //  * Returns all representative cycles of the current filtration.
+  //  * 
+  //  * @return A const reference to the vector of representative cycles.
+  //  */
+  // const std::vector<Cycle>& get_representative_cycles();
+  // /**
+  //  * @brief Only available if @ref PersistenceMatrixOptions::can_retrieve_representative_cycles is true.
+  //  * Returns the cycle representing the given bar.
+  //  * 
+  //  * @param bar A bar from the current barcode.
+  //  * @return A const reference to the cycle representing @p bar.
+  //  */
+  // const Cycle& get_representative_cycle(const Bar& bar);
+  std::vector<std::vector<std::vector<typename Matrix<PersistenceMatrixOptions>::ID_index> > >
+  get_representative_cycles_as_borders(bool detailed = false);
 
  private:
   using Underlying_matrix = 
@@ -1931,9 +1933,9 @@ inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::opera
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::print() 
+inline void Matrix<PersistenceMatrixOptions>::print(Index startCol, Index endCol, Index startRow, Index endRow) 
 {
-  return matrix_.print();
+  return matrix_.print(startCol, endCol, startRow, endRow);
 }
 
 template <class PersistenceMatrixOptions>
@@ -2035,20 +2037,28 @@ inline void Matrix<PersistenceMatrixOptions>::update_representative_cycles()
   matrix_.update_representative_cycles();
 }
 
-template <class PersistenceMatrixOptions>
-inline const std::vector<typename Matrix<PersistenceMatrixOptions>::Cycle>&
-Matrix<PersistenceMatrixOptions>::get_representative_cycles()
-{
-  static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
-  return matrix_.get_representative_cycles();
-}
+// template <class PersistenceMatrixOptions>
+// inline const std::vector<typename Matrix<PersistenceMatrixOptions>::Cycle>&
+// Matrix<PersistenceMatrixOptions>::get_representative_cycles()
+// {
+//   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
+//   return matrix_.get_representative_cycles();
+// }
+
+// template <class PersistenceMatrixOptions>
+// inline const typename Matrix<PersistenceMatrixOptions>::Cycle&
+// Matrix<PersistenceMatrixOptions>::get_representative_cycle(const Bar& bar)
+// {
+//   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
+//   return matrix_.get_representative_cycle(bar);
+// }
 
 template <class PersistenceMatrixOptions>
-inline const typename Matrix<PersistenceMatrixOptions>::Cycle&
-Matrix<PersistenceMatrixOptions>::get_representative_cycle(const Bar& bar)
-{
-  static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
-  return matrix_.get_representative_cycle(bar);
+inline std::vector<std::vector<std::vector<typename Matrix<PersistenceMatrixOptions>::ID_index> > >
+Matrix<PersistenceMatrixOptions>::get_representative_cycles_as_borders(bool detailed) {
+  static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles && PersistenceMatrixOptions::is_z2,
+                "This method was not enabled.");
+  return matrix_.get_representative_cycles_as_borders(detailed);
 }
 
 template <class PersistenceMatrixOptions>
