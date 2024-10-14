@@ -244,7 +244,7 @@ inline void write_scc_file(const std::string& outFilePath,
   if (maxIndex > maxDim) file << 0;
   file << "\n";
 
-  file << std::setprecision(std::numeric_limits<typename Filtration_value::value_type>::digits10 + 1);
+  file << std::setprecision(std::numeric_limits<typename Filtration_value::value_type>::digits);
 
   std::size_t startIndex = reverse ? minIndex + 1 : minIndex;
   std::size_t endIndex = reverse ? maxIndex : maxIndex - 1;

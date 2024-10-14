@@ -505,6 +505,9 @@ def function_delaunay_presentation_to_slicer(
 
     slicer.build_from_scc_file(path=output_path+id, shift_dimension=-1)
 
+    if clear:
+        clear_io(output_path + id, input_path + id)
+
 
 
 def clear_io(*args):

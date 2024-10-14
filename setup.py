@@ -148,8 +148,8 @@ extensions = [
         ],
         language="c++",
         extra_compile_args=[
-            "-Og",  # -Ofast disables infinity values for filtration values
-            "-g",
+            "-O3",  # -Ofast disables infinity values for filtration values
+            # "-g",
             # "-march=native",
             "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.

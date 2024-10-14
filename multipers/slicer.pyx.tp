@@ -383,7 +383,7 @@ cdef class {{PYTHON_TYPE}}:
 
          - inplace:bool if true, does the operation inplace, i.e., doesn't return a copy.
         """
-        if force and self.is_squeezed:
+        if not force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
         if filtration_grid is None:
             filtration_grid = mpg.compute_grid(
