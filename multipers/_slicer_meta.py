@@ -186,7 +186,7 @@ You can try using `multipers.slicer.to_simplextree`."""
         if max_dim is not None: #no test for simplex tree?
             st.prune_above_dimension(max_dim)
         if isinstance(st, str): #is_kcritical should be false
-            slicer = _Slicer().build_from_scc_file(st)
+            slicer = _Slicer()._build_from_scc_file(st)
         else:
             if is_simplextree_multi(st):
                 blocks = st._to_scc()

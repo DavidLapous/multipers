@@ -352,7 +352,7 @@ def scc_reduce_from_str_to_slicer(
         print(f"Calling :\n\n {command}")
     os.system(command)
 
-    slicer.build_from_scc_file(path=output_path+id, shift_dimension=shift_dimension)
+    slicer._build_from_scc_file(path=output_path+id, shift_dimension=shift_dimension)
 
     if clear:
         clear_io(input_path+id, output_path + id)
@@ -503,7 +503,7 @@ def function_delaunay_presentation_to_slicer(
         print(command)
     os.system(command)
 
-    slicer.build_from_scc_file(path=output_path+id, shift_dimension=-1)
+    slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1)
 
     if clear:
         clear_io(output_path + id, input_path + id)
@@ -706,29 +706,6 @@ def scc2disk_old(
     
     np.savetxt("test.scc", np.concatenate(str_blocks), delimiter="", fmt="%s")
 
-from multipers.slicer import Slicer_type
-from multipers.io cimport _write_scc_file_from_slicer, _read_scc_file_as_slicer
 
-def write_scc_file_from_slicer(
-        path:str|os.PathLike,
-        slicer:Slicer_type,
-        num_parameters = -1,
-        degree = -1,
-        rivet_compatible = False,
-        ignore_last_generators = False,
-        strip_comments = False,
-        reverse = False
-        ):
-
-    _write_scc_file_from_slicer(path.encode(encoding="utf-8"), slicer, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
-
-def read_scc_file_as_slicer(
-        slicer:Slicer_type,
-        path:str|os.PathLike,
-        rivet_compatible = False,
-        reverse = False,
-        shift_dimension = 0
-        ):
-    _read_scc_file_as_slicer(slicer, path.encode(encoding="utf-8"), rivet_compatible, reverse, shift_dimension)
 
 

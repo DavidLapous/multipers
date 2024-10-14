@@ -79,7 +79,6 @@ templated_cython_modules = [
     "mma_structures.pyx",
     "simplex_tree_multi.pyx",
     "slicer.pyx",
-    "io.pxd",
 ]
 
 ## generates some parameter files (Tempita fails with python<3.12)

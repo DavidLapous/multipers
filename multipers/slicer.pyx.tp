@@ -458,7 +458,7 @@ cdef class {{PYTHON_TYPE}}:
     {{endif}}
 
     {{if not IS_KCRITICAL}}
-    def build_from_scc_file(self, path:str|os.PathLike, rivet_compatible = False, reverse = False, shift_dimension = 0):
+    def _build_from_scc_file(self, path:str|os.PathLike, rivet_compatible = False, reverse = False, shift_dimension = 0):
         """
         Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
         """
