@@ -31,6 +31,7 @@ from multipers.ml.signed_betti import rank_decomposition_by_rectangles
 
 import numpy as np
 cimport cython
+from libcpp.string cimport string
 # python_value_type = np.float32
 from typing import Union
 from cython.operator cimport dereference
@@ -458,25 +459,29 @@ cdef class {{PYTHON_TYPE}}:
     {{endif}}
 
     {{if not IS_KCRITICAL}}
-    def _build_from_scc_file(self, path:str|os.PathLike, rivet_compatible = False, reverse = False, shift_dimension = 0):
+    def _build_from_scc_file(self, path:str|os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0):
         """
         Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
         """
-        self.truc.build_from_scc_file(path.encode(encoding="utf-8"), rivet_compatible, reverse, shift_dimension)
+        cdef string c_path = path.encode(encoding="utf-8")
+        with nogil:
+          self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
 
     def write_to_scc_file(
             self,
-            path:str|os.PathLike,
-            num_parameters = -1,
-            degree = -1,
-            rivet_compatible = False,
-            ignore_last_generators = False,
-            strip_comments = False,
-            reverse = False):
+            path:os.PathLike,
+            int num_parameters = -1,
+            int degree = -1,
+            bool rivet_compatible = False,
+            bool ignore_last_generators = False,
+            bool strip_comments = False,
+            bool reverse = False):
         """
         Writes current slicer to a file in scc format.
         """
-        self.truc.write_to_scc_file(path.encode(encoding="utf-8"), num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+        cdef string c_path = path.encode(encoding="utf-8")
+        with nogil:
+          self.truc.write_to_scc_file(c_path, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
     {{endif}}
 
     @staticmethod
