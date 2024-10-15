@@ -85,7 +85,7 @@ cdef extern from "Persistence_slices_interface.h":
       {{endif}}
 
       {{if not IS_KCRITICAL}}
-      void build_from_scc_file(const string&, bool, bool, int) nogil
+      void build_from_scc_file(const string&, bool, bool, int) except + nogil
       void write_to_scc_file(const string&, int, int, bool, bool, bool, bool)
       {{endif}}
 

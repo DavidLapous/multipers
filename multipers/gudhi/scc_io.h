@@ -129,9 +129,9 @@ inline Slicer read_scc_file(const std::string& inFilePath,
     std::vector<int> generator_dimensions(numberOfCells);
     std::vector<typename Slicer::Filtration_value> generator_filtrations(numberOfCells);
     std::size_t i = 0;
-    while (getline(file, line, '\n')){
-      if (dimIt == counts.size()) error("Wrong format. The number of cells in each dimension is wrong.");
-
+    //because of possible negative dimension shifts, the document should not always be read to the end
+    //therefore `dimIt < counts.size()` is also a stop condition
+    while (getline(file, line, '\n') && dimIt < counts.size()){
       if (!is_comment_or_empty_line(line)){
         std::size_t sep = line.find_first_of(';', 0);
         generator_filtrations[i] = get_filtration_value(line, sep);
