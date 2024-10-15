@@ -459,13 +459,14 @@ cdef class {{PYTHON_TYPE}}:
     {{endif}}
 
     {{if not IS_KCRITICAL}}
-    def _build_from_scc_file(self, path:str|os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0):
+    def _build_from_scc_file(self, path:str|os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{PYTHON_TYPE}}:
         """
         Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
         """
         cdef string c_path = path.encode(encoding="utf-8")
         with nogil:
           self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
+        return self
 
     def write_to_scc_file(
             self,
