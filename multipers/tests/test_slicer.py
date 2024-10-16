@@ -146,3 +146,14 @@ def test_scc():
     (a,) = mp.signed_measure(s)
     (b,) = mp.signed_measure(s2)
     assert sm_distance(a, b) == 0
+
+    st = random_st(npts=200)
+    s = mp.Slicer(st).grid_squeeze(inplace=True)
+    s.filtration_grid = []
+    s.to_scc(
+        "truc.scc",
+    )
+    s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
+    (a,) = mp.signed_measure(s, degree=1)
+    (b,) = mp.signed_measure(s2, degree=1)
+    assert sm_distance(a, b) == 0
