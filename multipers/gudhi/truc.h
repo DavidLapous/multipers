@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 #include <type_traits>  //std::invoke_result
+#include "scc_io.h"
 
 namespace Gudhi::multiparameter::interface {
 
@@ -65,7 +66,7 @@ public:
   } // needs to be iterable (begin, end, size)
   inline int dimension(std::size_t i) const { return generator_dimensions[i]; };
   inline friend std::ostream &operator<<(std::ostream &stream,
-                                         PresentationStructure &structure) {
+                                         const PresentationStructure &structure) {
     stream << "Boundary:\n";
     stream << "{";
     for (const auto &stuff : structure.generators) {
@@ -247,6 +248,47 @@ public:
     return *this;
   };
 
+  template<bool ignore_inf>
+  std::vector<std::pair<int, std::vector<unsigned int> > > get_current_boundary_matrix(){
+    std::vector<std::size_t> permutation(generator_order.size());
+    std::iota(permutation.begin(), permutation.end(), 0);
+    if constexpr (ignore_inf) {
+      permutation.erase(std::remove_if(permutation.begin(),
+                                       permutation.end(),
+                                       [&](std::size_t val) {
+                                         return filtration_container[val] == MultiFiltration::Generator::T_inf;
+                                       }),
+                        permutation.end());
+      std::sort(permutation.begin(), permutation.end());
+    }
+    std::sort(permutation.begin(), permutation.end(),
+              [&](std::size_t i, std::size_t j) {
+                if (structure.dimension(i) > structure.dimension(j))
+                  return false;
+                if (structure.dimension(i) < structure.dimension(j))
+                  return true;
+                return filtration_container[i] < filtration_container[j];
+              });
+
+    std::vector<std::pair<int, std::vector<unsigned int> > > matrix(permutation.size());
+
+    std::vector<std::size_t> permutationInv(generator_order.size());
+    std::size_t newPos = 0;
+    for (std::size_t oldPos : permutation) {
+      permutationInv[oldPos] = newPos;
+      auto& boundary = matrix[newPos].second;
+      boundary.resize(structure[oldPos].size());
+      for (std::size_t j = 0; j < structure[oldPos].size(); ++j) {
+        boundary[j] = permutationInv[structure[oldPos][j]];
+      }
+      std::sort(boundary.begin(), boundary.end());
+      matrix[newPos].first = structure.dimension(oldPos);
+      ++newPos;
+    }
+
+    return matrix;
+  }
+
   inline std::size_t num_generators() const { return structure.size(); }
   inline std::size_t num_parameters() const {
     return num_generators() == 0
@@ -318,6 +360,7 @@ public:
         }
     }
     if constexpr (false) {
+      std::cout << structure << std::endl;
       std::cout << "[";
       for (auto i : out_gen_order) {
 
@@ -831,12 +874,41 @@ public:
         bp_dirs);
   }
 
+  void build_from_scc_file(const std::string &inFilePath,
+                           bool isRivetCompatible = false,
+                           bool isReversed = false,
+                           int shiftDimensions = 0) {
+    *this = read_scc_file<Truc>(inFilePath, isRivetCompatible, isReversed, shiftDimensions);
+  }
+
+  void write_to_scc_file(const std::string &outFilePath,
+                         int numberOfParameters = -1,
+                         int degree = -1,
+                         bool rivetCompatible = false,
+                         bool IgnoreLastGenerators = false,
+                         bool stripComments = false,
+                         bool reverse = false) {
+    write_scc_file(
+        outFilePath, *this, numberOfParameters, degree, rivetCompatible, IgnoreLastGenerators, stripComments, reverse);
+  }
+
 public:
   using ThreadSafe = TrucThread; // for outside
 
   TrucThread weak_copy() const { return TrucThread(*this); }
 
-private:
+  //TODO: declare method here instead of scc_io.h
+  //it is just temporary, until Truc is cleaned up
+  friend void write_scc_file<Truc>(const std::string& outFilePath,
+                                   const Truc &slicer,
+                                   int numberOfParameters,
+                                   int degree,
+                                   bool rivetCompatible,
+                                   bool IgnoreLastGenerators,
+                                   bool stripComments,
+                                   bool reverse);
+
+ private:
   std::vector<MultiFiltration>
       generator_filtration_values; // defined at construction time. Const
   std::vector<std::size_t> generator_order; // size fixed at construction time,

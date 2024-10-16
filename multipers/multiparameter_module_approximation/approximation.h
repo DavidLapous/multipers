@@ -1391,6 +1391,9 @@ inline Summand<int64_t> Summand<value_type>::grid_squeeze(const std::vector<std:
   return out;
 }
 
+/**
+ * dim, summand, (birth/death), num_pts, num_parameters
+ */
 template <typename value_type>
 inline typename Module<value_type>::idx_dump_type Module<value_type>::to_idx(
     const std::vector<std::vector<value_type>> &grid) const {

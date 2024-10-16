@@ -121,3 +121,39 @@ def test_pruning():
     assert (
         s.get_filtrations_values() == s2.get_filtrations_values()
     ).all(), "Filtrations have changed"
+
+
+def test_scc():
+    import numpy as np
+
+    import multipers as mp
+    from multipers.distances import sm_distance
+    from multipers.tests import random_st
+
+    st = random_st(npts=500, num_parameters=2)
+    s = mp.Slicer(st, dtype=np.float64)
+    s.to_scc("truc.scc", degree=1)
+    s2 = mp.Slicer("truc.scc")
+    (a,) = mp.signed_measure(s)
+    (b,) = mp.signed_measure(s2)
+    assert sm_distance(a, b) < np.finfo(np.float64).resolution * s.num_generators
+
+    st = random_st(npts=500)
+    s = mp.Slicer(st).grid_squeeze(inplace=True)
+    s.filtration_grid = []
+    s.to_scc("truc.scc", degree=1)
+    s2 = mp.Slicer("truc.scc", dtype=np.float64)
+    (a,) = mp.signed_measure(s)
+    (b,) = mp.signed_measure(s2)
+    assert sm_distance(a, b) == 0
+
+    st = random_st(npts=200)
+    s = mp.Slicer(st).grid_squeeze(inplace=True)
+    s.filtration_grid = []
+    s.to_scc(
+        "truc.scc",
+    )
+    s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
+    (a,) = mp.signed_measure(s, degree=1)
+    (b,) = mp.signed_measure(s2, degree=1)
+    assert sm_distance(a, b) == 0

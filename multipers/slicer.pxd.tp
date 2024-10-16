@@ -84,6 +84,11 @@ cdef extern from "Persistence_slices_interface.h":
       void add_generator(const One_critical_filtration[{{C_VALUE_TYPE}}] &) nogil
       {{endif}}
 
+      {{if not IS_KCRITICAL}}
+      void build_from_scc_file(const string&, bool, bool, int) except + nogil
+      void write_to_scc_file(const string&, int, int, bool, bool, bool, bool) nogil
+      {{endif}}
+
 
       vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[vector[{{C_VALUE_TYPE}}]]) nogil
       vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[pair[vector[{{C_VALUE_TYPE}}],vector[{{C_VALUE_TYPE}}]]]) nogil

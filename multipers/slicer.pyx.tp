@@ -31,8 +31,10 @@ from multipers.ml.signed_betti import rank_decomposition_by_rectangles
 
 import numpy as np
 cimport cython
+from libcpp.string cimport string
 # python_value_type = np.float32
 from typing import Union
+from cython.operator cimport dereference
 
 ## WARNING : This is repeated in the pxd file ...
 python_indices_type=np.int32
@@ -107,6 +109,10 @@ cdef class {{PYTHON_TYPE}}:
         Returns a pointer to the underlying C++ slicer.
         """
         return <intptr_t>(&self.truc)
+    def _from_ptr(self, intptr_t slicer_ptr):
+        self.truc = dereference(<{{CTYPE}}*>(slicer_ptr))
+        return self
+
     {{if IS_SIMPLICIAL}}
     def __init__(self, st=None):
         """
@@ -186,6 +192,7 @@ cdef class {{PYTHON_TYPE}}:
         self.truc = {{CTYPE}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.minpres_degree = -1
     {{endif}}
+    
     def copy(self)->{{PYTHON_TYPE}}:
         """
         Returns a copy of the slicer.
@@ -377,7 +384,7 @@ cdef class {{PYTHON_TYPE}}:
 
          - inplace:bool if true, does the operation inplace, i.e., doesn't return a copy.
         """
-        if force and self.is_squeezed:
+        if not force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
         if filtration_grid is None:
             filtration_grid = mpg.compute_grid(
@@ -451,6 +458,54 @@ cdef class {{PYTHON_TYPE}}:
         return self.truc.get_current_order()
     {{endif}}
 
+    {{if not IS_KCRITICAL}}
+    def _build_from_scc_file(self, path:os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{PYTHON_TYPE}}:
+        """
+        Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
+        """
+        cdef string c_path = path.encode(encoding="utf-8")
+        with nogil:
+          self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
+        return self
+
+    def to_scc(
+            self,
+            path:os.PathLike,
+            int num_parameters = -1,
+            int degree = 1,
+            bool rivet_compatible = False,
+            bool ignore_last_generators = False,
+            bool strip_comments = False,
+            bool reverse = False,
+            bool unsqueeze = True,
+        ):
+        """
+        Writes current slicer to a file in scc format.
+        """
+        cdef string c_path = path.encode(encoding="utf-8")
+        if self.is_squeezed and unsqueeze:
+            kwargs = locals()
+            kwargs.pop("self",0)
+            kwargs.pop("c_path",0)
+            self.unsqueeze().to_scc(**kwargs)
+            return
+        with nogil:
+          self.truc.write_to_scc_file(c_path, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+    def unsqueeze(self, grid=None, dtype = np.float64):
+        from multipers.grids import evaluate_in_grid
+        from multipers import Slicer
+        grid = tuple(np.asarray(f) for f in self.filtration_grid) if grid is None else grid
+        new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
+        new_slicer = {{PYTHON_TYPE[:-3]+"f64"}}(
+            self.get_boundaries(),
+            self.get_dimensions(),
+            new_filtrations,
+        )
+        new_slicer.minpres_degree=self.minpres_degree
+        return new_slicer
+    {{endif}}
+
+
     @staticmethod
     def from_bitmap(self):
       raise ValueError("Not implemented.")
@@ -475,8 +530,8 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
-    blocks = mio.function_delaunay_presentation(points, grades, degree=degree, verbose=verbose,clear=clear)
-    s= multipers.Slicer(blocks, backend=backend, vineyard=vineyard)
+    s = multipers.Slicer(None, backend=backend, vineyard=vineyard)
+    mio.function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >0:
         s.minpres_degree = degree
     return s
@@ -534,16 +589,18 @@ def minimal_presentation(
         # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
     assert degree>=0, f"Degree not provided."
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-    blocks = to_blocks(slicer)
     if id is None:
         id = str(threading.get_native_id())
     if dtype is None:
         dtype = slicer.dtype
-    mio.scc2disk(blocks,path=mio.input_path+id, strip_comments=True)
-    dimension = len(blocks) -2 - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    new_blocks = mio.scc_reduce_from_str(path=mio.input_path+id,dimension=dimension, backend=backend, **minpres_kwargs)
-    new_blocks = new_blocks +  [(np.empty(0, dtype=np.float64),tuple())]*degree  ## Aligns back to the old degree
-    new_slicer = multipers.Slicer(new_blocks,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
+    slicer.to_scc(path=mio.input_path+id, strip_comments=True, degree=degree-1)
+    new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+    if backend=="mpfree":
+        shift_dimension=degree-1
+    else:
+        shift_dimension=degree
+    mio.scc_reduce_from_str_to_slicer(path=mio.input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
     new_slicer.minpres_degree = degree
     if filtration_grid is not None:
       new_slicer.filtration_grid = filtration_grid
