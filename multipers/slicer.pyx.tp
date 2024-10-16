@@ -472,18 +472,39 @@ cdef class {{PYTHON_TYPE}}:
             self,
             path:os.PathLike,
             int num_parameters = -1,
-            int degree = -1,
+            int degree = 1,
             bool rivet_compatible = False,
             bool ignore_last_generators = False,
             bool strip_comments = False,
-            bool reverse = False):
+            bool reverse = False,
+            bool unsqueeze = True,
+        ):
         """
         Writes current slicer to a file in scc format.
         """
         cdef string c_path = path.encode(encoding="utf-8")
+        if self.is_squeezed and unsqueeze:
+            kwargs = locals()
+            kwargs.pop("self",0)
+            kwargs.pop("c_path",0)
+            self.unsqueeze().to_scc(**kwargs)
+            return
         with nogil:
           self.truc.write_to_scc_file(c_path, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+    def unsqueeze(self, grid=None, dtype = np.float64):
+        from multipers.grids import evaluate_in_grid
+        from multipers import Slicer
+        grid = tuple(np.asarray(f) for f in self.filtration_grid) if grid is None else grid
+        new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
+        new_slicer = {{PYTHON_TYPE[:-3]+"f64"}}(
+            self.get_boundaries(),
+            self.get_dimensions(),
+            new_filtrations,
+        )
+        new_slicer.minpres_degree=self.minpres_degree
+        return new_slicer
     {{endif}}
+
 
     @staticmethod
     def from_bitmap(self):

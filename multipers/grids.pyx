@@ -251,6 +251,33 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
 
 
 
+def evaluate_in_grid(pts, grid, mass_default=None):
+    """    
+    Input
+    -----
+     - pts: of the form array[int, ndim=2]
+     - grid of the form Iterable[array[float, ndim=1]]
+    """
+    first_filtration = grid[0]
+    dtype = first_filtration.dtype
+    if isinstance(first_filtration, np.ndarray):
+        if mass_default is not None:
+            grid = tuple(np.concatenate([g, [m]]) for g,m in zip(grid, mass_default))
+        def empty_like(x):
+            return np.empty_like(x, dtype=dtype)
+    else: 
+        import torch
+        # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid[0])}, expected numpy or torch array."
+        if mass_default is not None:
+            grid = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid, mass_default))
+        def empty_like(x):
+            return torch.empty(x.shape,dtype=dtype)
+
+    coords= empty_like(pts)
+    for i in range(coords.shape[1]):
+        coords[:,i] = grid[i][pts[:,i]]
+    return coords
+
 def sm_in_grid(pts, weights, grid, int num_parameters=-1, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
