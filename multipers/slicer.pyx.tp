@@ -459,7 +459,7 @@ cdef class {{PYTHON_TYPE}}:
     {{endif}}
 
     {{if not IS_KCRITICAL}}
-    def _build_from_scc_file(self, path:str|os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{PYTHON_TYPE}}:
+    def _build_from_scc_file(self, path:os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{PYTHON_TYPE}}:
         """
         Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
         """
@@ -468,7 +468,7 @@ cdef class {{PYTHON_TYPE}}:
           self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
         return self
 
-    def write_to_scc_file(
+    def to_scc(
             self,
             path:os.PathLike,
             int num_parameters = -1,
@@ -573,7 +573,7 @@ def minimal_presentation(
     if dtype is None:
         dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    slicer.write_to_scc_file(path=mio.input_path+id, strip_comments=True, degree=degree-1)
+    slicer.to_scc(path=mio.input_path+id, strip_comments=True, degree=degree-1)
     new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
     if backend=="mpfree":
         shift_dimension=degree-1
