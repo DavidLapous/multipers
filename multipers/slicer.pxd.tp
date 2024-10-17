@@ -9,6 +9,12 @@ import pickle
 with open("build/tmp/_slicer_names.pkl", "rb") as f:
   slicers = pickle.load(f)
 
+# TODO: FIXME. This is not possible as the import is hardcoded as f32 and f64.
+# float_value_types = set([(D['C_VALUE_TYPE'],D['PY_VALUE_TYPE'],D['SHORT_VALUE_TYPE']) for D in slicers if D['IS_FLOAT']])
+
+float_value_types = set((("float",   "np.float32", "f32"), ("double",  "np.float64", "f64")) )
+
+
 }}
 
 cimport numpy as cnp
@@ -27,7 +33,6 @@ from cython cimport uint
 
 import numpy as np
 python_value_type=np.float32
-
 from libcpp.string cimport string
 
 cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparameter::python_interface":
@@ -38,60 +43,60 @@ from multipers.filtrations cimport *
 ctypedef  vector[uint] cycle_type ## its the cycle type of matrix
 
 
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
+{{for D in slicers}}
 
 #------------------------------------------------------------------------------
 cdef extern from "Persistence_slices_interface.h":
-  cdef cppclass {{CTYPE}} "{{CTYPE_H}}":
-      ctypedef {{C_VALUE_TYPE}} value_type
+  cdef cppclass {{D['C_TEMPLATE_TYPE']}} "{{D['TRUC_TYPE']}}":
+      ctypedef {{D['C_VALUE_TYPE']}} value_type
 
-      {{CTYPE}}()
+      {{D['C_TEMPLATE_TYPE']}}()
 
-      {{if IS_SIMPLICIAL}}
-      {{CTYPE}}(Simplex_tree_multi_interface[{{FILTRATION_TYPE}}, {{C_VALUE_TYPE}}]*)
+      {{if D['IS_SIMPLICIAL']}}
+      {{D['C_TEMPLATE_TYPE']}}(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]*)
       {{else}}
-      {{CTYPE}}(const vector[vector[unsigned int]]&, const vector[int]&, const vector[{{FILTRATION_TYPE}}]&)
+      {{D['C_TEMPLATE_TYPE']}}(const vector[vector[unsigned int]]&, const vector[int]&, const vector[{{D['FILTRATION_TYPE']}}]&)
       {{endif}}
 
-      {{CTYPE}}& operator=(const {{CTYPE}}&)
-      vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]] get_barcode() nogil
-      void push_to(const Line[{{C_VALUE_TYPE}}]&) nogil
-      void set_one_filtration(const vector[{{C_VALUE_TYPE}}]&) nogil
+      {{D['C_TEMPLATE_TYPE']}}& operator=(const {{D['C_TEMPLATE_TYPE']}}&)
+      vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode() nogil
+      void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
+      void set_one_filtration(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
       int prune_above_dimension(int) except + nogil 
 
-      vector[{{C_VALUE_TYPE}}] get_one_filtration()
+      vector[{{D['C_VALUE_TYPE']}}] get_one_filtration()
       void compute_persistence(vector[bool]) nogil
       void compute_persistence() nogil
       uint32_t num_generators() nogil
       uint32_t num_parameters() nogil
       string to_str() nogil
-      pair[One_critical_filtration[{{C_VALUE_TYPE}}], One_critical_filtration[{{C_VALUE_TYPE}}]] get_bounding_box() except + nogil
-      vector[One_critical_filtration[{{C_VALUE_TYPE}}]] get_filtration_values() nogil
+      pair[One_critical_filtration[{{D['C_VALUE_TYPE']}}], One_critical_filtration[{{D['C_VALUE_TYPE']}}]] get_bounding_box() except + nogil
+      vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] get_filtration_values() nogil
       vector[int] get_dimensions() nogil
       vector[vector[uint]] get_boundaries() nogil
-      void coarsen_on_grid_inplace(vector[vector[{{C_VALUE_TYPE}}]], bool) nogil
-      vector[{{FILTRATION_TYPE}}]& get_filtrations() nogil
-      {{if COL is not None}}
-      {{CTYPE[:-3]+"i32"}} coarsen_on_grid(vector[vector[{{C_VALUE_TYPE}}]]) nogil
+      void coarsen_on_grid_inplace(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
+      vector[{{D['FILTRATION_TYPE']}}]& get_filtrations() nogil
+      {{if D['COLUMN_TYPE'] is not None}}
+      {{D['C_TEMPLATE_TYPE'][:-3]+"i32"}} coarsen_on_grid(vector[vector[{{D['C_VALUE_TYPE']}}]]) nogil
       {{endif}}
-      {{if IS_VINE}}
+      {{if D['IS_VINE']}}
       void vineyard_update() nogil
       vector[vector[vector[vector[unsigned int]]]] get_representative_cycles(bool, bool) nogil
-      vector[size_t] get_current_order() nogil
+      vector[uint32_t] get_current_order() nogil
       {{endif}}
 
-      {{if IS_KCRITICAL}}
-      void add_generator(const One_critical_filtration[{{C_VALUE_TYPE}}] &) nogil
+      {{if D['IS_KCRITICAL']}}
+      void add_generator(const One_critical_filtration[{{D['C_VALUE_TYPE']}}] &) nogil
       {{endif}}
 
-      {{if not IS_KCRITICAL}}
+      {{if not D['IS_KCRITICAL']}}
       void build_from_scc_file(const string&, bool, bool, int) except + nogil
       void write_to_scc_file(const string&, int, int, bool, bool, bool, bool) nogil
       {{endif}}
 
 
-      vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[vector[{{C_VALUE_TYPE}}]]) nogil
-      vector[vector[vector[pair[{{C_VALUE_TYPE}}, {{C_VALUE_TYPE}}]]]] persistence_on_lines(vector[pair[vector[{{C_VALUE_TYPE}}],vector[{{C_VALUE_TYPE}}]]]) nogil
+      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[vector[{{D['C_VALUE_TYPE']}}]]) nogil
+      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[pair[vector[{{D['C_VALUE_TYPE']}}],vector[{{D['C_VALUE_TYPE']}}]]]) nogil
 {{endfor}}
 
 
@@ -100,9 +105,9 @@ cdef extern from "Persistence_slices_interface.h":
 
 from multipers.mma_structures cimport Module
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
-  {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-  {{if IS_VINE and SHORT[0]=='f'}}
-  Module[{{C_VALUE_TYPE}}] multiparameter_module_approximation({{CTYPE}}&, One_critical_filtration[{{C_VALUE_TYPE}}]&, {{C_VALUE_TYPE}}, Box[{{C_VALUE_TYPE}}]&, bool, bool, bool) except + nogil
+{{for D in slicers}}
+  {{if D['IS_VINE'] and D['IS_FLOAT']}}
+  Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, One_critical_filtration[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool) except + nogil
   {{endif}}
   {{endfor}}
 
@@ -111,25 +116,23 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
 import multipers.slicer as mps
 from cython.operator cimport dereference
-{{for ctype,pytype, short in (("float",   "np.float32", "f32"), ("double",  "np.float64", "f64"))}} ## TODO : make it less hardcoded
-{{if short[0]=='f'}}
-cdef inline Module[{{ctype}}] _multiparameter_module_approximation_{{short}}(object slicer, One_critical_filtration[{{ctype}}]& direction, {{ctype}} max_error, Box[{{ctype}}] box, bool threshold, bool complete, bool verbose):
+{{for C_VALUE_TYPE,PYTHON_VALUE_TYPE,SHORT_VALUE_TYPE in float_value_types}}
+cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, One_critical_filtration[{{C_VALUE_TYPE}}]& direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
   import multipers.slicer as mps
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
-  cdef Module[{{ctype}}] mod
+  cdef Module[{{C_VALUE_TYPE}}] mod
   if False:
     pass
-  {{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-  {{if IS_VINE and SHORT == short}} 
-  elif isinstance(slicer, mps.{{PYTHON_TYPE}}):
+  {{for D in slicers}}
+  {{if D['IS_VINE'] and D['SHORT_VALUE_TYPE'] == SHORT_VALUE_TYPE}} 
+  elif isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
-      mod = multiparameter_module_approximation(dereference(<{{CTYPE}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose)
+      mod = multiparameter_module_approximation(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose)
     return mod
   {{endif}}
   {{endfor}}
   else:
     raise ValueError(f"Unsupported slicer type {type(slicer)}")
-{{endif}}
 {{endfor}}
 
 ###### RANK INVARIANT
@@ -147,9 +150,9 @@ ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure
 
 cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gudhi::multiparameter::rank_invariant":
   ## from slicers
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-    void compute_rank_invariant_python({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type) except + nogil
-    signed_measure_type compute_rank_signed_measure({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type, bool) except + nogil
+{{for D in slicers}}
+    void compute_rank_invariant_python({{D['C_TEMPLATE_TYPE']}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type) except + nogil
+    signed_measure_type compute_rank_signed_measure({{D['C_TEMPLATE_TYPE']}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type], indices_type, bool) except + nogil
   {{endfor}}
 
 
@@ -159,10 +162,10 @@ cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gu
 cdef inline void _compute_rank_invariant(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs):
   import multipers.slicer as mps
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+{{for D in slicers}}
+  if isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
-      compute_rank_invariant_python(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs)
+      compute_rank_invariant_python(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs)
       return
   {{endfor}}
   raise ValueError(f"Unsupported slicer type {type(slicer)}")
@@ -175,10 +178,10 @@ cdef inline  _compute_rank_sm(object slicer, tensor_dtype* container_ptr, vector
   cdef signed_measure_type sm
   cdef cnp.ndarray[indices_type, ndim=2] pts
   cdef cnp.ndarray[tensor_dtype, ndim=1] weights
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+{{for D in slicers}}
+  if isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
-      sm = compute_rank_signed_measure(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs, verbose)
+      sm = compute_rank_signed_measure(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, n_jobs, verbose)
     pts = np.asarray(sm.first,dtype=python_indices_type)
     weights = np.asarray(sm.second,dtype=python_tensor_dtype)
     return (pts,weights)
@@ -191,8 +194,8 @@ cdef inline  _compute_rank_sm(object slicer, tensor_dtype* container_ptr, vector
 
 cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "Gudhi::multiparameter::hilbert_function":
   ## from slicers
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-    signed_measure_type get_hilbert_signed_measure({{CTYPE}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type],bool,indices_type, bool) except + nogil
+{{for D in slicers}}
+    signed_measure_type get_hilbert_signed_measure({{D['C_TEMPLATE_TYPE']}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type],bool,indices_type, bool) except + nogil
   {{endfor}}
 cdef inline  _compute_hilbert_sm(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs, bool verbose,bool zero_pad):
   import multipers.slicer as mps
@@ -200,10 +203,10 @@ cdef inline  _compute_hilbert_sm(object slicer, tensor_dtype* container_ptr, vec
   cdef signed_measure_type sm
   cdef cnp.ndarray[indices_type, ndim=2] pts
   cdef cnp.ndarray[tensor_dtype, ndim=1] weights
-{{for CTYPE_H, CTYPE,PYTHON_TYPE, IS_SIMPLICIAL, IS_VINE, IS_KCRITICAL, C_VALUE_TYPE, PY_VALUE_TYPE, COL, SHORT, FILTRATION_TYPE  in slicers}}
-  if isinstance(slicer, mps.{{PYTHON_TYPE}}):
+{{for D in slicers}}
+  if isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
-      sm = get_hilbert_signed_measure(dereference(<{{CTYPE}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, zero_pad, n_jobs, verbose)
+      sm = get_hilbert_signed_measure(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, zero_pad, n_jobs, verbose)
     pts = np.asarray(sm.first,dtype=python_indices_type)
     weights = np.asarray(sm.second,dtype=python_tensor_dtype)
     return (pts,weights)

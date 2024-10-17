@@ -6,7 +6,7 @@ import numpy as np
 import multipers.io as mio
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
-from multipers.slicer import _column_type, _valid_dtype, is_slicer
+from multipers.slicer import _column_type, _valid_dtype, _valid_pers_backend, is_slicer
 
 
 ## TODO : maybe optimize this with cython
@@ -80,7 +80,7 @@ def _slicer_from_simplextree(st, backend, vineyard):
 
 def _slicer_from_blocks(
     blocks,
-    backend: Literal["matrix", "clement"],
+    pers_backend: _valid_pers_backend,
     vineyard: bool,
     is_kcritical: bool,
     dtype: type,
@@ -91,27 +91,21 @@ def _slicer_from_blocks(
         inplace=False,
         is_kcritical=is_kcritical,
     )
-    if backend == "matrix":
-        slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, col)(
-            boundary, dimensions, multifiltrations
-        )
-    elif backend == "clement":
-        assert dtype == np.float32 and not is_kcritical and vineyard
-        slicer = mps._SlicerClement(boundary, dimensions, multifiltrations)
-    else:
-        raise ValueError(f"Inimplemented backend {backend}.")
+    slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, col, pers_backend)(
+        boundary, dimensions, multifiltrations
+    )
     return slicer
 
 
 def Slicer(
     st=None,
-    backend: Literal["matrix", "clement", "graph"] = "matrix",
     vineyard: Optional[bool] = None,
     reduce: bool = False,
     reduce_backend: Optional[str] = None,
     dtype: Optional[_valid_dtype] = None,
     is_kcritical: Optional[bool] = None,
     column_type: Optional[_column_type] = None,
+    backend: Optional[_valid_pers_backend] = None,
     max_dim: Optional[int] = None,
     return_type_only: bool = False,
 ) -> mps.Slicer_type:
@@ -149,12 +143,18 @@ def Slicer(
     if is_slicer(st, allow_minpres=False):
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
+        backend = st.pers_backend if backend is None else backend
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
+        backend = "Matrix" if backend is None else backend
 
     _Slicer = mps.get_matrix_slicer(
-        is_vineyard=vineyard, is_k_critical=is_kcritical, dtype=dtype, col=column_type
+        is_vineyard=vineyard,
+        is_k_critical=is_kcritical,
+        dtype=dtype,
+        col=column_type,
+        pers_backend=backend,
     )
     if return_type_only:
         return _Slicer
@@ -174,11 +174,11 @@ def Slicer(
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
         slicer.minpres_degree = st.minpres_degree
-    elif is_simplextree_multi(st) and backend == "graph":
+    elif is_simplextree_multi(st) and backend == "Graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
-    elif backend == "graph":
+    elif backend == "Graph":
         raise ValueError(
             """
 Graph is simplicial, incompatible with minpres.
@@ -204,6 +204,9 @@ You can try using `multipers.slicer.to_simplextree`."""
             slicer.filtration_grid = filtration_grid
     if reduce:
         slicer = mps.minimal_presentation(
-            slicer, backend=reduce_backend, slicer_backend=backend, vineyard=vineyard
+            slicer,
+            backend=reduce_backend,
+            slicer_backend=backend,
+            vineyard=vineyard,
         )
     return slicer

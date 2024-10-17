@@ -11,45 +11,48 @@
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <ostream>
-#include <utility> // std::pair
+#include <utility>  // std::pair
 #include <vector>
 
 namespace Gudhi::multiparameter::hilbert_function {
 
 // TODO : this function is ugly
 template <typename Filtration, typename indices_type>
-inline typename Filtration::value_type
-horizontal_line_filtration2(const Filtration &x, indices_type height,
-                            indices_type i, indices_type j,
-                            const std::vector<indices_type> &fixed_values) {
+inline typename Filtration::value_type horizontal_line_filtration2(const Filtration &x,
+                                                                   indices_type height,
+                                                                   indices_type i,
+                                                                   indices_type j,
+                                                                   const std::vector<indices_type> &fixed_values) {
   const auto &inf = Filtration::Generator::T_inf;
   for (indices_type k = 0u; k < static_cast<indices_type>(x.size()); k++) {
-    if (k == i || k == j)
-      continue;                 // coordinate in the plane
-    if (x[k] > fixed_values[k]) // simplex appears after the plane
+    if (k == i || k == j) continue;  // coordinate in the plane
+    if (x[k] > fixed_values[k])      // simplex appears after the plane
       return inf;
   }
-  if (x[j] <= height) // simplex apppears in the plane, but is it in the line
-                      // with height "height"
+  if (x[j] <= height)  // simplex apppears in the plane, but is it in the line
+                       // with height "height"
     return x[i];
   else
     return inf;
 }
 
 template <typename index_type>
-using hilbert_thread_data = tbb::enumerable_thread_specific<
-    std::pair<Simplex_tree_std, std::vector<index_type>>>;
+using hilbert_thread_data = tbb::enumerable_thread_specific<std::pair<Simplex_tree_std, std::vector<index_type>>>;
+
 template <typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
     python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
     // Simplex_tree_std &_st,
     hilbert_thread_data<index_type> &thread_simplex_tree,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
+    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
-    const std::vector<index_type> degrees, index_type i, index_type j,
-    const std::vector<index_type> fixed_values, bool mobius_inverion,
-    bool zero_pad, int expand_collapse_dim = 0) {
+    const std::vector<index_type> degrees,
+    index_type i,
+    index_type j,
+    const std::vector<index_type> fixed_values,
+    bool mobius_inverion,
+    bool zero_pad,
+    int expand_collapse_dim = 0) {
   using value_type = typename Filtration::value_type;
   // if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
   // 	throw std::invalid_argument("Grid shape has to have at least 2
@@ -60,8 +63,7 @@ inline void compute_2d_hilbert_surface(
 
   constexpr bool verbose = false;
   index_type I = grid_shape[i + 1], J = grid_shape[j + 1];
-  if constexpr (verbose)
-    std::cout << "Grid shape : " << I << " " << J << std::endl;
+  if constexpr (verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
 
   // grid2d out(I, std::vector<int>(J,0)); // zero of good size
   // std::vector<std::vector<index_type>> free_coordinates(grid_shape.size());
@@ -100,8 +102,7 @@ inline void compute_2d_hilbert_surface(
     // coordinates_container[0] = 0; // not necessary
     // for (auto [c, i] : std::views::zip(fixed_values, std::views::iota(0u,
     // fixed_values.size()))) // NIK APPLE CLANG coordinates_container[i+1] = c;
-    for (auto i = 0u; i < fixed_values.size(); i++)
-      coordinates_container[i + 1] = fixed_values[i];
+    for (auto i = 0u; i < fixed_values.size(); i++) coordinates_container[i + 1] = fixed_values[i];
 
     coordinates_container[j + 1] = height;
 
@@ -116,50 +117,41 @@ inline void compute_2d_hilbert_surface(
       multi_filtration = st_multi.filtration(*sh_multi);
       typename Simplex_tree_std::Filtration_value horizontal_filtration;
       if constexpr (Filtration::is_multi_critical) {
-        horizontal_filtration = std::numeric_limits<
-            typename Simplex_tree_std::Filtration_value>::infinity();
+        horizontal_filtration = std::numeric_limits<typename Simplex_tree_std::Filtration_value>::infinity();
         for (const auto &stuff : multi_filtration)
-          horizontal_filtration =
-              std::min(horizontal_filtration,
-                       static_cast<Simplex_tree_std::Filtration_value>(
-                           horizontal_line_filtration2(stuff, height, i, j,
-                                                       fixed_values)));
+          horizontal_filtration = std::min(horizontal_filtration,
+                                           static_cast<Simplex_tree_std::Filtration_value>(
+                                               horizontal_line_filtration2(stuff, height, i, j, fixed_values)));
       } else {
-        horizontal_filtration = horizontal_line_filtration2(
-            multi_filtration, height, i, j, fixed_values);
+        horizontal_filtration = horizontal_line_filtration2(multi_filtration, height, i, j, fixed_values);
       }
       st_std.assign_filtration(*sh_standard, horizontal_filtration);
 
       if constexpr (verbose) {
         Gudhi::multi_filtration::One_critical_filtration<int> splx;
-        for (auto vertex : st_multi.simplex_vertex_range(*sh_multi))
-          splx.push_back(vertex);
-        std::cout << "Simplex " << splx << "/" << st_std.num_simplices()
-                  << " Filtration multi " << st_multi.filtration(*sh_multi)
-                  << " Filtration 1d " << st_std.filtration(*sh_standard)
-                  << "\n";
+        for (auto vertex : st_multi.simplex_vertex_range(*sh_multi)) splx.push_back(vertex);
+        std::cout << "Simplex " << splx << "/" << st_std.num_simplices() << " Filtration multi "
+                  << st_multi.filtration(*sh_multi) << " Filtration 1d " << st_std.filtration(*sh_standard) << "\n";
       }
     }
 
     if constexpr (verbose) {
       std::cout << "Coords : " << height << " [";
-      for (auto stuff : fixed_values)
-        std::cout << stuff << " ";
+      for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
-    const std::vector<Barcode> barcodes =
-        compute_dgms(st_std, degrees, expand_collapse_dim);
+    const std::vector<Barcode> barcodes = compute_dgms(st_std, degrees, expand_collapse_dim);
     index_type degree_index = 0;
-    for (const auto &barcode : barcodes) { // TODO range view cartesian product
+    for (const auto &barcode : barcodes) {  // TODO range view cartesian product
       coordinates_container[0] = degree_index;
       for (const auto &bar : barcode) {
-        auto birth = bar.first; // float
+        auto birth = bar.first;  // float
         auto death = bar.second;
         // if constexpr (verbose) std::cout << "BEFORE " << birth << " " <<
         // death << " " << I << " \n"; death = death > I ? I : death; // TODO
         // FIXME if constexpr (verbose) std::cout <<"AFTER" << birth << " " <<
         // death << " " << I << " \n";
-        if (birth > I) // some birth can be infinite
+        if (birth > I)  // some birth can be infinite
           continue;
 
         if (!mobius_inverion) {
@@ -177,23 +169,19 @@ inline void compute_2d_hilbert_surface(
           index_type border = I;
           // index_type border  = out.get_resolution()[i+1];
           dtype *ptr = &out[coordinates_container];
-          auto stop_value = death > static_cast<value_type>(border)
-                                ? border
-                                : static_cast<index_type>(death);
+          auto stop_value = death > static_cast<value_type>(border) ? border : static_cast<index_type>(death);
           // Warning : for some reason linux static casts float inf to -min_int
           // so min doesnt work.
           if constexpr (verbose) {
             std::cout << "Adding : (";
-            for (auto stuff : coordinates_container)
-              std::cout << stuff << ", ";
-            std::cout << ") With death " << death << " casted at "
-                      << static_cast<index_type>(death) << "with threshold at"
-                      << stop_value << " with " << border << std::endl;
+            for (auto stuff : coordinates_container) std::cout << stuff << ", ";
+            std::cout << ") With death " << death << " casted at " << static_cast<index_type>(death)
+                      << "with threshold at" << stop_value << " with " << border << std::endl;
           }
           for (index_type b = birth; b < stop_value; b++) {
-            (*ptr)++;           // adds one to the vector
-            ptr += shift_value; // shift the pointer to the next element in the
-                                // segment [birth, death]
+            (*ptr)++;            // adds one to the vector
+            ptr += shift_value;  // shift the pointer to the next element in the
+                                 // segment [birth, death]
           }
         } else {
           // out[degree_index][static_cast<int>(birth)][height]++; // No need to
@@ -209,11 +197,9 @@ inline void compute_2d_hilbert_surface(
 
           if constexpr (verbose) {
             std::cout << "Coordinate : ";
-            for (auto c : coordinates_container)
-              std::cout << c << ", ";
+            for (auto c : coordinates_container) std::cout << c << ", ";
             std::cout << std::endl;
-            std::cout << "axis, death, resolution : " << i + 1 << ", "
-                      << std::to_string(death) << ", "
+            std::cout << "axis, death, resolution : " << i + 1 << ", " << std::to_string(death) << ", "
                       << out.get_resolution()[i + 1];
             std::cout << std::endl;
           }
@@ -236,23 +222,22 @@ inline void compute_2d_hilbert_surface(
 }
 
 template <typename Filtration, typename dtype, typename index_type>
-void _rec_get_hilbert_surface(
-    python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
-    // Simplex_tree_std &_st,
-    hilbert_thread_data<index_type> &thread_simplex_tree,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
-    const std::vector<index_type> grid_shape,
-    const std::vector<index_type> degrees,
-    std::vector<index_type> coordinates_to_compute,
-    const std::vector<index_type> fixed_values, bool mobius_inverion = true,
-    bool zero_pad = false, int expand_collapse_dim = 0) {
+void _rec_get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
+                              // Simplex_tree_std &_st,
+                              hilbert_thread_data<index_type> &thread_simplex_tree,
+                              const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                              const std::vector<index_type> grid_shape,
+                              const std::vector<index_type> degrees,
+                              std::vector<index_type> coordinates_to_compute,
+                              const std::vector<index_type> fixed_values,
+                              bool mobius_inverion = true,
+                              bool zero_pad = false,
+                              int expand_collapse_dim = 0) {
   constexpr bool verbose = false;
 
   if constexpr (verbose) {
     std::cout << "Computing coordinates (";
-    for (auto c : coordinates_to_compute)
-      std::cout << c << ", ";
+    for (auto c : coordinates_to_compute) std::cout << c << ", ";
     std::cout << "). with fixed values (";
     for (auto c : fixed_values) {
       std::cout << c << ", ";
@@ -263,92 +248,97 @@ void _rec_get_hilbert_surface(
     compute_2d_hilbert_surface(st_multi,
                                // _st,
                                thread_simplex_tree,
-                               out, // assumes its a zero tensor
-                               grid_shape, degrees, coordinates_to_compute[0],
-                               coordinates_to_compute[1], fixed_values,
-                               mobius_inverion, zero_pad, expand_collapse_dim);
+                               out,  // assumes its a zero tensor
+                               grid_shape,
+                               degrees,
+                               coordinates_to_compute[0],
+                               coordinates_to_compute[1],
+                               fixed_values,
+                               mobius_inverion,
+                               zero_pad,
+                               expand_collapse_dim);
     return;
   }
 
   // coordinate to iterate.size --
   auto coordinate_to_iterate = coordinates_to_compute.back();
   coordinates_to_compute.pop_back();
-  tbb::parallel_for(
-      0, grid_shape[coordinate_to_iterate + 1], [&](index_type z) {
-        // Updates fixes values that defines the slice
-        std::vector<index_type> _fixed_values =
-            fixed_values; // TODO : do not copy this //thread local
-        _fixed_values[coordinate_to_iterate] = z;
-        _rec_get_hilbert_surface(st_multi, thread_simplex_tree, out, grid_shape,
-                                 degrees, coordinates_to_compute, _fixed_values,
-                                 mobius_inverion, zero_pad,
-                                 expand_collapse_dim);
-      });
+  tbb::parallel_for(0, grid_shape[coordinate_to_iterate + 1], [&](index_type z) {
+    // Updates fixes values that defines the slice
+    std::vector<index_type> _fixed_values = fixed_values;  // TODO : do not copy this //thread local
+    _fixed_values[coordinate_to_iterate] = z;
+    _rec_get_hilbert_surface(st_multi,
+                             thread_simplex_tree,
+                             out,
+                             grid_shape,
+                             degrees,
+                             coordinates_to_compute,
+                             _fixed_values,
+                             mobius_inverion,
+                             zero_pad,
+                             expand_collapse_dim);
+  });
   // rmq : with mobius_inversion + rec, the coordinates to compute size is 2 =>
   // first coord is always the initial 1st coord.
   // => inversion is only needed for coords > 2
 }
 
 template <typename Filtration, typename dtype, typename index_type>
-void get_hilbert_surface(
-    python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
-    const std::vector<index_type> &grid_shape,
-    const std::vector<index_type> &degrees,
-    std::vector<index_type> coordinates_to_compute,
-    const std::vector<index_type> &fixed_values, bool mobius_inverion = true,
-    bool zero_pad = false, bool expand_collapse = false) {
-  if (degrees.size() == 0)
-    return;
+void get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
+                         const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                         const std::vector<index_type> &grid_shape,
+                         const std::vector<index_type> &degrees,
+                         std::vector<index_type> coordinates_to_compute,
+                         const std::vector<index_type> &fixed_values,
+                         bool mobius_inverion = true,
+                         bool zero_pad = false,
+                         bool expand_collapse = false) {
+  if (degrees.size() == 0) return;
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
-    throw std::logic_error("Not implemented for " +
-                           std::to_string(coordinates_to_compute.size()) +
-                           "<2 parameters.");
+    throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
 
   Simplex_tree_std _st;
   Gudhi::multi_persistence::flatten(_st, st_multi,
-          -1); // copies the st_multi to a standard 1-pers simplextree
-  std::vector<index_type> coordinates_container(
-      st_multi.get_number_of_parameters() + 1); // +1 for degree
+                                    -1);  // copies the st_multi to a standard 1-pers simplextree
+  std::vector<index_type> coordinates_container(st_multi.get_number_of_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
   // coordinates_container.push_back(0); // degree
   // for (auto c : fixed_values) coordinates_container.push_back(c);
-  std::pair<Simplex_tree_std, std::vector<index_type>>
-      thread_data_initialization = {_st, coordinates_container};
-  const int max_dim =
-      expand_collapse ? *std::max_element(degrees.begin(), degrees.end()) + 1
-                      : 0;
-  tbb::enumerable_thread_specific<
-      std::pair<Simplex_tree_std, std::vector<index_type>>>
-      thread_simplex_tree(
-          thread_data_initialization); // this has a fixed size, so init should
-                                       // be benefic
-  _rec_get_hilbert_surface(st_multi, thread_simplex_tree, out, grid_shape,
-                           degrees, coordinates_to_compute, fixed_values,
-                           mobius_inverion, zero_pad, max_dim);
+  std::pair<Simplex_tree_std, std::vector<index_type>> thread_data_initialization = {_st, coordinates_container};
+  const int max_dim = expand_collapse ? *std::max_element(degrees.begin(), degrees.end()) + 1 : 0;
+  tbb::enumerable_thread_specific<std::pair<Simplex_tree_std, std::vector<index_type>>> thread_simplex_tree(
+      thread_data_initialization);  // this has a fixed size, so init should
+                                    // be benefic
+  _rec_get_hilbert_surface(st_multi,
+                           thread_simplex_tree,
+                           out,
+                           grid_shape,
+                           degrees,
+                           coordinates_to_compute,
+                           fixed_values,
+                           mobius_inverion,
+                           zero_pad,
+                           max_dim);
 }
 
 template <typename Filtration, typename dtype = int, typename indices_type>
-std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>>
-get_hilbert_signed_measure(
+std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilbert_signed_measure(
     python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
-    dtype *data_ptr, std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees, bool zero_pad = false,
-    indices_type n_jobs = 0, const bool verbose = false,
+    dtype *data_ptr,
+    std::vector<indices_type> grid_shape,
+    const std::vector<indices_type> degrees,
+    bool zero_pad = false,
+    indices_type n_jobs = 0,
+    const bool verbose = false,
     const bool expand_collapse = false) {
-  if (degrees.size() == 0)
-    return {{}, {}};
+  if (degrees.size() == 0) return {{}, {}};
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(
-      data_ptr, grid_shape); // assumes its a zero tensor
-  std::vector<indices_type> coordinates_to_compute(
-      st_multi.get_number_of_parameters());
-  for (auto i = 0u; i < coordinates_to_compute.size(); i++)
-    coordinates_to_compute[i] = i;
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  std::vector<indices_type> coordinates_to_compute(st_multi.get_number_of_parameters());
+  for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
   // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
   // clang
@@ -356,23 +346,28 @@ get_hilbert_signed_measure(
 
   if (verbose) {
     std::cout << "Container shape : ";
-    for (auto r : container.get_resolution())
-      std::cout << r << ", ";
+    for (auto r : container.get_resolution()) std::cout << r << ", ";
     std::cout << "\nContainer size : " << container.size();
     std::cout << "\nComputing hilbert invariant ..." << std::flush;
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
     for (auto i = 1; i < st_multi.get_number_of_parameters() + 1; i++)
-      grid_shape[i]--; // get hilbert surface computes according to grid_shape.
+      grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
     // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
-  oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
+  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
   arena.execute([&] {
-    get_hilbert_surface(st_multi, container, grid_shape, degrees,
-                        coordinates_to_compute, fixed_values, true, zero_pad,
+    get_hilbert_surface(st_multi,
+                        container,
+                        grid_shape,
+                        degrees,
+                        coordinates_to_compute,
+                        fixed_values,
+                        true,
+                        zero_pad,
                         expand_collapse);
   });
 
@@ -384,9 +379,7 @@ get_hilbert_signed_measure(
   // for (indices_type axis :
   // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1;
-       axis++)
-    container.differentiate(axis);
+  for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
@@ -398,25 +391,23 @@ get_hilbert_signed_measure(
   return raw_signed_measure;
 }
 
-template <typename Filtration, typename dtype, typename indices_type,
-          typename... Args>
-void get_hilbert_surface_python(
-    python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
-    dtype *data_ptr, std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees, const bool mobius_inversion,
-    const bool zero_pad, indices_type n_jobs, bool expand_collapse) {
+template <typename Filtration, typename dtype, typename indices_type, typename... Args>
+void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
+                                dtype *data_ptr,
+                                std::vector<indices_type> grid_shape,
+                                const std::vector<indices_type> degrees,
+                                const bool mobius_inversion,
+                                const bool zero_pad,
+                                indices_type n_jobs,
+                                bool expand_collapse) {
   const bool verbose = false;
-  if (degrees.size() == 0)
-    return;
+  if (degrees.size() == 0) return;
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(
-      data_ptr, grid_shape); // assumes its a zero tensor
-  std::vector<indices_type> coordinates_to_compute(
-      st_multi.get_number_of_parameters());
-  for (auto i = 0u; i < coordinates_to_compute.size(); i++)
-    coordinates_to_compute[i] = i;
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  std::vector<indices_type> coordinates_to_compute(st_multi.get_number_of_parameters());
+  for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
   // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
   // clang
@@ -424,30 +415,33 @@ void get_hilbert_surface_python(
 
   if (verbose) {
     std::cout << "Container shape : ";
-    for (auto r : container.get_resolution())
-      std::cout << r << ", ";
+    for (auto r : container.get_resolution()) std::cout << r << ", ";
     std::cout << "\nContainer size : " << container.size();
     std::cout << "\nComputing hilbert invariant ...";
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
     for (auto i = 1; i < st_multi.get_number_of_parameters() + 1; i++)
-      grid_shape[i]--; // get hilbert surface computes according to grid_shape.
+      grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
     // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
-  oneapi::tbb::task_arena arena(n_jobs); // limits the number of threads
+  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
   arena.execute([&] {
-    get_hilbert_surface(st_multi, container, grid_shape, degrees,
-                        coordinates_to_compute, fixed_values, mobius_inversion,
-                        zero_pad, expand_collapse);
+    get_hilbert_surface(st_multi,
+                        container,
+                        grid_shape,
+                        degrees,
+                        coordinates_to_compute,
+                        fixed_values,
+                        mobius_inversion,
+                        zero_pad,
+                        expand_collapse);
   });
 
   if (mobius_inversion)
-    for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1;
-         axis++)
-      container.differentiate(axis);
+    for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
   return;
 }
 
@@ -455,30 +449,27 @@ void get_hilbert_surface_python(
 ///
 ///
 
-template <typename PersBackend, typename Structure, typename Filtration,
-          typename dtype, typename index_type>
+template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
-    tbb::enumerable_thread_specific<
-        std::pair<typename interface::Truc<PersBackend, Structure,
-                                           Filtration>::ThreadSafe,
-                  std::vector<index_type>>> &thread_stuff,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
+    tbb::enumerable_thread_specific<std::pair<typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+                                              std::vector<index_type>>> &thread_stuff,
+    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
-    const std::vector<index_type> degrees, index_type i, index_type j,
-    const std::vector<index_type> fixed_values, bool mobius_inverion,
+    const std::vector<index_type> degrees,
+    index_type i,
+    index_type j,
+    const std::vector<index_type> fixed_values,
+    bool mobius_inverion,
     bool zero_pad) {
   using value_type = typename Filtration::value_type;
 
   constexpr bool verbose = false;
   index_type I = grid_shape[i + 1], J = grid_shape[j + 1];
-  if constexpr (verbose)
-    std::cout << "Grid shape : " << I << " " << J << std::endl;
+  if constexpr (verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
   tbb::parallel_for(0, J, [&](index_type height) {
     // SIMPLEXTREE INIT
     auto &[slicer, coordinates_container] = thread_stuff.local();
-    for (auto i = 0u; i < fixed_values.size(); i++)
-      coordinates_container[i + 1] = fixed_values[i];
+    for (auto i = 0u; i < fixed_values.size(); i++) coordinates_container[i + 1] = fixed_values[i];
 
     coordinates_container[j + 1] = height;
 
@@ -492,23 +483,19 @@ inline void compute_2d_hilbert_surface(
         for (const auto &stuff : multi_filtration[k])
           horizontal_filtration =
               std::min(horizontal_filtration,
-                       static_cast<value_type>(horizontal_line_filtration2(
-                           stuff, height, i, j, fixed_values)));
+                       static_cast<value_type>(horizontal_line_filtration2(stuff, height, i, j, fixed_values)));
       } else {
-        horizontal_filtration = horizontal_line_filtration2(
-            multi_filtration[k], height, i, j, fixed_values);
+        horizontal_filtration = horizontal_line_filtration2(multi_filtration[k], height, i, j, fixed_values);
       }
       slice_filtration[k] = horizontal_filtration;
     }
 
     if constexpr (verbose) {
       std::cout << "Coords : " << height << " [";
-      for (auto stuff : fixed_values)
-        std::cout << stuff << " ";
+      for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
-    using bc_type = typename interface::Truc<PersBackend, Structure,
-                                             Filtration>::split_barcode;
+    using bc_type = typename interface::Truc<PersBackend, Structure, Filtration>::split_barcode;
     bc_type barcodes;
     if constexpr (PersBackend::is_vine) {
       if (!slicer.has_persistence()) [[unlikely]] {
@@ -518,44 +505,39 @@ inline void compute_2d_hilbert_surface(
       }
       barcodes = slicer.get_barcode();
     } else {
-      slicer.template compute_persistence<false>(); // BUG : cannot put this to
-                                                    // true ??
+      slicer.template compute_persistence<false>();  // BUG : cannot put this to
+                                                     // true ??
       barcodes = slicer.get_barcode();
     }
     index_type degree_index = 0;
-    for (auto degree : degrees) { // TODO range view cartesian product
+    for (auto degree : degrees) {  // TODO range view cartesian product
       const auto &barcode = barcodes[degree];
       coordinates_container[0] = degree_index;
       for (const auto &bar : barcode) {
-        auto birth = bar.first; // float
+        auto birth = bar.first;  // float
         auto death = bar.second;
-        if (birth > I) // some birth can be infinite
+        if (birth > I)  // some birth can be infinite
           continue;
 
         if (!mobius_inverion) {
-
           coordinates_container[i + 1] = static_cast<index_type>(birth);
           index_type shift_value = out.get_cum_resolution()[i + 1];
           index_type border = I;
           // index_type border  = out.get_resolution()[i+1];
           dtype *ptr = &out[coordinates_container];
-          auto stop_value = death > static_cast<value_type>(border)
-                                ? border
-                                : static_cast<index_type>(death);
+          auto stop_value = death > static_cast<value_type>(border) ? border : static_cast<index_type>(death);
           // Warning : for some reason linux static casts float inf to -min_int
           // so min doesnt work.
           if constexpr (verbose) {
             std::cout << "Adding : (";
-            for (auto stuff : coordinates_container)
-              std::cout << stuff << ", ";
-            std::cout << ") With death " << death << " casted at "
-                      << static_cast<index_type>(death) << "with threshold at"
-                      << stop_value << " with " << border << std::endl;
+            for (auto stuff : coordinates_container) std::cout << stuff << ", ";
+            std::cout << ") With death " << death << " casted at " << static_cast<index_type>(death)
+                      << "with threshold at" << stop_value << " with " << border << std::endl;
           }
           for (index_type b = birth; b < stop_value; b++) {
-            (*ptr)++;           // adds one to the vector
-            ptr += shift_value; // shift the pointer to the next element in the
-                                // segment [birth, death]
+            (*ptr)++;            // adds one to the vector
+            ptr += shift_value;  // shift the pointer to the next element in the
+                                 // segment [birth, death]
           }
         } else {
           coordinates_container[i + 1] = static_cast<index_type>(birth);
@@ -563,11 +545,9 @@ inline void compute_2d_hilbert_surface(
 
           if constexpr (verbose) {
             std::cout << "Coordinate : ";
-            for (auto c : coordinates_container)
-              std::cout << c << ", ";
+            for (auto c : coordinates_container) std::cout << c << ", ";
             std::cout << std::endl;
-            std::cout << "axis, death, resolution : " << i + 1 << ", "
-                      << std::to_string(death) << ", "
+            std::cout << "axis, death, resolution : " << i + 1 << ", " << std::to_string(death) << ", "
                       << out.get_resolution()[i + 1];
             std::cout << std::endl;
           }
@@ -586,26 +566,23 @@ inline void compute_2d_hilbert_surface(
   });
   return;
 }
-template <typename PersBackend, typename Structure, typename Filtration,
-          typename dtype, typename index_type>
+
+template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(
-    tbb::enumerable_thread_specific<
-        std::pair<typename interface::Truc<PersBackend, Structure,
-                                           Filtration>::ThreadSafe,
-                  std::vector<index_type>>> &thread_stuff,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
+    tbb::enumerable_thread_specific<std::pair<typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+                                              std::vector<index_type>>> &thread_stuff,
+    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
     const std::vector<index_type> degrees,
     std::vector<index_type> coordinates_to_compute,
-    const std::vector<index_type> fixed_values, bool mobius_inverion = true,
+    const std::vector<index_type> fixed_values,
+    bool mobius_inverion = true,
     bool zero_pad = false) {
   constexpr bool verbose = false;
 
   if constexpr (verbose) {
     std::cout << "Computing coordinates (";
-    for (auto c : coordinates_to_compute)
-      std::cout << c << ", ";
+    for (auto c : coordinates_to_compute) std::cout << c << ", ";
     std::cout << "). with fixed values (";
     for (auto c : fixed_values) {
       std::cout << c << ", ";
@@ -613,90 +590,82 @@ void _rec_get_hilbert_surface(
     std::cout << ")." << std::endl;
   }
   if (coordinates_to_compute.size() == 2) {
-    compute_2d_hilbert_surface<PersBackend, Structure, Filtration, dtype,
-                               index_type>(
-        thread_stuff,
-        out, // assumes its a zero tensor
-        grid_shape, degrees, coordinates_to_compute[0],
-        coordinates_to_compute[1], fixed_values, mobius_inverion, zero_pad);
+    compute_2d_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(thread_stuff,
+                                                                                      out,  // assumes its a zero tensor
+                                                                                      grid_shape,
+                                                                                      degrees,
+                                                                                      coordinates_to_compute[0],
+                                                                                      coordinates_to_compute[1],
+                                                                                      fixed_values,
+                                                                                      mobius_inverion,
+                                                                                      zero_pad);
     return;
   }
 
   // coordinate to iterate.size --
   auto coordinate_to_iterate = coordinates_to_compute.back();
   coordinates_to_compute.pop_back();
-  tbb::parallel_for(
-      0, grid_shape[coordinate_to_iterate + 1], [&](index_type z) {
-        // Updates fixes values that defines the slice
-        std::vector<index_type> _fixed_values =
-            fixed_values; // TODO : do not copy this //thread local
-        _fixed_values[coordinate_to_iterate] = z;
-        _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype,
-                                 index_type>(
-            thread_stuff, out, grid_shape, degrees, coordinates_to_compute,
-            _fixed_values, mobius_inverion, zero_pad);
-      });
+  tbb::parallel_for(0, grid_shape[coordinate_to_iterate + 1], [&](index_type z) {
+    // Updates fixes values that defines the slice
+    std::vector<index_type> _fixed_values = fixed_values;  // TODO : do not copy this //thread local
+    _fixed_values[coordinate_to_iterate] = z;
+    _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
+        thread_stuff, out, grid_shape, degrees, coordinates_to_compute, _fixed_values, mobius_inverion, zero_pad);
+  });
   // rmq : with mobius_inversion + rec, the coordinates to compute size is 2 =>
   // first coord is always the initial 1st coord.
   // => inversion is only needed for coords > 2
 }
 
-template <typename PersBackend, typename Structure, typename Filtration,
-          typename dtype, typename index_type>
-void get_hilbert_surface(
-    interface::Truc<PersBackend, Structure, Filtration> &slicer,
-    const tensor::static_tensor_view<dtype, index_type>
-        &out, // assumes its a zero tensor
-    const std::vector<index_type> &grid_shape,
-    const std::vector<index_type> &degrees,
-    std::vector<index_type> coordinates_to_compute,
-    const std::vector<index_type> &fixed_values, bool mobius_inverion = true,
-    bool zero_pad = false) {
-  if (degrees.size() == 0)
-    return;
+template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
+void get_hilbert_surface(interface::Truc<PersBackend, Structure, Filtration> &slicer,
+                         const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                         const std::vector<index_type> &grid_shape,
+                         const std::vector<index_type> &degrees,
+                         std::vector<index_type> coordinates_to_compute,
+                         const std::vector<index_type> &fixed_values,
+                         bool mobius_inverion = true,
+                         bool zero_pad = false) {
+  if (degrees.size() == 0) return;
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
-    throw std::logic_error("Not implemented for " +
-                           std::to_string(coordinates_to_compute.size()) +
-                           "<2 parameters.");
-  using ThreadSafe =
-      typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe;
+    throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
+  using ThreadSafe = typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe;
   ThreadSafe slicer_thread(slicer);
-  std::vector<index_type> coordinates_container(slicer_thread.num_parameters() +
-                                                1); // +1 for degree
+  std::vector<index_type> coordinates_container(slicer_thread.num_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
   // coordinates_container.push_back(0); // degree
   // for (auto c : fixed_values) coordinates_container.push_back(c);
-  std::pair<ThreadSafe, std::vector<index_type>> thread_data_initialization = {
-      slicer_thread, coordinates_container};
-  tbb::enumerable_thread_specific<
-      std::pair<ThreadSafe, std::vector<index_type>>>
-      thread_stuff(thread_data_initialization); // this has a fixed size, so
-                                                // init should be benefic
-  _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype,
-                           index_type>(thread_stuff, out, grid_shape, degrees,
-                                       coordinates_to_compute, fixed_values,
-                                       mobius_inverion, zero_pad);
+  std::pair<ThreadSafe, std::vector<index_type>> thread_data_initialization = {slicer_thread, coordinates_container};
+  tbb::enumerable_thread_specific<std::pair<ThreadSafe, std::vector<index_type>>> thread_stuff(
+      thread_data_initialization);  // this has a fixed size, so
+                                    // init should be benefic
+  _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
+      thread_stuff, out, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inverion, zero_pad);
 }
-template <typename PersBackend, typename Structure, typename Filtration,
-          typename dtype, typename indices_type, typename... Args>
-void get_hilbert_surface_python(
-    interface::Truc<PersBackend, Structure, Filtration> &slicer,
-    dtype *data_ptr, std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees, const bool mobius_inversion,
-    const bool zero_pad, indices_type n_jobs) {
+
+template <typename PersBackend,
+          typename Structure,
+          typename Filtration,
+          typename dtype,
+          typename indices_type,
+          typename... Args>
+void get_hilbert_surface_python(interface::Truc<PersBackend, Structure, Filtration> &slicer,
+                                dtype *data_ptr,
+                                std::vector<indices_type> grid_shape,
+                                const std::vector<indices_type> degrees,
+                                const bool mobius_inversion,
+                                const bool zero_pad,
+                                indices_type n_jobs) {
   const bool verbose = false;
-  if (degrees.size() == 0)
-    return;
+  if (degrees.size() == 0) return;
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(
-      data_ptr, grid_shape); // assumes its a zero tensor
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
   std::size_t num_parameters = slicer.num_parameters();
   std::vector<indices_type> coordinates_to_compute(num_parameters);
-  for (auto i = 0u; i < coordinates_to_compute.size(); i++)
-    coordinates_to_compute[i] = i;
+  for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
   // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
   // clang
@@ -704,51 +673,50 @@ void get_hilbert_surface_python(
 
   if (verbose) {
     std::cout << "Container shape : ";
-    for (auto r : container.get_resolution())
-      std::cout << r << ", ";
+    for (auto r : container.get_resolution()) std::cout << r << ", ";
     std::cout << "\nContainer size : " << container.size();
     std::cout << "\nComputing hilbert invariant ...";
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
     for (auto i = 1; i < num_parameters + 1; i++)
-      grid_shape[i]--; // get hilbert surface computes according to grid_shape.
+      grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
     // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
-  oneapi::tbb::task_arena arena(
-      PersBackend::is_vine ? 1 : n_jobs); // limits the number of threads
+  oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
   arena.execute([&] {
-    get_hilbert_surface(slicer, container, grid_shape, degrees,
-                        coordinates_to_compute, fixed_values, mobius_inversion,
-                        zero_pad);
+    get_hilbert_surface(
+        slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inversion, zero_pad);
   });
 
   if (mobius_inversion)
-    for (indices_type axis = 2u; axis < num_parameters + 1; axis++)
-      container.differentiate(axis);
+    for (indices_type axis = 2u; axis < num_parameters + 1; axis++) container.differentiate(axis);
   return;
 }
 
-template <typename PersBackend, typename Structure, typename Filtration,
-          typename dtype, typename indices_type, typename... Args>
-std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>>
-get_hilbert_signed_measure(
+template <typename PersBackend,
+          typename Structure,
+          typename Filtration,
+          typename dtype,
+          typename indices_type,
+          typename... Args>
+std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilbert_signed_measure(
     interface::Truc<PersBackend, Structure, Filtration> &slicer,
-    dtype *data_ptr, std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees, bool zero_pad = false,
-    indices_type n_jobs = 0, const bool verbose = false) {
-  if (degrees.size() == 0)
-    return {{}, {}};
+    dtype *data_ptr,
+    std::vector<indices_type> grid_shape,
+    const std::vector<indices_type> degrees,
+    bool zero_pad = false,
+    indices_type n_jobs = 0,
+    const bool verbose = false) {
+  if (degrees.size() == 0) return {{}, {}};
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(
-      data_ptr, grid_shape); // assumes its a zero tensor
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
   std::vector<indices_type> coordinates_to_compute(slicer.num_parameters());
-  for (auto i = 0u; i < coordinates_to_compute.size(); i++)
-    coordinates_to_compute[i] = i;
+  for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
   // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
   // clang
@@ -756,24 +724,21 @@ get_hilbert_signed_measure(
 
   if (verbose) {
     std::cout << "Container shape : ";
-    for (auto r : container.get_resolution())
-      std::cout << r << ", ";
+    for (auto r : container.get_resolution()) std::cout << r << ", ";
     std::cout << "\nContainer size : " << container.size();
     std::cout << "\nComputing hilbert invariant ..." << std::flush;
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
     for (auto i = 1u; i < slicer.num_parameters() + 1; i++)
-      grid_shape[i]--; // get hilbert surface computes according to grid_shape.
+      grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
     // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
-  oneapi::tbb::task_arena arena(
-      PersBackend::is_vine ? 1 : n_jobs); // limits the number of threads
+  oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
   arena.execute([&] {
-    get_hilbert_surface(slicer, container, grid_shape, degrees,
-                        coordinates_to_compute, fixed_values, true, zero_pad);
+    get_hilbert_surface(slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, true, zero_pad);
   });
 
   if (verbose) {
@@ -784,8 +749,7 @@ get_hilbert_signed_measure(
   // for (indices_type axis :
   // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (indices_type axis = 2;
-       axis < static_cast<indices_type>(slicer.num_parameters() + 1); axis++)
+  for (indices_type axis = 2; axis < static_cast<indices_type>(slicer.num_parameters() + 1); axis++)
     container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";
@@ -797,4 +761,4 @@ get_hilbert_signed_measure(
   }
   return raw_signed_measure;
 }
-} // namespace Gudhi::multiparameter::hilbert_function
+}  // namespace Gudhi::multiparameter::hilbert_function

@@ -18,6 +18,7 @@
 #define MMA_INTERFACE_MATRIX_H
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <ostream>
 #include <utility>
@@ -30,6 +31,7 @@ namespace Gudhi::multiparameter::interface {
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+  using Index = std::uint32_t;
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = true;
@@ -38,6 +40,7 @@ struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<co
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_Clement_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+  using Index = std::uint32_t;
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = true;
@@ -49,6 +52,7 @@ struct Multi_persistence_Clement_options : Gudhi::persistence_matrix::Default_op
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+  using Index = std::uint32_t;
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = false;
@@ -70,7 +74,7 @@ class Persistence_backend_matrix {
 
   class Barcode_iterator : public boost::iterator_facade<Barcode_iterator, const bar &, boost::forward_traversal_tag> {
    public:
-    Barcode_iterator(const typename matrix_type::Barcode *barcode, const std::vector<std::size_t> *inv)
+    Barcode_iterator(const typename matrix_type::Barcode *barcode, const std::vector<Index> *inv)
         : barcode_(barcode->size() == 0 ? nullptr : barcode), perm_(barcode->size() == 0 ? nullptr : inv), currPos_(0) {
       if (barcode_ != nullptr && perm_ != nullptr) {
         auto &b = barcode_->operator[](currPos_);
@@ -87,7 +91,7 @@ class Persistence_backend_matrix {
     friend class boost::iterator_core_access;
 
     const typename matrix_type::Barcode *barcode_;
-    const std::vector<std::size_t> *perm_;
+    const std::vector<Index> *perm_;
     std::size_t currPos_;
     bar currBar_;
 
@@ -122,7 +126,7 @@ class Persistence_backend_matrix {
    public:
     using iterator = Barcode_iterator;
 
-    Barcode(matrix_type &matrix, const std::vector<std::size_t> *perm) : barcode_(&matrix.get_current_barcode()) {
+    Barcode(matrix_type &matrix, const std::vector<Index> *perm) : barcode_(&matrix.get_current_barcode()) {
       const bool debug = false;
       if constexpr (Matrix_options::has_vine_update) {
         perm_ = perm;
@@ -166,21 +170,21 @@ class Persistence_backend_matrix {
 
    private:
     const typename matrix_type::Barcode *barcode_;
-    typename std::conditional<Matrix_options::has_vine_update,
-                              const std::vector<std::size_t> *,
-                              std::vector<std::size_t>>::type perm_;
+    typename std::conditional<Matrix_options::has_vine_update, const std::vector<Index> *, std::vector<Index>>::type
+        perm_;
   };
 
   Persistence_backend_matrix() : permutation_(nullptr) {};
 
-  Persistence_backend_matrix(const Boundary_matrix_type &boundaries, std::vector<std::size_t> &permutation)
+  Persistence_backend_matrix(const Boundary_matrix_type &boundaries, std::vector<Index> &permutation)
       : matrix_(boundaries.size()), permutation_(&permutation) {
+    static_assert(Matrix_options::is_of_boundary_type || Matrix_options::has_vine_update, "Clement implies vine.");
     const bool verbose = false;
     if constexpr (verbose) std::cout << "Constructing matrix..." << std::endl;
-    std::vector<std::size_t> permutationInv(permutation_->size());
-    std::vector<std::size_t> boundary_container;
+    std::vector<Index> permutationInv(permutation_->size());
+    std::vector<Index> boundary_container;
     std::size_t c = 0;
-    for (std::size_t i : *permutation_) {
+    for (auto i : *permutation_) {
       if (i >= boundaries.size()) {
         c++;
         continue;
@@ -243,7 +247,7 @@ class Persistence_backend_matrix {
     // finite) cf barcode perm which is copied to remove the -1
     std::vector<unsigned int> permutation2;
     permutation2.reserve(permutation_->size());
-    for (std::size_t i : *permutation_) {
+    for (auto i : *permutation_) {
       if (i >= matrix_.get_number_of_columns()) {
         continue;
       }
@@ -265,11 +269,11 @@ class Persistence_backend_matrix {
     return current_cycles;
   }
 
-  inline void _update_permutation_ptr(std::vector<std::size_t> &perm) { permutation_ = &perm; }
+  inline void _update_permutation_ptr(std::vector<Index> &perm) { permutation_ = &perm; }
 
  private:
   matrix_type matrix_;
-  std::vector<std::size_t> *permutation_;
+  std::vector<Index> *permutation_;
 };
 
 }  // namespace Gudhi::multiparameter::interface
