@@ -15,7 +15,7 @@ mass_defaults = [None, "auto"]
 strats = [("regular_closest", 20), ("quantile", 20), ("regular", 17)]
 
 mio._init_external_softwares()
-mpfree_flag = mio.pathes["mpfree"] is not None
+mpfree_flag = mio._check_available("mpfree")
 
 
 @pytest.mark.parametrize("invariant", invariants)
@@ -57,30 +57,33 @@ def test_backends(invariant, degree, mass_default, S):
                 invariant=invariant,
             )[0]
         )
-    if invariant != "euler" and mpfree_flag:
-        for s in [sv, snv]:
-            assert s.minpres(degree=degree).is_minpres, "minpres is not minpres"
-            sms.append(
-                mp.signed_measure(
-                    s.minpres(degree=degree),
-                    degree=degree,
-                    grid_strategy=strat,
-                    resolution=r,
-                    mass_default=mass_default,
-                    invariant=invariant,
-                )[0]
-            )
-            sms.append(
-                mp.signed_measure(
-                    st,
-                    grid_strategy=strat,
-                    degree=degree,
-                    resolution=r,
-                    mass_default=mass_default,
-                    backend="mpfree",
-                    invariant=invariant,
-                )[0]
-            )
+    if invariant != "euler":
+        if not mpfree_flag:
+            pytest.skip(r"Skipping next test, as `mpfree` was not found.")
+        else:
+            for s in [sv, snv]:
+                assert s.minpres(degree=degree).is_minpres, "minpres is not minpres"
+                sms.append(
+                    mp.signed_measure(
+                        s.minpres(degree=degree),
+                        degree=degree,
+                        grid_strategy=strat,
+                        resolution=r,
+                        mass_default=mass_default,
+                        invariant=invariant,
+                    )[0]
+                )
+                sms.append(
+                    mp.signed_measure(
+                        st,
+                        grid_strategy=strat,
+                        degree=degree,
+                        resolution=r,
+                        mass_default=mass_default,
+                        backend="mpfree",
+                        invariant=invariant,
+                    )[0]
+                )
     if mass_default is not None and invariant != "rank":
         assert sms[0][1].sum() == 0, "Did not remove all of the mass"
     assert_sm(*sms, exact=False, max_error=0.5)

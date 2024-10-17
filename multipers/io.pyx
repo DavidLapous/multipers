@@ -87,7 +87,7 @@ def _path_init(soft:str|os.PathLike):
 
 
 
-pathes = {
+cdef dict[str,str|None] pathes = {
         "mpfree":None,
         "2pac":None,
         "function_delaunay":None,
@@ -229,6 +229,10 @@ or in you $PATH.
 For instance:
 {doc_soft_easy_install[soft]}
                                  """)
+def _check_available(soft:str):
+    _init_external_softwares()
+    return pathes.get(soft,None) is not None
+
 
 def scc_reduce_from_str(
         path:str|os.PathLike,
@@ -705,7 +709,3 @@ def scc2disk_old(
         str_blocks.append(np.char.add(C,D))
     
     np.savetxt("test.scc", np.concatenate(str_blocks), delimiter="", fmt="%s")
-
-
-
-

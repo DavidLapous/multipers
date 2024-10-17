@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from numpy import array
 
 import multipers as mp
@@ -100,7 +101,7 @@ def test_representative_cycles():
     ), f"Invalid number of 0-cycles, got {np.asarray(cycles[0]).size}"
     for c in cycles[1]:
         assert (
-            np.unique(cycles[1][0], return_counts=1)[1] == 2
+            np.unique(cycles[1][0], return_counts=True)[1] == 2
         ).all(), f"Found a non-cycle, {cycles[1][0]}"
     assert len(cycles[2]) == 0, "Found a 2-cycle, which should not exist"
 
@@ -128,6 +129,7 @@ def test_scc():
 
     import multipers as mp
     from multipers.distances import sm_distance
+    from multipers.io import _check_available
     from multipers.tests import random_st
 
     st = random_st(npts=500, num_parameters=2)
@@ -153,7 +155,10 @@ def test_scc():
     s.to_scc(
         "truc.scc",
     )
-    s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
-    (a,) = mp.signed_measure(s, degree=1)
-    (b,) = mp.signed_measure(s2, degree=1)
-    assert sm_distance(a, b) == 0
+    if _check_available("multipers"):
+        s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
+        (a,) = mp.signed_measure(s, degree=1)
+        (b,) = mp.signed_measure(s2, degree=1)
+        assert sm_distance(a, b) == 0
+    else:
+        pytest.skip("Skipped a test bc `multipers` was not found.")
