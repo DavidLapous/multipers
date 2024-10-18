@@ -155,10 +155,10 @@ def test_scc():
     s.to_scc(
         "truc.scc",
     )
-    if _check_available("multipers"):
+    if _check_available("mpfree"):
         s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
         (a,) = mp.signed_measure(s, degree=1)
         (b,) = mp.signed_measure(s2, degree=1)
         assert sm_distance(a, b) == 0
     else:
-        pytest.skip("Skipped a test bc `multipers` was not found.")
+        pytest.skip("Skipped a test bc `mpfree` was not found.")
