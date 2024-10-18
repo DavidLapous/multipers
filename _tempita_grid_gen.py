@@ -53,11 +53,14 @@ matrix_types = [
 
 def check_combination(backend_type, is_vine, is_kcritical, value_type, column_type):
     if backend_type in ["Clement", "Graph"]:
-        return is_vine
+        if not is_vine:
+            return False
     if backend_type in ["GudhiCohomology"]:
-        return not is_vine
+        if is_vine:
+            return False
     if backend_type in ["Graph", "GudhiCohomology"]:
-        return column_type[0] == 0
+        if column_type[0] != 0:
+            return False
     return True
 
 
