@@ -162,3 +162,17 @@ def test_scc():
         assert sm_distance(a, b) == 0
     else:
         pytest.skip("Skipped a test bc `mpfree` was not found.")
+
+
+def test_bitmap():
+    img = np.random.uniform(size=(12, 10, 11, 2))
+    num_parameters = img.shape[-1]
+    s = mp.slicer.from_bitmap(img)
+    num_vertices = np.searchsorted(s.get_dimensions(), 1)
+    assert num_vertices == np.prod(img.shape[:-1])
+    assert s.num_parameters == num_parameters
+    assert s.dimension == img.ndim - 1
+    assert np.all(
+        np.asarray(s.get_filtrations()[:num_vertices])
+        == img.reshape(-1, num_parameters)
+    )

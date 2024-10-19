@@ -526,10 +526,49 @@ cdef class {{D['PYTHON_TYPE']}}:
     {{endif}}
 
 
-    @staticmethod
-    def from_bitmap(self):
-      raise ValueError("Not implemented.")
 {{endfor}}
+
+from libcpp.vector cimport vector
+from libcpp.set cimport set as cset
+cdef extern from "gudhi/cubical_to_boundary.h" namespace "":
+  void _to_boundary(const vector[unsigned int]&, vector[vector[unsigned int]]&, vector[int]&) except + nogil
+  void get_vertices(unsigned int, cset[unsigned int]&, const vector[vector[unsigned int]]&) nogil
+
+
+def from_bitmap(image, **slicer_kwargs):
+    from multipers import Slicer
+    _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
+    image = np.asarray(image)
+    cdef vector[unsigned int] img_shape = image.shape[:-1]
+    cdef unsigned int num_parameters = image.shape[-1]
+    cdef vector[vector[unsigned int]] gen_maps
+    cdef vector[int] gen_dims 
+
+    with nogil:
+        _to_boundary(img_shape,gen_maps, gen_dims)
+
+    cdef unsigned int num_gens = gen_dims.size()
+    filtration_values = np.zeros(shape=(num_gens, num_parameters), dtype = np.double) - np.inf
+    cdef double[:,:] F = filtration_values
+    cdef double[:,:] c_img = image.reshape(-1,num_parameters)
+    cdef cset[unsigned int] vertices
+    with nogil:
+        for i in range(num_gens):
+            # with gil:
+            #     print(f"idx {i}:", end="")
+            vertices.clear()
+            get_vertices(i,vertices,gen_maps)
+
+            # with gil:
+            #     print(f"v = {vertices}:", end="")
+            for k in vertices:
+                for j in range(num_parameters):
+                    F[i,j] =  max(F[i,j], c_img[k,j])
+
+            # with gil:
+            #     print(f"F = {np.asarray(F[i])}")
+    slicer = _Slicer(gen_maps, gen_dims, filtration_values)
+    return slicer
 
 def from_function_delaunay(
     points,

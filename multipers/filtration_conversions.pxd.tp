@@ -68,7 +68,7 @@ cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool cop
   cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(&(dereference(x)[0]))
   return np.array(x_view) if copy else np.asarray(x_view)
 
-cdef inline  _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
+cdef inline _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
   cdef Py_ssize_t k = dereference(x).num_generators()
   return [_ff21cview_{{SHORT}}(&(dereference(x)[i]), copy=copy, duplicate=duplicate) for i in range(k)]
 
