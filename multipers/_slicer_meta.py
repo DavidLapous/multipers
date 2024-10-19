@@ -137,8 +137,8 @@ def Slicer(
         dtype = st.dtype if dtype is None else dtype
         is_kcritical = st.is_kcritical if is_kcritical is None else is_kcritical
     else:
-        dtype = np.float64
-        is_kcritical = False
+        dtype = np.float64 if dtype is None else dtype
+        is_kcritical = False if is_kcritical is None else is_kcritical
 
     if is_slicer(st, allow_minpres=False):
         vineyard = st.is_vine if vineyard is None else vineyard
