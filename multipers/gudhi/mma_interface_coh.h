@@ -136,8 +136,9 @@ class Persistence_backend_cohomology {
   dimension_type get_dimension(pos_index i) { return matrix_.dimension(matrix_.simplex(i)); }
 
   Barcode get_barcode() {
-    Persistent_cohomology pcoh(matrix_);
-    pcoh.init_coefficients(2);
+    Persistent_cohomology pcoh(matrix_, true);
+    constexpr int coeff_field_characteristic = 11;
+    pcoh.init_coefficients(coeff_field_characteristic);
     pcoh.compute_persistent_cohomology(0);
 
     const auto &pairs = pcoh.get_persistent_pairs();

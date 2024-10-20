@@ -165,14 +165,14 @@ template <class PersBackend,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
-    interface::Truc<PersBackend, Structure, MultiFiltration> &slicer,  // truc slicer
-    const tensor::static_tensor_view<dtype, index_type> &out,          // assumes its a zero tensor
+    typename interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe &slicer,  // truc slicer
+    const tensor::static_tensor_view<dtype, index_type> &out,                               // assumes its a zero tensor
     const index_type I,
     const index_type J,
     const std::vector<index_type> &grid_shape,
     const std::vector<index_type> &degrees,
-    std::vector<Index> &order_container,                                 // constant size
-    std::vector<typename MultiFiltration::value_type> &one_persistence,  // constant size
+    // std::vector<Index> &order_container,                                 // constant size
+    // std::vector<typename MultiFiltration::value_type> &one_persistence,  // constant size
     const bool flip_death = false) {
   using value_type = typename MultiFiltration::value_type;
   const auto &filtrations_values = slicer.get_filtrations();
@@ -198,7 +198,7 @@ inline void compute_2d_rank_invariant_of_elbow(
       filtration_in_slice = get_slice_rank_filtration(x, y, I, J);
     }
     if constexpr (verbose) std::cout << filtration_in_slice << ",";
-    one_persistence[i] = filtration_in_slice;
+    slicer.get_one_filtration()[i] = filtration_in_slice;
   }
   if constexpr (verbose) std::cout << "\b]" << std::endl;
 
@@ -211,7 +211,7 @@ inline void compute_2d_rank_invariant_of_elbow(
   using bc_type = typename interface::Truc<PersBackend, Structure, MultiFiltration>::split_barcode;
   bc_type barcodes;
   if constexpr (PersBackend::is_vine) {
-    slicer.set_one_filtration(one_persistence);
+    // slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
     {
       // TODO : This is a good optimization but needs a patch on
@@ -228,8 +228,8 @@ inline void compute_2d_rank_invariant_of_elbow(
     }
     barcodes = slicer.get_barcode();
   } else {
-    PersBackend pers = slicer.compute_persistence_out(one_persistence, order_container);
-    barcodes = slicer.get_barcode(pers, one_persistence);
+    slicer.template compute_persistence<false>();  // PUT THAT TO TRUE...
+    barcodes = slicer.get_barcode();
   }
 
   // note one_pers not necesary when vine, but does the same computation
@@ -286,19 +286,15 @@ inline void compute_2d_rank_invariant(
     std::cout << "Shape " << grid_shape[0] << " " << grid_shape[1] << " " << grid_shape[2] << " " << grid_shape[3]
               << " " << grid_shape[4] << std::endl;
 
-  using local_type = std::tuple<std::vector<Index>,                                // order
-                                std::vector<typename MultiFiltration::value_type>  // one
-                                                                                   // filtration
-                                >;
-  local_type local_template = {std::vector<Index>(slicer.num_generators()),
-                               std::vector<typename MultiFiltration::value_type>(slicer.num_generators())};
-  tbb::enumerable_thread_specific<local_type> thread_locals(local_template);
+  using ThreadSafe = typename interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe;
+  ThreadSafe slicer_thread(slicer);
+  tbb::enumerable_thread_specific<ThreadSafe> thread_locals(slicer_thread);
   tbb::parallel_for(0, X, [&](index_type I) {
     tbb::parallel_for(0, Y, [&](index_type J) {
       if constexpr (verbose) std::cout << "Computing elbow " << I << " " << J << "...";
-      auto &[order_container, one_filtration_container] = thread_locals.local();
-      compute_2d_rank_invariant_of_elbow(
-          slicer, out, I, J, grid_shape, degrees, order_container, one_filtration_container, flip_death);
+      ThreadSafe &slicer = thread_locals.local();
+      compute_2d_rank_invariant_of_elbow<PersBackend, Structure, MultiFiltration, dtype, index_type>(
+          slicer, out, I, J, grid_shape, degrees, flip_death);
       if constexpr (verbose) std::cout << "Done!" << std::endl;
     });
   });
