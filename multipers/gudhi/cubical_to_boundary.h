@@ -30,8 +30,6 @@ inline void _to_boundary(const std::vector<unsigned int>& shape,
     }
   }
 
-  std::cout << "size: " << numberOfSimplices << "\n";
-
   generator_dimensions.resize(numberOfSimplices);
   generator_maps.resize(numberOfSimplices);
   unsigned int i = 0;
