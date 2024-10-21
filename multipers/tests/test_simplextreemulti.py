@@ -125,7 +125,8 @@ def test_make_filtration_non_decreasing():
     st.insert([2, 0], [11, 20])
 
     st.insert([0, 1, 2], [-np.inf, -np.inf])
-    assert (st.filtration([1, 2]) == -np.inf).all()
+    assert (st.filtration([1, 2]) == 3).all()
+    assert (st.filtration([0, 1, 2]) == [11, 21]).all()
     st.make_filtration_non_decreasing()
     assert (st.filtration([1, 2]) == 3).all()
     assert (st.filtration([0, 1, 2]) == [11, 21]).all()

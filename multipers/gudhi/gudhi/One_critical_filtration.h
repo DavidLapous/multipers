@@ -35,8 +35,8 @@ namespace Gudhi::multi_filtration {
  * @class One_critical_filtration one_critical_filtration.h gudhi/one_critical_filtration.h
  * @ingroup multi_filtration
  *
- * @brief Class encoding the apparition time, i.e., filtration value of an object 
- * (e.g., simplex, cell, abstract algebraic generator) in the setting of 1-critical multiparameter filtrations. 
+ * @brief Class encoding the apparition time, i.e., filtration value of an object
+ * (e.g., simplex, cell, abstract algebraic generator) in the setting of 1-critical multiparameter filtrations.
  * The class can be used as a vector whose indices correspond to one parameter each.
  * It also follows numpy-like broadcast semantic.
  *
@@ -305,7 +305,7 @@ class One_critical_filtration : public std::vector<T> {
    * @brief Returns `true` if and only if for each \f$ i \f$, \f$ a[i] \f$ is equal to \f$ b[i] \f$.
    */
   friend bool operator==(const One_critical_filtration &a, const One_critical_filtration &b) {
-    return static_cast<const Base&>(a) == static_cast<const Base&>(b);
+    return static_cast<const Base &>(a) == static_cast<const Base &>(b);
   }
 
   /**
@@ -905,6 +905,8 @@ class One_critical_filtration : public std::vector<T> {
     return apply_operation_with_finite_values_(result, to_div, divide_);
   }
 
+  constexpr static bool is_multicritical() { return false; }
+
   /**
    * @brief Modifies the first parameters such that an entry at index \f$ i \f$ is equal to
    * \f$ result[i] / to\_div \f$.
@@ -1017,7 +1019,8 @@ class One_critical_filtration : public std::vector<T> {
       const auto &filtration = grid[parameter];
       auto d =
           std::distance(filtration.begin(),
-                        std::lower_bound(filtration.begin(), filtration.end(),
+                        std::lower_bound(filtration.begin(),
+                                         filtration.end(),
                                          static_cast<typename oned_array::value_type>(Base::operator[](parameter))));
       Base::operator[](parameter) = coordinate ? static_cast<T>(d) : static_cast<T>(filtration[d]);
     }
@@ -1050,8 +1053,8 @@ class One_critical_filtration : public std::vector<T> {
   friend T compute_norm(const One_critical_filtration &f) {
     T out = 0;
     for (auto &val : f) out += (val * val);
-    if constexpr (std::is_integral_v<T>){
-       //to avoid Windows issue which don't know how to cast integers for cmath methods
+    if constexpr (std::is_integral_v<T>) {
+      // to avoid Windows issue which don't know how to cast integers for cmath methods
       return std::sqrt(static_cast<double>(out));
     } else {
       return std::sqrt(out);
@@ -1070,8 +1073,8 @@ class One_critical_filtration : public std::vector<T> {
     for (std::size_t i = 0u; i < other.size(); i++) {
       out += (f[i] - other[i]) * (f[i] - other[i]);
     }
-    if constexpr (std::is_integral_v<T>){
-       //to avoid Windows issue which don't know how to cast integers for cmath methods
+    if constexpr (std::is_integral_v<T>) {
+      // to avoid Windows issue which don't know how to cast integers for cmath methods
       return std::sqrt(static_cast<double>(out));
     } else {
       return std::sqrt(out);
@@ -1179,9 +1182,9 @@ class One_critical_filtration : public std::vector<T> {
   constexpr static bool is_multi_critical = false;
 
  private:
-  static bool is_nan_(T val){
-    if constexpr (std::is_integral_v<T>){
-       //to avoid Windows issue which don't know how to cast integers for cmath methods
+  static bool is_nan_(T val) {
+    if constexpr (std::is_integral_v<T>) {
+      // to avoid Windows issue which don't know how to cast integers for cmath methods
       return false;
     } else {
       return std::isnan(val);
@@ -1300,7 +1303,8 @@ class One_critical_filtration : public std::vector<T> {
 
   template <typename F>
   static One_critical_filtration &apply_scalar_operation_on_finite_value_(One_critical_filtration &result,
-                                                                          const T &to_operate, F &&operate) {
+                                                                          const T &to_operate,
+                                                                          F &&operate) {
     for (auto &val : result) {
       if constexpr (std::numeric_limits<T>::has_quiet_NaN) {
         operate(val, to_operate);
@@ -1317,7 +1321,9 @@ class One_critical_filtration : public std::vector<T> {
 
   template <typename F>
   static One_critical_filtration &apply_scalar_operation_on_finite_value_with_all_nan_possible_(
-      One_critical_filtration &result, const T &to_operate, F &&operate) {
+      One_critical_filtration &result,
+      const T &to_operate,
+      F &&operate) {
     bool allNaN = true;
 
     for (auto &val : result) {

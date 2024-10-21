@@ -40,8 +40,8 @@ namespace Gudhi::multi_filtration {
  * @brief Class encoding the different generators, i.e., apparition times, of a \f$k\f$-critical
  * \f$\mathbb R^n\f$-filtration value, e.g., the filtration of a simplex, or of the algebraic generator of a module
  * presentation. The class can be used as a vector whose indices correspond each to a generator, i.e., a one-critical
- * filtration value. Then, the indices of each generator correspond to a particular parameter. 
- * E.g., \f$ f[i][p] \f$ will be  \f$ p^{\textit{th}} \f$ parameter of the \f$ i^{\textit{th}} \f$ generator 
+ * filtration value. Then, the indices of each generator correspond to a particular parameter.
+ * E.g., \f$ f[i][p] \f$ will be  \f$ p^{\textit{th}} \f$ parameter of the \f$ i^{\textit{th}} \f$ generator
  * of this filtration value with @ref Multi_critical_filtration \f$ f \f$.
  *
  * @details Overloads `std::numeric_limits` such that:
@@ -192,6 +192,7 @@ class Multi_critical_filtration {
    * @brief Standard operator[].
    */
   Generator &operator[](std::size_t i) { return multi_filtration_[i]; }
+
   /**
    * @brief Standard operator[] const.
    */
@@ -240,8 +241,9 @@ class Multi_critical_filtration {
    * and if there is no generator, the method will segfault.
    */
   operator Generator() {
-    GUDHI_CHECK(num_generators() == 1, "Casting a " + std::to_string(num_generators()) +
-                                           "-critical filtration value into an 1-critical filtration value.");
+    GUDHI_CHECK(num_generators() == 1,
+                "Casting a " + std::to_string(num_generators()) +
+                    "-critical filtration value into an 1-critical filtration value.");
     return multi_filtration_[0];
   }
 
@@ -251,8 +253,9 @@ class Multi_critical_filtration {
    * and if there is no generator, the method will segfault.
    */
   operator const Generator() const {
-    GUDHI_CHECK(num_generators() == 1, "Casting a " + std::to_string(num_generators()) +
-                                           "-critical filtration value into an 1-critical filtration value.");
+    GUDHI_CHECK(num_generators() == 1,
+                "Casting a " + std::to_string(num_generators()) +
+                    "-critical filtration value into an 1-critical filtration value.");
     return multi_filtration_[0];
   }
 
@@ -313,6 +316,8 @@ class Multi_critical_filtration {
    * @return NaN.
    */
   constexpr static Multi_critical_filtration nan() { return Multi_critical_filtration(Generator::nan()); }
+
+  constexpr static bool is_multicritical() { return true; }
 
   // DESCRIPTORS
 
@@ -578,7 +583,8 @@ class Multi_critical_filtration {
    * @param include_infinities If true, removes also infinity values.
    */
   void remove_empty_generators(bool include_infinities = false) {
-    multi_filtration_.erase(std::remove_if(multi_filtration_.begin(), multi_filtration_.end(),
+    multi_filtration_.erase(std::remove_if(multi_filtration_.begin(),
+                                           multi_filtration_.end(),
                                            [include_infinities](const Generator &a) {
                                              return a.empty() ||
                                                     ((include_infinities) && (a.is_plus_inf() || a.is_minus_inf()));
@@ -762,7 +768,7 @@ class Multi_critical_filtration {
   Generators multi_filtration_; /**< Container for generators. */
 
   struct Is_strictly_smaller_lexicographically {
-    //assumes both generators have the same length if not infinite/nan.
+    // assumes both generators have the same length if not infinite/nan.
     bool operator()(const Generator &g1, const Generator &g2) {
       if (g1.is_nan() || g2.is_nan()) return !g1.is_nan();
       if (g1.is_plus_inf()) return false;
@@ -792,6 +798,7 @@ class Multi_critical_filtration {
       return a < b;
     }
   }
+
   /**
    * @brief Verifies if @p b is contained in the positive cone originating in `a`.
    */
@@ -802,17 +809,17 @@ class Multi_critical_filtration {
       return a <= b;
     }
   }
-  
-  static bool _first_strictly_dominates(const Generator& a, const Generator& b){
-    if constexpr (co){
+
+  static bool _first_strictly_dominates(const Generator &a, const Generator &b) {
+    if constexpr (co) {
       return !a.empty() && !b.empty() && a[0] < b[0];
     } else {
       return !a.empty() && !b.empty() && a[0] > b[0];
     }
   }
 
-  static bool _first_dominates(const Generator& a, const Generator& b){
-    if constexpr (co){
+  static bool _first_dominates(const Generator &a, const Generator &b) {
+    if constexpr (co) {
       return !a.empty() && !b.empty() && a[0] <= b[0];
     } else {
       return !a.empty() && !b.empty() && a[0] >= b[0];
@@ -900,7 +907,7 @@ class Multi_critical_filtration {
       if (res == Rel::DOMINATES) {                                      // x is dominated
         --end;
         std::swap(multi_filtration_[curr], multi_filtration_[end]);
-      } else {                                                          // no relation
+      } else {  // no relation
         ++curr;
       }
     }
