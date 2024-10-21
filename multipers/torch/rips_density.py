@@ -251,7 +251,8 @@ def function_rips_signed_measure(
         st.fill_lowerstar(
             codensity.detach(), parameter=1
         )  # fills the codensity in the second parameter of the simplextree
-        st = st.grid_squeeze(reduced_grid, coordinate_values=True)
+        st = st.grid_squeeze(reduced_grid)
+        st.filtration_grid = []
         if None in degrees:
             expansion_degree = st.num_vertices
         else:
@@ -267,7 +268,8 @@ def function_rips_signed_measure(
         )
         st = mp.slicer.to_simplextree(s)
         st.flagify(2)
-        s = mp.Slicer(st, vineyard=vineyard)
+        s = mp.Slicer(st, vineyard=vineyard).grid_squeeze(reduced_grid)
+        s.filtration_grid = []
 
     if None not in degrees:
         s = s.minpres(degrees=degrees)
@@ -280,11 +282,12 @@ def function_rips_signed_measure(
                 for d in degrees
             )
         )
-
     sms = tuple(
         sm
-        for slicer_of_degree in s
-        for sm in mp.signed_measure(slicer_of_degree, grid=reduced_grid, **sm_kwargs)
+        for slicer_of_degree, degree in zip(s, degrees)
+        for sm in mp.signed_measure(
+            slicer_of_degree, grid=reduced_grid, degree=degree, **sm_kwargs
+        )
     )  # computes the signed measure
     if plot:
         mp.plots.plot_signed_measures(
