@@ -171,6 +171,7 @@ def function_rips_signed_measure(
     *,
     log_density: bool = True,
     vineyard: bool = False,
+    pers_backend=None,
     **sm_kwargs,
 ):
     """
@@ -261,16 +262,18 @@ def function_rips_signed_measure(
         if not expand_collapse:
             st.expansion(expansion_degree)  # edge collapse
 
-        s = mp.Slicer(st, vineyard=vineyard)
+        s = mp.Slicer(st, vineyard=vineyard, backend=pers_backend)
     elif complex == "delaunay":
         s = mp.slicer.from_function_delaunay(
             x.detach().numpy(), codensity.detach().numpy()
         )
         st = mp.slicer.to_simplextree(s)
         st.flagify(2)
-        s = mp.Slicer(st, vineyard=vineyard).grid_squeeze(reduced_grid)
-        s.filtration_grid = []
+        s = mp.Slicer(st, vineyard=vineyard, backend=pers_backend).grid_squeeze(
+            reduced_grid
+        )
 
+    s.filtration_grid = []  ## To enforce minpres to be reasonable
     if None not in degrees:
         s = s.minpres(degrees=degrees)
     else:
@@ -282,6 +285,11 @@ def function_rips_signed_measure(
                 for d in degrees
             )
         )
+    ## fix previous hack
+    for stuff in s:
+        # stuff.filtration_grid = reduced_grid ## not necessary
+        stuff.filtration_grid = [[1]] * stuff.num_parameters
+
     sms = tuple(
         sm
         for slicer_of_degree, degree in zip(s, degrees)
