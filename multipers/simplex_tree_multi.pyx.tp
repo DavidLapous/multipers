@@ -1479,6 +1479,31 @@ def _safe_simplextree_multify_{{FSHORT}}(simplextree:SimplexTree,int num_paramet
     for batch_simplices, batch_filtrations in zip(simplices,filtration_values):
         st_multi.insert_batch(np.asarray(batch_simplices, dtype=np.int32).T, np.asarray(batch_filtrations, dtype={{PYTYPE}}))
     return st_multi
+
+
+def _safe_simplextree_multify_{{FSHORT}}2(simplextree:SimplexTree,int num_parameters=2, cnp.ndarray default_values=np.array(-np.inf))->SimplexTreeMulti_{{FSHORT}}:
+    if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
+        return simplextree
+    st_multi = SimplexTreeMulti_{{FSHORT}}(num_parameters=num_parameters)
+    if default_values.squeeze().ndim == 0:
+        default_values = np.zeros(num_parameters-1) + default_values
+    cdef int num_simplices = simplextree.num_simplices()
+    cdef int max_dim = simplextree.dimension()
+    dims = np.fromiter((len(s)-1 for s,_ in simplextree.get_simplices()), dtype=np.int32, count=num_simplices)
+    dims = np.unique_counts(dims).counts
+    cdef int[:] cdims = np.cumsum(np.concatenate([[0],dims])).astype(np.int32)
+    
+    # filtration_values = np.asarray([np.concatenate(([f],default_values)) for s,f in simplextree.get_simplices()])
+    cdef double [:,:] filtration_values = np.fromiter((np.concatenate((np.asarray(f)[None],default_values)) for s,f in simplextree.get_simplices()), dtype=np.dtype((np.float64,num_parameters)), count=num_simplices)
+
+    cdef int32_t[:,:] batch_simplices = np.fromiter((np.concatenate([s,np.empty(max_dim+2-len(s))]) for s,f in simplextree.get_simplices()), dtype=np.dtype((np.int32,max_dim+2)), count=num_simplices)
+    # print(filtration_values.shape, batch_simplices.shape)
+    for i in range(max_dim+1):
+        S = batch_simplices[cdims[i]:cdims[i+1]][:,:i+1].T
+        F = filtration_values[cdims[i]:cdims[i+1]]
+        st_multi.insert_batch(S, F)
+        # print(f"adding {S.shape,F.shape}")
+    return st_multi
 {{endfor}}
 
 global available_simplextrees, SimplexTreeMulti_type
