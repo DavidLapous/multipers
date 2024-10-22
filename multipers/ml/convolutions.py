@@ -1,5 +1,4 @@
 from collections.abc import Callable, Iterable
-from itertools import product
 from typing import Any, Literal, Union
 
 import numpy as np
@@ -39,7 +38,9 @@ def convolution_signed_measures(
 
     The concatenated images, for each signed measure (num_signed_measures) x (len(f) for f in filtration_values)
     """
-    grid_iterator = np.array(list(product(*filtrations)), dtype=float)
+    from multipers.grids import todense
+
+    grid_iterator = todense(filtrations)
     match backend:
         case "sklearn":
 
