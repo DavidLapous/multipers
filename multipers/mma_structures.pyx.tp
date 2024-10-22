@@ -702,7 +702,7 @@ cdef class PyModule_{{SHORT}}:
                       w = mod_degree.get_interleavings()[None]**p
                       return kernel(x/bandwidth,w)
             concatenated_images = np.stack(
-                Parallel(n_jobs = -1, backend= "threading")(
+                Parallel(n_jobs = n_jobs if n_jobs else -1, backend= "threading")(
                   delayed(todo)(self.get_module_of_degree(degree))
                   for degree in degrees
                 )
