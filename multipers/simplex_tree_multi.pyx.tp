@@ -1461,6 +1461,8 @@ def _simplextree_multify_{{FSHORT}}(simplextree:SimplexTree, int num_parameters,
         st.get_ptr().from_std(old_ptr, num_parameters, c_default_values)
     return st
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _safe_simplextree_multify_{{FSHORT}}(simplextree:SimplexTree,int num_parameters=2, cnp.ndarray default_values=np.array(-np.inf))->SimplexTreeMulti_{{FSHORT}}:
     if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
         return simplextree
@@ -1481,6 +1483,9 @@ def _safe_simplextree_multify_{{FSHORT}}(simplextree:SimplexTree,int num_paramet
     return st_multi
 
 
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _safe_simplextree_multify_{{FSHORT}}2(simplextree:SimplexTree,int num_parameters=2, cnp.ndarray default_values=np.array(-np.inf))->SimplexTreeMulti_{{FSHORT}}:
     if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
         return simplextree
