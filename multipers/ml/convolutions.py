@@ -40,7 +40,7 @@ def convolution_signed_measures(
     """
     from multipers.grids import todense
 
-    grid_iterator = todense(filtrations)
+    grid_iterator = todense(filtrations, product_order=True)
     match backend:
         case "sklearn":
 
@@ -111,7 +111,7 @@ def convolution_signed_measures(
     if not flatten:
         out_shape = [-1] + [len(f) for f in filtrations]  # Degree
         convolutions = [x.reshape(out_shape) for x in convolutions]
-    return np.asarray(convolutions, dtype=float)
+    return np.asarray(convolutions)
 
 
 # def _test(r=1000, b=0.5, plot=True, kernel=0):

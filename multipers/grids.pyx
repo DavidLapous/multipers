@@ -8,6 +8,7 @@ cnp.import_array()
 
 
 from typing import Iterable,Literal,Optional
+from itertools import product
 
 
 available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -74,8 +75,19 @@ def compute_grid(
         x = tuple(x)
         if len(x) == 0: return []
         first = x[0]
-        if isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
-            initial_grid = tuple(np.asarray(f) for f in x)
+        ## is_sm, i.e., iterable tuple(pts,weights)
+        if isinstance(x[0], tuple) and getattr(x[0][0], "shape", None) is not None:
+            initial_grid = tuple(f[0].T for f in x)
+            if isinstance(initial_grid[0], np.ndarray):
+                initial_grid = np.concatenate(initial_grid, axis=1)
+            else:
+                is_numpy_compatbile = False
+                import torch
+                assert isinstance(first[0], torch.Tensor), "Only numpy and torch are supported ftm."
+                initial_grid = torch.cat(initial_grid, axis=1)
+        ## is grid-like (num_params, num_pts)
+        elif isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
+            initial_grid = tuple(f for f in x)
         else:
             is_numpy_compatible = False
             import torch
@@ -176,10 +188,17 @@ def _compute_grid_numpy(
         return todense(F)
     return F
 
-def todense(grid):
+def todense(grid, bool product_order=False):
     if len(grid) == 0:
         return np.empty(0)
+    if not isinstance(grid[0], np.ndarray):
+        import torch
+        assert isinstance(grid[0], torch.Tensor)
+        from multipers.torch.diff_grids import todense
+        return todense(grid)
     dtype = grid[0].dtype
+    if product_order:
+        return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
     mesh = np.meshgrid(*grid)
     coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1, dtype=dtype)
     return coordinates
