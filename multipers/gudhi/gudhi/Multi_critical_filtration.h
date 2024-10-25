@@ -758,7 +758,57 @@ class Multi_critical_filtration {
     return stream;
   }
 
- public:
+  friend bool unify_lifetimes(Multi_critical_filtration& f1, const Multi_critical_filtration& f2){
+    bool modified = false;
+    for (const Generator& g : f2.multi_filtration_){
+      modified |= f1.add_generator(g);
+    }
+    return modified;
+  }
+
+  friend bool intersect_lifetimes(Multi_critical_filtration& f1, const Multi_critical_filtration& f2){
+    if (f1.is_nan() || f2.is_nan()) return false;
+
+    if constexpr (co){
+      if (f1.is_plus_inf()){
+        if (f2.is_plus_inf()) return false;
+        f1 = f2;
+        return true;
+      }
+      if (f1.is_minus_inf()){
+        return false;
+      }
+    } else {
+      if (f1.is_minus_inf()){
+        if (f2.is_minus_inf()) return false;
+        f1 = f2;
+        return true;
+      }
+      if (f1.is_plus_inf()){
+        return false;
+      }
+    }
+    
+    Multi_critical_filtration res(1, -_get_default_value());
+    // TODO: see if the order can be used to avoid n^2 complexity and
+    // perhaps even to replace add_generator by add_guaranteed_generator
+    for (const Generator& of1 : f1.multi_filtration_){
+      for (const Generator& of2 : f2.multi_filtration_){
+        // TODO: avoid one go-through by constructing nf directly as the max/min
+        Generator nf = of1;
+        if constexpr (co){
+          nf.pull_to_greatest_common_lower_bound(of2);
+        } else {
+          nf.push_to_least_common_upper_bound(of2);
+        }
+        res.add_generator(nf);
+      }
+    }
+    swap(f1, res);
+
+    return f1 != res;
+  }
+
   /**
    * @brief Indicates if the class manages multi-critical filtration values.
    */
