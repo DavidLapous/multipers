@@ -958,19 +958,27 @@ class One_critical_filtration : public std::vector<T> {
    * cones: \f$ \mathrm{this} = \min \{ y \in \mathbb R^n : y \ge this \} \cap \{ y \in \mathbb R^n : y \ge x \} \f$.
    *
    * @param x The target filtration value towards which to push.
+   * @return True if and only if the value of this actually changed.
    */
-  void push_to_least_common_upper_bound(const One_critical_filtration &x) {
-    if (this->is_plus_inf() || this->is_nan() || x.is_nan() || x.is_minus_inf()) return;
+  bool push_to_least_common_upper_bound(const One_critical_filtration &x) {
+    if (this->is_plus_inf() || this->is_nan() || x.is_nan() || x.is_minus_inf()) return false;
     if (x.is_plus_inf() || this->is_minus_inf()) {
-      *this = x;
-      return;
+      if (!x.is_minus_inf() && !this->is_plus_inf()) {
+        *this = x;
+        return true;
+      }
+      return false;
     }
 
     GUDHI_CHECK(this->num_parameters() == x.num_parameters(),
                 "A filtration value cannot be pushed to another one with different numbers of parameters.");
 
-    for (std::size_t i = 0; i < x.num_parameters(); i++)
+    bool modified = false;
+    for (std::size_t i = 0; i < x.num_parameters(); i++) {
+      modified |= Base::operator[](i) < x[i];
       Base::operator[](i) = Base::operator[](i) > x[i] ? Base::operator[](i) : x[i];
+    }
+    return modified;
   }
 
   /**
@@ -981,19 +989,27 @@ class One_critical_filtration : public std::vector<T> {
    * cones: \f$ \mathrm{this} = \min \{ y \in \mathbb R^n : y \le this \} \cap \{ y \in \mathbb R^n : y \le x \} \f$.
    *
    * @param x The target filtration value towards which to pull.
+   * @return True if and only if the value of this actually changed.
    */
-  void pull_to_greatest_common_lower_bound(const One_critical_filtration &x) {
-    if (x.is_plus_inf() || this->is_nan() || x.is_nan() || this->is_minus_inf()) return;
+  bool pull_to_greatest_common_lower_bound(const One_critical_filtration &x) {
+    if (x.is_plus_inf() || this->is_nan() || x.is_nan() || this->is_minus_inf()) return false;
     if (this->is_plus_inf() || x.is_minus_inf()) {
-      *this = x;
-      return;
+      if (!x.is_plus_inf() && !this->is_minus_inf()) {
+        *this = x;
+        return true;
+      }
+      return false;
     }
 
     GUDHI_CHECK(this->num_parameters() == x.num_parameters(),
                 "A filtration value cannot be pulled to another one with different numbers of parameters.");
 
-    for (std::size_t i = 0u; i < x.num_parameters(); i++)
+    bool modified = false;
+    for (std::size_t i = 0; i < x.num_parameters(); i++) {
+      modified |= Base::operator[](i) > x[i];
       Base::operator[](i) = Base::operator[](i) > x[i] ? x[i] : Base::operator[](i);
+    }
+    return modified;
   }
 
   /**
@@ -1169,7 +1185,17 @@ class One_critical_filtration : public std::vector<T> {
     return stream;
   }
 
- public:
+  friend bool unify_lifetimes(One_critical_filtration& f1, const One_critical_filtration& f2){
+    //WARNING: costly check
+    GUDHI_CHECK(f1 <= f2 || f2 <= f1, "When 1-critical, two non-comparable filtration values cannot be unified.");
+
+    return f1.pull_to_greatest_common_lower_bound(f2);
+  }
+
+  friend bool intersect_lifetimes(One_critical_filtration& f1, const One_critical_filtration& f2){
+    return f1.push_to_least_common_upper_bound(f2);
+  }
+
   /**
    * @brief Infinity value of an entry of the filtration value.
    */
