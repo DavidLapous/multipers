@@ -6,6 +6,9 @@ import multipers as mp
 import multipers.slicer as mps
 from multipers.tests import assert_sm
 
+mpfree_flag = mp.io._check_available("mpfree")
+fd_flag = mp.io._check_available("function_delaunay")
+
 
 def test_1():
     st = mp.SimplexTreeMulti(num_parameters=2)
@@ -176,3 +179,26 @@ def test_bitmap():
         np.asarray(s.get_filtrations()[:num_vertices])
         == img.reshape(-1, num_parameters)
     )
+
+
+@pytest.mark.skipif(
+    not fd_flag or not mpfree_flag,
+    reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
+)
+@pytest.mark.parametrize("dim", [1, 2, 3, 4])
+@pytest.mark.parametrize("degree", [1, 2, 3])
+def test_external(dim, degree):
+    if degree >= dim:
+        return
+    X = np.random.uniform(size=(100, dim))
+    f = np.random.uniform(size=(X.shape[0]))
+    fd = mps.from_function_delaunay(X, f)
+    assert np.array_equal(np.unique(fd.get_dimensions()), np.arange(dim + 2))
+    fd_ = mps.from_function_delaunay(X, f, degree=degree)
+    assert np.array_equal(
+        np.unique(fd_.get_dimensions()), [degree, degree + 1]
+    )  ## only does presentations
+    fd_ = fd.minpres(degree=degree)
+    assert np.array_equal(
+        np.unique(fd_.get_dimensions()), [degree, degree + 1, degree + 2]
+    )  ## resolution by default
