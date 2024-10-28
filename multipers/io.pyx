@@ -449,7 +449,7 @@ def function_delaunay_presentation(
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')
     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    degree_arg = f"--minpres {degree}" if degree > 0 else ""
+    degree_arg = f"--minpres {degree}" if degree >= 0 else ""
     multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
     if os.path.exists(output_path + id):
         os.remove(output_path+ id)
@@ -462,7 +462,7 @@ def function_delaunay_presentation(
     if clear:
         clear_io(output_path + id, input_path + id)
     ## Function Delaunay workaround: last size is 0 but shouldn't...
-    if degree==-1 and len(blocks) and not len(blocks[-1][1]):
+    if degree<0 and len(blocks) and not len(blocks[-1][1]):
         blocks=blocks[:-1]
 
     return blocks
@@ -498,7 +498,7 @@ def function_delaunay_presentation_to_slicer(
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')
     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    degree_arg = f"--minpres {degree}" if degree > 0 else ""
+    degree_arg = f"--minpres {degree}" if degree >= 0 else ""
     multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
     if os.path.exists(output_path + id):
         os.remove(output_path+ id)
@@ -507,7 +507,7 @@ def function_delaunay_presentation_to_slicer(
         print(command)
     os.system(command)
 
-    slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1)
+    slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1 if degree < 0 else 0 )
 
     if clear:
         clear_io(output_path + id, input_path + id)
