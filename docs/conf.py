@@ -6,10 +6,12 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import multipers as mp
+
 project = "multipers"
 copyright = "2024, David Loiseaux, Mathieu Carrière, Hannah Schreiber"
 author = "David Loiseaux, Hannah Schreiber"
-# release = "2.0"
+version = mp.__version__
 
 html_context = {
     "display_github": True,  # Integrate GitHub
