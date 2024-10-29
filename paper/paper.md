@@ -25,7 +25,7 @@ bibliography: paper.bib
 It features several efficient computational and visualization tools, with integrated, easy to use, auto-differentiable Machine Learning pipelines, that can be seamlessly interfaced with 
 `scikit-learn` [@scikit_learn] and `PyTorch` [@pytorch].
 This library is meant to be usable for non-experts in Topological or Geometrical Machine Learning.
-Performance-critical functions are implemented in `C++` or in `Cython`, are parallelizable with `TBB`, and have `Python` bindings and interface.
+Performance-critical functions are implemented in `C++` or in `Cython` [@cython], are parallelizable with `TBB` [@tbb], and have `Python` bindings and interface.
 <!--Additionally, it follows `Gudhi`'s [@gudhi] structure, for future integration.-->
 It can handle a very diverse range of datasets that can be framed into a (finite) multi-filtered simplicial or cell complex, including, e.g., point clouds, graphs, time series, images, etc.
 
@@ -74,7 +74,7 @@ of the bi-filtration. The second is less dense (thus above the first one) and bi
 **(Middle)** Hilbert Decomposition Signed Barcode, with its Hilbert Function surface.
 **(Right)** Rank invariant Signed Barcode, with the Hilbert Function as a background.](images/SignedBarcodes.png)
 
-The core functions of the Python library are automatically tested on Linux and macOS, using `pytest` alongside GitHub Actions.
+The core functions of the Python library are automatically tested on Linux and macOS, using `pytest` [@pytest] alongside GitHub Actions.
 
 
 # Related work and statement of need
