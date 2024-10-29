@@ -12,7 +12,7 @@ authors:
    affiliation: 1
 
 affiliations:
- - name: Centre Inria d'Université Côte d'Azur
+ - name: Centre Inria d'Université Côte d'Azur, France
    index: 1
 
 date: 15/04/2024
@@ -23,7 +23,7 @@ bibliography: paper.bib
 
 `multipers` is a Python library for Topological Data Analysis, focused on **Multi**parameter **Pers**istence computation and visualizations for Machine Learning.
 It features several efficient computational and visualization tools, with integrated, easy to use, auto-differentiable Machine Learning pipelines, that can be seamlessly interfaced with 
-`Scikit Learn` [@scikit_learn] and `PyTorch` [@pytorch].
+`scikit-learn` [@scikit_learn] and `PyTorch` [@pytorch].
 This library is meant to be usable for non-experts in Topological or Geometrical Machine Learning.
 Performance-critical functions are implemented in `C++` or in `Cython`, are parallelizable with `TBB`, and have `Python` bindings and interface.
 <!--Additionally, it follows `Gudhi`'s [@gudhi] structure, for future integration.-->
@@ -51,8 +51,8 @@ Nevertheless, by considering *all* possible combinations of geometric or density
 
 Furthermore, `multipers` seamlessly integrates several `Rust` and `C++` libraries such as `Gudhi` [@gudhi], `filtration-domination` [@filtration_domination], `mpfree` [@mpfree], and `function-delaunay` [@function_delaunay],
 and leverages on state-of-the-art
-Machine Learning libraries for fast computations, such as `Scikit Learn` [@scikit_learn], `Python Optimal Transport` [@pot], `PyKeops` [@pykeops], or `PyTorch` [@pytorch]. 
-This makes `multipers` a very efficient and feature-full library, showcasing a wide variety of mathematically-grounded multiparameter topological invariants, including,
+Machine Learning libraries for fast computations, such as `scikit-learn` [@scikit_learn], `Python Optimal Transport` [@pot], `PyKeops` [@pykeops], or `PyTorch` [@pytorch]. 
+This makes `multipers` a very efficient and fully-featured library, showcasing a wide variety of mathematically-grounded multiparameter topological invariants, including,
 e.g., Multiparameter Module Approximation [@mma], Euler, Hilbert, and Rectangle Signed Barcodes [@signed_barcode] [@signed_betti], Multiparameter Persistent Landscapes [@mpl]; each of them computable from several multi-filtrations, e.g.,
 Rips-Density-like filtrations, Cubical, Degree-Rips, Function-Delaunay, or any $k$-critical multi-filtration. 
 These topological descriptors can then directly be used in auto-differentiable Machine Learning pipelines, using the differentiability framework developed in [@sm_diff],
