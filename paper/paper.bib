@@ -519,31 +519,35 @@
 }
 
 @inproceedings{sm_diff,
-  title = {Differentiability and {{Convergence}} of {{Filtration Learning}} with {{Multiparameter
-           Persistence}}},
-  booktitle = {To Appear in {{Forty-first International Conference}} on {{Machine Learning}}},
+  title = {Differentiability and {{Optimization}} of {{Multiparameter Persistent Homology}}},
+  booktitle = {Proceedings of the 41st {{International Conference}} on {{Machine Learning}}},
   author = {Scoccola, Luis and Setlur, Siddharth and Loiseaux, David and Carri{\`e}re, Mathieu and
             Oudot, Steve},
   year = {2024},
-  month = may,
-  urldate = {2024-05-06},
-  abstract = {Filtration learning---learning a function on a geometric object, such as node
-              attributes on a graph---has been shown to improve when incorporating descriptors from
-              topological data analysis. When learning a real-valued function (the one-parameter
-              setting), there is a canonical choice of topological descriptor: the barcode. The
-              operation mapping a one-parameter filtration to its barcode is differentiable almost
-              everywhere, and the convergence of gradient descent for losses using barcodes is
-              relatively well understood. When learning a vector-valued function (the multiparameter
-              setting), there is no unique choice of topological descriptor, and many distinct
-              descriptors have been proposed. This calls for the development of a general framework
-              for differentiability and gradient descent based optimization that applies to a wide
-              range of multiparameter topological descriptors. In this article, we develop such a
-              framework and show that it encompasses well-known descriptors of different flavors,
-              such as signed barcodes and the multiparameter persistence landscape. We complement the
-              theory with numerical experiments supporting the idea that multiparameter filtration
-              learning can lead to improved performance compared to its one-parameter counterpart,
-              even when using the simplest and most efficiently computable multiparameter
-              descriptors.},
+  month = jul,
+  series = {Proceedings of Machine Learning Research},
+  volume = {235},
+  pages = {43986--44011},
+  publisher = {PMLR},
+  issn = {2640-3498},
+  urldate = {2024-10-02},
+  abstract = {Real-valued functions on geometric data---such as node attributes on a graph---can be
+              optimized using descriptors from persistent homology, allowing the user to incorporate
+              topological terms in the loss function. When optimizing a single real-valued function
+              (the one-parameter setting), there is a canonical choice of descriptor for persistent
+              homology: the barcode. The operation mapping a real-valued function to its barcode is
+              differentiable almost everywhere, and the convergence of gradient descent for losses
+              using barcodes is relatively well understood. When optimizing a vector-valued function
+              (the multiparameter setting), there is no unique choice of descriptor for
+              multiparameter persistent homology, and many distinct descriptors have been proposed.
+              This calls for the development of a general framework for differentiability and
+              optimization that applies to a wide range of multiparameter homological descriptors. In
+              this article, we develop such a framework and show that it encompasses well-known
+              descriptors of different flavors, such as signed barcodes and the multiparameter
+              persistence landscape. We complement the theory with numerical experiments supporting
+              the idea that optimizing multiparameter homological descriptors can lead to improved
+              performances compared to optimizing one-parameter descriptors, even when using the
+              simplest and most efficiently computable multiparameter descriptors.},
   langid = {english},
 }
 
