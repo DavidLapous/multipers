@@ -176,11 +176,12 @@ class Simplex_tree {
   struct Filtration_simplex_base_dummy {
     Filtration_simplex_base_dummy() {}
     Filtration_simplex_base_dummy(Filtration_value GUDHI_CHECK_code(f)) {
-      GUDHI_CHECK(f == 0, "filtration value specified for a complex that does not store them");
+      GUDHI_CHECK(f == Filtration_value(),
+                  "filtration value specified in the constructor for a complex that does not store them");
     }
 
     void assign_filtration(const Filtration_value& GUDHI_CHECK_code(f)) {
-      GUDHI_CHECK(f == Filtration_value(), "filtration value specified for a complex that does not store them");
+      GUDHI_CHECK(f == Filtration_value(), "filtration value assigned for a complex that does not store them");
     }
     const Filtration_value& filtration() const { return null_; }
 
@@ -1230,7 +1231,15 @@ class Simplex_tree {
    * which can be cleared with clear_filtration().
    */
   void initialize_filtration(bool ignore_infinite_values = false) {
-    initialize_filtration(is_before_in_totally_ordered_filtration(this), ignore_infinite_values);
+    if (ignore_infinite_values){
+      initialize_filtration(is_before_in_totally_ordered_filtration(this), [&](Simplex_handle sh) -> bool {
+        return filtration(sh) == Filtration_simplex_base_real::get_infinity();
+      });
+    } else {
+      initialize_filtration(is_before_in_totally_ordered_filtration(this), [](Simplex_handle) -> bool {
+        return false;
+      });
+    }
   }
 
   /**
@@ -1254,17 +1263,22 @@ class Simplex_tree {
    * which can be cleared with @ref clear_filtration().
    * 
    * @tparam Comparator Method type taking two Simplex_handle as input and returns a bool.
+   * @tparam Ignorer Method type taking one Simplex_handle as input and returns a bool.
    * @param is_before_in_filtration Method used to compare two simplices with respect to their position in the
    * wanted filtration. Takes two Simplex_handle as input and returns true if and only if the first simplex appears
    * strictly before the second simplex in the resulting 1-parameter filtration.
-   * @param ignore_infinite_values If true, simplices with filtration values at infinity are not cached.
+   * @param ignore_simplex Method taking a simplex handle as input and returns true if and only if the corresponding
+   * simplex should be ignored in the filtration and therefore not be cached. But note that it is important that
+   * the resulting filtration is still a valid filtration, that is all proper faces of a not ignored simplex
+   * should also not be ignored and have to appear before this simplex. There will be no tests to ensure that, so
+   * it is of the users responsibility.
    */
-  template<typename Comparator>
-  void initialize_filtration(Comparator&& is_before_in_filtration, bool ignore_infinite_values = false) {
+  template<typename Comparator, typename Ignorer>
+  void initialize_filtration(Comparator&& is_before_in_filtration, Ignorer&& ignore_simplex) {
     filtration_vect_.clear();
     filtration_vect_.reserve(num_simplices());
     for (Simplex_handle sh : complex_simplex_range()) {
-      if (ignore_infinite_values && filtration(sh) == Filtration_simplex_base_real::get_infinity()) continue;
+      if (ignore_simplex(sh)) continue;
       filtration_vect_.push_back(sh);
     }
 
@@ -2581,6 +2595,22 @@ class Simplex_tree {
     }
   }
 
+  std::size_t num_simplices_and_filtration_size(Siblings* sib, std::size_t& fv_byte_size) const {
+    using namespace Gudhi::simplex_tree;
+    
+    auto sib_begin = sib->members().begin();
+    auto sib_end = sib->members().end();
+    size_t simplices_number = sib->members().size();
+    for (auto sh = sib_begin; sh != sib_end; ++sh) {
+      if constexpr (SimplexTreeOptions::store_filtration)
+        fv_byte_size += get_serialization_size_of(sh->second.filtration());
+      if (has_children(sh)) {
+        simplices_number += num_simplices_and_filtration_size(sh->second.children(), fv_byte_size);
+      }
+    }
+    return simplices_number;
+  }
+
  public:
    /** @private @brief Returns the serialization required buffer size.
    * 
@@ -2590,9 +2620,12 @@ class Simplex_tree {
    *   architecture.
    */
   std::size_t get_serialization_size() {
+    using namespace Gudhi::simplex_tree;
+
     const std::size_t vh_byte_size = sizeof(Vertex_handle);
-    const std::size_t fv_byte_size = SimplexTreeOptions::store_filtration ? sizeof(Filtration_value) : 0;
-    const std::size_t buffer_byte_size = vh_byte_size + num_simplices() * (fv_byte_size + 2 * vh_byte_size);
+    std::size_t fv_byte_size = 0;
+    const std::size_t tree_size = num_simplices_and_filtration_size(&root_, fv_byte_size);
+    const std::size_t buffer_byte_size = vh_byte_size + fv_byte_size + tree_size * 2 * vh_byte_size;
 #ifdef DEBUG_TRACES
       std::clog << "Gudhi::simplex_tree::get_serialization_size - buffer size = " << buffer_byte_size << std::endl;
 #endif  // DEBUG_TRACES
@@ -2637,15 +2670,16 @@ class Simplex_tree {
  private:
   /** \brief Serialize each element of the sibling and recursively call serialization. */
   char* rec_serialize(Siblings *sib, char* buffer) {
+    using namespace Gudhi::simplex_tree;
     char* ptr = buffer;
-    ptr = Gudhi::simplex_tree::serialize_trivial(static_cast<Vertex_handle>(sib->members().size()), ptr);
+    ptr = serialize_trivial(static_cast<Vertex_handle>(sib->members().size()), ptr);
 #ifdef DEBUG_TRACES
     std::clog << "\n" << sib->members().size() << " : ";
 #endif  // DEBUG_TRACES
     for (auto& map_el : sib->members()) {
-      ptr = Gudhi::simplex_tree::serialize_trivial(map_el.first, ptr); // Vertex
+      ptr = serialize_trivial(map_el.first, ptr); // Vertex
       if (Options::store_filtration)
-        ptr = Gudhi::simplex_tree::serialize_trivial(map_el.second.filtration(), ptr); // Filtration
+        ptr = serialize_trivial(map_el.second.filtration(), ptr); // Filtration
 #ifdef DEBUG_TRACES
       std::clog << " [ " << map_el.first << " | " << map_el.second.filtration() << " ] ";
 #endif  // DEBUG_TRACES
@@ -2654,7 +2688,7 @@ class Simplex_tree {
       if (has_children(&map_el)) {
         ptr = rec_serialize(map_el.second.children(), ptr);
       } else {
-        ptr = Gudhi::simplex_tree::serialize_trivial(static_cast<Vertex_handle>(0), ptr);
+        ptr = serialize_trivial(static_cast<Vertex_handle>(0), ptr);
 #ifdef DEBUG_TRACES
         std::cout << "\n0 : ";
 #endif  // DEBUG_TRACES
@@ -2678,11 +2712,12 @@ class Simplex_tree {
    * 
    */
   void deserialize(const char* buffer, const std::size_t buffer_size) {
+    using namespace Gudhi::simplex_tree;
     GUDHI_CHECK(num_vertices() == 0, std::logic_error("Simplex_tree::deserialize - Simplex_tree must be empty"));
     const char* ptr = buffer;
     // Needs to read size before recursivity to manage new siblings for children
     Vertex_handle members_size;
-    ptr = Gudhi::simplex_tree::deserialize_trivial(members_size, ptr);
+    ptr = deserialize_trivial(members_size, ptr);
     ptr = rec_deserialize(&root_, members_size, ptr, 0);
     if (static_cast<std::size_t>(ptr - buffer) != buffer_size) {
       throw std::invalid_argument("Deserialization does not match end of buffer");
@@ -2692,15 +2727,16 @@ class Simplex_tree {
  private:
   /** \brief Serialize each element of the sibling and recursively call serialization. */
   const char* rec_deserialize(Siblings *sib, Vertex_handle members_size, const char* ptr, int dim) {
+    using namespace Gudhi::simplex_tree;
     // In case buffer is just a 0 char
     if (members_size > 0) {
       if constexpr (!Options::stable_simplex_handles) sib->members_.reserve(members_size);
       Vertex_handle vertex;
       Filtration_value filtration(0);
       for (Vertex_handle idx = 0; idx < members_size; idx++) {
-        ptr = Gudhi::simplex_tree::deserialize_trivial(vertex, ptr);
+        ptr = deserialize_trivial(vertex, ptr);
         if (Options::store_filtration) {
-          ptr = Gudhi::simplex_tree::deserialize_trivial(filtration, ptr);
+          ptr = deserialize_trivial(filtration, ptr);
         }
         // Default is no children
         // If store_filtration is false, `filtration` is ignored.
@@ -2709,7 +2745,7 @@ class Simplex_tree {
       Vertex_handle child_size;
       for (auto sh = sib->members().begin(); sh != sib->members().end(); ++sh) {
         update_simplex_tree_after_node_insertion(sh);
-        ptr = Gudhi::simplex_tree::deserialize_trivial(child_size, ptr);
+        ptr = deserialize_trivial(child_size, ptr);
         if (child_size > 0) {
           Siblings* child = new Siblings(sib, sh->first);
           sh->second.assign_children(child);

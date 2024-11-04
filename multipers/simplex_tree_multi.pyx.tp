@@ -151,6 +151,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef {{FSHORT}} c_default_values = _py21c_{{SHORT}}(default_values)
         {{endif}}
         cdef intptr_t other_ptr
+        cdef char[:] buffer
+        cdef size_t buffer_size
+        cdef char* buffer_start
         if other is not None:
             if isinstance(other, SimplexTreeMulti_{{FSHORT}}):
                 other_ptr = other.thisptr
@@ -163,9 +166,13 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     new_st_multi  = _safe_simplextree_multify_{{FSHORT}}(other, num_parameters = num_parameters, default_values=np.asarray(default_values))
                     self.thisptr, new_st_multi.thisptr = new_st_multi.thisptr, self.thisptr
                 else:
-                    other_ptr = other.thisptr
+                    stree_buffer = other.__getstate__()
+                    buffer = stree_buffer
+                    buffer_size = buffer.shape[0]
+                    buffer_start = &buffer[0]
+
                     with nogil:
-                        self.get_ptr().from_std(other_ptr, num_parameters, c_default_values)
+                        self.get_ptr().from_std(buffer_start, buffer_size, num_parameters, c_default_values)
             else:
                 raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
         else:
@@ -1435,31 +1442,31 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
 
 
-def _simplextree_multify_{{FSHORT}}(simplextree:SimplexTree, int num_parameters, default_values=[])->SimplexTreeMulti_{{FSHORT}}:
-    """Converts a gudhi simplextree to a multi simplextree.
-    Parameters
-    ----------
+# def _simplextree_multify_{{FSHORT}}(simplextree:SimplexTree, int num_parameters, default_values=[])->SimplexTreeMulti_{{FSHORT}}:
+#     """Converts a gudhi simplextree to a multi simplextree.
+#     Parameters
+#     ----------
 
-    parameters:int = 2
-        The number of filtrations
+#     parameters:int = 2
+#         The number of filtrations
 
-    Returns
-    -------
+#     Returns
+#     -------
 
-        A multi simplextree, with first filtration value being the one from the original simplextree.
-    """
-    if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
-        return simplextree
-    st = SimplexTreeMulti_{{FSHORT}}(num_parameters=num_parameters)
-    cdef intptr_t old_ptr = simplextree.thisptr
-    {{if is_kcritical}}
-    cdef {{FSHORT}} c_default_values= _py2kc_{{SHORT}}([default_values])
-    {{else}}
-    cdef {{FSHORT}} c_default_values= _py21c_{{SHORT}}([default_values])
-    {{endif}}
-    with nogil:
-        st.get_ptr().from_std(old_ptr, num_parameters, c_default_values)
-    return st
+#         A multi simplextree, with first filtration value being the one from the original simplextree.
+#     """
+#     if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
+#         return simplextree
+#     st = SimplexTreeMulti_{{FSHORT}}(num_parameters=num_parameters)
+#     cdef intptr_t old_ptr = simplextree.thisptr
+#     {{if is_kcritical}}
+#     cdef {{FSHORT}} c_default_values= _py2kc_{{SHORT}}([default_values])
+#     {{else}}
+#     cdef {{FSHORT}} c_default_values= _py21c_{{SHORT}}([default_values])
+#     {{endif}}
+#     with nogil:
+#         st.get_ptr().from_std(old_ptr, num_parameters, c_default_values)
+#     return st
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

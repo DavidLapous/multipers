@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -807,6 +808,39 @@ class Multi_critical_filtration {
     swap(f1, res);
 
     return f1 != res;
+  }
+
+  friend char* serialize_trivial(const Multi_critical_filtration& value, char* start)
+  {
+    const auto nberOfGenerators = value.num_generators();
+    const std::size_t type_size = sizeof(std::size_t);
+    memcpy(start, &nberOfGenerators, type_size);
+    char* curr = start + type_size;
+    for (const Generator& g : value){
+      curr = serialize_trivial(g, curr);
+    }
+    return curr;
+  }
+
+  friend const char* deserialize_trivial(Multi_critical_filtration& value, const char* start)
+  {
+    const std::size_t type_size = sizeof(std::size_t);
+    std::size_t nberOfGenerators;
+    memcpy(&nberOfGenerators, start, type_size);
+    const char* curr = start + type_size;
+    value.resize(nberOfGenerators);
+    for (const Generator& g : value){
+      curr = deserialize_trivial(g, curr);
+    }
+    return curr;
+  }
+
+  friend std::size_t get_serialization_size_of(const Multi_critical_filtration& value) {
+    std::size_t genSizes = sizeof(std::size_t);
+    for (const Generator& g : value){
+      genSizes += get_serialization_size_of(g);
+    }
+    return genSizes;
   }
 
   /**
