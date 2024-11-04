@@ -73,7 +73,7 @@ from multipers.point_measure import sparsify
 
 from warnings import warn
 
-SAFE_CONVERSION=True #Slower but at least it works everywhere
+SAFE_CONVERSION=False #Slower but at least it works everywhere
 
 _available_strategies =mpg.Lstrategies
 
