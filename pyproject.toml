@@ -19,7 +19,7 @@ maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
 dependencies = [
   #`import multipers`
   "numpy",
-  "gudhi",
+  "gudhi>=3.8", ## Needs simplextree serialize
   "tqdm",
   "scipy",
   "joblib",

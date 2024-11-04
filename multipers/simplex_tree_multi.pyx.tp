@@ -73,7 +73,7 @@ from multipers.point_measure import sparsify
 
 from warnings import warn
 
-SAFE_CONVERSION=True #Slower but at least it works everywhere
+SAFE_CONVERSION=False #Slower but at least it works everywhere
 
 _available_strategies =mpg.Lstrategies
 
@@ -151,6 +151,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef {{FSHORT}} c_default_values = _py21c_{{SHORT}}(default_values)
         {{endif}}
         cdef intptr_t other_ptr
+        cdef char[:] buffer
+        cdef size_t buffer_size
+        cdef char* buffer_start
         if other is not None:
             if isinstance(other, SimplexTreeMulti_{{FSHORT}}):
                 other_ptr = other.thisptr
@@ -163,9 +166,13 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     new_st_multi  = _safe_simplextree_multify_{{FSHORT}}(other, num_parameters = num_parameters, default_values=np.asarray(default_values))
                     self.thisptr, new_st_multi.thisptr = new_st_multi.thisptr, self.thisptr
                 else:
-                    other_ptr = other.thisptr
+                    stree_buffer = other.__getstate__()
+                    buffer = stree_buffer
+                    buffer_size = buffer.shape[0]
+                    buffer_start = &buffer[0]
+
                     with nogil:
-                        self.get_ptr().from_std(other_ptr, num_parameters, c_default_values)
+                        self.get_ptr().from_std(buffer_start, buffer_size, num_parameters, c_default_values)
             else:
                 raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
         else:
@@ -179,8 +186,35 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if ptr != NULL:
             del ptr
             # TODO : is that enough ??
-            
 
+    def __getstate__(self):
+        """:returns: Serialized (or flattened) SimplexTree data structure in order to pickle SimplexTree.
+        :rtype: numpy.array of shape (n,)
+        """
+        cdef size_t buffer_size = self.get_ptr().get_serialization_size()
+        # Let's use numpy to allocate a buffer. Will be deleted automatically
+        np_buffer = np.empty(buffer_size, dtype='B')
+        cdef char[:] buffer = np_buffer
+        cdef char* buffer_start = &buffer[0]
+        with nogil:
+            self.get_ptr().serialize(buffer_start, buffer_size)
+        
+        return np_buffer
+    def __setstate__(self, state):
+        """Construct the SimplexTree data structure from a Numpy Array (cf. :func:`~gudhi.SimplexTree.__getstate__`)
+        in order to unpickle a SimplexTree.
+        
+        :param state: Serialized SimplexTree data structure
+        :type state: numpy.array of shape (n,)
+        """
+        cdef char[:] buffer = state
+        cdef size_t buffer_size = state.shape[0]
+        cdef char* buffer_start = &buffer[0]
+        with nogil:
+            # deserialization requires an empty SimplexTree
+            self.get_ptr().clear()
+            # New pointer is a deserialized simplex tree
+            self.get_ptr().deserialize(buffer_start, buffer_size)
 
 
     def copy(self)->SimplexTreeMulti_{{FSHORT}}:
@@ -1434,32 +1468,31 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
 
 
+# def _simplextree_multify_{{FSHORT}}(simplextree:SimplexTree, int num_parameters, default_values=[])->SimplexTreeMulti_{{FSHORT}}:
+#     """Converts a gudhi simplextree to a multi simplextree.
+#     Parameters
+#     ----------
 
-def _simplextree_multify_{{FSHORT}}(simplextree:SimplexTree, int num_parameters, default_values=[])->SimplexTreeMulti_{{FSHORT}}:
-    """Converts a gudhi simplextree to a multi simplextree.
-    Parameters
-    ----------
+#     parameters:int = 2
+#         The number of filtrations
 
-    parameters:int = 2
-        The number of filtrations
+#     Returns
+#     -------
 
-    Returns
-    -------
-
-        A multi simplextree, with first filtration value being the one from the original simplextree.
-    """
-    if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
-        return simplextree
-    st = SimplexTreeMulti_{{FSHORT}}(num_parameters=num_parameters)
-    cdef intptr_t old_ptr = simplextree.thisptr
-    {{if is_kcritical}}
-    cdef {{FSHORT}} c_default_values= _py2kc_{{SHORT}}([default_values])
-    {{else}}
-    cdef {{FSHORT}} c_default_values= _py21c_{{SHORT}}([default_values])
-    {{endif}}
-    with nogil:
-        st.get_ptr().from_std(old_ptr, num_parameters, c_default_values)
-    return st
+#         A multi simplextree, with first filtration value being the one from the original simplextree.
+#     """
+#     if isinstance(simplextree, SimplexTreeMulti_{{FSHORT}}):
+#         return simplextree
+#     st = SimplexTreeMulti_{{FSHORT}}(num_parameters=num_parameters)
+#     cdef intptr_t old_ptr = simplextree.thisptr
+#     {{if is_kcritical}}
+#     cdef {{FSHORT}} c_default_values= _py2kc_{{SHORT}}([default_values])
+#     {{else}}
+#     cdef {{FSHORT}} c_default_values= _py21c_{{SHORT}}([default_values])
+#     {{endif}}
+#     with nogil:
+#         st.get_ptr().from_std(old_ptr, num_parameters, c_default_values)
+#     return st
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
