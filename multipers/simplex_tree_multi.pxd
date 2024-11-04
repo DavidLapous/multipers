@@ -107,6 +107,10 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void resize_all_filtrations(int) nogil
     void set_number_of_parameters(int) nogil
     int get_number_of_parameters() nogil
+    void serialize(char* buffer, const size_t buffer_size)  except + nogil
+    void deserialize(const char* buffer, const size_t buffer_size)  except + nogil
+    size_t get_serialization_size() nogil
+    void clear() nogil
   
     
     void from_std(char*, size_t, int, F&) nogil

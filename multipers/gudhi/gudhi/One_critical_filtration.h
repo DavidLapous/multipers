@@ -1185,30 +1185,28 @@ class One_critical_filtration : public std::vector<T> {
     return stream;
   }
 
-  friend bool unify_lifetimes(One_critical_filtration& f1, const One_critical_filtration& f2){
-    //WARNING: costly check
+  friend bool unify_lifetimes(One_critical_filtration &f1, const One_critical_filtration &f2) {
+    // WARNING: costly check
     GUDHI_CHECK(f1 <= f2 || f2 <= f1, "When 1-critical, two non-comparable filtration values cannot be unified.");
 
     return f1.pull_to_greatest_common_lower_bound(f2);
   }
 
-  friend bool intersect_lifetimes(One_critical_filtration& f1, const One_critical_filtration& f2){
+  friend bool intersect_lifetimes(One_critical_filtration &f1, const One_critical_filtration &f2) {
     return f1.push_to_least_common_upper_bound(f2);
   }
 
-  friend char* serialize_trivial(const One_critical_filtration& value, char* start)
-  {
+  friend char *serialize_trivial(const One_critical_filtration &value, char *start) {
     const auto length = value.size();
     const std::size_t arg_size = sizeof(T) * length;
-    const std::size_t type_size = sizeof(One_critical_filtration::Base::size_type);
+    const std::size_t type_size = sizeof(typename One_critical_filtration::Base::size_type);
     memcpy(start, &length, type_size);
     memcpy(start + type_size, value.data(), arg_size);
     return start + arg_size + type_size;
   }
 
-  friend const char* deserialize_trivial(One_critical_filtration& value, const char* start)
-  {
-    const std::size_t type_size = sizeof(One_critical_filtration::Base::size_type);
+  friend const char *deserialize_trivial(One_critical_filtration &value, const char *start) {
+    const std::size_t type_size = sizeof(typename One_critical_filtration::Base::size_type);
     typename One_critical_filtration::Base::size_type length;
     memcpy(&length, start, type_size);
     std::size_t arg_size = sizeof(T) * length;
@@ -1217,8 +1215,8 @@ class One_critical_filtration : public std::vector<T> {
     return start + arg_size + type_size;
   }
 
-  friend std::size_t get_serialization_size_of(const One_critical_filtration& value) {
-    return sizeof(One_critical_filtration::Base::size_type) + sizeof(T) * value.size();
+  friend std::size_t get_serialization_size_of(const One_critical_filtration &value) {
+    return sizeof(typename One_critical_filtration::Base::size_type) + sizeof(T) * value.size();
   }
 
   /**
