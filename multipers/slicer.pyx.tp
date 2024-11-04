@@ -109,7 +109,7 @@ cdef class {{D['PYTHON_TYPE']}}:
     cdef public int minpres_degree ## TODO : maybe change directly the degree in the minpres ?
 
     def __repr__(self):
-        return f"slicer[backend={self.pers_backend},dtype={self.dtype},num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},max_dim={self.dimension}]" 
+        return f"slicer[backend={self.pers_backend},dtype={np.dtype(self.dtype).name},num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},max_dim={self.dimension}]" 
 
     @property
     def is_squeezed(self)->bool:

@@ -187,6 +187,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             del ptr
             # TODO : is that enough ??
 
+    def __repr__(self):
+        return f"SimplexTreeMulti[dtype={{SHORT}},num_param={self.num_parameters},kcritical={self.is_kcritical},is_squeezed={self.is_squeezed},max_dim={self.dimension}]" 
     def __getstate__(self):
         """:returns: Serialized (or flattened) SimplexTree data structure in order to pickle SimplexTree.
         :rtype: numpy.array of shape (n,)
