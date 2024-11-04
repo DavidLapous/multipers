@@ -1,7 +1,6 @@
 from libcpp.utility cimport pair
 from libcpp cimport bool
 from libcpp.vector cimport vector
-from libcpp cimport tuple
 from libc.stdint cimport uintptr_t,intptr_t
 
 
