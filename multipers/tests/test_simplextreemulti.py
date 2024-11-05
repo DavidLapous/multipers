@@ -1,9 +1,11 @@
+import pickle as pkl
+
 import gudhi as gd
 import numpy as np
 from numpy import array
 
 import multipers as mp
-from multipers.tests import assert_st_simplices
+from multipers.tests import assert_st_simplices, random_st
 
 mp.simplex_tree_multi.SAFE_CONVERSION = True
 
@@ -163,3 +165,16 @@ def test_distance_matrix_filling():
     assert st2 != st
     st2.fill_distance_matrix(D, 0)
     assert st2 == st
+
+
+def test_serialize():
+    stm = random_st(num_parameters=4)
+    stm2 = pkl.loads(pkl.dumps(stm))
+    assert stm == stm2
+    stm2[[0]][:] = stm2[[0]] + 1
+    assert not stm == stm2
+    st1 = stm.project_on_line(parameter=0)
+    stm = mp.SimplexTreeMulti(st1, num_parameters=3)
+    assert st1 == stm.project_on_line(
+        parameter=0
+    ), "Gudhi<->Multipers conversion failed"

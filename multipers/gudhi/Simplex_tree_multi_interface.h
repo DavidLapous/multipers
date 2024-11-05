@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Simplex_tree_interface.h"
+#include <cstddef>
 #include <cstdint>
 #include <gudhi/Simplex_tree_multi.h>
 // #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
@@ -271,8 +272,9 @@ public:
         Base::filtration_mutable(SimplexHandle).resize(num);
     }
   }
-  void from_std(intptr_t ptr, int dimension, const Filtration &default_values) {
-    interface_std &st = get_simplextree_from_pointer<interface_std>(ptr);
+  void from_std(char* buffer_start, std::size_t buffer_size, int dimension, const Filtration &default_values) {
+    interface_std st;
+    st.deserialize(buffer_start, buffer_size);
     Gudhi::multi_persistence::multify(st, *this, dimension, default_values);
   }
   template <typename Line_like>

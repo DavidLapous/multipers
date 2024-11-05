@@ -25,7 +25,6 @@ cimport numpy as cnp
 from libcpp.utility cimport pair 
 from libcpp cimport bool, int, float
 from libcpp.vector cimport vector
-from libcpp cimport tuple
 
 
 from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t, uint64_t, int64_t
