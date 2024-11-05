@@ -228,7 +228,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     }
     barcodes = slicer.get_barcode();
   } else {
-    slicer.template compute_persistence<false>();  // PUT THAT TO TRUE...
+    slicer.template compute_persistence<true>();
     barcodes = slicer.get_barcode();
   }
 

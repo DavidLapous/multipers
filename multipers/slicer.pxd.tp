@@ -65,8 +65,8 @@ cdef extern from "Persistence_slices_interface.h":
       int prune_above_dimension(int) except + nogil 
 
       vector[{{D['C_VALUE_TYPE']}}] get_one_filtration()
-      void compute_persistence(vector[bool]) nogil
-      void compute_persistence() nogil
+      void compute_persistence(vector[bool]) except+ nogil
+      void compute_persistence() except+ nogil
       uint32_t num_generators() nogil
       uint32_t num_parameters() nogil
       string to_str() nogil

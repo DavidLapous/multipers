@@ -14,6 +14,8 @@
 #include <utility>  // std::pair
 #include <vector>
 
+#include "../gudhi/mma_interface_coh.h"
+
 namespace Gudhi::multiparameter::hilbert_function {
 
 // TODO : this function is ugly
@@ -505,8 +507,12 @@ inline void compute_2d_hilbert_surface(
       }
       barcodes = slicer.get_barcode();
     } else {
-      slicer.template compute_persistence<false>();  // BUG : cannot put this to
-                                                     // true ??
+      //TODO: correct problem with R to only have slicer.template compute_persistence<true>();
+      if constexpr (std::is_same_v<PersBackend, Gudhi::multiparameter::interface::Persistence_backend_cohomology<Structure> >){
+        slicer.template compute_persistence<true>();
+      } else {
+        slicer.template compute_persistence<false>();  // BUG : cannot put this to true ??
+      }
       barcodes = slicer.get_barcode();
     }
     index_type degree_index = 0;
