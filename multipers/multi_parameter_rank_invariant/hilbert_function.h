@@ -14,8 +14,6 @@
 #include <utility>  // std::pair
 #include <vector>
 
-#include "../gudhi/mma_interface_coh.h"
-
 namespace Gudhi::multiparameter::hilbert_function {
 
 // TODO : this function is ugly
@@ -498,23 +496,16 @@ inline void compute_2d_hilbert_surface(
       std::cout << "]" << std::endl;
     }
     using bc_type = typename interface::Truc<PersBackend, Structure, Filtration>::split_barcode;
-    bc_type barcodes;
     if constexpr (PersBackend::is_vine) {
       if (!slicer.has_persistence()) [[unlikely]] {
         slicer.compute_persistence();
       } else {
         slicer.vineyard_update();
       }
-      barcodes = slicer.get_barcode();
     } else {
-      //TODO: correct problem with R to only have slicer.template compute_persistence<true>();
-      if constexpr (std::is_same_v<PersBackend, Gudhi::multiparameter::interface::Persistence_backend_cohomology<Structure> >){
-        slicer.template compute_persistence<true>();
-      } else {
-        slicer.template compute_persistence<false>();  // BUG : cannot put this to true ??
-      }
-      barcodes = slicer.get_barcode();
+      slicer.template compute_persistence<true>();
     }
+    bc_type barcodes = slicer.get_barcode();
     index_type degree_index = 0;
     for (auto degree : degrees) {  // TODO range view cartesian product
       const auto &barcode = barcodes[degree];
