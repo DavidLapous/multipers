@@ -20,6 +20,8 @@
 #include <cstddef>
 #include <limits>
 #include <ostream>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -36,11 +38,85 @@ class Boundary_matrix_as_filtered_complex_for_coh {
   using Filtration_value = Simplex_key;
   using Dimension = int;
 
+  class Filtration_range_iterator
+      : public boost::iterator_facade<Filtration_range_iterator, const Simplex_handle&, boost::forward_traversal_tag> {
+   public:
+    Filtration_range_iterator(const std::vector<Simplex_handle> *new_to_old_perm = nullptr)
+        : new_to_old_perm_(new_to_old_perm), currPos_(0) {
+      if (new_to_old_perm_ != nullptr) {
+        find_next_valid_index();
+      }
+    }
+
+   private:
+    // mandatory for the boost::iterator_facade inheritance.
+    friend class boost::iterator_core_access;
+
+    const std::vector<Simplex_handle> *new_to_old_perm_;
+    std::size_t currPos_;
+
+    bool equal(Filtration_range_iterator const &other) const {
+      return new_to_old_perm_ == other.new_to_old_perm_ && currPos_ == other.currPos_;
+    }
+
+    const Simplex_handle& dereference() const { return (*new_to_old_perm_)[currPos_]; }
+
+    void increment() {
+      ++currPos_;
+      find_next_valid_index();
+    }
+
+    void set_to_end() {
+      new_to_old_perm_ = nullptr;
+      currPos_ = 0;
+    }
+
+    void find_next_valid_index() {
+      while (currPos_ < new_to_old_perm_->size() && dereference() >= new_to_old_perm_->size()) ++currPos_;
+      if (currPos_ == new_to_old_perm_->size()) set_to_end();
+    }
+  };
+
+  class Filtration_simplex_range {
+   public:
+    using iterator = Filtration_range_iterator;
+
+    Filtration_simplex_range(std::vector<Simplex_handle> const *new_to_old_perm)
+        : new_to_old_perm_(new_to_old_perm), size_(-1) {}
+
+    iterator begin() const { return iterator(new_to_old_perm_); }
+
+    iterator end() const { return iterator(); }
+
+    std::size_t size() {
+      if (size_ == static_cast<std::size_t>(-1)) {
+        size_ = 0;
+        for (auto i : *new_to_old_perm_) {
+          if (i < new_to_old_perm_->size()) ++size_;
+        }
+      }
+      return size_;
+    }
+
+    inline friend std::ostream &operator<<(std::ostream &stream, const Filtration_simplex_range &range) {
+      stream << "Filtration_simplex_range: ";
+      for (const auto idx : range) {
+        stream << idx << " ";
+      }
+      stream << "\n";
+      return stream;
+    }
+
+   private:
+    std::vector<Simplex_handle> const *new_to_old_perm_;
+    std::size_t size_;
+  };
+
   Boundary_matrix_as_filtered_complex_for_coh() : boundaries_(nullptr), new_to_old_perm_(nullptr) {}
 
   Boundary_matrix_as_filtered_complex_for_coh(const Structure &boundaries,
                                               const std::vector<Simplex_handle> &permutation)
-      : boundaries_(&boundaries), new_to_old_perm_(&permutation), keys_(permutation.size(), -1) {
+      : boundaries_(&boundaries), new_to_old_perm_(&permutation), keys_(permutation.size(), -1), keysToSH_(permutation.size(), -1) {
     assert(permutation.size() == boundaries.size());
   }
 
@@ -48,6 +124,7 @@ class Boundary_matrix_as_filtered_complex_for_coh {
     std::swap(be1.boundaries_, be2.boundaries_);
     std::swap(be1.new_to_old_perm_, be2.new_to_old_perm_);
     be1.keys_.swap(be2.keys_);
+    be1.keysToSH_.swap(be2.keysToSH_);
   }
 
   std::size_t num_simplices() const { return boundaries_->size(); }
@@ -61,8 +138,8 @@ class Boundary_matrix_as_filtered_complex_for_coh {
   Dimension dimension(Simplex_handle sh) const { return sh == null_simplex() ? -1 : boundaries_->dimension(sh); }
 
   void assign_key(Simplex_handle sh, Simplex_key key) {
-    if (sh == null_simplex()) return;
-    keys_[sh] = key;
+    if (sh != null_simplex()) keys_[sh] = key;
+    if (key != null_key()) keysToSH_[key] = sh;
   }
 
   Simplex_key key(Simplex_handle sh) const { return sh == null_simplex() ? null_key() : keys_[sh]; }
@@ -70,18 +147,20 @@ class Boundary_matrix_as_filtered_complex_for_coh {
   static constexpr Simplex_key null_key() { return static_cast<Simplex_key>(-1); }
 
   Simplex_handle simplex(Simplex_key key) const {
-    return key == null_key() ? null_simplex() : (*new_to_old_perm_)[key];
+    return key == null_key() ? null_simplex() : keysToSH_[key];
   }
 
   static constexpr Simplex_handle null_simplex() { return static_cast<Simplex_handle>(-1); }
 
   std::pair<Simplex_handle, Simplex_handle> endpoints(Simplex_handle sh) const {
     if (sh == null_simplex()) return {null_simplex(), null_simplex()};
+    assert(dimension(sh) == 1);
     const auto &col = (*boundaries_)[sh];
+    assert(col.size() == 2);
     return {col[0], col[1]};
   }
 
-  const std::vector<Simplex_handle> &filtration_simplex_range() const { return *new_to_old_perm_; }
+  Filtration_simplex_range filtration_simplex_range() const { return Filtration_simplex_range(new_to_old_perm_); }
 
   const std::vector<Simplex_handle> &boundary_simplex_range(Simplex_handle sh) const { return (*boundaries_)[sh]; }
 
@@ -108,6 +187,7 @@ class Boundary_matrix_as_filtered_complex_for_coh {
   Structure const *boundaries_;
   std::vector<Simplex_handle> const *new_to_old_perm_;
   std::vector<Simplex_key> keys_;
+  std::vector<Simplex_handle> keysToSH_;
 };
 
 template <class Boundary_matrix_type>
@@ -137,9 +217,8 @@ class Persistence_backend_cohomology {
 
   Barcode get_barcode() {
     Persistent_cohomology pcoh(matrix_, true);
-    constexpr int coeff_field_characteristic = 11;
-    pcoh.init_coefficients(coeff_field_characteristic);
-    pcoh.compute_persistent_cohomology(0);
+    pcoh.init_coefficients(2);
+    pcoh.compute_persistent_cohomology(0, false);
 
     const auto &pairs = pcoh.get_persistent_pairs();
     Barcode barcode(pairs.size());

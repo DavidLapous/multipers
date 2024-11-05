@@ -100,7 +100,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void set_keys_to_enumerate() nogil const
     int get_key(const simplex_type) nogil
     void set_key(simplex_type, int) nogil
-    void fill_lowerstar(const F&, int) nogil
+    void fill_lowerstar(const F&, int) except+ nogil
     simplex_list get_simplices_of_dimension(int) nogil
     edge_list get_edge_list() nogil
     # euler_char_list euler_char(const vector[filtration_type]&) nogil
