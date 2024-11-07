@@ -5,6 +5,7 @@ from numpy import array
 import multipers as mp
 import multipers.slicer as mps
 from multipers.tests import assert_sm
+import pickle as pkl
 
 mpfree_flag = mp.io._check_available("mpfree")
 fd_flag = mp.io._check_available("function_delaunay")
@@ -202,3 +203,19 @@ def test_external(dim, degree):
     assert np.array_equal(
         np.unique(fd_.get_dimensions()), [degree, degree + 1, degree + 2]
     )  ## resolution by default
+
+def test_pkl():
+    for num_params in range(1,4):
+        img = np.random.uniform(size=(20,20,num_params))
+        img2 = np.array(img)
+        img2[0,0,0]+=1
+        s = mp.slicer.from_bitmap(img)
+        s2 = mp.slicer.from_bitmap(img2)
+        s3 = type(s)(s.get_boundaries()[:-1], s.get_dimensions()[:-1], s.get_filtrations()[:-1])
+        s4 = type(s)(s.get_boundaries(), s.get_dimensions()+1, s.get_filtrations())
+        assert len(s)> np.prod(img.shape[:-1])+1
+        assert s == s.copy()
+        assert s != s2
+        assert s != s3
+        assert s != s4
+        assert s == pkl.loads(pkl.dumps(s))

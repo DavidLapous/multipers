@@ -295,6 +295,37 @@ cdef class {{D['PYTHON_TYPE']}}:
         return out
 
 
+    def __getstate__(self):
+        return (
+            self.get_boundaries(),
+            self.get_dimensions(),
+            self.get_filtrations(),
+            tuple(np.array(f) for f in self.filtration_grid),
+            self.minpres_degree,
+        )
+    def __setstate__(self, tuple dump):
+        B, D, F, filtration_grid, minpres_degree = dump
+        copy = {{D['PYTHON_TYPE']}}(B,D,F)
+        self.truc = copy.truc
+        self.minpres_degree= minpres_degree
+        self.filtration_grid=filtration_grid
+
+    def __eq__(self, other):
+        ## True if they rpz the same complex (no reordering allowed yet), 
+        # i.e., ignores minpres, squeeze
+        if other.is_squeezed:
+            return self == other.unsqueeze()
+        if self.is_squeezed:
+            return self.unsqueeze() == other
+        return (
+                np.array_equal(self.get_dimensions(), other.get_dimensions())
+                and
+                self.get_boundaries() == other.get_boundaries() 
+                and 
+                ## Kcritical are sorted + filtrationvalues is a dump. 
+                # for non kcritical there is an unnecessary copy though
+                np.array_equal(self.get_filtrations_values(), other.get_filtrations_values())
+            )
 
 
 
