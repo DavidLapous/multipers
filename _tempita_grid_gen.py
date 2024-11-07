@@ -16,6 +16,7 @@ columns_name = [  # only one column is necessary
         # "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
+        "SMALL_VECTOR",
     )
 ]
 
