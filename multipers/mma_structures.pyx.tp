@@ -355,14 +355,20 @@ cdef class PyModule_{{SHORT}}:
         if (len(box[0]) != 2):
             print("Filtration size :", len(box[0]), " != 2")
             return
-        num = 0
         if(degree < 0):
-            ndim = self.cmod.get_dimension()+1
+            dims = np.unique(self.get_dimensions())
+            separated = kwargs.pop("separated", False)
+            ndim = len(dims)
             scale = kwargs.pop("scale", 4)
-            fig, axes = plt.subplots(1, ndim, figsize=(ndim*scale,scale))
-            for degree in range(ndim):
-                plt.sca(axes[degree]) if ndim > 1 else  plt.sca(axes)
-                self.plot(degree,box=box,**kwargs)
+            if not separated:
+                fig, axes = plt.subplots(1, ndim, figsize=(ndim*scale,scale))
+            else: 
+                fig = None
+                axes = None
+            for dim_idx in range(ndim):
+                if not separated:
+                    plt.sca(axes[dim_idx]) if ndim > 1 else  plt.sca(axes)
+                self.plot(dims[dim_idx],box=box, separated = separated, **kwargs)
             return
         corners = self.cmod.get_corners_of_dimension(degree)
         plot2d_PyModule(corners, box=box, dimension=degree, **kwargs)
@@ -453,6 +459,13 @@ cdef class PyModule_{{SHORT}}:
 
         return bc
 
+    def get_dimensions(self):
+        cdef int num_summands =  len(self)
+        out = np.empty(shape=num_summands, dtype=np.int32)
+        cdef int32_t[:] c_out = out
+        for i in range(num_summands):
+            c_out[i] = self.cmod.at(i).get_dimension()
+        return out
 
     def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
         r"""Computes barcodes of module along a set of lines.
