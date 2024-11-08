@@ -3,6 +3,7 @@ requires = [
   "numpy",
   "Cython",
   "setuptools",
+  "wheel",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -52,14 +53,7 @@ download = "https://pypi.org/project/multipers/#files"
 tracker = "https://github.com/DavidLapous/multipers/issues"
 "release notes" = "https://github.com/DavidLapous/multipers/releases"
 
-# automatic search for packages
+# # automatic search for packages
 [tool.setuptools.packages.find]
 include = ["multipers*"]
-exclude = [
-  "multipers.gudhi",
-  "multipers.multi_parameter_rank_invariant",
-  "multipers.multiparameter_module_approximation",
-  "multipers.tensor",
-  "multipers.tests",
-]
 
