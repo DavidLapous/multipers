@@ -660,7 +660,7 @@ void get_hilbert_surface_python(interface::Truc<PersBackend, Structure, Filtrati
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  std::size_t num_parameters = slicer.num_parameters();
+  int num_parameters = slicer.num_parameters();
   std::vector<indices_type> coordinates_to_compute(num_parameters);
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
