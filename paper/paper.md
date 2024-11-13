@@ -69,7 +69,7 @@ here the three cycles can be retrieved using their radii (x-axis) and their co-d
 The first cycle is the densiest, and smallest, and thus corresponds to the one that appears in the bottom(high-density)-left(small-radius)
 of the bi-filtration. The second is less dense (thus above the first one) and bigger (thus more on the right). The same goes for the last one.](images/3cycles.png)
 
-![\label{3} Different Signed Barcodes from the same dataset as Figure \ref{1}.
+![\label{3} Different Signed Barcodes from the same dataset as Figure \ref{2}.
 **(Left)** Euler Decomposition Signed Barcode, and the Euler Surface in the background.
 **(Middle)** Hilbert Decomposition Signed Barcode, with its Hilbert Function surface.
 **(Right)** Rank invariant Signed Barcode, with the Hilbert Function as a background.](images/SignedBarcodes.png)
