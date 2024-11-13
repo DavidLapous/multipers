@@ -53,7 +53,7 @@ Furthermore, `multipers` seamlessly integrates several `Rust` and `C++` librarie
 and leverages on state-of-the-art
 Machine Learning libraries for fast computations, such as `scikit-learn` [@scikit_learn], `Python Optimal Transport` [@pot], `PyKeops` [@pykeops], or `PyTorch` [@pytorch]. 
 This makes `multipers` a very efficient and fully-featured library, showcasing a wide variety of mathematically-grounded multiparameter topological invariants, including,
-e.g., Multiparameter Module Approximation [@mma], Euler, Hilbert, and Rectangle Signed Barcodes [@signed_barcode] [@signed_betti], Multiparameter Persistent Landscapes [@mpl]; each of them computable from several multi-filtrations, e.g.,
+e.g., Multiparameter Module Approximation [@mma], Euler, Hilbert, and Rectangle Signed Barcodes [@signed_barcode;@signed_betti], Multiparameter Persistent Landscapes [@mpl]; each of them computable from several multi-filtrations, e.g.,
 Rips-Density-like filtrations, Cubical, Degree-Rips, Function-Delaunay, or any $k$-critical multi-filtration. 
 These topological descriptors can then directly be used in auto-differentiable Machine Learning pipelines, using the differentiability framework developed in [@sm_diff],
 through several methods, such as, e.g., 
@@ -99,7 +99,7 @@ Although relying on distinct methods, `multipers` can also be used to compute Ma
 
 [**Elder Rule Staircode.**](https://github.com/Chen-Cai-OSU/ER-staircode) This library features a descriptor for 2-parameter, degree-0 homology, rips-densitity-like filtrations [@erstaircode]. Once again, this library is very specific and not linked with other libraries.
 
-[**Persistable.**](https://github.com/LuisScoccola/persistable) is a GUI interactive library for clustering, using degree-0 multiparameter persistence [@code_persistable] [@persistable]. 
+[**Persistable.**](https://github.com/LuisScoccola/persistable) is a GUI interactive library for clustering, using degree-0 multiparameter persistence [@code_persistable;@persistable]. 
 Although aiming at distinct goals and using very different approaches, `multipers` can also be used for clustering, by computing (differentiable) descriptors that can be used afterward with standard clustering methods, e.g., K-means. 
 
 We contribute to this variety of task-specific libraries by providing a **general purpose** library, `multipers`, with novel and efficient topological invariant computations, integrated state-of-the art Machine Learning topological pipelines, and interfaces to standard Machine Learning and Deep Learning libraries.
