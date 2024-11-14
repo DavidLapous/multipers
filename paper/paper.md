@@ -1,5 +1,5 @@
 ---
-title: '`multipers` : Multiparameter Persistence for Machine Learning'
+title: 'multipers: Multiparameter Persistence for Machine Learning'
 
 tags:
   - machine learning
