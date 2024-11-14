@@ -1,0 +1,28 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Loiseaux
+  given-names: David
+- family-names: Schreiber
+  given-names: Hannah
+doi: 10.5281/zenodo.14042221
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Loiseaux
+    given-names: David
+  - family-names: Schreiber
+    given-names: Hannah
+  date-published: 2024-11-13
+  doi: 10.21105/joss.06773
+  issn: 2475-9066
+  issue: 103
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 6773
+  title: "multipers: Multiparameter Persistence for Machine Learning"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.06773"
+  volume: 9
+title: "multipers: Multiparameter Persistence for Machine Learning"
