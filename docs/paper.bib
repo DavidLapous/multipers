@@ -1,101 +1,3 @@
-@incollection{alonsoFiltrationdominationBifilteredGraphs2023,
-  title = {Filtration-Domination in Bifiltered Graphs},
-  booktitle = {2023 Proceedings of the Symposium on Algorithm Engineering and Experiments ({{ALENEX}})},
-  author = {Alonso, {\'A}ngel Javier and Kerber, Michael and Pritam, Siddharth},
-  year = {2023},
-  eprint = {https://epubs.siam.org/doi/pdf/10.1137/1.9781611977561.ch3},
-  pages = {27--38},
-  doi = {10.1137/1.9781611977561.ch3},
-  abstract = {Bifiltered graphs are a versatile tool for modelling relations between data points across multiple grades of a two- dimensional scale. They are especially popular in topological data analysis, where the homological properties of the induced clique complexes are studied. To reduce the large size of these clique complexes, we identify filtration-dominated edges of the graph, whose removal preserves the relevant topological properties. We give two algorithms to detect filtration-dominated edges in a bifiltered graph and analyze their complexity. These two algorithms work directly on the bifiltered graph, without first extracting the clique complexes, which are generally much bigger. We present extensive experimental evaluation which shows that in most cases, more than 90\% of the edges can be removed. In turn, we demonstrate that this often leads to a substantial speedup, and reduction in the memory usage, of the computational pipeline of multiparameter topological data analysis.},
-  file = {/user/dloiseau/home/Zotero/storage/WWRX5EQI/Alonso et al. - Filtration-domination in bifiltered graphs.pdf}
-}
-
-@inproceedings{botnanSignedBarcodesMultiParameter2022,
-  title = {Signed {{Barcodes}} for {{Multi-Parameter Persistence}} via {{Rank Decompositions}}},
-  booktitle = {38th {{International Symposium}} on {{Computational Geometry}} ({{SoCG}} 2022)},
-  author = {Botnan, Magnus Bakke and Oppermann, Steffen and Oudot, Steve},
-  editor = {Goaoc, Xavier and Kerber, Michael},
-  year = {2022},
-  series = {Leibniz {{International Proceedings}} in {{Informatics}} ({{LIPIcs}})},
-  volume = {224},
-  pages = {19:1--19:18},
-  publisher = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
-  address = {Dagstuhl, Germany},
-  issn = {1868-8969},
-  doi = {10/gtx3q9},
-  urldate = {2022-06-14},
-  isbn = {978-3-95977-227-3},
-  keywords = {multi-parameter persistent homology,Topological data analysis},
-  file = {/user/dloiseau/home/Zotero/storage/PQ2SWJA6/Botnan et al. - 2022 - Signed Barcodes for Multi-Parameter Persistence vi.pdf;/user/dloiseau/home/Zotero/storage/ZFIATDM8/Botnan et al. - 2021 - Signed barcodes for multi-parameter persistence vi.pdf;/user/dloiseau/home/Zotero/storage/FTU8JRV7/16027.html}
-}
-
-@article{caiElderRuleStaircodesAugmentedMetric2021,
-  title = {Elder-{{Rule-Staircodes}} for {{Augmented Metric Spaces}}},
-  author = {Cai, Chen and Kim, Woojin and Memoli, Facundo and Wang, Yusu},
-  year = {2021},
-  month = jan,
-  journal = {SIAM Journal on Applied Algebra and Geometry},
-  volume = {5},
-  number = {3},
-  eprint = {2003.04523},
-  primaryclass = {cs, math},
-  pages = {417--454},
-  issn = {2470-6566},
-  doi = {10/gtx3qv},
-  urldate = {2022-05-20},
-  abstract = {An augmented metric space is a metric space \$(X, d\_X)\$ equipped with a function \$f\_X: X {\textbackslash}to {\textbackslash}mathbb\{R\}\$. This type of data arises commonly in practice, e.g, a point cloud \$X\$ in \${\textbackslash}mathbb\{R\}{\textasciicircum}d\$ where each point \$x{\textbackslash}in X\$ has a density function value \$f\_X(x)\$ associated to it. An augmented metric space \$(X, d\_X, f\_X)\$ naturally gives rise to a 2-parameter filtration \${\textbackslash}mathcal\{K\}\$. However, the resulting 2-parameter persistent homology \${\textbackslash}mathrm\{H\}\_\{{\textbackslash}bullet\}({\textbackslash}mathcal\{K\})\$ could still be of wild representation type, and may not have simple indecomposables. In this paper, motivated by the elder-rule for the zeroth homology of 1-parameter filtration, we propose a barcode-like summary, called the elder-rule-staircode, as a way to encode \${\textbackslash}mathrm\{H\}\_0({\textbackslash}mathcal\{K\})\$. Specifically, if \$n = {\textbar}X{\textbar}\$, the elder-rule-staircode consists of \$n\$ number of staircase-like blocks in the plane. We show that if \${\textbackslash}mathrm\{H\}\_0({\textbackslash}mathcal\{K\})\$ is interval decomposable, then the barcode of \${\textbackslash}mathrm\{H\}\_0({\textbackslash}mathcal\{K\})\$ is equal to the elder-rule-staircode. Furthermore, regardless of the interval decomposability, the fibered barcode, the dimension function (a.k.a. the Hilbert function), and the graded Betti numbers of \${\textbackslash}mathrm\{H\}\_0({\textbackslash}mathcal\{K\})\$ can all be efficiently computed once the elder-rule-staircode is given. Finally, we develop and implement an efficient algorithm to compute the elder-rule-staircode in \$O(n{\textasciicircum}2{\textbackslash}log n)\$ time, which can be improved to \$O(n{\textasciicircum}2{\textbackslash}alpha(n))\$ if \$X\$ is from a fixed dimensional Euclidean space \${\textbackslash}mathbb\{R\}{\textasciicircum}d\$, where \${\textbackslash}alpha(n)\$ is the inverse Ackermann function.},
-  archiveprefix = {arXiv},
-  keywords = {Computer Science - Computational Geometry,Mathematics - Algebraic Topology},
-  file = {/user/dloiseau/home/Zotero/storage/QN5PC85K/Cai et al. - 2021 - Elder-Rule-Staircodes for Augmented Metric Spaces.pdf;/user/dloiseau/home/Zotero/storage/TKL8FVMS/2003.html}
-}
-
-@article{charlierKernelOperationsGPU2021,
-  title = {Kernel {{Operations}} on the {{GPU}}, with {{Autodiff}}, without {{Memory Overflows}}},
-  author = {Charlier, Benjamin and Feydy, Jean and Glaun{\`e}s, Joan Alexis and Collin, Fran{\c c}ois-David and Durif, Ghislain},
-  year = {2021},
-  journal = {Journal of Machine Learning Research},
-  volume = {22},
-  number = {74},
-  pages = {1--6},
-  issn = {1533-7928},
-  urldate = {2024-04-16},
-  abstract = {The KeOps library provides a fast and memory-efficient GPU support for tensors whose entries are given by a mathematical formula, such as kernel and distance matrices. KeOps alleviates the main bottleneck of tensor-centric libraries for kernel and geometric applications: memory consumption. It also supports automatic differentiation and outperforms standard GPU baselines, including PyTorch CUDA tensors or the Halide and TVM libraries. KeOps combines optimized C++/CUDA schemes with binders for high-level languages: Python (Numpy and PyTorch), Matlab and GNU R. As a result, high-level ``quadratic'' codes can now scale up to large data sets with millions of samples processed in seconds. KeOps brings graphics-like performances for kernel methods and is freely available on standard repositories (PyPi, CRAN). To showcase its versatility, we provide tutorials in a wide range of settings online at www.kernel-operations.io.},
-  keywords = {No DOI found},
-  file = {/user/dloiseau/home/Zotero/storage/S7CZXZY6/Charlier et al. - 2021 - Kernel Operations on the GPU, with Autodiff, witho.pdf;/user/dloiseau/home/Zotero/storage/VFU44LBL/keops.html}
-}
-
-@article{flamaryPOTPythonOptimal2021,
-  title = {{{POT}}: {{Python}} Optimal Transport},
-  shorttitle = {{{POT}}},
-  author = {Flamary, R{\'e}mi and Courty, Nicolas and Gramfort, Alexandre and Alaya, Mokhtar Z. and Boisbunon, Aur{\'e}lie and Chambon, Stanislas and Chapel, Laetitia and Corenflos, Adrien and Fatras, Kilian and Fournier, Nemo and Gautheron, L{\'e}o and Gayraud, Nathalie T.H. and Janati, Hicham and Rakotomamonjy, Alain and Redko, Ievgen and Rolet, Antoine and Schutz, Antony and Seguy, Vivien and Sutherland, Danica J. and Tavenard, Romain and Tong, Alexander and Vayer, Titouan},
-  year = {2021},
-  month = jan,
-  journal = {The Journal of Machine Learning Research},
-  volume = {22},
-  number = {1},
-  pages = {78:3571--78:3578},
-  issn = {1532-4435},
-  abstract = {Optimal transport has recently been reintroduced to the machine learning community thanks in part to novel efficient optimization procedures allowing for medium to large scale applications. We propose a Python toolbox that implements several key optimal transport ideas for the machine learning community. The toolbox contains implementations of a number of founding works of OT for machine learning such as Sinkhorn algorithm and Wasserstein barycenters, but also provides generic solvers that can be used for conducting novel fundamental research. This toolbox, named POT for Python Optimal Transport, is open source with an MIT license.},
-  keywords = {divergence,domain adaptation,No DOI found,optimal transport,optimization},
-  file = {/user/dloiseau/home/Zotero/storage/YG5FLRKT/Flamary et al. - 2021 - POT Python optimal transport.pdf}
-}
-
-@article{lesnickInteractiveVisualization2D2015,
-  title = {Interactive Visualization of 2-{{D}} Persistence Modules},
-  author = {Lesnick, Michael and Wright, Matthew},
-  year = {2015},
-  month = dec,
-  journal = {arXiv:1512.00180 [cs, math]},
-  eprint = {1512.00180},
-  primaryclass = {cs, math},
-  doi = {10/gtx3qt},
-  abstract = {The goal of this work is to extend the standard persistent homology pipeline for exploratory data analysis to the 2-D persistence setting, in a practical, computationally efficient way. To this end, we introduce RIVET, a software tool for the visualization of 2-D persistence modules, and present mathematical foundations for this tool. RIVET provides an interactive visualization of the barcodes of 1-D affine slices of a 2-D persistence module M . It also computes and visualizes the dimension of each vector space in M and the bigraded Betti numbers of M . At the heart of our computational approach is a novel data structure based on planar line arrangements, on which we can perform fast queries to find the barcode of any slice of M . We present an efficient algorithm for constructing this data structure and establish bounds on its complexity.},
-  archiveprefix = {arXiv},
-  langid = {english},
-  keywords = {Computer Science - Computational Geometry,Mathematics - Algebraic Topology,Mathematics - Commutative Algebra,yrf2022},
-  file = {/user/dloiseau/home/Zotero/storage/UQJIDJ4L/Lesnick et Wright - 2015 - Interactive Visualization of 2-D Persistence Modul.pdf}
-}
-
 @misc{loiseauxFastStableEfficient2022,
   title = {Fast, {{Stable}} and {{Efficient Approximation}} of {{Multi-parameter Persistence Modules}} with {{MMA}}},
   author = {Loiseaux, David and Carri{\`e}re, Mathieu and Blumberg, Andrew J.},
@@ -105,7 +7,6 @@
   urldate = {2024-04-16},
   abstract = {In this article, we introduce a new parameterized family of topological invariants, taking the form of candidate decompositions, for multi-parameter persistence modules. We prove that our candidate decompositions are controllable approximations: when restricting to modules that can be decomposed into interval summands, we establish theoretical results about the approximation error between our candidate decompositions and the true underlying module in terms of the standard interleaving and bottleneck distances. Moreover, even when the underlying module does not admit such a decomposition, our candidate decompositions are nonetheless stable invariants; small perturbations in the underlying module lead to small perturbations in the candidate decomposition. Then, we introduce MMA (Multipersistence Module Approximation): an algorithm for computing stable instances of such invariants, which is based on fibered barcodes and exact matchings, two constructions that stem from the theory of single-parameter persistence. By design, MMA can handle an arbitrary number of filtrations, and has bounded complexity and running time. Finally, we present empirical evidence validating the generalization capabilities and running time speed-ups of MMA on several data sets.},
   langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/WUSW534K/Loiseaux et al. - 2022 - Fast, Stable and Efficient Approximation of Multi-.pdf}
 }
 
 @article{loiseauxFrameworkFastStable2023,
@@ -118,8 +19,23 @@
   pages = {35774--35798},
   urldate = {2024-03-19},
   langid = {english},
-  keywords = {No DOI found},
-  file = {/user/dloiseau/home/Zotero/storage/4BGRQKUN/Loiseaux et al. - 2023 - A Framework for Fast and Stable Representations of.pdf}
+}
+
+@article{loiseauxMultipersMultiparameterPersistence2024,
+  title = {Multipers: {{Multiparameter Persistence}} for {{Machine Learning}}},
+  shorttitle = {Multipers},
+  author = {Loiseaux, David and Schreiber, Hannah},
+  year = {2024},
+  month = nov,
+  journal = {Journal of Open Source Software},
+  volume = {9},
+  number = {103},
+  pages = {6773},
+  issn = {2475-9066},
+  doi = {10.21105/joss.06773},
+  urldate = {2024-11-14},
+  abstract = {Loiseaux et al., (2024). multipers: Multiparameter Persistence for Machine Learning. Journal of Open Source Software, 9(103), 6773, https://doi.org/10.21105/joss.06773},
+  langid = {english},
 }
 
 @article{loiseauxStableVectorizationMultiparameter2023,
@@ -132,137 +48,20 @@
   pages = {68316--68342},
   urldate = {2024-03-19},
   langid = {english},
-  keywords = {No DOI found},
-  file = {/user/dloiseau/home/Zotero/storage/GXHTKP7M/Loiseaux et al. - 2023 - Stable Vectorization of Multiparameter Persistent .pdf}
-}
-
-@inproceedings{mariaGudhiLibrarySimplicial2014,
-  title = {The {{Gudhi Library}}: {{Simplicial Complexes}} and {{Persistent Homology}}},
-  shorttitle = {The {{Gudhi Library}}},
-  booktitle = {Mathematical {{Software}} -- {{ICMS}} 2014},
-  author = {Maria, Cl{\'e}ment and Boissonnat, Jean-Daniel and Glisse, Marc and Yvinec, Mariette},
-  editor = {Hong, Hoon and Yap, Chee},
-  year = {2014},
-  pages = {167--174},
-  publisher = {Springer},
-  address = {Berlin, Heidelberg},
-  doi = {10/gsfc8z},
-  abstract = {We present the main algorithmic and design choices that have been made to represent complexes and compute persistent homology in the Gudhi library. The Gudhi library (Geometric Understanding in Higher Dimensions) is a generic C++ library for computational topology. Its goal is to provide robust, efficient, flexible and easy to use implementations of state-of-the-art algorithms and data structures for computational topology. We present the different components of the software, their interaction and the user interface. We justify the algorithmic and design decisions made in Gudhi and provide benchmarks for the code. The software, which has been developped by the first author, will be available soon at project.inria.fr/gudhi/software/.},
-  isbn = {978-3-662-44199-2},
-  langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/C78JZN5L/Maria et al. - 2014 - The Gudhi Library Simplicial Complexes and Persis.pdf}
-}
-
-@article{oudotStabilityMultigradedBetti2024,
-  title = {On the {{Stability}} of {{Multigraded Betti Numbers}} and {{Hilbert Functions}}},
-  author = {Oudot, Steve and Scoccola, Luis},
-  year = {2024},
-  month = mar,
-  journal = {SIAM Journal on Applied Algebra and Geometry},
-  volume = {8},
-  number = {1},
-  pages = {54--88},
-  publisher = {{Society for Industrial and Applied Mathematics}},
-  doi = {10/gtt7dq},
-  urldate = {2024-05-14},
-  abstract = {.We introduce harmonic persistent homology spaces for filtrations of finite simplicial complexes. As a result, we can associate concrete subspaces of cycles to each bar of the barcode of the filtration. We prove stability of the harmonic persistent homology subspaces as well as the subspaces associated to the bars of the barcodes under small perturbations of functions defining them. We relate the notion of ``essential simplices'' introduced in an earlier work to identify simplices which play a significant role in the birth of a bar with that of harmonic persistent homology. We prove that the harmonic representatives of simple bars maximize the ``relative essential content'' among all representatives of the bar, where the relative essential content is the weight a particular cycle puts on the set of essential simplices.},
-  file = {/user/dloiseau/home/Zotero/storage/S64MVWN2/Oudot and Scoccola - 2024 - On the Stability of Multigraded Betti Numbers and .pdf}
-}
-
-@incollection{paszkePyTorchImperativeStyle2019,
-  title = {{{PyTorch}}: An Imperative Style, High-Performance Deep Learning Library},
-  shorttitle = {{{PyTorch}}},
-  booktitle = {Proceedings of the 33rd {{International Conference}} on {{Neural Information Processing Systems}}},
-  author = {Paszke, Adam and Gross, Sam and Massa, Francisco and Lerer, Adam and Bradbury, James and Chanan, Gregory and Killeen, Trevor and Lin, Zeming and Gimelshein, Natalia and Antiga, Luca and Desmaison, Alban and K{\"o}pf, Andreas and Yang, Edward and DeVito, Zach and Raison, Martin and Tejani, Alykhan and Chilamkurthy, Sasank and Steiner, Benoit and Fang, Lu and Bai, Junjie and Chintala, Soumith},
-  year = {2019},
-  month = dec,
-  number = {721},
-  pages = {8026--8037},
-  publisher = {Curran Associates Inc.},
-  address = {Red Hook, NY, USA},
-  urldate = {2024-04-16},
-  abstract = {Deep learning frameworks have often focused on either usability or speed, but not both. PyTorch is a machine learning library that shows that these two goals are in fact compatible: it provides an imperative and Pythonic programming style that supports code as a model, makes debugging easy and is consistent with other popular scientific computing libraries, while remaining efficient and supporting hardware accelerators such as GPUs. In this paper, we detail the principles that drove the implementation of PyTorch and how they are reflected in its architecture. We emphasize that every aspect of PyTorch is a regular Python program under the full control of its user. We also explain how the careful and pragmatic implementation of the key components of its runtime enables them to work together to achieve compelling performance. We demonstrate the efficiency of individual subsystems, as well as the overall speed of PyTorch on several common benchmarks.},
-  file = {/user/dloiseau/home/Zotero/storage/XUQVQUFU/Paszke et al. - 2019 - PyTorch an imperative style, high-performance dee.pdf}
-}
-
-@article{pedregosaScikitlearnMachineLearning2011,
-  title = {Scikit-Learn: {{Machine Learning}} in {{Python}}},
-  shorttitle = {Scikit-Learn},
-  author = {Pedregosa, Fabian and Varoquaux, Ga{\"e}l and Gramfort, Alexandre and Michel, Vincent and Thirion, Bertrand and Grisel, Olivier and Blondel, Mathieu and Prettenhofer, Peter and Weiss, Ron and Dubourg, Vincent and Vanderplas, Jake and Passos, Alexandre and Cournapeau, David and Brucher, Matthieu and Perrot, Matthieu and Duchesnay, {\'E}douard},
-  year = {2011},
-  journal = {Journal of Machine Learning Research},
-  volume = {12},
-  number = {85},
-  pages = {2825--2830},
-  issn = {1533-7928},
-  urldate = {2024-04-16},
-  abstract = {Scikit-learn is a Python module integrating a wide range of state-of-the-art machine learning algorithms for medium-scale supervised and unsupervised problems. This package focuses on bringing machine learning to non-specialists using a general-purpose high-level language. Emphasis is put on ease of use, performance, documentation, and API consistency. It has minimal dependencies and is distributed under the simplified BSD license, encouraging its use in both academic and commercial settings. Source code, binaries, and documentation can be downloaded from http://scikit-learn.sourceforge.net.},
-  keywords = {No DOI found},
-  file = {/user/dloiseau/home/Zotero/storage/9JQ3Y526/Pedregosa et al. - 2011 - Scikit-learn Machine Learning in Python.pdf}
-}
-
-@article{rolleStableConsistentDensitybased2020,
-  title = {Stable and Consistent Density-Based Clustering via Multiparameter Persistence},
-  author = {Rolle, Alexander and Scoccola, Luis},
-  year = {2020},
-  month = may,
-  journal = {arXiv.org},
-  doi = {10/gtx3rd},
-  urldate = {2024-04-16},
-  abstract = {We consider the degree-Rips construction from topological data analysis, which provides a density-sensitive, multiparameter hierarchical clustering algorithm. We analyze its stability to perturbations of the input data using the correspondence-interleaving distance, a metric for hierarchical clusterings that we introduce. Taking certain one-parameter slices of degree-Rips recovers well-known methods for density-based clustering, but we show that these methods are unstable. However, we prove that degree-Rips, as a multiparameter object, is stable, and we propose an alternative approach for taking slices of degree-Rips, which yields a one-parameter hierarchical clustering algorithm with better stability properties. We prove that this algorithm is consistent, using the correspondence-interleaving distance. We provide an algorithm for extracting a single clustering from one-parameter hierarchical clusterings, which is stable with respect to the correspondence-interleaving distance. And, we integrate these methods into a pipeline for density-based clustering, which we call Persistable. Adapting tools from multiparameter persistent homology, we propose visualization tools that guide the selection of all parameters of the pipeline. We demonstrate Persistable on benchmark datasets, showing that it identifies multi-scale cluster structure in data.},
-  langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/MEN5HI3B/Rolle and Scoccola - 2020 - Stable and consistent density-based clustering via.pdf}
 }
 
 @inproceedings{scoccolaDifferentiabilityOptimizationMultiparameter2024,
   title = {Differentiability and {{Optimization}} of {{Multiparameter Persistent Homology}}},
-  booktitle = {Forty-First {{International Conference}} on {{Machine Learning}}},
+  booktitle = {Proceedings of the 41st {{International Conference}} on {{Machine Learning}}},
   author = {Scoccola, Luis and Setlur, Siddharth and Loiseaux, David and Carri{\`e}re, Mathieu and Oudot, Steve},
   year = {2024},
-  month = jun,
-  urldate = {2024-06-15},
-  abstract = {Real-valued functions on geometric data---such as node attributes on a graph---can be optimized using descriptors from persistent homology, allowing the user to incorporate topological terms in the loss function. When optimizing a single real-valued function (the one-parameter setting), there is a canonical choice of descriptor for persistent homology: the barcode. The operation mapping a real-valued function to its barcode is differentiable almost everywhere, and the convergence of gradient descent for losses using barcodes is relatively well understood. When optimizing a vector-valued function (the multiparameter setting), there is no unique choice of descriptor for multiparameter persistent homology, and many distinct descriptors have been proposed. This calls for the development of a general framework for differentiability and optimization that applies to a wide range of multiparameter homological descriptors. In this article, we develop such a framework and show that it encompasses well-known descriptors of different flavors, such as signed barcodes and the multiparameter persistence landscape. We complement the theory with numerical experiments supporting the idea that optimizing multiparameter homological descriptors can lead to improved performances compared to optimizing one-parameter descriptors, even when using the simplest and most efficiently computable multiparameter descriptors.},
-  langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/7UJMRWTB/Scoccola et al. - 2024 - Differentiability and Optimization of Multiparamet.pdf}
-}
-
-@article{scoccolaPersistablePersistentStable2023,
-  title = {Persistable: Persistent and Stable Clustering},
-  shorttitle = {Persistable},
-  author = {Scoccola, Luis and Rolle, Alexander},
-  year = {2023},
-  month = mar,
-  journal = {Journal of Open Source Software},
-  volume = {8},
-  number = {83},
-  pages = {5022},
-  issn = {2475-9066},
-  doi = {10/gtx3k3},
-  urldate = {2024-05-09},
-  abstract = {Scoccola et al., (2023). Persistable: persistent and stable clustering. Journal of Open Source Software, 8(83), 5022, https://doi.org/10.21105/joss.05022},
-  langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/3DS9DWXU/Scoccola et Rolle - 2023 - Persistable persistent and stable clustering.pdf}
-}
-
-@misc{thegudhiprojectGUDHI2024,
-  title = {{{GUDHI}}},
-  author = {TheGudhiProject},
-  year = {2024},
-  howpublished = {GUDHI Editorial Board}
-}
-
-@inproceedings{xinGRILParameterPersistence2023,
-  title = {{{GRIL}}: {{A}} \$2\$-Parameter {{Persistence Based Vectorization}} for {{Machine Learning}}},
-  shorttitle = {{{GRIL}}},
-  booktitle = {Proceedings of 2nd {{Annual Workshop}} on {{Topology}}, {{Algebra}}, and {{Geometry}} in {{Machine Learning}} ({{TAG-ML}})},
-  author = {Xin, Cheng and Mukherjee, Soham and Samaga, Shreyas N. and Dey, Tamal K.},
-  year = {2023},
-  month = sep,
-  pages = {313--333},
+  month = jul,
+  series = {Proceedings of Machine Learning Research},
+  volume = {235},
+  pages = {43986--44011},
   publisher = {PMLR},
   issn = {2640-3498},
-  urldate = {2024-04-16},
-  abstract = {111-parameter persistent homology, a cornerstone in Topological Data Analysis (TDA), studies the evolution of topological features such as connected components and cycles hidden in data. It has been applied to enhance the representation power of deep learning models, such as Graph Neural Networks (GNNs). To enrich the representations of topological features,  here we propose to study 222-parameter persistence modules induced by bi-filtration functions.  In order to incorporate these representations into machine learning models, we introduce a novel vector representation called Generalized Rank Invariant Landscape (GRIL) for 222-parameter persistence modules.  We show that this vector representation is 111-Lipschitz stable and differentiable with respect to underlying filtration functions and can be easily integrated into machine learning models to augment encoding topological features. We present an algorithm to compute the vector representation  efficiently. We also test our methods on synthetic and benchmark graph datasets, and compare the results with previous vector representations of 111-parameter and 222-parameter persistence modules. Further, we augment GNNs with GRIL features and observe an increase in performance indicating that GRIL can capture additional features enriching GNNs.  We make the complete code for the proposed method available at [https://github.com/soham0209/mpml-graph](https://github.com/soham0209/mpml-graph).},
+  urldate = {2024-10-02},
+  abstract = {Real-valued functions on geometric data---such as node attributes on a graph---can be optimized using descriptors from persistent homology, allowing the user to incorporate topological terms in the loss function. When optimizing a single real-valued function (the one-parameter setting), there is a canonical choice of descriptor for persistent homology: the barcode. The operation mapping a real-valued function to its barcode is differentiable almost everywhere, and the convergence of gradient descent for losses using barcodes is relatively well understood. When optimizing a vector-valued function (the multiparameter setting), there is no unique choice of descriptor for multiparameter persistent homology, and many distinct descriptors have been proposed. This calls for the development of a general framework for differentiability and optimization that applies to a wide range of multiparameter homological descriptors. In this article, we develop such a framework and show that it encompasses well-known descriptors of different flavors, such as signed barcodes and the multiparameter persistence landscape. We complement the theory with numerical experiments supporting the idea that optimizing multiparameter homological descriptors can lead to improved performances compared to optimizing one-parameter descriptors, even when using the simplest and most efficiently computable multiparameter descriptors.},
   langid = {english},
-  file = {/user/dloiseau/home/Zotero/storage/4C5SHR8L/Xin et al. - 2023 - GRIL A $2$-parameter Persistence Based Vectorizat.pdf}
 }

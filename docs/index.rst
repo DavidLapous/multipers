@@ -84,20 +84,28 @@ Please cite `multipers` if using it in a research paper. You can use the key
 
 .. code-block:: bibtex
 
-  @misc{multipers,
-      author={Loiseaux, David and Schreiber, Hannah},
-      title={`multipers` : Multiparameter Persistence for Machine Learning},
-      year={2022},
-      publisher={GitHub},
-      journal={GitHub repository},
-      howpublished={\url{https://github.com/DavidLapous/multipers}}
+  @article{multipers,
+    title = {Multipers: {{Multiparameter Persistence}} for {{Machine Learning}}},
+    shorttitle = {Multipers},
+    author = {Loiseaux, David and Schreiber, Hannah},
+    year = {2024},
+    month = nov,
+    journal = {Journal of Open Source Software},
+    volume = {9},
+    number = {103},
+    pages = {6773},
+    issn = {2475-9066},
+    doi = {10.21105/joss.06773},
+    langid = {english},
   }
+
 
 For theoretical references,
  - Module Approximation :cite:p:`loiseauxFastStableEfficient2022`
  - Module Decomposition Representations :cite:p:`loiseauxFrameworkFastStable2023`
  - Signed Barcodes as Signed Measures :cite:p:`loiseauxStableVectorizationMultiparameter2023`
  - Differentiability and Multiparameter Persistence :cite:p:`scoccolaDifferentiabilityOptimizationMultiparameter2024`
+ - multipers :cite:p:`loiseauxMultipersMultiparameterPersistence2024`
 
 .. toctree::
   :caption: Introduction

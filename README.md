@@ -1,52 +1,29 @@
 # multipers : Multiparameter Persistence for Machine Learning
-[![Build, test](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml/badge.svg)](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml)
+[![Documentation](https://img.shields.io/badge/Documentation-website-blue)](https://davidlapous.github.io/multipers)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06773/status.svg)](https://doi.org/10.21105/joss.06773)
 [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers)
+[![Build, test](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml/badge.svg)](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml)
 [![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
-[Documentation](https://davidlapous.github.io/multipers/index.html)
 <br>
 Scikit-style PyTorch-autodiff multiparameter persistent homology python library. 
 This library aims to provide easy to use and performant strategies for applied multiparameter topology.
 <br> Meant to be integrated in [the Gudhi library](https://gudhi.inria.fr/).
 
-## Multiparameter Persistence
-This library allows computing several representations from "geometrical datasets", e.g., point clouds, images, graphs, that have multiple scales. A well known example is the following one. 
-<br>
-Pick a point cloud that has diffuse noise, or on which the sampling measure has some interesting properties, e.g., in the following example the measure has three modes.
-<br>
-Now define a two parameter grid (filtration) of topological spaces (on the left) from a point cloud $P$ on which we will compute the persistence of some topological structures (homological cycles).
-This filtration $X$, indexed over a radius parameter $r$ and a codensity parameter $s$ is defined as follows
-
-$$ X_{r,s} = \bigcup_{x \in P, \, \mathrm{density}(x) \ge s} B(x,r) = \lbrace x\in \mathbb R^2 \mid \exists p \in P, \, \mathrm{density}(p) \ge s \text{ and } d(x,p) \le r \rbrace$$
-
-The green shape on the left represents the lifetime of the biggest annulus. On the right, each cycle appearing on the left gets a colored shape (the color is only a label) and the shape of this colored shape represents the lifetime of this cycle.
-<br>
-In our case, the big green shape on the left corresponds to the largest green shape appearing on the right, recovering the structure of the annulus here.
-![Alt text](docs/1.png)
-
-The **magic** part is that we never had to choose any parameter to remove the noise in this construction, but the annulus still naturally appears!
-<br>A more striking example is the following one.
-Using the same constructions, we can identify topological structure, and their size, in a parameter free approach, even though the majority of the sampling measure's mass is noise.
-<br> In this example, the lifetime shape associated to each cycle can be identified from 
- - Their radius : the smaller cycle will naturally live more this shape will appear on the "left" (smaller radius)
- - Their concentration : Cycles having more concentration will appear lower than others (smaller co-density)
-
-Notice that this construction is also very stable w.r.t. the noise. The more noise is added the smaller the "rainbow strip" is, and the more the "large shape" are visible.
-![alt text](docs/2.png)
-We also provide several other descriptors, as well as associated Machine Learning technics and pipelines. In the following example from the same dataset, the *Hilbert decomposition signed measure*, the *Euler decomposition signed measure* and the *rank decomposition signed measure*.
-![alt text](docs/3.png)
-
-
-A non-exhaustive list of features can be found in the **Features** section, and in the [documentation](https://davidlapous.github.io/multipers/index.html).
 ## Quick start
+This library allows computing several representations from "geometrical datasets", e.g., point clouds, images, graphs, that have multiple scales.
+We provide some *nice* pictures in the [documentation](https://davidlapous.github.io/multipers/index.html). 
+A non-exhaustive list of features can be found in the **Features** section.
 
-
-This library is available [on PyPI](https://pypi.org/project/multipers/) for Linux and macOS, via
+This library is available [on PyPI](https://pypi.org/project/multipers/) for (reasonably up to date) Linux and macOS, via
 ```sh
 pip install multipers
 ```
-We recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/). 
+
+We recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/).
 <br>
-A documentation and building instructions are available [here](https://davidlapous.github.io/multipers/contributions.html).
+A documentation and building instructions are available
+[here](https://davidlapous.github.io/multipers/compilation.html).
+
 
 ## Features, and linked projects
 This library features a bunch of different functions and helpers. See below for a non-exhaustive list.
@@ -74,6 +51,25 @@ If I missed something, or you want to add something, feel free to open an issue.
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein)<br>
 
+## Citation
+Please cite this library when using it in scientific publications;
+you can use the following journal bibtex entry
+```bib
+@article{multipers,
+  title = {Multipers: {{Multiparameter Persistence}} for {{Machine Learning}}},
+  shorttitle = {Multipers},
+  author = {Loiseaux, David and Schreiber, Hannah},
+  year = {2024},
+  month = nov,
+  journal = {Journal of Open Source Software},
+  volume = {9},
+  number = {103},
+  pages = {6773},
+  issn = {2475-9066},
+  doi = {10.21105/joss.06773},
+  langid = {english},
+}
+```
 ## Contributions
 Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
 In particular, if you have a nice example or application that is not taken care in the documentation (see the ./docs/notebooks/ folder), please contact me to add it there.
