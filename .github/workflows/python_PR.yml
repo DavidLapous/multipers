@@ -14,27 +14,41 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-    - name: Setup miniconda
-      uses: conda-incubator/setup-miniconda@v3
+    # - name: Setup miniconda
+    #   uses: conda-incubator/setup-miniconda@v3
+    #   with:
+    #     python-version:  ${{ matrix.python-version }}
+    #     mamba-version: "1.5"
+    #     activate-environment: build_test_env
+    #     channels: conda-forge
+    #     channel-priority: true
+    - uses: mamba-org/setup-micromamba@v2
       with:
-        python-version:  ${{ matrix.python-version }}
-        mamba-version: "1.5"
-        activate-environment: build_test_env
-        channels: conda-forge
-        channel-priority: true
-    - name: Install build and test dependencies
+        micromamba-version: '1.5' 
+        # environment-file: environment.yml
+        init-shell: >-
+          bash
+          powershell
+        # cache-environment: true
+        # post-cleanup: 'all'
+        condarc: |
+          channels:
+            - conda-forge
+    - name: dependencies
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        mamba install python=${{matrix.python-version}} pip -c conda-forge
-        mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        micromamba install python=${{matrix.python-version}} pip -c conda-forge
+        micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
+
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          mamba install cxx-compiler -c conda-forge
+          micromamba install cxx-compiler -c conda-forge
         fi
         if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-          mamba install cxx-compiler -c conda-forge
+          micromamba install cxx-compiler -c conda-forge
         fi
+
     - name: Build package
       shell: bash -el {0}
       run: |
@@ -52,6 +66,7 @@ jobs:
           set LIBPATH=%LIBPATH%;C:\Miniconda\envs\build_test_env\Library\lib
         fi
         python setup.py build_ext -j4 --inplace bdist_wheel
+
     - name: Install and Test
       shell: bash -el {0}
       run: |
