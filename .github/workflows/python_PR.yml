@@ -26,6 +26,7 @@ jobs:
       with:
         micromamba-version: 'latest' 
         # environment-file: environment.yml
+        # environment-name: build
         init-shell: >-
           bash
           powershell
@@ -38,7 +39,9 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba install python=${{matrix.python-version}} pip -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
+        micromamba activate build
+
         micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
@@ -52,6 +55,7 @@ jobs:
     - name: Build package
       shell: bash -el {0}
       run: |
+        micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
@@ -70,5 +74,7 @@ jobs:
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install --no-build-isolation dist/*.whl
+        micromamba create -n test python=${{matrix.python-version}} pip -c conda-forge
+        micromamba activate test
+        pip install dist/*.whl
         pytest multipers/tests
