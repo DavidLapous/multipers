@@ -24,7 +24,7 @@ jobs:
     #     channel-priority: true
     - uses: mamba-org/setup-micromamba@v2
       with:
-        micromamba-version: '1.5' 
+        micromamba-version: 'latest' 
         # environment-file: environment.yml
         init-shell: >-
           bash
