@@ -71,6 +71,44 @@ jobs:
         fi
         python setup.py build_ext -j4 --inplace bdist_wheel
 
+    - name: Fix wheels on Linux and Macos
+      shell: bash -el {0}
+      run: |
+        micromamba activate build
+        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
+          cd dist
+          pip install auditwheel --upgrade
+          for wheel_file in multipers*linux*.whl; do
+            auditwheel show $wheel_file
+            auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
+            rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
+        if [[ ${{ matrix.os }} == "macos-13" ]]; then
+          cd dist
+          pip install delocate --upgrade
+          for wheel_file in multipers*macosx*x86*.whl; do
+            delocate-listdeps $wheel_file
+            delocate-wheel --require-archs x86_64 -w wheelhouse -v $wheel_file
+            rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
+
+        if [[ ${{ matrix.os }} == "macos-14" ]]; then
+          cd dist
+          pip install delocate --upgrade
+          for wheel_file in multipers*macosx*arm64*.whl; do
+            delocate-listdeps $wheel_file
+            delocate-wheel --require-archs arm64 -w wheelhouse -v $wheel_file
+            rm $wheel_file
+          done
+          mv wheelhouse/*.whl . # retrieves repaired wheels
+          cd ..
+        fi
     - name: Install and Test
       shell: bash -el {0}
       run: |
