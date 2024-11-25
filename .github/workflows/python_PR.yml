@@ -45,12 +45,13 @@ jobs:
         micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
-        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          micromamba install cxx-compiler=1.6 -c conda-forge
-        fi
-        if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-          micromamba install cxx-compiler=1.6 -c conda-forge
-        fi
+        micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
+        # if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
+        #   micromamba install cxx-compiler=1.6 -c conda-forge
+        # fi
+        # if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
+        #   micromamba install cxx-compiler=1.6 -c conda-forge
+        # fi
 
     - name: Build package
       shell: bash -el {0}
@@ -69,6 +70,7 @@ jobs:
         if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
           set LIBPATH=%LIBPATH%;C:\Miniconda\envs\build_test_env\Library\lib
         fi
+
         python setup.py build_ext -j4 --inplace bdist_wheel
 
     - name: Fix wheels on Linux and Macos
@@ -77,7 +79,7 @@ jobs:
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           cd dist
-          pip install auditwheel --upgrade
+          micromamba install auditwheel -c conda-forge
           for wheel_file in multipers*linux*.whl; do
             auditwheel show $wheel_file
             auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
@@ -88,7 +90,7 @@ jobs:
         fi
         if [[ ${{ matrix.os }} == "macos-13" ]]; then
           cd dist
-          pip install delocate --upgrade
+          micromamba install delocate -c conda-forge
           for wheel_file in multipers*macosx*x86*.whl; do
             delocate-listdeps $wheel_file
             delocate-wheel --require-archs x86_64 -w wheelhouse -v $wheel_file
@@ -109,6 +111,7 @@ jobs:
           mv wheelhouse/*.whl . # retrieves repaired wheels
           cd ..
         fi
+
     - name: Install and Test
       shell: bash -el {0}
       run: |

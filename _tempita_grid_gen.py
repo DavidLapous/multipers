@@ -10,9 +10,9 @@ columns_name = [  # only one column is necessary
     for stuff in (
         "INTRUSIVE_SET",
         # "SET",
-        "HEAP",
+        # "HEAP",
         # "UNORDERED_SET",
-        "NAIVE_VECTOR",
+        # "NAIVE_VECTOR",
         # "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
@@ -22,10 +22,10 @@ columns_name = [  # only one column is necessary
 
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
-    ("int32_t", "np.int32", "i32"),  # necessary
-    ("int64_t", "np.int64", "i64"),
-    ("float", "np.float32", "f32"),  # necessary for mma (TODO: fixme)
-    ("double", "np.float64", "f64"),  # necessary
+    ("int32_t", "np.int32",   "i32"),  # necessary
+    ("int64_t", "np.int64",   "i64"),
+    ("float",   "np.float32", "f32"),  # necessary for mma (TODO: fixme)
+    ("double",  "np.float64", "f64"),  # necessary
 ]
 
 ## True, False necessary
