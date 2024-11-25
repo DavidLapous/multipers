@@ -24,27 +24,36 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-    - name: Setup miniconda
-      uses: conda-incubator/setup-miniconda@v3
+    # - name: Setup miniconda
+    #   uses: conda-incubator/setup-miniconda@v3
+    #   with:
+    #     python-version:  ${{ matrix.python-version }}
+    #     mamba-version: "1.5"
+    #     activate-environment: build_test_env
+    #     channels: conda-forge
+    #     channel-priority: true
+    - uses: mamba-org/setup-micromamba@v1
       with:
-        python-version:  ${{ matrix.python-version }}
-        mamba-version: "1.5"
-        activate-environment: build_test_env
-        channels: conda-forge
-        channel-priority: true
+        micromamba-version: '1.5' # any version from https://github.com/mamba-org/micromamba-releases
+        # environment-file: environment.yml
+        init-shell: >-
+          bash
+          powershell
+        # cache-environment: true
+        # post-cleanup: 'all'
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        mamba install python=${{matrix.python-version}} pip -c conda-forge
+        micromamba install python=${{matrix.python-version}} pip -c conda-forge
         ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
-        mamba install boost-cpp  gudhi=3.10 numpy=2 pot cython=3 pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        micromamba install boost-cpp  "gudhi>=3.8" "numpy>=2" pot "cython>=3" pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
         
-        mamba install cxx-compiler=1.6
+        micromamba install cxx-compiler=1.6
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           # oldest supported gcc release; see https://gcc.gnu.org/
-          mamba install patchelf -c conda-forge
+          micromamba install patchelf -c conda-forge
           gcc --version
         fi
     - name: Build package
