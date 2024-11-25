@@ -24,41 +24,31 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-    # - name: Setup miniconda
-    #   uses: conda-incubator/setup-miniconda@v3
-    #   with:
-    #     python-version:  ${{ matrix.python-version }}
-    #     mamba-version: "1.5"
-    #     activate-environment: build_test_env
-    #     channels: conda-forge
-    #     channel-priority: true
-    - uses: mamba-org/setup-micromamba@v1
+    - uses: mamba-org/setup-micromamba@v2
       with:
-        micromamba-version: '1.5' # any version from https://github.com/mamba-org/micromamba-releases
-        # environment-file: environment.yml
+        micromamba-version: 'latest'
         init-shell: >-
           bash
           powershell
-        # cache-environment: true
-        # post-cleanup: 'all'
+        condarc: |
+          channels:
+            - conda-forge
+
     - name: Install build and test dependencies
       shell: bash -el {0}
       run: |
-        # conda install mamba -c conda-forge
-        micromamba install python=${{matrix.python-version}} pip -c conda-forge
-        ## if we split arm and x86_64 runners, tbb conda's non-fat builds are fine.
-        micromamba install boost-cpp  "gudhi>=3.8" "numpy>=2" pot "cython>=3" pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
+        micromamba activate build
+        micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
         
-        micromamba install cxx-compiler=1.6
-        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          # oldest supported gcc release; see https://gcc.gnu.org/
-          micromamba install patchelf -c conda-forge
-          gcc --version
-        fi
+        #  tbb, boost are installed in the conda env: sets some variables.
+        micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge 
+
     - name: Build package
       shell: bash -el {0}
       run: |
+        micromamba activate build
         python setup.py sdist
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
@@ -73,48 +63,54 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
         fi
         python setup.py build_ext -j4 --inplace bdist_wheel
+
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
       run: |
+        micromamba activate build
+        cd dist
+
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          cd dist
-          pip install auditwheel --upgrade
+          micromamba install auditwheel patchelf
           for wheel_file in multipers*linux*.whl; do
             auditwheel show $wheel_file
             auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
             rm $wheel_file
           done
-          mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
+
         if [[ ${{ matrix.os }} == "macos-13" ]]; then
-          cd dist
-          pip install delocate --upgrade
+          micromamba install delocate 
           for wheel_file in multipers*macosx*x86*.whl; do
             delocate-listdeps $wheel_file
             delocate-wheel --require-archs x86_64 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
-          mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
 
         if [[ ${{ matrix.os }} == "macos-14" ]]; then
-          cd dist
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*arm64*.whl; do
             delocate-listdeps $wheel_file
             delocate-wheel --require-archs arm64 -w wheelhouse -v $wheel_file
             rm $wheel_file
           done
-          mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
+
+
+        mv wheelhouse/*.whl . # retrieves repaired wheels
+        cd ..
+
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        pip install dist/*.whl --force-reinstall ## tests the repaired wheel on a "fresh" env
+        # Fresh env 
+        micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
+        micromamba activate test
+
+        pip install dist/*.whl --force-reinstall 
         pytest multipers/tests
+
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v3
       with:
