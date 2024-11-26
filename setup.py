@@ -3,6 +3,7 @@ import filecmp
 import os
 import shutil
 import site
+import platform
 
 from pathlib import Path
 import numpy as np
@@ -161,7 +162,7 @@ extensions = [
             "-O3",  # -Ofast disables infinity values for filtration values
             # "-g",
             # "-march=native",
-            "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
+            "/std:c++20" if platform.system() == "Windows" else "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
         ],
