@@ -283,7 +283,7 @@ inline void compute_2d_rank_invariant(
   if (degrees.size() == 0) return;
   index_type X = grid_shape[1];
   index_type Y = grid_shape[2];  // First axis is degree
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Shape " << grid_shape[0] << " " << grid_shape[1] << " " << grid_shape[2] << " " << grid_shape[3]
               << " " << grid_shape[4] << std::endl;
