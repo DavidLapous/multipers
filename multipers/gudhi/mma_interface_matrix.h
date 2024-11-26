@@ -181,7 +181,7 @@ class Persistence_backend_matrix {
   Persistence_backend_matrix(const Boundary_matrix_type &boundaries, std::vector<Index> &permutation)
       : matrix_(boundaries.size()), permutation_(&permutation) {
     static_assert(Matrix_options::is_of_boundary_type || Matrix_options::has_vine_update, "Clement implies vine.");
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     if constexpr (verbose) std::cout << "Constructing matrix..." << std::endl;
     std::vector<Index> permutationInv(permutation_->size());
     std::vector<Index> boundary_container;
@@ -255,7 +255,7 @@ class Persistence_backend_matrix {
       }
       permutation2.push_back(i);
     }
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     if (update) [[likely]]
       matrix_.update_representative_cycles();
     std::vector<std::vector<std::vector<unsigned int>>> current_cycles =
