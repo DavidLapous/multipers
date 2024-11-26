@@ -862,8 +862,9 @@ class Truc {
 
   // TODO: declare method here instead of scc_io.h
   // it is just temporary, until Truc is cleaned up
-  friend void write_scc_file<Truc>(const std::string &outFilePath,
-                                   const Truc &slicer,
+  template <class Truc_>
+  friend void write_scc_file(const std::string &outFilePath,
+                                   const Truc_ &slicer,
                                    int numberOfParameters,
                                    int degree,
                                    bool rivetCompatible,
