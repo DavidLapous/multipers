@@ -135,7 +135,7 @@ cpp_dirs = [
     "multipers/tensor",
     np.get_include(),
     PYTHON_ENV_PATH + "/include/", # Unix
-    PYTHON_ENV_PATH + "/Libary/include/", # Windows
+    PYTHON_ENV_PATH + "/Library/include/", # Windows
 ]
 cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
