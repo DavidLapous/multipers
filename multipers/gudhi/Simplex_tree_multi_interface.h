@@ -428,8 +428,7 @@ flattened_scc_type inline simplextree_to_ordered_bf(){
     const auto splx_dim = this->dimension(sh);
     if (splx_dim <= max_dim)
       for (auto i = 0u; i < splx_filtration.size(); i++) {
-        if (simplices_dimensions[i] != splx_dim and
-            simplices_dimensions[i] != -1)
+        if (simplices_dimensions[i] != splx_dim && simplices_dimensions[i] != -1)
           continue;
         auto f = splx_filtration[i];
         idx_map[i].try_emplace(f, splx_idx);
