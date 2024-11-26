@@ -4,6 +4,7 @@ import os
 import shutil
 import site
 import platform
+import sys
 
 from pathlib import Path
 import numpy as np
@@ -124,7 +125,7 @@ cython_compiler_directives = {
 
 # When venv is not properly set, we have to add the current python path
 # removes lib / python3.x / site-packages
-PYTHON_ENV_PATH = site.getsitepackages()[0] + "../../../"
+PYTHON_ENV_PATH = sys.prefix
 
 cpp_dirs = [
     "multipers/gudhi",
