@@ -235,7 +235,7 @@ void _rec_get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Fil
                               bool mobius_inverion = true,
                               bool zero_pad = false,
                               int expand_collapse_dim = 0) {
-  constexpr bool verbose = false;
+  constexpr const bool verbose = false;
 
   if constexpr (verbose) {
     std::cout << "Computing coordinates (";
@@ -465,7 +465,7 @@ inline void compute_2d_hilbert_surface(
     bool zero_pad) {
   using value_type = typename Filtration::value_type;
 
-  constexpr bool verbose = false;
+  constexpr const bool verbose = false;
   index_type I = grid_shape[i + 1], J = grid_shape[j + 1];
   if constexpr (verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
   tbb::parallel_for(0, J, [&](index_type height) {
@@ -577,7 +577,7 @@ void _rec_get_hilbert_surface(
     const std::vector<index_type> fixed_values,
     bool mobius_inverion = true,
     bool zero_pad = false) {
-  constexpr bool verbose = false;
+  constexpr const bool verbose = false;
 
   if constexpr (verbose) {
     std::cout << "Computing coordinates (";
