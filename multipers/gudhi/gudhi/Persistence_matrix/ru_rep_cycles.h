@@ -307,7 +307,7 @@ inline void RU_representative_cycles<Master_matrix>::_get_initial_borders(Index 
 }
 
 template <class Master_matrix>
-inline RU_representative_cycles<Master_matrix>::Cycle_border
+inline typename RU_representative_cycles<Master_matrix>::Cycle_border
 RU_representative_cycles<Master_matrix>::_get_border(Index uIndex) {
   const auto& col = _matrix()->reducedMatrixR_.get_column(uIndex);
   Cycle_border res;
@@ -333,7 +333,7 @@ RU_representative_cycles<Master_matrix>::_get_border(Index uIndex) {
 }
 
 template <class Master_matrix>
-inline RU_representative_cycles<Master_matrix>::Cycle_border
+inline typename RU_representative_cycles<Master_matrix>::Cycle_border
 RU_representative_cycles<Master_matrix>::_get_dependent_border(Index uIndex) {
   if (u_transposed_[uIndex].size() == 1){
     return _get_border(uIndex);
