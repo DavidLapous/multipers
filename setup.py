@@ -2,7 +2,6 @@
 import filecmp
 import os
 import shutil
-import site
 import platform
 import sys
 
@@ -130,9 +129,9 @@ PYTHON_ENV_PATH = sys.prefix
 cpp_dirs = [
     "multipers/gudhi",
     "multipers",
-    "multipers/multiparameter_module_approximation",
-    "multipers/multi_parameter_rank_invariant",
-    "multipers/tensor",
+    # "multipers/multiparameter_module_approximation",
+    # "multipers/multi_parameter_rank_invariant",
+    # "multipers/tensor",
     np.get_include(),
     PYTHON_ENV_PATH + "/include/", # Unix
     PYTHON_ENV_PATH + "/Library/include/", # Windows
@@ -170,7 +169,7 @@ extensions = [
         extra_link_args=[],  ## mvec for python312
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb", "m"],
+        libraries=["tbb"],
         library_dirs=library_dirs,
     )
     for module in cython_modules
