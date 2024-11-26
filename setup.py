@@ -4,6 +4,7 @@ import os
 import shutil
 import site
 
+from pathlib import Path
 import numpy as np
 from Cython import Tempita
 from Cython.Build import cythonize
@@ -15,7 +16,8 @@ Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
-os.system("mkdir -p ./build/tmp")
+os.system("mkdir ./build/")
+os.system("mkdir ./build/tmp")
 
 
 def was_modified(file):
@@ -121,9 +123,7 @@ cython_compiler_directives = {
 
 # When venv is not properly set, we have to add the current python path
 # removes lib / python3.x / site-packages
-PYTHON_ENV_PATH = "/".join((site.getsitepackages()[0]).split("/")[:-3])
-INCLUDE_PATH = PYTHON_ENV_PATH + "/include/"
-LIBRARY_PATH = PYTHON_ENV_PATH + "/lib/"
+PYTHON_ENV_PATH = site.getsitepackages()[0] + "../../../"
 
 cpp_dirs = [
     "multipers/gudhi",
@@ -132,12 +132,23 @@ cpp_dirs = [
     "multipers/multi_parameter_rank_invariant",
     "multipers/tensor",
     np.get_include(),
-    INCLUDE_PATH,
+    PYTHON_ENV_PATH + "/include/", # Unix
+    PYTHON_ENV_PATH + "/Libary/include/", # Windows
 ]
+cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
 library_dirs = [
-    LIBRARY_PATH,
+    PYTHON_ENV_PATH + "/lib/", # Unix
+    PYTHON_ENV_PATH + "/Library/lib/", # Windows
 ]
+
+library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dirs]
+
+print("Include dirs:")
+print(cpp_dirs)
+
+print("Library dirs:")
+print(library_dirs)
 
 extensions = [
     Extension(
