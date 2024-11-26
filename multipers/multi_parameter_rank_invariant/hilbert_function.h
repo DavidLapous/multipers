@@ -63,7 +63,7 @@ inline void compute_2d_hilbert_surface(
   // simplextree, which has a too big number of parameters");
   // assert(fixed_values.size() == st_multi.get_number_of_parameters());
 
-  constexpr bool verbose = false;
+  constexpr const bool verbose = false;
   index_type I = grid_shape[i + 1], J = grid_shape[j + 1];
   if constexpr (verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
 
