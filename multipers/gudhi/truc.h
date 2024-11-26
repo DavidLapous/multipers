@@ -851,7 +851,7 @@ class Truc {
                          bool IgnoreLastGenerators = false,
                          bool stripComments = false,
                          bool reverse = false) {
-    write_scc_file(
+    write_scc_file<Truc>(
         outFilePath, *this, numberOfParameters, degree, rivetCompatible, IgnoreLastGenerators, stripComments, reverse);
   }
 
