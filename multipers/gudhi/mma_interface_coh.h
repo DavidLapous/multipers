@@ -30,7 +30,7 @@
 
 namespace Gudhi {
 namespace multiparameter {
-namespace interface {
+namespace truc_interface {
 
 template <class Structure>
 class Boundary_matrix_as_filtered_complex_for_coh {

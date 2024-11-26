@@ -29,7 +29,7 @@
 
 namespace Gudhi {
 namespace multiparameter {
-namespace interface {
+namespace truc_interface {
 
 template <class Boundary_matrix_type> class Persistence_backend_h0 {
 public:

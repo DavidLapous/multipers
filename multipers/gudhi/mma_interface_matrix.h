@@ -29,7 +29,7 @@
 
 namespace Gudhi {
 namespace multiparameter {
-namespace interface {
+namespace truc_interface {
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {

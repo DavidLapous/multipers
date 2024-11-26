@@ -15,7 +15,7 @@
 namespace Gudhi {
 namespace multiparameter {
 namespace rank_invariant { 
-using Index = interface::index_type;
+using Index = truc_interface::index_type;
 
 // using Elbow = std::vector<std::pair<>>;grid
 template <typename index_type>
@@ -167,7 +167,7 @@ template <class PersBackend,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
-    typename interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe &slicer,  // truc slicer
+    typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe &slicer,  // truc slicer
     const tensor::static_tensor_view<dtype, index_type> &out,                               // assumes its a zero tensor
     const index_type I,
     const index_type J,
@@ -210,7 +210,7 @@ inline void compute_2d_rank_invariant_of_elbow(
   // TODO : use slicer::ThreadSafe instead of maintaining one_pers & order
   // BUG : This will break as soon as slicer interface change
 
-  using bc_type = typename interface::Truc<PersBackend, Structure, MultiFiltration>::split_barcode;
+  using bc_type = typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::split_barcode;
   bc_type barcodes;
   if constexpr (PersBackend::is_vine) {
     // slicer.set_one_filtration(one_persistence);
@@ -275,7 +275,7 @@ template <class PersBackend,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant(
-    interface::Truc<PersBackend, Structure, MultiFiltration> &slicer,
+    truc_interface::Truc<PersBackend, Structure, MultiFiltration> &slicer,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> &grid_shape,
     const std::vector<index_type> &degrees,
@@ -288,7 +288,7 @@ inline void compute_2d_rank_invariant(
     std::cout << "Shape " << grid_shape[0] << " " << grid_shape[1] << " " << grid_shape[2] << " " << grid_shape[3]
               << " " << grid_shape[4] << std::endl;
 
-  using ThreadSafe = typename interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe;
+  using ThreadSafe = typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe;
   ThreadSafe slicer_thread(slicer);
   tbb::enumerable_thread_specific<ThreadSafe> thread_locals(slicer_thread);
   tbb::parallel_for(0, X, [&](index_type I) {
@@ -307,7 +307,7 @@ template <class PersBackend,
           class MultiFiltration = Gudhi::multi_filtration::One_critical_filtration<float>,
           typename dtype,
           typename indices_type>
-void compute_rank_invariant_python(interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
+void compute_rank_invariant_python(truc_interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
                                    dtype *data_ptr,
                                    const std::vector<indices_type> grid_shape,
                                    const std::vector<indices_type> degrees,
@@ -327,7 +327,7 @@ template <typename PersBackend,
           typename dtype = int,
           typename indices_type = int>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_rank_signed_measure(
-    interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
+    truc_interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
     dtype *data_ptr,
     const std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,

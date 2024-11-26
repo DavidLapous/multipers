@@ -453,7 +453,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -497,7 +497,7 @@ inline void compute_2d_hilbert_surface(
       for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
-    using bc_type = typename interface::Truc<PersBackend, Structure, Filtration>::split_barcode;
+    using bc_type = typename truc_interface::Truc<PersBackend, Structure, Filtration>::split_barcode;
     if constexpr (PersBackend::is_vine) {
       if (!slicer.has_persistence()) [[unlikely]] {
         slicer.compute_persistence();
@@ -568,7 +568,7 @@ inline void compute_2d_hilbert_surface(
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -617,7 +617,7 @@ void _rec_get_hilbert_surface(
 }
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
-void get_hilbert_surface(interface::Truc<PersBackend, Structure, Filtration> &slicer,
+void get_hilbert_surface(truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
                          const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
                          const std::vector<index_type> &grid_shape,
                          const std::vector<index_type> &degrees,
@@ -629,7 +629,7 @@ void get_hilbert_surface(interface::Truc<PersBackend, Structure, Filtration> &sl
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
     throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
-  using ThreadSafe = typename interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe;
+  using ThreadSafe = typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe;
   ThreadSafe slicer_thread(slicer);
   std::vector<index_type> coordinates_container(slicer_thread.num_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
@@ -649,7 +649,7 @@ template <typename PersBackend,
           typename dtype,
           typename indices_type,
           typename... Args>
-void get_hilbert_surface_python(interface::Truc<PersBackend, Structure, Filtration> &slicer,
+void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
                                 dtype *data_ptr,
                                 std::vector<indices_type> grid_shape,
                                 const std::vector<indices_type> degrees,
@@ -702,7 +702,7 @@ template <typename PersBackend,
           typename indices_type,
           typename... Args>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilbert_signed_measure(
-    interface::Truc<PersBackend, Structure, Filtration> &slicer,
+    truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
     dtype *data_ptr,
     std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,

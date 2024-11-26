@@ -24,7 +24,7 @@
 
 namespace Gudhi {
 namespace multiparameter {
-namespace interface {
+namespace truc_interface {
 using index_type = std::uint32_t;
 
 class PresentationStructure {
