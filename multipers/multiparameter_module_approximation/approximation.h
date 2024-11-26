@@ -42,7 +42,9 @@
 #include <tbb/parallel_for.h>
 #include <tensor/tensor.h>
 
-namespace Gudhi::multiparameter::mma {
+namespace Gudhi {
+namespace multiparameter {
+namespace mma {
 
 using Debug::Timer;
 using Gudhi::multi_persistence::Box;
@@ -2288,6 +2290,6 @@ inline void Summand<value_type>::_clean(std::vector<filtration_type> &list, bool
              list.end());
 }
 
-}  // namespace Gudhi::multiparameter::mma
+}}}  // namespace Gudhi::multiparameter::mma
 
 #endif  // APPR

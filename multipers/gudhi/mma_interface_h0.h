@@ -27,7 +27,10 @@
 
 #include <naive_merge_tree.h>
 
-namespace Gudhi::multiparameter::interface {
+namespace Gudhi {
+namespace multiparameter {
+namespace interface {
+
 template <class Boundary_matrix_type> class Persistence_backend_h0 {
 public:
   using pos_index = int;
@@ -224,5 +227,5 @@ private:
   std::vector<std::size_t> *permutation_;
   std::vector<std::size_t> permutationInv_;
 };
-} // namespace Gudhi::multiparameter::interface
+}}} // namespace Gudhi::multiparameter::interface
 #endif // MMA_INTERFACE_H0_H

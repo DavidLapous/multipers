@@ -8,7 +8,9 @@
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 
-namespace Gudhi::multiparameter::function_rips {
+namespace Gudhi {
+namespace multiparameter {
+namespace function_rips {
 
 using value_type = typename python_interface::interface_std::Filtration_value;
 using _multifiltration = typename Gudhi::multi_filtration::One_critical_filtration<value_type>;
@@ -317,4 +319,4 @@ compute_function_rips_signed_measure_python(
   return container.sparsify();
 }
 
-} // namespace Gudhi::multiparameter::function_rips
+}}} // namespace Gudhi::multiparameter::function_rips

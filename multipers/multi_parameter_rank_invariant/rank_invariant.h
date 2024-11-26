@@ -12,7 +12,9 @@
 #include <utility>  // std::pair
 #include <vector>
 
-namespace Gudhi::multiparameter::rank_invariant {
+namespace Gudhi {
+namespace multiparameter {
+namespace rank_invariant { 
 using Index = interface::index_type;
 
 // using Elbow = std::vector<std::pair<>>;grid
@@ -357,4 +359,4 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
   return raw_signed_measure;
 }
 
-}  // namespace Gudhi::multiparameter::rank_invariant
+}}}  // namespace Gudhi::multiparameter::rank_invariant

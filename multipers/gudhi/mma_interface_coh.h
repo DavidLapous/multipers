@@ -28,7 +28,9 @@
 #include <gudhi/persistence_interval.h>
 #include <gudhi/Persistent_cohomology.h>
 
-namespace Gudhi::multiparameter::interface {
+namespace Gudhi {
+namespace multiparameter {
+namespace interface {
 
 template <class Structure>
 class Boundary_matrix_as_filtered_complex_for_coh {
@@ -248,6 +250,6 @@ class Persistence_backend_cohomology {
   MatrixComplex matrix_;
 };
 
-}  // namespace Gudhi::multiparameter::interface
+}}}  // namespace Gudhi::multiparameter::interface
 
 #endif  // MMA_INTERFACE_COH_H

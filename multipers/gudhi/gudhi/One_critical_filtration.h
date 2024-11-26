@@ -29,7 +29,8 @@
 
 #include <gudhi/Debug_utils.h>
 
-namespace Gudhi::multi_filtration {
+namespace Gudhi {
+namespace multi_filtration { 
 
 /**
  * @class One_critical_filtration one_critical_filtration.h gudhi/one_critical_filtration.h
@@ -1391,7 +1392,7 @@ class One_critical_filtration : public std::vector<T> {
   }
 };
 
-}  // namespace Gudhi::multi_filtration
+}}  // namespace Gudhi::multi_filtration
 
 namespace std {
 

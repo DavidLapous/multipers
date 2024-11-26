@@ -23,7 +23,8 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/One_critical_filtration.h>
 
-namespace Gudhi::multi_persistence {
+namespace Gudhi{
+namespace multi_persistence {
 
 /**
  * @class Box Box.h gudhi/Multi_persistence/Box.h
@@ -165,6 +166,6 @@ class Box {
   Point upperCorner_; /**< Greatest of defining corners. */
 };
 
-}  // namespace Gudhi::multi_persistence
+}}  // namespace Gudhi::multi_persistence
 
 #endif  // BOX_H_INCLUDED

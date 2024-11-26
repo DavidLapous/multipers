@@ -14,7 +14,9 @@
 #include <utility>  // std::pair
 #include <vector>
 
-namespace Gudhi::multiparameter::hilbert_function {
+namespace Gudhi {
+namespace multiparameter {
+namespace hilbert_function {
 
 // TODO : this function is ugly
 template <typename Filtration, typename indices_type>
@@ -758,4 +760,4 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   }
   return raw_signed_measure;
 }
-}  // namespace Gudhi::multiparameter::hilbert_function
+}}}  // namespace Gudhi::multiparameter::hilbert_function

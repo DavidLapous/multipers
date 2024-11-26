@@ -28,7 +28,8 @@
 #include <gudhi/Multi_critical_filtration.h>
 #include <gudhi/Multi_persistence/Box.h>
 
-namespace Gudhi::multi_persistence {
+namespace Gudhi{
+namespace multi_persistence {
 
 /**
  * @class Line Line.h gudhi/Multi_persistence/Line.h
@@ -276,6 +277,6 @@ class Line {
   }
 };
 
-}  // namespace Gudhi::multi_persistence
+}}  // namespace Gudhi::multi_persistence
 
 #endif  // LINE_FILTRATION_TRANSLATION_H_INCLUDED

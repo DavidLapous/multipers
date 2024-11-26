@@ -27,7 +27,9 @@
 #include <gudhi/Matrix.h>
 #include <gudhi/persistence_matrix_options.h>
 
-namespace Gudhi::multiparameter::interface {
+namespace Gudhi {
+namespace multiparameter {
+namespace interface {
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
@@ -276,5 +278,5 @@ class Persistence_backend_matrix {
   std::vector<Index> *permutation_;
 };
 
-}  // namespace Gudhi::multiparameter::interface
+}}}  // namespace Gudhi::multiparameter::interface
 #endif  // MMA_INTERFACE_MATRIX_H

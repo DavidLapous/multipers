@@ -14,7 +14,8 @@
 #include <algorithm>
 #include <gudhi/Simplex_tree.h>
 
-namespace Gudhi::multi_persistence {
+namespace Gudhi {
+namespace multi_persistence {
 
 /** Model of SimplexTreeOptions, with a multiparameter filtration.
  * \ingroup multi_persistence
@@ -157,6 +158,6 @@ void linear_projection(simplextree_std &st, simplextree_multi &st_multi,
   }
 }
 
-} // namespace Gudhi::multi_persistence
+}} // namespace Gudhi::multi_persistence
 
 #endif // SIMPLEX_TREE_MULTI_H_

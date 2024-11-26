@@ -3,7 +3,9 @@
 #include "Simplex_tree_multi_interface.h"
 #include <vector>
 
-namespace Gudhi::multiparameter::differentiation {
+namespace Gudhi {
+namespace multiparameter {
+namespace differentiation {
 
 using signed_measure_indices = std::vector<std::vector<int32_t>>;
 template <typename Filtration>
@@ -88,4 +90,4 @@ get_signed_measure_indices(
   return {out_indices, out_unmapped_values}; // TODO return a ptr for python
 }
 
-} // namespace Gudhi::multiparameter::differentiation
+}}} // namespace Gudhi::multiparameter::differentiation

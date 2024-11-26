@@ -22,7 +22,9 @@
 #include <type_traits>  //std::invoke_result
 #include "scc_io.h"
 
-namespace Gudhi::multiparameter::interface {
+namespace Gudhi {
+namespace multiparameter {
+namespace interface {
 using index_type = std::uint32_t;
 
 class PresentationStructure {
@@ -878,4 +880,4 @@ class Truc {
 
 };  // class Truc
 
-}  // namespace Gudhi::multiparameter::interface
+}}}  // namespace Gudhi::multiparameter::interface

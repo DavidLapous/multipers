@@ -24,7 +24,9 @@
 #include <utility> // std::pair
 #include <vector>
 
-namespace Gudhi::multiparameter::python_interface {
+namespace Gudhi {
+namespace multiparameter {
+namespace python_interface {
 
 using interface_std =
     Simplex_tree<Simplex_tree_options_for_python>; // Interface not necessary
@@ -555,4 +557,4 @@ using Simplex_tree_multi_skeleton_iterator = typename
 template <typename Filtration>
 using Simplex_tree_multi_boundary_iterator = typename 
     Simplex_tree_multi_interface<Filtration>::Boundary_simplex_iterator;
-} // namespace Gudhi::multiparameter::python_interface
+}}} // namespace Gudhi::multiparameter::python_interface

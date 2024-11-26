@@ -31,7 +31,8 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/One_critical_filtration.h>
 
-namespace Gudhi::multi_filtration {
+namespace Gudhi {
+namespace multi_filtration { 
 
 /**
  * @class Multi_critical_filtration multi_critical_filtration.h gudhi/multi_critical_filtration.h
@@ -996,7 +997,7 @@ class Multi_critical_filtration {
   }
 };
 
-}  // namespace Gudhi::multi_filtration
+}}  // namespace Gudhi::multi_filtration
 
 namespace std {
 

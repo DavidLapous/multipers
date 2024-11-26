@@ -18,8 +18,8 @@ Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
-os.system("mkdir ./build/")
-os.system("mkdir ./build/tmp")
+os.system("mkdir build/")
+os.system("mkdir build/tmp")
 
 
 def was_modified(file):

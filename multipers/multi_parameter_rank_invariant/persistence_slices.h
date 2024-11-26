@@ -5,7 +5,8 @@
 #include <gudhi/Simplex_tree_multi.h>
 #include <gudhi/Multi_persistence/Box.h>
 
-namespace Gudhi::multiparameter {
+namespace Gudhi {
+namespace multiparameter {
 
 struct Simplex_tree_float {  // smaller simplextrees
   typedef linear_indexing_tag Indexing_tag;
@@ -144,4 +145,4 @@ inline simplextree_like collapse_edges(simplextree_like &st, int num_collapses) 
   return collapsed_stree;
 }
 
-}  // namespace Gudhi::multiparameter
+}}  // namespace Gudhi::multiparameter
