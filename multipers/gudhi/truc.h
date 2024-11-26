@@ -294,6 +294,8 @@ class Truc {
     return num_generators() == 0 ? 0 : this->generator_filtration_values[0].num_parameters();
   }
 
+  inline const Structure &get_structure() const { return structure; }
+
   template <class SubFiltration, bool original_order = true>
   inline void push_to_out(const SubFiltration &f,
                           std::vector<typename MultiFiltration::value_type> &filtration_container,
@@ -862,14 +864,14 @@ class Truc {
 
   // TODO: declare method here instead of scc_io.h
   // it is just temporary, until Truc is cleaned up
-  friend void write_scc_file<Truc>(const std::string &outFilePath,
-                                   const Truc &slicer,
-                                   int numberOfParameters,
-                                   int degree,
-                                   bool rivetCompatible,
-                                   bool IgnoreLastGenerators,
-                                   bool stripComments,
-                                   bool reverse);
+  // friend void write_scc_file<Truc>(const std::string &outFilePath,
+  //                                  const Truc &slicer,
+  //                                  int numberOfParameters,
+  //                                  int degree,
+  //                                  bool rivetCompatible,
+  //                                  bool IgnoreLastGenerators,
+  //                                  bool stripComments,
+  //                                  bool reverse);
 
  private:
   std::vector<MultiFiltration> generator_filtration_values;  // defined at construction time. Const

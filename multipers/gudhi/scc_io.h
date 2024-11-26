@@ -206,7 +206,7 @@ inline void write_scc_file(const std::string& outFilePath,
 
   using Filtration_value = typename Slicer::Filtration_value;
 
-  auto& boundaries = slicer.structure;
+  const auto& boundaries = slicer.get_structure();
   int maxDim = boundaries.max_dimension();
   int minDim = maxDim;
 

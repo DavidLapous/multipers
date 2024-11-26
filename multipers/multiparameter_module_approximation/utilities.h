@@ -20,7 +20,7 @@
 
 namespace Gudhi::multiparameter::mma {
 
-const bool verbose = false;
+constexpr const bool verbose = false;
 
 using index = unsigned int;
 using value_type = double;
