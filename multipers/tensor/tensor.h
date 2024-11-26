@@ -264,8 +264,8 @@ class static_tensor_view {  // Python handles the construction - destruction of
   }
 
   inline void add_cone(const std::vector<indices_type> &basepoint, dtype value) const {
-    const bool check = false;
-    const bool verbose = false;
+    constexpr const bool check = false;
+    constexpr const bool verbose = false;
     if constexpr (check) {
       if (basepoint.size() != this->ndim()) throw std::logic_error("Invalid coordinate for cone");
     }

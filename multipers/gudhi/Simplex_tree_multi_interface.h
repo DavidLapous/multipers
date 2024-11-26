@@ -320,7 +320,7 @@ public:
   void squeeze_filtration(
       const intptr_t outptr,
       const std::vector<std::vector<double>> &grid) { // TODO : this is const but GUDHI
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     using int_fil_type = decltype(std::declval<Filtration>().template as_type<std::int32_t>());
     using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
     st_coord_type& out = *(st_coord_type*) outptr; // TODO : maybe fix this.

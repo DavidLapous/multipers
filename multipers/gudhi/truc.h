@@ -384,7 +384,7 @@ class Truc {
   inline void vineyard_update(PersBackend &persistence,
                               const std::vector<typename MultiFiltration::value_type> &one_filtration,
                               std::vector<index_type> &generator_order) const {
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     /* static_assert(PersBackend::has_vine_update); */
     // the first false is to get the generator order
     // insertion sort
@@ -418,8 +418,8 @@ class Truc {
       const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
     auto barcode_indices = persistence.get_barcode();
     split_barcode out(this->structure.max_dimension() + 1);  // TODO : This doesn't allow for negative dimensions
-    const bool verbose = false;
-    const bool debug = false;
+    constexpr const bool verbose = false;
+    constexpr const bool debug = false;
     const auto inf = MultiFiltration::Generator::T_inf;
     for (const auto &bar : barcode_indices) {
       if constexpr (verbose) std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
@@ -463,7 +463,7 @@ class Truc {
   static inline flat_nodim_barcode<value_type> get_flat_nodim_barcode(
       PersBackend &persistence,
       std::vector<typename MultiFiltration::value_type> &filtration_container) {
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     const auto &barcode_indices = persistence.get_barcode();
     auto num_bars = barcode_indices.size();
     flat_nodim_barcode<value_type> out(num_bars);
@@ -500,7 +500,7 @@ class Truc {
   static inline flat_barcode<value_type> get_flat_barcode(
       PersBackend &persistence,
       std::vector<typename MultiFiltration::value_type> &filtration_container) {
-    const bool verbose = false;
+    constexpr const bool verbose = false;
     const auto &barcode_indices = persistence.get_barcode();
     auto num_bars = barcode_indices.size();
     flat_barcode<value_type> out(num_bars);
@@ -862,9 +862,8 @@ class Truc {
 
   // TODO: declare method here instead of scc_io.h
   // it is just temporary, until Truc is cleaned up
-  template <class Truc_>
-  friend void write_scc_file(const std::string &outFilePath,
-                                   const Truc_ &slicer,
+  friend void write_scc_file<Truc>(const std::string &outFilePath,
+                                   const Truc &slicer,
                                    int numberOfParameters,
                                    int degree,
                                    bool rivetCompatible,

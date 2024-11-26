@@ -182,7 +182,7 @@ inline void compute_2d_rank_invariant_of_elbow(
   // one_persistence.resize(num_generators); // local variable should be
   // initialized correctly
   const auto Y = grid_shape[2];
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if constexpr (verbose) std::cout << "filtration_in_slice : [ ";
   for (auto i = 0u; i < num_generators; ++i) {
     const auto &f = filtrations_values[i];

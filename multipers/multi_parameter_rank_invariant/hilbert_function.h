@@ -402,7 +402,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
                                 const bool zero_pad,
                                 indices_type n_jobs,
                                 bool expand_collapse) {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if (degrees.size() == 0) return;
   // const bool verbose = false;
   // auto &st_multi =

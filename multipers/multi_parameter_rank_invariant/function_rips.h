@@ -44,7 +44,7 @@ std::tuple<_multist,
            std::vector<value_type>, int>
 inline get_degree_filtrations( // also return max_degree,filtration_values
     python_interface::interface_std &st, const std::vector<int> &degrees) {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   using filtration_lists = std::vector<std::vector<value_type>>;
 
   assert(st.dimension() ==

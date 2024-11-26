@@ -415,8 +415,8 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
       std::is_same<typename Filtration_value::value_type, typename Slicer::Filtration_value::value_type>::value);
   using value_type = typename Filtration_value::value_type;
   // Line iterator should be on the biggest axis
-  const bool verbose = false;
-  const bool verbose2 = false;
+  constexpr const bool verbose = false;
+  constexpr const bool verbose2 = false;
   while (!line_iterator.is_finished()) {
     const Line<value_type> &new_line = (axis_ >= 0) ? *(++line_iterator) : *line_iterator.next(axis);
     // if constexpr (axis_ >= 0) {
@@ -694,7 +694,7 @@ Module<value_type> multiparameter_module_approximation(
 template <typename value_type>
 template <class Barcode>
 inline void Module<value_type>::add_barcode(const Barcode &barcode) {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if (barcode.size() != module_.size()) {
     std::cerr << "Barcode sizes doesn't match. Module is " << std::to_string(module_.size()) << " and barcode is "
               << std::to_string(barcode.size()) << std::endl;
@@ -740,7 +740,7 @@ inline void Module<value_type>::_add_bar_with_threshold(const Line<value_type> &
                                                         const std::pair<value_type, value_type> &bar,
                                                         const bool threshold_in,
                                                         Summand<value_type> &summand) {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   auto [birth_filtration, death_filtration] = bar;
 
   if (birth_filtration >= death_filtration) return;
@@ -1162,7 +1162,7 @@ template <typename value_type>
 std::vector<std::vector<std::pair<value_type, value_type>>> Module<value_type>::get_barcode2(
     const Line<value_type> &l,
     const dimension_type dimension) const {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   std::vector<std::vector<std::pair<value_type, value_type>>> barcode(this->get_dimension() + 1);
   for (auto i = 0; i < this->get_dimension(); ++i) {
     barcode[i].reserve(this->size());
@@ -1184,7 +1184,7 @@ std::vector<std::vector<std::pair<value_type, value_type>>> Module<value_type>::
 template <typename value_type>
 MultiDiagram<typename Module<value_type>::filtration_type, value_type>
 Module<value_type>::get_barcode(const Line<value_type> &l, const dimension_type dimension, const bool threshold) const {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing barcode of dimension " << dimension << " and threshold " << threshold << std::endl;
   std::vector<MultiDiagram_point<filtration_type>> barcode(this->size());
@@ -1873,7 +1873,7 @@ inline value_type Summand<value_type>::distance_to(const filtration_type &x, boo
 
 template <typename value_type>
 inline std::pair<value_type, value_type> Summand<value_type>::get_bar2(const Line<value_type> &l) const {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing bar of this summand of dimension " << this->get_dimension() << std::endl;
   value_type pushed_birth = std::numeric_limits<value_type>::infinity();
@@ -1901,7 +1901,7 @@ inline std::pair<value_type, value_type> Summand<value_type>::get_bar2(const Lin
 template <typename value_type>
 inline std::pair<typename Summand<value_type>::filtration_type, typename Summand<value_type>::filtration_type>
 Summand<value_type>::get_bar(const Line<value_type> &l) const {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing bar of this summand of dimension " << this->get_dimension() << std::endl;
   filtration_type pushed_birth = std::numeric_limits<filtration_type>::infinity();
@@ -2007,7 +2007,7 @@ inline void Summand<value_type>::add_bar(const filtration_type &basepoint,
                                          value_type birth,
                                          value_type death,
                                          const Box<value_type> &box) {
-  const bool verbose = false;
+  constexpr const bool verbose = false;
   if (birth >= death) return;
   if constexpr (verbose) {
     std::cout << "Bar : " << basepoint + birth << "--" << basepoint + death << std::endl;
