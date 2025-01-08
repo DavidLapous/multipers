@@ -1,6 +1,6 @@
 import multipers as mp
 import numpy as np 
-from multipers.ml.signed_betti import signed_betti
+from multipers.point_measure import signed_betti
 from multipers.hilbert_function import hilbert_surface
 from multipers.euler_characteristic import euler_surface
 

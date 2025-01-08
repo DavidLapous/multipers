@@ -11,6 +11,7 @@ from tqdm import tqdm
 import multipers as mp
 from multipers.grids import compute_grid as reduce_grid
 from multipers.ml.convolutions import available_kernels, convolution_signed_measures
+from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles
 
 
 class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):

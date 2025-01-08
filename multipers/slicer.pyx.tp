@@ -26,8 +26,7 @@ from multipers.slicer cimport *
 from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
-from multipers.point_measure import sparsify
-from multipers.ml.signed_betti import rank_decomposition_by_rectangles
+from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
 
 import numpy as np
 cimport cython

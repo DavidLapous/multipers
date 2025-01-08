@@ -68,8 +68,7 @@ from typing import Iterable,Literal,Optional
 from tqdm import tqdm
 import multipers.grids as mpg
 
-from multipers.ml.signed_betti import rank_decomposition_by_rectangles
-from multipers.point_measure import sparsify
+from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles, sparsify
 
 from warnings import warn
 

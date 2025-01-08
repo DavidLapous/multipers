@@ -1,5 +1,5 @@
 import numpy as np 
-from multipers.ml.signed_betti import signed_betti, rank_decomposition_by_rectangles
+from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles
 
 
 # only tests rank functions with 1 and 2 parameters
