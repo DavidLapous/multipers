@@ -393,9 +393,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if D['IS_KCRITICAL']}}
-        return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=True, duplicate=self.num_parameters)
+        return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
         {{else}}
-        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=True, duplicate=self.num_parameters)
+        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:

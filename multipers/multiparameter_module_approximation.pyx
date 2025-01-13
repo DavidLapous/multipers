@@ -175,6 +175,12 @@ def module_approximation(
         else:
             box = input.filtration_bounds()
     box = np.asarray(box)
+
+    # empty coords
+    zero_idx = box[1] == box[0]
+    if np.any(zero_idx):
+        box[1] += zero_idx
+
     for i in swap_box_coords:
         box[0,i], box[1,i] = box[1,i], box[0,i]
     num_parameters = box.shape[1]
