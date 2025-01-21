@@ -361,10 +361,10 @@ cdef class PyModule_{{SHORT}}:
                 fig = None
                 axes = None
             elif ndim > 1:
-              fig, axs = plt.subplots(1,ndim, figsize=(ndim*scale,scale))
+              fig, axes = plt.subplots(1,ndim, figsize=(ndim*scale,scale))
             else:
               fig = plt.gcf()
-              axs = [plt.gca()]
+              axes = [plt.gca()]
             for dim_idx in range(ndim):
                 if not separated:
                     plt.sca(axes[dim_idx]) if ndim > 1 else  plt.sca(axes)
