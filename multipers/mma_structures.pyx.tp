@@ -348,10 +348,7 @@ cdef class PyModule_{{SHORT}}:
         """
         from multipers.plots import plot2d_PyModule
         import matplotlib.pyplot as plt
-        if (kwargs.get('box')):
-            box = kwargs.pop('box')
-        else:
-            box = [self.get_bottom(), self.get_top()]
+        box = kwargs.pop('box', self.get_box())
         if (len(box[0]) != 2):
             print("Filtration size :", len(box[0]), " != 2")
             return
