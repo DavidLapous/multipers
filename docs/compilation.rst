@@ -57,14 +57,14 @@ In the same conda environment as above, execute
    make
    cp mpfree $CONDA_PREFIX/bin/
    cd .. 
-   rm -rf mpfree
    
-   #function_delaunay
+   # function_delaunay
    git clone https://bitbucket.org/mkerber/function_delaunay/
    cd function_delaunay
+   # This is a workaround for some setups
+   sed -i "8i find_package (Eigen3 3.3 REQUIRED NO_MODULE)\nlink_libraries(Eigen3::Eigen)\n" CMakeLists.txt
    cmake .
    make
    cp main $CONDA_PREFIX/bin/function_delaunay
    cd ..
-   rm -rf function_delaunay
 
