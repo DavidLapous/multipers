@@ -357,11 +357,14 @@ cdef class PyModule_{{SHORT}}:
             separated = kwargs.pop("separated", False)
             ndim = len(dims)
             scale = kwargs.pop("scale", 4)
-            if not separated:
-                fig, axes = plt.subplots(1, ndim, figsize=(ndim*scale,scale))
-            else: 
+            if separated:
                 fig = None
                 axes = None
+            elif ndim > 1:
+              fig, axs = plt.subplots(1,ndim, figsize=(ndim*scale,scale))
+            else:
+              fig = plt.gcf()
+              axs = [plt.gca()]
             for dim_idx in range(ndim):
                 if not separated:
                     plt.sca(axes[dim_idx]) if ndim > 1 else  plt.sca(axes)
