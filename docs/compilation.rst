@@ -61,8 +61,7 @@ In the same conda environment as above, execute
    # function_delaunay
    git clone https://bitbucket.org/mkerber/function_delaunay/
    cd function_delaunay
-   # This is a workaround for some setups
-   sed -i "8i find_package (Eigen3 3.3 REQUIRED NO_MODULE)\nlink_libraries(Eigen3::Eigen)\n" CMakeLists.txt
+   sed -i "8i find_package(Eigen3 3.3 REQUIRED NO_MODULE)\nlink_libraries(Eigen3::Eigen)\n" CMakeLists.txt
    cmake .
    make
    cp main $CONDA_PREFIX/bin/function_delaunay
