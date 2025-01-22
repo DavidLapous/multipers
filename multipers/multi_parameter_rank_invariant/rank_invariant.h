@@ -175,7 +175,8 @@ inline void compute_2d_rank_invariant_of_elbow(
     const std::vector<index_type> &degrees,
     // std::vector<Index> &order_container,                                 // constant size
     // std::vector<typename MultiFiltration::value_type> &one_persistence,  // constant size
-    const bool flip_death = false) {
+    const bool flip_death = false,
+    const bool ignore_inf = true) {
   using value_type = typename MultiFiltration::value_type;
   const auto &filtrations_values = slicer.get_filtrations();
   auto num_generators = filtrations_values.size();
@@ -230,7 +231,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     }
     barcodes = slicer.get_barcode();
   } else {
-    slicer.template compute_persistence<true>();
+    slicer.compute_persistence(ignore_inf);
     barcodes = slicer.get_barcode();
   }
 
@@ -279,7 +280,8 @@ inline void compute_2d_rank_invariant(
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> &grid_shape,
     const std::vector<index_type> &degrees,
-    const bool flip_death) {
+    const bool flip_death,
+    const bool ignore_inf) {
   if (degrees.size() == 0) return;
   index_type X = grid_shape[1];
   index_type Y = grid_shape[2];  // First axis is degree
@@ -296,7 +298,7 @@ inline void compute_2d_rank_invariant(
       if constexpr (verbose) std::cout << "Computing elbow " << I << " " << J << "...";
       ThreadSafe &slicer = thread_locals.local();
       compute_2d_rank_invariant_of_elbow<PersBackend, Structure, MultiFiltration, dtype, index_type>(
-          slicer, out, I, J, grid_shape, degrees, flip_death);
+          slicer, out, I, J, grid_shape, degrees, flip_death, ignore_inf);
       if constexpr (verbose) std::cout << "Done!" << std::endl;
     });
   });
@@ -311,12 +313,16 @@ void compute_rank_invariant_python(truc_interface::Truc<PersBackend, Structure, 
                                    dtype *data_ptr,
                                    const std::vector<indices_type> grid_shape,
                                    const std::vector<indices_type> degrees,
-                                   indices_type n_jobs) {
+                                   indices_type n_jobs,
+                                   const bool ignore_inf) {
   if (degrees.size() == 0) return;
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  if constexpr (false){
+    std::cout  << "ignore_inf " << ignore_inf << std::endl;
+  }
 
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
-  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, false); });
+  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, false, ignore_inf); });
 
   return;
 }
@@ -332,12 +338,13 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
     const std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,
     indices_type n_jobs,
-    bool verbose) {
+    bool verbose,
+    const bool ignore_inf) {
   if (degrees.size() == 0) return {{}, {}};
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
   oneapi::tbb::task_arena arena(n_jobs);                                            // limits the number of threads
   constexpr bool flip_death = true;
-  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, flip_death); });
+  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, flip_death, ignore_inf); });
 
   if (verbose) {
     std::cout << "Done.\n";

@@ -328,7 +328,7 @@ cdef class {{D['PYTHON_TYPE']}}:
 
 
 
-    def compute_persistence(self,one_filtration=None)->{{D['PYTHON_TYPE']}}:
+    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->{{D['PYTHON_TYPE']}}:
         """
         Computes the current persistence, or the persistence
         given by the filtration one_filtration (num_generators,).
@@ -340,7 +340,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         #     self.truc.compute_persistence(degrees)
         # else:
         #     self.truc.compute_persistence()
-        self.truc.compute_persistence()
+        self.truc.compute_persistence(ignore_infinite_filtration_values)
         return self
         # return self.truc.get_barcode()
     def get_barcode(self):
@@ -794,6 +794,7 @@ def _hilbert_signed_measure(slicer,
     bool verbose=False,
     # bool expand_collapse=False, 
     # grid_conversion = None,
+    bool ignore_inf = True,
     ):
   """
   Computes the signed measures given by the decomposition of the hilbert function.
@@ -828,7 +829,7 @@ def _hilbert_signed_measure(slicer,
   cdef vector[indices_type] c_grid_shape = grid_shape_with_degree
   cdef tensor_dtype[::1] container = container_array
   cdef tensor_dtype* container_ptr = &container[0]
-  cdef signed_measure_type out = _compute_hilbert_sm(slicer, container_ptr, c_grid_shape, degrees,n_jobs, verbose, zero_pad)
+  cdef signed_measure_type out = _compute_hilbert_sm(slicer, container_ptr, c_grid_shape, degrees,n_jobs, verbose, zero_pad, ignore_inf)
   pts, weights = np.asarray(out.first, dtype=int).reshape(-1, slicer.num_parameters+1), np.asarray(out.second, dtype=int)
   slices = np.concatenate([np.searchsorted(pts[:,0], np.arange(degrees.size())), [pts.shape[0]] ])
   sms = [
@@ -852,6 +853,7 @@ def _rank_from_slicer(
         grid_shape=None,
         bool plot=False,
         bool return_raw=False,
+        bool ignore_inf = True,
         ):
     # cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
     if grid_shape is None:
@@ -877,7 +879,7 @@ def _rank_from_slicer(
     cdef tensor_dtype* container_ptr = &container[0]
 
     ## SLICERS
-    _compute_rank_invariant(slicer, container_ptr, c_grid_shape, degrees, n_jobs)
+    _compute_rank_invariant(slicer, container_ptr, c_grid_shape, degrees, n_jobs, ignore_inf)
 
     rank = container_array.reshape(grid_shape_with_degree)
     rank = tuple(rank_decomposition_by_rectangles(rank_of_degree, threshold = zero_pad) for rank_of_degree in rank)

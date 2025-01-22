@@ -93,7 +93,6 @@ def compute_grid(
             import torch
             assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
             initial_grid = x
-
     if is_numpy_compatible:
         return _compute_grid_numpy(
         initial_grid,

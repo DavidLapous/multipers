@@ -461,8 +461,9 @@ inline void compute_2d_hilbert_surface(
     index_type i,
     index_type j,
     const std::vector<index_type> fixed_values,
-    bool mobius_inverion,
-    bool zero_pad) {
+    const bool mobius_inverion,
+    const bool zero_pad,
+    const bool ignore_inf = true ) {
   using value_type = typename Filtration::value_type;
 
   constexpr const bool verbose = false;
@@ -505,7 +506,7 @@ inline void compute_2d_hilbert_surface(
         slicer.vineyard_update();
       }
     } else {
-      slicer.template compute_persistence<true>();
+      slicer.compute_persistence(ignore_inf);
     }
     bc_type barcodes = slicer.get_barcode();
     index_type degree_index = 0;
@@ -575,8 +576,9 @@ void _rec_get_hilbert_surface(
     const std::vector<index_type> degrees,
     std::vector<index_type> coordinates_to_compute,
     const std::vector<index_type> fixed_values,
-    bool mobius_inverion = true,
-    bool zero_pad = false) {
+    const bool mobius_inverion = true,
+    const bool zero_pad = false,
+    const bool ignore_inf = true) {
   constexpr const bool verbose = false;
 
   if constexpr (verbose) {
@@ -597,7 +599,7 @@ void _rec_get_hilbert_surface(
                                                                                       coordinates_to_compute[1],
                                                                                       fixed_values,
                                                                                       mobius_inverion,
-                                                                                      zero_pad);
+                                                                                      zero_pad, ignore_inf);
     return;
   }
 
@@ -609,7 +611,7 @@ void _rec_get_hilbert_surface(
     std::vector<index_type> _fixed_values = fixed_values;  // TODO : do not copy this //thread local
     _fixed_values[coordinate_to_iterate] = z;
     _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
-        thread_stuff, out, grid_shape, degrees, coordinates_to_compute, _fixed_values, mobius_inverion, zero_pad);
+        thread_stuff, out, grid_shape, degrees, coordinates_to_compute, _fixed_values, mobius_inverion, zero_pad, ignore_inf);
   });
   // rmq : with mobius_inversion + rec, the coordinates to compute size is 2 =>
   // first coord is always the initial 1st coord.
@@ -623,8 +625,10 @@ void get_hilbert_surface(truc_interface::Truc<PersBackend, Structure, Filtration
                          const std::vector<index_type> &degrees,
                          std::vector<index_type> coordinates_to_compute,
                          const std::vector<index_type> &fixed_values,
-                         bool mobius_inverion = true,
-                         bool zero_pad = false) {
+                         const bool mobius_inverion = true,
+                         const bool zero_pad = false, 
+                         const bool ignore_inf = true) {
+
   if (degrees.size() == 0) return;
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
@@ -640,7 +644,7 @@ void get_hilbert_surface(truc_interface::Truc<PersBackend, Structure, Filtration
       thread_data_initialization);  // this has a fixed size, so
                                     // init should be benefic
   _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
-      thread_stuff, out, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inverion, zero_pad);
+      thread_stuff, out, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inverion, zero_pad, ignore_inf);
 }
 
 template <typename PersBackend,
@@ -655,6 +659,7 @@ void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Fil
                                 const std::vector<indices_type> degrees,
                                 const bool mobius_inversion,
                                 const bool zero_pad,
+                                const bool ignore_inf,
                                 indices_type n_jobs) {
   const bool verbose = false;
   if (degrees.size() == 0) return;
@@ -687,7 +692,7 @@ void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Fil
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
   arena.execute([&] {
     get_hilbert_surface(
-        slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inversion, zero_pad);
+        slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inversion, zero_pad, ignore_inf);
   });
 
   if (mobius_inversion)
@@ -708,7 +713,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
     const std::vector<indices_type> degrees,
     bool zero_pad = false,
     indices_type n_jobs = 0,
-    const bool verbose = false) {
+    const bool verbose = false,
+    const bool ignore_inf = true){
   if (degrees.size() == 0) return {{}, {}};
   // const bool verbose = false;
   // auto &st_multi =
@@ -737,7 +743,7 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
 
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
   arena.execute([&] {
-    get_hilbert_surface(slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, true, zero_pad);
+    get_hilbert_surface(slicer, container, grid_shape, degrees, coordinates_to_compute, fixed_values, true, zero_pad, ignore_inf);
   });
 
   if (verbose) {

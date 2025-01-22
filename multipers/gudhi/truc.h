@@ -328,11 +328,11 @@ class Truc {
     return this->filtration_container;
   }
 
-  template <bool ignore_inf = true>
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
-      std::vector<index_type> &out_gen_order) const {  // needed ftm as PersBackend only points there
-
+      std::vector<index_type> &out_gen_order, 
+      const bool ignore_inf) const {  // needed ftm as PersBackend only points there
+    constexpr const bool verbose = false;
     if (one_filtration.size() != this->num_generators()) {
       throw;
     }
@@ -345,7 +345,10 @@ class Truc {
       if (structure.dimension(i) < structure.dimension(j)) return true;
       return one_filtration[i] < one_filtration[j];
     });
-    if constexpr (!PersBackend::is_vine && ignore_inf) {
+    if (!PersBackend::is_vine && ignore_inf) {
+      if constexpr (verbose){
+        std::cout << "Removing infinite simplices" << std::endl;
+      }
       for (auto &i : out_gen_order)
         if (one_filtration[i] == MultiFiltration::Generator::T_inf) {
           // TODO : later
@@ -374,12 +377,13 @@ class Truc {
 
   inline const bool has_persistence() { return this->persistence.size(); };
 
-  inline void compute_persistence() {
+  inline void compute_persistence(const bool ignore_inf = true) {
     this->persistence = this->compute_persistence_out(
         // this->filtration_container, this->generator_order, degrees); // TODO
         // : later
         this->filtration_container,
-        this->generator_order);
+        this->generator_order,
+        ignore_inf);
   };
 
   // TODO : static ?
@@ -744,10 +748,9 @@ class Truc {
       return truc_ptr->get_representative_cycles(update);
     }
 
-    template <bool ignore_inf = true>
-    inline void compute_persistence() {
-      this->persistence = this->truc_ptr->template compute_persistence_out<ignore_inf>(this->filtration_container,
-                                                                                       this->generator_order);
+    inline void compute_persistence(const bool ignore_inf=true) {
+      this->persistence =
+          this->truc_ptr->compute_persistence_out(this->filtration_container, this->generator_order, ignore_inf);
     };
 
     inline void vineyard_update() {
@@ -793,7 +796,7 @@ class Truc {
    *
    */
   template <typename Fun, typename Fun_arg>
-  inline std::vector<split_barcode> barcodes(Fun &&f, const std::vector<Fun_arg> &args) {
+  inline std::vector<split_barcode> barcodes(Fun &&f, const std::vector<Fun_arg> &args, const bool ignore_inf = true) {
     if (args.size() == 0) {
       return {};
     }
@@ -815,7 +818,7 @@ class Truc {
       tbb::parallel_for(static_cast<std::size_t>(0), args.size(), [&](const std::size_t &i) {
         ThreadSafe &s = thread_locals.local();
         s.push_to(f(args[i]));
-        s.compute_persistence();
+        s.compute_persistence(ignore_inf);
         out[i] = s.get_barcode();
       });
     }
