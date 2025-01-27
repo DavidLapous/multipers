@@ -49,7 +49,6 @@ import multipers.io as mio
 from multipers.slicer cimport _multiparameter_module_approximation_f32, _multiparameter_module_approximation_f64
 
 
-PyModule_type = Union[PyModule_f32, PyModule_f64]
 
 def module_approximation_from_slicer(
         slicer:Slicer_type,

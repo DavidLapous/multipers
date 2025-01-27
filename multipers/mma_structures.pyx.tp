@@ -69,7 +69,17 @@ from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
 from joblib import Parallel, delayed
 
+available_pymodules = [
+    {{for CTYPE, PYTYPE, SHORT in value_types}}
+    PyModule_{{SHORT}},
+    {{endfor}}
+]
 
+PyModule_type = Union[
+    {{for CTYPE, PYTYPE, SHORT in value_types}}
+    PyModule_{{SHORT}},
+    {{endfor}}
+]
 
 {{for CTYPE, PYTYPE, SHORT in value_types}}
 cdef class PySummand_{{SHORT}}:

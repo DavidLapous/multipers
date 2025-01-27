@@ -770,7 +770,7 @@ def to_blocks(input):
     raise ValueError("Input cannot be converted to blocks.")
 
 
-def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col, str pers_backend):
+def get_matrix_slicer(bool is_vineyard, bool is_k_critical, dtype:type|_valid_dtypes, str col, str pers_backend):
   """
   Given various parameters, returns the specific slicer type associated with them.
   """
