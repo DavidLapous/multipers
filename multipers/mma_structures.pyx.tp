@@ -5,12 +5,18 @@ MMA core structures.
 """
 
 ## Value types : CTYPE, PYTHON_TYPE, short
-value_types = [
-  ("int32_t", "np.int32", "i32"),
-  ("int64_t", "np.int64", "i64"),
-  ("float", "np.float32", "f32"),
-  ("double", "np.float64", "f64"),
-]
+# value_types = [
+#   ("int32_t", "np.int32", "i32"),
+#   ("int64_t", "np.int64", "i64"),
+#   ("float", "np.float32", "f32"),
+#   ("double", "np.float64", "f64"),
+# ]
+
+import pickle as pkl
+import numpy as np
+
+D = pkl.load(open("build/tmp/_slicer_names.pkl", "rb"))
+value_types = np.unique([tuple((x['C_VALUE_TYPE'],x['PY_VALUE_TYPE'], x['SHORT_VALUE_TYPE'])) for x in D], axis=0)
 
 }}
 
