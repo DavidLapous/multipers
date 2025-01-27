@@ -56,7 +56,7 @@ available_columns = set((
 global available_dtype
 available_dtype = set([
 {{for D in slicers}}
-  "{{D['PYTHON_TYPE']}}",
+  "{{D['PY_VALUE_TYPE']}}",
 {{endfor}}
 ])
 
