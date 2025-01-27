@@ -8,7 +8,7 @@ from itertools import product
 columns_name = [  # only one column is necessary
     "Available_columns::" + stuff
     for stuff in (
-        "INTRUSIVE_SET",
+        "INTRUSIVE_SET", # At least one of these is necessary. This one is the default
         # "SET",
         # "HEAP",
         # "UNORDERED_SET",
@@ -24,34 +24,35 @@ columns_name = [  # only one column is necessary
 value_types = [
     ("int32_t", "np.int32",   "i32"),  # necessary
     ("int64_t", "np.int64",   "i64"),
-    ("float",   "np.float32", "f32"),  # necessary for mma (TODO: fixme)
+    ("float",   "np.float32", "f32"), 
     ("double",  "np.float64", "f64"),  # necessary
 ]
 
-## True, False necessary
+## True needed for MMA, and False is default value
 vineyards_values = [
     #
     True,
     False,
 ]
 
-## Kcritical Filtrations
+## Kcritical Filtrations. Default is False.
 kcritical_options = [
     #
     True,
-    False,
+    False, # necessary
 ]
 
 ##
 matrix_types = [
     #
-    "Matrix",
+    "Matrix", # necessary
     # "Graph",
     # "Clement",
     "GudhiCohomology",
 ]
 
 
+# Removes some impossible / unnecessary combinations
 def check_combination(backend_type, is_vine, is_kcritical, value_type, column_type):
     if backend_type in ["Clement", "Graph"]:
         if not is_vine:
