@@ -567,8 +567,9 @@ cdef extern from "gudhi/cubical_to_boundary.h" namespace "":
 
 def from_bitmap(image, **slicer_kwargs):
     from multipers import Slicer
-    _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
     image = np.asarray(image)
+    slicer_kwargs["dtype"] = slicer_kwargs.get("dtype", image.dtype)
+    _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
     cdef vector[unsigned int] img_shape = image.shape[:-1]
     cdef unsigned int num_parameters = image.shape[-1]
     cdef vector[vector[unsigned int]] gen_maps
