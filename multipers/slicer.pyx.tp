@@ -778,7 +778,7 @@ def get_matrix_slicer(bool is_vineyard, bool is_k_critical, type dtype, str col,
       pass
 {{for D in slicers}}
 {{if not D['IS_SIMPLICIAL']}}
-  elif is_vineyard == {{D['IS_VINE']}} and is_k_critical  ==  {{D['IS_KCRITICAL']}} and dtype == np.dtype({{D['PY_VALUE_TYPE']}}) and col.lower() == "{{D['COLUMN_TYPE']}}".lower() and "{{D['PERS_BACKEND_TYPE']}}".lower() == pers_backend.lower():
+  elif is_vineyard == {{D['IS_VINE']}} and is_k_critical  ==  {{D['IS_KCRITICAL']}} and np.dtype(dtype) is np.dtype({{D['PY_VALUE_TYPE']}}) and col.lower() == "{{D['COLUMN_TYPE']}}".lower() and "{{D['PERS_BACKEND_TYPE']}}".lower() == pers_backend.lower():
     return {{D['PYTHON_TYPE']}}
 {{endif}}
 {{endfor}}
