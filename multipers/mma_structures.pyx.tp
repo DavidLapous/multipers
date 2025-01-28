@@ -56,6 +56,7 @@ from libcpp cimport bool
 from libcpp cimport int
 from cython.operator cimport dereference
 from libcpp.utility cimport move
+cimport cython
 #########################################################################
 ## Multipersistence Module Approximation Classes
 from multipers.mma_structures cimport *
@@ -806,12 +807,41 @@ cdef class PyModule_{{SHORT}}:
         with nogil:
             out = self.cmod.to_idx(cgrid)
         return tuple(tuple((np.asarray(I.first,dtype=np.int64), np.asarray(I.second, dtype=np.int64)) for I in Is_of_degree) for Is_of_degree in out)
+    
+    @cython.wraparound(False)
+    @cython.boundscheck(False)
     def to_flat_idx(self,grid):
+        if len(self) == 0:
+            return np.empty((2,0), dtype = np.int32), np.empty((0, self.num_parameters), dtype = np.int32),  np.empty((0, self.num_parameters), dtype = np.int32)
         cdef vector[vector[{{CTYPE}}]] cgrid = grid
         cdef vector[vector[vector[int]]] out
+        cdef int num_summands, num_births, num_deaths
+        cdef int num_parameters = self.num_parameters
         with nogil:
             out = self.cmod.to_flat_idx(cgrid)
-        return np.asarray(out[0], dtype=np.int32), np.asarray(out[1], dtype=np.int32), np.asarray(out[2], dtype=np.int32)
+            num_summands = out[0][0].size()
+            num_births = out[1].size()
+            num_deaths = out[2].size()
+        idx = np.empty((2, num_summands),dtype=np.int32 )
+        births = np.empty((num_births,num_parameters),dtype=np.int32)
+        deaths = np.empty((num_deaths,num_parameters),dtype=np.int32)
+
+        cdef int32_t[:,:] idx_view = idx
+        cdef int32_t[:,:] births_view = births
+        cdef int32_t[:,:] deaths_view = deaths
+
+        with nogil:
+            for i in range(num_summands):
+                idx_view[0,i] = out[0][0][i]
+                idx_view[1,i] = out[0][1][i]
+            for i in range(num_births):
+                for j in range(num_parameters):
+                    births_view[i,j] = out[1][i][j]
+            for i in range(num_deaths):
+                for j in range(num_parameters):
+                    deaths_view[i,j] = out[2][i][j]
+
+        return idx, births,deaths
 
     def distances_idx_to(self, pts, bool full=False, int n_jobs=1):
         pts = np.asarray(pts)
