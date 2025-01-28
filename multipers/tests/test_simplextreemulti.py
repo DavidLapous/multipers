@@ -5,6 +5,7 @@ import numpy as np
 from numpy import array
 
 import multipers as mp
+import pytest
 from multipers.tests import assert_st_simplices, random_st
 
 mp.simplex_tree_multi.SAFE_CONVERSION = True
@@ -60,6 +61,11 @@ def test_3():
         assert_st_simplices(st_multi, it)
 
 
+has_kcritical = np.any([a().is_kcritical and np.dtype(a().dtype) is np.float64 for a in mp.simplex_tree_multi.available_simplextrees])
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
 def test_4():
     st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
     st.insert([0, 1, 2], [0, 1])
