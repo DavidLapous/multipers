@@ -170,7 +170,7 @@ def _compute_grid_numpy(
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
                 return _compute_grid_numpy(filtrations_values=filtrations_values, resolution=resolution, strategy="quantile",_q_factor=1.5*_q_factor)
     elif strategy == "regular":
-        F = tuple(np.linspace(f.min(),f.max(),num=r, dtype=f.dtype) for f,r in zip(filtrations_values, resolution))
+        F = tuple(np.linspace(np.min(f),np.max(f),num=r, dtype=np.asarray(f).dtype) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_closest":
         F = tuple(_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_left":
