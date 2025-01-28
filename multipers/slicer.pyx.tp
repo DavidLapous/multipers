@@ -189,11 +189,14 @@ cdef class {{D['PYTHON_TYPE']}}:
          - filtration values (Iterable of filtration values)
         """
         pass
+    @cython.boundscheck(False)  
+    @cython.wraparound(False)
     def __cinit__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):
         """
         Cython constructor
         """
         cdef uint32_t num_generators = len(generator_maps)
+        assert len(filtration_values) == num_generators, f"Invalid input, shape do not coicide. Got sizes {num_generators,len(generator_dimensions),len(filtration_values)}."
         cdef vector[vector[uint32_t]] c_generator_maps
         cdef vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
 
@@ -204,7 +207,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             c_filtration_values[i] = _py21c_{{D['SHORT_VALUE_TYPE']}}(filtration_values[i])
         cdef vector[int] c_generator_dimensions = generator_dimensions
 
-        assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
+        assert num_generators == c_generator_maps.size() == c_filtration_values.size() == c_generator_dimensions.size(), "Invalid input, shape do not coincide."
         self.truc = {{D['C_TEMPLATE_TYPE']}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.minpres_degree = -1
     {{endif}}
