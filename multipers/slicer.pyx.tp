@@ -658,7 +658,7 @@ def minimal_presentation(
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard=True, 
         id :Optional[str] =None,
-        dtype=None,
+        dtype:type|_valid_dtypes=None,
         int n_jobs = -1,
         bool force=False,
         **minpres_kwargs
@@ -834,7 +834,7 @@ def _hilbert_signed_measure(slicer,
   cdef tensor_dtype[::1] container = container_array
   cdef tensor_dtype* container_ptr = &container[0]
   cdef signed_measure_type out = _compute_hilbert_sm(slicer, container_ptr, c_grid_shape, degrees,n_jobs, verbose, zero_pad, ignore_inf)
-  pts, weights = np.asarray(out.first, dtype=int).reshape(-1, slicer.num_parameters+1), np.asarray(out.second, dtype=int)
+  pts, weights = np.asarray(out.first, dtype=python_indices_type).reshape(-1, slicer.num_parameters+1), np.asarray(out.second, dtype=python_tensor_dtype)
   slices = np.concatenate([np.searchsorted(pts[:,0], np.arange(degrees.size())), [pts.shape[0]] ])
   sms = [
       (pts[slices[i]:slices[i+1],1:],weights[slices[i]:slices[i+1]])
