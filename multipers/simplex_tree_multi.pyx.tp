@@ -1681,7 +1681,7 @@ def _hilbert_signed_measure(simplextree,
   cdef tensor_dtype[::1] container = container_array
   cdef tensor_dtype* container_ptr = &container[0]
   cdef signed_measure_type out = _hilbert_sm_from_simplextree(simplextree, container_ptr, c_grid_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse)
-  pts, weights = np.asarray(out.first, dtype=int).reshape(-1, simplextree.num_parameters+1), np.asarray(out.second, dtype=int)
+  pts, weights = np.asarray(out.first, dtype=python_indices_type).reshape(-1, simplextree.num_parameters+1), np.asarray(out.second, dtype=python_tensor_dtype)
   slices = np.concatenate([np.searchsorted(pts[:,0], np.arange(degrees.size())), [pts.shape[0]] ])
   sms = [
       (pts[slices[i]:slices[i+1],1:],weights[slices[i]:slices[i+1]])
