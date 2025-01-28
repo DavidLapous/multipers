@@ -43,6 +43,7 @@ from multipers.simplex_tree_multi import is_simplextree_multi, SimplexTreeMulti_
 from multipers.slicer import Slicer_type, is_slicer
 from multipers._slicer_meta import Slicer
 from multipers.mma_structures import *
+from multipers.mma_structures import PyModule_type
 from typing import Union
 import multipers
 import multipers.io as mio
