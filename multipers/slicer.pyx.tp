@@ -196,14 +196,14 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef uint32_t num_generators = len(generator_maps)
         cdef vector[vector[uint32_t]] c_generator_maps
         cdef vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
-        for stuff in generator_maps:
-            c_generator_maps.push_back(<vector[uint32_t]>(stuff))
-        for f in filtration_values:
-            # cf.clear()
-            # for truc in f:
-            #     cf.push_back(truc)
-            c_filtration_values.push_back(_py21c_{{D['SHORT_VALUE_TYPE']}}(f))
+
+        c_generator_maps.resize(num_generators)
+        c_filtration_values.resize(num_generators)
+        for i in range(num_generators):
+            c_generator_maps[i]    = <vector[uint32_t]>(generator_maps[i])
+            c_filtration_values[i] = _py21c_{{D['SHORT_VALUE_TYPE']}}(filtration_values[i])
         cdef vector[int] c_generator_dimensions = generator_dimensions
+
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
         self.truc = {{D['C_TEMPLATE_TYPE']}}(c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.minpres_degree = -1
