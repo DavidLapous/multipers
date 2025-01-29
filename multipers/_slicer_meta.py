@@ -103,7 +103,7 @@ def Slicer(
     reduce: bool = False,
     reduce_backend: Optional[str] = None,
     dtype: Optional[_valid_dtype] = None,
-    is_kcritical: Optional[bool] = None,
+    kcritical: Optional[bool] = None,
     column_type: Optional[_column_type] = None,
     backend: Optional[_valid_pers_backend] = None,
     max_dim: Optional[int] = None,
