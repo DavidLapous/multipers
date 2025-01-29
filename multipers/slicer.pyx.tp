@@ -731,9 +731,10 @@ def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
     filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(len(idx)-1)) # TODO : optimize ?
     st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype, kcritical=s.is_kcritical)
     for i in range(len(filtrations)):
-        if s.is_kcritical:
-          for f in filtrations[i]:
-            st.insert(np.asarray(boundaries[i], dtype = np.int32),np.asarray(f, dtype=s.dtype))
+        if s.is_kcritical: ## TODO : this may be very slow
+          for b,f in zip(boundaries[i].T,filtrations[i]):
+            for g in np.asarray(f):
+                st.insert(np.asarray(b, dtype = np.int32),np.asarray(g, dtype=s.dtype))
         else:
           st.insert_batch(np.asarray(boundaries[i], dtype= np.int32),np.asarray(filtrations[i], dtype=s.dtype))
     return st
