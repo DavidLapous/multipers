@@ -3,7 +3,7 @@ import numpy as np
 import multipers as mp
 from multipers import signed_measure
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
+
 
 
 # def test_1(): # TODO: test integrate_measure instead

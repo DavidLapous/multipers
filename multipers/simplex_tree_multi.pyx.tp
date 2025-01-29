@@ -145,9 +145,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                   bool safe_conversion=False,
                   ): #TODO doc
         {{if is_kcritical}}
-        cdef {{FSHORT}} c_default_values = _py2kc_{{SHORT}}([default_values])
+        cdef {{FSHORT}} c_default_values = _py2kc_{{SHORT}}(np.asarray([default_values], dtype= {{PYTYPE}}))
         {{else}}
-        cdef {{FSHORT}} c_default_values = _py21c_{{SHORT}}(default_values)
+        cdef {{FSHORT}} c_default_values = _py21c_{{SHORT}}(np.asarray(default_values, dtype={{PYTYPE}}))
         {{endif}}
         cdef intptr_t other_ptr
         cdef char[:] buffer
@@ -417,6 +417,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if filtration is None:
             filtration = np.array([-np.inf]*num_parameters, dtype = float)
 
+        filtration = np.asarray(filtration, dtype = {{PYTYPE}})
+
         {{if is_kcritical}}
         from itertools import chain, combinations
 
@@ -431,9 +433,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             current_filtration_ptr = self.get_ptr().simplex_filtration(simplices_filtration_to_insert[i])
             dereference(current_filtration_ptr).add_generator(_py21c_{{SHORT}}(filtration))
           return True ## TODO : we may want to return false if this birth wasn't necessary
-        cdef {{Filtration}} cfiltration = _py2kc_{{SHORT}}(np.asarray(filtration, dtype = {{PYTYPE}})[None,:])
+        cdef {{Filtration}} cfiltration = _py2kc_{{SHORT}}(filtration[None,:])
         {{else}}
-        cdef {{Filtration}} cfiltration = _py21c_{{SHORT}}(np.asarray(filtration, dtype = {{PYTYPE}}))
+        cdef {{Filtration}} cfiltration = _py21c_{{SHORT}}(filtration)
         {{endif}}
         return self.get_ptr().insert(simplex,cfiltration)
 
@@ -459,6 +461,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t n = vertex_array.shape[1]
         cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
         cdef bool empty_filtration = (filtrations.size == 0)
+        cdef {{CTYPE}}[:,:] F_view = np.asarray(filtrations, dtype = {{PYTYPE}})
 
         if not empty_filtration :
             assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
@@ -468,7 +471,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        # cdef One_critical_filtration[{{CTYPE}}] w
         cdef {{Filtration}} w
         if empty_filtration:
             w = One_critical_filtration[{{CTYPE}}](num_parameters) # at -inf by default
@@ -479,9 +481,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     v.push_back(vertex_array[j, i])
                 #filtration
                 if not empty_filtration:
-
-                    for j in range(num_parameters):
-                        w.push_back(<{{CTYPE}}>filtrations[i,j])
+                    # for j in range(num_parameters):
+                    #     w.push_back(<{{CTYPE}}>filtrations[i,j])
+                    w = _py21c_{{SHORT}}(F_view[i,:])
                 self.get_ptr().insert(v, w)
                 v.clear()
         #repair filtration if necessary
@@ -1456,6 +1458,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if direction is None:
           direction = np.array([0]*self.get_ptr().get_number_of_parameters())
           direction[parameter] = 1
+        
+        basepoint = np.asarray(basepoint, dtype=np.float64)
+        direction = np.asarray(direction, dtype=np.float64)
         cdef One_critical_filtration[double] c_basepoint = _py21c_f64(basepoint)
         cdef One_critical_filtration[double] c_direction = _py21c_f64(direction)
         cdef Line[double] c_line = Line[double](c_basepoint, c_direction)

@@ -38,13 +38,12 @@ cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrat
               out[i][j] = filtrations[i,j]
     return out
 
-cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}(object filtration_):
-    cdef {{CTYPE}}[:] filtration = np.asarray(filtration_, dtype={{PYTYPE}})
+cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}({{CTYPE}}[:] filtration) noexcept nogil:
+    # cdef {{CTYPE}}[:] filtration = np.asarray(filtration_, dtype={{PYTYPE}})
     cdef One_critical_filtration[{{CTYPE}}] out = One_critical_filtration[{{CTYPE}}](0)
-    with nogil:
-      out.reserve(len(filtration))
-      for i in range(len(filtration)):
-          out.push_back(filtration[i])
+    out.reserve(len(filtration))
+    for i in range(len(filtration)):
+        out.push_back(filtration[i])
     return out
 
 

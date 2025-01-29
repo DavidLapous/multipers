@@ -3,7 +3,6 @@ import numpy as np
 
 import multipers as mp
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
 
 
 def test_h1_rips_density():

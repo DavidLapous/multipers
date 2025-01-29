@@ -21,6 +21,7 @@ import multipers.io as mio
 import multipers.grids as mpg
 import threading
 import os 
+from joblib import Parallel, delayed
 
 from multipers.slicer cimport *
 from multipers.filtrations cimport *
@@ -171,10 +172,12 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef Multi_critical_filtration[{{D['C_VALUE_TYPE']}}] cf
         cdef One_critical_filtration[{{D['C_VALUE_TYPE']}}] inf
         inf[0] = -inf[0]
+        cdef {{D['C_VALUE_TYPE']}}[:,:] F_view 
         for F in filtration_values:
             cf.push_to_least_common_upper_bound(inf)
-            for f in F:
-                cf.add_generator(_py21c_{{D['SHORT_VALUE_TYPE']}}(f))
+            F_view = np.asarray(F, dtype = {{D['PY_VALUE_TYPE']}} )
+            for i in range(F_view.shape[0]):
+                cf.add_generator(_py21c_{{D['SHORT_VALUE_TYPE']}}(F_view[i]))
             c_filtration_values.push_back(cf)
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
@@ -196,6 +199,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Cython constructor
         """
         cdef uint32_t num_generators = len(generator_maps)
+        filtration_values = np.asarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
         assert len(filtration_values) == num_generators, f"Invalid input, shape do not coicide. Got sizes {num_generators,len(generator_dimensions),len(filtration_values)}."
         cdef vector[vector[uint32_t]] c_generator_maps
         cdef vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
@@ -231,10 +235,12 @@ cdef class {{D['PYTHON_TYPE']}}:
         Pushes the current slicer to the line defined by a basepoint and an optional direction.
         If the direction is not provided, it is assumed to be diagonal.
         """
+        basepoint = np.asarray(basepoint, dtype = {{D['PY_VALUE_TYPE']}})
         cdef Line[{{D['C_VALUE_TYPE']}}] line
         if direction is None:
             line = Line[{{D['C_VALUE_TYPE']}}](_py21c_{{D['SHORT_VALUE_TYPE']}}(basepoint))
         else:
+            direction = np.asarray(direction, dtype = {{D['PY_VALUE_TYPE']}})
             line = Line[{{D['C_VALUE_TYPE']}}](_py21c_{{D['SHORT_VALUE_TYPE']}}(basepoint),_py21c_{{D['SHORT_VALUE_TYPE']}}(direction))
         self.truc.push_to(line)
         return self
@@ -674,7 +680,6 @@ def minimal_presentation(
         return slicer
     mio._init_external_softwares(requires=[backend])
     if len(degrees)>0:
-        from joblib import Parallel, delayed
         def todo(int degree):
             return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
         return tuple(
@@ -724,19 +729,24 @@ def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
         b = idx[-1]
         for i in range(a, b):
             boundaries_[i] = np.unique(np.concatenate([boundaries_[k] for k in boundaries_[i]]))
-    boundaries = [np.asarray(boundaries_[idx[i]:idx[i+1]]).T for i in range(len(idx)-1)]
+    cdef int num_dims = len(idx)-1
+    boundaries = [np.asarray(boundaries_[idx[i]:idx[i+1]], dtype=np.int32).T for i in range(num_dims)]
     boundaries[0] = np.arange(boundaries[0].shape[1])[None,:]
     filtrations = s.get_filtrations()
     num_parameters  = s.num_parameters
-    filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(len(idx)-1)) # TODO : optimize ?
+    filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(num_dims)) # TODO : optimize ?
     st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype, kcritical=s.is_kcritical)
-    for i in range(len(filtrations)):
+    for dim in range(num_dims):
         if s.is_kcritical: ## TODO : this may be very slow
-          for b,f in zip(boundaries[i].T,filtrations[i]):
-            for g in np.asarray(f):
-                st.insert(np.asarray(b, dtype = np.int32),np.asarray(g, dtype=s.dtype))
+          # for b,f in zip(boundaries[i].T,filtrations[i]):
+          #   for g in np.asarray(f):
+          #       st.insert(np.asarray(b, dtype = np.int32),np.asarray(g, dtype=s.dtype))
+          for j in range(boundaries[i].shape[1]):
+              splx = boundaries[i][:,j]
+              for k in range(filtrations[i][j]):
+                st.insert(splx, np.asarray(filtrations[i][j][k], dtype = s.dtype))
         else:
-          st.insert_batch(np.asarray(boundaries[i], dtype= np.int32),np.asarray(filtrations[i], dtype=s.dtype))
+          st.insert_batch(np.asarray(boundaries[dim], dtype= np.int32),np.asarray(filtrations[dim], dtype=s.dtype))
     return st
 
 

@@ -3,7 +3,6 @@ import numpy as np
 import multipers as mp
 import multipers.ml.point_clouds as mmp
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
 np.random.seed(0)
 
 

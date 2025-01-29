@@ -8,7 +8,6 @@ import multipers as mp
 import pytest
 from multipers.tests import assert_st_simplices, random_st
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
 
 
 def test_1():

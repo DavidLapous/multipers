@@ -5,7 +5,6 @@ import multipers as mp
 import multipers.ml.mma as mma
 from multipers.tests import random_st
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
 
 
 def test_1():

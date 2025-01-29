@@ -117,7 +117,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 import multipers.slicer as mps
 from cython.operator cimport dereference
 {{for C_VALUE_TYPE,PYTHON_VALUE_TYPE,SHORT_VALUE_TYPE in float_value_types}}
-cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, One_critical_filtration[{{C_VALUE_TYPE}}]& direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
+cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, One_critical_filtration[{{C_VALUE_TYPE}}] direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
   import multipers.slicer as mps
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
   cdef Module[{{C_VALUE_TYPE}}] mod

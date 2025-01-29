@@ -39,7 +39,7 @@ import gudhi as gd
 import numpy as np
 from typing import Union, Literal
 from collections.abc import Callable, Iterable, Sequence
-import pickle as pk
+import pickle
 import multipers.grids as mpg
 
 ###########################################################################
@@ -435,7 +435,7 @@ cdef class PyModule_{{SHORT}}:
             Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
         """
         out = PyMultiDiagram_{{SHORT}}()
-        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree, threshold))
+        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py21c_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
         return out
     @staticmethod
     cdef _threshold_bc(bc): 
@@ -465,9 +465,11 @@ cdef class PyModule_{{SHORT}}:
 
         tuple[np.ndarray of shape (num_bars,2)] or tuple[array of shape (num_bar, 2, num_parameters)]
         """
+        basepoint = np.asarray(basepoint, dtype={{PYTYPE}})
         if direction is None:
             bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
         else:
+            direction = np.asarray(direction, dtype = {{PYTYPE}})
             bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint), _py21c_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
@@ -563,6 +565,7 @@ cdef class PyModule_{{SHORT}}:
             basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
         else :
             num=len(basepoints)
+        basepoints = np.asarray(basepoints, dtype={{PYTYPE}})
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
             cbasepoints.push_back(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoints[i])))
@@ -1024,7 +1027,7 @@ def from_dump_{{SHORT}}(dump)->PyModule_{{SHORT}}:
     # TODO : optimize...
     mod = PyModule_{{SHORT}}()
     if type(dump) is str:
-        dump = pk.load(open(dump, "rb"))
+        dump = pickle.load(open(dump, "rb"))
     cdef Module[{{CTYPE}}] cmod = cmod_from_dump_{{SHORT}}(dump)
     mod.cmod = cmod
     return mod
