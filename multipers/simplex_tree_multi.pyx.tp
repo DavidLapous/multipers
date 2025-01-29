@@ -1766,7 +1766,7 @@ def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False):
 
   out = _euler_sm_from_simplextree(simplextree, container_ptr, c_grid_shape, zero_pad, verbose)
 
-  pts, weights = np.asarray(out.first, dtype=int).reshape(-1, simplextree.num_parameters), np.asarray(out.second, dtype=int)
+  pts, weights = np.asarray(out.first, dtype=python_indices_type).reshape(-1, simplextree.num_parameters), np.asarray(out.second, dtype=python_tensor_dtype)
   # return pts, weights
   sm = (pts,weights)
 
