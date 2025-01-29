@@ -468,18 +468,18 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        cdef One_critical_filtration[{{CTYPE}}] w
+        # cdef One_critical_filtration[{{CTYPE}}] w
+        cdef {{Filtration}} w
         if empty_filtration:
             w = One_critical_filtration[{{CTYPE}}](num_parameters) # at -inf by default
         with nogil:
             for i in range(n):
-                if not empty_filtration:
-                    w.clear()
                 # vertex
                 for j in range(k):
                     v.push_back(vertex_array[j, i])
                 #filtration
                 if not empty_filtration:
+
                     for j in range(num_parameters):
                         w.push_back(<{{CTYPE}}>filtrations[i,j])
                 self.get_ptr().insert(v, w)
@@ -624,59 +624,58 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         new_weights = new_weights[idx]
         return (new_pts, new_weights)
     
-    # {{else}}
-    #
-    # @cython.boundscheck(False)
-    # @cython.wraparound(False)
-    # def insert_batch(self, some_int[:,:] vertex_array, some_float[:,:,:]  filtrations)->SimplexTreeMulti_{{FSHORT}} :
-    #     """Inserts k-simplices given by a sparse array in a format similar
-    #     to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
-    #     The i-th simplex has vertices `vertex_array[0,i]`, ...,
-    #     `vertex_array[n,i]` and j-th filtration value `filtrations[i,j,num_parameters]`.
-    #
-    #     :param vertex_array: the k-simplices to insert.
-    #     :type vertex_array: numpy.array of shape (k+1,n)
-    #     :param filtrations: the filtration values.
-    #     :type filtrations: numpy.array of shape (n, max_critical_degree, num_parameters)
-    #     """
-    #     # TODO : multi-critical
-    #     # cdef vector[int] vertices = np.unique(vertex_array)
-    #     cdef Py_ssize_t k = vertex_array.shape[0]
-    #     cdef Py_ssize_t n = vertex_array.shape[1]
-    #     cdef Py_ssize_t max_crit_deg = filtrations.shape[1]
-    #     cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
-    #     cdef bool empty_filtration = (filtrations.size == 0)
-    #
-    #     if not empty_filtration :
-    #         assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
-    #                 Filtrations should be of shape ({n},{self.num_parameters})"
-    #         assert filtrations.shape[1] == num_parameters, f"Inconsistent number of parameters.\
-    #                 Filtrations should be of shape ({n},{self.num_parameters})"
-    #     cdef Py_ssize_t i
-    #     cdef Py_ssize_t j
-    #     cdef vector[int] v
-    #     cdef One_critical_filtration[{{CTYPE}}] w
-    #     if empty_filtration:
-    #         w = One_critical_filtration[{{CTYPE}}](num_parameters) # at -inf by default
-    #     with nogil:
-    #         for i in range(n):
-    #             v.clear()
-    #             # vertex
-    #             for j in range(k):
-    #                 v.push_back(vertex_array[j, i])
-    #             #filtration
-    #             self.get_ptr().insert(v, w)
-    #             if not empty_filtration:
-    #                 for crit_deg in range(max_crit_deg):
-    #                     w.clear()
-    #                     for j in range(num_parameters):
-    #                         w.push_back(<{{CTYPE}}>filtrations[i,crit_deg,j])
-    #                     self.get_ptr().insert(v, w)
-    #
-    #     #repair filtration if necessary
-    #     if empty_filtration:
-    #         self.make_filtration_non_decreasing()
-    #     return self
+    {{else}}
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def insert_batch(self, some_int[:,:] vertex_array, some_float[:,:,:]  filtrations)->SimplexTreeMulti_{{FSHORT}} :
+        """Inserts k-simplices given by a sparse array in a format similar
+        to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
+        The i-th simplex has vertices `vertex_array[0,i]`, ...,
+        `vertex_array[n,i]` and j-th filtration value `filtrations[i,j,num_parameters]`.
+
+        :param vertex_array: the k-simplices to insert.
+        :type vertex_array: numpy.array of shape (k+1,n)
+        :param filtrations: the filtration values.
+        :type filtrations: numpy.array of shape (n, max_critical_degree, num_parameters)
+        """
+        # TODO : multi-critical
+        # cdef vector[int] vertices = np.unique(vertex_array)
+        cdef Py_ssize_t k = vertex_array.shape[0]
+        cdef Py_ssize_t n = vertex_array.shape[1]
+        cdef Py_ssize_t max_crit_deg = filtrations.shape[1]
+        cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
+        cdef bool empty_filtration = (filtrations.size == 0)
+
+        if not empty_filtration :
+            assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
+                    Filtrations should be of shape ({n},{self.num_parameters})"
+            assert filtrations.shape[1] == num_parameters, f"Inconsistent number of parameters.\
+                    Filtrations should be of shape ({n},{self.num_parameters})"
+        cdef Py_ssize_t i
+        cdef Py_ssize_t j
+        cdef vector[int] v
+        cdef One_critical_filtration[{{CTYPE}}] w_temp
+        cdef {{Filtration}} w
+        if empty_filtration:
+            w = {{Filtration}}() # at -inf by default
+        with nogil:
+            for i in range(n):
+                v.clear()
+                # vertex
+                for j in range(k):
+                    v.push_back(vertex_array[j, i])
+                #filtration
+                self.get_ptr().insert(v, w)
+                if not empty_filtration:
+                    with gil:
+                        w =  _py2kc_{{SHORT}}(np.asarray(filtrations[i], dtype = {{PYTYPE}}))
+                self.get_ptr().insert(v, w)
+
+        #repair filtration if necessary
+        if empty_filtration:
+            self.make_filtration_non_decreasing()
+        return self
     {{endif}}
 
 
