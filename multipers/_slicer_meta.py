@@ -135,10 +135,10 @@ def Slicer(
 
     if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
         dtype = st.dtype if dtype is None else dtype
-        is_kcritical = st.is_kcritical if is_kcritical is None else is_kcritical
+        is_kcritical = st.is_kcritical if kcritical is None else kcritical
     else:
         dtype = np.float64 if dtype is None else dtype
-        is_kcritical = False if is_kcritical is None else is_kcritical
+        is_kcritical = False if kcritical is None else kcritical
 
     if is_slicer(st, allow_minpres=False):
         vineyard = st.is_vine if vineyard is None else vineyard
