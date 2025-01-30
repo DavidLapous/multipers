@@ -184,11 +184,12 @@ cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_fil
         Multi_critical_filtration()  except + nogil
         Multi_critical_filtration(One_critical_filtration[T]) except +
         Multi_critical_filtration[T]& operator=(const Multi_critical_filtration[T]&) except +
-        size_type num_parameters() nogil
-        size_type num_generators() nogil
+        size_t num_parameters() noexcept nogil
+        size_t num_generators() noexcept  nogil
         void add_guaranteed_generator(One_critical_filtration[T]) nogil
         void add_generator(One_critical_filtration[T]) nogil
-        void reserve(size_t) nogil
+        void reserve(size_t) noexcept nogil
+        void simplify() nogil
         void set_num_generators(size_t) nogil
         One_critical_filtration[T]& operator[](int) nogil
 

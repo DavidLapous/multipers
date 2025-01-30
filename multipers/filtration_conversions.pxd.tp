@@ -27,15 +27,15 @@ from cython.operator cimport dereference
 ###### ------------------- PY TO CPP
 #### ---------- 
 
-cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}(object filtrations_):
-    cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
+    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
     cdef Multi_critical_filtration[{{CTYPE}}] out
-    with nogil:
-      out.set_num_generators(filtrations.shape[0])
-      for i in range(filtrations.shape[0]):
-          out[i].resize(filtrations.shape[1])
-          for j in range(filtrations.shape[1]):
-              out[i][j] = filtrations[i,j]
+    out.set_num_generators(filtrations.shape[0])
+    for i in range(filtrations.shape[0]):
+        out[i].resize(filtrations.shape[1])
+        for j in range(filtrations.shape[1]):
+            out[i][j] = filtrations[i,j]
+    out.simplify()
     return out
 
 cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}({{CTYPE}}[:] filtration) noexcept nogil:
@@ -47,8 +47,8 @@ cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}({{CTYPE}}[:] fil
     return out
 
 
-cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}(object filtrations_):
-    cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
+    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
     cdef vector[One_critical_filtration[{{CTYPE}}]] out
     out.reserve(filtrations.shape[0])
     for i in range(filtrations.shape[0]):

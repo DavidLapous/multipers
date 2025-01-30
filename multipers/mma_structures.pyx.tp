@@ -524,7 +524,9 @@ cdef class PyModule_{{SHORT}}:
             basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
         else :
             num=len(basepoints)
-        cdef vector[One_critical_filtration[{{CTYPE}}]] cbasepoints = _py2v1c_{{SHORT}}(basepoints)
+
+        cdef {{CTYPE}}[:,:] basepoints_view = np.asarray(basepoints, dtype = {{PYTYPE}})
+        cdef vector[One_critical_filtration[{{CTYPE}}]] cbasepoints = _py2v1c_{{SHORT}}(basepoints_view)
 
         out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
         return out
@@ -565,6 +567,7 @@ cdef class PyModule_{{SHORT}}:
             basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
         else :
             num=len(basepoints)
+
         basepoints = np.asarray(basepoints, dtype={{PYTYPE}})
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
@@ -792,7 +795,9 @@ cdef class PyModule_{{SHORT}}:
             assert len(points.shape) in [1,2]
             if len(points.shape) == 1:
                 points = [points]
-        cdef vector[One_critical_filtration[{{CTYPE}}]] c_points = _py2v1c_{{SHORT}}(points)
+
+        cdef {{CTYPE}}[:,:] points_view = np.asarray(points, dtype = {{PYTYPE}})
+        cdef vector[One_critical_filtration[{{CTYPE}}]] c_points = _py2v1c_{{SHORT}}(points_view)
         # cdef One_critical_filtration temp
         # for point in points:
         #     temp.clear()
@@ -984,7 +989,7 @@ cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
             summand.get_dimension(),
             )
 
-cdef Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
+cdef inline Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
     cdef vector[One_critical_filtration[{{CTYPE}}]] births = _py2v1c_{{SHORT}}(summand_dump[0])
     cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = _py2v1c_{{SHORT}}(summand_dump[1]) 
     cdef int dim = summand_dump[2]
