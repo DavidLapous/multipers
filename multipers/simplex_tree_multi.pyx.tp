@@ -631,7 +631,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def insert_batch(self, some_int[:,:] vertex_array, some_float[:,:,:]  filtrations)->SimplexTreeMulti_{{FSHORT}} :
+    def insert_batch(self, vertex_array, filtrations)->SimplexTreeMulti_{{FSHORT}} :
         """Inserts k-simplices given by a sparse array in a format similar
         to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
         The i-th simplex has vertices `vertex_array[0,i]`, ...,
@@ -644,17 +644,20 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         """
         # TODO : multi-critical
         # cdef vector[int] vertices = np.unique(vertex_array)
-        cdef Py_ssize_t k = vertex_array.shape[0]
-        cdef Py_ssize_t n = vertex_array.shape[1]
-        cdef Py_ssize_t max_crit_deg = filtrations.shape[1]
+
+        cdef int[:,:] vertex_array_ = np.asarray(vertex_array, dtype=np.int32) 
+        cdef {{CTYPE}}[:,:,:] filtrations_ = np.asarray(filtrations, dtype={{PYTYPE}}) 
+        cdef Py_ssize_t k = vertex_array_.shape[0]
+        cdef Py_ssize_t n = vertex_array_.shape[1]
+        cdef Py_ssize_t max_crit_deg = filtrations_.shape[1]
         cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
-        cdef bool empty_filtration = (filtrations.size == 0)
+        cdef bool empty_filtration = (filtrations_.size == 0)
 
         if not empty_filtration :
-            assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
-                    Filtrations should be of shape ({n},{self.num_parameters})"
-            assert filtrations.shape[1] == num_parameters, f"Inconsistent number of parameters.\
-                    Filtrations should be of shape ({n},{self.num_parameters})"
+            assert filtrations_.shape[0] == n and filtrations_.shape[2] == num_parameters, f"""
+            Inconsistent sizes for vertex_array and filtrations\n
+            Filtrations should be of shape ({n},k, {self.num_parameters})
+            """
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
@@ -667,12 +670,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                 v.clear()
                 # vertex
                 for j in range(k):
-                    v.push_back(vertex_array[j, i])
+                    v.push_back(vertex_array_[j, i])
                 #filtration
-                self.get_ptr().insert(v, w)
                 if not empty_filtration:
-                    with gil:
-                        w =  _py2kc_{{SHORT}}(np.asarray(filtrations[i], dtype = {{PYTYPE}}))
+                    w =  _py2kc_{{SHORT}}(filtrations_[i])
                 self.get_ptr().insert(v, w)
 
         #repair filtration if necessary
