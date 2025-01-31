@@ -60,7 +60,7 @@ def test_3():
         assert_st_simplices(st_multi, it)
 
 
-has_kcritical = np.any([a().is_kcritical and np.dtype(a().dtype) is np.float64 for a in mp.simplex_tree_multi.available_simplextrees])
+has_kcritical = np.any([a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees])
 @pytest.mark.skipif(
     not has_kcritical,
     reason="kcritical simplextree not compiled, skipping this test",
@@ -183,3 +183,39 @@ def test_serialize():
     assert st1 == stm.project_on_line(
         parameter=0
     ), "Gudhi<->Multipers conversion failed"
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+def test_kcritical_batch_insert():
+
+    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
+
+    vertices = [[0,1]]
+    vertices_filtrations = np.array([[[-1, -2]],[[-2, -1]]])
+    st.insert_batch(vertices,vertices_filtrations)
+
+    edges = np.array([[0, 1],[1, 2], [2,0]]).T
+    edges_filtrations = np.array([
+        [[1,0],[0,1], [np.inf,np.inf]],
+        [[1,0],[0,1], [np.inf,np.inf]],
+        [[1,0],[0,1], [-1,3]],
+    ])
+    st.insert_batch(edges, edges_filtrations)
+
+    triangle = np.array([[0,1,2]]).T
+    triangle_filration = [[[2,2]]]
+    st.insert_batch(triangle, triangle_filration)
+
+    from numpy import array
+    goal = [(array([0, 1, 2]), [array([2., 2.])]),
+         (array([0, 1]), [array([0., 1.]), array([1., 0.])]),
+         (array([0, 2]), [array([-1.,  3.]), array([0., 1.]), array([1., 0.])]),
+         (array([0]), [array([-1., -2.])]),
+         (array([1, 2]), [array([0., 1.]), array([1., 0.])]),
+         (array([1]), [array([-2., -1.])]),
+         (array([2]), [array([0., 1.]), array([1., 0.])])
+    ]
+    assert_st_simplices(st, goal)
