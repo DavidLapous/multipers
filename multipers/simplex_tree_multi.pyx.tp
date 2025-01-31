@@ -442,7 +442,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
     {{if not is_kcritical}}
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def insert_batch(self, some_int[:,:] vertex_array, some_float[:,:]  filtrations)->SimplexTreeMulti_{{FSHORT}} :
+    def insert_batch(self,  vertex_array,  filtrations)->SimplexTreeMulti_{{FSHORT}} :
         """Inserts k-simplices given by a sparse array in a format similar
         to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
         The n-th simplex has vertices `vertex_array[0,n]`, ...,
@@ -457,8 +457,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         """
         # TODO : multi-critical
         # cdef vector[int] vertices = np.unique(vertex_array)
-        cdef Py_ssize_t k = vertex_array.shape[0]
-        cdef Py_ssize_t n = vertex_array.shape[1]
+        cdef int[:,:] vertex_array_ = np.asarray(vertex_array, dtype=np.int32)
+        cdef Py_ssize_t k = vertex_array_.shape[0]
+        cdef Py_ssize_t n = vertex_array_.shape[1]
         cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
         cdef bool empty_filtration = (filtrations.size == 0)
         cdef {{CTYPE}}[:,:] F_view = np.asarray(filtrations, dtype = {{PYTYPE}})
@@ -478,7 +479,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             for i in range(n):
                 # vertex
                 for j in range(k):
-                    v.push_back(vertex_array[j, i])
+                    v.push_back(vertex_array_[j, i])
                 #filtration
                 if not empty_filtration:
                     # for j in range(num_parameters):
