@@ -1,12 +1,17 @@
 import numpy as np
 
 import multipers as mp
-import multipers.ml.point_clouds as mmp
-
+import pytest
+import platform 
 np.random.seed(0)
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Detected windows. Pykeops is not compatible with windows yet. Skipping this ftm.",
+)
 def test_throw_test():
+    import multipers.ml.point_clouds as mmp
     pts = np.array([[1, 1], [2, 2]], dtype=np.float32)
     st = mmp.PointCloud2FilteredComplex(masses=[0.1]).fit_transform([pts])[0][0]
     assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
