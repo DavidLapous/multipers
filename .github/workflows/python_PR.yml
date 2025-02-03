@@ -45,6 +45,11 @@ jobs:
         micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
+        if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
+          choco install visualstudio2022community --params "'/NoWeb /IncludeRecommended'"
+          choco install visualstudio2022-workload-vctools
+        fi
+
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
         # if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
         #   micromamba install cxx-compiler=1.6 -c conda-forge
