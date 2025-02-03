@@ -126,5 +126,7 @@ jobs:
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
         pip install dist/*.whl
-        pytest -rv multipers/tests
+        cd multipers 
+        cd tests
+        pytest -rvv .
 
