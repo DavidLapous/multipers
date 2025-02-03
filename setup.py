@@ -17,8 +17,15 @@ Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
-os.system("mkdir build/")
-os.system("mkdir build/tmp")
+try:
+    os.mkdir("build")
+except FileExistsError:
+    pass
+
+try:
+    os.mkdir("build/tmp")
+except FileExistsError:
+    pass
 
 
 def was_modified(file):
