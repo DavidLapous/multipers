@@ -14,7 +14,7 @@ description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
   { name = "David Loiseaux", email = "david.lapous@proton.me" },
-  { name = "Hannah Schreiber" },
+  { name = "Hannah Schreiber", email = "hannah.schreiber@inria.fr"},
 ]
 maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
 dependencies = [
