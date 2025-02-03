@@ -23,6 +23,7 @@
 #include <iostream>
 #include <utility> // std::pair
 #include <vector>
+#include <limits> // has_quiet_NaN
 
 namespace Gudhi {
 namespace multiparameter {
@@ -213,10 +214,11 @@ public:
       /* value_type to_assign = minus_inf; */
       filtration_values_of_vertex.clear();
       for (auto vertex : Base::simplex_vertex_range(SimplexHandle)) {
-        /* to_assign = std::max(filtration[vertex], to_assign); */
-        if (std::isnan(filtration[vertex]))
-          std::cerr << "Invalid filtration for vertex " << vertex << " !!"
-                    << std::endl;
+        if constexpr (std::numeric_limits<typename Filtration::value_type>::has_quiet_NaN)
+          /* to_assign = std::max(filtration[vertex], to_assign); */
+          if (std::isnan(filtration[vertex]))
+            std::cerr << "Invalid filtration for vertex " << vertex << " !!"
+                      << std::endl;
         filtration_values_of_vertex.push_back(filtration[vertex]);
       }
       value_type to_assign =
@@ -262,7 +264,7 @@ public:
     return simplex_list;
   }
   void
-  resize_all_filtrations(int num) { 
+  resize_all_filtrations(int num) {
     if (num < 0)
       return;
     for (const auto &SimplexHandle : Base::complex_simplex_range()) {
@@ -310,13 +312,13 @@ public:
     for (const auto &simplex_handle : this->complex_simplex_range()) {
       auto &simplex_filtration = this->filtration_mutable(simplex_handle);
       const auto& coords = compute_coordinates_in_grid(simplex_filtration, grid);
-      if (coordinate_values) 
+      if (coordinate_values)
         simplex_filtration = coords.template as_type<value_type>();
-      else 
+      else
         simplex_filtration = evaluate_coordinates_in_grid(coords, grid).template as_type<value_type>();
     }
   }
-  
+
   void squeeze_filtration(
       const intptr_t outptr,
       const std::vector<std::vector<double>> &grid) { // TODO : this is const but GUDHI
@@ -548,12 +550,12 @@ using Simplex_tree_multi_simplex_handle = typename
     Simplex_tree_multi_interface<Filtration>::Simplex_handle;
 
 template <typename Filtration>
-using Simplex_tree_multi_simplices_iterator = typename 
+using Simplex_tree_multi_simplices_iterator = typename
     Simplex_tree_multi_interface<Filtration>::Complex_simplex_iterator;
 template <typename Filtration>
-using Simplex_tree_multi_skeleton_iterator = typename 
+using Simplex_tree_multi_skeleton_iterator = typename
     Simplex_tree_multi_interface<Filtration>::Skeleton_simplex_iterator;
 template <typename Filtration>
-using Simplex_tree_multi_boundary_iterator = typename 
+using Simplex_tree_multi_boundary_iterator = typename
     Simplex_tree_multi_interface<Filtration>::Boundary_simplex_iterator;
 }}} // namespace Gudhi::multiparameter::python_interface
