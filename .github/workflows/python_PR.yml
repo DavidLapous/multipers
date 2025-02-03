@@ -67,9 +67,6 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-          set LIBPATH=%LIBPATH%;C:\Miniconda\envs\build_test_env\Library\lib
-        fi
 
         python setup.py build_ext -j4 --inplace bdist_wheel
 
