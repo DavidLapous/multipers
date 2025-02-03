@@ -42,7 +42,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
         micromamba activate build
 
-        micromamba install boost-cpp 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib boost joblib tqdm scipy tbb tbb-devel -c conda-forge
+        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
