@@ -69,6 +69,7 @@ jobs:
       run: |
         micromamba activate build
         cd dist
+        zip -d multipers*.whl "*.cpp"  "*.tp" "*.h" # Not necessary once compiled
 
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           micromamba install auditwheel patchelf
