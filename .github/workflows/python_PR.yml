@@ -46,7 +46,7 @@ jobs:
         pip install pykeops filtration-domination --upgrade
 
         if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-          choco install visualstudio2022community --params "'/NoWeb /IncludeRecommended'"
+          choco install visualstudio2022community
           choco install visualstudio2022-workload-vctools
         fi
 
