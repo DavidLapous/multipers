@@ -40,7 +40,7 @@ jobs:
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
 
     - name: (windows) add dlls
-      if: matrix.os == "windows-latest"
+      if: ${{ matrix.os == 'windows-latest' }}
       shell: pwsh
       run: |
         cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
