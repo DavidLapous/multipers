@@ -162,4 +162,4 @@ jobs:
         run: |
           pip install --upgrade pip twine
           twine upload --skip-existing *.tar.gz # sources
-          twine upload --skip-existing *.whl    # wheels     
+          twine upload --skip-existing *.whl    # wheels
