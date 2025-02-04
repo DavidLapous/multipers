@@ -44,7 +44,7 @@ jobs:
       shell: pwsh
       run: |
         cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
-        ls multipers 
+        dir multipers
     - name: Build package
       shell: bash -el {0}
       run: |
