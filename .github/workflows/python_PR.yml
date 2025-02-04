@@ -50,6 +50,7 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba activate build
+        python setup.py sdist
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
@@ -68,7 +69,7 @@ jobs:
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           cd dist
-          micromamba install auditwheel -c conda-forge
+          micromamba install auditwheel patchelf -c conda-forge
           for wheel_file in multipers*linux*.whl; do
             auditwheel show $wheel_file
             auditwheel repair $wheel_file --plat manylinux_2_34_x86_64
