@@ -14,14 +14,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-    # - name: Setup miniconda
-    #   uses: conda-incubator/setup-miniconda@v3
-    #   with:
-    #     python-version:  ${{ matrix.python-version }}
-    #     mamba-version: "1.5"
-    #     activate-environment: build_test_env
-    #     channels: conda-forge
-    #     channel-priority: true
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest' 
@@ -45,18 +37,7 @@ jobs:
         micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
-        # if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-        #   choco install visualstudio2022community
-        #   choco install visualstudio2022-workload-vctools
-        # fi
-
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
-        # if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-        #   micromamba install cxx-compiler=1.6 -c conda-forge
-        # fi
-        # if [[ ${{ matrix.os }} =~ "windows-".* ]]; then
-        #   micromamba install cxx-compiler=1.6 -c conda-forge
-        # fi
 
     - name: Build package
       shell: bash -el {0}
@@ -71,6 +52,9 @@ jobs:
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
+        fi
+        if [[ ${{ matrix.os }} == "windows-".* ]]; then
+          cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
         fi
 
         python setup.py build_ext -j4 --inplace bdist_wheel
@@ -123,7 +107,7 @@ jobs:
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest tbb -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
         pip install dist/*.whl
         cd multipers 
