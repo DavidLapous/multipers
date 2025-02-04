@@ -14,12 +14,13 @@ This library allows computing several representations from "geometrical datasets
 We provide some *nice* pictures in the [documentation](https://davidlapous.github.io/multipers/index.html). 
 A non-exhaustive list of features can be found in the **Features** section.
 
-This library is available [on PyPI](https://pypi.org/project/multipers/) for (reasonably up to date) Linux and macOS, via
+This library is available [on PyPI](https://pypi.org/project/multipers/) for (reasonably up to date) Linux, macOS and Windows, via
 ```sh
 pip install multipers
 ```
 
-We recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/).
+Windows support is experimental, and some core dependencies are not available on Windows.
+We hence recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/).
 <br>
 A documentation and building instructions are available
 [here](https://davidlapous.github.io/multipers/compilation.html).
