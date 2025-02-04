@@ -109,11 +109,6 @@ jobs:
         fi
 
         cd ..
-    - name: Upload sources and wheel
-      uses: actions/upload-artifact@v4
-      with:
-        name: sources-${{ matrix.os }}-${{ matrix.python-version }}
-        path: dist
 
     - name: Install and Test
       shell: bash -el {0}
