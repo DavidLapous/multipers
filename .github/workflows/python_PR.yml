@@ -43,6 +43,7 @@ jobs:
       if: matrix.os == "windows-latest"
       shell: pwsh
       run: |
+        micromamba activate build
         cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
         dir multipers
     - name: Build package
