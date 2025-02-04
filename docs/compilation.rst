@@ -9,7 +9,7 @@ The following commands should provide a working environment
 
 .. code-block:: bash
 
-  conda install python=3.12  gudhi=3.10 numpy=2 cython=3 boost boost-cpp tbb tbb-devel pytest pot scikit-learn matplotlib joblib tqdm scipy  -c conda-forge
+  conda install python=3.12  gudhi=3.10 numpy=2 cython=3 libboost-devel tbb tbb-devel pytest pot scikit-learn matplotlib joblib tqdm scipy  -c conda-forge
   pip install pykeops filtration-domination --upgrade
 
 If you don't have a proper build system you can install one with conda, e.g.,
