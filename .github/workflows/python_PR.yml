@@ -123,7 +123,7 @@ jobs:
     - name: Install and Test
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest tbb -c conda-forge
         micromamba activate test
         pip install dist/*.whl
         cd multipers 
