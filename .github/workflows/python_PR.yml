@@ -39,6 +39,12 @@ jobs:
 
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
 
+    - name: (windows) add dlls
+      if: matrix.os == "windows-latest"
+      shell: pwsh
+      run: |
+        cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
+        ls multipers 
     - name: Build package
       shell: bash -el {0}
       run: |
@@ -53,11 +59,6 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        if [[ ${{ matrix.os }} == "windows-".* ]]; then
-          cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
-          ls multipers
-        fi
-
         python setup.py build_ext -j4 --inplace bdist_wheel
 
     - name: Fix wheels on Linux and Macos
