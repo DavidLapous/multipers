@@ -22,7 +22,7 @@ def test_ripslowerstar(npts,dim,num_parameters):
 
     assert st1.num_parameters == num_parameters, "Bad number of parameters"
     assert np.array_equal([f[1:] for s,f in st1.get_skeleton(0)], f)
-    assert np.all([f[1] == distance_matrix[*s] for s,f in st1.get_skeleton(0) if len(s)==2])
+    assert np.all([(f[1] == distance_matrix[*s]) for s,f in st1.get_skeleton(0) if len(s)==2])
 
 
 @pytest.mark.parametrize("npts", nptss)
