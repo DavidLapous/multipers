@@ -1,3 +1,14 @@
+# Fork TODO:
+
+- [ ] Add a `filtration` module with `__init__.py` and `delaunay_core.py`.
+- [ ] Implement Delaunay core in `delaunay_core.py`.
+- [ ] Write tests for Delaunay core.
+- [ ] Write documentation/user-guide for the Delaunay core filtration?
+- [ ] Build and test the Delaunay core filtration.
+- [x] Ensure `three_annulus(n1, n2)` always returns `n1+n2` points (even if `n1` is not divisible by 3).
+
+---
+
 # multipers : Multiparameter Persistence for Machine Learning
 [![Documentation](https://img.shields.io/badge/Documentation-website-blue)](https://davidlapous.github.io/multipers)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.06773/status.svg)](https://doi.org/10.21105/joss.06773)
