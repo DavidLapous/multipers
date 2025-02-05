@@ -203,7 +203,7 @@ def CoreDelaunay(
 
     assert len(points) > 0, f"The point cloud must contain at least one point."
     assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
-    assert beta > 0, f"The parameter beta must be positive, got {beta}."
+    assert beta >= 0, f"The parameter beta must be positive, got {beta}."
     assert k_max > 0, f"The parameter k_max must be positive, got {k_max}."
     assert k_step > 0, f"The parameter k_step must be positive, got {k_step}."
     assert precision in ["safe", "exact", "fast"], (
