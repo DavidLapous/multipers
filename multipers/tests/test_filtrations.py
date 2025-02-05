@@ -36,6 +36,10 @@ def test_ripscodensity(npts,dim):
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
+@pytest.mark.skipif(
+    not mp.io._check_available("function_delaunay"),
+    reason="Skipped external test as `function_delaunay` was not found.",
+)
 def test_delaunaylowerstar(npts,dim):
     np.random.seed(0)
     points = np.random.uniform(size=(npts,dim))
@@ -56,6 +60,10 @@ def test_delaunaylowerstar(npts,dim):
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
+@pytest.mark.skipif(
+    not mp.io._check_available("function_delaunay"),
+    reason="Skipped external test as `function_delaunay` was not found.",
+)
 def test_delaunaycodensity(npts,dim):
     np.random.seed(0)
     points = np.random.uniform(size=(npts,dim))
