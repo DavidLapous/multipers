@@ -517,16 +517,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self.truc.get_current_order()
     {{endif}}
 
-    {{if not D['IS_KCRITICAL']}}
-    def _build_from_scc_file(self, path:os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{D['PYTHON_TYPE']}}:
-        """
-        Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
-        """
-        cdef string c_path = path.encode(encoding="utf-8")
-        with nogil:
-          self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
-        return self
-
     def to_scc(
             self,
             path:os.PathLike,
@@ -550,6 +540,17 @@ cdef class {{D['PYTHON_TYPE']}}:
             return
         with nogil:
           self.truc.write_to_scc_file(c_path, num_parameters, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
+
+    {{if not D['IS_KCRITICAL']}}
+    def _build_from_scc_file(self, path:os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{D['PYTHON_TYPE']}}:
+        """
+        Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
+        """
+        cdef string c_path = path.encode(encoding="utf-8")
+        with nogil:
+          self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
+        return self
+
     def unsqueeze(self, grid=None, dtype = np.float64):
         from multipers.grids import evaluate_in_grid
         from multipers import Slicer

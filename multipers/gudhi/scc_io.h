@@ -27,14 +27,14 @@ inline Slicer read_scc_file(const std::string& inFilePath,
   unsigned int numberOfParameters;
 
   if (file.is_open()) {
-    auto error = [&file](std::string msg){
+    auto error = [&file](std::string msg) {
       file.close();
       throw std::invalid_argument(msg);
     };
-    auto is_comment_or_empty_line = [](const std::string& line)->bool{
+    auto is_comment_or_empty_line = [](const std::string& line) -> bool {
       size_t current = line.find_first_not_of(' ', 0);
       if (current == std::string::npos) return true;  // is empty line
-      if (line[current] == '#') return true;  // is comment
+      if (line[current] == '#') return true;          // is comment
       return false;
     };
 
@@ -46,10 +46,10 @@ inline Slicer read_scc_file(const std::string& inFilePath,
 
     while (getline(file, line, '\n') && is_comment_or_empty_line(line));
     if (!file) error("Premature ending of the file. Stops before numbers of parameters.");
-    
-    if (isRivetCompatible){
+
+    if (isRivetCompatible) {
       numberOfParameters = 2;
-      getline(file, line, '\n');  //second rivet label
+      getline(file, line, '\n');  // second rivet label
     } else {
       std::size_t current = line.find_first_not_of(' ', 0);
       std::size_t next = line.find_first_of(' ', current);
@@ -63,11 +63,11 @@ inline Slicer read_scc_file(const std::string& inFilePath,
     unsigned int numberOfCells = 0;
     counts.reserve(line.size() + shiftDimensions);
     std::size_t current = line.find_first_not_of(' ', 0);
-    if (shiftDimensions != 0 && isReversed && current != std::string::npos){
-      if (shiftDimensions > 0){
-        counts.resize(shiftDimensions, 0);}
-      else {
-        for (int i = shiftDimensions; i < 0 && current != std::string::npos; ++i){
+    if (shiftDimensions != 0 && isReversed && current != std::string::npos) {
+      if (shiftDimensions > 0) {
+        counts.resize(shiftDimensions, 0);
+      } else {
+        for (int i = shiftDimensions; i < 0 && current != std::string::npos; ++i) {
           std::size_t next = line.find_first_of(' ', current);
           current = line.find_first_not_of(' ', next);
         }
@@ -107,7 +107,7 @@ inline Slicer read_scc_file(const std::string& inFilePath,
       std::sort(res.begin(), res.end());
       return res;
     };
-    auto get_filtration_value = [](const std::string& line, std::size_t end)->Filtration_value{
+    auto get_filtration_value = [](const std::string& line, std::size_t end) -> Filtration_value {
       Filtration_value res(0);
       res.reserve(end);
       bool isPlusInf = true;
@@ -129,10 +129,10 @@ inline Slicer read_scc_file(const std::string& inFilePath,
     std::vector<int> generator_dimensions(numberOfCells);
     std::vector<typename Slicer::Filtration_value> generator_filtrations(numberOfCells);
     std::size_t i = 0;
-    //because of possible negative dimension shifts, the document should not always be read to the end
-    //therefore `dimIt < counts.size()` is also a stop condition
-    while (getline(file, line, '\n') && dimIt < counts.size()){
-      if (!is_comment_or_empty_line(line)){
+    // because of possible negative dimension shifts, the document should not always be read to the end
+    // therefore `dimIt < counts.size()` is also a stop condition
+    while (getline(file, line, '\n') && dimIt < counts.size()) {
+      if (!is_comment_or_empty_line(line)) {
         std::size_t sep = line.find_first_of(';', 0);
         generator_filtrations[i] = get_filtration_value(line, sep);
         if (generator_filtrations[i].is_finite() && generator_filtrations[i].num_parameters() != numberOfParameters)
@@ -141,7 +141,7 @@ inline Slicer read_scc_file(const std::string& inFilePath,
         generator_dimensions[i] = isReversed ? dimIt : counts.size() - 1 - dimIt;
 
         --counts[dimIt];
-        while (dimIt < counts.size() && counts[dimIt] == 0){
+        while (dimIt < counts.size() && counts[dimIt] == 0) {
           ++dimIt;
           if (dimIt != counts.size()) {
             shift += nextShift;
@@ -153,7 +153,7 @@ inline Slicer read_scc_file(const std::string& inFilePath,
       }
     }
 
-    if (!isReversed){ //to order by dimension
+    if (!isReversed) {  // to order by dimension
       std::reverse(generator_dimensions.begin(), generator_dimensions.end());
       std::reverse(generator_maps.begin(), generator_maps.end());
       std::reverse(generator_filtrations.begin(), generator_filtrations.end());
@@ -179,22 +179,24 @@ inline void write_scc_file(const std::string& outFilePath,
                            bool IgnoreLastGenerators = false,
                            bool stripComments = false,
                            bool reverse = false) {
-  if (numberOfParameters < 0){
+  if (numberOfParameters < 0) {
     numberOfParameters = slicer.num_parameters();
   }
   assert(numberOfParameters > 0 && "Invalid number of parameters!");
 
   std::ofstream file(outFilePath);
 
-  if (rivetCompatible) file << "firep\n";
-  else file << "scc2020\n";
+  if (rivetCompatible)
+    file << "firep\n";
+  else
+    file << "scc2020\n";
 
   if (!stripComments && !rivetCompatible)
     file << "# This file was generated by multipers (https://github.com/DavidLapous/multipers).\n";
 
   if (!stripComments && !rivetCompatible) file << "# Number of parameters\n";
 
-  if (rivetCompatible){
+  if (rivetCompatible) {
     assert(numberOfParameters == 2 && "Rivet only handles bifiltrations.");
     file << "Filtration 1\n";
     file << "Filtration 2\n";
@@ -227,10 +229,16 @@ inline void write_scc_file(const std::string& outFilePath,
 
   auto print_fil_values = [&](const Filtration_value& fil) {
     if (fil.is_finite()) {
-      assert(fil.size() == static_cast<unsigned int>(numberOfParameters));
-      for (auto f : fil) file << f << " ";
+      if constexpr (Filtration_value::is_multicritical()) {
+        for (const auto& ifil : fil) {
+          for (auto f: ifil) file << f << " ";
+        }
+      } else {
+        assert(fil.size() == static_cast<unsigned int>(numberOfParameters));
+        for (auto f : fil) file << f << " ";
+      }
     } else {
-      assert(fil.size() == 1);
+      // assert(fil.size() == 1);
       for (int p = 0; p < numberOfParameters; ++p) file << fil[0] << " ";
     }
   };
@@ -250,10 +258,12 @@ inline void write_scc_file(const std::string& outFilePath,
   std::size_t endIndex = reverse ? maxIndex : maxIndex - 1;
   const auto& filtValues = slicer.get_filtrations();
   int currDim;
-  if (reverse) currDim = minIndex == -1 ? 0 : minIndex;
-  else currDim = maxIndex == maxDim + 1 ? maxDim + 1 : maxDim;
+  if (reverse)
+    currDim = minIndex == -1 ? 0 : minIndex;
+  else
+    currDim = maxIndex == maxDim + 1 ? maxDim + 1 : maxDim;
 
-  if (reverse){
+  if (reverse) {
     if (!stripComments) file << "# Block of dimension " << currDim++ << "\n";
     if (minIndex >= 0) {
       for (auto index : indicesByDim[minIndex]) {
@@ -265,8 +275,10 @@ inline void write_scc_file(const std::string& outFilePath,
   for (std::size_t i = startIndex; i <= endIndex; ++i) {
     if (!stripComments) {
       file << "# Block of dimension " << currDim << "\n";
-      if (reverse) ++currDim;
-      else --currDim;
+      if (reverse)
+        ++currDim;
+      else
+        --currDim;
     }
     for (auto index : indicesByDim[i]) {
       print_fil_values(filtValues[index]);
@@ -275,7 +287,7 @@ inline void write_scc_file(const std::string& outFilePath,
       file << "\n";
     }
   }
-  if (!reverse){
+  if (!reverse) {
     if (!stripComments) file << "# Block of dimension " << currDim << "\n";
     if (maxIndex <= maxDim) {
       for (auto index : indicesByDim[maxIndex]) {
@@ -286,4 +298,4 @@ inline void write_scc_file(const std::string& outFilePath,
   }
 };
 
-#endif // MULTIPERS_SCC_IO_H
+#endif  // MULTIPERS_SCC_IO_H

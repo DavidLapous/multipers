@@ -22,7 +22,7 @@ def test_ripslowerstar(npts,dim,num_parameters):
 
     assert st1.num_parameters == num_parameters, "Bad number of parameters"
     assert np.array_equal([f[1:] for s,f in st1.get_skeleton(0)], f)
-    assert np.all([f[1] == distance_matrix[*s] for s,f in st1.get_skeleton(0) if len(s)==2])
+    assert np.all([(f[1] == distance_matrix[s[0],s[1]]) for s,f in st1.get_skeleton(0) if len(s)==2])
 
 
 @pytest.mark.parametrize("npts", nptss)
@@ -36,6 +36,10 @@ def test_ripscodensity(npts,dim):
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
+@pytest.mark.skipif(
+    not mp.io._check_available("function_delaunay"),
+    reason="Skipped external test as `function_delaunay` was not found.",
+)
 def test_delaunaylowerstar(npts,dim):
     np.random.seed(0)
     points = np.random.uniform(size=(npts,dim))
@@ -51,11 +55,15 @@ def test_delaunaylowerstar(npts,dim):
     p1 = np.argsort(F1)
     p2 = np.argsort(f)
     assert np.allclose(F1[p1], f[p2])
-    assert np.all([np.isclose(st.filtration(p1[s])[1],distance_matrix[*p2[s]]) for s,f in st.get_skeleton(0) if len(s)==2])
+    assert np.all([np.isclose(st.filtration(p1[s])[1],distance_matrix[p2[s][0],p2[s][1]]) for s,f in st.get_skeleton(0) if len(s)==2])
 
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
+@pytest.mark.skipif(
+    not mp.io._check_available("function_delaunay"),
+    reason="Skipped external test as `function_delaunay` was not found.",
+)
 def test_delaunaycodensity(npts,dim):
     np.random.seed(0)
     points = np.random.uniform(size=(npts,dim))
