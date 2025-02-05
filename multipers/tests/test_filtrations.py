@@ -55,7 +55,7 @@ def test_delaunaylowerstar(npts,dim):
     p1 = np.argsort(F1)
     p2 = np.argsort(f)
     assert np.allclose(F1[p1], f[p2])
-    assert np.all([np.isclose(st.filtration(p1[s])[1],distance_matrix[*p2[s]]) for s,f in st.get_skeleton(0) if len(s)==2])
+    assert np.all([np.isclose(st.filtration(p1[s])[1],distance_matrix[p2[s][0],p2[s][1]]) for s,f in st.get_skeleton(0) if len(s)==2])
 
 
 @pytest.mark.parametrize("npts", nptss)
