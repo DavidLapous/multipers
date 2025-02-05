@@ -3,6 +3,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from numpy.typing import ArrayLike
 from typing import Optional
+from multipers.ml.convolutions import available_kernels, KDE, DTM
 
 import multipers as mp
 import multipers.slicer as mps
@@ -41,6 +42,28 @@ def RipsLowerstar( *,
         st.fill_lowerstar(function[:,i], parameter = 1+i)
     return st
 
+def RipsCodensity(
+    points: ArrayLike,
+    bandwidth: Optional[float] = None,
+    *,
+    return_log: bool = True,
+    dtm_mass:Optional[float]=None,
+    kernel: available_kernels="gaussian",
+    threshold_radius: Optional[float] = None,
+):
+    """
+    Computes the Rips density filtration.
+    """
+    assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
+    if bandwidth is not None:
+        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+        f = kde.fit(points).score_samples(points)
+    elif dtm_mass is not None:
+        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
+    else:
+        raise ValueError("Bandwidth or DTM mass has to be given.")
+    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius)
+
 
 def DelaunayLowerstar(
         points:ArrayLike,
@@ -69,6 +92,42 @@ def DelaunayLowerstar(
     function = np.asarray(function).squeeze()
     assert function.ndim == 1, "Delaunay Lowerstar is only compatible with 1 additional parameter." 
     return mps.from_function_delaunay(points, function, degree=reduce_degree, vineyard=vineyard, dtype=dtype, verbose=verbose, clear=clear)
+
+def DelaunayCodensity(
+    points: ArrayLike,
+    bandwidth: Optional[float] = None,
+    *,
+    return_log: bool = True,
+    dtm_mass:Optional[float]=None,
+    kernel: available_kernels="gaussian",
+    threshold_radius:Optional[float]=None,
+    reduce_degree:int=-1, 
+    vineyard:Optional[bool]=None, 
+    dtype=np.float64, 
+    verbose:bool=False, 
+    clear:bool=True 
+):
+    """
+    TODO
+    """
+    assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
+    if bandwidth is not None:
+        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+        f = kde.fit(points).score_samples(points)
+    elif dtm_mass is not None:
+        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
+    else:
+        raise ValueError("Bandwidth or DTM mass has to be given.")
+    return DelaunayLowerstar(
+        points=points,
+        function=f,
+        threshold_radius=threshold_radius,
+        reduce_degree=reduce_degree,
+        vineyard=vineyard,
+        dtype=dtype,
+        verbose=verbose,
+        clear=clear,
+    )
 
 def Cubical(image:ArrayLike, **slicer_kwargs):
     """

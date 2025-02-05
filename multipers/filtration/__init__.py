@@ -4,4 +4,6 @@ from .filtrations import (
     Cubical,
     DelaunayLowerstar,
     CoreDelaunay,
+    DelaunayCodensity,
+    RipsCodensity,
 )
