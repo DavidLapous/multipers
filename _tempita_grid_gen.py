@@ -16,15 +16,15 @@ columns_name = [  # only one column is necessary
         # "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
-        # "SMALL_VECTOR",
+        "SMALL_VECTOR",
     )
 ]
 
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
     ("int32_t", "np.int32",   "i32"),  # necessary
-    # ("int64_t", "np.int64",   "i64"),
-    # ("float",   "np.float32", "f32"), 
+    ("int64_t", "np.int64",   "i64"),
+    ("float",   "np.float32", "f32"), 
     ("double",  "np.float64", "f64"),  # necessary
 ]
 
