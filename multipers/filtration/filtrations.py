@@ -152,8 +152,7 @@ def CoreDelaunay(
     points: ArrayLike,
     *,
     beta: float = 1.0,
-    k_max: Optional[int] = None,
-    k_step: int = 1,
+    ks: Optional[list|np.ndarray] = None,
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
@@ -164,31 +163,33 @@ def CoreDelaunay(
     Input:
      - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
      - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
-     - k_max: The maximum number of nearest neighbors to consider (default None). If None or greater than the number of points in the point cloud, k_max is set to the number of points in the point cloud.
-     - k_step: The step size for the number of nearest neighbors (default 1).
+     - ks: The list of k-values to include in the bifiltration (default None). If None, the k-values are set to [1, 2, ..., n] where n is the number of points in the point cloud. For large point clouds, it is recommended to set ks to a smaller list of k-values to reduce computation time. The values in ks must all be integers, positive, and less than or equal to the number of points in the point cloud.
      - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
-    if k_max is None or k_max > len(points):
-        k_max = len(points)
+    if ks is None:
+        ks = np.arange(1, len(points) + 1)
+    if isinstance(ks, list):
+        ks = np.array(ks, dtype=int)
 
+    assert len(ks) > 0, f"The parameter ks must contain at least one value."
+    assert all(isinstance(k, np.integer) for k in ks), f"All values in ks must be integers."
+    assert ks.min() > 0, f"All values in ks must be positive."
+    assert ks.max() <= len(points), f"All values in ks must be less than or equal to the number of points in the point cloud."
     assert len(points) > 0, f"The point cloud must contain at least one point."
     assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
     assert beta >= 0, f"The parameter beta must be positive, got {beta}."
-    assert k_max > 0, f"The parameter k_max must be positive, got {k_max}."
-    assert k_step > 0, f"The parameter k_step must be positive, got {k_step}."
     assert precision in ["safe", "exact", "fast"], (
         f"The parameter precision must be one of ['safe', 'exact', 'fast'], got {precision}."
     )
-    ks = np.arange(1, k_max + 1, k_step)
+
     if verbose:
         print(
             f"Computing the Delaunay Core Bifiltration of {len(points)} points in dimension {points.shape[1]} with parameters:"
         )
         print(f"\tbeta = {beta}")
-        print(f"\tk_max = {k_max}")
-        print(f"\tk_step = {k_step} (total of {len(ks)} k-values)")
+        print(f"\tks = {ks}")
 
     if verbose:
         print("Building the alpha complex...")

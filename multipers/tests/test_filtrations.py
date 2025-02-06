@@ -9,8 +9,7 @@ ress = [1,10]
 dims = [1,2,4]
 nparamss = [1,2,3]
 betas = [0.0, 0.5, 1.0]
-kmaxs = [None, 1, 50, 51]
-ksteps = [1, 7, 13]
+kss = [[1, 2, 3], np.arange(1, 10, 2)]
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
@@ -86,12 +85,11 @@ def test_cubical(res,dim, num_parameters):
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
 @pytest.mark.parametrize("beta", betas)
-@pytest.mark.parametrize("k_max", kmaxs)
-@pytest.mark.parametrize("k_step", ksteps)
-def test_coredelaunay(npts, dim, beta, k_max, k_step):
+@pytest.mark.parametrize("ks", kss)
+def test_coredelaunay(npts, dim, beta, ks):
     np.random.seed(0)
     points = np.random.uniform(size=(npts, dim))
-    s = mpf.CoreDelaunay(points=points, beta=beta, k_max=k_max, k_step=k_step)
+    s = mpf.CoreDelaunay(points=points, beta=beta, ks=ks)
     ac = gd.AlphaComplex(points=points).create_simplex_tree(
         default_filtration_value=True
     )
