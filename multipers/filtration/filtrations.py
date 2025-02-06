@@ -152,7 +152,7 @@ def CoreDelaunay(
     points: ArrayLike,
     *,
     beta: float = 1.0,
-    ks: Optional[list|np.ndarray] = None,
+    ks: Optional[Sequence[int]] = None,
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
