@@ -65,7 +65,7 @@ def RipsCodensity(
     assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
-        f = kde.fit(points).score_samples(points)
+        f = -kde.fit(points).score_samples(points)
     elif dtm_mass is not None:
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:
