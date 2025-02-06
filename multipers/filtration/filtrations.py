@@ -153,7 +153,7 @@ def CoreDelaunay(
     points: ArrayLike,
     *,
     beta: float = 1.0,
-    k_max: int | None = None,
+    k_max: Optional[int] = None,
     k_step: int = 1,
     precision: str = "safe",
     verbose: bool = False,
