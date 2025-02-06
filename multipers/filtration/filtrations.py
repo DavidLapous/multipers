@@ -5,6 +5,11 @@ from numpy.typing import ArrayLike
 from typing import Optional
 from multipers.ml.convolutions import available_kernels, KDE, DTM
 
+try:
+    import pykeops
+except ImportError:
+    from sklearn.neighbors import KernelDensity as KDE
+
 import multipers as mp
 import multipers.slicer as mps
 
