@@ -29,7 +29,7 @@ def RipsLowerstar( *,
         distance_matrix = cdist(points, points) # this may be slow...
     if threshold_radius is None:
         threshold_radius = np.min(np.max(distance_matrix, axis=1))
-    st = gd.RipsComplex(distance_matrix = distance_matrix, max_edge_length=threshold_radius).create_simplex_tree()
+    st = gd.SimplexTree.create_from_array(distance_matrix, max_filtration=threshold_radius)
     if function is None:
         return mp.SimplexTreeMulti(st, num_parameters = 1)
 
