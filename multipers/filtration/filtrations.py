@@ -165,13 +165,13 @@ def CoreDelaunay(
     Input:
      - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
      - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
-     - k_max: The maximum number of nearest neighbors to consider (default None). If None, k_max is set to the number of points in the point cloud.
+     - k_max: The maximum number of nearest neighbors to consider (default None). If None or greater than the number of points in the point cloud, k_max is set to the number of points in the point cloud.
      - k_step: The step size for the number of nearest neighbors (default 1).
      - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
-    if k_max is None:
+    if k_max is None or k_max > len(points):
         k_max = len(points)
 
     assert len(points) > 0, f"The point cloud must contain at least one point."
@@ -201,40 +201,34 @@ def CoreDelaunay(
         print("Computing the k-nearest neighbor distances...")
     knn_distances = KDTree(points).query(points, k=ks)[0]
 
-    # Group simplices by dimension
-    simplices_in_dimension = {dim: [] for dim in range(alpha_complex.dimension() + 1)}
-    for simplex, alpha_sq in alpha_complex.get_simplices():
-        alpha = sqrt(alpha_sq)
-        simplices_in_dimension[len(simplex) - 1].append((simplex, alpha))
+    max_dim = alpha_complex.dimension()
+    vertex_arrays_in_dimension = [[] for _ in range(max_dim + 1)]
+    squared_alphas_in_dimension = [[] for _ in range(max_dim + 1)]
+    for simplex, alpha_squared in alpha_complex.get_simplices():
+        dim = len(simplex) - 1
+        squared_alphas_in_dimension[dim].append(alpha_squared)
+        vertex_arrays_in_dimension[dim].append(simplex)
 
-    def compute_critical_radii(simplex: list[int], alpha: float) -> np.ndarray:
-        """
-        Given a simplex, compute the critical radii for each k in ks. Returns a 1D array of critical radii for the simplex.
-        """
-        max_knn_distances = np.max(knn_distances[simplex], axis=0)
-        return np.maximum(alpha, beta * max_knn_distances)
+    alphas_in_dimension = [np.sqrt(np.array(alpha_squared, dtype=np.float64)) for alpha_squared in squared_alphas_in_dimension]
+    vertex_arrays_in_dimension = [np.array(vertex_array, dtype=int) for vertex_array in vertex_arrays_in_dimension]
 
     simplex_tree_multi = mp.SimplexTreeMulti(
         num_parameters=2, kcritical=True, dtype=np.float64
     )
 
-    for dim, simplices in simplices_in_dimension.items():
+    for dim, (vertex_array, alphas) in enumerate(zip(vertex_arrays_in_dimension, alphas_in_dimension)):
+        num_simplices = len(vertex_array)
         if verbose:
             print(
-                f"Inserting {len(simplices)} simplices of dimension {dim} ({len(simplices) * len(ks)} birth values)..."
+                f"Inserting {num_simplices} simplices of dimension {dim} ({num_simplices * len(ks)} birth values)..."
             )
-        num_simplices = len(simplices)
-        vertex_array = np.empty((dim + 1, num_simplices), dtype=int)
-        filtrations = np.empty((num_simplices, len(ks), 2), dtype=np.float64)
-        filtrations[:, :, 1] = (-1) * ks  # -1 for opposite ordering
-
-        for i, (simplex, alpha) in enumerate(simplices):
-            vertex_array[:, i] = simplex
-            filtrations[i, :, 0] = compute_critical_radii(simplex, alpha)
-
-        simplex_tree_multi.insert_batch(vertex_array, filtrations)
+        max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
+        critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
+        filtrations = np.stack((critical_radii, -ks * np.ones_like(critical_radii)), axis=-1)
+        simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
 
     if verbose:
         print("Done computing the Delaunay Core Bifiltration.")
 
     return simplex_tree_multi
+
