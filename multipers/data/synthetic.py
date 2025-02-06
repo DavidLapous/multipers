@@ -46,6 +46,8 @@ def noisy_annulus(
 
 
 def three_annulus(num_pts: int = 500, num_outliers: int = 500):
+    q, r = divmod(num_pts, 3)
+    num_pts_1, num_pts_2, num_pts_3 =  q, q + (r > 0), q + (r > 1)
     X = np.block(
         [
             [np.random.uniform(low=-2, high=2, size=(num_outliers, 2))],
@@ -54,7 +56,7 @@ def three_annulus(num_pts: int = 500, num_outliers: int = 500):
                     noisy_annulus(
                         r1=0.6,
                         r2=0.9,
-                        n1=(int)(num_pts * 1 / 3),
+                        n1=num_pts_1,
                         n2=0,
                         center=[1, -0.2],
                     )
@@ -65,7 +67,7 @@ def three_annulus(num_pts: int = 500, num_outliers: int = 500):
                     noisy_annulus(
                         r1=0.4,
                         r2=0.55,
-                        n1=(int)(num_pts * 1 / 3),
+                        n1=num_pts_2,
                         n2=0,
                         center=[-1.2, -1],
                     )
@@ -76,7 +78,7 @@ def three_annulus(num_pts: int = 500, num_outliers: int = 500):
                     noisy_annulus(
                         r1=0.3,
                         r2=0.4,
-                        n1=(int)(num_pts * 1 / 3),
+                        n1=num_pts_3,
                         n2=0,
                         center=[-0.7, 1.1],
                     )

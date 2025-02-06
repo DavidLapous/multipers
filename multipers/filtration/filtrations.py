@@ -1,8 +1,12 @@
 import gudhi as gd
 import numpy as np
+import multipers as mp
+import multipers.slicer as mps
+from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 from numpy.typing import ArrayLike
 from typing import Optional
+from collections.abc import Sequence
 from multipers.ml.convolutions import available_kernels, DTM
 
 try:
@@ -13,8 +17,6 @@ except ImportError:
     def KDE(bandwidth,kernel, return_log): 
         return KernelDensity(bandwidth=bandwidth, kernel=kernel)
 
-import multipers as mp
-import multipers.slicer as mps
 
 
 def RipsLowerstar( *, 
@@ -155,9 +157,86 @@ def DegreeRips(*, points = None, distance_matrix=None, ks=None, threshold_radius
 
     raise NotImplementedError("Use the default implentation ftm.")
 
-def CoreDelaunay():
-    pass
+def CoreDelaunay(
+    points: ArrayLike,
+    *,
+    beta: float = 1.0,
+    ks: Optional[Sequence[int]] = None,
+    precision: str = "safe",
+    verbose: bool = False,
+    max_alpha_square: float = float("inf"),
+) -> mp.simplex_tree_multi.SimplexTreeMulti_KFf64:
+    """
+    Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
 
+    Input:
+     - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
+     - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
+     - ks: The list of k-values to include in the bifiltration (default None). If None, the k-values are set to [1, 2, ..., n] where n is the number of points in the point cloud. For large point clouds, it is recommended to set ks to a smaller list of k-values to reduce computation time. The values in ks must all be integers, positive, and less than or equal to the number of points in the point cloud.
+     - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
+     - verbose: Whether to print progress messages (default False).
+     - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
+    """
+    if ks is None:
+        ks = np.arange(1, len(points) + 1)
+    else:
+        ks = np.asarray(ks, dtype=int)
 
+    assert len(ks) > 0, f"The parameter ks must contain at least one value."
+    assert np.all(ks > 0), f"All values in ks must be positive."
+    assert np.all(ks <= len(points)), f"All values in ks must be less than or equal to the number of points in the point cloud."
+    assert len(points) > 0, f"The point cloud must contain at least one point."
+    assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
+    assert beta >= 0, f"The parameter beta must be positive, got {beta}."
+    assert precision in ["safe", "exact", "fast"], (
+        f"The parameter precision must be one of ['safe', 'exact', 'fast'], got {precision}."
+    )
 
+    if verbose:
+        print(
+            f"Computing the Delaunay Core Bifiltration of {len(points)} points in dimension {points.shape[1]} with parameters:"
+        )
+        print(f"\tbeta = {beta}")
+        print(f"\tks = {ks}")
+
+    if verbose:
+        print("Building the alpha complex...")
+    alpha_complex = gd.AlphaComplex(
+        points=points, precision=precision
+    ).create_simplex_tree(max_alpha_square=max_alpha_square)
+
+    if verbose:
+        print("Computing the k-nearest neighbor distances...")
+    knn_distances = KDTree(points).query(points, k=ks)[0]
+
+    max_dim = alpha_complex.dimension()
+    vertex_arrays_in_dimension = [[] for _ in range(max_dim + 1)]
+    squared_alphas_in_dimension = [[] for _ in range(max_dim + 1)]
+    for simplex, alpha_squared in alpha_complex.get_simplices():
+        dim = len(simplex) - 1
+        squared_alphas_in_dimension[dim].append(alpha_squared)
+        vertex_arrays_in_dimension[dim].append(simplex)
+
+    alphas_in_dimension = [np.sqrt(np.array(alpha_squared, dtype=np.float64)) for alpha_squared in squared_alphas_in_dimension]
+    vertex_arrays_in_dimension = [np.array(vertex_array, dtype=np.int32) for vertex_array in vertex_arrays_in_dimension]
+
+    simplex_tree_multi = mp.SimplexTreeMulti(
+        num_parameters=2, kcritical=True, dtype=np.float64
+    )
+
+    for dim, (vertex_array, alphas) in enumerate(zip(vertex_arrays_in_dimension, alphas_in_dimension)):
+        num_simplices = len(vertex_array)
+        if verbose:
+            print(
+                f"Inserting {num_simplices} simplices of dimension {dim} ({num_simplices * len(ks)} birth values)..."
+            )
+        max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
+        critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
+        filtrations = np.stack((critical_radii, -ks * np.ones_like(critical_radii)), axis=-1)
+        simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
+
+    if verbose:
+        print("Done computing the Delaunay Core Bifiltration.")
+
+    return simplex_tree_multi
 

@@ -1,5 +1,6 @@
 import multipers as mp
 import numpy as np
+import gudhi as gd
 import multipers.filtration as mpf
 import pytest
 
@@ -7,6 +8,8 @@ nptss = [50]
 ress = [1,10]
 dims = [1,2,4]
 nparamss = [1,2,3]
+betas = [0.0, 0.5, 1.0]
+kss = [[1, 2, 3], np.arange(1, 10, 2)]
 
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
@@ -80,4 +83,21 @@ def test_cubical(res,dim, num_parameters):
     s = mpf.Cubical(image)
     assert s.num_parameters == num_parameters
 
+@pytest.mark.parametrize("npts", nptss)
+@pytest.mark.parametrize("dim", dims)
+@pytest.mark.parametrize("beta", betas)
+@pytest.mark.parametrize("ks", kss)
+def test_coredelaunay(npts, dim, beta, ks):
+    np.random.seed(0)
+    points = np.random.uniform(size=(npts, dim))
+    s = mpf.CoreDelaunay(points=points, beta=beta, ks=ks)
+    ac = gd.AlphaComplex(points=points).create_simplex_tree(
+        default_filtration_value=True
+    )
 
+    assert s.num_parameters == 2, "Bad number of parameters"
+    assert s.is_kcritical, "Bifiltration is not k-critical"
+    assert s.dimension == dim, "Bad dimension"
+    assert set(tuple(spx) for spx, _ in s.get_simplices()) == set(
+        tuple(spx) for spx, _ in ac.get_simplices()
+    ), "Simplices differs from the Delaunay Complex"
