@@ -4,6 +4,7 @@ from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 from numpy.typing import ArrayLike
 from typing import Optional
+from collections.abc import Sequence
 from multipers.ml.convolutions import available_kernels, KDE, DTM
 
 import multipers as mp
