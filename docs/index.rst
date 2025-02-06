@@ -117,6 +117,11 @@ For theoretical references,
   bibliography
 
 .. toctree::
+  :caption: Filtrations
+
+  notebooks/delaunay_core_bifiltration
+
+.. toctree::
   :caption: Example zoo:
   
   notebooks/time_series_classification
