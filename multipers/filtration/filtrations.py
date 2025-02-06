@@ -1,14 +1,22 @@
 import gudhi as gd
 import numpy as np
+import multipers as mp
+import multipers.slicer as mps
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 from numpy.typing import ArrayLike
 from typing import Optional
 from collections.abc import Sequence
-from multipers.ml.convolutions import available_kernels, KDE, DTM
+from multipers.ml.convolutions import available_kernels, DTM
 
-import multipers as mp
-import multipers.slicer as mps
+try:
+    import pykeops
+    from multipers.ml.convolutions import KDE
+except ImportError:
+    from sklearn.neighbors import KernelDensity 
+    def KDE(bandwidth,kernel, return_log): 
+        return KernelDensity(bandwidth=bandwidth, kernel=kernel)
+
 
 
 def RipsLowerstar( *, 
@@ -31,7 +39,7 @@ def RipsLowerstar( *,
         distance_matrix = cdist(points, points) # this may be slow...
     if threshold_radius is None:
         threshold_radius = np.min(np.max(distance_matrix, axis=1))
-    st = gd.RipsComplex(distance_matrix = distance_matrix, max_edge_length=threshold_radius).create_simplex_tree()
+    st = gd.SimplexTree.create_from_array(distance_matrix, max_filtration=threshold_radius)
     if function is None:
         return mp.SimplexTreeMulti(st, num_parameters = 1)
 
@@ -59,7 +67,7 @@ def RipsCodensity(
     assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
-        f = kde.fit(points).score_samples(points)
+        f = -kde.fit(points).score_samples(points)
     elif dtm_mass is not None:
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:

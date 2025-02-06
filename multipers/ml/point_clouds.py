@@ -121,9 +121,12 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 
     def _get_sts_rips(self, x):
         assert self._output_type is not None and self._vineyard is not None
-        st_init = gd.RipsComplex(
-            points=x, max_edge_length=self._threshold, sparse=self.sparse
-        ).create_simplex_tree(max_dimension=1)
+        if self.sparse is None:
+            st_init = gd.SimplexTree.create_from_array(x, max_filtration=self._threshold)
+        else:
+            st_init = gd.RipsComplex(
+                points=x, max_edge_length=self._threshold, sparse=self.sparse
+            ).create_simplex_tree(max_dimension=1)
         st_init = mp.simplex_tree_multi.SimplexTreeMulti(
             st_init, num_parameters=2, safe_conversion=self.safe_conversion
         )

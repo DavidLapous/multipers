@@ -2,7 +2,7 @@ from typing import Callable, Literal, Optional
 
 import numpy as np
 import torch
-from gudhi.rips_complex import RipsComplex
+import gudhi as gd
 
 import multipers as mp
 from multipers.ml.convolutions import DTM, KDE
@@ -68,9 +68,12 @@ def function_rips_signed_measure_old(
     if threshold < np.inf:
         distance_matrix[distance_matrix > threshold] = np.inf
 
-    st = RipsComplex(
-        distance_matrix=distance_matrix.detach(), max_edge_length=threshold
-    ).create_simplex_tree()
+    # st = RipsComplex(
+    #     distance_matrix=distance_matrix.detach(), max_edge_length=threshold
+    # ).create_simplex_tree()
+    st = gd.SimplexTree.create_from_array(
+        distance_matrix.detach(), max_filtration=threshold
+    )
     # detach makes a new (reference) tensor, without tracking the gradient
     st = mp.SimplexTreeMulti(st, num_parameters=2, safe_conversion=safe_conversion)
     st.fill_lowerstar(
@@ -244,9 +247,12 @@ def function_rips_signed_measure(
     if sm_kwargs.get("degree", None) is not None:
         degrees = [sm_kwargs.pop("degree", None)] + degrees
     if complex == "rips":
-        st = RipsComplex(
-            distance_matrix=distance_matrix.detach(), max_edge_length=threshold
-        ).create_simplex_tree()
+        # st = RipsComplex(
+        #     distance_matrix=distance_matrix.detach(), max_edge_length=threshold
+        # ).create_simplex_tree()
+        st = gd.SimplexTree.create_from_array(
+            distance_matrix.detach(), max_filtration=threshold
+        )
         # detach makes a new (reference) tensor, without tracking the gradient
         st = mp.SimplexTreeMulti(st, num_parameters=2, safe_conversion=safe_conversion)
         st.fill_lowerstar(

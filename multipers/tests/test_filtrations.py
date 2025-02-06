@@ -33,8 +33,9 @@ def test_ripslowerstar(npts,dim,num_parameters):
 def test_ripscodensity(npts,dim):
     np.random.seed(0)
     points = np.random.uniform(size=(npts,dim))
-    s = mpf.RipsCodensity(points=points,dtm_mass=.4) # bandwidth requires pykeops
-
+    s = mpf.RipsCodensity(points=points,dtm_mass=.4) 
+    assert s.num_parameters == 2, "Bad number of parameters"
+    s = mpf.RipsCodensity(points=points,bandwidth=.1) 
     assert s.num_parameters == 2, "Bad number of parameters"
 
 @pytest.mark.parametrize("npts", nptss)
