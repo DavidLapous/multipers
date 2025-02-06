@@ -184,7 +184,7 @@ def CoreDelaunay(
     max_alpha_square: float = float("inf"),
 ) -> mp.simplex_tree_multi.SimplexTreeMulti_KFf64:
     """
-    Computes the Delaunay Core Bifiltration of a point cloud from the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214.
+    Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
 
     Input:
      - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
@@ -194,9 +194,6 @@ def CoreDelaunay(
      - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
-
-    Returns:
-     - SimplexTreeMulti: A multi-critical simplex tree storing the Delaunay Core Bifiltration.
     """
     if k_max is None:
         k_max = len(points)
