@@ -182,7 +182,7 @@ def CoreDelaunay(
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
-) -> mp.SimplexTreeMulti:
+) -> mp.simplex_tree_multi.SimplexTreeMulti_KFf64:
     """
     Computes the Delaunay Core Bifiltration of a point cloud from the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214.
 
