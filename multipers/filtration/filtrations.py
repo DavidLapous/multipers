@@ -187,13 +187,13 @@ def CoreDelaunay(
     Computes the Delaunay Core Bifiltration of a point cloud from the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214.
 
     Input:
-     - points: (ArrayLike) The point cloud as a 2D array of shape (n, d) where n is the number of points and d is the dimension of the points.
-     - beta: (float) The beta parameter for the Delaunay Core Bifiltration (default 1.0).
-     - k_max: (int or None) The maximum number of nearest neighbors to consider (default None). If None, k_max is set to the number of points in the point cloud.
-     - k_step: (int) The step size for the number of nearest neighbors (default 1).
-     - precision: (str) The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
-     - verbose: (bool) Whether to print progress messages (default False).
-     - max_alpha_square: (float) The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
+     - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
+     - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
+     - k_max: The maximum number of nearest neighbors to consider (default None). If None, k_max is set to the number of points in the point cloud.
+     - k_step: The step size for the number of nearest neighbors (default 1).
+     - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
+     - verbose: Whether to print progress messages (default False).
+     - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
 
     Returns:
      - SimplexTreeMulti: A multi-critical simplex tree storing the Delaunay Core Bifiltration.
