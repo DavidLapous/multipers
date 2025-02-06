@@ -171,13 +171,12 @@ def CoreDelaunay(
     """
     if ks is None:
         ks = np.arange(1, len(points) + 1)
-    if isinstance(ks, list):
-        ks = np.array(ks, dtype=int)
+    else:
+        ks = np.asarray(ks, dtype=int)
 
     assert len(ks) > 0, f"The parameter ks must contain at least one value."
-    assert all(isinstance(k, np.integer) for k in ks), f"All values in ks must be integers."
-    assert ks.min() > 0, f"All values in ks must be positive."
-    assert ks.max() <= len(points), f"All values in ks must be less than or equal to the number of points in the point cloud."
+    assert np.all(ks > 0), f"All values in ks must be positive."
+    assert np.all(ks <= len(points)), f"All values in ks must be less than or equal to the number of points in the point cloud."
     assert len(points) > 0, f"The point cloud must contain at least one point."
     assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
     assert beta >= 0, f"The parameter beta must be positive, got {beta}."
