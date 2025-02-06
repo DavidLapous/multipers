@@ -210,7 +210,7 @@ def CoreDelaunay(
         vertex_arrays_in_dimension[dim].append(simplex)
 
     alphas_in_dimension = [np.sqrt(np.array(alpha_squared, dtype=np.float64)) for alpha_squared in squared_alphas_in_dimension]
-    vertex_arrays_in_dimension = [np.array(vertex_array, dtype=int) for vertex_array in vertex_arrays_in_dimension]
+    vertex_arrays_in_dimension = [np.array(vertex_array, dtype=np.int32) for vertex_array in vertex_arrays_in_dimension]
 
     simplex_tree_multi = mp.SimplexTreeMulti(
         num_parameters=2, kcritical=True, dtype=np.float64
