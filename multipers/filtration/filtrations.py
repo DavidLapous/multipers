@@ -1,6 +1,5 @@
 import gudhi as gd
 import numpy as np
-from math import sqrt
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 from numpy.typing import ArrayLike
