@@ -119,6 +119,7 @@ For theoretical references,
 .. toctree::
   :caption: Filtrations
 
+  notebooks/rips
   notebooks/delaunay_core_bifiltration
 
 .. toctree::
