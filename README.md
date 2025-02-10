@@ -38,6 +38,7 @@ This library features a bunch of different functions and helpers. See below for 
  - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SOCG2019]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
  - [x] [[Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology, JAAG]](https://doi.org/10.1137/20M1388425) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert, Rank Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
  - [x] [[Delaunay Bifiltrations of Functions on Point Clouds, SODA2024]](https://epubs.siam.org/doi/10.1137/1.9781611977912.173) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bifiltrations.
+ - [x] [[Delaunay Core Bifiltration]](https://arxiv.org/abs/2405.01214) Bifiltration for point clouds, taking into account the density. Similar to Rips-Density. 
  - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
  - [x] [[Kernel Operations on the GPU, with Autodiff, without Memory Overflows, JMLR]](http://jmlr.org/papers/v22/20-275.html) Although not linked, at first glance, to persistence in any way, this library allows computing blazingly fast signed measures convolutions (and more!) with custom kernels. 
  - [ ] [Backend only] [[Projected distances for multi-parameter persistence modules]](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
@@ -46,11 +47,12 @@ This library features a bunch of different functions and helpers. See below for 
 If I missed something, or you want to add something, feel free to open an issue.
 
 ## Authors
-[David Loiseaux](https://www-sop.inria.fr/members/David.Loiseaux/index.html),<br>
+[David Loiseaux](https://davidlapous.github.io/),<br>
 [Hannah Schreiber](https://github.com/hschreiber) (Persistence backend code),<br>
 [Luis Scoccola](https://luisscoccola.com/) 
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
-[Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein)<br>
+[Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
+[Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration).<br>
 
 ## Citation
 Please cite this library when using it in scientific publications;
@@ -73,5 +75,5 @@ you can use the following journal bibtex entry
 ```
 ## Contributions
 Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
-In particular, if you have a nice example or application that is not taken care in the documentation (see the ./docs/notebooks/ folder), please contact me to add it there.
+In particular, if you have a nice example or application that is not taken care in the documentation (see the `./docs/notebooks/` folder), please contact me to add it there.
 
