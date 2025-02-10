@@ -39,7 +39,7 @@ def signed_measure(
     clean: Optional[bool] = None,
     vineyard: bool = False,
     grid_conversion: Optional[Iterable] = None,
-    ignore_infinite_filtration_values:bool=True,
+    ignore_infinite_filtration_values: bool = True,
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     r"""
@@ -228,7 +228,7 @@ def signed_measure(
                         n_jobs=n_jobs,
                         # grid_shape=tuple(len(g) for g in grid),
                         zero_pad=fix_mass_default,
-                        ignore_inf = ignore_infinite_filtration_values,
+                        ignore_inf=ignore_infinite_filtration_values,
                     )[0]
                     for s, d in zip(reduced_complex, degrees)
                 ]
@@ -260,7 +260,7 @@ def signed_measure(
                     n_jobs=n_jobs,
                     zero_pad=fix_mass_default,
                     # grid_shape=tuple(len(g) for g in grid),
-                    ignore_inf = ignore_infinite_filtration_values,
+                    ignore_inf=ignore_infinite_filtration_values,
                 )
                 fix_mass_default = False
                 if verbose:
@@ -299,7 +299,7 @@ def signed_measure(
                     zero_pad=fix_mass_default,
                     n_jobs=n_jobs,
                     verbose=verbose,
-                    ignore_inf = ignore_infinite_filtration_values,
+                    ignore_inf=ignore_infinite_filtration_values,
                 )
                 fix_mass_default = False
                 if verbose:

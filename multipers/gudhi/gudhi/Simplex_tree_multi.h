@@ -12,6 +12,8 @@
 #define SIMPLEX_TREE_MULTI_H_
 
 #include <algorithm>
+#include <cstdint>
+#include <vector>
 #include <gudhi/Simplex_tree.h>
 
 namespace Gudhi {
@@ -22,7 +24,7 @@ namespace multi_persistence {
  * */
 template <typename Filtration>
 struct Simplex_tree_options_multidimensional_filtration {
-public:
+ public:
   typedef linear_indexing_tag Indexing_tag;
   typedef int Vertex_handle;
   using Filtration_value = Filtration;
@@ -49,27 +51,23 @@ public:
  * values of axes `1` to `num_parameters`.
  * */
 template <class simplextree_std, class simplextree_multi>
-void multify(simplextree_std &st, simplextree_multi &st_multi,
+void multify(simplextree_std &st,
+             simplextree_multi &st_multi,
              const int num_parameters,
-             const typename simplextree_multi::Options::Filtration_value
-                 &default_values = {}) {
+             const typename simplextree_multi::Options::Filtration_value &default_values = {}) {
   typename simplextree_multi::Options::Filtration_value f(num_parameters);
-  static_assert(
-      !simplextree_std::Options::is_multi_parameter &&
-          simplextree_multi::Options::is_multi_parameter,
-      "Can only convert non-multiparameter to multiparameter simplextree.");
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter,
+                "Can only convert non-multiparameter to multiparameter simplextree.");
   unsigned int num_default_values = 0;
-  if constexpr (simplextree_multi::Options::Filtration_value::
-                    is_multi_critical) {
+  if constexpr (simplextree_multi::Options::Filtration_value::is_multi_critical) {
     num_default_values = default_values[0].size();
   } else {
     num_default_values = default_values.size();
   }
-  for (auto i = 0u; i < std::min(num_default_values,
-                                 num_parameters < 1 ? 0u : static_cast<unsigned int>(num_parameters - 1));
+  for (auto i = 0u;
+       i < std::min(num_default_values, num_parameters < 1 ? 0u : static_cast<unsigned int>(num_parameters - 1));
        i++) {
-    if constexpr (simplextree_multi::Options::Filtration_value::
-                      is_multi_critical) {
+    if constexpr (simplextree_multi::Options::Filtration_value::is_multi_critical) {
       f[0][i + 1] = default_values[0][i];
     } else {
       f[i + 1] = default_values[i];
@@ -80,12 +78,10 @@ void multify(simplextree_std &st, simplextree_multi &st_multi,
   simplex.reserve(st.dimension() + 1);
   for (auto &simplex_handle : st.complex_simplex_range()) {
     simplex.clear();
-    for (auto vertex : st.simplex_vertex_range(simplex_handle))
-      simplex.push_back(vertex);
+    for (auto vertex : st.simplex_vertex_range(simplex_handle)) simplex.push_back(vertex);
 
     if (num_parameters > 0) {
-      if constexpr (simplextree_multi::Options::Filtration_value::
-                        is_multi_critical) {
+      if constexpr (simplextree_multi::Options::Filtration_value::is_multi_critical) {
         f[0][0] = st.filtration(simplex_handle);
       } else {
         f[0] = st.filtration(simplex_handle);
@@ -107,20 +103,15 @@ void multify(simplextree_std &st, simplextree_multi &st_multi,
  * \param dimension The filtration parameter to put into the 1 parameter simplextree.
  * */
 template <class simplextree_std, class simplextree_multi>
-void flatten(simplextree_std &st, simplextree_multi &st_multi,
-             const int dimension = 0) {
-  static_assert(
-      !simplextree_std::Options::is_multi_parameter &&
-          simplextree_multi::Options::is_multi_parameter,
-      "Can only convert multiparameter to non-multiparameter simplextree.");
+void flatten(simplextree_std &st, simplextree_multi &st_multi, const int dimension = 0) {
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter,
+                "Can only convert multiparameter to non-multiparameter simplextree.");
   for (const auto &simplex_handle : st_multi.complex_simplex_range()) {
     std::vector<int> simplex;
     typename simplextree_multi::Options::value_type f;
-    for (auto vertex : st_multi.simplex_vertex_range(simplex_handle))
-      simplex.push_back(vertex);
+    for (auto vertex : st_multi.simplex_vertex_range(simplex_handle)) simplex.push_back(vertex);
     if constexpr (simplextree_multi::Filtration_value::is_multi_critical) {
-      f = dimension >= 0 ? st_multi.filtration(simplex_handle)[0][dimension]
-                         : 0;
+      f = dimension >= 0 ? st_multi.filtration(simplex_handle)[0][dimension] : 0;
     } else {
       f = dimension >= 0 ? st_multi.filtration(simplex_handle)[dimension] : 0;
     }
@@ -141,12 +132,9 @@ void flatten(simplextree_std &st, simplextree_multi &st_multi,
  * the linear form to apply.
  * */
 template <class simplextree_std, class simplextree_multi>
-void linear_projection(simplextree_std &st, simplextree_multi &st_multi,
-                       const std::vector<double> &linear_form) {
-  static_assert(
-      !simplextree_std::Options::is_multi_parameter &&
-          simplextree_multi::Options::is_multi_parameter,
-      "Can only convert multiparameter to non-multiparameter simplextree.");
+void linear_projection(simplextree_std &st, simplextree_multi &st_multi, const std::vector<double> &linear_form) {
+  static_assert(!simplextree_std::Options::is_multi_parameter && simplextree_multi::Options::is_multi_parameter,
+                "Can only convert multiparameter to non-multiparameter simplextree.");
   auto sh = st.complex_simplex_range().begin();
   auto sh_multi = st_multi.complex_simplex_range().begin();
   auto end = st.complex_simplex_range().end();
@@ -158,6 +146,7 @@ void linear_projection(simplextree_std &st, simplextree_multi &st_multi,
   }
 }
 
-}} // namespace Gudhi::multi_persistence
+}  // namespace multi_persistence
+}  // namespace Gudhi
 
-#endif // SIMPLEX_TREE_MULTI_H_
+#endif  // SIMPLEX_TREE_MULTI_H_

@@ -31,24 +31,20 @@ namespace Gudhi {
 namespace multiparameter {
 namespace truc_interface {
 
-template <class Boundary_matrix_type> class Persistence_backend_h0 {
-public:
+template <class Boundary_matrix_type>
+class Persistence_backend_h0 {
+ public:
   using pos_index = int;
   using dimension_type = int;
   using cycle_type = std::vector<unsigned int>;
   static const bool is_vine = true;
-  std::vector<cycle_type> get_representative_cycles(bool update = true) const {
-    throw "Unimplemented";
-  }
 
-  class Barcode_iterator
-      : public boost::iterator_facade<Barcode_iterator, const Bar &,
-                                      boost::forward_traversal_tag> {
-  public:
-    Barcode_iterator(const std::vector<Bar> *barcode,
-                     const std::vector<std::size_t> *inv)
-        : barcode_(barcode->size() == 0 ? nullptr : barcode),
-          perm_(barcode->size() == 0 ? nullptr : inv), currPos_(0) {
+  std::vector<cycle_type> get_representative_cycles(bool update = true) const { throw "Unimplemented"; }
+
+  class Barcode_iterator : public boost::iterator_facade<Barcode_iterator, const Bar &, boost::forward_traversal_tag> {
+   public:
+    Barcode_iterator(const std::vector<Bar> *barcode, const std::vector<std::size_t> *inv)
+        : barcode_(barcode->size() == 0 ? nullptr : barcode), perm_(barcode->size() == 0 ? nullptr : inv), currPos_(0) {
       if (barcode->size() != 0) {
         auto &b = barcode_->operator[](currPos_);
         currBar_.dim = b.dim;
@@ -59,7 +55,7 @@ public:
 
     Barcode_iterator() : barcode_(nullptr), perm_(nullptr), currPos_(0) {}
 
-  private:
+   private:
     // mandatory for the boost::iterator_facade inheritance.
     friend class boost::iterator_core_access;
 
@@ -69,8 +65,7 @@ public:
     Bar currBar_;
 
     bool equal(Barcode_iterator const &other) const {
-      return barcode_ == other.barcode_ && perm_ == other.perm_ &&
-             currPos_ == other.currPos_;
+      return barcode_ == other.barcode_ && perm_ == other.perm_ && currPos_ == other.currPos_;
     }
 
     const Bar &dereference() const { return currBar_; }
@@ -91,10 +86,10 @@ public:
   };
 
   class Barcode {
-  public:
+   public:
     using iterator = Barcode_iterator;
-    Barcode(Naive_merge_forest &mf, const std::vector<std::size_t> *perm)
-        : barcode_(&mf.get_barcode()), perm_(perm) {}
+
+    Barcode(Naive_merge_forest &mf, const std::vector<std::size_t> *perm) : barcode_(&mf.get_barcode()), perm_(perm) {}
 
     iterator begin() const { return Barcode_iterator(barcode_, perm_); }
 
@@ -102,8 +97,7 @@ public:
 
     std::size_t size() const { return barcode_->size(); }
 
-    inline friend std::ostream &operator<<(std::ostream &stream,
-                                           Barcode &structure) {
+    inline friend std::ostream &operator<<(std::ostream &stream, Barcode &structure) {
       stream << "Barcode: " << structure.size() << "\n";
       for (const auto bar : structure) {
         stream << "[" << bar.dim << "] ";
@@ -114,16 +108,17 @@ public:
       return stream;
     }
 
-  private:
+   private:
     const std::vector<Bar> *barcode_;
     const std::vector<std::size_t> *perm_;
   };
 
   Persistence_backend_h0() {}
-  Persistence_backend_h0(const Boundary_matrix_type &boundaries,
-                         std::vector<std::size_t> &permutation)
+
+  Persistence_backend_h0(const Boundary_matrix_type &boundaries, std::vector<std::size_t> &permutation)
       : pers_(boundaries.size(), boundaries.num_vertices()),
-        boundaries_(&boundaries), permutation_(&permutation),
+        boundaries_(&boundaries),
+        permutation_(&permutation),
         permutationInv_(permutation_->size()) {
     unsigned int c = 0;
     for (std::size_t i : *permutation_) {
@@ -135,18 +130,20 @@ public:
       if (boundaries.dimension(i) == 0) {
         pers_.add_vertex(c++);
       } else if (boundaries.dimension(i) == 1) {
-        pers_.add_edge(c++, permutationInv_[boundaries[i][0]],
-                       permutationInv_[boundaries[i][1]]);
+        pers_.add_edge(c++, permutationInv_[boundaries[i][0]], permutationInv_[boundaries[i][1]]);
       } else {
         std::cout << "Simplex of dimension > 1 got ignored.\n";
       }
     }
     pers_.initialize();
   }
+
   Persistence_backend_h0(const Persistence_backend_h0 &toCopy)
-      : pers_(toCopy.pers_), boundaries_(toCopy.boundaries_),
+      : pers_(toCopy.pers_),
+        boundaries_(toCopy.boundaries_),
         permutation_(toCopy.permutation_),
         permutationInv_(toCopy.permutationInv_) {}
+
   Persistence_backend_h0(Persistence_backend_h0 &&other) noexcept
       : pers_(std::move(other.pers_)),
         boundaries_(std::exchange(other.boundaries_, nullptr)),
@@ -160,6 +157,7 @@ public:
     permutationInv_.swap(other.permutationInv_);
     return *this;
   }
+
   friend void swap(Persistence_backend_h0 &be1, Persistence_backend_h0 &be2) {
     swap(be1.pers_, be2.pers_);
     std::swap(be1.boundaries_, be2.boundaries_);
@@ -172,60 +170,54 @@ public:
   void vine_swap(pos_index i) {
     if (pers_.get_dimension(i) == 0) {
       if (pers_.get_dimension(i + 1) == 1) {
-        const auto &boundary =
-            boundaries_->operator[](permutation_->operator[](i + 1));
-        pers_.vertex_edge_swap(i, permutationInv_[boundary[0]],
-                               permutationInv_[boundary[1]]);
-        std::swap(permutationInv_[permutation_->operator[](i)],
-                  permutationInv_[permutation_->operator[](i + 1)]);
+        const auto &boundary = boundaries_->operator[](permutation_->operator[](i + 1));
+        pers_.vertex_edge_swap(i, permutationInv_[boundary[0]], permutationInv_[boundary[1]]);
+        std::swap(permutationInv_[permutation_->operator[](i)], permutationInv_[permutation_->operator[](i + 1)]);
         return;
       }
       pers_.vertex_swap(i);
-      std::swap(permutationInv_[permutation_->operator[](i)],
-                permutationInv_[permutation_->operator[](i + 1)]);
+      std::swap(permutationInv_[permutation_->operator[](i)], permutationInv_[permutation_->operator[](i + 1)]);
       return;
     }
 
     if (pers_.get_dimension(i + 1) == 1) {
-      const auto &boundary1 =
-          boundaries_->operator[](permutation_->operator[](i));
-      const auto &boundary2 =
-          boundaries_->operator[](permutation_->operator[](i + 1));
-      pers_.edge_edge_swap(
-          i, permutationInv_[boundary1[0]], permutationInv_[boundary1[1]],
-          permutationInv_[boundary2[0]], permutationInv_[boundary2[1]]);
-      std::swap(permutationInv_[permutation_->operator[](i)],
-                permutationInv_[permutation_->operator[](i + 1)]);
+      const auto &boundary1 = boundaries_->operator[](permutation_->operator[](i));
+      const auto &boundary2 = boundaries_->operator[](permutation_->operator[](i + 1));
+      pers_.edge_edge_swap(i,
+                           permutationInv_[boundary1[0]],
+                           permutationInv_[boundary1[1]],
+                           permutationInv_[boundary2[0]],
+                           permutationInv_[boundary2[1]]);
+      std::swap(permutationInv_[permutation_->operator[](i)], permutationInv_[permutation_->operator[](i + 1)]);
       return;
     }
 
     const auto &boundary = boundaries_->operator[](permutation_->operator[](i));
-    pers_.edge_vertex_swap(i, permutationInv_[boundary[0]],
-                           permutationInv_[boundary[1]]);
-    std::swap(permutationInv_[permutation_->operator[](i)],
-              permutationInv_[permutation_->operator[](i + 1)]);
+    pers_.edge_vertex_swap(i, permutationInv_[boundary[0]], permutationInv_[boundary[1]]);
+    std::swap(permutationInv_[permutation_->operator[](i)], permutationInv_[permutation_->operator[](i + 1)]);
   }
 
   Barcode get_barcode() { return Barcode(pers_, permutation_); }
+
   std::size_t size() {
-    throw; // TODO:
+    throw;  // TODO:
   }
 
-  inline friend std::ostream &operator<<(std::ostream &stream,
-                                         Persistence_backend_h0 &structure) {
+  inline friend std::ostream &operator<<(std::ostream &stream, Persistence_backend_h0 &structure) {
     stream << structure.pers_;
     stream << std::endl;
     return stream;
   }
-  inline void _update_permutation_ptr(std::vector<std::size_t> &perm) {
-    permutation_ = &perm;
-  }
 
-private:
+  inline void _update_permutation_ptr(std::vector<std::size_t> &perm) { permutation_ = &perm; }
+
+ private:
   Naive_merge_forest pers_;
   const Boundary_matrix_type *boundaries_;
   std::vector<std::size_t> *permutation_;
   std::vector<std::size_t> permutationInv_;
 };
-}}} // namespace Gudhi::multiparameter::interface
-#endif // MMA_INTERFACE_H0_H
+}  // namespace truc_interface
+}  // namespace multiparameter
+}  // namespace Gudhi
+#endif  // MMA_INTERFACE_H0_H

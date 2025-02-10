@@ -1,9 +1,8 @@
 from copy import deepcopy
-from typing import Literal, Optional
+from typing import  Optional
 
 import numpy as np
 
-import multipers.io as mio
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
 from multipers.slicer import _column_type, _valid_dtype, _valid_pers_backend, is_slicer

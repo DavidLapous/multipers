@@ -20,8 +20,6 @@
 #include <cstddef>
 #include <limits>
 #include <ostream>
-#include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -41,7 +39,7 @@ class Boundary_matrix_as_filtered_complex_for_coh {
   using Dimension = int;
 
   class Filtration_range_iterator
-      : public boost::iterator_facade<Filtration_range_iterator, const Simplex_handle&, boost::forward_traversal_tag> {
+      : public boost::iterator_facade<Filtration_range_iterator, const Simplex_handle &, boost::forward_traversal_tag> {
    public:
     Filtration_range_iterator(const std::vector<Simplex_handle> *new_to_old_perm = nullptr)
         : new_to_old_perm_(new_to_old_perm), currPos_(0) {
@@ -61,7 +59,7 @@ class Boundary_matrix_as_filtered_complex_for_coh {
       return new_to_old_perm_ == other.new_to_old_perm_ && currPos_ == other.currPos_;
     }
 
-    const Simplex_handle& dereference() const { return (*new_to_old_perm_)[currPos_]; }
+    const Simplex_handle &dereference() const { return (*new_to_old_perm_)[currPos_]; }
 
     void increment() {
       ++currPos_;
@@ -118,7 +116,10 @@ class Boundary_matrix_as_filtered_complex_for_coh {
 
   Boundary_matrix_as_filtered_complex_for_coh(const Structure &boundaries,
                                               const std::vector<Simplex_handle> &permutation)
-      : boundaries_(&boundaries), new_to_old_perm_(&permutation), keys_(permutation.size(), -1), keysToSH_(permutation.size(), -1) {
+      : boundaries_(&boundaries),
+        new_to_old_perm_(&permutation),
+        keys_(permutation.size(), -1),
+        keysToSH_(permutation.size(), -1) {
     assert(permutation.size() == boundaries.size());
   }
 
@@ -148,9 +149,7 @@ class Boundary_matrix_as_filtered_complex_for_coh {
 
   static constexpr Simplex_key null_key() { return static_cast<Simplex_key>(-1); }
 
-  Simplex_handle simplex(Simplex_key key) const {
-    return key == null_key() ? null_simplex() : keysToSH_[key];
-  }
+  Simplex_handle simplex(Simplex_key key) const { return key == null_key() ? null_simplex() : keysToSH_[key]; }
 
   static constexpr Simplex_handle null_simplex() { return static_cast<Simplex_handle>(-1); }
 
@@ -250,6 +249,8 @@ class Persistence_backend_cohomology {
   MatrixComplex matrix_;
 };
 
-}}}  // namespace Gudhi::multiparameter::interface
+}  // namespace truc_interface
+}  // namespace multiparameter
+}  // namespace Gudhi
 
 #endif  // MMA_INTERFACE_COH_H

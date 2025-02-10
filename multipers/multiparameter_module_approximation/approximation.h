@@ -411,8 +411,7 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
                                                 LineIterator<Filtration_value, axis_, sign> &line_iterator,
                                                 const bool threshold,
                                                 int axis = 0) {
-  static_assert(
-      std::is_same<typename Filtration_value::value_type, typename Slicer::Filtration_value::value_type>::value);
+  static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::Filtration_value::value_type>);
   using value_type = typename Filtration_value::value_type;
   // Line iterator should be on the biggest axis
   constexpr const bool verbose = false;
@@ -474,7 +473,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                Slicer &&current_persistence,
                const value_type precision,
                bool threshold) {
-  static_assert(std::is_same<typename Filtration_value::value_type, typename Slicer::value_type>::value);
+  static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::value_type>);
 
   if (dim_to_iterate <= axis) {
     if (signs[axis]) {
@@ -531,8 +530,8 @@ Module<value_type> multiparameter_module_approximation(
     const bool threshold,
     const bool complete,
     const bool verbose) {
-  static_assert(std::is_same<typename Slicer::Filtration_value::value_type,
-                             value_type>::value);  // Value type can be exposed to python interface.
+  static_assert(std::is_same_v<typename Slicer::Filtration_value::value_type,
+                               value_type>);  // Value type can be exposed to python interface.
   if (verbose) std::cout << "Starting Module Approximation" << std::endl;
   /* using Filtration_value = Slicer::Filtration_value; */
 
@@ -2290,6 +2289,8 @@ inline void Summand<value_type>::_clean(std::vector<filtration_type> &list, bool
              list.end());
 }
 
-}}}  // namespace Gudhi::multiparameter::mma
+}  // namespace mma
+}  // namespace multiparameter
+}  // namespace Gudhi
 
 #endif  // APPR

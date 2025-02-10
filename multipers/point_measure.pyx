@@ -142,6 +142,8 @@ def integrate_measure_python(pts, weights, filtrations):
     return out
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def sparsify(x):
     """
     Given an arbitrary dimensional numpy array, returns (coordinates,data).

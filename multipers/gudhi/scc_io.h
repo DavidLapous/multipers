@@ -231,7 +231,7 @@ inline void write_scc_file(const std::string& outFilePath,
     if (fil.is_finite()) {
       if constexpr (Filtration_value::is_multicritical()) {
         for (const auto& ifil : fil) {
-          for (auto f: ifil) file << f << " ";
+          for (auto f : ifil) file << f << " ";
         }
       } else {
         assert(fil.size() == static_cast<unsigned int>(numberOfParameters));

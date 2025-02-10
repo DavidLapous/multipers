@@ -12,8 +12,8 @@ def _collapse_edge_list(
     Given an edge list defining a 1 critical 2 parameter 1 dimensional simplicial complex, simplificates this filtered simplicial complex, using filtration-domination's edge collapser.
     """
     from filtration_domination import (
-        remove_strongly_filtration_dominated,
         remove_filtration_dominated,
+        remove_strongly_filtration_dominated,
     )
 
     n = len(edges)

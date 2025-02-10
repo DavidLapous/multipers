@@ -278,5 +278,7 @@ class Persistence_backend_matrix {
   std::vector<Index> *permutation_;
 };
 
-}}}  // namespace Gudhi::multiparameter::interface
+}  // namespace truc_interface
+}  // namespace multiparameter
+}  // namespace Gudhi
 #endif  // MMA_INTERFACE_MATRIX_H

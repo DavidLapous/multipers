@@ -1,9 +1,9 @@
 from .filtrations import (
-    RipsLowerstar,
-    DegreeRips,
-    Cubical,
-    DelaunayLowerstar,
     CoreDelaunay,
+    Cubical,
+    DegreeRips,
     DelaunayCodensity,
+    DelaunayLowerstar,
     RipsCodensity,
+    RipsLowerstar,
 )

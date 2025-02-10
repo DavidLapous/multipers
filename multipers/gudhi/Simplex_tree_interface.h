@@ -24,7 +24,7 @@
 namespace Gudhi {
 
 /** Model of SimplexTreeOptions.
- * 
+ *
  * Specific to python interfaces of the Simplex_tree */
 struct Simplex_tree_options_for_python {
   typedef linear_indexing_tag Indexing_tag;
@@ -39,7 +39,7 @@ struct Simplex_tree_options_for_python {
   static const bool is_multi_parameter = false;
 };
 
-template<class Simplex_tree_options_for_python = Simplex_tree_options_for_python>
+template <class Simplex_tree_options_for_python = Simplex_tree_options_for_python>
 class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_python> {
  public:
   using Base = Simplex_tree<Simplex_tree_options_for_python>;
@@ -56,15 +56,12 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
   using Boundary_simplex_iterator = typename Base::Boundary_simplex_iterator;
   using Siblings = typename Base::Siblings;
   using Node = typename Base::Node;
-  typedef bool (*blocker_func_t)(Simplex simplex, void *user_data);
+  typedef bool (*blocker_func_t)(Simplex simplex, void* user_data);
 
  public:
-
   Extended_filtration_data efd;
-  
-  bool find_simplex(const Simplex& simplex) {
-    return (Base::find(simplex) != Base::null_simplex());
-  }
+
+  bool find_simplex(const Simplex& simplex) { return (Base::find(simplex) != Base::null_simplex()); }
 
   void assign_simplex_filtration(const Simplex& simplex, Filtration_value filtration) {
     Simplex_handle sh = Base::find(simplex);
@@ -76,8 +73,7 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
 
   bool insert(const Simplex& simplex, Filtration_value filtration = 0) {
     Insertion_result result = Base::insert_simplex_and_subfaces(simplex, filtration);
-    if (result.first != Base::null_simplex())
-      Base::clear_filtration();
+    if (result.first != Base::null_simplex()) Base::clear_filtration();
     return (result.second);
   }
 
@@ -85,17 +81,17 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
     // We could delegate to insert_graph, but wrapping the matrix in a graph interface is too much work,
     // and this is a bit more efficient.
     auto& rm = this->root()->members_;
-    for(int i=0; i<n; ++i) {
+    for (int i = 0; i < n; ++i) {
       char* p = reinterpret_cast<char*>(filtrations) + i * stride0;
       double fv = *reinterpret_cast<double*>(p + i * stride1);
-      if(fv > max_filtration) continue;
+      if (fv > max_filtration) continue;
       auto sh = rm.emplace_hint(rm.end(), i, Node(this->root(), fv));
       Siblings* children = nullptr;
       // Should we make a first pass to count the number of edges so we can reserve the right space?
-      for(int j=i+1; j<n; ++j) {
+      for (int j = i + 1; j < n; ++j) {
         double fe = *reinterpret_cast<double*>(p + j * stride1);
-        if(fe > max_filtration) continue;
-        if(!children) {
+        if (fe > max_filtration) continue;
+        if (!children) {
           children = new Siblings(this->root(), i);
           sh->second.assign_children(children);
         }
@@ -117,9 +113,7 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
     return (result.second);
   }
 
-  Filtration_value simplex_filtration(const Simplex& simplex) {
-    return Base::filtration(Base::find(simplex));
-  }
+  Filtration_value simplex_filtration(const Simplex& simplex) { return Base::filtration(Base::find(simplex)); }
 
   void remove_maximal_simplex(const Simplex& simplex) {
     Base::remove_maximal_simplex(Base::find(simplex));
@@ -186,13 +180,14 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
     }
     // Insert remaining edges
     for (auto remaining_edge : edges) {
-      collapsed_stree_ptr->insert({std::get<0>(remaining_edge), std::get<1>(remaining_edge)}, std::get<2>(remaining_edge));
+      collapsed_stree_ptr->insert({std::get<0>(remaining_edge), std::get<1>(remaining_edge)},
+                                  std::get<2>(remaining_edge));
     }
     return collapsed_stree_ptr;
   }
 
-  void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void *user_data) {
-    Base::expansion_with_blockers(dimension, [&](Simplex_handle sh){
+  void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void* user_data) {
+    Base::expansion_with_blockers(dimension, [&](Simplex_handle sh) {
       Simplex simplex(Base::simplex_vertex_range(sh).begin(), Base::simplex_vertex_range(sh).end());
       return user_func(simplex, user_data);
     });
@@ -232,8 +227,7 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options_for_pyth
 
   std::pair<Boundary_simplex_iterator, Boundary_simplex_iterator> get_boundary_iterators(const Simplex& simplex) {
     auto bd_sh = Base::find(simplex);
-    if (bd_sh == Base::null_simplex())
-      throw std::runtime_error("simplex not found - cannot find boundaries");
+    if (bd_sh == Base::null_simplex()) throw std::runtime_error("simplex not found - cannot find boundaries");
     // this specific case works because the range is just a pair of iterators - won't work if range was a vector
     auto boundary_srange = Base::boundary_simplex_range(bd_sh);
     return std::make_pair(boundary_srange.begin(), boundary_srange.end());

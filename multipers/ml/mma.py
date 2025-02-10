@@ -9,7 +9,6 @@ import multipers as mp
 import multipers.simplex_tree_multi
 import multipers.slicer
 from multipers.grids import compute_grid as reduce_grid
-from multipers.ml.tools import filtration_grid_to_coordinates
 from multipers.mma_structures import PyBox_f64, PyModule_type
 
 _FilteredComplexType = Union[

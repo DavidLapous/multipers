@@ -1,30 +1,37 @@
+from collections.abc import Sequence
+from typing import Optional
+
 import gudhi as gd
 import numpy as np
-import multipers as mp
-import multipers.slicer as mps
+from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
-from numpy.typing import ArrayLike
-from typing import Optional
-from collections.abc import Sequence
-from multipers.ml.convolutions import available_kernels, DTM
+
+import multipers as mp
+import multipers.slicer as mps
+from multipers.ml.convolutions import DTM, available_kernels
 
 try:
     import pykeops
+
     from multipers.ml.convolutions import KDE
 except ImportError:
-    from sklearn.neighbors import KernelDensity 
-    def KDE(bandwidth,kernel, return_log): 
+    from sklearn.neighbors import KernelDensity
+    from warnings import warn
+    warn("pykeops not found. Falling back to sklearn.")
+
+    def KDE(bandwidth, kernel, return_log):
+        assert return_log, "Sklearn returns log-density."
         return KernelDensity(bandwidth=bandwidth, kernel=kernel)
 
 
-
-def RipsLowerstar( *, 
-        points:Optional[ArrayLike] = None,
-        distance_matrix:Optional[ArrayLike]=None,
-        function=None,
-        threshold_radius=None
-    ):
+def RipsLowerstar(
+    *,
+    points: Optional[ArrayLike] = None,
+    distance_matrix: Optional[ArrayLike] = None,
+    function=None,
+    threshold_radius=None,
+):
     """
     Computes the Rips complex, with the usual rips filtration as a first parameter,
     and the lower star multi filtration as other parameter.
@@ -34,37 +41,44 @@ def RipsLowerstar( *,
      - function : ArrayLike of shape (num_data, num_parameters -1)
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    assert points is not None or distance_matrix is not None, "`points` or `distance_matrix` has to be given."
+    assert (
+        points is not None or distance_matrix is not None
+    ), "`points` or `distance_matrix` has to be given."
     if distance_matrix is None:
-        distance_matrix = cdist(points, points) # this may be slow...
+        distance_matrix = cdist(points, points)  # this may be slow...
     if threshold_radius is None:
         threshold_radius = np.min(np.max(distance_matrix, axis=1))
-    st = gd.SimplexTree.create_from_array(distance_matrix, max_filtration=threshold_radius)
+    st = gd.SimplexTree.create_from_array(
+        distance_matrix, max_filtration=threshold_radius
+    )
     if function is None:
-        return mp.SimplexTreeMulti(st, num_parameters = 1)
+        return mp.SimplexTreeMulti(st, num_parameters=1)
 
     function = np.asarray(function)
     if function.ndim == 1:
-        function = function[:,None]
-    num_parameters = function.shape[1] +1 
-    st = mp.SimplexTreeMulti(st, num_parameters = num_parameters)
+        function = function[:, None]
+    num_parameters = function.shape[1] + 1
+    st = mp.SimplexTreeMulti(st, num_parameters=num_parameters)
     for i in range(function.shape[1]):
-        st.fill_lowerstar(function[:,i], parameter = 1+i)
+        st.fill_lowerstar(function[:, i], parameter=1 + i)
     return st
+
 
 def RipsCodensity(
     points: ArrayLike,
     bandwidth: Optional[float] = None,
     *,
     return_log: bool = True,
-    dtm_mass:Optional[float]=None,
-    kernel: available_kernels="gaussian",
+    dtm_mass: Optional[float] = None,
+    kernel: available_kernels = "gaussian",
     threshold_radius: Optional[float] = None,
 ):
     """
     Computes the Rips density filtration.
     """
-    assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
+    assert (
+        bandwidth is None or dtm_mass is None
+    ), "Density estimation is either via kernels or dtm."
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -76,23 +90,24 @@ def RipsCodensity(
 
 
 def DelaunayLowerstar(
-        points:ArrayLike,
-        function:ArrayLike,
-        *,
-        distance_matrix:Optional[ArrayLike]=None,
-        threshold_radius:Optional[float]=None,
-        reduce_degree:int=-1, 
-        vineyard:Optional[bool]=None, 
-        dtype=np.float64, 
-        verbose:bool=False, 
-        clear:bool=True 
-    ):
+    points: ArrayLike,
+    function: ArrayLike,
+    *,
+    distance_matrix: Optional[ArrayLike] = None,
+    threshold_radius: Optional[float] = None,
+    reduce_degree: int = -1,
+    vineyard: Optional[bool] = None,
+    dtype=np.float64,
+    verbose: bool = False,
+    clear: bool = True,
+):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
+    See [Delaunay bifiltrations of functions on point clouds, Alonso et al] https://doi.org/10.1137/1.9781611977912.173
 
     Input:
      - points or distance_matrix: ArrayLike
-     - function : ArrayLike of shape (num_data, ) 
+     - function : ArrayLike of shape (num_data, )
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
@@ -100,27 +115,40 @@ def DelaunayLowerstar(
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
     points = np.asarray(points)
     function = np.asarray(function).squeeze()
-    assert function.ndim == 1, "Delaunay Lowerstar is only compatible with 1 additional parameter." 
-    return mps.from_function_delaunay(points, function, degree=reduce_degree, vineyard=vineyard, dtype=dtype, verbose=verbose, clear=clear)
+    assert (
+        function.ndim == 1
+    ), "Delaunay Lowerstar is only compatible with 1 additional parameter."
+    return mps.from_function_delaunay(
+        points,
+        function,
+        degree=reduce_degree,
+        vineyard=vineyard,
+        dtype=dtype,
+        verbose=verbose,
+        clear=clear,
+    )
+
 
 def DelaunayCodensity(
     points: ArrayLike,
     bandwidth: Optional[float] = None,
     *,
     return_log: bool = True,
-    dtm_mass:Optional[float]=None,
-    kernel: available_kernels="gaussian",
-    threshold_radius:Optional[float]=None,
-    reduce_degree:int=-1, 
-    vineyard:Optional[bool]=None, 
-    dtype=np.float64, 
-    verbose:bool=False, 
-    clear:bool=True 
+    dtm_mass: Optional[float] = None,
+    kernel: available_kernels = "gaussian",
+    threshold_radius: Optional[float] = None,
+    reduce_degree: int = -1,
+    vineyard: Optional[bool] = None,
+    dtype=np.float64,
+    verbose: bool = False,
+    clear: bool = True,
 ):
     """
     TODO
     """
-    assert bandwidth is None or dtm_mass is None, "Density estimation is either via kernels or dtm."
+    assert (
+        bandwidth is None or dtm_mass is None
+    ), "Density estimation is either via kernels or dtm."
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = kde.fit(points).score_samples(points)
@@ -139,9 +167,10 @@ def DelaunayCodensity(
         clear=clear,
     )
 
-def Cubical(image:ArrayLike, **slicer_kwargs):
+
+def Cubical(image: ArrayLike, **slicer_kwargs):
     """
-    Computes the cubical filtration of an image. 
+    Computes the cubical filtration of an image.
     The last axis dimention is interpreted as the number of parameters.
 
     Input:
@@ -150,12 +179,14 @@ def Cubical(image:ArrayLike, **slicer_kwargs):
     """
     return mps.from_bitmap(image, **slicer_kwargs)
 
-def DegreeRips(*, points = None, distance_matrix=None, ks=None, threshold_radius=None):
+
+def DegreeRips(*, points=None, distance_matrix=None, ks=None, threshold_radius=None):
     """
     The DegreeRips filtration.
     """
 
     raise NotImplementedError("Use the default implentation ftm.")
+
 
 def CoreDelaunay(
     points: ArrayLike,
@@ -177,20 +208,26 @@ def CoreDelaunay(
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
+    points = np.asarray(points)
     if ks is None:
         ks = np.arange(1, len(points) + 1)
     else:
         ks = np.asarray(ks, dtype=int)
+    ks:np.ndarray
 
-    assert len(ks) > 0, f"The parameter ks must contain at least one value."
-    assert np.all(ks > 0), f"All values in ks must be positive."
-    assert np.all(ks <= len(points)), f"All values in ks must be less than or equal to the number of points in the point cloud."
-    assert len(points) > 0, f"The point cloud must contain at least one point."
+    assert len(ks) > 0, "The parameter ks must contain at least one value."
+    assert np.all(ks > 0), "All values in ks must be positive."
+    assert np.all(
+        ks <= len(points)
+    ), "All values in ks must be less than or equal to the number of points in the point cloud."
+    assert len(points) > 0, "The point cloud must contain at least one point."
     assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
     assert beta >= 0, f"The parameter beta must be positive, got {beta}."
-    assert precision in ["safe", "exact", "fast"], (
-        f"The parameter precision must be one of ['safe', 'exact', 'fast'], got {precision}."
-    )
+    assert precision in [
+        "safe",
+        "exact",
+        "fast",
+    ], f"The parameter precision must be one of ['safe', 'exact', 'fast'], got {precision}."
 
     if verbose:
         print(
@@ -217,14 +254,22 @@ def CoreDelaunay(
         squared_alphas_in_dimension[dim].append(alpha_squared)
         vertex_arrays_in_dimension[dim].append(simplex)
 
-    alphas_in_dimension = [np.sqrt(np.array(alpha_squared, dtype=np.float64)) for alpha_squared in squared_alphas_in_dimension]
-    vertex_arrays_in_dimension = [np.array(vertex_array, dtype=np.int32) for vertex_array in vertex_arrays_in_dimension]
+    alphas_in_dimension = [
+        np.sqrt(np.array(alpha_squared, dtype=np.float64))
+        for alpha_squared in squared_alphas_in_dimension
+    ]
+    vertex_arrays_in_dimension = [
+        np.array(vertex_array, dtype=np.int32)
+        for vertex_array in vertex_arrays_in_dimension
+    ]
 
     simplex_tree_multi = mp.SimplexTreeMulti(
         num_parameters=2, kcritical=True, dtype=np.float64
     )
 
-    for dim, (vertex_array, alphas) in enumerate(zip(vertex_arrays_in_dimension, alphas_in_dimension)):
+    for dim, (vertex_array, alphas) in enumerate(
+        zip(vertex_arrays_in_dimension, alphas_in_dimension)
+    ):
         num_simplices = len(vertex_array)
         if verbose:
             print(
@@ -232,11 +277,12 @@ def CoreDelaunay(
             )
         max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
         critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
-        filtrations = np.stack((critical_radii, -ks * np.ones_like(critical_radii)), axis=-1)
+        filtrations = np.stack(
+            (critical_radii, -ks * np.ones_like(critical_radii)), axis=-1
+        )
         simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
 
     if verbose:
         print("Done computing the Delaunay Core Bifiltration.")
 
     return simplex_tree_multi
-

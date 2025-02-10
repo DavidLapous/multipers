@@ -24,8 +24,7 @@ constexpr const bool verbose = false;
 
 using index = unsigned int;
 using value_type = double;
-using filtration_type = Gudhi::multi_filtration::
-    One_critical_filtration<value_type>;
+using filtration_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
 using multifiltration_type = std::vector<filtration_type>;
 using python_filtration_type = std::vector<value_type>;
 using python_multifiltration_type = std::vector<python_filtration_type>;
@@ -35,12 +34,9 @@ using persistence_pair = std::pair<value_type, value_type>;
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
 using permutation_type = std::vector<std::size_t>;
-using point_type = Gudhi::multi_filtration::
-    One_critical_filtration<value_type>;
-using corner_type = Gudhi::multi_filtration::
-    One_critical_filtration<value_type>;
-using corners_type =
-    std::pair<std::vector<corner_type>, std::vector<corner_type>>;
+using point_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
+using corner_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
+using corners_type = std::pair<std::vector<corner_type>, std::vector<corner_type>>;
 // using python_bar =
 //     std::pair<std::vector<value_type>,
 //               std::vector<value_type>>; // This type is for python
@@ -67,8 +63,7 @@ using interval_type = std::pair<point_type, point_type>;
 struct Bar {
   Bar() : dim(-1), birth(-1), death(-1) {}
 
-  Bar(dimension_type dim, int birth, int death)
-      : dim(dim), birth(birth), death(death) {}
+  Bar(dimension_type dim, int birth, int death) : dim(dim), birth(birth), death(death) {}
 
   dimension_type dim;
   int birth;
@@ -80,104 +75,109 @@ using barcode_type = std::vector<Bar>;
 struct Diagram_point {
   Diagram_point() : dim(-1), birth(-1), death(-1) {}
 
-  Diagram_point(dimension_type dim, value_type birth, value_type death)
-      : dim(dim), birth(birth), death(death) {}
+  Diagram_point(dimension_type dim, value_type birth, value_type death) : dim(dim), birth(birth), death(death) {}
 
   dimension_type dim;
   value_type birth;
   value_type death;
 };
+
 using diagram_type = std::vector<Diagram_point>;
 
 template <typename filtration_type = filtration_type>
 struct MultiDiagram_point {
-public:
+ public:
   MultiDiagram_point() : dim(-1), birth({}), death({}) {}
 
-  MultiDiagram_point(dimension_type dim, filtration_type birth,
-                     filtration_type death)
+  MultiDiagram_point(dimension_type dim, filtration_type birth, filtration_type death)
       : dim(dim), birth(birth), death(death) {}
-  dimension_type get_dimension() const { return dim; }
-  const filtration_type& get_birth() const { return birth; }
-  const filtration_type& get_death() const { return death; }
 
-private:
+  dimension_type get_dimension() const { return dim; }
+
+  const filtration_type &get_birth() const { return birth; }
+
+  const filtration_type &get_death() const { return death; }
+
+ private:
   dimension_type dim;
   filtration_type birth;
   filtration_type death;
 };
-template <typename filtration_type, typename value_type>
-struct MultiDiagram { // for python interface
-  static_assert(std::is_same<typename filtration_type::value_type, value_type>::value,
-                "filtration_type and value_type must be the same");
-public:
-  using iterator =
-      typename std::vector<MultiDiagram_point<filtration_type>>::const_iterator;
-  MultiDiagram() {}
-  MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m)
-      : multiDiagram(m) {}
 
-  using python_bar =
-      std::pair<std::vector<typename filtration_type::value_type>,
-                std::vector<typename filtration_type::value_type>>; // This type is for python
-  std::vector<python_bar> get_points(
-      const dimension_type dimension = -1) const { // dump for python interface
+template <typename filtration_type, typename value_type>
+struct MultiDiagram {  // for python interface
+  static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
+                "filtration_type and value_type must be the same");
+
+ public:
+  using iterator = typename std::vector<MultiDiagram_point<filtration_type>>::const_iterator;
+
+  MultiDiagram() {}
+
+  MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m) : multiDiagram(m) {}
+
+  using python_bar = std::pair<std::vector<typename filtration_type::value_type>,
+                               std::vector<typename filtration_type::value_type>>;  // This type is for python
+
+  std::vector<python_bar> get_points(const dimension_type dimension = -1) const {  // dump for python interface
     std::vector<python_bar> out;
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 &&
-            !pt.get_birth().is_plus_inf() && !pt.get_death().is_minus_inf())
+        if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && !pt.get_birth().is_plus_inf() &&
+            !pt.get_death().is_minus_inf())
           out.push_back({pt.get_birth(), pt.get_death()});
       }
     }
     /* out.shrink_to_fit(); */
     return out;
   }
+
   std::vector<std::vector<double>> to_multipers(
-      const dimension_type dimension = -1) const { // dump for python interface
+      const dimension_type dimension = -1) const {  // dump for python interface
     std::vector<std::vector<double>> out;
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
         const auto &b = pt.get_birth().template as_type<double>();
         const auto &d = pt.get_death().template as_type<double>();
-        assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() ||
-                 d.is_minus_inf()));
+        assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
         out.push_back({b[0], d[0], b[1], d[1]});
       }
     }
     out.shrink_to_fit();
     return out;
   }
-  iterator begin() const { return this->multiDiagram.begin(); }
-  iterator end() const { return this->multiDiagram.end(); }
-  unsigned int size() { return this->multiDiagram.size(); }
-  void set(std::vector<MultiDiagram_point<filtration_type>> &m) {
-    this->multiDiagram.swap(m);
-  }
-  std::vector<MultiDiagram_point<filtration_type>> &getref() {
-    return this->multiDiagram;
-  }
-  MultiDiagram_point<filtration_type> &operator[](unsigned int i) {
-    return this->multiDiagram[i];
-  }
-  MultiDiagram_point<filtration_type> &at(const unsigned int i) {
-    return multiDiagram[i];
-  }
 
-private:
+  iterator begin() const { return this->multiDiagram.begin(); }
+
+  iterator end() const { return this->multiDiagram.end(); }
+
+  unsigned int size() { return this->multiDiagram.size(); }
+
+  void set(std::vector<MultiDiagram_point<filtration_type>> &m) { this->multiDiagram.swap(m); }
+
+  std::vector<MultiDiagram_point<filtration_type>> &getref() { return this->multiDiagram; }
+
+  MultiDiagram_point<filtration_type> &operator[](unsigned int i) { return this->multiDiagram[i]; }
+
+  MultiDiagram_point<filtration_type> &at(const unsigned int i) { return multiDiagram[i]; }
+
+ private:
   std::vector<MultiDiagram_point<filtration_type>> multiDiagram;
 };
-template <typename filtration_type, typename value_type > struct MultiDiagrams {
-  static_assert(std::is_same<typename filtration_type::value_type, value_type>::value,
+
+template <typename filtration_type, typename value_type>
+struct MultiDiagrams {
+  static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
                 "filtration_type and value_type must be the same");
-public:
-  using iterator =
-      typename std::vector<MultiDiagram<filtration_type, value_type>>::const_iterator;
-  using nciterator =
-      typename std::vector<MultiDiagram<filtration_type, value_type>>::iterator;
+
+ public:
+  using iterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::const_iterator;
+  using nciterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::iterator;
+
   MultiDiagrams() {}
+
   MultiDiagrams(unsigned int size) : multiDiagrams(size) {}
 
   std::vector<std::vector<std::vector<double>>> to_multipers() {
@@ -189,8 +189,7 @@ public:
     for (unsigned int i = 0; i < nsummands; i++) {
       out[i].reserve(nlines);
       for (unsigned int j = 0; j < nlines; j++) {
-        const MultiDiagram_point<filtration_type> &pt =
-            this->multiDiagrams[j][i];
+        const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[j][i];
         /* if(pt.get_birth().is_plus_inf() || pt.get_death().is_minus_inf()) */
         /*     out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)}); */
         /* else */
@@ -224,26 +223,21 @@ public:
     }
     return out;
   }
-  using __for_python_plot_type =
-      std::pair<std::vector<std::pair<double, double>>,
-                std::vector<unsigned int>>;
-  __for_python_plot_type _for_python_plot(dimension_type dimension = -1,
-                                          value_type min_persistence = 0) {
+
+  using __for_python_plot_type = std::pair<std::vector<std::pair<double, double>>, std::vector<unsigned int>>;
+
+  __for_python_plot_type _for_python_plot(dimension_type dimension = -1, value_type min_persistence = 0) {
     __for_python_plot_type out;
     auto &bars = out.first;
     auto &summand_idx = out.second;
-    bars.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size() *
-                 2);
-    summand_idx.reserve(this->multiDiagrams.size() *
-                        this->multiDiagrams[0].size());
-    for (const MultiDiagram<filtration_type, value_type> &multiDiagram :
-         this->multiDiagrams) {
+    bars.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size() * 2);
+    summand_idx.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size());
+    for (const MultiDiagram<filtration_type, value_type> &multiDiagram : this->multiDiagrams) {
       unsigned int count = 0;
       for (const MultiDiagram_point<filtration_type> &bar : multiDiagram) {
         const auto &birth = bar.get_birth().template as_type<double>();
         const auto &death = bar.get_death().template as_type<double>();
-        if ((dimension == -1 || bar.get_dimension() == dimension) &&
-            birth.size() > 1 && death.size() > 1 &&
+        if ((dimension == -1 || bar.get_dimension() == dimension) && birth.size() > 1 && death.size() > 1 &&
             (death[0] > birth[0] + min_persistence)) {
           // Checking >1 ensure that filtration is not inf or -inf or nan.
           bars.push_back({birth[0], death[0]});
@@ -255,21 +249,19 @@ public:
     }
     return out;
   }
-  MultiDiagram<filtration_type, value_type> &operator[](const unsigned int i) {
-    return multiDiagrams[i];
-  }
-  MultiDiagram<filtration_type, value_type> &at(const unsigned int i) {
-    return multiDiagrams[i];
-  }
-  iterator begin() const {
-    return this->multiDiagrams.begin();
-  } // cython bug : iterators like bc in bcs crash)
+
+  MultiDiagram<filtration_type, value_type> &operator[](const unsigned int i) { return multiDiagrams[i]; }
+
+  MultiDiagram<filtration_type, value_type> &at(const unsigned int i) { return multiDiagrams[i]; }
+
+  iterator begin() const { return this->multiDiagrams.begin(); }  // cython bug : iterators like bc in bcs crash)
+
   iterator end() const { return this->multiDiagrams.end(); }
 
-using python_bar =
-    std::pair<std::vector<value_type>,
-              std::vector<value_type>>; // This type is for python
+  using python_bar = std::pair<std::vector<value_type>,
+                               std::vector<value_type>>;  // This type is for python
   using barcodes = std::vector<std::vector<python_bar>>;
+
   barcodes get_points() {
     unsigned int nsummands = this->multiDiagrams.front().size();
     unsigned int nlines = this->multiDiagrams.size();
@@ -278,8 +270,7 @@ using python_bar =
     barcodes out(nlines, std::vector<python_bar>(nsummands));
     for (unsigned int i = 0; i < nlines; i++) {
       for (unsigned int j = 0; j < nsummands; j++) {
-        const MultiDiagram_point<filtration_type> &pt =
-            this->multiDiagrams[i][j];
+        const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
         out[i][j] = {pt.get_birth(), pt.get_death()};
       }
     }
@@ -288,7 +279,7 @@ using python_bar =
 
   unsigned int size() const { return this->multiDiagrams.size(); }
 
-private:
+ private:
   std::vector<MultiDiagram<filtration_type, value_type>> multiDiagrams;
   /* inline bool _is_inf(const std::vector<value_type> &truc) const{ */
   /*     for (const auto coord : truc) */
@@ -303,13 +294,11 @@ private:
 };
 
 void inline threshold_up(point_type &point,
-                  const Gudhi::multi_persistence::Box<value_type> &box,
-                  const point_type &basepoint) {
-  Gudhi::multi_filtration::One_critical_filtration
-      point_(point);
+                         const Gudhi::multi_persistence::Box<value_type> &box,
+                         const point_type &basepoint) {
+  Gudhi::multi_filtration::One_critical_filtration point_(point);
   // if (is_smaller(point, box.get_upper_corner())) return;
-  if (point_ <= box.get_upper_corner())
-    return;
+  if (point_ <= box.get_upper_corner()) return;
 
   //    if  (verbose && Debug::debug) Debug::disp_vect(point);
 
@@ -324,8 +313,7 @@ void inline threshold_up(point_type &point,
     for (unsigned int i = 0; i < point.size(); i++) {
       threshold = std::min(threshold, box.get_upper_corner()[i] - basepoint[i]);
     }
-    for (unsigned int i = 0; i < point.size() - 1; i++)
-      point[i] = basepoint[i] + threshold;
+    for (unsigned int i = 0; i < point.size() - 1; i++) point[i] = basepoint[i] + threshold;
     point.back() = threshold;
 
     return;
@@ -333,7 +321,7 @@ void inline threshold_up(point_type &point,
 
   // if (!is_greater(point, box.get_lower_corner())) {
   if (box.get_lower_corner() <= point_) {
-    point[0] = inf; // puts point to infinity
+    point[0] = inf;  // puts point to infinity
     //        if  (verbose) std::cout << "buggy point" << std::endl;
     return;
   }
@@ -349,8 +337,7 @@ void inline threshold_up(point_type &point,
   //            std::cout << "Thresholding the point with "<< threshold << " at
   //            ";
 
-  for (std::size_t i = 0; i < point.size(); i++)
-    point[i] -= threshold;
+  for (std::size_t i = 0; i < point.size(); i++) point[i] -= threshold;
 
   //    if  (verbose && Debug::debug) Debug::disp_vect(point);
 }
@@ -368,23 +355,21 @@ void inline threshold_up(point_type &point,
  */
 
 void inline threshold_down(point_type &point,
-                    const Gudhi::multi_persistence::Box<value_type> &box,
-                    const point_type &basepoint) {
+                           const Gudhi::multi_persistence::Box<value_type> &box,
+                           const point_type &basepoint) {
   if (basepoint[0] == negInf) [[unlikely]]
     return;
 
-  if (point.back() == inf)
-      [[unlikely]] { // ie. point at infinity -> feature never appearing
+  if (point.back() == inf) [[unlikely]] {  // ie. point at infinity -> feature never appearing
     return;
   }
 
   // if (is_greater(point, box.get_lower_corner())) return;
-  if (point >= box.get_lower_corner())
-    return;
+  if (point >= box.get_lower_corner()) return;
 
   // if (!is_smaller(point, box.get_upper_corner())) {
   if (!(point <= box.get_upper_corner())) {
-    point[0] = inf; // puts point to infinity
+    point[0] = inf;  // puts point to infinity
     return;
   }
 
@@ -392,11 +377,10 @@ void inline threshold_down(point_type &point,
   for (unsigned int i = 1; i < point.size(); i++) {
     threshold = std::max(threshold, box.get_lower_corner()[i] - point[i]);
   }
-  for (unsigned int i = 0; i < point.size(); i++)
-    point[i] += threshold;
+  for (unsigned int i = 0; i < point.size(); i++) point[i] += threshold;
 }
 
-} // namespace Gudhi::multiparameter::mma
+}  // namespace Gudhi::multiparameter::mma
 
 //// Different implementations of the matrix columns. Set seems to be the
 /// fastest / in our tests. / using Vineyard_matrix_type =
@@ -416,4 +400,4 @@ void inline threshold_down(point_type &point,
 // using Vineyard_matrix_type = RU_matrix<Set_column>;
 //}
 
-#endif // UTILITIES_H
+#endif  // UTILITIES_H

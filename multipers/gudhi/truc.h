@@ -330,7 +330,7 @@ class Truc {
 
   inline PersBackend compute_persistence_out(
       const std::vector<typename MultiFiltration::value_type> &one_filtration,
-      std::vector<index_type> &out_gen_order, 
+      std::vector<index_type> &out_gen_order,
       const bool ignore_inf) const {  // needed ftm as PersBackend only points there
     constexpr const bool verbose = false;
     if (one_filtration.size() != this->num_generators()) {
@@ -346,7 +346,7 @@ class Truc {
       return one_filtration[i] < one_filtration[j];
     });
     if (!PersBackend::is_vine && ignore_inf) {
-      if constexpr (verbose){
+      if constexpr (verbose) {
         std::cout << "Removing infinite simplices" << std::endl;
       }
       for (auto &i : out_gen_order)
@@ -748,7 +748,7 @@ class Truc {
       return truc_ptr->get_representative_cycles(update);
     }
 
-    inline void compute_persistence(const bool ignore_inf=true) {
+    inline void compute_persistence(const bool ignore_inf = true) {
       this->persistence =
           this->truc_ptr->compute_persistence_out(this->filtration_container, this->generator_order, ignore_inf);
     };
@@ -885,4 +885,6 @@ class Truc {
 
 };  // class Truc
 
-}}}  // namespace Gudhi::multiparameter::interface
+}  // namespace truc_interface
+}  // namespace multiparameter
+}  // namespace Gudhi

@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from typing import Literal, Optional
 
 import gudhi as gd
@@ -122,7 +122,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
     def _get_sts_rips(self, x):
         assert self._output_type is not None and self._vineyard is not None
         if self.sparse is None:
-            st_init = gd.SimplexTree.create_from_array(x, max_filtration=self._threshold)
+            st_init = gd.SimplexTree.create_from_array(
+                x, max_filtration=self._threshold
+            )
         else:
             st_init = gd.RipsComplex(
                 points=x, max_edge_length=self._threshold, sparse=self.sparse
