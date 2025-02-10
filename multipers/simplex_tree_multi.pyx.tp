@@ -1228,7 +1228,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                         file.write(str(i) + " ")
                     file.write("; ")
                     for f in F:
+                        {{if is_kcritical}}
+                        for fi in f:
+                            file.write(str(fi) + " ")
+                        {{else}}
                         file.write(str(f) + " ")
+                        {{endif}}
                     file.write("\n")
                     bar.update(1)
         file.close()
