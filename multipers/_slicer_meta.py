@@ -173,10 +173,12 @@ def Slicer(
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
         slicer.minpres_degree = st.minpres_degree
+        slicer.is_squeezed = st.is_squeezed
     elif is_simplextree_multi(st) and backend == "Graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
+        slicer.is_squeezed = st.is_squeezed
     elif backend == "Graph":
         raise ValueError(
             """

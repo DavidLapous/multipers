@@ -99,8 +99,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
     """
     cdef public intptr_t thisptr
 
-    cdef public vector[vector[double]] filtration_grid
+    cdef public object filtration_grid
     cdef public bool _is_function_simplextree 
+    cdef public bool is_squeezed
     # Get the pointer casted as it should be
     cdef Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]* get_ptr(self) noexcept nogil:
         return <Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]*>(self.thisptr)
@@ -159,6 +160,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                 self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}](dereference(<Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]*>other_ptr))) ## prevents calling destructor of other
                 num_parameters = other.num_parameters
                 self.filtration_grid = other.filtration_grid
+                self.is_squeezed = other.is_squeezed
             elif isinstance(other, SimplexTree): # Constructs a SimplexTreeMulti from a SimplexTree
                 self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]())
                 if safe_conversion or SAFE_CONVERSION:
@@ -178,7 +180,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]())
         self.get_ptr().set_number_of_parameters(num_parameters)
         self._is_function_simplextree = False
-        self.filtration_grid=[[]*num_parameters]
 
     def __dealloc__(self):
         cdef Simplex_tree_multi_interface[{{FSHORT}},{{CTYPE}}]* ptr = self.get_ptr()
@@ -1305,23 +1306,25 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         #TODO : multi-critical
         if filtration_grid is None:  
             filtration_grid = self.get_filtration_grid(grid_strategy=grid_strategy, **filtration_grid_kwargs)
-        cdef vector[vector[double]] c_filtration_grid = filtration_grid
-        assert <int>c_filtration_grid.size() == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
+        assert len(filtration_grid) == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
         cdef intptr_t ptr = self.thisptr
         if coordinate_values and inplace:
-            self.filtration_grid = c_filtration_grid
+            self.filtration_grid = filtration_grid
         if inplace or not coordinate_values:
-          self.get_ptr().squeeze_filtration_inplace(c_filtration_grid, coordinate_values)
+          self.get_ptr().squeeze_filtration_inplace(filtration_grid, coordinate_values)
+          self.filtration_grid = filtration_grid
+          self.is_squeezed = True
         else:
           out = SimplexTreeMulti_{{FSHORT[:-3] + "i32"}}(num_parameters=self.num_parameters)
-          self.get_ptr().squeeze_filtration(out.thisptr, c_filtration_grid)
-          out.filtration_grid = c_filtration_grid
+          self.get_ptr().squeeze_filtration(out.thisptr, filtration_grid)
+          out.filtration_grid = filtration_grid
+          out.is_squeezed = True
           return out
         return self
 
-    @property
-    def is_squeezed(self)->bool:
-        return self.num_vertices > 0 and len(self.filtration_grid)>0 and len(self.filtration_grid[0]) > 0
+    # @property
+    # def is_squeezed(self)->bool:
+    #     return self.num_vertices > 0 and self.filtration_grid is not None
 
     @property
     def dtype(self)->type:

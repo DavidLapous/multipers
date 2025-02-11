@@ -105,15 +105,16 @@ _valid_pers_backend = Literal[
 #------------------------------------------------------------------------------
 cdef class {{D['PYTHON_TYPE']}}:
     cdef {{D['C_TEMPLATE_TYPE']}} truc
-    cdef public vector[vector[double]] filtration_grid
+    cdef public object filtration_grid ## should hold numpy / pytorch tensor
     cdef public int minpres_degree ## TODO : maybe change directly the degree in the minpres ?
+    cdef public bool is_squeezed
 
     def __repr__(self):
         return f"slicer[backend={self.pers_backend},dtype={np.dtype(self.dtype).name},num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},max_dim={self.dimension}]" 
 
-    @property
-    def is_squeezed(self)->bool:
-        return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
+    # @property
+    # def is_squeezed(self)->bool:
+    #     return self.filtration_grid is not None
     @property
     def is_minpres(self)->bool:
         return self.minpres_degree>=0
@@ -308,7 +309,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             self.get_boundaries(),
             self.get_dimensions(),
             self.get_filtrations(),
-            tuple(np.array(f) for f in self.filtration_grid),
+            self.filtration_grid,
             self.minpres_degree,
         )
     def __setstate__(self, tuple dump):
@@ -451,6 +452,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         if inplace or not coordinates:
             self.truc.coarsen_on_grid_inplace(grid, coordinates)
             self.filtration_grid = filtration_grid
+            self.is_squeezed = True
         else:
           {{if D['COLUMN_TYPE'] is None}}
           raise ValueError("WIP")
@@ -459,6 +461,7 @@ cdef class {{D['PYTHON_TYPE']}}:
           out.truc = self.truc.coarsen_on_grid(grid)
           out.filtration_grid = filtration_grid
           out.minpres_degree = self.minpres_degree
+          out.is_squeezed = True
           return out
           {{endif}}
         return self
@@ -554,7 +557,7 @@ cdef class {{D['PYTHON_TYPE']}}:
     def unsqueeze(self, grid=None, dtype = np.float64):
         from multipers.grids import evaluate_in_grid
         from multipers import Slicer
-        grid = tuple(np.asarray(f) for f in self.filtration_grid) if grid is None else grid
+        grid = tuple(f for f in self.filtration_grid) if grid is None else grid
         new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
         new_slicer = {{D['PYTHON_TYPE'][:-3]+"f64"}}(
             self.get_boundaries(),
