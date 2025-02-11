@@ -225,6 +225,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         copy_.truc = self.truc
         copy_.minpres_degree = self.minpres_degree
         copy_.filtration_grid = self.filtration_grid
+        copy_.is_squeezed = self.is_squeezed
         return copy_
     def get_barcode(self):
         """
@@ -430,7 +431,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
+    def grid_squeeze(self, filtration_grid=None, strategy:Optional[str]=None, resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
 
@@ -444,10 +445,15 @@ cdef class {{D['PYTHON_TYPE']}}:
         if not force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
         if filtration_grid is None:
-            filtration_grid = mpg.compute_grid(
-                    self.get_filtrations_values().T,
-                    strategy=grid_strategy,
-                    resolution=resolution)
+            if strategy is None and self.filtration_grid is not None:
+                filtration_grid = self.filtration_grid
+            else:
+                if strategy is None:
+                    strategy = "exact"
+                filtration_grid = mpg.compute_grid(
+                        self.get_filtrations_values().T,
+                        strategy=strategy,
+                        resolution=resolution)
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] grid = filtration_grid
         if inplace or not coordinates:
             self.truc.coarsen_on_grid_inplace(grid, coordinates)

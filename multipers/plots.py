@@ -3,6 +3,11 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 
+try:
+    import torch
+    istensor = torch.is_tensor
+except ImportError:
+    istensor = lambda x: False
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
     rectangle = np.asarray(rectangle)
@@ -116,6 +121,10 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
     else:
         plt.sca(ax)
     pts, weights = signed_measure
+    if istensor(pts):
+        pts = pts.detach().numpy()
+    if istensor(weights):
+        weights = weights.detach().numpy()
     pts = np.asarray(pts)
     num_pts = pts.shape[0]
     num_parameters = pts.shape[1]

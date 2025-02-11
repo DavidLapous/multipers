@@ -1292,7 +1292,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
 
 
-    def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, bool coordinate_values=True, force=False, grid_strategy:_available_strategies = "exact", inplace=False, **filtration_grid_kwargs):
+    def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, bool coordinate_values=True, force=False, strategy:Optional[str] = None, inplace=False, resolution:Optional[int]=None):
         """
         Fit the filtration of the simplextree to a grid.
 
@@ -1305,7 +1305,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             raise Exception("SimplexTree already squeezed, use `force=True` if that's really what you want to do.") 
         #TODO : multi-critical
         if filtration_grid is None:  
-            filtration_grid = self.get_filtration_grid(grid_strategy=grid_strategy, **filtration_grid_kwargs)
+            if strategy is None and self.filtration_grid is not None:
+                filtration_grid = self.filtration_grid
+            else:
+                if strategy is None:
+                    strategy = "exact"
+                filtration_grid = self.get_filtration_grid(grid_strategy=strategy, resolution=resolution)
         assert len(filtration_grid) == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
         cdef intptr_t ptr = self.thisptr
         if coordinate_values and inplace:
