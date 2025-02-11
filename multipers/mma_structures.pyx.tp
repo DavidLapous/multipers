@@ -384,7 +384,7 @@ cdef class PyModule_{{SHORT}}:
               axes = [plt.gca()]
             for dim_idx in range(ndim):
                 if not separated:
-                    plt.sca(axes[dim_idx]) if ndim > 1 else  plt.sca(axes)
+                    plt.sca(axes[dim_idx])
                 self.plot(dims[dim_idx],box=box, separated = separated, **kwargs)
             return
         corners = self.cmod.get_corners_of_dimension(degree)
