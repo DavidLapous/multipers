@@ -1,2 +1,3 @@
 recursive-include multipers *.py *.so *.tp *.pxd *.h *.pyx *.dll *.dylib *.lib *.pyd
-global-exclude  *.cpp 
+include _tempita_grid_gen.py
+global-exclude  *.cpp
