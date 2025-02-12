@@ -19,8 +19,8 @@ jobs:
             - conda-forge
     - run:
         micromamba create -n sources python=3.11 pip setuptools cython numpy
-        pip install build
-        python -m build . --sdist
+        pip install build --upgrade
+        python -m build --sdist -n
     - name: Upload sources 
       uses: actions/upload-artifact@v4
       with:
