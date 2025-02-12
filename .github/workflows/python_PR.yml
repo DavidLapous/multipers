@@ -31,8 +31,7 @@ jobs:
     - name: test archive
       shell: bash -el {0}
       run: |
-        tar -tf dist/*.tar.gz 
-
+        tar -tf dist/*.tar.gz
   build:
     name: Build
     needs: create_sources
@@ -50,7 +49,6 @@ jobs:
       if: ${{ matrix.os == 'windows-latest' }}
       run: |
         choco install -y tar bzip2 7zip
-
     - name: extract sources
       run: |
         tar -xvf multipers-*.tar.gz
