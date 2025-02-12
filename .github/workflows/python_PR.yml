@@ -50,7 +50,7 @@ jobs:
     - name: extract sources
       run: |
         tar -xvf multipers-*.tar.gz
-        cd "$(ls -d multipers*/ | head -n 1)"
+        mv multipers-*/* .
         ls
     - uses: mamba-org/setup-micromamba@v2
       with:
