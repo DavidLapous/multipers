@@ -19,7 +19,7 @@ jobs:
             - conda-forge
     - name: Build source distribution
       run: |
-        micromamba create -n sources python=3.11 pip setuptools cython build numpy
+        micromamba create -n sources python=3.11 pip setuptools cython numpy
         micromamba activate sources
         pip install build --upgrade
         python -m build --sdist --no-isolation
@@ -96,6 +96,7 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
+        pip install build --upgrade
         python -m build . --no-isolation --wheel
 
     - name: Fix wheels on Linux and Macos
