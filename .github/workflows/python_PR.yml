@@ -12,12 +12,12 @@ jobs:
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest'
-        init-shell: >-
-          bash
+        init-shell: bash
         condarc: |
           channels:
             - conda-forge
     - name: Build source distribution
+      shell: bash -el {0}
       run: |
         micromamba create -n sources python=3.11 pip setuptools cython numpy
         micromamba activate sources
@@ -29,6 +29,7 @@ jobs:
         name: sources
         path: dist
     - name: test archive
+      shell: bash -el {0}
       run: |
         tar -tf dist/*.tar.gz 
 
