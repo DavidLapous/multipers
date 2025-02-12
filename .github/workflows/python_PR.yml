@@ -4,8 +4,35 @@ on:
   [pull_request,workflow_dispatch,push]
 
 jobs:
-  build_test:
+  create_sources:
+    name: Create source dist
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mamba-org/setup-micromamba@v2
+      with:
+        micromamba-version: 'latest'
+        init-shell: >-
+          bash
+        condarc: |
+          channels:
+            - conda-forge
+    - run:
+        micromamba create -n sources python=3.11 pip setuptools cython numpy
+        pip install build
+        python -m build . --sdist
+    - name: Upload sources 
+      uses: actions/upload-artifact@v4
+      with:
+        name: sources
+        path: dist
+    - name: test archive
+      run: |
+        tar -tf dist/*.tar.gz 
+
+  build:
     name: Build and Test 
+    needs: create_sources
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -13,7 +40,14 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: sources
+    - name: extract sources
+      run: |
+        tar -xvf sources.tar.gz
+        cd "$(ls -d multipers*/ | head -n 1)"
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest' 
@@ -50,7 +84,6 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba activate build
-        python setup.py sdist
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
@@ -61,10 +94,11 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        python setup.py build_ext -j4 --inplace bdist_wheel
+        python -m build . --no-isolation --wheel
 
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
+      if: ${{ matrix.os != 'windows-latest' }}
       run: |
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
@@ -105,15 +139,30 @@ jobs:
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v4
       with:
-        name: sources-${{ matrix.os }}-${{ matrix.python-version }}
+        name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
 
+  test:
+    name: Test 
+    needs: build
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: ["ubuntu-latest", "macos-13", "macos-14","windows-latest"]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: retrieves compiled sources
+      uses: actions/download-artifact@v4
+      with:
+        name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
+    - uses: actions/checkout@v4
     - name: Install and Test
       shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
-        pip install dist/*.whl
+        pip install *.whl
         cd multipers 
         cd tests
         pytest -rvv .
