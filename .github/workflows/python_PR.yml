@@ -51,6 +51,7 @@ jobs:
       run: |
         tar -xvf multipers-*.tar.gz
         cd "$(ls -d multipers*/ | head -n 1)"
+        ls
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest' 
@@ -86,6 +87,7 @@ jobs:
     - name: Build package
       shell: bash -el {0}
       run: |
+        ls
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
