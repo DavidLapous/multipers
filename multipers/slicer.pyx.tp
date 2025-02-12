@@ -225,10 +225,14 @@ cdef class {{D['PYTHON_TYPE']}}:
         copy_.minpres_degree = self.minpres_degree
         copy_.filtration_grid = self.filtration_grid
         return copy_
-    def get_barcode(self):
+    def get_barcode(self, bool keep_inf = False):
         """
         Returns the current barcode.
         """
+        if keep_inf:
+            bcs = tuple(np.asarray(stuff, dtype = {{D['PY_VALUE_TYPE']}}) for stuff in self.truc.get_barcode())
+        else:
+            bcs = {{D['PYTHON_TYPE']}}._threshold_bcs(self.truc.get_barcode())
         return self.truc.get_barcode()
     def push_to_line(self, basepoint, direction=None)->{{D['PYTHON_TYPE']}}:
         """

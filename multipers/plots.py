@@ -242,9 +242,8 @@ def _rectangle(x, y, color, alpha):
 
 
 def _d_inf(a, b):
-    if type(a) != np.ndarray or type(b) != np.ndarray:
-        a = np.array(a)
-        b = np.array(b)
+    a = np.asarray(a)
+    b = np.asarray(b)
     return np.min(np.abs(b - a))
 
 
