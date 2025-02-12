@@ -18,7 +18,8 @@ jobs:
           channels:
             - conda-forge
     - run:
-        micromamba create -n sources python=3.11 pip setuptools cython numpy
+        micromamba create -n sources python=3.11 pip setuptools cython build numpy
+        micromamba activate sources
         pip install build --upgrade
         python -m build --sdist -n
     - name: Upload sources 
