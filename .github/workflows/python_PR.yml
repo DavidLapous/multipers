@@ -47,8 +47,7 @@ jobs:
         name: sources
     - name: (windows) install tar stuff
       if: ${{ matrix.os == 'windows-latest' }}
-      run: |
-        choco install -y tar bzip2 7zip
+      run: choco install bzip2 7zip
     - name: extract sources
       run: |
         tar -xvf multipers-*.tar.gz
