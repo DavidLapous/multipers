@@ -180,12 +180,18 @@ jobs:
         condarc: |
           channels:
             - conda-forge
-    - name: Install compiled and Test
-      shell: bash -el {0}
+    - name: dependencies
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
+    - name: install
+      run: |
+        ls
+        micromamba activate test
         pip install *.whl
+    - name: tests
+      run: |
+        micromamba activate test
         cd multipers 
         cd tests
         pytest -rvv .
