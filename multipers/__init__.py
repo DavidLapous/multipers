@@ -4,6 +4,7 @@ __version__ = _version("multipers")
 # Doc
 from multipers import (
     data,
+    filtration,
     grids,
     io,
     multiparameter_module_approximation,
@@ -18,14 +19,15 @@ from multipers.multiparameter_module_approximation import module_approximation
 from multipers.simplex_tree_multi import SimplexTreeMulti
 
 __all__ = [
-    "signed_measure",
-    "module_approximation",
-    "Slicer",
-    "SimplexTreeMulti",
     "data",
+    "filtration",
     "grids",
     "io",
     "multiparameter_module_approximation",
-    "slicer",
     "simplex_tree_multi",
+    "slicer",
+    "signed_measure",
+    "Slicer",
+    "module_approximation",
+    "SimplexTreeMulti",
 ]

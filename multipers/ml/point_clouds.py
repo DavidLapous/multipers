@@ -5,6 +5,7 @@ import gudhi as gd
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, TransformerMixin
+from scipy.spatial.distance import cdist
 from tqdm import tqdm
 
 import multipers as mp
@@ -123,7 +124,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         assert self._output_type is not None and self._vineyard is not None
         if self.sparse is None:
             st_init = gd.SimplexTree.create_from_array(
-                x, max_filtration=self._threshold
+                cdist(x,x), max_filtration=self._threshold
             )
         else:
             st_init = gd.RipsComplex(

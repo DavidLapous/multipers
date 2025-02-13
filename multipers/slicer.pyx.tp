@@ -636,6 +636,7 @@ def from_function_delaunay(
     vineyard : bool, use a vineyard-compatible backend
     """
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
+    mio._init_external_softwares(requires=["function_delaunay"])
     mio.function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
