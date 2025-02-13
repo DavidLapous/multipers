@@ -155,28 +155,13 @@ jobs:
       with:
         name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
-
-  test:
-    name: Test 
-    needs: build
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-        os: ["ubuntu-latest", "macos-13", "macos-14","windows-latest"]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
-    steps:
-    - name: retrieves compiled sources
-      uses: actions/download-artifact@v4
-      with:
-        name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
-    - uses: actions/checkout@v4
-    - name: Install compiled and Test
+    - name: tests
       shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
-        pip install *.whl
+        pip install dist/*.whl
+
         cd multipers 
         cd tests
         pytest -rvv .
