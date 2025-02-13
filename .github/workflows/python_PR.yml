@@ -171,6 +171,15 @@ jobs:
       with:
         name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
     - uses: actions/checkout@v4
+    - uses: mamba-org/setup-micromamba@v2
+      with:
+        micromamba-version: 'latest' 
+        init-shell: >-
+          bash
+          powershell
+        condarc: |
+          channels:
+            - conda-forge
     - name: Install compiled and Test
       shell: bash -el {0}
       run: |
