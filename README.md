@@ -1,22 +1,30 @@
 # multipers : Multiparameter Persistence for Machine Learning
-[![Documentation](https://img.shields.io/badge/Documentation-website-blue)](https://davidlapous.github.io/multipers)
-[![DOI](https://joss.theoj.org/papers/10.21105/joss.06773/status.svg)](https://doi.org/10.21105/joss.06773)
-[![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers)
-[![Build, test](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml/badge.svg)](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml)
-[![Downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06773/status.svg)](https://doi.org/10.21105/joss.06773) [![Documentation](https://img.shields.io/badge/Documentation-website-blue)](https://davidlapous.github.io/multipers) [![Build, test](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml/badge.svg)](https://github.com/DavidLapous/multipers/actions/workflows/python_PR.yml)
 <br>
 Scikit-style PyTorch-autodiff multiparameter persistent homology python library. 
 This library aims to provide easy to use and performant strategies for applied multiparameter topology.
-<br> Meant to be integrated in [the Gudhi library](https://gudhi.inria.fr/).
+<br> Meant to be integrated in the [Gudhi](https://gudhi.inria.fr/) library.
+
+## Compiled packages
+| Source | Version | Downloads | Platforms | 
+| --- | --- | --- | --- | 
+| [![Conda Recipe](https://img.shields.io/badge/conda-recipe-green.svg)](https://anaconda.org/conda-forge/multipers)| [![Conda Version](https://img.shields.io/conda/vn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |  [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) | 
+| [![pip Recipe](https://img.shields.io/badge/pip-package-green.svg)](https:///pypi.org/project/multipers) | [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers) | [![ pip downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers) | | 
+
+
 
 ## Quick start
 This library allows computing several representations from "geometrical datasets", e.g., point clouds, images, graphs, that have multiple scales.
 We provide some *nice* pictures in the [documentation](https://davidlapous.github.io/multipers/index.html). 
 A non-exhaustive list of features can be found in the **Features** section.
 
-This library is available [on PyPI](https://pypi.org/project/multipers/) for (reasonably up to date) Linux, macOS and Windows, via
+This library is available on pip and conda-forge for (reasonably up to date) Linux, macOS and Windows, via
 ```sh
 pip install multipers
+```
+or 
+```sh
+conda install multipers -c conda-forge
 ```
 
 Windows support is experimental, and some core dependencies are not available on Windows.
