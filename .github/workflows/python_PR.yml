@@ -156,6 +156,7 @@ jobs:
         name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
     - name: tests
+      shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
