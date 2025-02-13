@@ -41,12 +41,9 @@ cimport numpy as cnp
 ## Small hack for typing
 from multipers.simplex_tree_multi import is_simplextree_multi, SimplexTreeMulti_type
 from multipers.slicer import Slicer_type, is_slicer
-from multipers._slicer_meta import Slicer
 from multipers.mma_structures import *
 from multipers.mma_structures import PyModule_type
 from typing import Union
-import multipers
-import multipers.io as mio
 from multipers.slicer cimport _multiparameter_module_approximation_f32, _multiparameter_module_approximation_f64
 
 
@@ -66,7 +63,8 @@ def module_approximation_from_slicer(
     cdef intptr_t ptr
     if not slicer.is_vine:
         print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
-        slicer = Slicer(slicer, vineyard=True)
+        from multipers._slicer_meta import Slicer
+        slicer = Slicer(slicer, vineyard=True, backend="matrix")
     direction_ = np.asarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
@@ -199,7 +197,8 @@ Try to increase the precision parameter, or set `ignore_warning=True` to compute
 Returning the trivial module."""
         )
     if is_simplextree_multi(input):
-        input = multipers.Slicer(input,backend=slicer_backend, vineyard=True)
+        from multipers._slicer_meta import Slicer
+        input = Slicer(input,backend=slicer_backend, vineyard=True)
     assert is_slicer(input), "First argument must be a simplextree or a slicer !"
     return module_approximation_from_slicer(
             slicer=input,

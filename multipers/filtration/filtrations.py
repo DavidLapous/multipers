@@ -7,9 +7,8 @@ from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 
-import multipers as mp
-import multipers.slicer as mps
 from multipers.ml.convolutions import DTM, available_kernels
+from multipers.simplex_tree_multi import SimplexTreeMulti_KFf64,SimplexTreeMulti
 
 try:
     import pykeops
@@ -52,13 +51,13 @@ def RipsLowerstar(
         distance_matrix, max_filtration=threshold_radius
     )
     if function is None:
-        return mp.SimplexTreeMulti(st, num_parameters=1)
+        return SimplexTreeMulti(st, num_parameters=1)
 
     function = np.asarray(function)
     if function.ndim == 1:
         function = function[:, None]
     num_parameters = function.shape[1] + 1
-    st = mp.SimplexTreeMulti(st, num_parameters=num_parameters)
+    st = SimplexTreeMulti(st, num_parameters=num_parameters)
     for i in range(function.shape[1]):
         st.fill_lowerstar(function[:, i], parameter=1 + i)
     return st
@@ -110,6 +109,7 @@ def DelaunayLowerstar(
      - function : ArrayLike of shape (num_data, )
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
+    from multipers.slicer import from_function_delaunay
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
@@ -118,7 +118,7 @@ def DelaunayLowerstar(
     assert (
         function.ndim == 1
     ), "Delaunay Lowerstar is only compatible with 1 additional parameter."
-    return mps.from_function_delaunay(
+    return from_function_delaunay(
         points,
         function,
         degree=reduce_degree,
@@ -177,7 +177,8 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
      - image: ArrayLike of shape (*image_resolution, num_parameters)
      - ** args : specify non-default slicer parameters
     """
-    return mps.from_bitmap(image, **slicer_kwargs)
+    from multipers.slicer import from_bitmap
+    return from_bitmap(image, **slicer_kwargs)
 
 
 def DegreeRips(*, points=None, distance_matrix=None, ks=None, threshold_radius=None):
@@ -196,7 +197,7 @@ def CoreDelaunay(
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
-) -> mp.simplex_tree_multi.SimplexTreeMulti_KFf64:
+) -> SimplexTreeMulti_KFf64:
     """
     Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
 
@@ -263,7 +264,7 @@ def CoreDelaunay(
         for vertex_array in vertex_arrays_in_dimension
     ]
 
-    simplex_tree_multi = mp.SimplexTreeMulti(
+    simplex_tree_multi = SimplexTreeMulti(
         num_parameters=2, kcritical=True, dtype=np.float64
     )
 

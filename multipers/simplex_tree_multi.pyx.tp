@@ -66,15 +66,14 @@ cimport cython
 from gudhi.simplex_tree import SimplexTree ## Small hack for typing
 from typing import Iterable,Literal,Optional
 from tqdm import tqdm
-import multipers.grids as mpg
-
+from multipers.grids import Lstrategies, compute_grid
 from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles, sparsify
 
 from warnings import warn
 
 SAFE_CONVERSION=False #Slower but at least it works everywhere
 
-_available_strategies =mpg.Lstrategies
+_available_strategies =Lstrategies
 
 
 
@@ -1287,7 +1286,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         # removes nan
         filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
 
-        return mpg.compute_grid(filtrations_values, resolution=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
+        return compute_grid(filtrations_values, resolution=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
 
 
 

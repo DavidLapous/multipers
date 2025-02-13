@@ -17,8 +17,6 @@ with open("build/tmp/_slicer_names.pkl", "rb") as f:
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 import multipers
 from typing import Optional,Literal
-import multipers.io as mio
-import multipers.grids as mpg
 import threading
 import os 
 from joblib import Parallel, delayed
@@ -28,6 +26,7 @@ from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
+from multipers.grids import compute_grid
 
 import numpy as np
 cimport cython
@@ -396,7 +395,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         out = _vff21cview_{{D['SHORT_VALUE_TYPE']}}(v, copy=True, duplicate=self.num_parameters)
         return np.asarray(out)
     def get_filtration_grid(self,grid_strategy:str="exact", **infer_grid_kwargs):
-        return mpg.compute_grid(
+        return compute_grid(
                 self.get_filtrations_values().T,
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
@@ -447,7 +446,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         if not force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
         if filtration_grid is None:
-            filtration_grid = mpg.compute_grid(
+            filtration_grid = compute_grid(
                     self.get_filtrations_values().T,
                     strategy=grid_strategy,
                     resolution=resolution)
@@ -635,9 +634,10 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
+    from multipers.io import _init_external_softwares, function_delaunay_presentation_to_slicer
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    mio._init_external_softwares(requires=["function_delaunay"])
-    mio.function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
+    _init_external_softwares(requires=["function_delaunay"])
+    function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
     return s
@@ -680,11 +680,12 @@ def minimal_presentation(
     and returns it as a slicer.
     Backends differents than `mpfree` are unstable.
     """
+    from multipers.io import _init_external_softwares, input_path, scc_reduce_from_str_to_slicer
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
         warn(f"The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
         return slicer
-    mio._init_external_softwares(requires=[backend])
+    _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
             return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
@@ -699,13 +700,13 @@ def minimal_presentation(
     if dtype is None:
         dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    slicer.to_scc(path=mio.input_path+id, strip_comments=True, degree=degree-1)
+    slicer.to_scc(path=input_path+id, strip_comments=True, degree=degree-1)
     new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
     if backend=="mpfree":
         shift_dimension=degree-1
     else:
         shift_dimension=degree
-    mio.scc_reduce_from_str_to_slicer(path=mio.input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
+    scc_reduce_from_str_to_slicer(path=input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
     new_slicer.minpres_degree = degree
     if filtration_grid is not None:
       new_slicer.filtration_grid = filtration_grid
@@ -786,7 +787,8 @@ def to_blocks(input):
     if is_simplextree_multi(input):
       return input._to_scc()
     if isinstance(input, str) or isinstance(input, os.PathLike):
-      return mio.scc_parser(input)
+      from multipers.io import scc_parser
+      return scc_parser(input)
     raise ValueError("Input cannot be converted to blocks.")
 
 

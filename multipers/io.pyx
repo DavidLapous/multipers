@@ -1,6 +1,5 @@
 import re
 from gudhi import SimplexTree
-import multipers.slicer as mps
 import gudhi as gd
 import numpy as np
 import os
@@ -384,6 +383,7 @@ def reduce_complex(
     """
 
     from multipers.simplex_tree_multi import is_simplextree_multi
+    from multipers.slicer import slicer2blocks
     if id is None:
         id = str(threading.get_native_id())
     path = input_path+id
@@ -403,7 +403,7 @@ def reduce_complex(
         scc2disk(complex,path=path)
     else:
         # Assumes its a slicer
-        blocks = mps.slicer2blocks(complex)
+        blocks = slicer2blocks(complex)
         scc2disk(blocks,path=path)
         dimension = len(blocks) -2 -dimension
 
