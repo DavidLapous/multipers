@@ -8,7 +8,7 @@ from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 
 from multipers.ml.convolutions import DTM, available_kernels
-from multipers.simplex_tree_multi import SimplexTreeMulti_KFf64,SimplexTreeMulti
+from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 
 try:
     import pykeops
@@ -197,7 +197,7 @@ def CoreDelaunay(
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
-) -> SimplexTreeMulti_KFf64:
+) -> SimplexTreeMulti_type:
     """
     Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
 

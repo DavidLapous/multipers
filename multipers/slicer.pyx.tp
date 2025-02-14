@@ -524,7 +524,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             self,
             path:os.PathLike,
             int num_parameters = -1,
-            int degree = 1,
+            int degree = -1,
             bool rivet_compatible = False,
             bool ignore_last_generators = False,
             bool strip_comments = False,
@@ -534,6 +534,8 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         Writes current slicer to a file in scc format.
         """
+        if degree == -1 and not rivet_compatible:
+            degree = 1
         cdef string c_path = path.encode(encoding="utf-8")
         if self.is_squeezed and unsqueeze:
             kwargs = locals()

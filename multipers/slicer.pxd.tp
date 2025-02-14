@@ -110,6 +110,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
   Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, One_critical_filtration[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool) except + nogil
   {{endif}}
   {{endfor}}
+  pass
 
 
 

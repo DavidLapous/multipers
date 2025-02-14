@@ -179,6 +179,7 @@ inline void write_scc_file(const std::string& outFilePath,
                            bool IgnoreLastGenerators = false,
                            bool stripComments = false,
                            bool reverse = false) {
+  constexpr bool verbose = false;
   if (numberOfParameters < 0) {
     numberOfParameters = slicer.num_parameters();
   }
@@ -225,7 +226,14 @@ inline void write_scc_file(const std::string& outFilePath,
   int minIndex = reverse ? degree - 1 : 0;
   int maxIndex = reverse ? maxDim : maxDim - degree + 1;
   if (maxIndex < -1) maxIndex = -1;
-  if (rivetCompatible || IgnoreLastGenerators) maxIndex--;
+  if (IgnoreLastGenerators) maxIndex--;
+  if (rivetCompatible)
+    minIndex = maxIndex -2;
+
+  if constexpr (verbose) {
+    std::cout << "minDim = " << minDim << " maxDim = " << maxDim << " minIndex = " << minIndex
+              << " maxIndex = " << maxIndex << " degree = " << degree << std::endl;
+  }
 
   auto print_fil_values = [&](const Filtration_value& fil) {
     if (fil.is_finite()) {
@@ -248,7 +256,8 @@ inline void write_scc_file(const std::string& outFilePath,
   for (int i = std::max(minIndex, 0); i <= std::min(maxDim, maxIndex); ++i) {
     file << indicesByDim[i].size() << " ";
   }
-  for (int i = maxIndex + 1; i <= maxDim; ++i) file << 0 << " ";
+  if (!rivetCompatible)
+    for (int i = maxIndex + 1; i <= maxDim; ++i) file << 0 << " ";
   if (maxIndex > maxDim) file << 0;
   file << "\n";
 
