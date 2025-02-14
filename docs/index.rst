@@ -120,6 +120,7 @@ For theoretical references,
   :caption: Filtrations
 
   notebooks/rips
+  notebooks/function_delaunay
   notebooks/delaunay_core_bifiltration
   notebooks/cubical
 
