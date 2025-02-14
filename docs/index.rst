@@ -121,6 +121,7 @@ For theoretical references,
 
   notebooks/rips
   notebooks/delaunay_core_bifiltration
+  notebooks/cubical
 
 .. toctree::
   :caption: Example zoo:
