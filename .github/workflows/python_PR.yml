@@ -162,7 +162,6 @@ jobs:
         micromamba activate test
         pip install dist/*.whl
 
-        cd multipers 
         cd tests
         pytest -rvv .
 
