@@ -113,8 +113,9 @@ jobs:
       if: ${{ matrix.os != 'windows-latest' }}
       run: |
         micromamba activate build
+        cd dist
+
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          cd dist
           micromamba install auditwheel patchelf -c conda-forge
           for wheel_file in multipers*linux*.whl; do
             auditwheel show $wheel_file
@@ -122,10 +123,8 @@ jobs:
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
         if [[ ${{ matrix.os }} == "macos-13" ]]; then
-          cd dist
           micromamba install delocate -c conda-forge
           for wheel_file in multipers*macosx*x86*.whl; do
             delocate-listdeps $wheel_file
@@ -133,11 +132,9 @@ jobs:
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
 
         if [[ ${{ matrix.os }} == "macos-14" ]]; then
-          cd dist
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*arm64*.whl; do
             delocate-listdeps $wheel_file
@@ -145,9 +142,9 @@ jobs:
             rm $wheel_file
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
-          cd ..
         fi
 
+        cd ..
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v4
       with:
