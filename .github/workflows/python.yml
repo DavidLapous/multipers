@@ -14,16 +14,61 @@ on:
 
 
 jobs:
-  build_test:
-    name: Build and Test 
+  create_sources:
+    name: Create source dist
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mamba-org/setup-micromamba@v2
+      with:
+        micromamba-version: 'latest'
+        init-shell: bash
+        condarc: |
+          channels:
+            - conda-forge
+    - name: Build source distribution
+      shell: bash -el {0}
+      run: |
+        micromamba create -n sources python=3.11 pip setuptools cython numpy python-build
+        micromamba activate sources
+        python -m build --sdist --no-isolation
+    - name: Upload sources 
+      uses: actions/upload-artifact@v4
+      with:
+        name: sources-sdist
+        path: dist
+    - name: test archive
+      shell: bash -el {0}
+      run: |
+        tar -tf dist/*.tar.gz
+  build:
+    name: Build
+    needs: create_sources
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: ["ubuntu-latest", "macos-13", "macos-14", "windows-latest"] # macos13 is x86_64 and macos-latest=14 is arm64
-        # monitor  https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+        os: ["ubuntu-latest", "macos-13", "macos-14","windows-latest"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: sources
+    - name: (windows) install tar stuff and extract
+      if: ${{ matrix.os == 'windows-latest' }}
+      shell: pwsh
+      run: |
+        choco install bzip2 7zip
+        7z x multipers-*.tar.gz
+        7z x multipers-*.tar
+        Move-Item -Path multipers-*/* -Destination .
+        dir
+    - name: (unix) extract sources 
+      if: ${{ matrix.os != 'windows-latest' }}
+      run: |
+        tar -xvf multipers-*.tar.gz
+        mv multipers-*/* .
+        ls
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest' 
@@ -44,7 +89,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel -c conda-forge
+        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
@@ -59,8 +104,8 @@ jobs:
     - name: Build package
       shell: bash -el {0}
       run: |
+        ls
         micromamba activate build
-        python setup.py sdist
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
@@ -71,14 +116,14 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        python setup.py build_ext -j4 --inplace bdist_wheel
+        python -m build . --no-isolation --wheel
 
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
+      if: ${{ matrix.os != 'windows-latest' }}
       run: |
         micromamba activate build
         cd dist
-
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           micromamba install auditwheel patchelf -c conda-forge
           for wheel_file in multipers*linux*.whl; do
@@ -107,19 +152,17 @@ jobs:
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
         fi
-
         cd ..
 
-    - name: Install and Test
+    - name: tests
       shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
         micromamba activate test
         pip install dist/*.whl
-        cd multipers 
+
         cd tests
         pytest -rvv .
-
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v4
       with:
