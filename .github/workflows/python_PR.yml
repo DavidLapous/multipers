@@ -19,9 +19,8 @@ jobs:
     - name: Build source distribution
       shell: bash -el {0}
       run: |
-        micromamba create -n sources python=3.11 pip setuptools cython numpy
+        micromamba create -n sources python=3.11 pip setuptools cython numpy python-build
         micromamba activate sources
-        pip install build --upgrade
         python -m build --sdist --no-isolation
     - name: Upload sources 
       uses: actions/upload-artifact@v4
@@ -80,7 +79,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel -c conda-forge
+        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
@@ -107,7 +106,6 @@ jobs:
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        pip install build --upgrade
         python -m build . --no-isolation --wheel
 
     - name: Fix wheels on Linux and Macos
