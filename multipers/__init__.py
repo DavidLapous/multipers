@@ -4,7 +4,7 @@ __version__ = _version("multipers")
 # Doc
 from multipers import (
     data,
-    filtration,
+    filtrations,
     grids,
     io,
     multiparameter_module_approximation,
@@ -20,7 +20,7 @@ from multipers.simplex_tree_multi import SimplexTreeMulti
 
 __all__ = [
     "data",
-    "filtration",
+    "filtrations",
     "grids",
     "io",
     "multiparameter_module_approximation",

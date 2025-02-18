@@ -1,7 +1,7 @@
 import multipers as mp
 import numpy as np
 import gudhi as gd
-import multipers.filtration as mpf
+import multipers.filtrations as mpf
 import pytest
 
 nptss = [50]
