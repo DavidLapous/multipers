@@ -176,7 +176,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         st = alpha_complex.create_simplex_tree(max_alpha_square=self._threshold**2)
         vertices = np.array([i for (i,), _ in st.get_skeleton(0)])
         new_points = np.asarray(
-            [alpha_complex.get_point(i) for i in vertices]
+            [alpha_complex.get_point(int(i)) for i in vertices]
         )  # Seems to be unsafe for some reason
         # new_points = x
         st = mp.simplex_tree_multi.SimplexTreeMulti(
