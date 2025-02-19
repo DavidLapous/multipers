@@ -104,7 +104,6 @@ input_path:str|os.PathLike = "multipers_input.scc"
 output_path:str|os.PathLike = "multipers_output.scc"
 
 
-_init_external_softwares()
 
 ## TODO : optimize with Python.h ?
 def scc_parser(path: str| os.PathLike):
@@ -228,6 +227,7 @@ or in you $PATH.
 For instance:
 {doc_soft_easy_install[soft]}
                                  """)
+_init_external_softwares()
 def _check_available(soft:str):
     _init_external_softwares()
     return pathes.get(soft,None) is not None
