@@ -1039,7 +1039,8 @@ class One_critical_filtration : public std::vector<T> {
                         std::lower_bound(filtration.begin(),
                                          filtration.end(),
                                          static_cast<typename oned_array::value_type>(Base::operator[](parameter))));
-      d = d == filtration.size() ? filtration.size() - 1 : d;
+      int num_filtration_values = filtration.size();
+      d = d == num_filtration_values ? std::max(num_filtration_values - 1,0) : d;
       Base::operator[](parameter) = coordinate ? static_cast<T>(d) : static_cast<T>(filtration[d]);
     }
   }
