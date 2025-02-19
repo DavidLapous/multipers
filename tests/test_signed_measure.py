@@ -14,7 +14,6 @@ degrees = [0, 1]
 mass_defaults = [None, "auto"]
 strats = [("regular_closest", 20), ("quantile", 20), ("regular", 17)]
 
-mio._init_external_softwares()
 mpfree_flag = mio._check_available("mpfree")
 
 

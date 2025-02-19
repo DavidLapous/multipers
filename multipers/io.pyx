@@ -65,7 +65,6 @@ doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
 
 available_reduce_softs = Literal["mpfree","multi_chunk","2pac"]
 
-
 def _path_init(soft:str|os.PathLike):
     a = which(f"./{soft}")
     b = which(f"{soft}")
@@ -105,6 +104,7 @@ input_path:str|os.PathLike = "multipers_input.scc"
 output_path:str|os.PathLike = "multipers_output.scc"
 
 
+_init_external_softwares()
 
 ## TODO : optimize with Python.h ?
 def scc_parser(path: str| os.PathLike):
@@ -255,8 +255,7 @@ def scc_reduce_from_str(
     backend: "mpfree", "multi_chunk" or "2pac"
     """
     global pathes, input_path, output_path
-    if pathes[backend] is None:
-        _init_external_softwares(requires=[backend])
+    assert _check_available(backend), f"Backend {backend} is not available."
 
 
     resolution_str = "--resolution" if full_resolution else ""
@@ -323,8 +322,7 @@ def scc_reduce_from_str_to_slicer(
     backend: "mpfree", "multi_chunk" or "2pac"
     """
     global pathes, input_path, output_path
-    if pathes[backend] is None:
-        _init_external_softwares(requires=[backend])
+    assert _check_available(backend), f"Backend {backend} is not available."
 
 
     resolution_str = "--resolution" if full_resolution else ""
@@ -443,8 +441,7 @@ def function_delaunay_presentation(
         id = str(threading.get_native_id())
     global input_path, output_path, pathes
     backend = "function_delaunay"
-    if  pathes[backend] is None :
-        _init_external_softwares(requires=[backend])
+    assert _check_available(backend), f"Backend {backend} is not available."
 
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')
@@ -492,8 +489,7 @@ def function_delaunay_presentation_to_slicer(
         id = str(threading.get_native_id())
     global input_path, output_path, pathes
     backend = "function_delaunay"
-    if  pathes[backend] is None :
-        _init_external_softwares(requires=[backend])
+    assert _check_available(backend), f"Backend {backend} is not available."
 
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')

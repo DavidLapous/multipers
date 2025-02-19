@@ -636,9 +636,9 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
-    from multipers.io import _init_external_softwares, function_delaunay_presentation_to_slicer
+    from multipers.io import _check_available, function_delaunay_presentation_to_slicer
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    _init_external_softwares(requires=["function_delaunay"])
+    assert _check_available("function_delaunay"), f"Could not find function_delaunay"
     function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
@@ -682,12 +682,12 @@ def minimal_presentation(
     and returns it as a slicer.
     Backends differents than `mpfree` are unstable.
     """
-    from multipers.io import _init_external_softwares, input_path, scc_reduce_from_str_to_slicer
+    from multipers.io import _check_available, input_path, scc_reduce_from_str_to_slicer
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
         warn(f"The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
         return slicer
-    _init_external_softwares(requires=[backend])
+    assert _check_available(backend), f"Backend {backend} is not available."
     if len(degrees)>0:
         def todo(int degree):
             return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
