@@ -2064,7 +2064,7 @@ inline void Summand<value_type>::complete_birth(const value_type precision) {
   for (std::size_t i = 0; i < birth_corners_.num_generators(); i++) {
     for (std::size_t j = i + 1; j < birth_corners_.num_generators(); j++) {
       value_type dinf = d_inf(birth_corners_[i], birth_corners_[j]);
-      if (dinf < precision) {
+      if (dinf < .99 * precision) { // for machine error ?
         _factorize_min(birth_corners_[i], birth_corners_[j]);
         birth_corners_[j].clear();
       }
@@ -2080,7 +2080,7 @@ inline void Summand<value_type>::complete_death(const value_type precision) {
   for (std::size_t i = 0; i < death_corners_.num_generators(); i++) {
     for (std::size_t j = i + 1; j < death_corners_.num_generators(); j++) {
       value_type d = d_inf(death_corners_[i], death_corners_[j]);
-      if (d < 1.1 * precision) {
+      if (d < .99 * precision) {
         _factorize_max(death_corners_[i], death_corners_[j]);
         death_corners_[j].clear();
       }
