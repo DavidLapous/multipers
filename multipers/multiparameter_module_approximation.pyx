@@ -166,6 +166,8 @@ def module_approximation(
         for i,m in enumerate(modules):
             mod.merge(m, input[i].minpres_degree)
         return mod
+    if len(input) == 0:
+        return PyModule_f64()
     if box is None:
         if is_simplextree_multi(input):
             box = input.filtration_bounds()
