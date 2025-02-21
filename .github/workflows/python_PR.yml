@@ -36,7 +36,7 @@ jobs:
     needs: create_sources
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         os: ["ubuntu-latest", "macos-13", "macos-14","windows-latest"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -62,13 +62,9 @@ jobs:
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest' 
-        # environment-file: environment.yml
-        # environment-name: build
         init-shell: >-
           bash
           powershell
-        # cache-environment: true
-        # post-cleanup: 'all'
         condarc: |
           channels:
             - conda-forge
@@ -79,7 +75,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
+        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler=1.6 cxx-compiler=1.6 -c conda-forge
@@ -158,5 +154,5 @@ jobs:
         pip install dist/*.whl
 
         cd tests
-        pytest -rvv .
+        pytest -rv .
 
