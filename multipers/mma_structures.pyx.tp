@@ -602,7 +602,6 @@ cdef class PyModule_{{SHORT}}:
         cdef Box[{{CTYPE}}] c_box = Box[{{CTYPE}}](box)
         out = np.array(self.cmod.get_landscape(degree, k, c_box, resolution))
         if plot:
-            plt.figure()
             aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
             extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
             plt.imshow(out.T, origin="lower", extent=extent, aspect=aspect)
@@ -636,7 +635,6 @@ cdef class PyModule_{{SHORT}}:
         out = np.array(self.cmod.get_landscapes(degree, ks, Box[{{CTYPE}}](box), resolution))
         if plot:
             to_plot = np.sum(out, axis=0)
-            plt.figure()
             aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
             extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
             plt.imshow(to_plot.T, origin="lower", extent=extent, aspect=aspect)
