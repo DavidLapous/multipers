@@ -15,7 +15,7 @@ cimport cython
 # from multipers.filtration_conversions cimport *
 # from multipers.mma_structures cimport boundary_matrix,float,pair,vector,intptr_t
 # cimport numpy as cnp
-
+current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
         "mpfree":"https://bitbucket.org/mkerber/mpfree/",
         "multi_chunk":"",
@@ -27,6 +27,8 @@ doc_soft_easy_install = {
 ```sh
 git clone {doc_soft_urls["mpfree"]}
 cd mpfree
+cmake . --fresh
+make
 sudo cp mpfree /usr/bin/
 cd .. 
 rm -rf mpfree
@@ -36,6 +38,8 @@ rm -rf mpfree
 ```sh
 git clone {doc_soft_urls["multi_chunk"]}
 cd multi_chunk
+cmake . --fresh
+make
 sudo cp multi_chunk /usr/bin/
 cd .. 
 rm -rf multi_chunk
@@ -45,6 +49,8 @@ rm -rf multi_chunk
 ```sh
 git clone {doc_soft_urls["function_delaunay"]}
 cd function_delaunay
+cmake . --fresh
+make
 sudo cp main /usr/bin/function_delaunay
 cd ..
 rm -rf function_delaunay
@@ -221,9 +227,10 @@ def _init_external_softwares(requires=[]):
             if pathes[soft] is None:
                 global doc_soft_urls
                 raise ValueError(f"""
-Did not found {soft}.
+Did not find {soft}.
 Install it from {doc_soft_urls[soft]}, and put it in your current directory,
 or in you $PATH.
+Documentation is available here: {current_doc_url}compilation.html#external-libraries
 For instance:
 {doc_soft_easy_install[soft]}
                                  """)
