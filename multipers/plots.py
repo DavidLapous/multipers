@@ -254,7 +254,7 @@ def plot2d_PyModule(
     dimension=-1,
     separated=False,
     min_persistence=0,
-    alpha=1,
+    alpha=.8,
     verbose=False,
     save=False,
     dpi=200,
