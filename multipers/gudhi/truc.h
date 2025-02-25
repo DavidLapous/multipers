@@ -184,7 +184,7 @@ class SimplicialStructure {
 
   inline unsigned int max_dimension() const { return max_dimension_; }
 
-  int prune_above_dimension(int dim) { throw; }
+  int prune_above_dimension([[maybe_unused]] int dim) { throw "Not implemented"; }
 
  private:
   std::vector<std::vector<index_type>> boundaries;
@@ -238,17 +238,28 @@ class Truc {
     std::iota(generator_order.begin(), generator_order.end(), 0);  // range
   }
 
-  Truc() {};
-
-  Truc &operator=(const Truc &other) {
-    generator_filtration_values = other.generator_filtration_values;
-    generator_order = other.generator_order;
-    structure = other.structure;
-    persistence = other.persistence;
-    filtration_container = other.filtration_container;
+  Truc(const Truc &other)
+      : generator_filtration_values(other.generator_filtration_values),
+        generator_order(other.generator_order),
+        structure(other.structure),
+        filtration_container(other.filtration_container),
+        persistence(other.persistence) {
     persistence._update_permutation_ptr(generator_order);
+  }
+
+  Truc &operator=(Truc other) {
+    if (this != &other) {
+      generator_filtration_values = other.generator_filtration_values;
+      generator_order = other.generator_order;
+      structure = other.structure;
+      filtration_container = other.filtration_container;
+      persistence = other.persistence;
+      persistence._update_permutation_ptr(generator_order);
+    }
     return *this;
-  };
+  }
+
+  Truc() {};
 
   template <bool ignore_inf>
   std::vector<std::pair<int, std::vector<index_type>>> get_current_boundary_matrix() {
@@ -375,7 +386,7 @@ class Truc {
     return PersBackend(structure, out_gen_order);
   }
 
-  inline const bool has_persistence() { return this->persistence.size(); };
+  inline bool has_persistence() const { return this->persistence.size(); };
 
   inline void compute_persistence(const bool ignore_inf = true) {
     this->persistence = this->compute_persistence_out(
@@ -718,7 +729,7 @@ class Truc {
 
     inline TrucThread weak_copy() const { return TrucThread(*truc_ptr); }
 
-    inline const bool has_persistence() { return this->persistence.size(); };
+    inline bool has_persistence() const { return this->persistence.size(); };
 
     inline const PersBackend &get_persistence() const { return persistence; }
 

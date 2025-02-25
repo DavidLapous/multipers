@@ -583,7 +583,7 @@ class static_tensor_view_view
   // 	}
   // }
   template <typename T = std::initializer_list<indices_type>>
-  inline dtype &operator[](T coords) {
+  inline dtype &operator[]([[maybe_unused]] T coords) {
     throw std::logic_error("Not yet implemented");
     // this->compute_cum_res();
     // assert(this->cum_resolution_view.size() == coords.size());

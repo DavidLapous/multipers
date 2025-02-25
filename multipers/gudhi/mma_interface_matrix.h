@@ -228,7 +228,7 @@ class Persistence_backend_matrix {
 
   inline Barcode get_barcode() { return Barcode(matrix_, permutation_); }
 
-  inline std::size_t size() { return this->matrix_.get_number_of_columns(); }
+  inline std::size_t size() const { return this->matrix_.get_number_of_columns(); }
 
   inline friend std::ostream &operator<<(std::ostream &stream, Persistence_backend_matrix &structure) {
     stream << "[\n";

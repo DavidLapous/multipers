@@ -39,7 +39,7 @@ class Persistence_backend_h0 {
   using cycle_type = std::vector<unsigned int>;
   static const bool is_vine = true;
 
-  std::vector<cycle_type> get_representative_cycles(bool update = true) const { throw "Unimplemented"; }
+  std::vector<cycle_type> get_representative_cycles([[maybe_unused]] bool update = true) const { throw "Unimplemented"; }
 
   class Barcode_iterator : public boost::iterator_facade<Barcode_iterator, const Bar &, boost::forward_traversal_tag> {
    public:

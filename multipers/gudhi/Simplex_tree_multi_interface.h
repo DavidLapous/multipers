@@ -165,7 +165,7 @@ class Simplex_tree_multi_interface
 
   void compute_extended_filtration() { throw std::logic_error("Incompatible with multipers"); }
 
-  Simplex_tree_multi_interface *collapse_edges(int nb_collapse_iteration) {
+  Simplex_tree_multi_interface *collapse_edges([[maybe_unused]] int nb_collapse_iteration) {
     throw std::logic_error("Incompatible with multipers");
   }
 

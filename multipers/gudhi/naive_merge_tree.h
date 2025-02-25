@@ -314,7 +314,7 @@ class Naive_merge_forest {
   struct Barcode {
     Barcode() {}
 
-    Barcode(int numberOfSimplices, int numberOfVertices)
+    Barcode(int numberOfSimplices, [[maybe_unused]] int numberOfVertices)
         : barcode_(numberOfSimplices), positionToBar_(numberOfSimplices), nextBarIndex_(0) {}
 
     friend void swap(Barcode &mf1, Barcode &mf2) {
