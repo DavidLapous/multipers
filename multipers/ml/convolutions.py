@@ -514,7 +514,6 @@ class KNNmean:
             assert isinstance(x, torch.Tensor), "Backend has to be numpy or torch"
             from pykeops.torch import Vi, Vj
 
-        self._x = x
         D = x.shape[1]
         X_i = Vi(0, D)
         X_j = Vj(1, D)
@@ -531,6 +530,7 @@ class KNNmean:
         else:
             raise NotImplementedError(f"The '{self.metric}' distance is not supported.")
 
+        self._x = x
         self._KNN_fun = D_ij.Kmin(self.k, dim=1)
         return self
 
