@@ -502,7 +502,7 @@ class KNNmean:
     def __init__(self, k: int, metric: str = "euclidean"):
         self.k = k
         self.metric = metric
-        self._KNN_fun = lambda x, y: None
+        self._KNN_fun = None
         self._x = None
 
     def fit(self, x):
