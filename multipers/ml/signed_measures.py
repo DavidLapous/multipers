@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import multipers as mp
 from multipers.grids import compute_grid as reduce_grid
-from multipers.ml.convolutions import available_kernels, convolution_signed_measures
+from multipers.filtrations.density import available_kernels, convolution_signed_measures
 from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
 
 

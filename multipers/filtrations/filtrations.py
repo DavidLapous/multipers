@@ -7,13 +7,13 @@ from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 
-from multipers.ml.convolutions import DTM, available_kernels
+from multipers.filtrations.density import DTM, available_kernels
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 
 try:
     import pykeops
 
-    from multipers.ml.convolutions import KDE
+    from multipers.filtrations.density import KDE
 except ImportError:
     from sklearn.neighbors import KernelDensity
     from warnings import warn

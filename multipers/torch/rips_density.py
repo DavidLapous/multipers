@@ -5,7 +5,7 @@ import torch
 import gudhi as gd
 
 import multipers as mp
-from multipers.ml.convolutions import DTM, KDE
+from multipers.filtrations.density import DTM, KDE
 from multipers.simplex_tree_multi import _available_strategies
 from multipers.torch.diff_grids import get_grid
 

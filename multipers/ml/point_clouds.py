@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import multipers as mp
 import multipers.slicer as mps
-from multipers.ml.convolutions import DTM, KDE, available_kernels
+from multipers.filtrations.density import DTM, KDE, available_kernels
 
 
 class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
