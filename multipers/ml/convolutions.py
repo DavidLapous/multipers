@@ -497,6 +497,48 @@ class DTM:
         return DTMs
 
 
+## code taken from pykeops doc (https://www.kernel-operations.io/keops/_auto_benchmarks/benchmark_KNN.html)
+class KNNmean:
+    def __init__(self, k: int, metric: str = "euclidean"):
+        self.k = k
+        self.metric = metric
+        self._KNN_fun = lambda x, y: None
+        self._x = None
+
+    def fit(self, x):
+        if isinstance(x, np.ndarray):
+            from pykeops.numpy import Vi, Vj
+        else:
+            import torch
+
+            assert isinstance(x, torch.Tensor), "Backend has to be numpy or torch"
+            from pykeops.torch import Vi, Vj
+
+        self._x = x
+        D = x.shape[1]
+        X_i = Vi(0, D)
+        X_j = Vj(1, D)
+
+        # Symbolic distance matrix:
+        if self.metric == "euclidean":
+            D_ij = ((X_i - X_j) ** 2).sum(-1)
+        elif self.metric == "manhattan":
+            D_ij = (X_i - X_j).abs().sum(-1)
+        elif self.metric == "angular":
+            D_ij = -(X_i | X_j)
+        elif self.metric == "hyperbolic":
+            D_ij = ((X_i - X_j) ** 2).sum(-1) / (X_i[0] * X_j[0])
+        else:
+            raise NotImplementedError(f"The '{self.metric}' distance is not supported.")
+
+        self._KNN_fun = D_ij.Kmin(self.k, dim=1)
+        return self
+
+    def score_samples(self, x):
+        assert self._x is not None and self._KNN_fun is not None, "Fit first."
+        return self._KNN_fun(x, self._x).sum(axis=1) / self.k
+
+
 # def _pts_convolution_sparse(pts:np.ndarray, pts_weights:np.ndarray, filtration_grid:Iterable[np.ndarray], kernel="gaussian", bandwidth=0.1, **more_kde_args):
 # 	"""
 # 	Old version of `convolution_signed_measures`. Scikitlearn's convolution is slower than the code above.
