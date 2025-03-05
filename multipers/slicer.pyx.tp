@@ -258,7 +258,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         direction = 1 if direction is None else np.asarray(direction)[None,None,:]
         return tuple(bc[:,:,None]*direction + basepoint for bc in bcs)
 
-    def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True, bool full=False):
+    def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
         Computes the persistence on a line L defined by 
          - a basepoint (num_parameters,) array
@@ -267,7 +267,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Warning: This is not parallelizable. Use `persitence_on_lines`.
         """
         self.push_to_line(basepoint,direction)
-        self.truc.compute_persistence()
+        self.truc.compute_persistence(ignore_infinite_filtration_values)
         if keep_inf:
             bcs = tuple(np.asarray(stuff, dtype = {{D['PY_VALUE_TYPE']}}) for stuff in self.truc.get_barcode())
         else:
@@ -277,7 +277,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             bcs = {{D['PYTHON_TYPE']}}._bc_to_full(bcs, basepoint, direction)
         return bcs
 
-    def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False):
+    def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
         Same as `persistence_on_line`, but with vineyards operation between
         lines if `self.is_vine`, and in parallel otherwise.
@@ -288,11 +288,11 @@ cdef class {{D['PYTHON_TYPE']}}:
         if directions is None:
             c_basepoints = basepoints
             with nogil:
-                c_out = self.truc.persistence_on_lines(c_basepoints)
+                c_out = self.truc.persistence_on_lines(c_basepoints, ignore_infinite_filtration_values)
         else:
             c_truc = zip(basepoints,directions)
             with nogil:
-                c_out = self.truc.persistence_on_lines(c_truc)
+                c_out = self.truc.persistence_on_lines(c_truc, ignore_infinite_filtration_values)
         cdef int num_bc = c_basepoints.size()
         
         if keep_inf:

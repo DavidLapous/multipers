@@ -838,19 +838,23 @@ class Truc {
 
   // FOR Python interface, but I'm not fan. Todo: do the lambda function in
   // cython?
-  inline std::vector<split_barcode> persistence_on_lines(const std::vector<std::vector<value_type>> &basepoints) {
+  inline std::vector<split_barcode> persistence_on_lines(const std::vector<std::vector<value_type>> &basepoints,
+                                                         bool ignore_inf) {
     return barcodes(
         [](const std::vector<value_type> &basepoint) { return Gudhi::multi_persistence::Line<value_type>(basepoint); },
-        basepoints);
+        basepoints,
+        ignore_inf);
   }
 
   inline std::vector<split_barcode> persistence_on_lines(
-      const std::vector<std::pair<std::vector<value_type>, std::vector<value_type>>> &bp_dirs) {
+      const std::vector<std::pair<std::vector<value_type>, std::vector<value_type>>> &bp_dirs,
+      bool ignore_inf) {
     return barcodes(
         [](const std::pair<std::vector<value_type>, std::vector<value_type>> &bpdir) {
           return Gudhi::multi_persistence::Line<value_type>(bpdir.first, bpdir.second);
         },
-        bp_dirs);
+        bp_dirs,
+        ignore_inf);
   }
 
   void build_from_scc_file(const std::string &inFilePath,
