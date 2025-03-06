@@ -219,3 +219,13 @@ def test_kcritical_batch_insert():
          (array([2]), [array([0., 1.]), array([1., 0.])])
     ]
     assert_st_simplices(st, goal)
+
+
+def test_5():
+    st3 = random_st(num_parameters=3)
+    st5 = mp.SimplexTreeMulti(st3, num_parameters=5)
+    assert st5.num_parameters == 5
+    for s,f in st5:
+        assert len(f) == 5
+    assert mp.SimplexTreeMulti(st5,num_parameters=3) == st3
+

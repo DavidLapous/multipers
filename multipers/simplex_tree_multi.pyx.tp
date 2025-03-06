@@ -106,7 +106,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
     # cdef Simplex_tree_persistence_interface * pcohptr
     # Fake constructor that does nothing but documenting the constructor
-    def __init__(self, other = None, num_parameters:int=2,default_values=[], safe_conversion=False):
+    def __init__(self, other = None, num_parameters:int=-1,default_values=[], safe_conversion=False):
         """SimplexTreeMulti constructor.
 
         :param other: If `other` is `None` (default value), an empty `SimplexTreeMulti` is created.
@@ -139,7 +139,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
     def is_kcritical(self)->bool:
       return {{is_kcritical}}
     # The real cython constructor
-    def __cinit__(self, other = None, int num_parameters=2, 
+    def __cinit__(self, other = None, int num_parameters=-1, 
                   default_values=np.asarray([SimplexTreeMulti_{{FSHORT}}.T_minus_inf()]), # I'm not sure why `[]` does not work. Cython bug ? 
                   bool safe_conversion=False,
                   ): #TODO doc
@@ -156,10 +156,13 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             if isinstance(other, SimplexTreeMulti_{{FSHORT}}):
                 other_ptr = other.thisptr
                 self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}](dereference(<Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]*>other_ptr))) ## prevents calling destructor of other
-                num_parameters = other.num_parameters
+                if num_parameters <=0:
+                    num_parameters = other.num_parameters
                 self.filtration_grid = other.filtration_grid
             elif isinstance(other, SimplexTree): # Constructs a SimplexTreeMulti from a SimplexTree
                 self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]())
+                if num_parameters <= 0:
+                    num_parameters = 1
                 if safe_conversion or SAFE_CONVERSION:
                     new_st_multi  = _safe_simplextree_multify_{{FSHORT}}(other, num_parameters = num_parameters, default_values=np.asarray(default_values))
                     self.thisptr, new_st_multi.thisptr = new_st_multi.thisptr, self.thisptr
@@ -174,8 +177,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             else:
                 raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
         else:
+            if num_parameters <=0:
+                num_parameters = 2 # I don't know how dangerous this is, but this is mostly used.
             self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]())
-        self.get_ptr().set_number_of_parameters(num_parameters)
+        self.set_num_parameter(num_parameters)
         self._is_function_simplextree = False
         self.filtration_grid=[[]*num_parameters]
 
@@ -1635,7 +1640,7 @@ def is_simplextree_multi(input)->bool:
 
 
 
-def SimplexTreeMulti(input=None, int num_parameters=2, dtype:type = np.float64, bool kcritical = False,**kwargs) ->  SimplexTreeMulti_type:
+def SimplexTreeMulti(input=None, int num_parameters=-1, dtype:type = np.float64, bool kcritical = False,**kwargs) ->  SimplexTreeMulti_type:
     """SimplexTreeMulti constructor.
 
     :param other: If `other` is `None` (default value), an empty `SimplexTreeMulti` is created.
