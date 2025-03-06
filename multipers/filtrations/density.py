@@ -180,9 +180,10 @@ def _pts_convolution_pykeops(
 
 
 def gaussian_kernel(x_i, y_j, bandwidth):
+    D = x_i.shape[-1]
     exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=-1) / 2
     # float is necessary for some reason (pykeops fails)
-    kernel = (exponent).exp() / (bandwidth * float(np.sqrt(2 * np.pi)))
+    kernel = (exponent).exp() / float((bandwidth*np.sqrt(2 * np.pi))**D) 
     return kernel
 
 
@@ -339,7 +340,7 @@ class KDE:
             kernel *= w
         if return_kernel:
             return kernel
-        density_estimation = kernel.sum(dim=0).ravel() / kernel.shape[0]  # mean
+        density_estimation = kernel.sum(dim=0).squeeze() / kernel.shape[0]  # mean
         return (
             self._backend.log(density_estimation)
             if self.return_log
