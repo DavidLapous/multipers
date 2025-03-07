@@ -86,7 +86,7 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba create -n build python=${{matrix.python-version}} pip -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
         micromamba install 'gudhi>=3.10' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
