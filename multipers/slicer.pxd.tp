@@ -58,6 +58,9 @@ cdef extern from "Persistence_slices_interface.h":
       {{endif}}
 
       {{D['C_TEMPLATE_TYPE']}}& operator=(const {{D['C_TEMPLATE_TYPE']}}&)
+      
+      {{D['C_TEMPLATE_TYPE']}} colexical_rearange() except + nogil
+
       vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode() nogil
       void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
       void set_one_filtration(const vector[{{D['C_VALUE_TYPE']}}]&) nogil

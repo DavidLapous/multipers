@@ -215,6 +215,13 @@ cdef class {{D['PYTHON_TYPE']}}:
         self.minpres_degree = -1
     {{endif}}
     
+    def to_colexical(self)->{{D['PYTHON_TYPE']}}:
+        assert not self.is_squeezed, "Unsqueeze first"
+        new_slicer = {{D['PYTHON_TYPE']}}()
+        new_slicer.truc = self.truc.colexical_rearange()
+        new_slicer.minpres_degree = self.minpres_degree
+        return new_slicer
+
     def copy(self)->{{D['PYTHON_TYPE']}}:
         """
         Returns a copy of the slicer.

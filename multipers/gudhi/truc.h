@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <boost/mpl/aux_/na_fwd.hpp>
 #include <cassert>
+#include <csignal>
 #include <cstddef>
 #include <cstdint>
 // #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
@@ -114,6 +115,19 @@ class PresentationStructure {
     generator_dimensions.resize(idx);
     max_dimension_ = generator_dimensions.size() ? generator_dimensions.back() : -1;
     return idx;
+  }
+
+  PresentationStructure permute(const std::vector<index_type> &order) const {
+    std::vector<std::vector<index_type>> new_generators(generators.size());
+    std::vector<int> new_generator_dimensions(generator_dimensions.size());
+    for (std::size_t i = 0; i < order.size(); i++) {
+      new_generators[i] = std::vector<index_type>(generators[order[i]].size());
+      for (std::size_t j = 0; j < generators[order[i]].size(); j++) {
+        new_generators[i][j] = order[generators[order[i]][j]];
+      }
+      new_generator_dimensions[i] = generator_dimensions[order[i]];
+    }
+    return PresentationStructure(new_generators, new_generator_dimensions);
   }
 
  private:
@@ -260,6 +274,44 @@ class Truc {
   }
 
   Truc() {};
+
+  inline bool dimension_order(const index_type &i, const index_type &j) const {
+    return structure.dimension(i) < structure.dimension(j);
+  };
+
+  inline bool colexical_order(const index_type &i, const index_type &j) const  {
+    if (structure.dimension(i) > structure.dimension(j)) return false;
+    if (structure.dimension(i) < structure.dimension(j)) return true;
+    if constexpr (MultiFiltration::is_multicritical())  // TODO : this may not be the best
+      throw "Not implemented in the multicritical case";
+
+    for (int idx = generator_filtration_values[i].num_parameters() - 1; idx >= 0; --idx) {
+      if (generator_filtration_values[i][idx] < generator_filtration_values[j][idx])
+        return true;
+      else if (generator_filtration_values[i][idx] > generator_filtration_values[j][idx])
+        return false;
+    }
+    return false;
+  };
+
+
+  template <class Fun>
+  inline Truc rearange_sort(const Fun&& fun) const {
+    std::vector<index_type> permutation(generator_order.size());
+    std::iota(permutation.begin(), permutation.end(), 0);
+    std::sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) {
+      return fun(i, j);
+    });
+    std::vector<MultiFiltration> new_filtration(generator_filtration_values.size());
+    for (std::size_t i = 0; i < generator_filtration_values.size(); i++) {
+      new_filtration[i] = generator_filtration_values[permutation[i]];
+    }
+    return Truc(structure.permute(permutation), new_filtration);
+  }
+
+  Truc colexical_rearange() const {
+    return rearange_sort([this](std::size_t i, std::size_t j) { return this->colexical_order(i, j); });
+  }
 
   template <bool ignore_inf>
   std::vector<std::pair<int, std::vector<index_type>>> get_current_boundary_matrix() {
