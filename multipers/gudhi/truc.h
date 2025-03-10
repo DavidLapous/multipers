@@ -118,13 +118,21 @@ class PresentationStructure {
   }
 
   PresentationStructure permute(const std::vector<index_type> &order) const {
+    if (order.size() != generators.size()) {
+      throw std::invalid_argument("Permutation order must have the same size as the number of generators.");
+    }
+    std::vector<index_type> inverse_order(order.size());
+    for (std::size_t i = 0; i < order.size(); i++) {
+      inverse_order[order[i]] = i;
+    }
     std::vector<std::vector<index_type>> new_generators(generators.size());
     std::vector<int> new_generator_dimensions(generator_dimensions.size());
     for (std::size_t i = 0; i < order.size(); i++) {
       new_generators[i] = std::vector<index_type>(generators[order[i]].size());
       for (std::size_t j = 0; j < generators[order[i]].size(); j++) {
-        new_generators[i][j] = order[generators[order[i]][j]];
+        new_generators[i][j] = inverse_order[generators[order[i]][j]];
       }
+      std::sort(new_generators[i].begin(), new_generators[i].end());
       new_generator_dimensions[i] = generator_dimensions[order[i]];
     }
     return PresentationStructure(new_generators, new_generator_dimensions);

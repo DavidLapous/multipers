@@ -89,6 +89,7 @@ def integrate_measure(
         grid_strategy:str="regular",
         resolution:int|list[int]=100,
         bool return_grid=False,
+        bool plot=False,
         **get_fitration_kwargs,
         ):
     """
@@ -126,6 +127,9 @@ def integrate_measure(
     for i in range(num_pts): 
         cone = tuple(slice(c,r) for r,c in zip(resolution,pts_coords[:,i]))
         out[cone] += weights[i] 
+    if plot:
+        from multipers.plots import plot_surface
+        plot_surface(filtration_grid, out, discrete_surface=True)
     if return_grid:
         return out,filtration_grid
     return out

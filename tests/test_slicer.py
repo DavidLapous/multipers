@@ -219,3 +219,12 @@ def test_pkl():
         assert s != s3
         assert s != s4
         assert s == pkl.loads(pkl.dumps(s))
+
+def test_colexical():
+    from multipers.tests import random_st
+    from multipers.distances import sm_distance
+
+    s = mp.Slicer(random_st())
+    s1, = mp.signed_measure(s, degree=1)
+    s2, = mp.signed_measure(s.to_colexical(), degree=1)
+    assert np.isclose(sm_distance(s1,s2,),0 )
