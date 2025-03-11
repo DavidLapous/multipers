@@ -1,4 +1,6 @@
 #pragma once
+#include "gudhi/Matrix.h"
+#include "gudhi/mma_interface_matrix.h"
 #include "gudhi/Multi_persistence/Line.h"
 #include "multiparameter_module_approximation/format_python-cpp.h"
 #include <gudhi/One_critical_filtration.h>
@@ -9,7 +11,6 @@
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
-// #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -137,6 +138,8 @@ class PresentationStructure {
     }
     return PresentationStructure(new_generators, new_generator_dimensions);
   }
+
+  void update_matrix(std::vector<std::vector<index_type>> &new_gens) { std::swap(generators, new_gens); }
 
  private:
   std::vector<std::vector<index_type>> generators;
@@ -287,7 +290,7 @@ class Truc {
     return structure.dimension(i) < structure.dimension(j);
   };
 
-  inline bool colexical_order(const index_type &i, const index_type &j) const  {
+  inline bool colexical_order(const index_type &i, const index_type &j) const {
     if (structure.dimension(i) > structure.dimension(j)) return false;
     if (structure.dimension(i) < structure.dimension(j)) return true;
     if constexpr (MultiFiltration::is_multicritical())  // TODO : this may not be the best
@@ -302,14 +305,11 @@ class Truc {
     return false;
   };
 
-
   template <class Fun>
-  inline Truc rearange_sort(const Fun&& fun) const {
+  inline Truc rearange_sort(const Fun &&fun) const {
     std::vector<index_type> permutation(generator_order.size());
     std::iota(permutation.begin(), permutation.end(), 0);
-    std::sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) {
-      return fun(i, j);
-    });
+    std::sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) { return fun(i, j); });
     std::vector<MultiFiltration> new_filtration(generator_filtration_values.size());
     for (std::size_t i = 0; i < generator_filtration_values.size(); i++) {
       new_filtration[i] = generator_filtration_values[permutation[i]];

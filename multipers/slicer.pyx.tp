@@ -231,6 +231,12 @@ cdef class {{D['PYTHON_TYPE']}}:
         copy_.minpres_degree = self.minpres_degree
         copy_.filtration_grid = self.filtration_grid
         return copy_
+    def fix_presentation(self, int dim):
+        """
+        Warning. this is inline
+        """
+        self.truc.fix_presentation(dim)
+        return self
     def get_barcode(self, bool keep_inf = False):
         """
         Returns the current barcode.

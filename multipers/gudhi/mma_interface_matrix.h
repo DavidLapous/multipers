@@ -63,14 +63,15 @@ struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_op
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct fix_presentation_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
   using Index = std::uint32_t;
-  static const bool has_map_column_container = true;
-  static const bool has_removable_columns = true;  // WARN : idx will change if map is not true
+  static const bool has_map_column_container = false;
+  static const bool has_removable_columns = false;  // WARN : idx will change if map is not true
 };
 
 template <class Matrix_options, class Boundary_matrix_type>
 class Persistence_backend_matrix {
  public:
   using matrix_type = Gudhi::persistence_matrix::Matrix<Matrix_options>;
+  using options = Matrix_options;
   using cycle_type = typename matrix_type::Cycle;
   static const bool is_vine = Matrix_options::has_vine_update;
 
