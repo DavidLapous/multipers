@@ -6,7 +6,6 @@
 #include <gudhi/One_critical_filtration.h>
 #include <gudhi/Multi_critical_filtration.h>
 #include <algorithm>
-#include <boost/mpl/aux_/na_fwd.hpp>
 #include <cassert>
 #include <csignal>
 #include <cstddef>
