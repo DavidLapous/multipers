@@ -29,6 +29,12 @@ namespace multiparameter {
 namespace truc_interface {
 using index_type = std::uint32_t;
 
+template <typename T, typename = void>
+struct has_columns : std::false_type {};
+
+template <typename T>
+struct has_columns<T, std::void_t<typename T::options>> : std::true_type {};
+
 class PresentationStructure {
  public:
   PresentationStructure() {}
@@ -322,17 +328,17 @@ class Truc {
   }
 
   void fix_presentation(int dim) {
-    if constexpr (MultiFiltration::is_multicritical() ||
-                  !std::is_same_v<Structure, PresentationStructure>)  // TODO : this may not be the best
+    if constexpr (MultiFiltration::is_multicritical() || !std::is_same_v<Structure, PresentationStructure> ||
+                  !has_columns<PersBackend>::value)  // TODO : this may not be the best
     {
-      throw "Not implemented in the multicritical case";
+      throw std::invalid_argument("Not implemented for this Truc");
     } else {
       const bool verbose = false;
       // filtration values are assumed to be dim + colexicographically sorted
+      // vector seem to be good here
       using SmallMatrix = Gudhi::persistence_matrix::Matrix<
-            Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type>>;
+          Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type>>;
 
-      // Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET
       // lexico iterator
       struct Grid {
         Grid(const std::vector<MultiFiltration> &F) {

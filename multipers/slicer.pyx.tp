@@ -231,7 +231,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         copy_.minpres_degree = self.minpres_degree
         copy_.filtration_grid = self.filtration_grid
         return copy_
-    def fix_presentation(self, int dim):
+    def _fix_pres(self, int dim):
         """
         Warning. this is inline
         """
