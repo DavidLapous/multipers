@@ -12,11 +12,11 @@ columns_name = [  # only one column is necessary
         # "SET",
         # "HEAP",
         # "UNORDERED_SET",
-        # "NAIVE_VECTOR",
+        "NAIVE_VECTOR",
         # "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
-        "SMALL_VECTOR",
+        # "SMALL_VECTOR",
     )
 ]
 
