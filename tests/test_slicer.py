@@ -1,3 +1,5 @@
+import pickle as pkl
+
 import numpy as np
 import pytest
 from numpy import array
@@ -5,7 +7,6 @@ from numpy import array
 import multipers as mp
 import multipers.slicer as mps
 from multipers.tests import assert_sm
-import pickle as pkl
 
 mpfree_flag = mp.io._check_available("mpfree")
 fd_flag = mp.io._check_available("function_delaunay")
@@ -204,27 +205,49 @@ def test_external(dim, degree):
         np.unique(fd_.get_dimensions()), [degree, degree + 1, degree + 2]
     )  ## resolution by default
 
+
 def test_pkl():
-    for num_params in range(1,4):
-        img = np.random.uniform(size=(20,20,num_params))
+    for num_params in range(1, 4):
+        img = np.random.uniform(size=(20, 20, num_params))
         img2 = np.array(img)
-        img2[0,0,0]+=1
+        img2[0, 0, 0] += 1
         s = mp.slicer.from_bitmap(img)
         s2 = mp.slicer.from_bitmap(img2)
-        s3 = type(s)(s.get_boundaries()[:-1], s.get_dimensions()[:-1], s.get_filtrations()[:-1])
-        s4 = type(s)(s.get_boundaries(), s.get_dimensions()+1, s.get_filtrations())
-        assert len(s)> np.prod(img.shape[:-1])+1
+        s3 = type(s)(
+            s.get_boundaries()[:-1], s.get_dimensions()[:-1], s.get_filtrations()[:-1]
+        )
+        s4 = type(s)(s.get_boundaries(), s.get_dimensions() + 1, s.get_filtrations())
+        assert len(s) > np.prod(img.shape[:-1]) + 1
         assert s == s.copy()
         assert s != s2
         assert s != s3
         assert s != s4
         assert s == pkl.loads(pkl.dumps(s))
 
+
 def test_colexical():
-    from multipers.tests import random_st
     from multipers.distances import sm_distance
+    from multipers.tests import random_st
 
     s = mp.Slicer(random_st())
-    s1, = mp.signed_measure(s, degree=1)
-    s2, = mp.signed_measure(s.to_colexical(), degree=1)
-    assert np.isclose(sm_distance(s1,s2,),0 )
+    (s1,) = mp.signed_measure(s, degree=1)
+    (s2,) = mp.signed_measure(s.to_colexical(), degree=1)
+    assert np.isclose(
+        sm_distance(
+            s1,
+            s2,
+        ),
+        0.0,
+    )
+
+    _s = s.to_colexical()
+    F = np.array(_s.get_filtrations())
+    dims = _s.get_dimensions()
+    dims_shift = np.searchsorted(dims, np.unique(dims)[1:])
+    G = F[1:] - F[:-1]
+    num_parameters = G.shape[1]
+    idx = np.arange(G.shape[0])
+    for i in range(num_parameters - 1, 0, -1):
+        idx = np.argwhere(G[idx, i] < 0).squeeze()
+    for stuff in idx:
+        assert stuff + 1 in dims_shift, "Colexical sort issue"
