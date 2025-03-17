@@ -63,6 +63,7 @@ struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_op
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct fix_presentation_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
   using Index = std::uint32_t;
+  static const bool has_row_access = true;
   static const bool has_map_column_container = false;
   static const bool has_removable_columns = false;  // WARN : idx will change if map is not true
 };
