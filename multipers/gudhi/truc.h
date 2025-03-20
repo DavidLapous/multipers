@@ -369,7 +369,7 @@ class Truc {
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
       using SmallMatrix = Gudhi::persistence_matrix::Matrix<
-          Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type>>;
+          Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type, !use_grid>>;
 
       // lexico iterator
       auto lex_cmp = [&](const MultiFiltration &a, const MultiFiltration &b) { return lexical_order(a, b); };
@@ -533,7 +533,7 @@ class Truc {
       std::vector<int> pivot_cache(ndpp);
       std::vector<bool> less_than_grid_value(nd + ndpp);
       // update the grid
-      std::function<void(int)> update_queue_with_col = [&](int j) {
+      auto update_queue_with_col = [&](int j, const bool always = false) {
         if constexpr (!use_grid) {
           // if (valid_columns[j]) return;
           // add lubs of possible columns to the queue
@@ -546,23 +546,31 @@ class Truc {
               int possible_pivot = *row_idx;
               for (const auto &entry : M.get_row(possible_pivot)) {
                 const auto &idx = entry.get_column_index();
-                if (idx <= j || valid_columns[idx]) continue;
+                if (!always && (idx <= j || valid_columns[idx])) continue;
                 const MultiFiltration &col2 = get_fil(idx);
                 const MultiFiltration &col = get_fil(j);
-                MultiFiltration row = get_fil(possible_pivot);
-                row.push_to_least_common_upper_bound(col2);
-                if (lex_cmp(current_grid_value, row)) {
-                  lexico_it.insert(row);
+                const MultiFiltration &row = get_fil(possible_pivot);
+                MultiFiltration temp_f;
+
+                temp_f = row;
+                temp_f.push_to_least_common_upper_bound(col2);
+                if (always || lex_cmp(current_grid_value, temp_f)) {
+                  lexico_it.insert(temp_f);
                 }
-                row = get_fil(possible_pivot);
-                row.push_to_least_common_upper_bound(col);
-                if (lex_cmp(current_grid_value, row)) {
-                  lexico_it.insert(row);
+                temp_f = row;
+                temp_f.push_to_least_common_upper_bound(col);
+                if (always || lex_cmp(current_grid_value, temp_f)) {
+                  lexico_it.insert(temp_f);
                 }
-                row = col;
-                row.push_to_least_common_upper_bound(col2);
-                if (lex_cmp(current_grid_value, col)) {
-                  lexico_it.insert(col);
+
+                temp_f = col;
+                temp_f.push_to_least_common_upper_bound(col2);
+                if (always || lex_cmp(current_grid_value, temp_f)) {
+                  lexico_it.insert(temp_f);
+                }
+                temp_f.push_to_least_common_upper_bound(row);
+                if (always || lex_cmp(current_grid_value, temp_f)) {
+                  lexico_it.insert(temp_f);
                 }
               }
             }
@@ -572,7 +580,7 @@ class Truc {
       };
       if constexpr (!use_grid) {
         for (auto j : std::views::iota(0, nd + ndpp)) lexico_it.insert(get_fil(j));
-        for (auto j : std::views::iota(nd, nd + ndpp)) update_queue_with_col(j);
+        for (auto j : std::views::iota(nd, nd + ndpp)) update_queue_with_col(j, true);
       }
 
       MultiFiltration grid_value;
@@ -585,11 +593,9 @@ class Truc {
           lexico_it.erase(*lexico_it.begin());
         }
 
-        // tbb::parallel_for(0, nd + ndpp, [&](int i)
         for (int i : std::views::iota(0, nd + ndpp)) {
           less_than_grid_value[i] = get_fil(i) <= grid_value;
         }
-        // );
         // assumes there is work to do here
         auto compute_pivot = [&](int j) -> void {
           int pivot = -1;
@@ -606,18 +612,16 @@ class Truc {
           }
           pivot_cache[j - nd] = pivot;
         };
-        std::function<int(int)> get_pivot = [&](int j) -> int {
+        auto get_pivot = [&](int j) -> int {
           if (valid_columns[j]) return -1;  // rel j appeared => gen as well
           return pivot_cache[j - nd];
         };
-        tbb::parallel_for(nd, nd + ndpp, [&](int j) {
-          // for (int j = nd; j < nd + ndpp; ++j) {
+        for (int j : std::views::iota(nd, nd + ndpp)) {
           compute_pivot(j);
-          // }
-        });
+        }
 
-        for (int j = nd; j < nd + ndpp; ++j) {
-          if (valid_columns[j] || !less_than_grid_value[j]) {  // TODO : break early, start late
+        for (int j : std::views::iota(nd, nd + ndpp)) {
+          if (valid_columns[j] || !less_than_grid_value[j]) {
             continue;
           }
           if (get_pivot(j) == -1) {
@@ -627,6 +631,7 @@ class Truc {
             }
             get_fil(j) = grid_value;
             valid_columns[j] = true;
+            update_queue_with_col(j);  // recomputes the future columns
             continue;
           }
           std::vector<int> column_order;
