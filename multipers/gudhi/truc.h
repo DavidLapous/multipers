@@ -15,7 +15,9 @@
 #include <numeric>
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_sort.h>
 #include <oneapi/tbb/task_group.h>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -312,7 +314,11 @@ class Truc {
 
   // TODO : inside of MultiFiltration
   inline static bool lexical_order(const MultiFiltration &a, const MultiFiltration &b) {
-    for (int idx = 0; idx < a.num_parameters(); ++idx) {
+    if constexpr (MultiFiltration::is_multicritical())  // TODO : this may not be the best
+      throw "Not implemented in the multicritical case";
+    if (a.is_plus_inf() || a.is_nan() || b.is_minus_inf()) return false;
+    if (b.is_plus_inf() || b.is_nan() || a.is_minus_inf()) return true;
+    for (auto idx = 0u; idx < a.num_parameters(); ++idx) {
       if (a[idx] < b[idx])
         return true;
       else if (a[idx] > b[idx])
@@ -359,7 +365,7 @@ class Truc {
       throw std::invalid_argument("Not implemented for this Truc");
     } else {
       const bool verbose = false;
-      const bool use_grid = false;
+      const bool use_grid = true;
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
       using SmallMatrix = Gudhi::persistence_matrix::Matrix<
@@ -416,14 +422,14 @@ class Truc {
 
         inline MultiFiltration next() {
           MultiFiltration out(pos.size());
-          // if constexpr (verbose) {
-          //   std::cout << ("\nGrid: ");
-          // }
+          if constexpr (verbose) {
+            std::cout << ("Grid: ");
+          }
           for (int i = 0; i < pos.size(); i++) {
-            // if constexpr (verbose) std::cout << unique_values[i][pos[i]] << " ";
+            if constexpr (verbose) std::cout << unique_values[i][pos[i]] << " ";
             out[i] = unique_values[i][pos[i]];
           }
-          // if constexpr (verbose) std::cout << std::endl;
+          if constexpr (verbose) std::cout << std::endl;
           // lexicographic
           for (int i = pos.size() - 1; i >= 0; i--) {
             if (pos[i] + 1 < unique_values[i].size()) {
@@ -445,15 +451,6 @@ class Truc {
 
       using GridIterator = std::conditional_t<use_grid, Grid, std::set<MultiFiltration, decltype(lex_cmp)>>;
       GridIterator lexico_it(generator_filtration_values.begin(), generator_filtration_values.end(), lex_cmp);
-      // GridIterator lexico_it;
-      // Grid lexico_it(generator_filtration_values);
-      // if constexpr (use_grid) {
-      //   lexico_it = Grid(generator_filtration_values);
-      // } else {
-      //   GridIterator temp(
-      //       decltype(lexico_it)(generator_filtration_values.begin(), generator_filtration_values.end(), lex_cmp));
-      //   lexico_it.swap(temp);
-      // }
 
       // Matrix to reduce
       int nd = 0;
@@ -518,10 +515,9 @@ class Truc {
       }
 
       // cols such that F(\partial(c)) \leq F(c)
-      std::vector<bool> valid_columns(nd + ndpp, true);
-      for (int i = 0; i < nd + ndpp; i++) {
-        valid_columns[i] = is_col_valid(i);
-      }
+      std::vector<bool> valid_columns(nd + ndpp);
+      tbb::parallel_for(0, nd + ndpp, [&](int i) { valid_columns[i] = is_col_valid(i); });
+
       if constexpr (verbose) {
         std::cout << "Valid columns: [";
         for (int i = 0; i < nd + ndpp; i++) {
@@ -536,11 +532,51 @@ class Truc {
 
       std::vector<int> pivot_cache(ndpp);
       std::vector<bool> less_than_grid_value(nd + ndpp);
-      auto clear_pivot_cache = [&](int j) {
-        if (j < nd) return;
-        pivot_cache[j - nd] = -2;
+      // update the grid
+      std::function<void(int)> update_queue_with_col = [&](int j) {
+        if constexpr (!use_grid) {
+          // if (valid_columns[j]) return;
+          // add lubs of possible columns to the queue
+          const auto &boundary = M.get_column(j);
+          // bool found_one = false; // needs to push filtration, not handled here
+          const auto &current_grid_value = *lexico_it.begin();
+          for (auto row_idx = boundary.begin(); row_idx != boundary.end(); row_idx++) {
+            if (!(get_fil(*row_idx) <= get_fil(j))) {
+              // found_one = true;
+              int possible_pivot = *row_idx;
+              for (const auto &entry : M.get_row(possible_pivot)) {
+                const auto &idx = entry.get_column_index();
+                if (idx <= j || valid_columns[idx]) continue;
+                const MultiFiltration &col2 = get_fil(idx);
+                const MultiFiltration &col = get_fil(j);
+                MultiFiltration row = get_fil(possible_pivot);
+                row.push_to_least_common_upper_bound(col2);
+                if (lex_cmp(current_grid_value, row)) {
+                  lexico_it.insert(row);
+                }
+                row = get_fil(possible_pivot);
+                row.push_to_least_common_upper_bound(col);
+                if (lex_cmp(current_grid_value, row)) {
+                  lexico_it.insert(row);
+                }
+                row = col;
+                row.push_to_least_common_upper_bound(col2);
+                if (lex_cmp(current_grid_value, col)) {
+                  lexico_it.insert(col);
+                }
+              }
+            }
+          }
+          // if (!found_one) valid_columns[j] = true;
+        }
       };
+      if constexpr (!use_grid) {
+        for (auto j : std::views::iota(0, nd + ndpp)) lexico_it.insert(get_fil(j));
+        for (auto j : std::views::iota(nd, nd + ndpp)) update_queue_with_col(j);
+      }
+
       MultiFiltration grid_value;
+
       while (!lexico_it.empty()) {
         if constexpr (use_grid) {
           grid_value = lexico_it.next();
@@ -549,67 +585,50 @@ class Truc {
           lexico_it.erase(*lexico_it.begin());
         }
 
-        // pivot stuff, when called, it assumes fil(j) <= grid_value
-        std::function<int(int)> get_pivot = [&](int j) -> int {
-          if (valid_columns[j]) return -1;
-          if (j > nd + ndpp)
-            throw std::invalid_argument("Internal error, got j=" + std::to_string(j) + " but nd=" + std::to_string(nd) +
-                                        " and ndpp=" + std::to_string(ndpp));
-          if (pivot_cache[j - nd] != -2) {
-            return pivot_cache[j - nd];
-          }
+        // tbb::parallel_for(0, nd + ndpp, [&](int i)
+        for (int i : std::views::iota(0, nd + ndpp)) {
+          less_than_grid_value[i] = get_fil(i) <= grid_value;
+        }
+        // );
+        // assumes there is work to do here
+        auto compute_pivot = [&](int j) -> void {
           int pivot = -1;
           const auto &boundary = M.get_column(j);
           // first non-zero (invalid) from below
           for (auto row_idx = boundary.rbegin(); row_idx != boundary.rend(); row_idx++) {
-            if (!(get_fil(*row_idx) <= grid_value)) {
+            if (!(less_than_grid_value[*row_idx])) {
               pivot = *row_idx;
+              if constexpr (verbose) {
+                std::cout << "pivot(" << j << ") = " << pivot << "\n";
+              }
               break;
             }
           }
           pivot_cache[j - nd] = pivot;
-          return pivot;
         };
-        std::function<void(int)> update_queue_with_col = [&](int j) {
-          if constexpr (!use_grid) {
-            int pivot = get_pivot(j);
-            if (pivot == -1) return;
-            // add lubs of possible columns to the queue
-            for (const auto &entry : M.get_row(pivot)) {
-              const auto &idx = entry.get_column_index();
-              if (idx <= j || get_pivot(idx) == -1) continue;
-              MultiFiltration col2 = get_fil(idx);
-              MultiFiltration col = get_fil(j);
-              MultiFiltration row = get_fil(pivot);
-              row.push_to_least_common_upper_bound(col2);
-              if (lex_cmp(grid_value, row)) {
-                lexico_it.insert(row);
-              }
-              row = get_fil(pivot);
-              row.push_to_least_common_upper_bound(col);
-              if (lex_cmp(grid_value, row)) {
-                lexico_it.insert(row);
-              }
-              col.push_to_least_common_upper_bound(col2);
-              if (lex_cmp(grid_value, col)) {
-                lexico_it.insert(col);
-              }
-            }
-          }
+        std::function<int(int)> get_pivot = [&](int j) -> int {
+          if (valid_columns[j]) return -1;  // rel j appeared => gen as well
+          return pivot_cache[j - nd];
         };
+        tbb::parallel_for(nd, nd + ndpp, [&](int j) {
+          // for (int j = nd; j < nd + ndpp; ++j) {
+          compute_pivot(j);
+          // }
+        });
 
-        // init caches
-        for (int i = 0; i < nd + ndpp; i++) {
-          clear_pivot_cache(i);
-          less_than_grid_value[i] = get_fil(i) <= grid_value;  // memory bound ? TODO: check tbb
-        }
-
-        for (int j = nd; j < nd + ndpp; j++) {
-          update_queue_with_col(j);
-          if (get_pivot(j) == -1 || !less_than_grid_value[j]) {
+        for (int j = nd; j < nd + ndpp; ++j) {
+          if (valid_columns[j] || !less_than_grid_value[j]) {  // TODO : break early, start late
             continue;
           }
-
+          if (get_pivot(j) == -1) {
+            if constexpr (verbose) {
+              std::cout << "Column " << j << " is fixed, pushed from " << get_fil(j) << " to filtration value "
+                        << grid_value << std::endl;
+            }
+            get_fil(j) = grid_value;
+            valid_columns[j] = true;
+            continue;
+          }
           std::vector<int> column_order;
           column_order.reserve(j - nd);
           for (int k = nd; k < j; k++) {
@@ -623,29 +642,23 @@ class Truc {
             return a > b;
           });
 
-          // TODO : rbegin (if row are sorted, no need to break)
-          // for (int k = nd; k < j; k++) {
-          for (auto _k = column_order.begin(); _k != column_order.end(); ++_k) {
-            int k = *_k;
-            if (get_pivot(j) == -1)  // -1 should be sorted at the end
-              break;
-            // if (!less_than_grid_value[k] || get_pivot(k) == -1) continue;
+          for (auto k : column_order) {
             if (get_pivot(k) == get_pivot(j)) {
               M.add_to(k, j);
-              clear_pivot_cache(j);      // it will change with add
-              update_queue_with_col(j);  // recomputes the future columns
-              // k = nd;                    // Restart TODO : rbegin.
-              // _k = column_order.begin();
+              compute_pivot(j);  // it will change with add
             }
+            if (get_pivot(j) == -1) break;
           }
-          if (get_pivot(j) == -1) {  // first time that it is valid
+
+          if (get_pivot(j) == -1) {
             if constexpr (verbose) {
               std::cout << "Column " << j << " is fixed, pushed from " << get_fil(j) << " to filtration value "
                         << grid_value << std::endl;
             }
             get_fil(j) = grid_value;
             valid_columns[j] = true;
-          }
+          };
+          update_queue_with_col(j);  // recomputes the future columns
         }
       }
       std::vector<std::vector<index_type>> out(nd + ndpp);
