@@ -109,6 +109,13 @@ cdef dict[str,str|None] pathes = {
 input_path:str|os.PathLike = "multipers_input.scc"
 output_path:str|os.PathLike = "multipers_output.scc"
 
+def _put_temp_files_to_ram():
+    global input_path,output_path
+    shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
+    if os.access(shm_memory, os.W_OK) and not input_path.startswith(shm_memory):
+        input_path = shm_memory + input_path
+        output_path = shm_memory + output_path
+_put_temp_files_to_ram()
 
 
 ## TODO : optimize with Python.h ?
@@ -204,14 +211,6 @@ def scc_parser__old(path: str):
 
     return blocks
 
-
-
-def _put_temp_files_to_ram():
-    global input_path,output_path
-    shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
-    if os.access(shm_memory, os.W_OK) and not input_path.startswith(shm_memory):
-        input_path = shm_memory + input_path
-        output_path = shm_memory + output_path
 
 def _init_external_softwares(requires=[]):
     global pathes
