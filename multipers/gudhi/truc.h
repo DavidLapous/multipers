@@ -6,6 +6,7 @@
 #include <gudhi/One_critical_filtration.h>
 #include <gudhi/Multi_critical_filtration.h>
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <csignal>
 #include <cstddef>
@@ -17,8 +18,10 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/parallel_sort.h>
 #include <oneapi/tbb/task_group.h>
+#include <oneapi/tbb/mutex.h>
 #include <ranges>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,9 +83,10 @@ class PresentationStructure {
 
   inline friend std::ostream &operator<<(std::ostream &stream, const PresentationStructure &structure) {
     stream << "Boundary:\n";
-    stream << "{";
-    for (const auto &stuff : structure.generators) {
-      stream << "{";
+    stream << "{\n";
+    for (auto i : std::views::iota(0u,structure.size())) {
+      const auto &stuff = structure.generators[i];
+      stream << i << ": {";
       for (auto truc : stuff) stream << truc << ", ";
 
       if (!stuff.empty()) stream << "\b" << "\b ";
@@ -126,14 +130,14 @@ class PresentationStructure {
   }
 
   PresentationStructure permute(const std::vector<index_type> &order) const {
-    if (order.size() != generators.size()) {
+    if (order.size() > generators.size()) {
       throw std::invalid_argument("Permutation order must have the same size as the number of generators.");
     }
-    std::vector<index_type> inverse_order(order.size());
+    std::vector<index_type> inverse_order(generators.size());
     for (std::size_t i = 0; i < order.size(); i++) {
       inverse_order[order[i]] = i;
     }
-    std::vector<std::vector<index_type>> new_generators(generators.size());
+    std::vector<std::vector<index_type>> new_generators(order.size());
     std::vector<int> new_generator_dimensions(generator_dimensions.size());
     for (std::size_t i = 0; i < order.size(); i++) {
       new_generators[i] = std::vector<index_type>(generators[order[i]].size());
@@ -342,19 +346,28 @@ class Truc {
     return false;
   };
 
-  template <class Fun>
-  inline Truc rearange_sort(const Fun &&fun) const {
-    std::vector<index_type> permutation(generator_order.size());
-    std::iota(permutation.begin(), permutation.end(), 0);
-    std::sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) { return fun(i, j); });
-    std::vector<MultiFiltration> new_filtration(generator_filtration_values.size());
-    for (std::size_t i = 0; i < generator_filtration_values.size(); i++) {
+  inline Truc permute(const std::vector<index_type> &permutation) const {
+    auto num_gen = generator_filtration_values.size();
+    if (permutation.size() > num_gen) {
+      throw std::invalid_argument("Invalid permutation size. Got " + std::to_string(permutation.size()) + " expected " +
+                                  std::to_string(num_gen) + ".");
+    }
+    std::vector<MultiFiltration> new_filtration(permutation.size());
+    for (auto i : std::views::iota(0u, num_gen)) {  // assumes permutation has correct indices.
       new_filtration[i] = generator_filtration_values[permutation[i]];
     }
     return Truc(structure.permute(permutation), new_filtration);
   }
 
-  Truc colexical_rearange() const {
+  template <class Fun>
+  inline std::pair<Truc, std::vector<index_type>> rearange_sort(const Fun &&fun) const {
+    std::vector<index_type> permutation(generator_order.size());
+    std::iota(permutation.begin(), permutation.end(), 0);
+    tbb::parallel_sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) { return fun(i, j); });
+    return {permute(permutation), permutation};
+  }
+
+  std::pair<Truc, std::vector<index_type>> colexical_rearange() const {
     return rearange_sort([this](std::size_t i, std::size_t j) { return this->colexical_order(i, j); });
   }
 
@@ -368,8 +381,9 @@ class Truc {
       const bool use_grid = true;
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
-      using SmallMatrix = Gudhi::persistence_matrix::Matrix<
-          Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type, !use_grid>>;
+      using SmallMatrix =
+          Gudhi::persistence_matrix::Matrix<Gudhi::multiparameter::truc_interface::
+                                                fix_presentation_options<PersBackend::options::column_type, !use_grid>>;
 
       // lexico iterator
       auto lex_cmp = [&](const MultiFiltration &a, const MultiFiltration &b) { return lexical_order(a, b); };
@@ -457,7 +471,7 @@ class Truc {
       int ndpp = 0;
       int argfirst_dim = -1;
       int argfirst_dimpp = -1;
-      for (int i = 0; i < structure.size(); i++) {
+      for (unsigned int i = 0; i < structure.size(); i++) {
         if (structure.dimension(i) == dim) {
           if (argfirst_dim == -1) argfirst_dim = i;
           nd++;
@@ -674,6 +688,227 @@ class Truc {
     }
   }
 
+  std::pair<std::vector<std::vector<int>>, std::vector<std::vector<value_type>>> kernel(int dim) {
+    if constexpr (MultiFiltration::is_multicritical() || !std::is_same_v<Structure, PresentationStructure> ||
+                  !has_columns<PersBackend>::value)  // TODO : this may not be the best
+    {
+      throw std::invalid_argument("Not implemented for this Truc");
+    } else {
+      const bool verbose = false;
+      const bool use_grid = true;
+      // filtration values are assumed to be dim + colexicographically sorted
+      // vector seem to be good here
+      using SmallMatrix = Gudhi::persistence_matrix::Matrix<
+          Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type, false>>;
+
+      // lexico iterator
+      auto lex_cmp = [&](const MultiFiltration &a, const MultiFiltration &b) { return lexical_order(a, b); };
+
+      struct Grid {
+        Grid() {};
+
+        Grid(decltype(generator_filtration_values)::const_iterator a,
+             decltype(generator_filtration_values)::const_iterator b,
+             [[maybe_unused]] const decltype(lex_cmp) &lex_cmp) {
+          int num_parameters = -1;
+          for (auto c = a; c != b; ++c) {
+            const auto &f = *c;
+            if (f.is_finite()) {
+              num_parameters = f.num_parameters();
+              break;
+            }
+          }
+          if (num_parameters == -1) {
+            throw std::invalid_argument("No finite filtration found");
+          }
+
+          pos = std::vector<int>(num_parameters, 0);
+          unique_values.resize(num_parameters);
+          std::vector<std::set<typename MultiFiltration::value_type>> _unique_values(num_parameters);
+
+          for (auto c = a; c != b; ++c) {
+            std::set<typename MultiFiltration::value_type> _unique;
+            const auto &f = *c;
+            if (f.is_finite()) {
+              for (int j = 0; j < num_parameters; j++) {
+                _unique_values[j].insert(f[j]);
+              }
+            }
+          }
+          for (int i = 0; i < num_parameters; i++) {
+            unique_values[i] =
+                std::vector<typename MultiFiltration::value_type>(_unique_values[i].begin(), _unique_values[i].end());
+            if constexpr (verbose) {
+              std::cout << "Unique values for parameter " << i << " : ";
+              for (auto &val : unique_values[i]) std::cout << val << " ";
+              std::cout << std::endl;
+            }
+          }
+        };
+
+        std::vector<std::vector<typename MultiFiltration::value_type>> unique_values;
+        std::vector<int> pos;
+        bool is_end = false;
+
+        inline MultiFiltration next() {
+          MultiFiltration out(pos.size());
+          if constexpr (verbose) {
+            std::cout << std::flush << ("Grid: ");
+          }
+          for (unsigned int i = 0; i < pos.size(); i++) {
+            if constexpr (verbose) std::cout << unique_values[i][pos[i]] << " ";
+            out[i] = unique_values[i][pos[i]];
+          }
+          if constexpr (verbose) std::cout << std::endl;
+          // lexicographic
+          for (int i = pos.size() - 1; i >= 0; i--) {
+            if (pos[i] + 1 < unique_values[i].size()) {
+              pos[i]++;
+              break;
+            } else {
+              pos[i] = 0;
+            }
+          }
+          if (std::all_of(pos.begin(), pos.end(), [&](int i) { return i == 0; })) [[unlikely]]
+            is_end = true;
+          return out;
+        }
+
+        inline bool finished() { return is_end; }
+
+        inline bool empty() { return is_end; }
+      };
+
+      using GridIterator = std::conditional_t<use_grid, Grid, std::set<MultiFiltration, decltype(lex_cmp)>>;
+      GridIterator lexico_it(generator_filtration_values.begin(), generator_filtration_values.end(), lex_cmp);
+
+      // Matrix to reduce
+      int nd = 0;
+      int ndpp = 0;
+      for (auto i : std::views::iota(0u, structure.size())) {
+        if (structure.dimension(i) == dim) {
+          nd++;
+        } else if (structure.dimension(i) == dim + 1) {
+          ndpp++;
+        } else {
+          throw std::invalid_argument("This truc contains bad dimensions. Got " +
+                                      std::to_string(structure.dimension(i)) + " expected " + std::to_string(dim) +
+                                      " or " + std::to_string(dim + 1) + " in position " + std::to_string(i) + "  .");
+        }
+      }
+      if (nd == 0 || ndpp == 0)
+        throw std::invalid_argument("Given dimension or dimension+1 has no simplices. Got " + std::to_string(nd) + " " +
+                                    std::to_string(ndpp) + ".");
+
+      SmallMatrix M(nd + ndpp);
+      SmallMatrix N(nd + ndpp);  // slave
+      std::vector<int> pivot_to_id(nd + ndpp);
+      for (int i = 0; i < nd + ndpp; i++) {
+        const auto &b = structure[i];
+        M.insert_boundary(b);
+      }
+      for (auto i : std::views::iota(0u, static_cast<unsigned int>(nd + ndpp))) {
+        N.insert_boundary({i});
+      };
+
+      auto get_fil = [&](int i) -> MultiFiltration & { return generator_filtration_values[i]; };
+
+      // starting here, everything is indexed w.r.t. M
+
+      if constexpr (verbose) {
+        std::cout << "Initial matrix (" << nd << " + " << ndpp << "):" << std::endl;
+        for (int i = 0; i < nd + ndpp; i++) {
+          std::cout << "Column " << i << " : {";
+          for (const auto &j : M.get_column(i)) std::cout << j << " ";
+          std::cout << "} | " << get_fil(i) << std::endl;
+        }
+      }
+
+      // pivots with mask
+
+      // filtration-wise
+
+      // std::vector<bool> less_than_grid_value(nd + ndpp);
+      // update the grid
+      auto update_queue_with_col = [&](int j) {
+        if constexpr (!use_grid) {
+          // if (!found_one) valid_columns[j] = true;
+        }
+      };
+      if constexpr (!use_grid) {
+        for (auto j : std::views::iota(0, nd + ndpp)) lexico_it.insert(get_fil(j));
+        for (auto j : std::views::iota(nd, nd + ndpp)) update_queue_with_col(j);
+      }
+
+      MultiFiltration grid_value;
+
+      std::vector<std::vector<int>> out_structure;
+      out_structure.reserve(nd + ndpp);
+      std::vector<std::vector<value_type>> out_filtration;
+      out_filtration.reserve(nd + ndpp);
+
+      auto get_pivot = [&](int j) -> int {
+        const auto &col = M.get_column(j);
+        return col.size() ? (*col.rbegin()).get_row_index() : -1;
+        ;
+      };
+      std::vector<bool> reduced_columns(nd + ndpp);
+      auto reduce_column = [&](int j) -> bool {
+        int pivot = get_pivot(j);
+        if constexpr (verbose) std::cout << "Reducing column " << j << " with pivot " << pivot << "\n";
+        if (pivot < 0) {
+          if (!reduced_columns[j]) {
+            out_structure.emplace_back(N.get_column(j).begin(), N.get_column(j).end());
+            out_filtration.emplace_back(grid_value.begin(), grid_value.end());
+            reduced_columns[j] = true;
+          }
+          return false;
+        }
+        if constexpr (verbose) std::cout << "Previous registered pivot : " << pivot_to_id[pivot] << std::endl;
+        if (pivot_to_id[pivot] < 0) {
+          pivot_to_id[pivot] = j;
+          if constexpr (verbose) std::cout << "New pivot " << pivot << " in col " << j << "\n";
+          return false;
+        }
+        if (pivot_to_id[pivot] > j) throw std::runtime_error("missed something here");
+        if (pivot_to_id[pivot] < j) {
+          if constexpr (verbose) std::cout << "Reducing col " << j << " by adding " << pivot_to_id[pivot] << std::endl;
+          M.add_to(pivot_to_id[pivot], j);
+          N.add_to(pivot_to_id[pivot], j);
+          if constexpr (verbose) {
+            if (get_pivot(j) >= pivot) {
+              throw std::runtime_error("Addition failed ? current " + std::to_string(get_pivot(j)) + " previous " +
+                                       std::to_string(pivot));
+            }
+          }
+          return true;
+        }
+
+        // pivot is i -> false
+        return false;
+      };
+      while (!lexico_it.empty()) {
+        if constexpr (use_grid) {
+          grid_value = lexico_it.next();
+        } else {
+          grid_value = *lexico_it.begin();
+          lexico_it.erase(*lexico_it.begin());
+        }
+
+        for (auto &idx : pivot_to_id) idx = -1;
+
+        for (int i = 0; i < nd + ndpp; i++) {
+          if (reduced_columns[i] || !(get_fil(i) <= grid_value)) continue;  // TODO : parallel preprocess ?
+          if (get_fil(i) > grid_value) break;         // already in the cache :  fine
+          while (reduce_column(i)) {
+            continue;
+          }
+        }
+      }
+      return {out_structure, out_filtration};
+    }
+  }
+
   template <bool ignore_inf>
   std::vector<std::pair<int, std::vector<index_type>>> get_current_boundary_matrix() {
     std::vector<index_type> permutation(generator_order.size());
@@ -685,9 +920,9 @@ class Truc {
                                          return filtration_container[val] == MultiFiltration::Generator::T_inf;
                                        }),
                         permutation.end());
-      std::sort(permutation.begin(), permutation.end());
+      tbb::parallel_sort(permutation.begin(), permutation.end());
     }
-    std::sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) {
+    tbb::parallel_sort(permutation.begin(), permutation.end(), [&](std::size_t i, std::size_t j) {
       if (structure.dimension(i) > structure.dimension(j)) return false;
       if (structure.dimension(i) < structure.dimension(j)) return true;
       return filtration_container[i] < filtration_container[j];
@@ -764,7 +999,7 @@ class Truc {
     std::iota(out_gen_order.begin(),
               out_gen_order.end(),
               0);  // we have to reset here, even though we're already doing this
-    std::sort(out_gen_order.begin(), out_gen_order.end(), [&](index_type i, index_type j) {
+    tbb::parallel_sort(out_gen_order.begin(), out_gen_order.end(), [&](index_type i, index_type j) {
       if (structure.dimension(i) > structure.dimension(j)) return false;
       if (structure.dimension(i) < structure.dimension(j)) return true;
       return one_filtration[i] < one_filtration[j];

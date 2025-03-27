@@ -215,10 +215,19 @@ cdef class {{D['PYTHON_TYPE']}}:
         self.minpres_degree = -1
     {{endif}}
     
-    def to_colexical(self)->{{D['PYTHON_TYPE']}}:
+    def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
         assert not self.is_squeezed, "Unsqueeze first"
         new_slicer = {{D['PYTHON_TYPE']}}()
-        new_slicer.truc = self.truc.colexical_rearange()
+        cdef pair[{{D['C_TEMPLATE_TYPE']}}, vector[unsigned int]] stuff = self.truc.colexical_rearange()
+        new_slicer.truc = stuff.first
+        new_slicer.minpres_degree = self.minpres_degree
+        if return_permutation:
+            return new_slicer, np.array(stuff.second, dtype=np.int32)
+        return new_slicer
+    def permute_generators(self, permutation)->{{D['PYTHON_TYPE']}}:
+        cdef vector[unsigned int] c_perm = permutation
+        new_slicer = {{D['PYTHON_TYPE']}}()
+        new_slicer.truc = self.truc.permute(c_perm)
         new_slicer.minpres_degree = self.minpres_degree
         return new_slicer
 
@@ -237,6 +246,8 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         self.truc.fix_presentation(dim)
         return self
+    def compute_kernel(self, int dim):
+        return self.truc.kernel(dim)
     def get_barcode(self, bool keep_inf = False):
         """
         Returns the current barcode.

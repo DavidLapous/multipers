@@ -59,7 +59,8 @@ cdef extern from "Persistence_slices_interface.h":
 
       {{D['C_TEMPLATE_TYPE']}}& operator=(const {{D['C_TEMPLATE_TYPE']}}&)
       
-      {{D['C_TEMPLATE_TYPE']}} colexical_rearange() except + nogil
+      pair[{{D['C_TEMPLATE_TYPE']}}, vector[unsigned int]] colexical_rearange() except + nogil
+      {{D['C_TEMPLATE_TYPE']}} permute(const vector[unsigned int]&) except + nogil
 
       vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode() nogil
       void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
@@ -104,6 +105,7 @@ cdef extern from "Persistence_slices_interface.h":
 
       {{if D['COLUMN_TYPE'] is not None}}
       void fix_presentation(int) except + nogil
+      pair[vector[vector[int]], vector[vector[{{D['C_VALUE_TYPE']}}]]] kernel(int dim) except + nogil
       {{endif}}
 {{endfor}}
 
