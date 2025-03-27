@@ -846,6 +846,13 @@ class Truc {
       out_structure.reserve(nd + ndpp);
       std::vector<std::vector<value_type>> out_filtration;
       out_filtration.reserve(nd + ndpp);
+      // std::vector<int> out_dimension;
+      // out_dimension.reserve(nd+ndpp);
+      for (auto i : std::views::iota(0, nd)){
+          out_structure.emplace_back(this->structure[i].begin(), this->structure[i].end());
+          out_filtration.push_back(this->get_filtration_values()[i]);
+          // out_dimension.push_back(this->structure.dimension(i));
+      }
 
       auto get_pivot = [&](int j) -> int {
         const auto &col = M.get_column(j);
@@ -897,7 +904,7 @@ class Truc {
 
         for (auto &idx : pivot_to_id) idx = -1;
 
-        for (int i = 0; i < nd + ndpp; i++) {
+        for (int i = nd; i < nd + ndpp; i++) {
           if (reduced_columns[i] || !(get_fil(i) <= grid_value)) continue;  // TODO : parallel preprocess ?
           if (get_fil(i) > grid_value) break;         // already in the cache :  fine
           while (reduce_column(i)) {
