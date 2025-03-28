@@ -84,7 +84,7 @@ class PresentationStructure {
   inline friend std::ostream &operator<<(std::ostream &stream, const PresentationStructure &structure) {
     stream << "Boundary:\n";
     stream << "{\n";
-    for (auto i : std::views::iota(0u,structure.size())) {
+    for (auto i : std::views::iota(0u, structure.size())) {
       const auto &stuff = structure.generators[i];
       stream << i << ": {";
       for (auto truc : stuff) stream << truc << ", ";
@@ -133,16 +133,19 @@ class PresentationStructure {
     if (order.size() > generators.size()) {
       throw std::invalid_argument("Permutation order must have the same size as the number of generators.");
     }
-    std::vector<index_type> inverse_order(generators.size());
+    index_type flag = -1;
+    std::vector<index_type> inverse_order(generators.size(), flag);
     for (std::size_t i = 0; i < order.size(); i++) {
       inverse_order[order[i]] = i;
     }
     std::vector<std::vector<index_type>> new_generators(order.size());
-    std::vector<int> new_generator_dimensions(generator_dimensions.size());
-    for (std::size_t i = 0; i < order.size(); i++) {
-      new_generators[i] = std::vector<index_type>(generators[order[i]].size());
+    std::vector<int> new_generator_dimensions(order.size());
+
+    for (auto i : std::views::iota(0u, order.size())) {
+      new_generators[i].reserve(generators[order[i]].size());
       for (std::size_t j = 0; j < generators[order[i]].size(); j++) {
-        new_generators[i][j] = inverse_order[generators[order[i]][j]];
+        index_type stuff = inverse_order[generators[order[i]][j]];
+        if (stuff != flag) new_generators[i].push_back(stuff);
       }
       std::sort(new_generators[i].begin(), new_generators[i].end());
       new_generator_dimensions[i] = generator_dimensions[order[i]];
@@ -232,6 +235,7 @@ template <class PersBackend, class Structure, class MultiFiltration>
 class Truc {
  public:
   using Filtration_value = MultiFiltration;
+  using MultiFiltrations = std::vector<MultiFiltration>;
   using value_type = typename MultiFiltration::value_type;
   using split_barcode =
       std::vector<std::vector<std::pair<typename MultiFiltration::value_type, typename MultiFiltration::value_type>>>;
@@ -347,13 +351,13 @@ class Truc {
   };
 
   inline Truc permute(const std::vector<index_type> &permutation) const {
-    auto num_gen = generator_filtration_values.size();
-    if (permutation.size() > num_gen) {
-      throw std::invalid_argument("Invalid permutation size. Got " + std::to_string(permutation.size()) + " expected " +
-                                  std::to_string(num_gen) + ".");
+    auto num_new_gen = permutation.size();
+    if (permutation.size() > this->num_generators()) {
+      throw std::invalid_argument("Invalid permutation size. Got " + std::to_string(num_new_gen) + " expected " +
+                                  std::to_string(this->num_generators()) + ".");
     }
-    std::vector<MultiFiltration> new_filtration(permutation.size());
-    for (auto i : std::views::iota(0u, num_gen)) {  // assumes permutation has correct indices.
+    std::vector<MultiFiltration> new_filtration(num_new_gen);
+    for (auto i : std::views::iota(0u, num_new_gen)) {  // assumes permutation has correct indices.
       new_filtration[i] = generator_filtration_values[permutation[i]];
     }
     return Truc(structure.permute(permutation), new_filtration);
@@ -688,7 +692,9 @@ class Truc {
     }
   }
 
-  std::pair<std::vector<std::vector<int>>, std::vector<std::vector<value_type>>> kernel(int dim) {
+  template <bool generator_only = false>
+  inline std::conditional_t<generator_only, std::pair<std::vector<std::vector<index_type>>, MultiFiltrations>, Truc>
+  projective_cover_kernel(int dim) {
     if constexpr (MultiFiltration::is_multicritical() || !std::is_same_v<Structure, PresentationStructure> ||
                   !has_columns<PersBackend>::value)  // TODO : this may not be the best
     {
@@ -796,8 +802,8 @@ class Truc {
                                       " or " + std::to_string(dim + 1) + " in position " + std::to_string(i) + "  .");
         }
       }
-      if (nd == 0 || ndpp == 0)
-        throw std::invalid_argument("Given dimension or dimension+1 has no simplices. Got " + std::to_string(nd) + " " +
+      if (ndpp == 0)
+        throw std::invalid_argument("Given dimension+1 has no simplices. Got " + std::to_string(nd) + " " +
                                     std::to_string(ndpp) + ".");
 
       SmallMatrix M(nd + ndpp);
@@ -842,16 +848,18 @@ class Truc {
 
       MultiFiltration grid_value;
 
-      std::vector<std::vector<int>> out_structure;
+      std::vector<std::vector<index_type>> out_structure;
       out_structure.reserve(nd + ndpp);
-      std::vector<std::vector<value_type>> out_filtration;
+      std::vector<MultiFiltration> out_filtration;
       out_filtration.reserve(nd + ndpp);
-      // std::vector<int> out_dimension;
-      // out_dimension.reserve(nd+ndpp);
-      for (auto i : std::views::iota(0, nd)){
-          out_structure.emplace_back(this->structure[i].begin(), this->structure[i].end());
+      std::vector<int> out_dimension;
+      out_dimension.reserve(nd + ndpp);
+      if constexpr (!generator_only) {
+        for (auto i : std::views::iota(nd, nd + ndpp)) {
+          out_structure.push_back({});
           out_filtration.push_back(this->get_filtration_values()[i]);
-          // out_dimension.push_back(this->structure.dimension(i));
+          out_dimension.push_back(this->structure.dimension(i));
+        }
       }
 
       auto get_pivot = [&](int j) -> int {
@@ -865,8 +873,11 @@ class Truc {
         if constexpr (verbose) std::cout << "Reducing column " << j << " with pivot " << pivot << "\n";
         if (pivot < 0) {
           if (!reduced_columns[j]) {
-            out_structure.emplace_back(N.get_column(j).begin(), N.get_column(j).end());
+            std::vector<index_type> _b(N.get_column(j).begin(), N.get_column(j).end());
+            for (auto &stuff : _b) stuff -= nd;
+            out_structure.push_back(_b);
             out_filtration.emplace_back(grid_value.begin(), grid_value.end());
+            if constexpr (!generator_only) out_dimension.emplace_back(this->structure.dimension(j) + 1);
             reduced_columns[j] = true;
           }
           return false;
@@ -906,15 +917,27 @@ class Truc {
 
         for (int i = nd; i < nd + ndpp; i++) {
           if (reduced_columns[i] || !(get_fil(i) <= grid_value)) continue;  // TODO : parallel preprocess ?
-          if (get_fil(i) > grid_value) break;         // already in the cache :  fine
+          if (get_fil(i) > grid_value) break;                               // already in the cache :  fine
           while (reduce_column(i)) {
             continue;
           }
         }
       }
-      return {out_structure, out_filtration};
+      if constexpr (generator_only)
+        return {out_structure, out_dimension};
+      else {
+        return Truc(out_structure, out_dimension, out_filtration);
+      }
     }
   }
+
+  inline Truc fix_presentation2(int dim) {
+    // assumes its a rb_ga slicer.
+    // TODO : there are a few copy to remove here...
+    auto boundaries = this->get_boundaries();
+    const auto &filtrations = this->get_dimensions();
+    auto dimensions = this->get_dimensions();
+  };
 
   template <bool ignore_inf>
   std::vector<std::pair<int, std::vector<index_type>>> get_current_boundary_matrix() {
@@ -1547,7 +1570,7 @@ class Truc {
   //                                  bool reverse);
 
  private:
-  std::vector<MultiFiltration> generator_filtration_values;                // defined at construction time. Const
+  MultiFiltrations generator_filtration_values;                            // defined at construction time. Const
   std::vector<index_type> generator_order;                                 // size fixed at construction time
   Structure structure;                                                     // defined at construction time. Const
   std::vector<typename MultiFiltration::value_type> filtration_container;  // filtration of the current slice
