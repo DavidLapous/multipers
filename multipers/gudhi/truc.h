@@ -6,7 +6,6 @@
 #include <gudhi/One_critical_filtration.h>
 #include <gudhi/Multi_critical_filtration.h>
 #include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <csignal>
 #include <cstddef>
@@ -434,6 +433,8 @@ class Truc {
           }
         };
 
+        inline void insert() {};
+
         std::vector<std::vector<typename MultiFiltration::value_type>> unique_values;
         std::vector<int> pos;
         bool is_end = false;
@@ -701,7 +702,7 @@ class Truc {
       throw std::invalid_argument("Not implemented for this Truc");
     } else {
       const bool verbose = false;
-      const bool use_grid = true;
+      const bool use_grid = false;
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
       using SmallMatrix = Gudhi::persistence_matrix::Matrix<
@@ -808,7 +809,6 @@ class Truc {
 
       SmallMatrix M(nd + ndpp);
       SmallMatrix N(nd + ndpp);  // slave
-      std::vector<int> pivot_to_id(nd + ndpp);
       for (int i = 0; i < nd + ndpp; i++) {
         const auto &b = structure[i];
         M.insert_boundary(b);
@@ -836,17 +836,43 @@ class Truc {
 
       // std::vector<bool> less_than_grid_value(nd + ndpp);
       // update the grid
-      auto update_queue_with_col = [&](int j) {
-        if constexpr (!use_grid) {
-          // if (!found_one) valid_columns[j] = true;
-        }
+
+      auto get_pivot = [&](int j) -> int {
+        const auto &col = M.get_column(j);
+        return col.size() ? (*col.rbegin()).get_row_index() : -1;
       };
       if constexpr (!use_grid) {
-        for (auto j : std::views::iota(0, nd + ndpp)) lexico_it.insert(get_fil(j));
-        for (auto j : std::views::iota(nd, nd + ndpp)) update_queue_with_col(j);
+        for (auto j : std::views::iota(nd, nd + ndpp)) lexico_it.insert(get_fil(j));
       }
-
+      std::vector<std::set<int>> pivot_cache;  // this[pivot] = cols of given pivot (<=nd)
+      pivot_cache.resize(nd + ndpp);
+      for (int j : std::views::iota(0, nd)) {
+        int col_pivot = get_pivot(j);
+        if (col_pivot == -1) continue;
+        pivot_cache[col_pivot].insert(j);
+        if constexpr (!use_grid) {
+          for (int k : pivot_cache[col_pivot]) {
+            auto prev = get_fil(k);
+            lexico_it.insert(prev.push_to_least_common_upper_bound(get_fil(j)));
+          }
+        }
+      }
       MultiFiltration grid_value;
+
+      auto chores_after_new_pivot = [&](int j) {
+        int col_pivot = get_pivot(j);
+        if (col_pivot == -1) return;
+        pivot_cache[col_pivot].insert(j);
+        if constexpr (!use_grid) {
+          for (int k : pivot_cache[col_pivot]) {
+            auto prev = get_fil(k);
+            prev.push_to_least_common_upper_bound(get_fil(j));
+            if (lex_cmp(grid_value, prev)) {
+              lexico_it.insert(prev);
+            }
+          }
+        }
+      };
 
       std::vector<std::vector<index_type>> out_structure;
       out_structure.reserve(nd + ndpp);
@@ -862,11 +888,6 @@ class Truc {
         }
       }
 
-      auto get_pivot = [&](int j) -> int {
-        const auto &col = M.get_column(j);
-        return col.size() ? (*col.rbegin()).get_row_index() : -1;
-        ;
-      };
       std::vector<bool> reduced_columns(nd + ndpp);
       auto reduce_column = [&](int j) -> bool {
         int pivot = get_pivot(j);
@@ -882,45 +903,49 @@ class Truc {
           }
           return false;
         }
-        if constexpr (verbose) std::cout << "Previous registered pivot : " << pivot_to_id[pivot] << std::endl;
-        if (pivot_to_id[pivot] < 0) {
-          pivot_to_id[pivot] = j;
-          if constexpr (verbose) std::cout << "New pivot " << pivot << " in col " << j << "\n";
+        if constexpr (verbose) std::cout << "Previous registered pivot : " << *pivot_cache[pivot].begin() << std::endl;
+        // WARN : we lazy update some variables...
+        // if (pivot_cache[pivot].size() == 0) throw std::runtime_error("Invalid pivot cache (empty cache)");
+        // if (*pivot_cache[pivot].begin() > j) throw std::runtime_error("Invalid pivot cache (j wasnt inside ?)");
+        // if (*pivot_cache[pivot].begin() <= j) {
+        if (pivot_cache[pivot].size() == 0) {
           return false;
         }
-        if (pivot_to_id[pivot] > j) throw std::runtime_error("missed something here");
-        if (pivot_to_id[pivot] < j) {
-          if constexpr (verbose) std::cout << "Reducing col " << j << " by adding " << pivot_to_id[pivot] << std::endl;
-          M.add_to(pivot_to_id[pivot], j);
-          N.add_to(pivot_to_id[pivot], j);
-          if constexpr (verbose) {
+        for (int k : pivot_cache[pivot]) {
+          if (k >= j) {  // cannot reduce more here. this is a (local) pivot.
+            return false;
+          }
+          if (get_fil(k) <= grid_value) {
+            M.add_to(k, j);
+            N.add_to(k, j);
+            pivot_cache[pivot].erase(j);
+            // WARN : we update the pivot cache after the update loop
             if (get_pivot(j) >= pivot) {
               throw std::runtime_error("Addition failed ? current " + std::to_string(get_pivot(j)) + " previous " +
                                        std::to_string(pivot));
             }
+            return true;  // pivot has changed
           }
-          return true;
         }
-
-        // pivot is i -> false
+        // }
         return false;
+        throw std::runtime_error("??");
       };
       while (!lexico_it.empty()) {
         if constexpr (use_grid) {
           grid_value = lexico_it.next();
         } else {
           grid_value = *lexico_it.begin();
-          lexico_it.erase(*lexico_it.begin());
+          lexico_it.erase(lexico_it.begin());
         }
 
-        for (auto &idx : pivot_to_id) idx = -1;
+        // for (auto &idx : pivot_to_id) idx = -1;
 
         for (int i = nd; i < nd + ndpp; i++) {
           if (reduced_columns[i] || !(get_fil(i) <= grid_value)) continue;  // TODO : parallel preprocess ?
           if (get_fil(i) > grid_value) break;                               // already in the cache :  fine
-          while (reduce_column(i)) {
-            continue;
-          }
+          while (reduce_column(i));
+          chores_after_new_pivot(i);
         }
       }
       if constexpr (generator_only)
@@ -930,14 +955,6 @@ class Truc {
       }
     }
   }
-
-  inline Truc fix_presentation2(int dim) {
-    // assumes its a rb_ga slicer.
-    // TODO : there are a few copy to remove here...
-    auto boundaries = this->get_boundaries();
-    const auto &filtrations = this->get_dimensions();
-    auto dimensions = this->get_dimensions();
-  };
 
   template <bool ignore_inf>
   std::vector<std::pair<int, std::vector<index_type>>> get_current_boundary_matrix() {

@@ -246,7 +246,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         self.truc.fix_presentation(dim)
         return self
-    def compute_kernel(self, int dim)->{{D['PYTHON_TYPE']}}:
+    def compute_kernel_projective_cover(self, int dim)->{{D['PYTHON_TYPE']}}:
         out = {{D['PYTHON_TYPE']}}()
         out.truc =  self.truc.projective_cover_kernel(dim)
         return out
