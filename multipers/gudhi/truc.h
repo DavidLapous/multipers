@@ -703,94 +703,11 @@ class Truc {
       throw std::invalid_argument("Not implemented for this Truc");
     } else {
       const bool verbose = false;
-      const bool use_grid = false;
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
       using SmallMatrix = Gudhi::persistence_matrix::Matrix<
           Gudhi::multiparameter::truc_interface::fix_presentation_options<PersBackend::options::column_type, false>>;
 
-      // lexico iterator
-      auto lex_cmp = [&](const MultiFiltration &a, const MultiFiltration &b) { return lexical_order(a, b); };
-
-      struct Grid {
-        Grid() {};
-
-        Grid(decltype(generator_filtration_values)::const_iterator a,
-             decltype(generator_filtration_values)::const_iterator b,
-             [[maybe_unused]] const decltype(lex_cmp) &lex_cmp) {
-          int num_parameters = -1;
-          for (auto c = a; c != b; ++c) {
-            const auto &f = *c;
-            if (f.is_finite()) {
-              num_parameters = f.num_parameters();
-              break;
-            }
-          }
-          if (num_parameters == -1) {
-            throw std::invalid_argument("No finite filtration found");
-          }
-
-          pos = std::vector<int>(num_parameters, 0);
-          unique_values.resize(num_parameters);
-          std::vector<std::set<typename MultiFiltration::value_type>> _unique_values(num_parameters);
-
-          for (auto c = a; c != b; ++c) {
-            std::set<typename MultiFiltration::value_type> _unique;
-            const auto &f = *c;
-            if (f.is_finite()) {
-              for (int j = 0; j < num_parameters; j++) {
-                _unique_values[j].insert(f[j]);
-              }
-            }
-          }
-          for (int i = 0; i < num_parameters; i++) {
-            unique_values[i] =
-                std::vector<typename MultiFiltration::value_type>(_unique_values[i].begin(), _unique_values[i].end());
-            if constexpr (verbose) {
-              std::cout << "Unique values for parameter " << i << " : ";
-              for (auto &val : unique_values[i]) std::cout << val << " ";
-              std::cout << std::endl;
-            }
-          }
-        };
-
-        std::vector<std::vector<typename MultiFiltration::value_type>> unique_values;
-        std::vector<int> pos;
-        bool is_end = false;
-
-        inline MultiFiltration next() {
-          MultiFiltration out(pos.size());
-          if constexpr (verbose) {
-            std::cout << std::flush << ("Grid: ");
-          }
-          for (unsigned int i = 0; i < pos.size(); i++) {
-            if constexpr (verbose) std::cout << unique_values[i][pos[i]] << " ";
-            out[i] = unique_values[i][pos[i]];
-          }
-          if constexpr (verbose) std::cout << std::endl;
-          // lexicographic
-          for (int i = pos.size() - 1; i >= 0; i--) {
-            if (pos[i] + 1 < unique_values[i].size()) {
-              pos[i]++;
-              break;
-            } else {
-              pos[i] = 0;
-            }
-          }
-          if (std::all_of(pos.begin(), pos.end(), [&](int i) { return i == 0; })) [[unlikely]]
-            is_end = true;
-          return out;
-        }
-
-        inline bool finished() { return is_end; }
-
-        inline bool empty() { return is_end; }
-      };
-
-      using GridIterator = std::conditional_t<use_grid, Grid, std::set<MultiFiltration, decltype(lex_cmp)>>;
-      GridIterator lexico_it(generator_filtration_values.begin(), generator_filtration_values.end(), lex_cmp);
-
-      // Matrix to reduce
       int nd = 0;
       int ndpp = 0;
       for (auto i : std::views::iota(0u, structure.size())) {
@@ -807,6 +724,89 @@ class Truc {
       if (ndpp == 0)
         throw std::invalid_argument("Given dimension+1 has no simplices. Got " + std::to_string(nd) + " " +
                                     std::to_string(ndpp) + ".");
+      // lexico iterator
+      auto lex_cmp = [&](const MultiFiltration &a, const MultiFiltration &b) { return lexical_order(a, b); };
+
+      struct SmallQueue {
+        SmallQueue(decltype(generator_filtration_values)::const_iterator a,
+                   decltype(generator_filtration_values)::const_iterator b)
+            : queue{}, last_cols{} {
+          // int i = 0;
+          // for (auto c = a; c != b; ++c) {
+          //   queue.insert({*c, i++});  // TODO : not necessary
+          // }
+        }
+
+        struct MFWrapper {
+          MFWrapper(const MultiFiltration &g) : g(g) {};
+
+          MFWrapper(const MultiFiltration &g, int col) : g(g) { some_cols.insert(col); }
+
+          MFWrapper(const MultiFiltration &g, std::initializer_list<int> cols)
+              : g(g), some_cols(cols.begin(), cols.end()) {}
+
+          inline void insert(int col) const { some_cols.insert(col); }
+
+          inline bool operator<(const MFWrapper &other) const { return (lexical_order(g, other.g)); }
+
+         public:
+          MultiFiltration g;
+          mutable std::set<int> some_cols;
+        };
+
+        inline void insert(const MultiFiltration &g, int col) {
+          auto it = queue.find(g);
+          if (it != queue.end()) {
+            // std::cout << "found somthg" << std::endl;
+            // auto node_handle = queue.extract(it);
+            // node_handle.value().insert(col);
+            // queue.insert(std::move(node_handle));  // TODO : we pay an unnecessary logn here, maybe do a mutable
+            // later
+            it->insert(col);
+          } else {
+            queue.emplace(g, col);
+          }
+        };
+
+        inline void insert(const MultiFiltration &g, const std::initializer_list<int> &cols) {
+          auto it = queue.find(g);
+          if (it != queue.end()) {
+            for (int c : cols) it->insert(c);
+          } else {
+            queue.emplace(g, cols);
+          }
+        };
+
+        inline bool empty() const { return queue.empty(); }
+
+        inline MultiFiltration pop() {
+          if (queue.empty()) [[unlikely]]
+            throw std::runtime_error("Queue is empty");
+
+          auto out = *queue.begin();
+          queue.erase(queue.begin());
+          last_cols = std::move(out.some_cols);
+          return out.g;
+        }
+
+        const std::set<int> &get_current_cols() const { return last_cols; }
+
+       private:
+        // struct lexico_stuff {
+        //   bool operator()(const std::pair<MultiFiltration, std::set<int>> &a,
+        //                   const std::pair<MultiFiltration, std::set<int>> &b) const {
+        //     return lexical_order(a.first, b.first);
+        //   }
+        // };
+
+        // grid value, cols to treat for this grid value.
+        std::set<MFWrapper> queue;
+        std::set<int> last_cols;
+      };
+
+      SmallQueue lexico_it(generator_filtration_values.begin(), generator_filtration_values.end());
+
+      // Matrix to reduce
 
       SmallMatrix M(nd + ndpp);
       SmallMatrix N(nd + ndpp);  // slave
@@ -831,12 +831,6 @@ class Truc {
         }
       }
 
-      // pivots with mask
-
-      // filtration-wise
-
-      // std::vector<bool> less_than_grid_value(nd + ndpp);
-      // update the grid
 
       auto get_pivot = [&](int j) -> int {
         const auto &col = M.get_column(j);
@@ -860,7 +854,10 @@ class Truc {
         }
       }
       // pivot cache
-      for (int j : std::views::iota(0, nd + ndpp)) {
+      if constexpr (verbose) {
+        std::cout << "Initial pivot cache:\n";
+      }
+      for (int j : std::views::iota(nd, nd + ndpp)) {
         int col_pivot = get_pivot(j);
         if (col_pivot == -1) {
           reduced_columns[j] = true;
@@ -868,22 +865,34 @@ class Truc {
         };
         pivot_cache[col_pivot].insert(j);
       }
-
-      // grid iterator
-      if constexpr (!use_grid) {
-        for (int j : std::views::iota(0, nd + ndpp)) {
-          int col_pivot = get_pivot(j);
-          lexico_it.insert(get_fil(j));  // if not col pivot ? ?
-          // std::cout << "[" << get_fil(j);
-          if (col_pivot < 0) continue;
-          for (int k : pivot_cache[col_pivot]) {
-            // if (k <= j) continue;
-            auto prev = get_fil(k);
-            prev.push_to_least_common_upper_bound(get_fil(j));
-            lexico_it.insert(prev);
+      if constexpr (verbose) {
+        int i = 0;
+        for (const auto &cols : pivot_cache) {
+          std::cout << " - " << i++ << " : ";
+          for (const auto &col : cols) {
+            std::cout << col << " ";
           }
+          std::cout << std::endl;
         }
       }
+
+      // grid iterator
+      // if constexpr (!use_grid) {
+        if constexpr (verbose) std::cout << "Initial grid queue:\n";
+        for (int j : std::views::iota(nd, nd + ndpp)) {
+          int col_pivot = get_pivot(j);
+          if (col_pivot < 0) continue;
+          lexico_it.insert(get_fil(j), j);
+          for (int k : pivot_cache[col_pivot]) {
+            if (k <= j) continue;
+            auto prev = get_fil(k);
+            prev.push_to_least_common_upper_bound(get_fil(j));
+            if constexpr (verbose) std::cout << " -  (" << j << ", " << k << ") are interacting at " << prev << "\n";
+            lexico_it.insert(std::move(prev), k);
+          }
+        }
+        if constexpr (verbose) std::cout << std::flush;
+      // }
       auto reduce_column = [&](int j) -> bool {
         int pivot = get_pivot(j);
         if constexpr (verbose) std::cout << "Reducing column " << j << " with pivot " << pivot << "\n";
@@ -899,10 +908,7 @@ class Truc {
           return false;
         }
         if constexpr (verbose) std::cout << "Previous registered pivot : " << *pivot_cache[pivot].begin() << std::endl;
-        // WARN : we lazy update some variables...
-        // if (pivot_cache[pivot].size() == 0) throw std::runtime_error("Invalid pivot cache (empty cache)");
-        // if (*pivot_cache[pivot].begin() > j) throw std::runtime_error("Invalid pivot cache (j wasnt inside ?)");
-        // if (*pivot_cache[pivot].begin() <= j) {
+        // WARN : we lazy update variables linked with col j...
         if (pivot_cache[pivot].size() == 0) {
           return false;
         }
@@ -932,48 +938,51 @@ class Truc {
           return;
         };
         pivot_cache[col_pivot].insert(j);
-        if constexpr (!use_grid) {
+        // if constexpr (!use_grid) {
           for (int k : pivot_cache[col_pivot]) {
-            // if (k <= j) continue;
-            // if (get_fil(k) >= get_fil(j)) continue;
-            // auto prev = get_fil(k);
-            // k>j => y' >=y
-            // prev.push_to_least_common_upper_bound(get_fil(j));
-            // prev[0] = get_fil(j)[0];  // y=y' => x' >x
-            // if (lex_cmp(grid_value, prev)) {
+            if (k <= j) continue;
+            if (get_fil(k) >= get_fil(j)) continue;
             auto prev = get_fil(k);
             prev.push_to_least_common_upper_bound(get_fil(j));
-            // prev[0] = get_fil(j)[0];
             if (lex_cmp(grid_value, prev)) {
-              // std::cout << ", " << prev;
-              lexico_it.insert(prev);
+              if constexpr (verbose)
+                std::cout << "(chores) Updating grid queue, (" << j << ", " << k << ") are interacting at " << prev
+                          << std::endl;
+              ;
+              lexico_it.insert(prev, k);
             }
-            // prev[0] = get_fil(k)[0];
-            // prev[1] = get_fil(j)[1];
-            // if (lex_cmp(grid_value, prev)) {
-            //   lexico_it.insert(prev);
-            // }
           }
-          // std::cout << std::flush;
-        }
+        // }
       };
       // std::vector<bool> less_than_grid_value(nd + ndpp);
       // std::ostrstream grid_;
+      if constexpr (verbose) {
+        std::cout << "Initially reduced columns: [";
+        for (int i = 0; i < nd + ndpp; i++) {
+          std::cout << reduced_columns[i] << ", ";
+        }
+        std::cout << "]" << std::endl;
+      }
       while (!lexico_it.empty()) {
-        if constexpr (use_grid) {
-          grid_value = lexico_it.next();
-        } else {
-          grid_value = *lexico_it.begin();
-          lexico_it.erase(lexico_it.begin());
-          // grid_ <<", "<< grid_value << std::flush;
+        // if constexpr (use_grid) {
+        //   grid_value = lexico_it.next();
+        // } else {
+          grid_value = std::move(lexico_it.pop());
+        // }
+        if constexpr (verbose) {
+          std::cout << "Grid value: " << grid_value << std::endl;
+          std::cout << "    Reduced cols: ";
+          for (int i = 0; i < nd + ndpp; i++) {
+            std::cout << reduced_columns[i] << ", ";
+          }
+          std::cout << "]" << std::endl;
         }
 
-        // for (auto &idx : pivot_to_id) idx = -1;
-        // tbb::parallel_for(0, nd + ndpp, [&](int i) { less_than_grid_value[i] = get_fil(i) <= grid_value; });
-
-        for (auto i : std::views::iota(nd, nd + ndpp)) {                    // TODO : kerbers trick 2
-          if (reduced_columns[i] || !(get_fil(i) <= grid_value)) continue;  // TODO : parallel preprocess ?
-          if (get_fil(i) > grid_value) break;                               // already in the cache :  fine
+        for (int i : lexico_it.get_current_cols()) {
+          if constexpr (false) {
+            if ((reduced_columns[i] || !(get_fil(i) <= grid_value))) continue;
+            if ((get_fil(i) > grid_value)) break;
+          }
           while (reduce_column(i));
           chores_after_new_pivot(i);
         }
