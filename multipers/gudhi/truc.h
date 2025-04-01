@@ -749,7 +749,7 @@ class Truc {
     std::iota(out_gen_order.begin(),
               out_gen_order.end(),
               0);  // we have to reset here, even though we're already doing this
-    tbb::parallel_sort(out_gen_order.begin(), out_gen_order.end(), [&](index_type i, index_type j) {
+    std::sort(out_gen_order.begin(), out_gen_order.end(), [&](index_type i, index_type j) {
       if (structure.dimension(i) > structure.dimension(j)) return false;
       if (structure.dimension(i) < structure.dimension(j)) return true;
       return one_filtration[i] < one_filtration[j];
