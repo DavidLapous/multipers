@@ -104,7 +104,6 @@ cdef extern from "Persistence_slices_interface.h":
 
 
       {{if D['COLUMN_TYPE'] is not None}}
-      void fix_presentation(int) except + nogil
       {{D['C_TEMPLATE_TYPE']}} projective_cover_kernel(int dim) except + nogil
       {{endif}}
 {{endfor}}

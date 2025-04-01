@@ -521,7 +521,7 @@ class KNNmean:
 
         # Symbolic distance matrix:
         if self.metric == "euclidean":
-            D_ij = ((X_i - X_j) ** 2).sum(-1)
+            D_ij = ((X_i - X_j) ** 2).sum(-1) ** (1/2)
         elif self.metric == "manhattan":
             D_ij = (X_i - X_j).abs().sum(-1)
         elif self.metric == "angular":
