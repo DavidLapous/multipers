@@ -785,7 +785,7 @@ class Truc {
 
           auto out = *queue.begin();
           queue.erase(queue.begin());
-          last_cols = std::move(out.some_cols);
+          std::swap(last_cols, out.some_cols);
           return out.g;
         }
 
@@ -830,7 +830,6 @@ class Truc {
           std::cout << "} | " << get_fil(i) << std::endl;
         }
       }
-
 
       auto get_pivot = [&](int j) -> int {
         const auto &col = M.get_column(j);
@@ -878,20 +877,27 @@ class Truc {
 
       // grid iterator
       // if constexpr (!use_grid) {
-        if constexpr (verbose) std::cout << "Initial grid queue:\n";
-        for (int j : std::views::iota(nd, nd + ndpp)) {
-          int col_pivot = get_pivot(j);
-          if (col_pivot < 0) continue;
-          lexico_it.insert(get_fil(j), j);
-          for (int k : pivot_cache[col_pivot]) {
-            if (k <= j) continue;
-            auto prev = get_fil(k);
-            prev.push_to_least_common_upper_bound(get_fil(j));
-            if constexpr (verbose) std::cout << " -  (" << j << ", " << k << ") are interacting at " << prev << "\n";
-            lexico_it.insert(std::move(prev), k);
-          }
+      if constexpr (verbose) std::cout << "Initial grid queue:\n";
+      for (int j : std::views::iota(nd, nd + ndpp)) {
+        int col_pivot = get_pivot(j);
+        if (col_pivot < 0) continue;
+        lexico_it.insert(get_fil(j), j);
+        auto it = pivot_cache[col_pivot].find(j);
+        if (it == pivot_cache[col_pivot].end()) [[unlikely]]
+          throw std::runtime_error("Column " + std::to_string(j) + " not in pivot cache");
+        it++;
+        // for (int k : pivot_cache[col_pivot]) {
+        for (auto _k = it; _k != pivot_cache[col_pivot].end(); ++_k) {
+          int k = *_k;
+          if (k <= j) [[unlikely]]
+            throw std::runtime_error("Column " + std::to_string(k) + " is not a future column");
+          auto prev = get_fil(k);
+          prev.push_to_least_common_upper_bound(get_fil(j));
+          if constexpr (verbose) std::cout << " -  (" << j << ", " << k << ") are interacting at " << prev << "\n";
+          lexico_it.insert(std::move(prev), k);
         }
-        if constexpr (verbose) std::cout << std::flush;
+      }
+      if constexpr (verbose) std::cout << std::flush;
       // }
       auto reduce_column = [&](int j) -> bool {
         int pivot = get_pivot(j);
@@ -937,21 +943,26 @@ class Truc {
           if (!reduced_columns[j]) throw std::runtime_error("Empty column should have been detected before");
           return;
         };
-        pivot_cache[col_pivot].insert(j);
+        auto [it, was_there] = pivot_cache[col_pivot].insert(j);
+        it++;
         // if constexpr (!use_grid) {
-          for (int k : pivot_cache[col_pivot]) {
-            if (k <= j) continue;
-            if (get_fil(k) >= get_fil(j)) continue;
-            auto prev = get_fil(k);
-            prev.push_to_least_common_upper_bound(get_fil(j));
-            if (lex_cmp(grid_value, prev)) {
-              if constexpr (verbose)
-                std::cout << "(chores) Updating grid queue, (" << j << ", " << k << ") are interacting at " << prev
-                          << std::endl;
-              ;
-              lexico_it.insert(prev, k);
-            }
+        // auto it = pivot_cache[col_pivot].find(j);
+        // for (int k : pivot_cache[col_pivot]) {
+        for (auto _k = it; _k != pivot_cache[col_pivot].end(); ++_k) {
+          int k = *_k;
+          if (k <= j) [[unlikely]]
+            throw std::runtime_error("(chores)  col " + std::to_string(k) + " is not a future column");
+          if (get_fil(k) >= get_fil(j)) continue;
+          auto prev = get_fil(k);
+          prev.push_to_least_common_upper_bound(get_fil(j));
+          if (lex_cmp(grid_value, prev)) {
+            if constexpr (verbose)
+              std::cout << "(chores) Updating grid queue, (" << j << ", " << k << ") are interacting at " << prev
+                        << std::endl;
+            ;
+            lexico_it.insert(prev, k);
           }
+        }
         // }
       };
       // std::vector<bool> less_than_grid_value(nd + ndpp);
@@ -967,7 +978,7 @@ class Truc {
         // if constexpr (use_grid) {
         //   grid_value = lexico_it.next();
         // } else {
-          grid_value = std::move(lexico_it.pop());
+        grid_value = std::move(lexico_it.pop());
         // }
         if constexpr (verbose) {
           std::cout << "Grid value: " << grid_value << std::endl;

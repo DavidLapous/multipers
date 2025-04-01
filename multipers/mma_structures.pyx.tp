@@ -197,7 +197,9 @@ cdef class PyModule_{{SHORT}}:
         Copy module from a memory pointer. Unsafe.
         """
         self.cmod = move(dereference(<Module[{{CTYPE}}]*>(module_ptr)))
-    def set_box(self, PyBox_{{SHORT}} pybox):
+    def set_box(self, box):
+        assert len(box) == 2, "Box format is [low, hight]"
+        pybox = PyBox_{{SHORT}}(box[0], box[1])
         cdef Box[{{CTYPE}}] cbox = pybox.box
         with nogil:
             self.cmod.set_box(cbox)
