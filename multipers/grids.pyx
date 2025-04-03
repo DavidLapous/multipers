@@ -271,7 +271,13 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
         return push_to_grid(points, grid, coordinate), grid
     return push_to_grid(points, grid, coordinate)
 
-
+def _inf_value(dtype):
+    cdef str kind = np.dtype(dtype).kind
+    if kind == 'f':
+        return np.asarray(np.inf,dtype=dtype)
+    if kind == 'i':
+        return np.iinfo(dtype).max
+    raise ValueError(f"Dtype must be integer or floating like (got {dtype})")
 
 def evaluate_in_grid(pts, grid, mass_default=None):
     """    
@@ -287,6 +293,7 @@ def evaluate_in_grid(pts, grid, mass_default=None):
             grid = tuple(np.concatenate([g, [m]]) for g,m in zip(grid, mass_default))
         def empty_like(x):
             return np.empty_like(x, dtype=dtype)
+        _argwhere = np.argwhere
     else: 
         import torch
         # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid[0])}, expected numpy or torch array."
@@ -294,13 +301,19 @@ def evaluate_in_grid(pts, grid, mass_default=None):
             grid = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid, mass_default))
         def empty_like(x):
             return torch.empty(x.shape,dtype=dtype)
+        _argwhere = torch.argwhere
 
-    coords= empty_like(pts)
+    coords=empty_like(pts)
+    pts_inf = _inf_value(pts.dtype)
+    coords_inf = _inf_value(coords.dtype)
+    idx = _argwhere(pts == pts_inf)
+    pts[idx] == 0
     for i in range(coords.shape[1]):
         coords[:,i] = grid[i][pts[:,i]]
+    coords[idx] = coords_inf
     return coords
 
-def sm_in_grid(pts, weights, grid, int num_parameters=-1, mass_default=None):
+def sm_in_grid(pts, weights, grid, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
     Input
@@ -310,34 +323,27 @@ def sm_in_grid(pts, weights, grid, int num_parameters=-1, mass_default=None):
      - grid of the form Iterable[array[float, ndim=1]]
      - num_parameters: number of parameters
     """
-    first_filtration = grid[0]
-    dtype = first_filtration.dtype
-    def to_int(x):
-        return np.asarray(x,dtype=np.int64)
-    if isinstance(first_filtration, np.ndarray):
-        if mass_default is not None:
-            grid = tuple(np.concatenate([g, [m]]) for g,m in zip(grid, mass_default))
-        def empty_like(x, weights):
-            return np.empty_like(x, dtype=dtype), np.asarray(weights)
-    else: 
-        import torch
-        # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid[0])}, expected numpy or torch array."
-        if mass_default is not None:
-            grid = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid, mass_default))
-        def empty_like(x, weights):
-            return torch.empty(x.shape,dtype=dtype), torch.from_numpy(weights)
-
-    pts = to_int(pts)
-    coords,weights = empty_like(pts,weights)
-    for i in range(coords.shape[1]):
-        if num_parameters > 0:
-            coords[:,i] = grid[i%num_parameters][pts[:,i]]
+    cdef int num_parameters  = pts.shape[1]
+    if len(grid) < num_parameters:
+        _grid = list(grid)
+        
+        if isinstance(grid[0], np.ndarray|list|tuple):
+            _grid += [np.concatenate([g[1:], [_inf_value(g.dtype)]] ) for g in grid]
+            if mass_default is not None:
+                mass_default = np.concatenate([mass_default]*2)
         else:
-            coords[:,i] = grid[i][pts[:,i]]
+            import torch 
+            _grid += [torch.cat([g[1:], [torch.inf]]) for g in grid] 
+            if mass_default is not None:
+                mass_default = torch.cat([mass_default]*2)
+    else:
+        _grid = grid
+
+    coords = evaluate_in_grid(np.asarray(pts, dtype=int), _grid, mass_default)
     return (coords, weights)
 
 # TODO : optimize with memoryviews / typing
-def sms_in_grid(sms, grid, int num_parameters=-1, mass_default=None):
+def sms_in_grid(sms, grid, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
     Input
@@ -346,5 +352,5 @@ def sms_in_grid(sms, grid, int num_parameters=-1, mass_default=None):
        where signed_measure_like = tuple(array[int, ndim=2], array[int])
      - grid of the form Iterable[array[float, ndim=1]]
     """
-    sms = tuple(sm_in_grid(pts,weights,grid=grid,num_parameters=num_parameters, mass_default=mass_default) for pts,weights in sms)
+    sms = tuple(sm_in_grid(pts,weights,grid=grid, mass_default=mass_default) for pts,weights in sms)
     return sms

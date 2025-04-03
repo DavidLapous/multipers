@@ -497,11 +497,11 @@ class Truc {
       MultiFiltration grid_value;
 
       std::vector<std::vector<index_type>> out_structure;
-      out_structure.reserve(2*ndpp);
+      out_structure.reserve(2 * ndpp);
       std::vector<MultiFiltration> out_filtration;
-      out_filtration.reserve(2*ndpp);
+      out_filtration.reserve(2 * ndpp);
       std::vector<int> out_dimension;
-      out_dimension.reserve(2*ndpp);
+      out_dimension.reserve(2 * ndpp);
       if constexpr (!generator_only) {
         for (auto i : std::views::iota(nd, nd + ndpp)) {
           out_structure.push_back({});
@@ -519,8 +519,8 @@ class Truc {
           reduced_columns[j] = true;
           continue;
         };
-        auto& current_pivot_cache = pivot_cache[col_pivot];
-        current_pivot_cache.emplace_hint(current_pivot_cache.cend(), j);// j is increasing
+        auto &current_pivot_cache = pivot_cache[col_pivot];
+        current_pivot_cache.emplace_hint(current_pivot_cache.cend(), j);  // j is increasing
       }
       if constexpr (verbose) {
         int i = 0;
@@ -743,7 +743,7 @@ class Truc {
       const bool ignore_inf) const {  // needed ftm as PersBackend only points there
     constexpr const bool verbose = false;
     if (one_filtration.size() != this->num_generators()) {
-      throw;
+      throw std::runtime_error("The one parameter filtration doesn't have a proper size.");
     }
     out_gen_order.resize(this->num_generators());
     std::iota(out_gen_order.begin(),
@@ -863,7 +863,7 @@ class Truc {
                   << " --" << bar.death << "(" << death_filtration << ")"
                   << " dim " << bar.dim << std::endl;
       }
-      if (birth_filtration < death_filtration)
+      if (birth_filtration <= death_filtration)
         out[bar.dim].push_back({birth_filtration, death_filtration});
       else {
         out[bar.dim].push_back({inf, inf});
@@ -901,7 +901,7 @@ class Truc {
                   << std::endl;
       }
 
-      if (birth_filtration < death_filtration)
+      if (birth_filtration <= death_filtration)
         out[idx] = {birth_filtration, death_filtration};
       else {
         out[idx] = {inf, inf};
@@ -938,7 +938,7 @@ class Truc {
                   << std::endl;
       }
 
-      if (birth_filtration < death_filtration)
+      if (birth_filtration <= death_filtration)
         out[idx] = {bar.dim, {birth_filtration, death_filtration}};
       else {
         out[idx] = {bar.dim, {inf, inf}};

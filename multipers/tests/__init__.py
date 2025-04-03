@@ -24,6 +24,9 @@ def sort_sm(sms):
 def assert_sm_pair(sm1, sm2, exact=True, max_error=1e-3, reg=0.1):
     if not exact:
         from multipers.distances import sm_distance
+        _inf_value_fix = 0
+        sm1[0][sm1[0] == np.inf] = _inf_value_fix
+        sm2[0][sm2[0] == np.inf] = _inf_value_fix
 
         d = sm_distance(sm1, sm2, reg=0.1)
         assert d < max_error, f"Failed comparison:\n{sm1}\n{sm2},\n with distance {d}."

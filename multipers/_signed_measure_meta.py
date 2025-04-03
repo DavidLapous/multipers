@@ -385,7 +385,7 @@ def signed_measure(
             sms,
             grid=grid,
             mass_default=mass_default,
-            num_parameters=num_parameters,
+            # num_parameters=num_parameters,
         )
         if verbose:
             print("Done.")

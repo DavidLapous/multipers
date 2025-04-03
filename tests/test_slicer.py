@@ -56,11 +56,16 @@ def test_3():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     sm = mp.signed_measure(st, invariant="rank", degree=0)
-    sm2 = mp.signed_measure(mp.Slicer(st, dtype=np.int32), invariant="rank", degree=0)
     sm3 = mp.signed_measure(mp.Slicer(st, dtype=np.float64), invariant="rank", degree=0)
+
+    (pts,w), = mp.signed_measure(mp.Slicer(st, dtype=np.int32), invariant="rank", degree=0)
+    pts = np.array(pts, dtype = float )
+    pts[pts==mp.grids._inf_value(np.int32)] = np.inf
+    sm2 = (pts,w),
+
     it = [
         (
-            array([[0.0, 1.0, 1.0, 1.0], [1.0, 0.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]),
+            array([[0.0, 1.0, np.inf, np.inf], [1.0, 0.0, np.inf, np.inf], [1.0, 1.0, np.inf,np.inf]]),
             array([1, 1, -1]),
         )
     ]
