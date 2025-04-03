@@ -137,6 +137,7 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
             else:
                 pts_ = pts
             threshold = np.max(np.ma.masked_invalid(pts_), axis=0)
+        threshold = np.max([threshold, [plt.gca().get_xlim()[1], plt.gca().get_ylim()[1]]])
     if isinstance(pts, np.ndarray):
         pass
     else:
