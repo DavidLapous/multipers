@@ -58,20 +58,47 @@ def test_3():
     sm = mp.signed_measure(st, invariant="rank", degree=0)
     sm3 = mp.signed_measure(mp.Slicer(st, dtype=np.float64), invariant="rank", degree=0)
 
-    (pts,w), = mp.signed_measure(mp.Slicer(st, dtype=np.int32), invariant="rank", degree=0)
-    pts = np.array(pts, dtype = float )
-    pts[pts==mp.grids._inf_value(np.int32)] = np.inf
-    sm2 = (pts,w),
+    ((pts, w),) = mp.signed_measure(
+        mp.Slicer(st, dtype=np.int32), invariant="rank", degree=0
+    )
+    pts = np.array(pts, dtype=float)
+    pts[pts == mp.grids._inf_value(np.int32)] = np.inf
+    sm2 = ((pts, w),)
 
     it = [
         (
-            array([[0.0, 1.0, np.inf, np.inf], [1.0, 0.0, np.inf, np.inf], [1.0, 1.0, np.inf,np.inf]]),
+            array(
+                [
+                    [0.0, 1.0, np.inf, np.inf],
+                    [1.0, 0.0, np.inf, np.inf],
+                    [1.0, 1.0, np.inf, np.inf],
+                ]
+            ),
             array([1, 1, -1]),
         )
     ]
     assert_sm(sm, it)
     assert_sm(sm2, it)
     assert_sm(sm3, it)
+
+
+def test_rank_custom():
+    B = [[], [0], [0], [0], [0]]
+    F = [[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]]
+    D = [0, 1, 1, 1, 1]
+    s = mp.Slicer(return_type_only=True, dtype=np.int32)(B, D, F)
+    ((pts, w),) = mp.signed_measure(s, invariant="rank", degree=0)
+    assert np.array_equal(
+        pts,
+        [
+            [0.0, 0.0, 1.0, 2.0],
+            [0.0, 0.0, 1.0, 3.0],
+            [0.0, 0.0, 2.0, 1.0],
+            [0.0, 0.0, 2.0, 2.0],
+            [0.0, 0.0, 3.0, 1.0],
+        ],
+    )
+    assert np.array_equal(w,[-1,1,-1,1,1])
 
 
 def test_representative_cycles():
