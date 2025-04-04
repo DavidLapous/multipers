@@ -303,7 +303,7 @@ def barcode_from_rank_sm(
     return out
 
 
-def estimate_rank_from_rank_sm(sm:tuple, a, b) -> int:
+def estimate_rank_from_rank_sm(sm:tuple, a, b)->np.int64:
     """
     Given a rank signed measure (sm) and two points (a) and (b),
     estimates the rank between these two points.
