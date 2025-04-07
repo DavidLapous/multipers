@@ -169,10 +169,11 @@ extensions = [
             "-O3",  # -Ofast disables infinity values for filtration values
             # "-g",
             # "-march=native",
-            "/std:c++20" if platform.system() == "Windows" else "-std=c++20",  # Windows doesn't support this yet. TODO: Wait.
+            "/std:c++23" if platform.system() == "Windows" else "-std=c++23",
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
             "-Wextra" if platform.system() != "Windows" else "",
+            # "-Werror" if platform.system() != "Windows" else "",
         ],
         extra_link_args=[],  ## mvec for python312
         include_dirs=cpp_dirs,
