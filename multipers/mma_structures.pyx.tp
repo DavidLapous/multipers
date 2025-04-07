@@ -984,8 +984,8 @@ cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
     cdef vector[One_critical_filtration[{{CTYPE}}]] births = summand.get_birth_list()
     cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = summand.get_death_list()
     return (
-            _vff21cview_{{SHORT}}(births, copy=True), ## copy as local variables
-            _vff21cview_{{SHORT}}(deaths, copy=True),
+            np.array(_vff21cview_{{SHORT}}(births)),
+            np.array(_vff21cview_{{SHORT}}(deaths)),
             summand.get_dimension(),
             )
 
