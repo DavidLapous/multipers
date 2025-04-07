@@ -199,8 +199,8 @@ class Module {
     if (a.get_dimension() != b.get_dimension()) return false;
     if (a.box_ != b.box_) return false;
     if (a.size() != b.size()) return false;
-    for (const auto &[a, b] : std::views::zip(a, b)) {
-      if (a != b) return false;
+    for (auto i : std::views::iota(0u, a.size())) {
+      if (a[i] != b[i]) return false;
     }
     return true;
   }
