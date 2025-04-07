@@ -30,7 +30,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         bool contains(const vector[T]&)  nogil const
         Box[T] get_bounds() nogil const
         void rescale(const vector[T]&) nogil
-
+        bool operator==(const Summand[T]&) nogil
 
 
 
@@ -86,6 +86,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         Summand[T]& at(unsigned int)  nogil
         vector[Summand[T]].iterator begin()
         vector[Summand[T]].iterator end() 
+        bool operator==(const Module[T]&) nogil
         void clean(const bool)  nogil
         void fill(const T)  nogil
         # vector[image_type] get_vectorization(const T,const T, unsigned int,unsigned int,const Box&)

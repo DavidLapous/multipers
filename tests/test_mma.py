@@ -81,3 +81,12 @@ def test_pipeline2(prune_degrees_above, n_jobs, expand_dim):
 
     output = mp.module_approximation(st_copy, box=box).representation(bandwidth=0.01)
     assert np.array_equal(truc[0].representation(bandwidth=-0.01), output)
+
+def test_dump_load():
+    from multipers.tests import random_st
+    import pickle as pkl
+    mod = mp.module_approximation(random_st())
+    _mod = pkl.loads(pkl.dumps(mod))
+    assert mod == _mod
+    mod = mp.module_approximation(random_st())
+    assert _mod != mod

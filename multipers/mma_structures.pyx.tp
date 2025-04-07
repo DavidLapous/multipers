@@ -118,6 +118,11 @@ cdef class PySummand_{{SHORT}}:
             return v[0].num_parameters()
         v = self.sum.get_death_list()
         return v[0].num_parameters()
+    def __eq__(self, PySummand_{{SHORT}} other):
+        return self.sum == other.sum 
+
+
+
 
 cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     r"""
@@ -182,6 +187,10 @@ cdef class PyModule_{{SHORT}}:
 
     cdef set(self, Module[{{CTYPE}}] m):
         self.cmod = m
+
+    def __eq__(self, PyModule_{{SHORT}} other):
+        return self.cmod == other.cmod
+
     def merge(self, PyModule_{{SHORT}} other, int dim=-1):
         r"""
         Merges two modules into one

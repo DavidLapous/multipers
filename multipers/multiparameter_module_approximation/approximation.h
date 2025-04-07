@@ -28,6 +28,7 @@
 #include <limits>
 #include <oneapi/tbb/parallel_for.h>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -88,6 +89,8 @@ class Module {
                    const bool threshold);
   typename module_type::iterator begin();
   typename module_type::iterator end();
+  typename module_type::const_iterator begin() const;
+  typename module_type::const_iterator end() const;
 
   void clean();
   void fill(const value_type precision);
@@ -192,6 +195,16 @@ class Module {
 
   std::vector<int> inline get_degree_splits() const;
 
+  inline friend bool operator==(const Module &a, const Module &b) {
+    if (a.get_dimension() != b.get_dimension()) return false;
+    if (a.box_ != b.box_) return false;
+    if (a.size() != b.size()) return false;
+    for (const auto &[a, b] : std::views::zip(a, b)) {
+      if (a != b) return false;
+    }
+    return true;
+  }
+
  private:
   module_type module_;
   Box<value_type> box_;
@@ -280,6 +293,10 @@ class Summand {
     std::swap(sum1.distanceTo0_, sum2.distanceTo0_);
     // 	std::swap(sum1.updateDistance_, sum2.updateDistance_);
   };
+
+  friend bool operator==(const Summand &a, const Summand &b) {
+    return a.dimension_ == b.dimension_ && a.birth_corners_ == b.birth_corners_ && a.death_corners_ == b.death_corners_;
+  }
 
   bool contains(const filtration_type &x) const;
 
@@ -813,8 +830,18 @@ inline typename Module<value_type>::module_type::iterator Module<value_type>::be
 }
 
 template <typename value_type>
+inline typename Module<value_type>::module_type::const_iterator Module<value_type>::begin() const {
+  return module_.cbegin();
+}
+
+template <typename value_type>
 inline typename Module<value_type>::module_type::iterator Module<value_type>::end() {
   return module_.end();
+}
+
+template <typename value_type>
+inline typename Module<value_type>::module_type::const_iterator Module<value_type>::end() const {
+  return module_.cend();
 }
 
 template <typename value_type>
@@ -2046,14 +2073,16 @@ const Gudhi::multi_filtration::Multi_critical_filtration<value_type> &Summand<va
 
 template <typename value_type>
 inline void Summand<value_type>::clean() {
-  // birth_corners_.erase(
-  //     std::remove_if(birth_corners_.begin(), birth_corners_.end(),
-  //                    [](const std::vector<value_type> &bp) {
-  //                      return std::any_of(
-  //                          bp.begin(), bp.end(),
-  //                          [](float value) { return !std::isfinite(value); });
-  //                    }),
-  //     birth_corners_.end());
+  // birth_corners_.erase(std::remove_if(birth_corners_.begin(),
+  //                                     birth_corners_.end(),
+  //                                     [](const std::vector<value_type> &bp) {
+  //                                       // return std::any_of(
+  //                                       //     bp.begin(), bp.end(),
+  //                                       //     [](float value) { return !std::isfinite(value); });
+  //                                       bp.size() == 0;
+  //                                     }),
+  //                      birth_corners_.end());
+  // birth_corners_.simplify();
   // TODO : clean
 }
 
@@ -2064,14 +2093,15 @@ inline void Summand<value_type>::complete_birth(const value_type precision) {
   for (std::size_t i = 0; i < birth_corners_.num_generators(); i++) {
     for (std::size_t j = i + 1; j < birth_corners_.num_generators(); j++) {
       value_type dinf = d_inf(birth_corners_[i], birth_corners_[j]);
-      if (dinf < .99 * precision) { // for machine error ?
+      if (dinf < .99 * precision) {  // for machine error ?
         _factorize_min(birth_corners_[i], birth_corners_[j]);
-        birth_corners_[j].clear();
+        birth_corners_[j] = std::remove_reference_t<decltype(birth_corners_[j])>::inf();
         i++;
       }
     }
   }
-  _clean(birth_corners_);
+  birth_corners_.simplify();
+  // _clean(birth_corners_);
 }
 
 template <typename value_type>
@@ -2083,12 +2113,14 @@ inline void Summand<value_type>::complete_death(const value_type precision) {
       value_type d = d_inf(death_corners_[i], death_corners_[j]);
       if (d < .99 * precision) {
         _factorize_max(death_corners_[i], death_corners_[j]);
-        death_corners_[j].clear();
+        death_corners_[j] = std::remove_reference_t<decltype(death_corners_[j])>::minus_inf();
         i++;
       }
     }
   }
-  _clean(death_corners_);
+
+  death_corners_.simplify();
+  // _clean(death_corners_);
 }
 
 template <typename value_type>

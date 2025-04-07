@@ -149,6 +149,9 @@ class Box {
     lowerCorner_ -= delta;
     upperCorner_ += delta;
   }
+  friend bool operator==(const Box& a, const Box&b){
+    return a.upperCorner_ == b.upperCorner_ && a.lowerCorner_ == b.lowerCorner_;
+  }
 
   /**
    * @brief Outstream operator.
