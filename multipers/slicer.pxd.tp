@@ -207,8 +207,10 @@ cdef extern from "multi_parameter_rank_invariant/hilbert_function.h" namespace "
 {{for D in slicers}}
     signed_measure_type get_hilbert_signed_measure({{D['C_TEMPLATE_TYPE']}}&, tensor_dtype* , const vector[indices_type], const vector[indices_type],  bool zero_pad,indices_type n_jobs, bool verbose, bool ignore_inf) except + nogil
   {{endfor}}
-cdef inline  _compute_hilbert_sm(object slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs, bool verbose,bool zero_pad, bool ignore_inf):
+cdef inline  _compute_hilbert_sm(slicer, tensor_dtype* container_ptr, vector[indices_type] c_grid_shape, vector[indices_type] degrees, int n_jobs, bool verbose,bool zero_pad, bool ignore_inf):
   import multipers.slicer as mps
+  if len(slicer) == 0:
+    return (np.empty(shape=(0, 1), dtype=slicer.dtype), np.empty(shape=(0), dtype=int))
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
   cdef signed_measure_type sm
   cdef cnp.ndarray[indices_type, ndim=2] pts
@@ -217,8 +219,12 @@ cdef inline  _compute_hilbert_sm(object slicer, tensor_dtype* container_ptr, vec
   if isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
       sm = get_hilbert_signed_measure(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, zero_pad, n_jobs, verbose, ignore_inf)
-    pts = np.asarray(sm.first,dtype=python_indices_type)
-    weights = np.asarray(sm.second,dtype=python_tensor_dtype)
+    if len(sm.first) == 0:
+      pts = np.empty(shape=(0, slicer.num_parameter), dtype=python_indices_type)
+      weights = np.empty(shape=(0), dtype=python_tensor_dtype)
+    else:
+      pts = np.asarray(sm.first,dtype=python_indices_type)
+      weights = np.asarray(sm.second,dtype=python_tensor_dtype)
     return (pts,weights)
   {{endfor}}
   raise ValueError(f"Unsupported slicer type {type(slicer)}")

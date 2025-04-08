@@ -286,6 +286,7 @@ def evaluate_in_grid(pts, grid, mass_default=None):
      - pts: of the form array[int, ndim=2]
      - grid of the form Iterable[array[float, ndim=1]]
     """
+    assert pts.ndim == 2
     first_filtration = grid[0]
     dtype = first_filtration.dtype
     if isinstance(first_filtration, np.ndarray):
@@ -304,11 +305,12 @@ def evaluate_in_grid(pts, grid, mass_default=None):
         _argwhere = torch.argwhere
 
     coords=empty_like(pts)
+    cdef int dim = coords.shape[1]
     pts_inf = _inf_value(pts.dtype)
     coords_inf = _inf_value(coords.dtype)
     idx = _argwhere(pts == pts_inf)
     pts[idx] == 0
-    for i in range(coords.shape[1]):
+    for i in range(dim):
         coords[:,i] = grid[i][pts[:,i]]
     coords[idx] = coords_inf
     return coords
@@ -323,6 +325,7 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
      - grid of the form Iterable[array[float, ndim=1]]
      - num_parameters: number of parameters
     """
+    assert pts.ndim == 2, f"invalid dirac locations. got {pts.ndim=} != 2"
     cdef int num_parameters  = pts.shape[1]
     if len(grid) < num_parameters:
         _grid = list(grid)

@@ -718,6 +718,8 @@ def minimal_presentation(
         )
         # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
     assert degree>=0, f"Degree not provided."
+    if not np.any(slicer.get_dimensions() == degree):
+        return type(slicer)()
     filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     if id is None:
         id = str(threading.get_native_id())

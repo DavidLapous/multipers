@@ -35,7 +35,7 @@ def signed_measure(
     thread_id: str = "",
     grid: Optional[Iterable] = None,
     coordinate_measure: bool = False,
-    num_collapses: int = 0,
+    num_collapses: int = 0,  # TODO : deprecate
     clean: Optional[bool] = None,
     vineyard: bool = False,
     grid_conversion: Optional[Iterable] = None,
@@ -100,6 +100,8 @@ def signed_measure(
      - Rank: Same as Hilbert.
     """
     ## TODO : add timings in verbose
+    if len(filtered_complex) == 0:
+        return [(np.empty((0,2), dtype=filtered_complex.dtype), np.empty(shape=(0,), dtype=int))]
     if grid_conversion is not None:
         grid = tuple(f for f in grid_conversion)
         raise DeprecationWarning(
@@ -242,7 +244,7 @@ def signed_measure(
                     _signed_measure_from_slicer(
                         s,
                         shift=(
-                            reduced_complex.minpres_degree % 2 if d is None else d % 2
+                            reduced_complex.minpres_degree & 1 if d is None else d & 1
                         ),
                     )[0]
                     for s, d in zip(reduced_complex, degrees)
@@ -272,11 +274,12 @@ def signed_measure(
                     _signed_measure_from_slicer(
                         filtered_complex_,
                         shift=(
-                            filtered_complex_.minpres_degree % 2 if d is None else d % 2
+                            filtered_complex_.minpres_degree & 1 if d is None else d & 1
                         ),
                     )[0]
                     for d in degrees
                 ]
+                print(sms[0])
                 if verbose:
                     print("Done.")
             elif (invariant is None or "euler" in invariant) and (
@@ -408,7 +411,7 @@ def _signed_measure_from_scc(
     pts = np.concatenate([b[0] for b in minimal_presentation])
     weights = np.concatenate(
         [
-            (1 - 2 * (i % 2)) * np.ones(len(b[0]))
+            (1 - 2 * (i & 1)) * np.ones(len(b[0]))
             for i, b in enumerate(minimal_presentation)
         ]
     )
