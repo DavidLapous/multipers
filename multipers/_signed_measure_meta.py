@@ -279,7 +279,6 @@ def signed_measure(
                     )[0]
                     for d in degrees
                 ]
-                print(sms[0])
                 if verbose:
                     print("Done.")
             elif (invariant is None or "euler" in invariant) and (
