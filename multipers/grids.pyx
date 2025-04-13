@@ -271,12 +271,18 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
         return push_to_grid(points, grid, coordinate), grid
     return push_to_grid(points, grid, coordinate)
 
-def _inf_value(dtype):
-    cdef str kind = np.dtype(dtype).kind
-    if kind == 'f':
-        return np.asarray(np.inf,dtype=dtype)
-    if kind == 'i':
-        return np.iinfo(dtype).max
+def _inf_value(array):
+    if isinstance(array, np.ndarray):
+        if array.dtype.kind == 'f':
+            return np.asarray(np.inf,dtype=array.dtype)
+        if array.dtype.kind == 'i':
+            return np.iinfo(array.dtype).max
+    import torch 
+    assert isinstance(array, torch.Tensor)
+    if array.dtype.is_floating_point:
+        return torch.tensor(torch.inf, dtype=array.dtype)
+    else:
+        return torch.iinfo(array.dtype).max
     raise ValueError(f"Dtype must be integer or floating like (got {dtype})")
 
 def evaluate_in_grid(pts, grid, mass_default=None):
@@ -294,7 +300,6 @@ def evaluate_in_grid(pts, grid, mass_default=None):
             grid = tuple(np.concatenate([g, [m]]) for g,m in zip(grid, mass_default))
         def empty_like(x):
             return np.empty_like(x, dtype=dtype)
-        _argwhere = np.argwhere
     else: 
         import torch
         # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid[0])}, expected numpy or torch array."
@@ -302,13 +307,12 @@ def evaluate_in_grid(pts, grid, mass_default=None):
             grid = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid, mass_default))
         def empty_like(x):
             return torch.empty(x.shape,dtype=dtype)
-        _argwhere = torch.argwhere
 
     coords=empty_like(pts)
     cdef int dim = coords.shape[1]
-    pts_inf = _inf_value(pts.dtype)
-    coords_inf = _inf_value(coords.dtype)
-    idx = _argwhere(pts == pts_inf)
+    pts_inf = _inf_value(pts)
+    coords_inf = _inf_value(coords)
+    idx = np.argwhere(pts == pts_inf)
     pts[idx] == 0
     for i in range(dim):
         coords[:,i] = grid[i][pts[:,i]]
@@ -331,7 +335,7 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
         _grid = list(grid)
         
         if isinstance(grid[0], np.ndarray|list|tuple):
-            _grid += [np.concatenate([g[1:], [_inf_value(g.dtype)]] ) for g in grid]
+            _grid += [np.concatenate([g[1:], [_inf_value(g)]] ) for g in grid]
             if mass_default is not None:
                 mass_default = np.concatenate([mass_default]*2)
         else:

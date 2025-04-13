@@ -99,6 +99,13 @@ def test_rank_custom():
         ],
     )
     assert np.array_equal(w,[-1,1,-1,1,1])
+    B = [[]]
+    D = [0]
+    F = [[0,0]]
+    s = mp.Slicer(return_type_only=True)(B,D,F)
+    (a,b), = mp.signed_measure(s, invariant="rank", degree=0,)
+    assert np.array_equal(a, [[0,0,np.inf, np.inf]])
+    assert np.array_equal(b,[1])
 
 
 def test_representative_cycles():

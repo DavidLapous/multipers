@@ -376,13 +376,14 @@ class Truc {
   }
 
   template <bool generator_only = false>
-  inline std::conditional_t<generator_only, std::pair<std::vector<std::vector<index_type>>, MultiFiltrations>, Truc>
+  std::conditional_t<generator_only, std::pair<std::vector<std::vector<index_type>>, MultiFiltrations>, Truc>
   projective_cover_kernel(int dim) {
     if constexpr (MultiFiltration::is_multicritical() || !std::is_same_v<Structure, PresentationStructure> ||
                   !has_columns<PersBackend>::value)  // TODO : this may not be the best
     {
       throw std::invalid_argument("Not implemented for this Truc");
     } else {
+      // TODO : this only works for 2 parameter modules. Optimize w.r.t. this.
       const bool verbose = false;
       // filtration values are assumed to be dim + colexicographically sorted
       // vector seem to be good here
@@ -452,13 +453,13 @@ class Truc {
           if (queue.empty()) [[unlikely]]
             throw std::runtime_error("Queue is empty");
 
-          auto out = *queue.begin();
+          auto out = std::move(*queue.begin());
           queue.erase(queue.begin());
           std::swap(last_cols, out.some_cols);
           return out.g;
         }
 
-        const std::set<int> &get_current_cols() const { return last_cols; }
+        const auto &get_current_cols() const { return last_cols; }
 
        private:
         std::set<MFWrapper> queue;
@@ -479,7 +480,7 @@ class Truc {
       auto get_fil = [&](int i) -> MultiFiltration & { return generator_filtration_values[i]; };
       auto get_pivot = [&](int j) -> int {
         const auto &col = M.get_column(j);
-        return col.size() ? (*col.rbegin()).get_row_index() : -1;
+        return col.size()>0 ? (*col.rbegin()).get_row_index() : -1;
       };
 
       if constexpr (verbose) {
@@ -563,7 +564,7 @@ class Truc {
           if (!reduced_columns[j]) {
             std::vector<index_type> _b(N.get_column(j).begin(), N.get_column(j).end());
             for (auto &stuff : _b) stuff -= nd;
-            out_structure.push_back(_b);
+            out_structure.push_back(std::move(_b));
             out_filtration.emplace_back(grid_value.begin(), grid_value.end());
             if constexpr (!generator_only) out_dimension.emplace_back(this->structure.dimension(j) + 1);
             reduced_columns[j] = true;
