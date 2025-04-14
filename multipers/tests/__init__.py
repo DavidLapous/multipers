@@ -21,14 +21,15 @@ def sort_sm(sms):
     return tuple((sm[0][idx], sm[1][idx]) for sm in sms)
 
 
-def assert_sm_pair(sm1, sm2, exact=True, max_error=1e-3, reg=0.1):
+def assert_sm_pair(sm1, sm2, exact=True, max_error=1e-3, reg=0.1, threshold=None):
     if not exact:
         from multipers.distances import sm_distance
-        _inf_value_fix = 0
-        sm1[0][sm1[0] == np.inf] = _inf_value_fix
-        sm2[0][sm2[0] == np.inf] = _inf_value_fix
+        if threshold is not None:
+            _inf_value_fix = threshold
+            sm1[0][sm1[0] >threshold] = _inf_value_fix
+            sm2[0][sm2[0] >threshold] = _inf_value_fix
 
-        d = sm_distance(sm1, sm2, reg=0.1)
+        d = sm_distance(sm1, sm2, reg=reg)
         assert d < max_error, f"Failed comparison:\n{sm1}\n{sm2},\n with distance {d}."
         return
     assert np.all(
@@ -40,10 +41,11 @@ def assert_sm_pair(sm1, sm2, exact=True, max_error=1e-3, reg=0.1):
     ), f"Failed comparison:\n-----------------\n{sm1}\n-----------------\n{sm2}"
 
 
-def assert_sm(*args, exact=True, max_error=1e-5, reg=0.1):
+def assert_sm(*args, exact=True, max_error=1e-5, reg=0.1, threshold=None):
     sms = tuple(args)
     for i in range(len(sms) - 1):
-        assert_sm_pair(sms[i], sms[i + 1], exact=exact, max_error=max_error, reg=reg)
+        print(i)
+        assert_sm_pair(sms[i], sms[i + 1], exact=exact, max_error=max_error, reg=reg, threshold=threshold)
 
 
 def random_st(npts=100, num_parameters=2, max_dim=2):

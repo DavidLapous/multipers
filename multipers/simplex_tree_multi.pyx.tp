@@ -1906,9 +1906,9 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
     else:
         mass_default = np.asarray(mass_default)
         assert mass_default.ndim == 1 and mass_default.shape[0] == simplextree.num_parameters, "Mass default has to be an array like of shape (num_parameters,)"
-    if zero_pad:
-        for i, _ in enumerate(grid_shape):
-            grid_shape[i] += 1 # adds a 0
+    # if zero_pad:
+    #     for i, _ in enumerate(grid_shape):
+    #         grid_shape[i] += 1 # adds a 0
         # grid_conversion = tuple(np.concatenate([f, [mass_default[i]]]) for i,f in enumerate(grid_conversion))
 
     assert len(grid_shape) == simplextree.num_parameters, "Grid shape size has to be the number of parameters."

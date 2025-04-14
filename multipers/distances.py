@@ -6,7 +6,7 @@ from multipers.multiparameter_module_approximation import PyModule_type
 from multipers.simplex_tree_multi import SimplexTreeMulti_type
 
 
-def sm2diff(sm1, sm2):
+def sm2diff(sm1, sm2, threshold=None):
     pts = sm1[0]
     dtype = pts.dtype
     if isinstance(pts, np.ndarray):
@@ -45,6 +45,9 @@ def sm2diff(sm1, sm2):
     )
     x = backend_concatenate(pts1[pos_indices1], pts2[neg_indices2])
     y = backend_concatenate(pts1[neg_indices1], pts2[pos_indices2])
+    if threshold is not None:
+        x[x>threshold]=threshold
+        y[y>threshold]=threshold
     return x, y
 
 
@@ -55,6 +58,7 @@ def sm_distance(
     reg_m: float = 0,
     numItermax: int = 10000,
     p: float = 1,
+    threshold=None,
 ):
     """
     Computes the wasserstein distances between two signed measures,
@@ -68,7 +72,7 @@ def sm_distance(
      - sinkhorn if reg != 0
      - sinkhorn unbalanced if reg_m != 0
     """
-    x, y = sm2diff(sm1, sm2)
+    x, y = sm2diff(sm1, sm2, threshold=threshold)
     loss = ot.dist(
         x, y, metric="sqeuclidean", p=p
     )  # only euc + sqeuclidian are implemented in pot for the moment with torch backend # TODO : check later

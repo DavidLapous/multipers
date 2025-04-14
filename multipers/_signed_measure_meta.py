@@ -31,8 +31,7 @@ def signed_measure(
     verbose: bool = False,
     n_jobs: int = -1,
     expand_collapse: bool = False,
-    backend: Optional[str] = None,
-    thread_id: str = "",
+    backend: Optional[str] = None, # deprecated
     grid: Optional[Iterable] = None,
     coordinate_measure: bool = False,
     num_collapses: int = 0,  # TODO : deprecate
@@ -99,6 +98,10 @@ def signed_measure(
            It is usually faster to use this backend if not in a parallel context.
      - Rank: Same as Hilbert.
     """
+    if backend is not None:
+        raise ValueError("backend is deprecated. reduce the complex before this function.")
+    if num_collapses >0:
+        raise ValueError("num_collapses is deprecated. reduce the complex before this function.")
     ## TODO : add timings in verbose
     if len(filtered_complex) == 0:
         return [(np.empty((0,2), dtype=filtered_complex.dtype), np.empty(shape=(0,), dtype=int))]
@@ -188,69 +191,70 @@ def signed_measure(
         grid
     ), f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
 
-    if is_simplextree_multi(filtered_complex_):
-        if num_collapses != 0:
-            if verbose:
-                print("Collapsing edges...", end="")
-            filtered_complex_.collapse_edges(num_collapses)
-            if verbose:
-                print("Done.")
-        if backend is not None:
-            filtered_complex_ = mp.Slicer(filtered_complex_, vineyard=vineyard)
+    # if is_simplextree_multi(filtered_complex_):
+    #     # if num_collapses != 0:
+    #     #     if verbose:
+    #     #         print("Collapsing edges...", end="")
+    #     #     filtered_complex_.collapse_edges(num_collapses)
+    #     #     if verbose:
+    #     #         print("Done.")
+    #     # if backend is not None:
+    #     #     filtered_complex_ = mp.Slicer(filtered_complex_, vineyard=vineyard)
 
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
         if verbose:
             print("Input is a slicer.")
         if backend is not None and not filtered_complex_.is_minpres:
-            from multipers.slicer import minimal_presentation
-
-            assert (
-                invariant != "euler"
-            ), "Euler Characteristic cannot be speed up by a backend"
-            # This returns a list of reduced complexes
-            if verbose:
-                print("Reducing complex...", end="")
-            reduced_complex = minimal_presentation(
-                filtered_complex_,
-                degrees=degrees,
-                backend=backend,
-                vineyard=vineyard,
-                verbose=verbose,
-            )
-            if verbose:
-                print("Done.")
-            if invariant is not None and "rank" in invariant:
-                if verbose:
-                    print("Computing rank...", end="")
-                sms = [
-                    _rank_from_slicer(
-                        s,
-                        degrees=[d],
-                        n_jobs=n_jobs,
-                        # grid_shape=tuple(len(g) for g in grid),
-                        zero_pad=fix_mass_default,
-                        ignore_inf=ignore_infinite_filtration_values,
-                    )[0]
-                    for s, d in zip(reduced_complex, degrees)
-                ]
-                fix_mass_default = False
-                if verbose:
-                    print("Done.")
-            else:
-                if verbose:
-                    print("Reduced slicer. Retrieving measure from it...", end="")
-                sms = [
-                    _signed_measure_from_slicer(
-                        s,
-                        shift=(
-                            reduced_complex.minpres_degree & 1 if d is None else d & 1
-                        ),
-                    )[0]
-                    for s, d in zip(reduced_complex, degrees)
-                ]
-                if verbose:
-                    print("Done.")
+            raise ValueError("giving a backend to this function is deprecated")
+        #     from multipers.slicer import minimal_presentation
+        #
+        #     assert (
+        #         invariant != "euler"
+        #     ), "Euler Characteristic cannot be speed up by a backend"
+        #     # This returns a list of reduced complexes
+        #     if verbose:
+        #         print("Reducing complex...", end="")
+        #     reduced_complex = minimal_presentation(
+        #         filtered_complex_,
+        #         degrees=degrees,
+        #         backend=backend,
+        #         vineyard=vineyard,
+        #         verbose=verbose,
+        #     )
+        #     if verbose:
+        #         print("Done.")
+        #     if invariant is not None and "rank" in invariant:
+        #         if verbose:
+        #             print("Computing rank...", end="")
+        #         sms = [
+        #             _rank_from_slicer(
+        #                 s,
+        #                 degrees=[d],
+        #                 n_jobs=n_jobs,
+        #                 # grid_shape=tuple(len(g) for g in grid),
+        #                 zero_pad=fix_mass_default,
+        #                 ignore_inf=ignore_infinite_filtration_values,
+        #             )[0]
+        #             for s, d in zip(reduced_complex, degrees)
+        #         ]
+        #         fix_mass_default = False
+        #         if verbose:
+        #             print("Done.")
+        #     else:
+        #         if verbose:
+        #             print("Reduced slicer. Retrieving measure from it...", end="")
+        #         sms = [
+        #             _signed_measure_from_slicer(
+        #                 s,
+        #                 shift=(
+        #                     reduced_complex.minpres_degree & 1 if d is None else d & 1
+        #                 ),
+        #             )[0]
+        #             for s, d in zip(reduced_complex, degrees)
+        #         ]
+        #         if verbose:
+        #             print("Done.")
         else:  # No backend
             if invariant is not None and "rank" in invariant:
                 degrees = np.asarray(degrees, dtype=int)
