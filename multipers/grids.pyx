@@ -272,17 +272,29 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
     return push_to_grid(points, grid, coordinate)
 
 def _inf_value(array):
-    if isinstance(array, np.ndarray):
-        if array.dtype.kind == 'f':
-            return np.asarray(np.inf,dtype=array.dtype)
-        if array.dtype.kind == 'i':
-            return np.iinfo(array.dtype).max
-    import torch 
-    assert isinstance(array, torch.Tensor)
-    if array.dtype.is_floating_point:
-        return torch.tensor(torch.inf, dtype=array.dtype)
+    if isinstance(array, type|np.dtype):
+        dtype = np.dtype(array) # torch types are not types
+    elif isinstance(array, np.ndarray):
+        dtype = np.dtype(array.dtype)
     else:
-        return torch.iinfo(array.dtype).max
+        import torch
+        if isinstance(array, torch.Tensor):
+            dtype=array.dtype
+        elif isinstance(array, torch.dtype):
+            dtype=array
+        else:
+            raise ValueError(f"unknown input {array}")
+
+    if isinstance(dtype, np.dtype):
+        if dtype.kind == 'f':
+            return np.asarray(np.inf,dtype=dtype)
+        if dtype.kind == 'i':
+            return np.iinfo(dtype).max
+    # torch only here.
+    if dtype.is_floating_point:
+        return torch.tensor(torch.inf, dtype=dtype)
+    else:
+        return torch.iinfo(dtype).max
     raise ValueError(f"Dtype must be integer or floating like (got {dtype})")
 
 def evaluate_in_grid(pts, grid, mass_default=None):

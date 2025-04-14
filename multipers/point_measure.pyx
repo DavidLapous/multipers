@@ -215,7 +215,7 @@ def zero_out_sm(pts,weights, mass_default):
     C = np.concatenate([C, np.ones((C.shape[0],1))], axis=1).astype(np.bool_)
     
     # signs of each corner
-    Cw = 1-2*((~C).sum(axis=1)%2)
+    Cw = 1-2*((~C).sum(axis=1) & 1)
 
     # something useless in the end to ensure that the shape is correct (as we added 1 in pts)
     mass_default = np.concatenate([mass_default,[np.nan]]) 
