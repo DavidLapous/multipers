@@ -81,7 +81,7 @@ def compute_grid(
             if isinstance(initial_grid[0], np.ndarray):
                 initial_grid = np.concatenate(initial_grid, axis=1)
             else:
-                is_numpy_compatbile = False
+                is_numpy_compatible = False
                 import torch
                 assert isinstance(first[0], torch.Tensor), "Only numpy and torch are supported ftm."
                 initial_grid = torch.cat(initial_grid, axis=1)
@@ -104,8 +104,10 @@ def compute_grid(
         dense = dense,
         )
     from multipers.torch.diff_grids import get_grid
-    return get_grid(strategy)(initial_grid,resolution)
-
+    grid = get_grid(strategy)(initial_grid,resolution)
+    if dense:
+        grid = todense(grid)
+    return grid
 
 
 

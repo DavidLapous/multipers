@@ -15,6 +15,8 @@ def get_grid(strategy: Literal["exact", "regular_closest", "regular_left", "quan
     match strategy:
         case "exact":
             return _exact_grid
+        case "regular":
+            return _regular_grid
         case "regular_closest":
             return _regular_closest_grid
         case "regular_left":
@@ -43,6 +45,14 @@ def _regular_closest_grid(filtration_values, r: int):
     grid = tuple(_regular_closest(f, r) for f in filtration_values)
     return grid
 
+def _regular_grid(filtration_values, r:int):
+    grid = tuple(_regular(g,r) for g in filtration_values)
+    return grid
+
+def _regular(x, r:int):
+    if x.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {x=}")
+    return torch.linspace(start=torch.min(x), end=torch.max(x), steps=r) 
 
 def _regular_left_grid(filtration_values, r: int):
     grid = tuple(_regular_left(f, r) for f in filtration_values)
@@ -56,6 +66,8 @@ def _quantile_grid(filtration_values, r: int):
 
 
 def _unique_any(x, assume_sorted=False, remove_inf: bool = True):
+    if x.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {x=}")
     if not assume_sorted:
         x, _ = x.sort()
     if remove_inf and x[-1] == torch.inf:
@@ -68,6 +80,8 @@ def _unique_any(x, assume_sorted=False, remove_inf: bool = True):
 
 
 def _regular_left(f, r: int, unique: bool = True):
+    if f.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {f=}")
     f = _unique_any(f)
     with torch.no_grad():
         f_regular = torch.linspace(f[0].item(), f[-1].item(), r, device=f.device)
@@ -79,6 +93,8 @@ def _regular_left(f, r: int, unique: bool = True):
 
 
 def _regular_closest(f, r: int, unique: bool = True):
+    if f.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {f=}")
     f = _unique_any(f)
     with torch.no_grad():
         f_reg = torch.linspace(

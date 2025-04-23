@@ -857,6 +857,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
             c = torch.empty(new_shape, dtype=dtype)
             c[:, :-1] = dirac_positions
+            if isinstance(dirac_signs, np.ndarray):
+                dirac_signs = torch.from_numpy(dirac_signs)
             c[:, -1] = dirac_signs
         return c
 
@@ -1041,7 +1043,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         if not self._is_input_sparse:
             self._input_resolution = X[0][0].shape
             try:
-                float(self.bandwidth)
                 b = float(self.bandwidth)
                 self._bandwidths = [
                     b if b > 0 else -b * s for s in self._input_resolution
