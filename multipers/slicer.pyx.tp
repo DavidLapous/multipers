@@ -240,7 +240,11 @@ cdef class {{D['PYTHON_TYPE']}}:
         copy_.minpres_degree = self.minpres_degree
         copy_.filtration_grid = self.filtration_grid
         return copy_
-    def compute_kernel_projective_cover(self, int dim)->{{D['PYTHON_TYPE']}}:
+    def compute_kernel_projective_cover(self, dim:Optional[int]=None)->{{D['PYTHON_TYPE']}}:
+        if len(self) == 0:
+            return {{D['PYTHON_TYPE']}}()
+        if dim is None:
+            dim = self.truc.get_dimension(0)
         out = {{D['PYTHON_TYPE']}}()
         out.truc = self.truc.projective_cover_kernel(dim)
         out.filtration_grid = self.filtration_grid

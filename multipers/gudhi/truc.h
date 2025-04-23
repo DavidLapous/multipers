@@ -1044,6 +1044,9 @@ class Truc {
     }
     return out;
   }
+  inline int get_dimension(int i) const {
+    return structure.dimension(i);
+  }
 
   inline void prune_above_dimension(int max_dim) {
     int idx = structure.prune_above_dimension(max_dim);
