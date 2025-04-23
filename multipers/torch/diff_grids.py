@@ -37,16 +37,17 @@ def todense(grid: list[torch.Tensor]):
 
 
 def _exact_grid(filtration_values, r=None):
+    assert r is None
     grid = tuple(_unique_any(f) for f in filtration_values)
     return grid
 
 
-def _regular_closest_grid(filtration_values, r: int):
-    grid = tuple(_regular_closest(f, r) for f in filtration_values)
+def _regular_closest_grid(filtration_values, res):
+    grid = tuple(_regular_closest(f, r) for f,r in zip(filtration_values, res))
     return grid
 
-def _regular_grid(filtration_values, r:int):
-    grid = tuple(_regular(g,r) for g in filtration_values)
+def _regular_grid(filtration_values, res):
+    grid = tuple(_regular(g,r) for g,r in zip(filtration_values, res))
     return grid
 
 def _regular(x, r:int):
@@ -54,15 +55,21 @@ def _regular(x, r:int):
         raise ValueError(f"Got ndim!=1. {x=}")
     return torch.linspace(start=torch.min(x), end=torch.max(x), steps=r) 
 
-def _regular_left_grid(filtration_values, r: int):
-    grid = tuple(_regular_left(f, r) for f in filtration_values)
+def _regular_left_grid(filtration_values, res):
+    grid = tuple(_regular_left(f, r) for f,r in zip(filtration_values,res))
     return grid
 
 
-def _quantile_grid(filtration_values, r: int):
+def _quantile_grid(filtration_values, res):
+    grid = tuple(_quantile(f, r) for f,r in zip(filtration_values,res))
+    return grid
+def _quantile(x, r):
+    if x.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {x=}")
     qs = torch.linspace(0, 1, r)
-    grid = tuple(_unique_any(torch.quantile(f, q=qs)) for f in filtration_values)
-    return grid
+    return _unique_any(torch.quantile(x, q=qs))
+
+
 
 
 def _unique_any(x, assume_sorted=False, remove_inf: bool = True):

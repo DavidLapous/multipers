@@ -298,7 +298,7 @@ class KDE:
                 X.reshape((X.shape[0], 1, X.shape[1]))
             )  # numpts, 1, dim
             lazy_y = LazyTensor(
-                Y.reshape((1, Y.shape[0], Y.shape[1]))
+                Y.reshape((1, Y.shape[0], Y.shape[1])).astype(X.dtype)
             )  # 1, numpts, dim
             if x_weights is not None:
                 w = LazyTensor(np.asarray(x_weights, dtype=X.dtype)[:, None], axis=0)
@@ -310,7 +310,7 @@ class KDE:
             from pykeops.torch import LazyTensor
 
             lazy_x = LazyTensor(X.view(X.shape[0], 1, X.shape[1]))
-            lazy_y = LazyTensor(Y.view(1, Y.shape[0], Y.shape[1]))
+            lazy_y = LazyTensor(Y.type(X.dtype).view(1, Y.shape[0], Y.shape[1]))
             if x_weights is not None:
                 if isinstance(x_weights, np.ndarray):
                     x_weights = torch.from_numpy(x_weights)
