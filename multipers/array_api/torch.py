@@ -5,6 +5,7 @@ norm=_t.norm
 astensor=_t.as_tensor
 tensor=_t.tensor
 stack=_t.stack
+empty=_t.empty
 def minvalues(x:_t.Tensor,**kwargs):
     return _t.min(x, **kwargs).values
 def maxvalues(x:_t.Tensor,**kwargs):

@@ -6,6 +6,7 @@ astensor=_np.asarray
 asnumpy=_np.asarray
 tensor=_np.array
 stack=_np.stack
+empty=_np.empty
 def minvalues(x:_np.ndarray,**kwargs):
     return _np.min(x, **kwargs)
 def maxvalues(x:_np.ndarray,**kwargs):

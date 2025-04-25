@@ -325,7 +325,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         bcs = tuple(
                 api.stack([projected_fil[bc[:,0]], projected_fil[bc[:,1]]], axis=1) 
                 if bc.size>0 
-                else bc.astype(s.dtype) 
+                else api.empty((0,2), dtype = self.filtration_grid[0].dtype)
                 for bc in bcs_idx
             )
         if full:

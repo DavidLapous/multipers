@@ -557,6 +557,7 @@ class Truc {
           lexico_it.insert(std::move(prev), k);
         }
       }
+      // TODO : check poset cache ?
       if constexpr (verbose) std::cout << std::flush;
       // }
       auto reduce_column = [&](int j) -> bool {
