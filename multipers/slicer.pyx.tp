@@ -26,7 +26,8 @@ from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
-from multipers.grids import compute_grid, sanitize_grid
+from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_line 
+from multipers.array_api import api_from_tensor
 
 import numpy as np
 cimport cython
@@ -250,6 +251,11 @@ cdef class {{D['PYTHON_TYPE']}}:
         out.filtration_grid = self.filtration_grid
         return out
 
+    def get_barcode_idx(self, bool keep_inf = False):
+        """
+        Returns the current barcode.
+        """
+        return tuple(np.asarray(x) if len(x) else np.empty((0,2), dtype=int)for x in self.truc.get_barcode_idx())
     def get_barcode(self, bool keep_inf = False):
         """
         Returns the current barcode.
@@ -258,12 +264,13 @@ cdef class {{D['PYTHON_TYPE']}}:
             bcs = tuple(np.asarray(stuff, dtype = {{D['PY_VALUE_TYPE']}}) for stuff in self.truc.get_barcode())
         else:
             bcs = {{D['PYTHON_TYPE']}}._threshold_bcs(self.truc.get_barcode())
-        return self.truc.get_barcode()
+        return bcs
     def push_to_line(self, basepoint, direction=None)->{{D['PYTHON_TYPE']}}:
         """
         Pushes the current slicer to the line defined by a basepoint and an optional direction.
         If the direction is not provided, it is assumed to be diagonal.
         """
+        {{if D['IS_FLOAT']}}
         basepoint = np.asarray(basepoint, dtype = {{D['PY_VALUE_TYPE']}})
         cdef Line[{{D['C_VALUE_TYPE']}}] line
         if direction is None:
@@ -273,6 +280,9 @@ cdef class {{D['PYTHON_TYPE']}}:
             line = Line[{{D['C_VALUE_TYPE']}}](_py21c_{{D['SHORT_VALUE_TYPE']}}(basepoint),_py21c_{{D['SHORT_VALUE_TYPE']}}(direction))
         self.truc.push_to(line)
         return self
+        {{else}}
+        raise NotImplementedError("There is no `int` slicing.")
+        {{endif}}
 
     @staticmethod
     cdef _threshold_bcs(vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] bcs):
@@ -280,8 +290,8 @@ cdef class {{D['PYTHON_TYPE']}}:
     @staticmethod
     def _bc_to_full(bcs, basepoint, direction=None):
         # i, (b sv d), coords 
-        basepoint = np.asarray(basepoint)[None,None,:]
-        direction = 1 if direction is None else np.asarray(direction)[None,None,:]
+        basepoint = basepoint[None,None,:]
+        direction = 1 if direction is None else direction[None,None,:]
         return tuple(bc[:,:,None]*direction + basepoint for bc in bcs)
 
     def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
@@ -292,6 +302,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         
         Warning: This is not parallelizable. Use `persitence_on_lines`.
         """
+        {{if D['IS_FLOAT']}}
         self.push_to_line(basepoint,direction)
         self.truc.compute_persistence(ignore_infinite_filtration_values)
         if keep_inf:
@@ -302,6 +313,25 @@ cdef class {{D['PYTHON_TYPE']}}:
         if full:
             bcs = {{D['PYTHON_TYPE']}}._bc_to_full(bcs, basepoint, direction)
         return bcs
+        {{else}}
+        if not self.is_squeezed:
+            raise ValueError("Unsqueeze tensor, or provide a filtration grid")
+        api = api_from_tensor(self.filtration_grid[0])
+        s = self.unsqueeze()
+        fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
+        projected_fil =_push_pts_to_line(fil, basepoint, direction)
+        s.compute_persistence(projected_fil)
+        bcs_idx = s.get_barcode_idx()
+        bcs = tuple(
+                api.stack([projected_fil[bc[:,0]], projected_fil[bc[:,1]]], axis=1) 
+                if bc.size>0 
+                else bc.astype(s.dtype) 
+                for bc in bcs_idx
+            )
+        if full:
+            bcs = self._bc_to_full(bcs, basepoint, direction)
+        return bcs
+        {{endif}}
 
     def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
@@ -588,7 +618,7 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
         return self
 
-    def unsqueeze(self, grid=None):
+    def unsqueeze(self, grid=None)->{{D['PYTHON_TYPE'][:-3]+"f64"}}:
         from multipers.grids import evaluate_in_grid, sanitize_grid
         from multipers import Slicer
         grid = self.filtration_grid if grid is None else grid

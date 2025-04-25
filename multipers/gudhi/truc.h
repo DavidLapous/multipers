@@ -239,6 +239,8 @@ class Truc {
   using value_type = typename MultiFiltration::value_type;
   using split_barcode =
       std::vector<std::vector<std::pair<typename MultiFiltration::value_type, typename MultiFiltration::value_type>>>;
+  using split_barcode_idx =
+      std::vector<std::vector<std::pair<int, int>>>;
   template <typename value_type = value_type>
   using flat_barcode = std::vector<std::pair<int, std::pair<value_type, value_type>>>;
 
@@ -828,7 +830,49 @@ class Truc {
   inline void vineyard_update() {
     vineyard_update(this->persistence, this->filtration_container, this->generator_order);
   }
+inline split_barcode_idx get_barcode_idx(
+      PersBackend &persistence,
+      const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
+    auto barcode_indices = persistence.get_barcode();
+    split_barcode_idx out(this->structure.max_dimension() + 1);  // TODO : This doesn't allow for negative dimensions
+    constexpr const bool verbose = false;
+    constexpr const bool debug = false;
+    const auto inf = MultiFiltration::Generator::T_inf;
+    for (const auto &bar : barcode_indices) {
+      if constexpr (verbose) std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
+      if constexpr (debug) {
+        if (bar.birth >= filtration_container.size() || bar.birth < 0) {
+          std::cout << "Trying to add an incompatible birth... ";
+          std::cout << bar.birth << std::endl;
+          std::cout << "Death is " << bar.death << std::endl;
+          std::cout << "Max size is " << filtration_container.size() << std::endl;
+          continue;
+        }
+        if (bar.dim > static_cast<int>(this->structure.max_dimension())) {
+          std::cout << "Incompatible dimension detected... " << bar.dim << std::endl;
+          std::cout << "While max dim is " << this->structure.max_dimension() << std::endl;
+          continue;
+        }
+      }
 
+      auto birth_filtration = filtration_container[bar.birth];
+      auto death_filtration = inf;
+      if (bar.death != static_cast<typename PersBackend::pos_index>(-1))
+        death_filtration = filtration_container[bar.death];
+
+      if constexpr (verbose) {
+        std::cout << "BAR: " << bar.birth << "(" << birth_filtration << ")"
+                  << " --" << bar.death << "(" << death_filtration << ")"
+                  << " dim " << bar.dim << std::endl;
+      }
+      if (birth_filtration <= death_filtration)
+        out[bar.dim].push_back({bar.birth, bar.death});
+      else {
+        out[bar.dim].push_back({-1, -1});
+      }
+    }
+    return out;
+  }
   inline split_barcode get_barcode(
       PersBackend &persistence,
       const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
@@ -874,6 +918,7 @@ class Truc {
   }
 
   inline split_barcode get_barcode() { return get_barcode(this->persistence, this->filtration_container); }
+  inline split_barcode_idx get_barcode_idx() { return get_barcode_idx(this->persistence, this->filtration_container); }
 
   template <typename value_type = value_type>
   static inline flat_nodim_barcode<value_type> get_flat_nodim_barcode(

@@ -63,6 +63,7 @@ cdef extern from "Persistence_slices_interface.h":
       {{D['C_TEMPLATE_TYPE']}} permute(const vector[unsigned int]&) except + nogil
 
       vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode() nogil
+      vector[vector[pair[int,int]]] get_barcode_idx() nogil
       void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
       void set_one_filtration(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
       int prune_above_dimension(int) except + nogil 

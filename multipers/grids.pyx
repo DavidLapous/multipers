@@ -9,7 +9,7 @@ cnp.import_array()
 
 from typing import Iterable,Literal,Optional
 from itertools import product
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 
 available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -384,3 +384,32 @@ def sms_in_grid(sms, grid, mass_default=None):
     """
     sms = tuple(sm_in_grid(pts,weights,grid=grid, mass_default=mass_default) for pts,weights in sms)
     return sms
+
+
+def _push_pts_to_line(pts, basepoint, direction=None):
+    api = api_from_tensors(pts, basepoint)
+    pts = api.astensor(pts)
+    basepoint = api.astensor(basepoint)
+    num_parameters = basepoint.shape[0]
+    if direction is not None:
+        if not api.is_promotable(direction):
+            raise ValueError(f"Incompatible input types. Got {type(pts)=}, {type(basepoint)=}, {type(direction)=}")
+
+        direction = api.astensor(direction)
+        ok_idx = direction > 0
+        if ok_idx.sum() == 0:
+            raise ValueError(f"Got invalid direction {direction}")
+        zero_idx = None if ok_idx.all() else direction == 0
+    else:
+        direction = api.tensor([1], dtype=int)
+        ok_idx = slice(None)
+        zero_idx = None
+    xa = api.maxvalues(
+        (pts[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=True
+    )
+    if zero_idx is not None:
+        xb = api.where(pts[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
+        xs = api.maxvalues(api.cat([xa, xb], axis=1), axis=1, keepdims=True)
+    else:
+        xs = xa
+    return xs.squeeze()

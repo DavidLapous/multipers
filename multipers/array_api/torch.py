@@ -12,3 +12,6 @@ def maxvalues(x:_t.Tensor,**kwargs):
 def asnumpy(x):
     return x.detach().numpy()
 zeros=_t.zeros
+def is_promotable(x):
+    return isinstance(x, _t.Tensor)
+where = _t.where
