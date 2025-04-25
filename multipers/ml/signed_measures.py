@@ -9,6 +9,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from tqdm import tqdm
 
 import multipers as mp
+from multipers.array_api import api_from_tensor
 from multipers.filtrations.density import available_kernels, convolution_signed_measures
 from multipers.grids import compute_grid
 from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
@@ -633,14 +634,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         return
 
     def _get_filtration_bounds(self, X, axis):
-        if self._backend == "numpy":
-            _cat = np.concatenate
-
-        else:
-            ## torch is globally imported
-            _cat = torch.cat
         stuff = [
-            _cat(
+            self._backend.cat(
                 [sm[axis][degree][0] for sm in X],
                 axis=0,
             )
@@ -648,17 +643,20 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         ]
         sizes_ = np.array([len(x) == 0 for x in stuff])
         assert np.all(~sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
-        if self._backend == "numpy":
-            filtrations_bounds = np.array(
-                [([f.min(axis=0), f.max(axis=0)]) for f in stuff]
-            )
-        else:
-            filtrations_bounds = torch.stack(
+
+        filtrations_bounds = self._backend.asnumpy(
+            self._backend.stack(
                 [
-                    torch.stack([f.min(axis=0).values, f.max(axis=0).values])
+                    self._backend.stack(
+                        [
+                            self._backend.minvalues(f, axis=0),
+                            self._backend.maxvalues(f, axis=0),
+                        ]
+                    )
                     for f in stuff
                 ]
-            ).detach()  ## don't want to rescale gradient of normalization
+            )
+        )  ## don't want to rescale gradient of normalization
         normalization_factors = (
             filtrations_bounds[:, 1] - filtrations_bounds[:, 0]
             if self.normalize
@@ -721,14 +719,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             first_sm = X[0][0][0][0]
         else:
             first_sm = X[0][0][0]
-        if isinstance(first_sm, np.ndarray):
-            self._backend = "numpy"
-        else:
-            global torch
-            import torch
-
-            assert isinstance(first_sm, torch.Tensor)
-            self._backend = "pytorch"
+        self._backend = api_from_tensor(first_sm, verbose=self.verbose)
 
     def _check_measures(self, X):
         if self._has_axis:
@@ -945,11 +936,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 ), f"Bad axis/degree count. Got {num_axis_degree} (Internal error)"
                 num_parameters = out[0][0].shape[1]
                 dtype = out[0][0].dtype
-                if isinstance(out[0][0], np.ndarray):
-                    from numpy import zeros
-                else:
-                    from torch import zeros
-                unragged_tensor = zeros(
+                unragged_tensor = self._backend.zeros(
                     (
                         num_axis_degree,
                         num_data,
@@ -1038,12 +1025,10 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             return self
         if isinstance(X[0][0], tuple):
             self._is_input_sparse = True
-            from multipers.array_api import api_from_tensor
 
             self._api = api_from_tensor(X[0][0][0], verbose=self.progress)
         else:
             self._is_input_sparse = False
-            from multipers.array_api import api_from_tensor
 
             self._api = api_from_tensor(X, verbose=self.progress)
         # print(f"IMG output is set to {'sparse' if self.sparse else 'matrix'}")
@@ -1146,7 +1131,10 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         for i, img in enumerate(imgs):
             for j, img_of_degree in enumerate(img):
                 plot_surface(
-                    [self._api.asnumpy(f) for f in self.filtration_grid], img_of_degree, ax=axes[i, j], cmap="Spectral"
+                    [self._api.asnumpy(f) for f in self.filtration_grid],
+                    img_of_degree,
+                    ax=axes[i, j],
+                    cmap="Spectral",
                 )
 
     def transform(self, X):
