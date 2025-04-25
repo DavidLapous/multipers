@@ -1,8 +1,9 @@
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, Union
-
 import numpy as np
 
+
+from multipers.array_api import api_from_tensor
 global available_kernels
 available_kernels = Union[
     Literal[
@@ -41,13 +42,14 @@ def convolution_signed_measures(
     from multipers.grids import todense
 
     grid_iterator = todense(filtrations, product_order=True)
+    api = api_from_tensor(iterable_of_signed_measures[0][0][0])
     match backend:
         case "sklearn":
 
             def convolution_signed_measures_on_grid(
-                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
+                signed_measures,
             ):
-                return np.concatenate(
+                return api.cat(
                     [
                         _pts_convolution_sparse_old(
                             pts=pts,
@@ -67,7 +69,7 @@ def convolution_signed_measures(
             def convolution_signed_measures_on_grid(
                 signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
             ) -> np.ndarray:
-                return np.concatenate(
+                return api.cat(
                     [
                         _pts_convolution_pykeops(
                             pts=pts,
@@ -111,7 +113,7 @@ def convolution_signed_measures(
     if not flatten:
         out_shape = [-1] + [len(f) for f in filtrations]  # Degree
         convolutions = [x.reshape(out_shape) for x in convolutions]
-    return np.asarray(convolutions)
+    return api.cat([x[None] for x in convolutions])
 
 
 # def _test(r=1000, b=0.5, plot=True, kernel=0):

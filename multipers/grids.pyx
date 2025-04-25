@@ -93,6 +93,14 @@ def compute_grid(
             import torch
             assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
             initial_grid = x
+
+    num_parameters = len(initial_grid)
+    try:
+        int(resolution)
+        resolution = [resolution]*num_parameters
+    except TypeError:
+        pass
+
     if is_numpy_compatible:
         return _compute_grid_numpy(
         initial_grid,
@@ -138,14 +146,6 @@ def _compute_grid_numpy(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
-    if resolution is None and strategy not in ["exact", "precomputed"]:
-        raise ValueError("Resolution must be provided for this strategy.")
-    elif resolution is not None:
-        try:
-            int(resolution)
-            resolution = [resolution]*num_parameters
-        except:
-            pass
     try:
         a,b=drop_quantiles
     except:

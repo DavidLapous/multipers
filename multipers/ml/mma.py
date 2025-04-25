@@ -8,7 +8,7 @@ from tqdm import tqdm
 import multipers as mp
 import multipers.simplex_tree_multi
 import multipers.slicer
-from multipers.grids import compute_grid as reduce_grid
+from multipers.grids import compute_grid
 from multipers.mma_structures import PyBox_f64, PyModule_type
 
 _FilteredComplexType = Union[
@@ -353,7 +353,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         if "_mean" in strategy:
             substrategy = strategy.split("_")[0]
             processed_filtration_values = [
-                reduce_grid(f, resolution, substrategy, unique=False)
+                compute_grid(f, resolution, substrategy, unique=False)
                 for f in filtration_values
             ]
             reduced_grid = np.mean(processed_filtration_values, axis=0)
@@ -368,7 +368,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 )
                 for parameter in range(num_parameters)
             ]
-            reduced_grid = reduce_grid(
+            reduced_grid = compute_grid(
                 filtration_values, resolution, strategy, unique=True
             )
 

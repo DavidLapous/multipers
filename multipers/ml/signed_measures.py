@@ -9,8 +9,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from tqdm import tqdm
 
 import multipers as mp
-from multipers.grids import compute_grid as reduce_grid
 from multipers.filtrations.density import available_kernels, convolution_signed_measures
+from multipers.grids import compute_grid
 from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
 
 
@@ -145,7 +145,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         ## ax, num_x
         filtrations = tuple(
             tuple(
-                reduce_grid(x, strategy="exact")
+                compute_grid(x, strategy="exact")
                 for x in (X[idx][ax] for idx in indices)
             )
             for ax in range(self._num_axis)
@@ -164,7 +164,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         ]
         ## ax, param, gridsize
         filtration_grid = tuple(
-            reduce_grid(
+            compute_grid(
                 filtrations_values[ax],
                 resolution=self.resolution,
                 strategy=self.grid_strategy,
@@ -237,7 +237,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
     ):
         # st = mp.SimplexTreeMulti(st, num_parameters=st.num_parameters)  # COPY
         if self.individual_grid:
-            filtration_grid = reduce_grid(
+            filtration_grid = compute_grid(
                 simplextree, strategy=self.grid_strategy, resolution=self.resolution
             )
             mass_default = (
@@ -546,6 +546,27 @@ def rescale_sparse_signed_measure(
     return out
 
 
+def sm2deep(signed_measure):
+    dirac_positions, dirac_signs = signed_measure
+    dtype = dirac_positions.dtype
+    new_shape = list(dirac_positions.shape)
+    new_shape[1] += 1
+    if isinstance(dirac_positions, np.ndarray):
+        c = np.empty(new_shape, dtype=dtype)
+        c[:, :-1] = dirac_positions
+        c[:, -1] = dirac_signs
+
+    else:
+        import torch
+
+        c = torch.empty(new_shape, dtype=dtype)
+        c[:, :-1] = dirac_positions
+        if isinstance(dirac_signs, np.ndarray):
+            dirac_signs = torch.from_numpy(dirac_signs)
+        c[:, -1] = dirac_signs
+    return c
+
+
 class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
     """
     Input
@@ -770,7 +791,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             ]
             # axis, filtration_values
             filtration_values = [
-                reduce_grid(
+                compute_grid(
                     f_ax.T, resolution=self.resolution, strategy=self.grid_strategy
                 )
                 for f_ax in filtration_values
@@ -842,27 +863,6 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             return np.asarray(out)[0]
 
     @staticmethod
-    def deep_format_measure(signed_measure):
-        dirac_positions, dirac_signs = signed_measure
-        dtype = dirac_positions.dtype
-        new_shape = list(dirac_positions.shape)
-        new_shape[1] += 1
-        if isinstance(dirac_positions, np.ndarray):
-            c = np.empty(new_shape, dtype=dtype)
-            c[:, :-1] = dirac_positions
-            c[:, -1] = dirac_signs
-
-        else:
-            import torch
-
-            c = torch.empty(new_shape, dtype=dtype)
-            c[:, :-1] = dirac_positions
-            if isinstance(dirac_signs, np.ndarray):
-                dirac_signs = torch.from_numpy(dirac_signs)
-            c[:, -1] = dirac_signs
-        return c
-
-    @staticmethod
     def _integrate_measure(sm, filtrations):
         from multipers.point_measure import integrate_measure
 
@@ -930,7 +930,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         elif self.deep_format:
             num_degrees = self._num_degrees
             out = tuple(
-                tuple(self.deep_format_measure(sm[axis][degree]) for sm in out)
+                tuple(sm2deep(sm[axis][degree]) for sm in out)
                 for degree in range(num_degrees)
                 for axis in self._axis_iterator
             )
@@ -1029,6 +1029,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         self.plot = plot
         self.log_density = log_density
         self.kde_kwargs = kde_kwargs
+        self._api = None
         return
 
     def fit(self, X, y=None):
@@ -1037,8 +1038,14 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             return self
         if isinstance(X[0][0], tuple):
             self._is_input_sparse = True
+            from multipers.array_api import api_from_tensor
+
+            self._api = api_from_tensor(X[0][0][0], verbose=self.progress)
         else:
             self._is_input_sparse = False
+            from multipers.array_api import api_from_tensor
+
+            self._api = api_from_tensor(X, verbose=self.progress)
         # print(f"IMG output is set to {'sparse' if self.sparse else 'matrix'}")
         if not self._is_input_sparse:
             self._input_resolution = X[0][0].shape
@@ -1061,24 +1068,24 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         # If not sparse : a grid has to be defined
         if self._refit:
             # print("Fitting a grid...", end="")
-            pts = np.concatenate(
+            pts = self._api.cat(
                 [sm[0] for signed_measures in X for sm in signed_measures]
             ).T
-            self.filtration_grid = reduce_grid(
+            self.filtration_grid = compute_grid(
                 pts,
                 strategy=self.grid_strategy,
                 resolution=self.resolution,
             )
             # print('Done.')
         if self.filtration_grid is not None:
-            self.diameter = np.linalg.norm(
-                [f.max() - f.min() for f in self.filtration_grid]
+            self.diameter = self._api.norm(
+                self._api.astensor([f[-1] - f[0] for f in self.filtration_grid])
             )
             if self.progress:
                 print(f"Computed a diameter of {self.diameter}")
         return self
 
-    def _sm2smi(self, signed_measures: Iterable[np.ndarray]):
+    def _sm2smi(self, signed_measures):
         # print(self._input_resolution, self.bandwidths, _bandwidths)
         from scipy.ndimage import gaussian_filter
 
@@ -1126,6 +1133,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
     def _plot_imgs(self, imgs: Iterable[np.ndarray], size=4):
         from multipers.plots import plot_surface
 
+        imgs = self._api.asnumpy(imgs)
         num_degrees = imgs[0].shape[0]
         num_imgs = len(imgs)
         fig, axes = plt.subplots(
@@ -1138,7 +1146,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         for i, img in enumerate(imgs):
             for j, img_of_degree in enumerate(img):
                 plot_surface(
-                    self.filtration_grid, img_of_degree, ax=axes[i, j], cmap="Spectral"
+                    [self._api.asnumpy(f) for f in self.filtration_grid], img_of_degree, ax=axes[i, j], cmap="Spectral"
                 )
 
     def transform(self, X):
@@ -1154,6 +1162,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
                     X, desc="Computing images", disable=not self.progress
                 )
             )
+            out = self._api.cat([x[None] for x in out])
         if self.plot and not self.flatten:
             if self.progress:
                 print("Plotting convolutions...", end="")
@@ -1161,8 +1170,8 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             if self.progress:
                 print("Done !")
         if self.flatten and not self._is_input_sparse:
-            out = [x.flatten() for x in out]
-        return np.asarray(out)
+            out = self._api.cat([x.ravel()[None] for x in out])
+        return out
 
 
 class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):

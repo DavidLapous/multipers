@@ -53,7 +53,7 @@ def _regular_grid(filtration_values, res):
 def _regular(x, r:int):
     if x.ndim != 1:
         raise ValueError(f"Got ndim!=1. {x=}")
-    return torch.linspace(start=torch.min(x), end=torch.max(x), steps=r) 
+    return torch.linspace(start=torch.min(x), end=torch.max(x), steps=r, dtype=x.dtype) 
 
 def _regular_left_grid(filtration_values, res):
     grid = tuple(_regular_left(f, r) for f,r in zip(filtration_values,res))
@@ -66,7 +66,7 @@ def _quantile_grid(filtration_values, res):
 def _quantile(x, r):
     if x.ndim != 1:
         raise ValueError(f"Got ndim!=1. {x=}")
-    qs = torch.linspace(0, 1, r)
+    qs = torch.linspace(0, 1, r, dtype=x.dtype)
     return _unique_any(torch.quantile(x, q=qs))
 
 
