@@ -9,7 +9,7 @@ cnp.import_array()
 
 from typing import Iterable,Literal,Optional
 from itertools import product
-
+from multipers.array_api import api_from_tensor
 
 available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -24,6 +24,17 @@ ctypedef fused some_float:
     float
     double
 
+def sanitize_grid(grid, bool numpyfy=False):
+    if len(grid) == 0:
+        raise ValueError("empty filtration grid")
+    if isinstance(grid[0], list|tuple): 
+        grid = tuple(np.asarray(g) for g in grid)
+        return grid
+    api = api_from_tensor(grid[0]) ## checks if its supported
+    assert np.all([g.ndim==1 for g in grid])
+    if numpyfy and api.backend != np:
+        grid = tuple(api.asnumpy(g) for g in grid)
+    return grid
 
 def compute_grid(
         x,
@@ -285,7 +296,7 @@ def _inf_value(array):
         elif isinstance(array, torch.dtype):
             dtype=array
         else:
-            raise ValueError(f"unknown input {array}")
+            raise ValueError(f"unknown input of type {type(array)=} {array=}")
 
     if isinstance(dtype, np.dtype):
         if dtype.kind == 'f':
@@ -345,22 +356,20 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
     """
     assert pts.ndim == 2, f"invalid dirac locations. got {pts.ndim=} != 2"
     cdef int num_parameters  = pts.shape[1]
-    if len(grid) < num_parameters:
+    while len(grid) < num_parameters:
         _grid = list(grid)
-        
         if isinstance(grid[0], np.ndarray|list|tuple):
             _grid += [np.concatenate([g[1:], [_inf_value(g)]] ) for g in grid]
             if mass_default is not None:
                 mass_default = np.concatenate([mass_default]*2)
         else:
             import torch 
-            _grid += [torch.cat([g[1:], [torch.inf]]) for g in grid] 
+            _grid += [torch.cat([g[1:], torch.tensor([torch.inf])]) for g in grid] 
             if mass_default is not None:
                 mass_default = torch.cat([mass_default]*2)
-    else:
-        _grid = grid
+        grid=tuple(_grid)
 
-    coords = evaluate_in_grid(np.asarray(pts, dtype=int), _grid, mass_default)
+    coords = evaluate_in_grid(np.asarray(pts, dtype=int), grid, mass_default)
     return (coords, weights)
 
 # TODO : optimize with memoryviews / typing

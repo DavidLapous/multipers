@@ -146,7 +146,8 @@ def signed_measure(
                 filtered_complex, strategy=grid_strategy, **infer_grid_kwargs
             )
         else:
-            grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
+            # grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
+            grid = filtered_complex.filtration_grid
 
     if mass_default is None:
         mass_default = mass_default

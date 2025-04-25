@@ -26,7 +26,7 @@ from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
-from multipers.grids import compute_grid
+from multipers.grids import compute_grid, sanitize_grid
 
 import numpy as np
 cimport cython
@@ -104,7 +104,7 @@ _valid_pers_backend = Literal[
 #------------------------------------------------------------------------------
 cdef class {{D['PYTHON_TYPE']}}:
     cdef {{D['C_TEMPLATE_TYPE']}} truc
-    cdef public vector[vector[double]] filtration_grid
+    cdef public object filtration_grid
     cdef public int minpres_degree ## TODO : maybe change directly the degree in the minpres ?
 
     def __repr__(self):
@@ -112,7 +112,7 @@ cdef class {{D['PYTHON_TYPE']}}:
 
     @property
     def is_squeezed(self)->bool:
-        return self.filtration_grid.size() > 0 and self.filtration_grid[0].size() > 0
+        return self.filtration_grid is not None and len(self.filtration_grid) > 0 and len(self.filtration_grid[0]) > 0
     @property
     def is_minpres(self)->bool:
         return self.minpres_degree>=0
@@ -337,7 +337,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             self.get_boundaries(),
             self.get_dimensions(),
             self.get_filtrations(),
-            tuple(np.array(f) for f in self.filtration_grid),
+            self.filtration_grid,
             self.minpres_degree,
         )
     def __setstate__(self, tuple dump):
@@ -458,7 +458,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, grid_strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False)->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
+    def grid_squeeze(self, filtration_grid=None, strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False, grid_strategy=None)->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
 
@@ -471,10 +471,14 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         if not force and self.is_squeezed:
             raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
+        if grid_strategy is not None:
+            from warnings import warn
+            warn("`grid_strategy` is deprecated, use `strategy` instead.",DeprecationWarning)
+            strategy=grid_strategy
         if filtration_grid is None:
             filtration_grid = compute_grid(
                     self.get_filtrations_values().T,
-                    strategy=grid_strategy,
+                    strategy=strategy,
                     resolution=resolution)
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] grid = filtration_grid
         if inplace or not coordinates:
@@ -488,7 +492,7 @@ cdef class {{D['PYTHON_TYPE']}}:
           out = {{D['PYTHON_TYPE'][:-3]+"i32"}}()
           out.truc = self.truc.coarsen_on_grid(grid)
           if coordinates:
-              out.filtration_grid = filtration_grid
+              out.filtration_grid = sanitize_grid(filtration_grid)
           out.minpres_degree = self.minpres_degree
           return out
           {{endif}}
@@ -584,10 +588,11 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.truc.build_from_scc_file(c_path, rivet_compatible, reverse, shift_dimension)
         return self
 
-    def unsqueeze(self, grid=None, dtype = np.float64):
-        from multipers.grids import evaluate_in_grid
+    def unsqueeze(self, grid=None):
+        from multipers.grids import evaluate_in_grid, sanitize_grid
         from multipers import Slicer
-        grid = tuple(np.asarray(f) for f in self.filtration_grid) if grid is None else grid
+        grid = self.filtration_grid if grid is None else grid
+        grid = sanitize_grid(grid, numpyfy=True)
         new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
         new_slicer = {{D['PYTHON_TYPE'][:-3]+"f64"}}(
             self.get_boundaries(),
