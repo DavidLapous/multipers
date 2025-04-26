@@ -16,3 +16,4 @@ zeros=_t.zeros
 def is_promotable(x):
     return isinstance(x, _t.Tensor)
 where = _t.where
+no_grad = _t.no_grad

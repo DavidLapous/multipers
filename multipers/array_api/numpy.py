@@ -1,4 +1,6 @@
 import numpy as _np
+from contextlib import nullcontext
+
 backend=_np
 cat = _np.concatenate
 norm=_np.linalg.norm
@@ -15,3 +17,4 @@ zeros=_np.zeros
 def is_promotable(x):
     return isinstance(x, _np.ndarray|list|tuple)
 where = _np.where
+no_grad = nullcontext

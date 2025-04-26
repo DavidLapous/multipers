@@ -239,8 +239,7 @@ class Truc {
   using value_type = typename MultiFiltration::value_type;
   using split_barcode =
       std::vector<std::vector<std::pair<typename MultiFiltration::value_type, typename MultiFiltration::value_type>>>;
-  using split_barcode_idx =
-      std::vector<std::vector<std::pair<int, int>>>;
+  using split_barcode_idx = std::vector<std::vector<std::pair<int, int>>>;
   template <typename value_type = value_type>
   using flat_barcode = std::vector<std::pair<int, std::pair<value_type, value_type>>>;
 
@@ -482,7 +481,7 @@ class Truc {
       auto get_fil = [&](int i) -> MultiFiltration & { return generator_filtration_values[i]; };
       auto get_pivot = [&](int j) -> int {
         const auto &col = M.get_column(j);
-        return col.size()>0 ? (*col.rbegin()).get_row_index() : -1;
+        return col.size() > 0 ? (*col.rbegin()).get_row_index() : -1;
       };
 
       if constexpr (verbose) {
@@ -733,7 +732,9 @@ class Truc {
 
   template <class array1d>
   inline void set_one_filtration(const array1d &truc) {
-    assert(truc.size() == this->num_generators());
+    if (truc.size() != this->num_generators())
+      throw std::invalid_argument("(setting one filtration) Bad size. Got " + std::to_string(truc.size()) +
+                                  " expected " + std::to_string(this->num_generators()));
     this->filtration_container = truc;
   }
 
@@ -831,7 +832,8 @@ class Truc {
   inline void vineyard_update() {
     vineyard_update(this->persistence, this->filtration_container, this->generator_order);
   }
-inline split_barcode_idx get_barcode_idx(
+
+  inline split_barcode_idx get_barcode_idx(
       PersBackend &persistence,
       const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
     auto barcode_indices = persistence.get_barcode();
@@ -874,6 +876,7 @@ inline split_barcode_idx get_barcode_idx(
     }
     return out;
   }
+
   inline split_barcode get_barcode(
       PersBackend &persistence,
       const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
@@ -919,6 +922,7 @@ inline split_barcode_idx get_barcode_idx(
   }
 
   inline split_barcode get_barcode() { return get_barcode(this->persistence, this->filtration_container); }
+
   inline split_barcode_idx get_barcode_idx() { return get_barcode_idx(this->persistence, this->filtration_container); }
 
   template <typename value_type = value_type>
@@ -1090,9 +1094,8 @@ inline split_barcode_idx get_barcode_idx(
     }
     return out;
   }
-  inline int get_dimension(int i) const {
-    return structure.dimension(i);
-  }
+
+  inline int get_dimension(int i) const { return structure.dimension(i); }
 
   inline void prune_above_dimension(int max_dim) {
     int idx = structure.prune_above_dimension(max_dim);
@@ -1227,6 +1230,7 @@ inline split_barcode_idx get_barcode_idx(
     }
 
     inline split_barcode get_barcode() { return truc_ptr->get_barcode(this->persistence, this->filtration_container); }
+    inline split_barcode_idx get_barcode_idx() { return truc_ptr->get_barcode_idx(this->persistence, this->filtration_container); }
 
     inline std::size_t num_generators() const { return this->truc_ptr->structure.size(); }
 
@@ -1242,6 +1246,14 @@ inline split_barcode_idx get_barcode_idx(
       return this->filtration_container;
     }
 
+    template <class array1d>
+    inline void set_one_filtration(const array1d &truc) {
+      if (truc.size() != this->num_generators())
+        throw std::invalid_argument("(setting one filtration) Bad size. Got " + std::to_string(truc.size()) +
+                                    " expected " + std::to_string(this->num_generators()));
+      this->filtration_container = truc;
+    }
+
    private:
     const Truc *truc_ptr;
     std::vector<index_type> generator_order;                                 // size fixed at construction time,
@@ -1254,21 +1266,34 @@ inline split_barcode_idx get_barcode_idx(
    * returns barcodes of the f(multipers)
    *
    */
-  template <typename Fun, typename Fun_arg>
-  inline std::vector<split_barcode> barcodes(Fun &&f, const std::vector<Fun_arg> &args, const bool ignore_inf = true) {
+  template <typename Fun, typename Fun_arg, bool idx = false, bool custom = false>
+  inline std::conditional_t<idx, std::vector<split_barcode_idx>, std::vector<split_barcode>>
+  barcodes(Fun &&f, const std::vector<Fun_arg> &args, const bool ignore_inf = true) {
     if (args.size() == 0) {
       return {};
     }
-    std::vector<split_barcode> out(args.size());
+    std::conditional_t<idx, std::vector<split_barcode_idx>, std::vector<split_barcode>> out(args.size());
 
     if constexpr (PersBackend::is_vine) {
-      this->push_to(f(args[0]));
+      if constexpr (custom)
+        this->set_one_filtration(f(args[0]));
+      else
+        this->push_to(f(args[0]));
       this->compute_persistence();
-      out[0] = this->get_barcode();
+      if constexpr (idx)
+        out[0] = this->get_barcode_idx();
+      else
+        out[0] = this->get_barcode();
       for (auto i = 1u; i < args.size(); ++i) {
-        this->push_to(f(args[i]));
+        if constexpr (custom)
+          this->set_one_filtration(f(args[i]));
+        else
+          this->push_to(f(args[i]));
         this->vineyard_update();
-        out[i] = this->get_barcode();
+        if constexpr (idx)
+          out[i] = this->get_barcode_idx();
+        else
+          out[i] = this->get_barcode();
       }
 
     } else {
@@ -1276,9 +1301,16 @@ inline split_barcode_idx get_barcode_idx(
       tbb::enumerable_thread_specific<ThreadSafe> thread_locals(local_template);
       tbb::parallel_for(static_cast<std::size_t>(0), args.size(), [&](const std::size_t &i) {
         ThreadSafe &s = thread_locals.local();
-        s.push_to(f(args[i]));
+        if constexpr (custom)
+          s.set_one_filtration(f(args[i]));
+        else
+          s.push_to(f(args[i]));
         s.compute_persistence(ignore_inf);
-        out[i] = s.get_barcode();
+        if constexpr (idx){
+          out[i] = s.get_barcode_idx();
+        }
+        else
+          out[i] = s.get_barcode();
       });
     }
     return out;
@@ -1292,6 +1324,20 @@ inline split_barcode_idx get_barcode_idx(
         [](const std::vector<value_type> &basepoint) { return Gudhi::multi_persistence::Line<value_type>(basepoint); },
         basepoints,
         ignore_inf);
+  }
+
+  inline std::vector<split_barcode_idx> custom_persistences(const value_type *filtrations, int size, bool ignore_inf) {
+    std::vector<const value_type *> args(size);
+    for (auto i = 0; i < size; ++i) args[i] = filtrations + this->num_generators() * i;
+
+    auto fun = [&](const value_type *one_filtration_ptr) {
+      std::vector<value_type> fil(this->num_generators());
+      for (auto i : std::views::iota(0u, this->num_generators())) {
+        fil[i] = *(one_filtration_ptr + i);
+      }
+      return std::move(fil);
+    };
+    return barcodes<decltype(fun), const value_type *, true, true>(std::move(fun), args, ignore_inf);
   }
 
   inline std::vector<split_barcode> persistence_on_lines(

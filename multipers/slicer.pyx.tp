@@ -333,6 +333,15 @@ cdef class {{D['PYTHON_TYPE']}}:
         return bcs
         {{endif}}
 
+    def _custom_persistences_idx(self, filtration_array, bool ignore_inf=True):
+      filtration_array = np.asarray(filtration_array, dtype= {{D['PY_VALUE_TYPE']}})
+      cdef {{D['C_VALUE_TYPE']}}[:,:] arr_view = filtration_array
+      cdef int size = arr_view.shape[0]
+      if arr_view.shape[1] != self.truc.num_generators():
+          raise ValueError(f"Got filtration array of shape {filtration_array.shape=} / {arr_view.shape=}. Was expecting (-1, {len(self)=})")
+
+      return tuple(tuple(np.array(bc_idx_degree, dtype=int) for bc_idx_degree in bc_idx) for bc_idx in self.truc.custom_persistences(&arr_view[0,0], size, ignore_inf))
+
     def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
         Same as `persistence_on_line`, but with vineyards operation between
@@ -396,26 +405,49 @@ cdef class {{D['PYTHON_TYPE']}}:
 
 
 
-    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->{{D['PYTHON_TYPE']}}:
+    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->tuple:
         """
         Computes the current persistence, or the persistence
         given by the filtration one_filtration (num_generators,).
         """
         if one_filtration is not None:
-            self.truc.set_one_filtration(one_filtration)
+            api = api_from_tensor(one_filtration)
+            # self.truc.set_one_filtration(one_filtration)
+            # s = self.unsqueeze()
+            # fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
+            # projected_fil =_push_pts_to_line(fil, basepoint, direction)
+            if one_filtration.ndim > 2 or one_filtration.ndim == 0:
+                raise ValueError(f"Expected a filtration shape of the form ((num_1_param), num_generators). Got {one_filtration.shape=}")
+            squeeze = False
+            if one_filtration.ndim == 1:
+                one_filtration = one_filtration[None]
+                squeeze = True
+
+            bcs = self._custom_persistences_idx(api.asnumpy(one_filtration))
+            
+            bcs = tuple(tuple(
+                    api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
+                    if bc.size>0 
+                    else api.empty((0,2), dtype = F.dtype)
+                    for bc in bcs_idx
+                )
+                for bcs_idx,F in zip(bcs,one_filtration)
+            )
+            return bcs[0] if squeeze else bcs
+
         # TODO: Later
         # if len(degrees)>0:
         #     self.truc.compute_persistence(degrees)
         # else:
         #     self.truc.compute_persistence()
         self.truc.compute_persistence(ignore_infinite_filtration_values)
-        return self
-        # return self.truc.get_barcode()
+        # return self
+        return self.get_barcode()
     def get_barcode(self):
         """
         Returns the barcode of the current 1d-persistence.
         """
-        return self.truc.get_barcode()
+        return tuple(np.asarray(bc) for bc in self.truc.get_barcode())
     def sliced_filtration(self,basepoint, direction=None):
         """
         Computes the filtration on a line L defined by 
@@ -541,7 +573,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         See :func:`multipers.slicer.minimal_presentation`.
         """
-        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, id=id, **minpres_kwargs)
         return new_slicer
 
     @property
@@ -775,8 +807,6 @@ def minimal_presentation(
         shift_dimension=degree
     scc_reduce_from_str_to_slicer(path=input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
     new_slicer.minpres_degree = degree
-    if filtration_grid is not None:
-      new_slicer.filtration_grid = filtration_grid
     return new_slicer
 
 
