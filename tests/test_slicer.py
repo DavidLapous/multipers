@@ -18,7 +18,7 @@ def test_1():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     for S in mps.available_slicers:
-        if not S().is_vine or not S().col_type or S().is_kcritical:
+        if not S().col_type or S().is_kcritical or not np.issubdtype(S().dtype, np.floating):
             continue
         from multipers._slicer_meta import _blocks2boundary_dimension_grades
 
@@ -28,9 +28,11 @@ def test_1():
                 inplace=False,
             )
         )
-        it = S(
+        s = S(
             generator_maps, generator_dimensions, filtration_values
-        ).persistence_on_line([0, 0])
+        )
+        s.info
+        it =s.persistence_on_line([0, 0])
         assert (
             len(it) == 2
         ), "There are simplices of dim 0 and 1, but no pers ? got {}".format(len(it))

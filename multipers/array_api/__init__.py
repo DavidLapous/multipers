@@ -1,16 +1,14 @@
 def api_from_tensor(x, verbose:bool = False):
-    import numpy as np
-    if isinstance(x, np.ndarray):
-        import multipers.array_api.numpy as backend
+    import multipers.array_api.numpy as npapi
+    if npapi.is_promotable(x):
         if verbose:
             print("using numpy backend")
-        return backend
-    import torch
-    if isinstance(x,torch.Tensor):
+        return npapi
+    import multipers.array_api.torch as torchapi
+    if torchapi.is_promotable(x):
         if verbose:
             print("using torch backend")
-        import multipers.array_api.torch as backend
-        return backend
+        return torchapi
     raise ValueError(f"Unsupported type {type(x)=}")
 
 def api_from_tensors(*args):

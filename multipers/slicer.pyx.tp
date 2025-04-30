@@ -315,7 +315,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         return bcs
         {{else}}
         if not self.is_squeezed:
-            raise ValueError("Unsqueeze tensor, or provide a filtration grid")
+            raise ValueError("Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers...")
         api = api_from_tensor(self.filtration_grid[0])
         s = self.unsqueeze()
         fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
@@ -414,6 +414,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         if one_filtration is not None:
             api = api_from_tensor(one_filtration)
+            one_filtration=api.astensor(one_filtration)
             # self.truc.set_one_filtration(one_filtration)
             # s = self.unsqueeze()
             # fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
