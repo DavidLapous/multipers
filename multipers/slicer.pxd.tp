@@ -103,8 +103,8 @@ cdef extern from "Persistence_slices_interface.h":
       {{endif}}
 
 
-      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
-      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[pair[vector[{{D['C_VALUE_TYPE']}}],vector[{{D['C_VALUE_TYPE']}}]]],bool) nogil
+      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) except + nogil
+      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[pair[vector[{{D['C_VALUE_TYPE']}}],vector[{{D['C_VALUE_TYPE']}}]]],bool) except + nogil
 
 
       {{if D['COLUMN_TYPE'] is not None}}

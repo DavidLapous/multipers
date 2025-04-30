@@ -18,7 +18,8 @@ def test_1():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     for S in mps.available_slicers:
-        if not S().col_type or S().is_kcritical or not np.issubdtype(S().dtype, np.floating):
+        # TODO : investigate gudhi ??
+        if S().pers_backend.lower() == "gudhicohomology" or S().is_kcritical or not np.issubdtype(S().dtype, np.floating):
             continue
         from multipers._slicer_meta import _blocks2boundary_dimension_grades
 
@@ -31,8 +32,10 @@ def test_1():
         s = S(
             generator_maps, generator_dimensions, filtration_values
         )
+        print(type(s), s.col_type, s.pers_backend)
+
         s.info
-        it =s.persistence_on_line([0, 0])
+        it =s.persistence_on_line([0, 0], [1,1],ignore_infinite_filtration_values=False)
         assert (
             len(it) == 2
         ), "There are simplices of dim 0 and 1, but no pers ? got {}".format(len(it))
@@ -292,3 +295,5 @@ def test_colexical():
         idx = np.argwhere(G[idx, i] < 0).squeeze()
     for stuff in idx:
         assert stuff + 1 in dims_shift, "Colexical sort issue"
+# %%
+
