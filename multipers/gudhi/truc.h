@@ -834,48 +834,47 @@ class Truc {
   }
 
   inline split_barcode_idx get_barcode_idx(
-      PersBackend &persistence,
-      const std::vector<typename MultiFiltration::value_type> &filtration_container) const {
+      PersBackend &persistence) const {
     auto barcode_indices = persistence.get_barcode();
     split_barcode_idx out(this->structure.max_dimension() + 1);  // TODO : This doesn't allow for negative dimensions
-    constexpr const bool verbose = false;
-    constexpr const bool debug = false;
-    const auto inf = MultiFiltration::Generator::T_inf;
     for (const auto &bar : barcode_indices) {
-      if constexpr (verbose) std::cout << "BAR : " << bar.birth << " " << bar.death << "\n";
-      if constexpr (debug) {
-        if (bar.birth >= filtration_container.size() || bar.birth < 0) {
-          std::cout << "Trying to add an incompatible birth... ";
-          std::cout << bar.birth << std::endl;
-          std::cout << "Death is " << bar.death << std::endl;
-          std::cout << "Max size is " << filtration_container.size() << std::endl;
-          continue;
-        }
-        if (bar.dim > static_cast<int>(this->structure.max_dimension())) {
-          std::cout << "Incompatible dimension detected... " << bar.dim << std::endl;
-          std::cout << "While max dim is " << this->structure.max_dimension() << std::endl;
-          continue;
-        }
-      }
-
-      auto birth_filtration = filtration_container[bar.birth];
-      auto death_filtration = inf;
-      if (bar.death != static_cast<typename PersBackend::pos_index>(-1))
-        death_filtration = filtration_container[bar.death];
-
-      if constexpr (verbose) {
-        std::cout << "BAR: " << bar.birth << "(" << birth_filtration << ")"
-                  << " --" << bar.death << "(" << death_filtration << ")"
-                  << " dim " << bar.dim << std::endl;
-      }
-      if (birth_filtration <= death_filtration)
-        out[bar.dim].push_back({bar.birth, bar.death});
-      else {
-        out[bar.dim].push_back({-1, -1});
-      }
+      int death = bar.death == static_cast<typename PersBackend::pos_index>(-1) ? -1 : bar.death;
+      out[bar.dim].push_back({bar.birth, death});
     }
     return out;
   }
+
+  // puts the degree-ordered bc starting out_ptr, and returns the "next" pointer.
+  // corresond to an array of shape (num_bar, 2);
+  template <bool return_shape = false>
+  inline std::conditional_t<return_shape, std::pair<std::vector<int>, int*>, int*> get_barcode_idx(
+      PersBackend &persistence,
+      int *start_ptr) const {
+    const auto &bc = persistence.barcode();
+    if (bc.size() == 0) return start_ptr;
+    std::vector<int> shape(this->structure.max_dimension());
+    for (const auto &b : bc) shape[b.dim]++;
+    // dim in barcode may be unsorted...
+    std::vector<int *> ptr_shifts(shape.size());
+    int shape_cumsum = 0;
+    for (auto i : std::views::iota(0u, bc.size())) {
+      if (i != 0u) shape_cumsum += shape[i - 1];
+      // 2 for (birth, death)
+      ptr_shifts[i] = 2 * shape_cumsum + start_ptr;
+    }
+    for (const auto &b : bc) {
+      int *current_loc = ptr_shifts[b.dim];
+      *(current_loc++) = b.birth;
+      *(current_loc++) = b.death == static_cast<typename PersBackend::pos_index>(-1) ? -1 : b.death;
+    }
+
+    if constexpr (return_shape)
+      return {shape, ptr_shifts.back()};
+    else
+      return ptr_shifts.back();
+  }
+
+    
 
   inline split_barcode get_barcode(
       PersBackend &persistence,
@@ -923,7 +922,7 @@ class Truc {
 
   inline split_barcode get_barcode() { return get_barcode(this->persistence, this->filtration_container); }
 
-  inline split_barcode_idx get_barcode_idx() { return get_barcode_idx(this->persistence, this->filtration_container); }
+  inline split_barcode_idx get_barcode_idx() { return get_barcode_idx(this->persistence); }
 
   template <typename value_type = value_type>
   static inline flat_nodim_barcode<value_type> get_flat_nodim_barcode(
@@ -1230,7 +1229,10 @@ class Truc {
     }
 
     inline split_barcode get_barcode() { return truc_ptr->get_barcode(this->persistence, this->filtration_container); }
-    inline split_barcode_idx get_barcode_idx() { return truc_ptr->get_barcode_idx(this->persistence, this->filtration_container); }
+
+    inline split_barcode_idx get_barcode_idx() {
+      return truc_ptr->get_barcode_idx(this->persistence);
+    }
 
     inline std::size_t num_generators() const { return this->truc_ptr->structure.size(); }
 
@@ -1306,10 +1308,9 @@ class Truc {
         else
           s.push_to(f(args[i]));
         s.compute_persistence(ignore_inf);
-        if constexpr (idx){
+        if constexpr (idx) {
           out[i] = s.get_barcode_idx();
-        }
-        else
+        } else
           out[i] = s.get_barcode();
       });
     }

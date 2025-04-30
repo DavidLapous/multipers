@@ -361,7 +361,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef int num_bc = c_basepoints.size()
         
         if keep_inf:
-            out = tuple(tuple(np.asarray(y, dtype = {{D['PY_VALUE_TYPE']}}) for y in x) for x in c_out)
+            out = tuple(tuple(
+                np.asarray(y, dtype = {{D['PY_VALUE_TYPE']}}) if len(y)>0 else np.empty((0,2), dtype = {{D['PY_VALUE_TYPE']}})
+            for y in x) for x in c_out)
         else:
             out = tuple({{D['PYTHON_TYPE']}}._threshold_bcs(x) for x in c_out)
 
@@ -423,7 +425,7 @@ cdef class {{D['PYTHON_TYPE']}}:
                 one_filtration = one_filtration[None]
                 squeeze = True
 
-            bcs = self._custom_persistences_idx(api.asnumpy(one_filtration))
+            bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
             
             bcs = tuple(tuple(
                     api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
