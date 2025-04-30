@@ -27,13 +27,13 @@ ctypedef fused some_float:
 def sanitize_grid(grid, bool numpyfy=False):
     if len(grid) == 0:
         raise ValueError("empty filtration grid")
-    if isinstance(grid[0], list|tuple): 
-        grid = tuple(np.asarray(g) for g in grid)
-        return grid
-    api = api_from_tensor(grid[0]) ## checks if its supported
-    assert np.all([g.ndim==1 for g in grid])
-    if numpyfy and api.backend != np:
+    api = api_from_tensors(*grid)
+    if numpyfy:
         grid = tuple(api.asnumpy(g) for g in grid)
+    else:
+        # copy here may not be necessary, but cheap
+        grid = tuple(api.astensor(g) for g in grid) 
+    assert np.all([g.ndim==1 for g in grid])
     return grid
 
 def compute_grid(
@@ -354,20 +354,34 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
      - grid of the form Iterable[array[float, ndim=1]]
      - num_parameters: number of parameters
     """
-    assert pts.ndim == 2, f"invalid dirac locations. got {pts.ndim=} != 2"
+    if pts.ndim != 2:
+        raise ValueError(f"invalid dirac locations. got {pts.ndim=} != 2")
+    if len(grid) == 0:
+        raise ValueError(f"Empty grid given. Got {grid=}")
     cdef int num_parameters  = pts.shape[1]
-    while len(grid) < num_parameters:
-        _grid = list(grid)
-        if isinstance(grid[0], np.ndarray|list|tuple):
-            _grid += [np.concatenate([g[1:], [_inf_value(g)]] ) for g in grid]
-            if mass_default is not None:
-                mass_default = np.concatenate([mass_default]*2)
-        else:
-            import torch 
-            _grid += [torch.cat([g[1:], torch.tensor([torch.inf])]) for g in grid] 
-            if mass_default is not None:
-                mass_default = torch.cat([mass_default]*2)
-        grid=tuple(_grid)
+    if mass_default is None:
+        api = api_from_tensors(*grid)
+    else:
+        api = api_from_tensors(*grid, mass_default)
+
+    _grid = list(grid)
+    _mass_default = None if mass_default is None else api.astensor(mass_default)
+    while len(_grid) < num_parameters:
+        _grid += [api.cat([(gt:=api.astensor(g))[1:], [_inf_value(api.asnumpy(gt))]]) for g in grid]
+        if mass_default is not None:
+            _mass_default = api.cat([_mass_default,mass_default])
+        # if isinstance(grid[0], np.ndarray|list|tuple):
+        #     _grid += [np.concatenate([g[1:], [_inf_value(g)]] ) for g in grid]
+        #     if mass_default is not None:
+        #         mass_default = np.concatenate([mass_default]*2)
+        # else:
+        #     import torch 
+        #     _grid += [torch.cat([g[1:], torch.tensor([torch.inf])]) for g in grid] 
+        #     if mass_default is not None:
+        #         mass_default = torch.cat([mass_default]*2)
+        # grid=tuple(_grid)
+    grid = tuple(_grid)
+    mass_default = _mass_default
 
     coords = evaluate_in_grid(np.asarray(pts, dtype=int), grid, mass_default)
     return (coords, weights)

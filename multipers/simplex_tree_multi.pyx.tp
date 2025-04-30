@@ -66,7 +66,8 @@ cimport cython
 from gudhi.simplex_tree import SimplexTree ## Small hack for typing
 from typing import Iterable,Literal,Optional
 from tqdm import tqdm
-from multipers.grids import Lstrategies, compute_grid
+from multipers.grids import Lstrategies, compute_grid, sanitize_grid
+from multipers.array_api import api_from_tensor
 from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles, sparsify
 
 from warnings import warn
@@ -98,7 +99,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
     """
     cdef public intptr_t thisptr
 
-    cdef public vector[vector[double]] filtration_grid
+    cdef public object filtration_grid
     cdef public bool _is_function_simplextree 
     # Get the pointer casted as it should be
     cdef Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]* get_ptr(self) noexcept nogil:
@@ -182,7 +183,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self.thisptr = <intptr_t>(new Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]())
         self.set_num_parameter(num_parameters)
         self._is_function_simplextree = False
-        self.filtration_grid=[[]*num_parameters]
+        self.filtration_grid=[]
 
     def __dealloc__(self):
         cdef Simplex_tree_multi_interface[{{FSHORT}},{{CTYPE}}]* ptr = self.get_ptr()
@@ -1312,17 +1313,20 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         #TODO : multi-critical
         if filtration_grid is None:  
             filtration_grid = self.get_filtration_grid(grid_strategy=grid_strategy, **filtration_grid_kwargs)
-        cdef vector[vector[double]] c_filtration_grid = filtration_grid
-        assert <int>c_filtration_grid.size() == self.get_ptr().get_number_of_parameters(), f"Grid has to be of size {self.num_parameters}, got {filtration_grid.size()}"
-        cdef intptr_t ptr = self.thisptr
+        else:
+            filtration_grid = sanitize_grid(filtration_grid)
+            if len(filtration_grid) != self.num_parameters:
+                raise ValueError(f"Invalid grid to squeeze onto. Got {len(filtration_grid)=} != {self.num_parameters=}.")
+        api = api_from_tensor(filtration_grid[0])
+        cdef vector[vector[double]] c_filtration_grid = tuple(api.asnumpy(f).astype(np.float64) for f in filtration_grid) # may be faster with loop on views
         if coordinate_values and inplace:
-            self.filtration_grid = c_filtration_grid
+            self.filtration_grid = filtration_grid
         if inplace or not coordinate_values:
           self.get_ptr().squeeze_filtration_inplace(c_filtration_grid, coordinate_values)
         else:
           out = SimplexTreeMulti_{{FSHORT[:-3] + "i32"}}(num_parameters=self.num_parameters)
           self.get_ptr().squeeze_filtration(out.thisptr, c_filtration_grid)
-          out.filtration_grid = c_filtration_grid
+          out.filtration_grid = filtration_grid
           return out
         return self
 
@@ -1812,7 +1816,8 @@ def _euler_signed_measure(simplextree, mass_default=None, bool verbose=False):
   `[signed_measure_of_degree for degree in degrees]`
   with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
   """
-  assert len(simplextree.filtration_grid[0]) > 0, "Squeeze grid first."
+  if not simplextree.is_squeezed:
+      raise ValueError("Squeeze grid first.")
   cdef bool zero_pad = mass_default is not None
   # assert simplextree.num_parameters == 2
   grid_shape = np.array([len(f) for f in simplextree.filtration_grid])

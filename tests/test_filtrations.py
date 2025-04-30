@@ -83,6 +83,11 @@ def test_cubical(res,dim, num_parameters):
     s = mpf.Cubical(image)
     assert s.num_parameters == num_parameters
 
+has_kcritical = np.any([a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees])
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
 @pytest.mark.parametrize("beta", betas)
