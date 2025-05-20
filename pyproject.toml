@@ -1,7 +1,7 @@
 [build-system]
 requires = [
   "numpy",
-  "Cython<3.1", # there are issues with 3.1
+  "Cython",
   "setuptools",
   "wheel",
 ]

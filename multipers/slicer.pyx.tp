@@ -718,8 +718,8 @@ def from_function_delaunay(
     points,
     grades,
     int degree=-1,
-    backend: Optional[_valid_pers_backend]=None,
-    vineyard:Optional[bool]=None,
+    backend:Optional[_valid_pers_backend]=None,
+    vineyard=None, # TODO : Optional[bool] when cython fixes it
     dtype=np.float64,
     bool verbose = False,
     bool clear = True,
