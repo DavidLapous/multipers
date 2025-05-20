@@ -1,6 +1,6 @@
 
 from libc.stdint cimport intptr_t, int32_t, int64_t
-from libcpp cimport bool,int,long, float
+from libcpp cimport bool,int, float
 
 cimport numpy as cnp
 import numpy as np
@@ -17,8 +17,6 @@ Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", 
 ctypedef fused some_int:
     int32_t
     int64_t
-    int
-    long
 
 ctypedef fused some_float:
     float
@@ -221,7 +219,7 @@ def todense(grid, bool product_order=False):
 def _todo_regular_closest(some_float[:] f, int r, bool unique):
     f_array = np.asarray(f)
     f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
-    f_regular_closest = np.asarray([f[<long>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)])
+    f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)])
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
 
@@ -267,7 +265,7 @@ def push_to_grid(some_float[:,:] points, grid, bool return_coordinate=False):
     pushes the points onto the grid.
     """
     num_points, num_parameters = points.shape[0], points.shape[1]
-    cdef cnp.ndarray[long,ndim=2] coordinates = np.empty((num_points, num_parameters),dtype=np.int64)
+    cdef cnp.ndarray[int64_t,ndim=2] coordinates = np.empty((num_points, num_parameters),dtype=np.int64)
     for parameter in range(num_parameters):
         coordinates[:,parameter] = np.searchsorted(grid[parameter],points[:,parameter])
     if return_coordinate:
