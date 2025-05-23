@@ -18,7 +18,7 @@ cimport cython
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
         "mpfree":"https://bitbucket.org/mkerber/mpfree/",
-        "multi_chunk":"",
+        "multi_chunk":"https://bitbucket.org/mkerber/multi_chunk/",
         "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
         "2pac":"https://gitlab.com/flenzen/2pac",
         }
@@ -29,7 +29,7 @@ git clone {doc_soft_urls["mpfree"]}
 cd mpfree
 cmake . --fresh
 make
-sudo cp mpfree /usr/bin/
+cp mpfree $CONDA_PREFIX/bin/
 cd .. 
 rm -rf mpfree
 ```
@@ -40,7 +40,7 @@ git clone {doc_soft_urls["multi_chunk"]}
 cd multi_chunk
 cmake . --fresh
 make
-sudo cp multi_chunk /usr/bin/
+cp multi_chunk $CONDA_PREFIX/bin/
 cd .. 
 rm -rf multi_chunk
 ```
@@ -51,7 +51,7 @@ git clone {doc_soft_urls["function_delaunay"]}
 cd function_delaunay
 cmake . --fresh
 make
-sudo cp main /usr/bin/function_delaunay
+cp main $CONDA_PREFIX/bin/function_delaunay
 cd ..
 rm -rf function_delaunay
 ```
@@ -62,7 +62,7 @@ git clone {doc_soft_urls["2pac"]} 2pac
 cd 2pac && mkdir build && cd build
 cmake ..
 make
-sudo cp 2pac /usr/bin
+cp 2pac $CONDA_PREFIX/bin
 ```
 """,
         }
@@ -261,7 +261,7 @@ def scc_reduce_from_str(
     backend: "mpfree", "multi_chunk" or "2pac"
     """
     global pathes, input_path, output_path
-    assert _check_available(backend), f"Backend {backend} is not available."
+    _init_external_softwares(requires=[backend])
 
 
     resolution_str = "--resolution" if full_resolution else ""
@@ -328,7 +328,7 @@ def scc_reduce_from_str_to_slicer(
     backend: "mpfree", "multi_chunk" or "2pac"
     """
     global pathes, input_path, output_path
-    assert _check_available(backend), f"Backend {backend} is not available."
+    _init_external_softwares(requires=[backend])
 
 
     resolution_str = "--resolution" if full_resolution else ""
@@ -447,7 +447,7 @@ def function_delaunay_presentation(
         id = str(threading.get_native_id())
     global input_path, output_path, pathes
     backend = "function_delaunay"
-    assert _check_available(backend), f"Backend {backend} is not available."
+    _init_external_softwares(requires=[backend])
 
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')
@@ -495,7 +495,7 @@ def function_delaunay_presentation_to_slicer(
         id = str(threading.get_native_id())
     global input_path, output_path, pathes
     backend = "function_delaunay"
-    assert _check_available(backend), f"Backend {backend} is not available."
+    _init_external_softwares(requires=[backend])
 
     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
     np.savetxt(input_path+id,to_write,delimiter=' ')
@@ -525,75 +525,6 @@ def clear_io(*args):
 
 
 
-
-
-
-# cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
-    # pair[boundary_matrix, vector[One_critical_filtration[double]]] simplextree_to_boundary_filtration(intptr_t)
-    # vector[pair[ vector[vector[float]],boundary_matrix]] simplextree_to_scc(intptr_t)
-    # vector[pair[ vector[vector[vector[float]]],boundary_matrix]] function_simplextree_to_scc(intptr_t)
-    # pair[vector[vector[float]],boundary_matrix ] simplextree_to_ordered_bf(intptr_t)
-
-# def simplex_tree2boundary_filtrations(simplextree:SimplexTreeMulti | SimplexTree):
-#     """Computes a (sparse) boundary matrix, with associated filtration. Can be used as an input of approx afterwards.
-#
-#     Parameters
-#     ----------
-#     simplextree: Gudhi or mma simplextree
-#         The simplextree defining the filtration to convert to boundary-filtration.
-#
-#     Returns
-#     -------
-#     B:List of lists of ints
-#         The boundary matrix.
-#     F: List of 1D filtration
-#         The filtrations aligned with B; the i-th simplex of this simplextree has boundary B[i] and filtration(s) F[i].
-#
-#     """
-#     cdef intptr_t cptr
-#     if isinstance(simplextree, SimplexTreeMulti):
-#         cptr = simplextree.thisptr
-#     elif isinstance(simplextree, SimplexTree):
-#         temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
-#         cptr = temp_st.thisptr
-#     else:
-#         raise TypeError("Has to be a simplextree")
-#     cdef pair[boundary_matrix, vector[One_critical_filtration[double]]] cboundary_filtration = simplextree_to_boundary_filtration(cptr)
-#     boundary = cboundary_filtration.first
-#     # multi_filtrations = np.array(<vector[vector[float]]>One_critical_filtration.to_python(cboundary_filtration.second))
-#     cdef cnp.ndarray[double, ndim=2] multi_filtrations = _fmf2numpy_f64(cboundary_filtration.second)
-#     return boundary, multi_filtrations
-
-# def simplextree2scc(simplextree:SimplexTreeMulti | SimplexTree, filtration_dtype=np.float32, bool flattened=False):
-#     """
-#     Turns a simplextree into a (simplicial) module presentation.
-#     """
-#     cdef intptr_t cptr
-#     cdef bool is_function_st = False
-#     if isinstance(simplextree, SimplexTreeMulti):
-#         cptr = simplextree.thisptr
-#         is_function_st = simplextree._is_function_simplextree
-#     elif isinstance(simplextree, SimplexTree):
-#         temp_st = gd.SimplexTreeMulti(simplextree, parameters=1)
-#         cptr = temp_st.thisptr
-#     else:
-#         raise TypeError("Has to be a simplextree")
-#     
-#     cdef pair[vector[vector[float]], boundary_matrix] out
-#     if flattened:
-#         out = simplextree_to_ordered_bf(cptr)
-#         return np.asarray(out.first,dtype=filtration_dtype), tuple(out.second)
-#
-#     if is_function_st:
-#         blocks = function_simplextree_to_scc(cptr)
-#     else:
-#         blocks = simplextree_to_scc(cptr)
-#     # reduces the space in memory
-#     if is_function_st:
-#         blocks = [(tuple(f), tuple(b)) for f,b in blocks[::-1]]
-#     else:
-#         blocks = [(np.asarray(f,dtype=filtration_dtype), tuple(b)) for f,b in blocks[::-1]] ## presentation is on the other order 
-#     return blocks+[(np.empty(0,dtype=filtration_dtype),[])]
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
