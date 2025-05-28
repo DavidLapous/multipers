@@ -19,7 +19,11 @@ def test_1():
     st.insert([0, 1], [1, 1])
     for S in mps.available_slicers:
         # TODO : investigate gudhi ??
-        if S().pers_backend.lower() == "gudhicohomology" or S().is_kcritical or not np.issubdtype(S().dtype, np.floating):
+        if (
+            S().pers_backend.lower() == "gudhicohomology"
+            or S().is_kcritical
+            or not np.issubdtype(S().dtype, np.floating)
+        ):
             continue
         from multipers._slicer_meta import _blocks2boundary_dimension_grades
 
@@ -29,13 +33,13 @@ def test_1():
                 inplace=False,
             )
         )
-        s = S(
-            generator_maps, generator_dimensions, filtration_values
-        )
+        s = S(generator_maps, generator_dimensions, filtration_values)
         print(type(s), s.col_type, s.pers_backend)
 
         s.info
-        it =s.persistence_on_line([0, 0], [1,1],ignore_infinite_filtration_values=False)
+        it = s.persistence_on_line(
+            [0, 0], [1, 1], ignore_infinite_filtration_values=False
+        )
         assert (
             len(it) == 2
         ), "There are simplices of dim 0 and 1, but no pers ? got {}".format(len(it))
@@ -103,14 +107,18 @@ def test_rank_custom():
             [0.0, 0.0, 3.0, 1.0],
         ],
     )
-    assert np.array_equal(w,[-1,1,-1,1,1])
+    assert np.array_equal(w, [-1, 1, -1, 1, 1])
     B = [[]]
     D = [0]
-    F = [[0,0]]
-    s = mp.Slicer(return_type_only=True)(B,D,F)
-    (a,b), = mp.signed_measure(s, invariant="rank", degree=0,)
-    assert np.array_equal(a, [[0,0,np.inf, np.inf]])
-    assert np.array_equal(b,[1])
+    F = [[0, 0]]
+    s = mp.Slicer(return_type_only=True)(B, D, F)
+    ((a, b),) = mp.signed_measure(
+        s,
+        invariant="rank",
+        degree=0,
+    )
+    assert np.array_equal(a, [[0, 0, np.inf, np.inf]])
+    assert np.array_equal(b, [1])
 
 
 def test_representative_cycles():
@@ -295,5 +303,34 @@ def test_colexical():
         idx = np.argwhere(G[idx, i] < 0).squeeze()
     for stuff in idx:
         assert stuff + 1 in dims_shift, "Colexical sort issue"
-# %%
 
+
+def test_clean_filtration_grid():
+    x = np.random.uniform(size=(100, 2))
+    from multipers.filtrations import RipsCodensity
+
+    st = RipsCodensity(x, bandwidth=0.1)
+    st = st.grid_squeeze()
+    st.collapse_edges(-1)
+    st.expansion(2)
+    s = [len(f) for f in st.filtration_grid]
+    st2 = st.copy()
+    st2._clean_filtration_grid()
+    s2 = [len(f) for f in st2.filtration_grid]
+    assert s2[0] < s[0] and s2[1] <= s[1]
+    (sm1,) = mp.signed_measure(st, degree=1)
+    (sm2,) = mp.signed_measure(st2, degree=1)
+    assert_sm(sm1, sm2)
+
+    s = mp.Slicer(st)
+    s2 = mp.Slicer(st)._clean_filtration_grid()
+    a = [len(f) for f in s.filtration_grid]
+    b = [len(f) for f in s2.filtration_grid]
+    assert b[0] < a[0] and b[1] <= a[1]
+    (sm1,) = mp.signed_measure(s, degree=1)
+    (sm2,) = mp.signed_measure(s2, degree=1)
+    assert_sm(sm1, sm2)
+
+
+
+# %%

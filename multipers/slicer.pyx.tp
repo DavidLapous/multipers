@@ -562,6 +562,21 @@ cdef class {{D['PYTHON_TYPE']}}:
           return out
           {{endif}}
         return self
+    def _clean_filtration_grid(self):
+        """
+        Removes the values in filtration_grid that are not linked to any splx.
+        """
+        if not self.is_squeezed:
+            raise ValueError("No grid to clean.")
+        F = self.filtration_grid
+        self.filtration_grid=None
+        cleaned_coordinates = compute_grid(self)
+        new_slicer = self.grid_squeeze(cleaned_coordinates)
+
+        self._from_ptr(new_slicer.get_ptr())
+        self.filtration_grid = tuple(f[g] for f,g in zip(F,cleaned_coordinates))
+        return self
+
     def minpres(self,
         int degree=-1, 
         list[int] degrees=[],
@@ -796,7 +811,6 @@ def minimal_presentation(
     assert degree>=0, f"Degree not provided."
     if not np.any(slicer.get_dimensions() == degree):
         return type(slicer)()
-    filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     if id is None:
         id = str(threading.get_native_id())
     if dtype is None:
@@ -809,7 +823,9 @@ def minimal_presentation(
     else:
         shift_dimension=degree
     scc_reduce_from_str_to_slicer(path=input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
+
     new_slicer.minpres_degree = degree
+    new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     return new_slicer
 
 

@@ -100,7 +100,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
     cdef public intptr_t thisptr
 
     cdef public object filtration_grid
-    cdef public bool _is_function_simplextree 
+    cdef public bool _is_function_simplextree  # TODO : deprecate
     # Get the pointer casted as it should be
     cdef Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]* get_ptr(self) noexcept nogil:
         return <Simplex_tree_multi_interface[{{FSHORT}}, {{CTYPE}}]*>(self.thisptr)
@@ -1258,11 +1258,26 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             out = self.get_ptr().get_filtration_values(degrees)
         filtrations_values =  [np.asarray(filtration) for filtration in out]
         # Removes infs
-        if inf_to_nan:
+        if inf_to_nan and np.dtype(filtrations_values[0].dtype).kind == 'f':
             for i,f in enumerate(filtrations_values):
                 filtrations_values[i][f == np.inf] = np.nan
                 filtrations_values[i][f == - np.inf] = np.nan
         return filtrations_values
+    def _clean_filtration_grid(self):
+        """
+        Removes the values in filtration_grid that are not linked to any splx.
+        """
+        if not self.is_squeezed:
+            raise ValueError("No grid to clean.")
+        F = self.filtration_grid
+        self.filtration_grid=None
+        cleaned_coordinates = compute_grid(self)
+        new_st = self.grid_squeeze(cleaned_coordinates)
+
+        self.thisptr, new_st.thisptr = new_st.thisptr, self.thisptr
+        self.filtration_grid = tuple(f[g] for f,g in zip(F,cleaned_coordinates))
+        return self
+
 
 
     def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, drop_quantiles:float|tuple=0, grid_strategy:_available_strategies="exact")->Iterable[np.ndarray]:
@@ -1332,7 +1347,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
     @property
     def is_squeezed(self)->bool:
-        return self.num_vertices > 0 and len(self.filtration_grid)>0 and len(self.filtration_grid[0]) > 0
+        return self.num_vertices > 0 and self.filtration_grid is not None and len(self.filtration_grid)>0 and len(self.filtration_grid[0]) > 0
 
     @property
     def dtype(self)->type:
