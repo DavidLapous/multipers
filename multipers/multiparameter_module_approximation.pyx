@@ -69,7 +69,7 @@ def module_approximation_from_slicer(
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
     if slicer.is_squeezed:
         if warnings:
-            print(r"Got a squeezed slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
+            print(r"Got a squeezed slicer as an input. Do not squeeze it to remove this copy.", file=sys.stderr)
         slicer = slicer.unsqueeze()
 
     direction_ = np.asarray(direction, dtype=slicer.dtype)

@@ -217,11 +217,14 @@ cdef class {{D['PYTHON_TYPE']}}:
     {{endif}}
     
     def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
-        assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"
+        # assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"
         new_slicer = {{D['PYTHON_TYPE']}}()
         cdef pair[{{D['C_TEMPLATE_TYPE']}}, vector[unsigned int]] stuff = self.truc.colexical_rearange()
+
         new_slicer.truc = stuff.first
         new_slicer.minpres_degree = self.minpres_degree
+        new_slicer.filtration_grid = self.filtration_grid
+
         if return_permutation:
             return new_slicer, np.array(stuff.second, dtype=np.int32)
         return new_slicer

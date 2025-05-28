@@ -10,6 +10,7 @@ cnp.import_array()
 from typing import Iterable,Literal,Optional
 from itertools import product
 from multipers.array_api import api_from_tensor, api_from_tensors
+from multipers.array_api import numpy as npapi
 
 available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -72,36 +73,48 @@ def compute_grid(
 
 
     cdef bool is_numpy_compatible = True
-    if is_slicer(x):
+    if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
+        initial_grid = x.filtration_grid
+        api = api_from_tensors(*initial_grid)
+    elif is_slicer(x):
         initial_grid = x.get_filtrations_values().T
+        api = npapi
     elif is_simplextree_multi(x):
         initial_grid = x.get_filtration_grid()
+        api = npapi
     elif is_mma(x):
         initial_grid = x.get_filtration_values()
+        api = npapi
     elif isinstance(x, np.ndarray):
         initial_grid = x
+        api = npapi
     else:
         x = tuple(x)
         if len(x) == 0: return []
         first = x[0]
         ## is_sm, i.e., iterable tuple(pts,weights)
-        if isinstance(x[0], tuple) and getattr(x[0][0], "shape", None) is not None:
+        if isinstance(first, tuple) and getattr(first[0], "shape", None) is not None:
             initial_grid = tuple(f[0].T for f in x)
-            if isinstance(initial_grid[0], np.ndarray):
-                initial_grid = np.concatenate(initial_grid, axis=1)
-            else:
-                is_numpy_compatible = False
-                import torch
-                assert isinstance(first[0], torch.Tensor), "Only numpy and torch are supported ftm."
-                initial_grid = torch.cat(initial_grid, axis=1)
+            api = api_from_tensors(*initial_grid)
+            initial_grid = api.cat(initial_grid, axis=1)
+            # if isinstance(initial_grid[0], np.ndarray):
+            #     initial_grid = np.concatenate(initial_grid, axis=1)
+            # else:
+            #     is_numpy_compatible = False
+            #     import torch
+            #     assert isinstance(first[0], torch.Tensor), "Only numpy and torch are supported ftm."
+            #     initial_grid = torch.cat(initial_grid, axis=1)
         ## is grid-like (num_params, num_pts)
-        elif isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
-            initial_grid = tuple(f for f in x)
         else:
-            is_numpy_compatible = False
-            import torch
-            assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
-            initial_grid = x
+            api = api_from_tensors(*x)
+            initial_grid = tuple(api.astensor(f) for f in x)
+            # elif isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
+            #     initial_grid = tuple(f for f in x)
+            # else:
+            #     is_numpy_compatible = False
+            #     import torch
+            #     assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
+            #     initial_grid = x
 
     num_parameters = len(initial_grid)
     try:
@@ -110,7 +123,7 @@ def compute_grid(
     except TypeError:
         pass
 
-    if is_numpy_compatible:
+    if api is npapi:
         return _compute_grid_numpy(
         initial_grid,
         resolution=resolution, 
