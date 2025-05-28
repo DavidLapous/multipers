@@ -56,15 +56,22 @@ def module_approximation_from_slicer(
         bool threshold=False,
         bool verbose=False,
         list[float] direction = [],
+        bool warnings = True,
         )->PyModule_type:
 
     cdef Module[float] mod_f32
     cdef Module[double] mod_f64
     cdef intptr_t ptr
     if not slicer.is_vine:
-        print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
+        if warnings:
+            print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
         from multipers._slicer_meta import Slicer
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
+    if slicer.is_squeezed:
+        if warnings:
+            print(r"Got a squeezed slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
+        slicer = slicer.unsqueeze()
+
     direction_ = np.asarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()

@@ -5,8 +5,8 @@ import gudhi as gd
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
-from scipy.spatial.distance import cdist
 
+from multipers.array_api import api_from_tensor
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 
@@ -15,8 +15,10 @@ try:
 
     from multipers.filtrations.density import KDE
 except ImportError:
-    from sklearn.neighbors import KernelDensity
     from warnings import warn
+
+    from sklearn.neighbors import KernelDensity
+
     warn("pykeops not found. Falling back to sklearn.")
 
     def KDE(bandwidth, kernel, return_log):
@@ -28,8 +30,8 @@ def RipsLowerstar(
     *,
     points: Optional[ArrayLike] = None,
     distance_matrix: Optional[ArrayLike] = None,
-    function=None,
-    threshold_radius=None,
+    function: Optional[ArrayLike] = None,
+    threshold_radius: Optional[float] = None,
 ):
     """
     Computes the Rips complex, with the usual rips filtration as a first parameter,
@@ -44,22 +46,35 @@ def RipsLowerstar(
         points is not None or distance_matrix is not None
     ), "`points` or `distance_matrix` has to be given."
     if distance_matrix is None:
-        distance_matrix = cdist(points, points)  # this may be slow...
+        api = api_from_tensor(points)
+        points = api.astensor(points)
+        D = api.cdist(points, points)  # this may be slow...
+    else:
+        api = api_from_tensor(distance_matrix)
+        D = api.astensor(distance_matrix)
+
     if threshold_radius is None:
-        threshold_radius = np.min(np.max(distance_matrix, axis=1))
+        threshold_radius = api.min(api.maxvalues(D, axis=1))
     st = gd.SimplexTree.create_from_array(
-        distance_matrix, max_filtration=threshold_radius
+        api.asnumpy(D), max_filtration=threshold_radius
     )
     if function is None:
         return SimplexTreeMulti(st, num_parameters=1)
 
-    function = np.asarray(function)
+    function = api.astensor(function)
     if function.ndim == 1:
         function = function[:, None]
+    if function.ndim != 2:
+        raise ValueError(f"`function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}")
     num_parameters = function.shape[1] + 1
     st = SimplexTreeMulti(st, num_parameters=num_parameters)
     for i in range(function.shape[1]):
-        st.fill_lowerstar(function[:, i], parameter=1 + i)
+        st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
+    if api.has_grad(D) or api.has_grad(function):
+        from multipers.grids import compute_grid
+
+        grid = compute_grid([D.ravel(), *[f for f in function.T]])
+        st = st.grid_squeeze(grid)
     return st
 
 
@@ -110,6 +125,7 @@ def DelaunayLowerstar(
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
     from multipers.slicer import from_function_delaunay
+
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
@@ -178,6 +194,7 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
      - ** args : specify non-default slicer parameters
     """
     from multipers.slicer import from_bitmap
+
     return from_bitmap(image, **slicer_kwargs)
 
 
@@ -214,7 +231,7 @@ def CoreDelaunay(
         ks = np.arange(1, len(points) + 1)
     else:
         ks = np.asarray(ks, dtype=int)
-    ks:np.ndarray
+    ks: np.ndarray
 
     assert len(ks) > 0, "The parameter ks must contain at least one value."
     assert np.all(ks > 0), "All values in ks must be positive."
