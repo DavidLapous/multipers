@@ -384,16 +384,6 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
             ]) for g in grid]
         if mass_default is not None:
             _mass_default = api.cat([_mass_default,mass_default])
-        # if isinstance(grid[0], np.ndarray|list|tuple):
-        #     _grid += [np.concatenate([g[1:], [_inf_value(g)]] ) for g in grid]
-        #     if mass_default is not None:
-        #         mass_default = np.concatenate([mass_default]*2)
-        # else:
-        #     import torch 
-        #     _grid += [torch.cat([g[1:], torch.tensor([torch.inf])]) for g in grid] 
-        #     if mass_default is not None:
-        #         mass_default = torch.cat([mass_default]*2)
-        # grid=tuple(_grid)
     grid = tuple(_grid)
     mass_default = _mass_default
 
