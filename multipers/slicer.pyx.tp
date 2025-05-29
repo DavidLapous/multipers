@@ -20,6 +20,7 @@ from typing import Optional,Literal
 import threading
 import os 
 from joblib import Parallel, delayed
+from warnings import warn
 
 from multipers.slicer cimport *
 from multipers.filtrations cimport *
@@ -526,7 +527,15 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns the boundaries of the generators.
         """
         return tuple(tuple(b) for b in self.truc.get_boundaries())
-    def grid_squeeze(self, filtration_grid=None, strategy="exact", resolution:Optional[int]=None, bool coordinates=True, bool inplace = False, bool force=False, grid_strategy=None)->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
+    def grid_squeeze(
+            self, 
+            filtration_grid=None,
+            strategy="exact",
+            resolution:Optional[int]=None,
+            bool coordinates=True,
+            bool inplace = False,
+            grid_strategy=None
+        )->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
 
@@ -537,12 +546,16 @@ cdef class {{D['PYTHON_TYPE']}}:
 
          - inplace:bool if true, does the operation inplace, i.e., doesn't return a copy.
         """
-        if not force and self.is_squeezed:
-            raise ValueError("The slicer seems to be already squeezed. Use force=True to resqueeze.")
         if grid_strategy is not None:
-            from warnings import warn
             warn("`grid_strategy` is deprecated, use `strategy` instead.",DeprecationWarning)
             strategy=grid_strategy
+
+        if self.is_squeezed:
+            warn("Squeezing an already squeezed slicer.")
+            temp = self.unsqueeze()
+            subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
+            return temp.grid_squeeze(subgrid, coordinates=coordinates, inplace=inplace)
+
         if filtration_grid is None:
             filtration_grid = compute_grid(
                     self.get_filtrations_values().T,
