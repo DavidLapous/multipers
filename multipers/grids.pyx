@@ -378,7 +378,10 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
     _grid = list(grid)
     _mass_default = None if mass_default is None else api.astensor(mass_default)
     while len(_grid) < num_parameters:
-        _grid += [api.cat([(gt:=api.astensor(g))[1:], [_inf_value(api.asnumpy(gt))]]) for g in grid]
+        _grid += [api.cat([
+                (gt:=api.astensor(g))[1:],
+                api.astensor(_inf_value(api.asnumpy(gt))).reshape(1)
+            ]) for g in grid]
         if mass_default is not None:
             _mass_default = api.cat([_mass_default,mass_default])
         # if isinstance(grid[0], np.ndarray|list|tuple):
