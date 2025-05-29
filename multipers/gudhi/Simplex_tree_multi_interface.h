@@ -21,6 +21,8 @@
 #include "multiparameter_module_approximation/format_python-cpp.h"
 
 #include <iostream>
+#include <ranges>
+#include <stdexcept>
 #include <utility>  // std::pair
 #include <vector>
 #include <limits>  // has_quiet_NaN
@@ -289,6 +291,39 @@ class Simplex_tree_multi_interface
         simplex_filtration = coords.template as_type<value_type>();
       else
         simplex_filtration = evaluate_coordinates_in_grid(coords, grid).template as_type<value_type>();
+    }
+  }
+
+  void unsqueeze_filtration(const intptr_t grid_st_ptr,
+                            const std::vector<std::vector<double>> &grid) {  // TODO : this is const but GUDHI
+    if constexpr (Filtration::is_multicritical())
+      throw std::invalid_argument("Multicritical not supported yet");
+    else {
+      constexpr const bool verbose = false;
+      using int_fil_type = decltype(std::declval<Filtration>().template as_type<std::int32_t>());
+      using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
+      st_coord_type &grid_st = *(st_coord_type *)grid_st_ptr;  // TODO : maybe fix this.
+      std::vector<int> simplex_vertex;
+      int num_parameters = grid_st.get_number_of_parameters();
+      for (auto &simplex_handle : grid_st.complex_simplex_range()) {
+        const auto &simplex_filtration = grid_st.filtration(simplex_handle);
+        if constexpr (verbose) std::cout << "Filtration " << simplex_filtration << "\n";
+        Filtration splx_filtration(simplex_filtration.size(), 1.);
+        if (simplex_filtration.is_finite()) {
+          for (auto i : std::views::iota(num_parameters)) splx_filtration[i] = grid[i][simplex_filtration[i]];
+        } else if (simplex_filtration.is_plus_inf()) {
+          splx_filtration = Filtration().inf();
+        } else if (simplex_filtration.is_minus_inf()) {
+          splx_filtration = Filtration().minus_inf();
+        } else if (simplex_filtration.is_nan()) {
+          splx_filtration = Filtration().nan();
+        }
+        if constexpr (verbose) std::cout << "Filtration " << splx_filtration << "\n";
+        for (const auto s : grid_st.simplex_vertex_range(simplex_handle)) simplex_vertex.push_back(s);
+        this->insert_simplex(simplex_vertex, splx_filtration);
+        if constexpr (verbose) std::cout << "Coords in st" << this->filtration(this->find(simplex_vertex)) << std::endl;
+        simplex_vertex.clear();
+      }
     }
   }
 
