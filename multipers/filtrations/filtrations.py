@@ -1,13 +1,15 @@
 from collections.abc import Sequence
 from typing import Optional
+from warnings import warn
 
 import gudhi as gd
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.filtrations.density import DTM, available_kernels
+from multipers.grids import compute_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 
 try:
@@ -15,7 +17,6 @@ try:
 
     from multipers.filtrations.density import KDE
 except ImportError:
-    from warnings import warn
 
     from sklearn.neighbors import KernelDensity
 
@@ -65,7 +66,9 @@ def RipsLowerstar(
     if function.ndim == 1:
         function = function[:, None]
     if function.ndim != 2:
-        raise ValueError(f"`function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}")
+        raise ValueError(
+            f"`function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}"
+        )
     num_parameters = function.shape[1] + 1
     st = SimplexTreeMulti(st, num_parameters=num_parameters)
     for i in range(function.shape[1]):
@@ -114,6 +117,7 @@ def DelaunayLowerstar(
     dtype=np.float64,
     verbose: bool = False,
     clear: bool = True,
+    flagify: bool = False,
 ):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
@@ -129,20 +133,38 @@ def DelaunayLowerstar(
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
-    points = np.asarray(points)
-    function = np.asarray(function).squeeze()
+    api = api_from_tensors(points, function)
+    if not flagify and api.has_grad(points):
+        warn("Cannot keep points gradient unless using `flagify=True`.")
+    points = api.astensor(points)
+    function = api.astensor(function).squeeze()
     assert (
         function.ndim == 1
     ), "Delaunay Lowerstar is only compatible with 1 additional parameter."
-    return from_function_delaunay(
-        points,
-        function,
+    slicer = from_function_delaunay(
+        api.asnumpy(points),
+        api.asnumpy(function),
         degree=reduce_degree,
         vineyard=vineyard,
         dtype=dtype,
         verbose=verbose,
         clear=clear,
     )
+    if flagify:
+        from multipers.slicer import to_simplextree
+
+        from multipers import Slicer
+
+        slicer = to_simplextree(slicer)
+        slicer.flagify(2)
+
+        if api.has_grad(points) or api.has_grad(function):
+            distances = api.cdist(points, points) / 2
+            grid = compute_grid([distances.ravel(), function])
+            slicer = slicer.grid_squeeze(grid)
+            slicer = slicer._clean_filtration_grid()
+
+    return slicer
 
 
 def DelaunayCodensity(
@@ -158,6 +180,7 @@ def DelaunayCodensity(
     dtype=np.float64,
     verbose: bool = False,
     clear: bool = True,
+    flagify:bool = False,
 ):
     """
     TODO
@@ -181,6 +204,7 @@ def DelaunayCodensity(
         dtype=dtype,
         verbose=verbose,
         clear=clear,
+        flagify=flagify,
     )
 
 
