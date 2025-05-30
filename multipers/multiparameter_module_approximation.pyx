@@ -162,10 +162,10 @@ def module_approximation(
         if len(input) == 0:
             return PyModule_f64()
         if n_jobs <= 1: 
-            modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warning, id, direction, swap_box_coords) for slicer in input)
+            modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, id, direction, swap_box_coords) for slicer in input)
         else:
             modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warning, id, direction, swap_box_coords)
+                delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, id, direction, swap_box_coords)
                 for slicer in input
             ))
         mod = PyModule_f64().set_box(PyBox_f64(*modules[0].get_box()))
