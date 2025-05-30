@@ -14,6 +14,7 @@ import numpy as np
 from typing import List
 from joblib import Parallel, delayed
 import sys
+from warnings import warn
 
 ###########################################################################
 ## CPP CLASSES
@@ -68,9 +69,7 @@ def module_approximation_from_slicer(
         from multipers._slicer_meta import Slicer
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
     if slicer.is_squeezed:
-        if warnings:
-            print(r"Got a squeezed slicer as an input. Do not squeeze it to remove this copy.", file=sys.stderr)
-        slicer = slicer.unsqueeze()
+        raise ValueError("Got a squeezed slicer. Should have been unsqueezed before !")
 
     direction_ = np.asarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
@@ -103,7 +102,7 @@ def module_approximation(
         bool complete=True, 
         bool threshold=False, 
         bool verbose=False,
-        bool ignore_warning=False,
+        bool ignore_warnings=False,
         id="",
         list[float] direction = [],
         list[int] swap_box_coords = [],
@@ -175,6 +174,11 @@ def module_approximation(
         return mod
     if len(input) == 0:
         return PyModule_f64()
+    if input.is_squeezed:
+        if not ignore_warnings:
+            warn("(copy warning) Got a squeezed input. ")
+        input = input.unsqueeze()
+
     if box is None:
         if is_simplextree_multi(input):
             box = input.filtration_bounds()
@@ -199,11 +203,16 @@ def module_approximation(
     if max_error <= 0:
         max_error = (prod/nlines)**(1/(num_parameters-1))
 
-    if not ignore_warning and prod >= 10_000:
+    if not ignore_warnings and prod >= 10_000:
         raise ValueError(f"""
 Warning : the number of lines (around {np.round(prod)}) may be too high. 
+This may be due to extreme box or filtration bounds :
+
+{box=}
+
 Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. 
-Returning the trivial module."""
+Returning the trivial module.
+"""
         )
     if is_simplextree_multi(input):
         from multipers._slicer_meta import Slicer
