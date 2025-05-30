@@ -45,7 +45,7 @@ def test_3():
     st = mp.SimplexTreeMulti(num_parameters=2)
     st.insert([0, 1, 2], [1] * st.num_parameters)
     st.remove_maximal_simplex([0, 1, 2])
-    st = st.grid_squeeze(grid_strategy="exact")
+    st = st.grid_squeeze(strategy="exact")
     ((a, b),) = mp.signed_measure(st, degrees=[1], mass_default=None)
     assert np.array_equal(a, [[1, 1]]) and np.array_equal(b, [1])
     assert mp.signed_measure(st, degrees=[1], mass_default="inf")[0][1].sum() == 0
@@ -59,7 +59,7 @@ def test_4():
     st.insert([0, 1, 2], [2, 2, 2])
     st.make_filtration_non_decreasing()
     # list(st.get_simplices())
-    st = st.grid_squeeze(grid_strategy="exact")
+    st = st.grid_squeeze(strategy="exact")
     assert signed_measure(st, degrees=[0], mass_default="inf")[0][1].sum() == 0
 
 
