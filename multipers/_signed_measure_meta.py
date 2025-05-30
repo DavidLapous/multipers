@@ -138,7 +138,7 @@ def signed_measure(
 
     assert (
         not plot or filtered_complex.num_parameters == 2
-    ), "Can only plot 2d measures."
+    ), f"Can only plot 2d measures. Got {filtered_complex.num_parameters=}."
 
     if grid is None:
         if not filtered_complex.is_squeezed:
@@ -146,7 +146,6 @@ def signed_measure(
                 filtered_complex, strategy=grid_strategy, **infer_grid_kwargs
             )
         else:
-            # grid = tuple(np.asarray(f) for f in filtered_complex.filtration_grid)
             grid = filtered_complex.filtration_grid
 
     if mass_default is None:

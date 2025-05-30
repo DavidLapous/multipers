@@ -103,7 +103,11 @@ def RipsCodensity(
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:
         raise ValueError("Bandwidth or DTM mass has to be given.")
-    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius)
+    return RipsLowerstar(
+        points=points,
+        function=f,
+        threshold_radius=threshold_radius
+    )
 
 
 def DelaunayLowerstar(
@@ -153,8 +157,6 @@ def DelaunayLowerstar(
     if flagify:
         from multipers.slicer import to_simplextree
 
-        from multipers import Slicer
-
         slicer = to_simplextree(slicer)
         slicer.flagify(2)
 
@@ -180,7 +182,7 @@ def DelaunayCodensity(
     dtype=np.float64,
     verbose: bool = False,
     clear: bool = True,
-    flagify:bool = False,
+    flagify: bool = False,
 ):
     """
     TODO
