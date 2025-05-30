@@ -130,6 +130,8 @@ def DelaunayLowerstar(
     """
     from multipers.slicer import from_function_delaunay
 
+    if flagify and reduce_degree:
+        raise ValueError("Got {reduce_degree=} and {flagify=}. Cannot flagify with reduce degree.")
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
