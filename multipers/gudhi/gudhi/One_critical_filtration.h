@@ -30,7 +30,7 @@
 #include <gudhi/Debug_utils.h>
 
 namespace Gudhi {
-namespace multi_filtration { 
+namespace multi_filtration {
 
 /**
  * @class One_critical_filtration one_critical_filtration.h gudhi/one_critical_filtration.h
@@ -1034,14 +1034,21 @@ class One_critical_filtration : public std::vector<T> {
                 "The grid should not be smaller than the number of parameters in the filtration value.");
     for (std::size_t parameter = 0u; parameter < Base::size(); ++parameter) {
       const auto &filtration = grid[parameter];
-      auto d =
-          std::distance(filtration.begin(),
-                        std::lower_bound(filtration.begin(),
-                                         filtration.end(),
-                                         static_cast<typename oned_array::value_type>(Base::operator[](parameter))));
       int num_filtration_values = filtration.size();
-      d = d == num_filtration_values ? std::max(num_filtration_values - 1,0) : d;
-      Base::operator[](parameter) = coordinate ? static_cast<T>(d) : static_cast<T>(filtration[d]);
+      auto this_at_param = static_cast<typename oned_array::value_type>(Base::operator[](parameter));
+      auto it = std::lower_bound(filtration.begin(), filtration.end(), this_at_param);
+      std::size_t idx;
+      if (it == filtration.end()) {
+        idx = num_filtration_values - 1;
+      } else if (it == filtration.begin()) {
+        idx = 0;
+      } else {
+        auto prev = it - 1;
+        idx = (std::abs(*prev - this_at_param) <= std::abs(*it - this_at_param))
+                  ? std::distance(filtration.begin(), prev)
+                  : std::distance(filtration.begin(), it);
+      }
+      Base::operator[](parameter) = coordinate ? static_cast<T>(idx) : static_cast<T>(filtration[idx]);
     }
   }
 
@@ -1394,7 +1401,8 @@ class One_critical_filtration : public std::vector<T> {
   }
 };
 
-}}  // namespace Gudhi::multi_filtration
+}  // namespace multi_filtration
+}  // namespace Gudhi
 
 namespace std {
 

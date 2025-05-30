@@ -1112,12 +1112,15 @@ class Truc {
     return out;
   }
 
-  auto coarsen_on_grid(const std::vector<std::vector<typename MultiFiltration::value_type>> grid) {
+  auto coarsen_on_grid(const std::vector<std::vector<typename MultiFiltration::value_type>>& grid) {
     using return_type = decltype(std::declval<MultiFiltration>().template as_type<std::int32_t>());
     std::vector<return_type> coords(this->num_generators());
-    for (std::size_t gen = 0u; gen < coords.size(); ++gen) {
+    // for (std::size_t gen = 0u; gen < coords.size(); ++gen) { // TODO : parallelize
+    //   coords[gen] = compute_coordinates_in_grid<int32_t>(generator_filtration_values[gen], grid);
+    // }
+    tbb::parallel_for(static_cast<std::size_t>(0u), coords.size(), [&](std::size_t gen){
       coords[gen] = compute_coordinates_in_grid<int32_t>(generator_filtration_values[gen], grid);
-    }
+    });
     return Truc<PersBackend, Structure, return_type>(structure, coords);
   }
 
