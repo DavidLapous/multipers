@@ -224,7 +224,7 @@ cdef inline  _compute_hilbert_sm(slicer, tensor_dtype* container_ptr, vector[ind
     with nogil:
       sm = get_hilbert_signed_measure(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)),container_ptr, c_grid_shape,degrees, zero_pad, n_jobs, verbose, ignore_inf)
     if len(sm.first) == 0:
-      pts = np.empty(shape=(0, slicer.num_parameter), dtype=python_indices_type)
+      pts = np.empty(shape=(0, slicer.num_parameters), dtype=python_indices_type)
       weights = np.empty(shape=(0), dtype=python_tensor_dtype)
     else:
       pts = np.asarray(sm.first,dtype=python_indices_type)

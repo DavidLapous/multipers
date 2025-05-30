@@ -551,7 +551,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             strategy=grid_strategy
 
         if self.is_squeezed:
-            warn("Squeezing an already squeezed slicer.")
+            warn("(copy warning) Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
             return temp.grid_squeeze(subgrid, coordinates=coordinates, inplace=inplace)
@@ -814,7 +814,7 @@ def minimal_presentation(
     from multipers.io import _check_available, input_path, scc_reduce_from_str_to_slicer
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
-        warn(f"The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
+        warn(f"(unnecessary computation) The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
         return slicer
     assert _check_available(backend), f"Backend {backend} is not available."
     if len(degrees)>0:

@@ -1339,7 +1339,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             strategy=grid_strategy
 
         if self.is_squeezed:
-            warn("Squeezing an already squeezed slicer.")
+            warn("(copy warning) Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
             return temp.grid_squeeze(subgrid, coordinates=coordinates, inplace=inplace)
