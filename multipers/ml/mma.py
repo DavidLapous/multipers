@@ -478,7 +478,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 if self.weights is None
                 else np.asarray(self.weights)
             )
-            standard_box = PyBox_f64([0] * self._num_parameters, w)
+            standard_box = np.array([[0] * self._num_parameters, w])
 
             X_copy = [
                 [
