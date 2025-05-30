@@ -11,6 +11,7 @@ import pickle
 with open("build/tmp/_slicer_names.pkl", "rb") as f:
   slicers=pickle.load(f)
 
+dtypes = set([(D['PY_VALUE_TYPE'], D['C_VALUE_TYPE'], D['SHORT_VALUE_TYPE']) for D in slicers])
 
 }}
 
@@ -709,10 +710,13 @@ cdef extern from "gudhi/cubical_to_boundary.h" namespace "":
   void get_vertices(unsigned int, cset[unsigned int]&, const vector[vector[unsigned int]]&) nogil
 
 
-def from_bitmap(image, **slicer_kwargs):
+{{for pytype,ctype,fshort in dtypes}}
+def _from_bitmap{{fshort}}(image, **slicer_kwargs):
     from multipers import Slicer
-    image = np.asarray(image)
-    slicer_kwargs["dtype"] = slicer_kwargs.get("dtype", image.dtype)
+    dtype = slicer_kwargs.get("dtype", image.dtype)
+    slicer_kwargs["dtype"] = dtype
+    if image.dtype  !=  dtype:
+        raise ValueError(f"Invalid type matching. Got {dtype=} and {image.dtype=}")
     _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
     cdef vector[unsigned int] img_shape = image.shape[:-1]
     cdef unsigned int num_parameters = image.shape[-1]
@@ -722,11 +726,12 @@ def from_bitmap(image, **slicer_kwargs):
     with nogil:
         _to_boundary(img_shape,gen_maps, gen_dims)
 
-    cdef unsigned int num_gens = gen_dims.size()
-    filtration_values = np.zeros(shape=(num_gens, num_parameters), dtype = np.double) - np.inf
-    cdef double[:,:] F = filtration_values
-    cdef double[:,:] c_img = image.reshape(-1,num_parameters)
     cdef cset[unsigned int] vertices
+
+    cdef unsigned int num_gens = gen_dims.size()
+    filtration_values = np.zeros(shape=(num_gens, num_parameters), dtype = {{pytype}}) - _Slicer._inf_value()
+    cdef {{ctype}}[:,:] F = filtration_values
+    cdef {{ctype}}[:,:] c_img = image.reshape(-1,num_parameters)
     with nogil:
         for i in range(num_gens):
             # with gil:
@@ -744,13 +749,22 @@ def from_bitmap(image, **slicer_kwargs):
             #     print(f"F = {np.asarray(F[i])}")
     slicer = _Slicer(gen_maps, gen_dims, filtration_values)
     return slicer
+{{endfor}}
+
+def from_bitmap(img, **kwargs):
+    img = np.asarray(img)
+    {{for pytype,ctype,stype in dtypes}}
+    if img.dtype == {{pytype}}:
+        return _from_bitmap{{stype}}(img, **kwargs)
+    {{endfor}}
+    raise ValueError(f"Invalid dtype. Got {img.dtype=}, was expecting {available_dtype=}.")
 
 def from_function_delaunay(
     points,
     grades,
     int degree=-1,
     backend:Optional[_valid_pers_backend]=None,
-    vineyard=None, # TODO : Optional[bool] when cython fixes it
+    vineyard:Optional[bool]=None, # TODO : Optional[bool] when cython fixes it
     dtype=np.float64,
     bool verbose = False,
     bool clear = True,
@@ -811,12 +825,12 @@ def minimal_presentation(
     and returns it as a slicer.
     Backends differents than `mpfree` are unstable.
     """
-    from multipers.io import _check_available, input_path, scc_reduce_from_str_to_slicer
+    from multipers.io import _init_external_softwares, input_path, scc_reduce_from_str_to_slicer
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
         warn(f"(unnecessary computation) The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
         return slicer
-    assert _check_available(backend), f"Backend {backend} is not available."
+    _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
             return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
@@ -832,7 +846,7 @@ def minimal_presentation(
     if dtype is None:
         dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    slicer.to_scc(path=input_path+id, strip_comments=True, degree=degree-1)
+    slicer.to_scc(path=input_path+id, strip_comments=True, degree=degree-1, unsqueeze = False)
     new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
     if backend=="mpfree":
         shift_dimension=degree-1

@@ -103,11 +103,7 @@ def RipsCodensity(
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:
         raise ValueError("Bandwidth or DTM mass has to be given.")
-    return RipsLowerstar(
-        points=points,
-        function=f,
-        threshold_radius=threshold_radius
-    )
+    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius)
 
 
 def DelaunayLowerstar(
@@ -138,7 +134,7 @@ def DelaunayLowerstar(
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
     api = api_from_tensors(points, function)
-    if not flagify and api.has_grad(points):
+    if not flagify and (api.has_grad(points) or api.has_grad(function)):
         warn("Cannot keep points gradient unless using `flagify=True`.")
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
@@ -220,6 +216,22 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
      - ** args : specify non-default slicer parameters
     """
     from multipers.slicer import from_bitmap
+
+    api = api_from_tensor(image)
+    image = api.astensor(image)
+    if api.has_grad(image):
+        img2 = image.reshape(-1, image.shape[-1]).T
+        grid = compute_grid(img2)
+        coord_img = np.empty(image.shape, dtype=np.int32)
+        slice_shape = image.shape[:-1]
+        for i in range(image.shape[-1]):
+            coord_img[..., i] = np.searchsorted(
+                api.asnumpy(grid[i]),
+                api.asnumpy(image[..., i]).reshape(-1),
+            ).reshape(slice_shape)
+        slicer = from_bitmap(coord_img, **slicer_kwargs)
+        slicer.filtration_grid = grid
+        return slicer
 
     return from_bitmap(image, **slicer_kwargs)
 

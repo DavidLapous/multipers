@@ -65,7 +65,7 @@ def module_approximation_from_slicer(
     cdef intptr_t ptr
     if not slicer.is_vine:
         if warnings:
-            print(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.", file=sys.stderr)
+            warn(r"(copy warning) Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
         from multipers._slicer_meta import Slicer
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
     if slicer.is_squeezed:
