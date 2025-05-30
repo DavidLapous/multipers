@@ -168,7 +168,8 @@ def module_approximation(
                 delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, id, direction, swap_box_coords)
                 for slicer in input
             ))
-        mod = PyModule_f64().set_box(PyBox_f64(*modules[0].get_box()))
+        box = modules[0].get_box()
+        mod = PyModule_f64().set_box(box)
         for i,m in enumerate(modules):
             mod.merge(m, input[i].minpres_degree)
         return mod
