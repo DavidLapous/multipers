@@ -4,7 +4,6 @@ import numpy as np
 import multipers as mp
 
 
-
 def test_h1_rips_density():
     num_pts = 100
     dim = 2

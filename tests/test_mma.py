@@ -6,7 +6,6 @@ import multipers.ml.mma as mma
 from multipers.tests import random_st
 
 
-
 def test_1():
     st = mp.SimplexTreeMulti(num_parameters=2)
     st.insert([0], [0, 1])
@@ -82,9 +81,12 @@ def test_pipeline2(prune_degrees_above, n_jobs, expand_dim):
     output = mp.module_approximation(st_copy, box=box).representation(bandwidth=0.01)
     assert np.array_equal(truc[0].representation(bandwidth=-0.01), output)
 
+
 def test_dump_load():
-    from multipers.tests import random_st
     import pickle as pkl
+
+    from multipers.tests import random_st
+
     mod = mp.module_approximation(random_st())
     _mod = pkl.loads(pkl.dumps(mod))
     assert mod == _mod

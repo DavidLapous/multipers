@@ -3,9 +3,6 @@ import numpy as np
 import multipers as mp
 from multipers import signed_measure
 
-
-
-
 # def test_1(): # TODO: test integrate_measure instead
 #     st = mp.SimplexTreeMulti(num_parameters=3)
 #     st.insert([0], [1, 0, 0])
@@ -62,7 +59,7 @@ def test_4():
     st.insert([0, 1, 2], [2, 2, 2])
     st.make_filtration_non_decreasing()
     # list(st.get_simplices())
-    st.grid_squeeze(grid_strategy="exact")
+    st = st.grid_squeeze(grid_strategy="exact")
     assert signed_measure(st, degrees=[0], mass_default="inf")[0][1].sum() == 0
 
 
@@ -75,7 +72,7 @@ def test_5():
         st.insert([i], f)
     st.insert(np.arange(num_param), [2] * num_param)
     assert not st.make_filtration_non_decreasing()
-    st.grid_squeeze()
+    st = st.grid_squeeze()
     (a, b), (c, d) = signed_measure(st, degrees=[0, 1])
     assert np.all(a[-1] == 2)
     assert np.sum(b) == 1 and b[-1] == -(num_param - 1)

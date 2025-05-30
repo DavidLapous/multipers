@@ -332,5 +332,4 @@ def test_clean_filtration_grid():
     assert_sm(sm1, sm2)
 
 
-
 # %%

@@ -2,12 +2,11 @@ import pickle as pkl
 
 import gudhi as gd
 import numpy as np
+import pytest
 from numpy import array
 
 import multipers as mp
-import pytest
 from multipers.tests import assert_st_simplices, random_st
-
 
 
 def test_1():
@@ -60,7 +59,11 @@ def test_3():
         assert_st_simplices(st_multi, it)
 
 
-has_kcritical = np.any([a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees])
+has_kcritical = np.any(
+    [a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees]
+)
+
+
 @pytest.mark.skipif(
     not has_kcritical,
     reason="kcritical simplextree not compiled, skipping this test",
@@ -193,30 +196,34 @@ def test_kcritical_batch_insert():
 
     st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
 
-    vertices = [[0,1]]
-    vertices_filtrations = np.array([[[-1, -2]],[[-2, -1]]])
-    st.insert_batch(vertices,vertices_filtrations)
+    vertices = [[0, 1]]
+    vertices_filtrations = np.array([[[-1, -2]], [[-2, -1]]])
+    st.insert_batch(vertices, vertices_filtrations)
 
-    edges = np.array([[0, 1],[1, 2], [2,0]]).T
-    edges_filtrations = np.array([
-        [[1,0],[0,1], [np.inf,np.inf]],
-        [[1,0],[0,1], [np.inf,np.inf]],
-        [[1,0],[0,1], [-1,3]],
-    ])
+    edges = np.array([[0, 1], [1, 2], [2, 0]]).T
+    edges_filtrations = np.array(
+        [
+            [[1, 0], [0, 1], [np.inf, np.inf]],
+            [[1, 0], [0, 1], [np.inf, np.inf]],
+            [[1, 0], [0, 1], [-1, 3]],
+        ]
+    )
     st.insert_batch(edges, edges_filtrations)
 
-    triangle = np.array([[0,1,2]]).T
-    triangle_filration = [[[2,2]]]
+    triangle = np.array([[0, 1, 2]]).T
+    triangle_filration = [[[2, 2]]]
     st.insert_batch(triangle, triangle_filration)
 
     from numpy import array
-    goal = [(array([0, 1, 2]), [array([2., 2.])]),
-         (array([0, 1]), [array([0., 1.]), array([1., 0.])]),
-         (array([0, 2]), [array([-1.,  3.]), array([0., 1.]), array([1., 0.])]),
-         (array([0]), [array([-1., -2.])]),
-         (array([1, 2]), [array([0., 1.]), array([1., 0.])]),
-         (array([1]), [array([-2., -1.])]),
-         (array([2]), [array([0., 1.]), array([1., 0.])])
+
+    goal = [
+        (array([0, 1, 2]), [array([2.0, 2.0])]),
+        (array([0, 1]), [array([0.0, 1.0]), array([1.0, 0.0])]),
+        (array([0, 2]), [array([-1.0, 3.0]), array([0.0, 1.0]), array([1.0, 0.0])]),
+        (array([0]), [array([-1.0, -2.0])]),
+        (array([1, 2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
+        (array([1]), [array([-2.0, -1.0])]),
+        (array([2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
     ]
     assert_st_simplices(st, goal)
 
@@ -225,7 +232,6 @@ def test_5():
     st3 = random_st(num_parameters=3)
     st5 = mp.SimplexTreeMulti(st3, num_parameters=5)
     assert st5.num_parameters == 5
-    for s,f in st5:
+    for s, f in st5:
         assert len(f) == 5
-    assert mp.SimplexTreeMulti(st5,num_parameters=3) == st3
-
+    assert mp.SimplexTreeMulti(st5, num_parameters=3) == st3

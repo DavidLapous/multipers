@@ -1,5 +1,6 @@
-import numpy as np 
-from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles
+import numpy as np
+
+from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
 
 
 # only tests rank functions with 1 and 2 parameters
@@ -174,7 +175,7 @@ def _test_signed_betti():
             e = np.random.randint(5, 10)
             f = np.random.randint(5, 10)
 
-            f = np.random.randint(0, 40, size=(a, b, c, d,e,f))
+            f = np.random.randint(0, 40, size=(a, b, c, d, e, f))
             sb = signed_betti(f, threshold=threshold)
             sb_ = signed_betti(f, threshold=threshold)
 

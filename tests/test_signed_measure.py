@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
+from gudhi.wasserstein import wasserstein_distance
 
 import multipers as mp
 import multipers.io as mio
 from multipers.tests import assert_sm, random_st
-from gudhi.wasserstein import wasserstein_distance
 
 np.random.seed(0)
 
@@ -73,17 +73,19 @@ def test_backends(invariant, degree, mass_default, S):
                 )
     if mass_default is not None and invariant != "rank":
         assert sms[0][1].sum() == 0, "Did not remove all of the mass"
-    assert_sm(*sms, exact=False, max_error=0.5, threshold=1,reg=1.)
+    assert_sm(*sms, exact=False, max_error=0.5, threshold=1, reg=1.0)
 
 
 @pytest.mark.parametrize("degree", degrees)
 def test_rank(degree):
-    s = mp.Slicer(random_st(npts=50,max_dim=1).collapse_edges(-2).expansion(degree+1))
-    rank_sm, = mp.signed_measure(s, invariant="rank", degree=degree);
+    s = mp.Slicer(
+        random_st(npts=50, max_dim=1).collapse_edges(-2).expansion(degree + 1)
+    )
+    (rank_sm,) = mp.signed_measure(s, invariant="rank", degree=degree)
     for _ in range(5):
         bp = np.random.uniform(size=(2))
         d = np.random.uniform(size=(2))
-        bc1 = mp.point_measure.barcode_from_rank_sm(rank_sm, bp,d)
+        bc1 = mp.point_measure.barcode_from_rank_sm(rank_sm, bp, d)
         bc2 = s.persistence_on_line(bp, d)[degree]
         # assert_sm(bc1,bc2, max_error=.1)
-        assert np.isclose(wasserstein_distance(bc1,bc2),0)
+        assert np.isclose(wasserstein_distance(bc1, bc2), 0)

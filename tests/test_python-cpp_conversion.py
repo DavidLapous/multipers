@@ -1,7 +1,7 @@
-import numpy as np
-import multipers as mp
 import gudhi as gd
+import numpy as np
 
+import multipers as mp
 
 mp.simplex_tree_multi.SAFE_CONVERSION = False
 
