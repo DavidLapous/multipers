@@ -26,7 +26,8 @@ Then clone the repository and pip install it.
   cd multipers
   python setup.py build_ext -j4 --inplace # this may take some time
   pip install --no-build-isolation .
-  pytest multipers # optional, does test some functions
+  # tests
+  for f in tests/test_*.py; do pytest "$f" || break; done
 
 
 **Note:** You can also tune the compilation flags in the `setup.py` file. 
@@ -36,10 +37,11 @@ the `aligned-new` compiler optimization is enabled; in that case, please disable
 
 .. code-block:: python
 
-      # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
+  # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
 
 External libraries
 ******************
+
 Some external library may be needed to be compiled from sources, e.g., `mpfree`, `function_delaunay`.
 The easiest way to deal with those is to compile them in a proper conda environment, and put it in this conda environment.
 
@@ -47,23 +49,23 @@ In the same conda environment as above, execute
 
 .. code-block:: bash
    
-   # more dependencies are needed
-   conda install llvm-openmp cgal cgal-cpp gmp mpfr eigen cmake -c conda-forge
+  # more dependencies are needed
+  conda install llvm-openmp cgal cgal-cpp gmp mpfr eigen cmake -c conda-forge
 
-   # mpfree
-   git clone https://bitbucket.org/mkerber/mpfree/
-   cd mpfree
-   cmake .
-   make
-   cp mpfree $CONDA_PREFIX/bin/
-   cd .. 
-   
-   # function_delaunay
-   git clone https://bitbucket.org/mkerber/function_delaunay/
-   cd function_delaunay
-   sed -i "8i find_package(Eigen3 3.3 REQUIRED NO_MODULE)\nlink_libraries(Eigen3::Eigen)\n" CMakeLists.txt
-   cmake .
-   make
-   cp main $CONDA_PREFIX/bin/function_delaunay
-   cd ..
+  # mpfree
+  git clone https://bitbucket.org/mkerber/mpfree/
+  cd mpfree
+  cmake .
+  make
+  cp mpfree $CONDA_PREFIX/bin/
+  cd .. 
+  
+  # function_delaunay
+  git clone https://bitbucket.org/mkerber/function_delaunay/
+  cd function_delaunay
+  sed -i "8i find_package(Eigen3 3.3 REQUIRED NO_MODULE)\nlink_libraries(Eigen3::Eigen)\n" CMakeLists.txt
+  cmake .
+  make
+  cp main $CONDA_PREFIX/bin/function_delaunay
+  cd ..
 
