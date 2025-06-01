@@ -2,12 +2,15 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import ArrayLike
 
 try:
     import torch
+
     istensor = torch.is_tensor
 except ImportError:
     istensor = lambda x: False
+
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
     rectangle = np.asarray(rectangle)
@@ -137,7 +140,9 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
             else:
                 pts_ = pts
             threshold = np.max(np.ma.masked_invalid(pts_), axis=0)
-        threshold = np.max([threshold, [plt.gca().get_xlim()[1], plt.gca().get_ylim()[1]]], axis=0)
+        threshold = np.max(
+            [threshold, [plt.gca().get_xlim()[1], plt.gca().get_ylim()[1]]], axis=0
+        )
     if isinstance(pts, np.ndarray):
         pass
     else:
@@ -255,7 +260,7 @@ def plot2d_PyModule(
     dimension=-1,
     separated=False,
     min_persistence=0,
-    alpha=.8,
+    alpha=0.8,
     verbose=False,
     save=False,
     dpi=200,
@@ -341,3 +346,84 @@ def plot2d_PyModule(
         if dimension >= 0:
             plt.title(rf"$H_{dimension}$ $2$-persistence")
     return
+
+
+def plot_simplicial_complex(
+    st, pts: ArrayLike, x: float, y: float, mma=None, degree=None
+):
+    """
+    Scatters the points, with the simplices in the filtration at coordinates (x,y).
+    if an mma module is given, plots it in a second axis
+    """
+    if mma is not None:
+        fig, (a, b) = plt.subplots(ncols=2, figsize=(15, 5))
+        plt.sca(a)
+        plot_simplicial_complex(st, pts, x, y)
+        plt.sca(b)
+        mma.plot(degree=degree)
+        box = mma.get_box()
+        a, b, c, d = box.ravel()
+        mma.plot(degree=1, min_persistence=0.01)
+        plt.vlines(x, b, d, color="k", linestyle="--")
+        plt.hlines(y, a, c, color="k", linestyle="--")
+        plt.scatter([x], [y], c="r", zorder=10)
+        plt.text(x + 0.01 * (b - a), y + 0.01 * (d - c), f"({x},{y})")
+        return
+
+    pts = np.asarray(pts)
+    values = np.array([-f[1] for s, f in st.get_skeleton(0)])
+    qs = np.quantile(values, np.linspace(0, 1, 100))
+    color_idx = lambda d: np.searchsorted(qs, d) / 100
+
+    from matplotlib.pyplot import get_cmap
+
+    color = lambda d: get_cmap("viridis")([0, color_idx(d), 1])[1]
+    cols_pc = np.asarray([color(v) for v in values])
+    ax = plt.gca()
+    for s, f in st:  ## simplexe, filtration
+        density = -f[1]
+        if len(s) <= 1 or f[0] > x or density < -y:  ## simplexe  = point
+            continue
+        if len(s) == 2:  ## simplexe = segment
+            xx = np.array([pts[a, 0] for a in s])
+            yy = np.array([pts[a, 1] for a in s])
+            plt.plot(xx, yy, c=color(density), alpha=1, zorder=10 * density, lw=1.5)
+        if len(s) == 3:  ## simplexe = triangle
+            xx = np.array([pts[a, 0] for a in s])
+            yy = np.array([pts[a, 1] for a in s])
+            _c = color(density)
+            ax.fill(xx, yy, c=_c, alpha=0.3, zorder=0)
+    out = plt.scatter(pts[:, 0], pts[:, 1], c=cols_pc, zorder=10, s=10)
+    ax.set_aspect(1)
+    return out
+
+
+def plot_point_cloud(pts, function, x, y, mma=None, degree=None):
+    if mma is not None:
+        fig, (a, b) = plt.subplots(ncols=2, figsize=(15, 5))
+        plt.sca(a)
+        plot_point_cloud(pts, function, x, y)
+        plt.sca(b)
+        mma.plot(degree=degree)
+        box = mma.get_box()
+        a, b, c, d = box.ravel()
+        mma.plot(degree=1, min_persistence=0.01)
+        plt.vlines(x, b, d, color="k", linestyle="--")
+        plt.hlines(y, a, c, color="k", linestyle="--")
+        plt.scatter([x], [y], c="r", zorder=10)
+        plt.text(x + 0.01 * (b - a), y + 0.01 * (d - c), f"({x},{y})")
+        return
+    values = 1 - function
+    qs = np.quantile(values, np.linspace(0, 1, 100))
+    color_idx = lambda d: np.searchsorted(qs, d) / 100
+    from matplotlib.pyplot import get_cmap
+    from matplotlib.collections import PatchCollection
+
+    color = lambda d: get_cmap("viridis")([0, color_idx(d), 1])[1]
+    ax = plt.gca()
+    idx = function <= y
+    circles = [plt.Circle(pt, x, color=color(c)) for pt, c in zip(pts[idx], function)]
+    pc = PatchCollection(circles, alpha=0.3)
+    ax.add_collection(pc)
+    plt.scatter(*pts.T, c=-function, s=20)
+    ax.set_aspect(1)
