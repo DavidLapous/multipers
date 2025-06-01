@@ -972,7 +972,16 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             out = self.get_ptr().get_edge_list()
         return out
 
-    def collapse_edges(self, int num=1, int max_dimension = 0, bool progress=False, bool strong=True, bool full=False, bool ignore_warning=False)->SimplexTreeMulti_{{FSHORT}}:
+    def collapse_edges(
+            self,
+            int num=1,
+            int max_dimension = 0,
+            bool progress=False,
+            bool strong=True,
+            bool full=False,
+            bool ignore_warning=False,
+            bool auto_clean=True,
+        )->SimplexTreeMulti_{{FSHORT}}:
         """Edge collapse for 1-critical 2-parameter clique complex (see https://arxiv.org/abs/2211.05574).
         It uses the code from the github repository https://github.com/aj-alonso/filtration_domination .
 
@@ -1022,7 +1031,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         edges = _collapse_edge_list(edges, num=num, full=full, strong=strong, progress=progress)
         # Retrieves the collapsed simplicial complex
         self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
-        if self.is_squeezed:
+        if self.is_squeezed and auto_clean:
             self._clean_filtration_grid()
         return self
 
@@ -1319,10 +1328,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self,
             filtration_grid:np.ndarray|list|None=None,
             bool coordinate_values=True,
-            force=False,
-            strategy:_available_strategies = "exact",
+            bool force=False,
+            str strategy:_available_strategies = "exact",
             grid_strategy=None,
-            inplace=False,
+            bool inplace=False,
             **filtration_grid_kwargs
         )->SimplexTreeMulti_{{FSHORT[:-3] + "i32"}} | SimplexTreeMulti_{{FSHORT}}:
         """

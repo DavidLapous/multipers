@@ -818,6 +818,7 @@ def minimal_presentation(
         dtype:type|_valid_dtypes=None,
         int n_jobs = -1,
         bool force=False,
+        bool auto_clean = True,
         **minpres_kwargs
         ):
     """
@@ -856,7 +857,7 @@ def minimal_presentation(
 
     new_slicer.minpres_degree = degree
     new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-    if new_slicer.is_squeezed:
+    if new_slicer.is_squeezed and auto_clean:
         new_slicer = new_slicer._clean_filtration_grid()
     return new_slicer
 
