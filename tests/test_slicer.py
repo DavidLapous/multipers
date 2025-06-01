@@ -315,6 +315,7 @@ def test_clean_filtration_grid():
     st.expansion(2)
     s = [len(f) for f in st.filtration_grid]
     st2 = st.copy()
+    st2._clean_filtration_grid()
     s2 = [len(f) for f in st2.filtration_grid]
     assert s2[0] < s[0] and s2[1] <= s[1]
     (sm1,) = mp.signed_measure(st, degree=1)
@@ -322,7 +323,8 @@ def test_clean_filtration_grid():
     assert_sm(sm1, sm2)
 
     s = mp.Slicer(st)
-    s2 = mp.Slicer(st)._clean_filtration_grid()
+    s2 = mp.Slicer(st)
+    s2._clean_filtration_grid()
     a = [len(f) for f in s.filtration_grid]
     b = [len(f) for f in s2.filtration_grid]
     assert b[0] < a[0] and b[1] <= a[1]
