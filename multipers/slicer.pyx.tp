@@ -856,6 +856,8 @@ def minimal_presentation(
 
     new_slicer.minpres_degree = degree
     new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+    if new_slicer.is_squeezed:
+        new_slicer = new_slicer._clean_filtration_grid()
     return new_slicer
 
 

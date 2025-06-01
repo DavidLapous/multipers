@@ -1022,6 +1022,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         edges = _collapse_edge_list(edges, num=num, full=full, strong=strong, progress=progress)
         # Retrieves the collapsed simplicial complex
         self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
+        if self.is_squeezed:
+            self._clean_filtration_grid()
         return self
 
     @cython.inline
