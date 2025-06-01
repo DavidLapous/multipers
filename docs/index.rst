@@ -136,6 +136,7 @@ For theoretical references,
 .. toctree::
   :caption: Differentiation
 
+  notebooks/differentiability_by_hand
   notebooks/rips_density_autodiff
   notebooks/graph_autodiff
 
