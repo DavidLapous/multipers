@@ -779,9 +779,9 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
-    from multipers.io import _check_available, function_delaunay_presentation_to_slicer
+    from multipers.io import function_delaunay_presentation_to_slicer, _init_external_softwares
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    assert _check_available("function_delaunay"), f"Could not find function_delaunay"
+    _init_external_softwares(requires=["function_delaunay"])
     function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
