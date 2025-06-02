@@ -167,6 +167,8 @@ extensions = [
         language="c++",
         extra_compile_args=[
             "-O3",  # -Ofast disables infinity values for filtration values
+            "-fassociative-math",
+            "-funsafe-math-optimizations",
             # "-g",
             # "-march=native",
             "/std:c++20" if platform.system() == "Windows" else "-std=c++20",
