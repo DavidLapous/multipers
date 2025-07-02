@@ -37,3 +37,7 @@ def api_from_tensors(*args):
     if is_torch:
         return torchapi
     raise ValueError(f"Incompatible types got {[type(x) for x in args]=}.")
+
+def to_numpy(x):
+    api = api_from_tensor(x)
+    return api.asnumpy(x)

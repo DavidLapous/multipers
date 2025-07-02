@@ -3,13 +3,9 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
+from warnings import warn
+from multipers.array_api import to_numpy
 
-try:
-    import torch
-
-    istensor = torch.is_tensor
-except ImportError:
-    istensor = lambda x: False
 
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
@@ -124,11 +120,8 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
     else:
         plt.sca(ax)
     pts, weights = signed_measure
-    if istensor(pts):
-        pts = pts.detach().numpy()
-    if istensor(weights):
-        weights = weights.detach().numpy()
-    pts = np.asarray(pts)
+    pts = to_numpy(pts)
+    weights = to_numpy(weights)
     num_pts = pts.shape[0]
     num_parameters = pts.shape[1]
     if threshold is None:
@@ -143,15 +136,6 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
         threshold = np.max(
             [threshold, [plt.gca().get_xlim()[1], plt.gca().get_ylim()[1]]], axis=0
         )
-    if isinstance(pts, np.ndarray):
-        pass
-    else:
-        import torch
-
-        if isinstance(pts, torch.Tensor):
-            pts = pts.detach().numpy()
-        else:
-            raise Exception("Invalid measure type.")
 
     assert num_parameters in (2, 4)
     if num_parameters == 2:
@@ -222,9 +206,9 @@ def plot_surface(
 
 def plot_surfaces(HF, size=4, **plt_args):
     grid, hf = HF
-    assert (
-        hf.ndim == 3
-    ), f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
+    assert hf.ndim == 3, (
+        f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
+    )
     num_degrees = hf.shape[0]
     fig, axes = plt.subplots(
         nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
@@ -260,7 +244,7 @@ def plot2d_PyModule(
     dimension=-1,
     separated=False,
     min_persistence=0,
-    alpha=0.8,
+    alpha=None,
     verbose=False,
     save=False,
     dpi=200,
@@ -278,12 +262,14 @@ def plot2d_PyModule(
 
         shapely = True and shapely
     except ImportError:
-        from warnings import warn
-
         shapely = False
         warn(
             "Shapely not installed. Fallbacking to matplotlib. The plots may be inacurate."
         )
+    if alpha is None:
+        alpha = 0.8 if shapely else 1
+    if not shapely and alpha != 1:
+        warn("Opacity without shapely will lead to incorect plots.")
     cmap = (
         matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
     )
@@ -373,22 +359,26 @@ def plot_simplicial_complex(
     pts = np.asarray(pts)
     values = np.array([-f[1] for s, f in st.get_skeleton(0)])
     qs = np.quantile(values, np.linspace(0, 1, 100))
-    color_idx = lambda d: np.searchsorted(qs, d) / 100
+
+    def color_idx(d):
+        return np.searchsorted(qs, d) / 100
 
     from matplotlib.pyplot import get_cmap
 
-    color = lambda d: get_cmap("viridis")([0, color_idx(d), 1])[1]
+    def color(d):
+        return get_cmap("viridis")([0, color_idx(d), 1])[1]
+
     cols_pc = np.asarray([color(v) for v in values])
     ax = plt.gca()
-    for s, f in st:  ## simplexe, filtration
+    for s, f in st:  # simplexe, filtration
         density = -f[1]
-        if len(s) <= 1 or f[0] > x or density < -y:  ## simplexe  = point
+        if len(s) <= 1 or f[0] > x or density < -y:  # simplexe  = point
             continue
-        if len(s) == 2:  ## simplexe = segment
+        if len(s) == 2:  # simplexe = segment
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])
             plt.plot(xx, yy, c=color(density), alpha=1, zorder=10 * density, lw=1.5)
-        if len(s) == 3:  ## simplexe = triangle
+        if len(s) == 3:  # simplexe = triangle
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])
             _c = color(density)
@@ -415,11 +405,16 @@ def plot_point_cloud(pts, function, x, y, mma=None, degree=None):
         return
     values = 1 - function
     qs = np.quantile(values, np.linspace(0, 1, 100))
-    color_idx = lambda d: np.searchsorted(qs, d) / 100
+
+    def color_idx(d):
+        return np.searchsorted(qs, d) / 100
+
     from matplotlib.pyplot import get_cmap
     from matplotlib.collections import PatchCollection
 
-    color = lambda d: get_cmap("viridis")([0, color_idx(d), 1])[1]
+    def color(d):
+        return get_cmap("viridis")([0, color_idx(d), 1])[1]
+
     ax = plt.gca()
     idx = function <= y
     circles = [plt.Circle(pt, x, color=color(c)) for pt, c in zip(pts[idx], function)]
