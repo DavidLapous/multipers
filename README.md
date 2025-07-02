@@ -26,6 +26,11 @@ or
 ```sh
 conda install multipers -c conda-forge
 ```
+Pre-releases are available via
+```sh
+pip install --pre multipers
+```
+These release usually contain small bugfixes or unstable new features.
 
 Windows support is experimental, and some core dependencies are not available on Windows.
 We hence recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/).
