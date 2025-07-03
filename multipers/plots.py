@@ -1,11 +1,11 @@
 from typing import Optional
+from warnings import warn
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
-from warnings import warn
-from multipers.array_api import to_numpy
 
+from multipers.array_api import to_numpy
 
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
@@ -206,9 +206,9 @@ def plot_surface(
 
 def plot_surfaces(HF, size=4, **plt_args):
     grid, hf = HF
-    assert hf.ndim == 3, (
-        f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
-    )
+    assert (
+        hf.ndim == 3
+    ), f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
     num_degrees = hf.shape[0]
     fig, axes = plt.subplots(
         nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
@@ -388,7 +388,19 @@ def plot_simplicial_complex(
     return out
 
 
-def plot_point_cloud(pts, function, x, y, mma=None, degree=None):
+def plot_point_cloud(
+    pts,
+    function,
+    x,
+    y,
+    mma=None,
+    degree=None,
+    ball_alpha=0.3,
+    point_cmap="viridis",
+    color_bias=1,
+    ball_color=None,
+    point_size=20,
+):
     if mma is not None:
         fig, (a, b) = plt.subplots(ncols=2, figsize=(15, 5))
         plt.sca(a)
@@ -403,22 +415,23 @@ def plot_point_cloud(pts, function, x, y, mma=None, degree=None):
         plt.scatter([x], [y], c="r", zorder=10)
         plt.text(x + 0.01 * (b - a), y + 0.01 * (d - c), f"({x},{y})")
         return
-    values = 1 - function
+    values = -function
     qs = np.quantile(values, np.linspace(0, 1, 100))
 
     def color_idx(d):
-        return np.searchsorted(qs, d) / 100
+        return np.searchsorted(qs, d * color_bias) / 100
 
-    from matplotlib.pyplot import get_cmap
     from matplotlib.collections import PatchCollection
+    from matplotlib.pyplot import get_cmap
 
     def color(d):
-        return get_cmap("viridis")([0, color_idx(d), 1])[1]
+        return get_cmap(point_cmap)([0, color_idx(d), 1])[1]
 
+    _colors = np.array([color(v) for v in values])
     ax = plt.gca()
     idx = function <= y
-    circles = [plt.Circle(pt, x, color=color(c)) for pt, c in zip(pts[idx], function)]
-    pc = PatchCollection(circles, alpha=0.3)
+    circles = [plt.Circle(pt, x) for pt, c in zip(pts[idx], function)]
+    pc = PatchCollection(circles, alpha=ball_alpha, color=ball_color)
     ax.add_collection(pc)
-    plt.scatter(*pts.T, c=-function, s=20)
+    plt.scatter(*pts.T, c=_colors, s=point_size)
     ax.set_aspect(1)
