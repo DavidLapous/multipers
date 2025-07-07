@@ -758,6 +758,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 ) = self._get_filtration_bounds(X, axis=ax)
                 self._filtrations_bounds.append(filtration_bounds)
                 self._normalization_factors.append(normalization_factors)
+            self._filtrations_bounds = self._backend.astensor(self._filtrations_bounds)
+            self._normalization_factors = self._backend.astensor(self._normalization_factors)
             # else:
             #     (
             #         self._filtrations_bounds,
@@ -782,9 +784,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             ]
             # axis, filtration_values
             filtration_values = [
-                compute_grid(
+                self._backend.astensor(compute_grid(
                     f_ax.T, resolution=self.resolution, strategy=self.grid_strategy
-                )
+                ))
                 for f_ax in filtration_values
             ]
             self._infered_grids = filtration_values
