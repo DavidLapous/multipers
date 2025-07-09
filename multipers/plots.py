@@ -1,11 +1,24 @@
 from typing import Optional
 from warnings import warn
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import ListedColormap
 from numpy.typing import ArrayLike
 
 from multipers.array_api import to_numpy
+
+_custom_colors = [
+    "#03045e",
+    "#0077b6",
+    "#00b4d8",
+    "#90e0ef",
+]
+_cmap = ListedColormap(_custom_colors)
+_continuous_cmap = mcolors.LinearSegmentedColormap.from_list(
+    "continuous_cmap", _cmap.colors, N=256
+)
 
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
@@ -185,7 +198,7 @@ def plot_surface(
         if discrete_surface:
             cmap = matplotlib.colormaps["gray_r"]
         else:
-            cmap = matplotlib.colormaps["plasma"]
+            cmap = _cmap
     if discrete_surface:
         if has_negative_values:
             bounds = np.arange(-5, 6, 1, dtype=int)
