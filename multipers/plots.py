@@ -200,7 +200,7 @@ def plot_surface(
         )
         cbar.set_ticks(ticks=bounds, labels=bounds)
         return im
-    im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
+    im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
     return im
 
 

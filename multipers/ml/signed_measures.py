@@ -850,7 +850,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
         if self.flatten:
             out = np.concatenate(out).flatten()
-        if self.axis == -1:
+        elif self.axis == -1:
             return np.asarray(out)
         else:
             return np.asarray(out)[0]
