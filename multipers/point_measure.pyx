@@ -11,6 +11,7 @@ from collections import defaultdict
 cnp.import_array()
 from scipy import sparse
 
+from multipers.array_api import api_from_tensor
 
 import multipers.grids as mpg
 
@@ -29,7 +30,6 @@ ctypedef fused some_float:
 
 import cython
 cimport cython
-
 
 
 # from scipy.sparse import coo_array
@@ -169,7 +169,7 @@ def sparsify(x):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def clean_signed_measure(some_float[:,:] pts, some_int[:] weights, dtype = np.float32):
+def clean_signed_measure_old(some_float[:,:] pts, some_int[:] weights, dtype = np.float32):
     """
     Sum the diracs at the same locations. i.e.,
     returns the minimal sized measure to represent the input.
@@ -189,6 +189,14 @@ def clean_signed_measure(some_float[:,:] pts, some_int[:] weights, dtype = np.fl
     new_pts = new_pts[idx]
     new_weights = new_weights[idx]
     return (new_pts, new_weights)
+
+def clean_signed_measure(pts, w, dtype=np.int32):
+    api = api_from_tensor(pts)
+    _, idx, inv = np.unique(api.asnumpy(pts), return_index=True, return_inverse=True, axis=0)
+    new_w = np.bincount(inv, weights=w).astype(w.dtype)
+    pts, w = pts[idx], new_w
+    idx = w!=0
+    return pts[idx],w[idx]
 
 def clean_sms(sms):
     """
