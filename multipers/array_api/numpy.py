@@ -17,6 +17,7 @@ zeros = _np.zeros
 min = _np.min
 max = _np.max
 repeat_interleave = _np.repeat
+cdist = cdist  # type: ignore[no-redef]
 
 
 def minvalues(x: _np.ndarray, **kwargs):
