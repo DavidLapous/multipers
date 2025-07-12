@@ -3,7 +3,6 @@ from typing import Optional, Union
 
 import numpy as np
 
-import multipers as mp
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
 from multipers.point_measure import clean_sms, zero_out_sms

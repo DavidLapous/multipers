@@ -334,7 +334,7 @@ def estimate_rank_from_rank_sm(sm:tuple, a, b)->np.int64:
 
 def rectangle_to_hook_minimal_signed_barcode(pts,w,):
     if pts.shape[1] != 4:
-        raise UnimplementedError(
+        raise NotImplementedError(
             "Only works for 2-parameter persistence modules for the moment."
         )
     api = api_from_tensor(pts)
