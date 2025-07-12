@@ -16,6 +16,7 @@ no_grad = nullcontext
 zeros = _np.zeros
 min = _np.min
 max = _np.max
+repeat_interleave = _np.repeat
 
 
 def minvalues(x: _np.ndarray, **kwargs):

@@ -13,6 +13,7 @@ cdist = _t.cdist
 zeros = _t.zeros
 min = _t.min
 max = _t.max
+repeat_interleave = _t.repeat_interleave
 
 
 def minvalues(x: _t.Tensor, **kwargs):

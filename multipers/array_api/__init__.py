@@ -1,6 +1,7 @@
-def api_from_tensor(x, *, verbose: bool = False):
-    import multipers.array_api.numpy as npapi
+import multipers.array_api.numpy as npapi
 
+
+def api_from_tensor(x, *, verbose: bool = False):
     if npapi.is_promotable(x):
         if verbose:
             print("using numpy backend")
@@ -37,6 +38,7 @@ def api_from_tensors(*args):
     if is_torch:
         return torchapi
     raise ValueError(f"Incompatible types got {[type(x) for x in args]=}.")
+
 
 def to_numpy(x):
     api = api_from_tensor(x)
