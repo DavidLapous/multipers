@@ -84,7 +84,7 @@ def _plot_signed_measure_4(
     pts = np.clip(pts, a_min=-np.inf, a_max=np.array((*threshold, *threshold))[None, :])
     alpha_rescaling = 0
     for rectangle, weight in zip(pts, weights):
-        if rectangle[2] > x_smoothing * rectangle[0]:
+        if rectangle[2] >= x_smoothing * rectangle[0]:
             alpha_rescaling = max(
                 alpha_rescaling,
                 (rectangle[2] / x_smoothing - rectangle[0])
@@ -93,7 +93,7 @@ def _plot_signed_measure_4(
     # draw the rectangles
     for rectangle, weight in zip(pts, weights):
         # draw only the rectangles that have not been reduced to the empty set
-        if rectangle[2] > x_smoothing * rectangle[0]:
+        if rectangle[2] >= x_smoothing * rectangle[0]:
             # make the alpha channel proportional to the rectangle's area
             if area_alpha:
                 _plot_rectangle(

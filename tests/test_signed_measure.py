@@ -89,3 +89,70 @@ def test_rank(degree):
         bc2 = s.persistence_on_line(bp, d)[degree]
         # assert_sm(bc1,bc2, max_error=.1)
         assert np.isclose(wasserstein_distance(bc1, bc2), 0)
+
+
+def test_hook_decomposition():
+    from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
+
+    B = [[], [0]]
+    D = [0, 1]
+    F = [[0, 0], [1, 1]]
+    s = mp.Slicer(return_type_only=True)(B, D, F)
+    (sm_rank,) = mp.signed_measure(
+        s,
+        invariant="rank",
+        degree=0,
+    )
+    sm_hook = rectangle_to_hook_minimal_signed_barcode(*sm_rank)
+    pts_hook, w_hook = sm_hook
+    assert np.array_equal(pts_hook, [[0, 0, 1, 1]]), pts_hook
+    assert np.array_equal(w_hook, [1]), w_hook
+    B = [[], [0], [0]]
+    D = [0, 1, 1]
+    F = [[0, 0], [1, 0], [0, 1]]
+    s = mp.Slicer(return_type_only=True)(B, D, F)
+    (sm_rank,) = mp.signed_measure(
+        s,
+        invariant="rank",
+        degree=0,
+    )
+    sm_hook = rectangle_to_hook_minimal_signed_barcode(*sm_rank)
+    pts_hook, w_hook = sm_hook
+    assert np.array_equal(
+        pts_hook, [[0, 0, 0, 1], [0, 0, 1, 0], [0, 0, 1, 1]]
+    ), pts_hook
+    assert np.array_equal(w_hook, [1, 1, -1]), w_hook
+
+    B = [
+        [],
+        [0],
+    ]
+    D = [
+        0,
+        1,
+    ]
+    F = [[0, 0], [1, 0]]
+    s = mp.Slicer(return_type_only=True)(B, D, F)
+    (sm_rank,) = mp.signed_measure(
+        s,
+        invariant="rank",
+        degree=0,
+    )
+    sm_hook = rectangle_to_hook_minimal_signed_barcode(*sm_rank)
+    pts_hook, w_hook = sm_hook
+    assert np.array_equal(pts_hook, [[0, 0, 1, 0]]), pts_hook
+    assert np.array_equal(w_hook, [1]), w_hook
+
+    B = [[], [0]]
+    D = [0, 1]
+    F = [[0, 0], [0, 1]]
+    s = mp.Slicer(return_type_only=True)(B, D, F)
+    (sm_rank,) = mp.signed_measure(
+        s,
+        invariant="rank",
+        degree=0,
+    )
+    sm_hook = rectangle_to_hook_minimal_signed_barcode(*sm_rank)
+    pts_hook, w_hook = sm_hook
+    assert np.array_equal(pts_hook, [[0, 0, 0, 1]]), pts_hook
+    assert np.array_equal(w_hook, [1]), w_hook

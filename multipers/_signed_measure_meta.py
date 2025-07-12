@@ -31,7 +31,7 @@ def signed_measure(
     verbose: bool = False,
     n_jobs: int = -1,
     expand_collapse: bool = False,
-    backend: Optional[str] = None, # deprecated
+    backend: Optional[str] = None,  # deprecated
     grid: Optional[Iterable] = None,
     coordinate_measure: bool = False,
     num_collapses: int = 0,  # TODO : deprecate
@@ -99,12 +99,21 @@ def signed_measure(
      - Rank: Same as Hilbert.
     """
     if backend is not None:
-        raise ValueError("backend is deprecated. reduce the complex before this function.")
-    if num_collapses >0:
-        raise ValueError("num_collapses is deprecated. reduce the complex before this function.")
+        raise ValueError(
+            "backend is deprecated. reduce the complex before this function."
+        )
+    if num_collapses > 0:
+        raise ValueError(
+            "num_collapses is deprecated. reduce the complex before this function."
+        )
     ## TODO : add timings in verbose
     if len(filtered_complex) == 0:
-        return [(np.empty((0,2), dtype=filtered_complex.dtype), np.empty(shape=(0,), dtype=int))]
+        return [
+            (
+                np.empty((0, 2), dtype=filtered_complex.dtype),
+                np.empty(shape=(0,), dtype=int),
+            )
+        ]
     if grid_conversion is not None:
         grid = tuple(f for f in grid_conversion)
         raise DeprecationWarning(
@@ -134,6 +143,8 @@ def signed_measure(
         "rank",
         "euler_characteristic",
         "hilbert_function",
+        "rectangle",
+        "hook",
     ]
 
     assert (
@@ -256,7 +267,7 @@ def signed_measure(
         #         if verbose:
         #             print("Done.")
         else:  # No backend
-            if invariant is not None and "rank" in invariant:
+            if invariant is not None and ("rank" in invariant or "hook" in invariant or "rectangle" in invariant):
                 degrees = np.asarray(degrees, dtype=int)
                 if verbose:
                     print("Computing rank...", end="")
@@ -269,6 +280,10 @@ def signed_measure(
                     ignore_inf=ignore_infinite_filtration_values,
                 )
                 fix_mass_default = False
+
+                if "hook" in invariant:
+                    from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
+                    sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
                 if verbose:
                     print("Done.")
             elif filtered_complex_.is_minpres:
@@ -315,7 +330,7 @@ def signed_measure(
         if verbose:
             print("Input is a simplextree.")
         ## we still have a simplextree here
-        if invariant in ["rank_invariant", "rank"]:
+        if invariant in ["rank_invariant", "rank", "hook", "rectangle"]:
             if verbose:
                 print("Computing rank invariant...", end="")
             assert (
@@ -331,6 +346,9 @@ def signed_measure(
                 expand_collapse=expand_collapse,
             )
             fix_mass_default = False
+            if "hook" in invariant:
+                from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
+                sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
             if verbose:
                 print("Done.")
         elif len(degrees) == 1 and degrees[0] is None:

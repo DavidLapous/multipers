@@ -332,3 +332,64 @@ def estimate_rank_from_rank_sm(sm:tuple, a, b)->np.int64:
     return w[idx].sum()
 
 
+def rectangle_to_hook_minimal_signed_barcode(pts,w,):
+    if pts.shape[1] != 4:
+        raise UnimplementedError(
+            "Only works for 2-parameter persistence modules for the moment."
+        )
+    api = api_from_tensor(pts)
+    pts = api.astensor(pts)
+    w = np.asarray(w)
+    ## [a,b], [a, a0b1], [a,b0a1], proj, V,H 
+
+    projectives_idx = (pts[:,3] == np.inf) * (pts[:,2] == np.inf)
+    pts_proj = pts[projectives_idx]
+    w_proj = w[projectives_idx]
+    pts = pts[~projectives_idx]
+    w = w[~projectives_idx]
+    # print("projectives:", pts_proj)
+    
+    vert_blocks_idx = pts[:,3] == np.inf
+    pts_V = pts[vert_blocks_idx]
+    w_V = w[vert_blocks_idx]
+    pts_V[:,3] = pts_V[:,1]
+    pts = pts[~vert_blocks_idx]
+    w = w[~vert_blocks_idx]
+    # print("vertical:", pts_V)
+
+    h_idx = pts[:,2] == np.inf
+    pts_H = pts[h_idx]
+    w_H = w[h_idx]
+    pts_H[:,2] = pts_H[:,0]
+    pts = pts[~h_idx]
+    w = w[~h_idx]
+    # print("horizontal:", pts_H)
+    
+    
+    new_w = api.cat([-w, w, w,  w_proj,w_V,w_H])
+    
+    pts_b0a1 = api.tensor(pts)
+    pts_b0a1[:,3] = pts[:,1]
+    pts_a0b1 = api.tensor(pts)
+    pts_a0b1[:,2] = pts[:,0]
+    
+    new_pts = api.cat([
+        pts,
+        pts_b0a1,
+        pts_a0b1,
+        pts_proj, 
+        pts_V,
+        pts_H
+    ], axis=0)
+    # pts,w = new_pts,new_w
+    pts,w = clean_signed_measure(new_pts,new_w)
+
+    # Everything infinite is handled separately anyway
+    # inf0 = pts[:,2] == np.inf
+    # inf1 = pts[:,3] == np.inf
+    # pts[inf0,3] = pts[inf0,1]
+    # pts[inf1,2] = pts[inf1,0]
+    # pts,w = clean_signed_measure(pts,w)  
+
+    return pts,w
+
