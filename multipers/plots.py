@@ -15,9 +15,9 @@ _custom_colors = [
     "#00b4d8",
     "#90e0ef",
 ]
-_cmap = ListedColormap(_custom_colors)
-_continuous_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "continuous_cmap", _cmap.colors, N=256
+_cmap_ = ListedColormap(_custom_colors)
+_cmap = mcolors.LinearSegmentedColormap.from_list(
+    "continuous_cmap", _cmap_.colors, N=256
 )
 
 
@@ -180,8 +180,9 @@ def plot_surface(
     fig=None,
     ax=None,
     cmap: Optional[str] = None,
-    discrete_surface=False,
-    has_negative_values=False,
+    discrete_surface: bool = False,
+    has_negative_values: bool = False,
+    contour: bool = True,
     **plt_args,
 ):
     import matplotlib
@@ -213,7 +214,12 @@ def plot_surface(
         )
         cbar.set_ticks(ticks=bounds, labels=bounds)
         return im
-    im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
+
+    if contour:
+        levels = locals().get("levels",20)
+        im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, levels=levels, **plt_args)
+    else:
+        im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
     return im
 
 
