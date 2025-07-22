@@ -81,6 +81,7 @@ jobs:
         micromamba install c-compiler cxx-compiler  -c conda-forge
 
     - name: compiler restrictions 
+      shell: bash -el {0}
       run: |
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
         micromamba install gcc=11 # Conda changed ? workaround
