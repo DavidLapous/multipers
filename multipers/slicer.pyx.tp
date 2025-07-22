@@ -785,7 +785,7 @@ def from_function_delaunay(
     function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
-    s = s.minpres(degree=degree, force=True)
+        s = s.minpres(degree=degree, force=True)
     return s
 
 def slicer2blocks(slicer, int degree = -1, bool reverse=True):
