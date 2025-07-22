@@ -1330,6 +1330,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             bool coordinate_values=True,
             bool force=False,
             str strategy:_available_strategies = "exact",
+            resolution:Optional[int|list[int]] = None,
+            bool coordinates = False,
             grid_strategy=None,
             bool inplace=False,
             **filtration_grid_kwargs
