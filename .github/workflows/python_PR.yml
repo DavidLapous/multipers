@@ -78,7 +78,13 @@ jobs:
         micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
-        micromamba install c-compiler=1.5 cxx-compiler=1.5 -c conda-forge
+        micromamba install c-compiler cxx-compiler  -c conda-forge
+
+    - name: compiler restrictions 
+      run: |
+        if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
+        micromamba install gcc=11 # Conda changed ? workaround
+        fi
 
     - name: (windows) add dlls
       if: ${{ matrix.os == 'windows-latest' }}
