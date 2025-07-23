@@ -18,6 +18,11 @@ min = _np.min
 max = _np.max
 repeat_interleave = _np.repeat
 cdist = cdist  # type: ignore[no-redef]
+unique = _np.unique
+
+
+def quantile_closest(x, q, axis=None):
+    return _np.quantile(x, q, axis=axis, interpolation="closest_observation")
 
 
 def minvalues(x: _np.ndarray, **kwargs):
