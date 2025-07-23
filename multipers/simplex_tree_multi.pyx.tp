@@ -1359,7 +1359,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
         #TODO : multi-critical
         if filtration_grid is None:  
-            filtration_grid = self.get_filtration_grid(grid_strategy=strategy, **filtration_grid_kwargs)
+            filtration_grid = self.get_filtration_grid(grid_strategy=strategy, resolution=resolution, **filtration_grid_kwargs)
         else:
             filtration_grid = sanitize_grid(filtration_grid)
             if len(filtration_grid) != self.num_parameters:
