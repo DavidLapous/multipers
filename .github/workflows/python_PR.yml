@@ -146,7 +146,7 @@ jobs:
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v4
       with:
-        name: compiled-sources-${{ matrix.os }}-${{ matrix.python-version }}
+        name: sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
     - name: tests
       shell: bash -el {0}
