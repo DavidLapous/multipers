@@ -78,8 +78,7 @@ jobs:
         micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
-        # use default compilers ?
-        # micromamba install c-compiler=1.6 cxx-compiler=1.6  -c conda-forge 
+        micromamba install c-compiler cxx-compiler  -c conda-forge 
 
     - name: (windows) add dlls
       if: ${{ matrix.os == 'windows-latest' }}
