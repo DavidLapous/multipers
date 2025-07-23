@@ -66,8 +66,9 @@ def RipsLowerstar(
         function = function[:, None]
     if function.ndim != 2:
         raise ValueError(
-            f"`function.ndim` should be 0 or 1 . Got {
-                function.ndim=}.{function=}"
+            f"""
+            `function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}
+            """
         )
     num_parameters = function.shape[1] + 1
     st = SimplexTreeMulti(st, num_parameters=num_parameters)
@@ -290,9 +291,10 @@ def CoreDelaunay(
         "safe",
         "exact",
         "fast",
-    ], (
-        f"The parameter precision must be one of ['safe', 'exact', 'fast'], got {precision}."
-    )
+    ], f"""
+    The parameter precision must be one of ['safe', 'exact', 'fast'],
+    got {precision}.
+    """
 
     if verbose:
         print(
@@ -340,9 +342,10 @@ def CoreDelaunay(
         num_simplices = len(vertex_array)
         if verbose:
             print(
-                f"Inserting {num_simplices} simplices of dimension {dim} ({
-                    num_simplices * len(ks)
-                } birth values)..."
+                f"""
+                Inserting {num_simplices} simplices of dimension {dim}
+                ({num_simplices * len(ks)} birth values)...
+                """
             )
         max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
         critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
