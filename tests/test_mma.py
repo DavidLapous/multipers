@@ -23,7 +23,7 @@ def test_img():
         box=[[0, 0, 0, 0], [5, 5, 5, 5]], max_error=1.0
     )
     img = mod.representation(resolution=6, kernel="linear")
-    assert np.isclose(img[0, 2, 3, 4, 5], 0.5)
+    assert np.isclose(img[0, 1, 2, 3, 4], 0.5)
     assert np.isclose(img[0, 1, 1, 1, 1], 0)
     assert np.isclose(img[0, 3, 4, 5, 5], 1)
 
