@@ -216,7 +216,7 @@ def plot_surface(
         return im
 
     if contour:
-        levels = plt_args.pop("levels", 20)
+        levels = plt_args.pop("levels", 50)
         im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, levels=levels, **plt_args)
     else:
         im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)

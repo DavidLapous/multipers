@@ -1,5 +1,6 @@
 import numpy as _np
 import torch as _t
+from pykeops.torch import LazyTensor
 
 backend = _t
 cat = _t.cat
@@ -15,6 +16,27 @@ zeros = _t.zeros
 min = _t.min
 max = _t.max
 repeat_interleave = _t.repeat_interleave
+linspace = _t.linspace
+cartesian_product = _t.cartesian_prod
+inf = _t.inf
+searchsorted = _t.searchsorted
+LazyTensor = LazyTensor  # type: ignore[no-redef]
+
+
+def from_numpy(x):
+    return _t.from_numpy(x)
+
+
+def ascontiguous(x):
+    return _t.as_tensor(x).contiguous()
+
+
+def device(x):
+    return x.device
+
+
+def sort(x, axis=-1):
+    return _t.sort(x, dim=axis).values
 
 
 # in our context, this allows to get a correct gradient.
@@ -28,10 +50,10 @@ def unique(x, assume_sorted=False, _mean=True):
     _, c = _t.unique(x, sorted=True, return_counts=True)
     if _mean:
         x = _t.segment_reduce(data=x, reduce="mean", lengths=c, unsafe=True, axis=0)
-        return x
-
-    c = _np.concatenate([[0], _np.cumsum(c[:-1])])
-    return x[c]
+    else:
+        c = _np.concatenate([[0], _np.cumsum(c[:-1])])
+        x = x[c]
+    return x
 
 
 def quantile_closest(x, q, axis=None):
@@ -48,6 +70,10 @@ def maxvalues(x: _t.Tensor, **kwargs):
 
 def asnumpy(x):
     return x.detach().numpy()
+
+
+def is_tensor(x):
+    return isinstance(x, _t.Tensor)
 
 
 def is_promotable(x):

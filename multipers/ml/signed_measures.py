@@ -9,10 +9,105 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from tqdm import tqdm
 
 import multipers as mp
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.filtrations.density import available_kernels, convolution_signed_measures
-from multipers.grids import compute_grid
+from multipers.grids import compute_grid, todense
 from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
+
+
+def batch_signed_measure_convolutions(
+    signed_measures,  # array of shape (num_data,num_pts,D)
+    x,  # array of shape (num_x, D) or (num_data, num_x, D)
+    bandwidth,  # either float or matrix if multivariate kernel
+    kernel: available_kernels,
+    api=None,
+):
+    """
+    Input
+    -----
+     - signed_measures: unragged, of shape (num_data, num_pts, D+1)
+       where last coord is weights, (0 for dummy points)
+     - x : the points to convolve (num_x,D)
+     - bandwidth : the bandwidths or covariance matrix inverse or ... of the kernel
+     - kernel : "gaussian", "multivariate_gaussian", "exponential", or Callable (x_i, y_i, bandwidth)->float
+
+    Output
+    ------
+    Array of shape (num_convolutions, (num_axis), num_data,
+    Array of shape (num_convolutions, (num_axis), num_data, max_x_size)
+    """
+    from multipers.filtrations.density import _kernel
+
+    if api is None:
+        api = api_from_tensors(signed_measures, x)
+    if signed_measures.ndim == 2:
+        signed_measures = signed_measures[None, :, :]
+    sms = signed_measures[..., :-1]
+    weights = signed_measures[..., -1]
+    _sms = api.LazyTensor(api.ascontiguous(sms[..., None, :]))
+    _x = api.ascontiguous(x[..., None, :, :])
+
+    sms_kernel = _kernel(kernel)(_sms, _x, bandwidth)
+    out = (sms_kernel * api.ascontiguous(weights[..., None, None])).sum(
+        signed_measures.ndim - 2
+    )
+    assert out.shape[-1] == 1, "Pykeops bug fixed, TODO : refix this "
+    out = out[..., 0]  ## pykeops bug + ensures its a tensor
+    # assert out.shape == (x.shape[0], x.shape[1]), f"{x.shape=}, {out.shape=}"
+    return out
+
+
+def sm2deep(signed_measure, api=None):
+    if api is None:
+        api = api_from_tensor(signed_measure[0])
+    dirac_positions, dirac_signs = signed_measure
+    dtype = dirac_positions.dtype
+    new_shape = list(dirac_positions.shape)
+    new_shape[1] += 1
+    c = api.empty(new_shape, dtype=dtype)
+    c[:, :-1] = dirac_positions
+    c[:, -1] = api.astensor(dirac_signs)
+    return c
+
+
+def deep_unrag(sms, api=None):
+    if api is None:
+        api = api_from_tensor(sms[0][0])
+    num_sm = len(sms)
+    if num_sm == 0:
+        return api.tensor([])
+    first = sms[0][0]
+    num_parameters = first.shape[1]
+    dtype = first.dtype
+    deep_sms = tuple(sm2deep(sm, api=api) for sm in sms)
+    max_num_pts = np.max([sm[0].shape[0] for sm in sms])
+    unragged_sms = api.zeros((num_sm, max_num_pts, num_parameters + 1), dtype=dtype)
+
+    for data in range(num_sm):
+        sm = deep_sms[data]
+        a, b = sm.shape
+        unragged_sms[data, :a, :b] = sm
+    return unragged_sms
+
+
+def sm_convolution(
+    sms,
+    grid,
+    bandwidth,
+    kernel: available_kernels = "gaussian",
+    plot: bool = False,
+    **plt_kwargs,
+):
+    dense_grid = todense(grid)
+    api = api_from_tensors(sms[0][0], dense_grid)
+    sms = deep_unrag(sms, api=api)
+    convs = batch_signed_measure_convolutions(
+        sms, dense_grid, bandwidth, kernel, api=api
+    ).reshape(sms.shape[0], *(len(g) for g in grid))
+    if plot:
+        from multipers.plots import plot_surfaces
+        plot_surfaces((grid, convs), **plt_kwargs)
+    return convs
 
 
 class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
@@ -547,27 +642,6 @@ def rescale_sparse_signed_measure(
     return out
 
 
-def sm2deep(signed_measure):
-    dirac_positions, dirac_signs = signed_measure
-    dtype = dirac_positions.dtype
-    new_shape = list(dirac_positions.shape)
-    new_shape[1] += 1
-    if isinstance(dirac_positions, np.ndarray):
-        c = np.empty(new_shape, dtype=dtype)
-        c[:, :-1] = dirac_positions
-        c[:, -1] = dirac_signs
-
-    else:
-        import torch
-
-        c = torch.empty(new_shape, dtype=dtype)
-        c[:, :-1] = dirac_positions
-        if isinstance(dirac_signs, np.ndarray):
-            dirac_signs = torch.from_numpy(dirac_signs)
-        c[:, -1] = dirac_signs
-    return c
-
-
 class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
     """
     Input
@@ -759,7 +833,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 self._filtrations_bounds.append(filtration_bounds)
                 self._normalization_factors.append(normalization_factors)
             self._filtrations_bounds = self._backend.astensor(self._filtrations_bounds)
-            self._normalization_factors = self._backend.astensor(self._normalization_factors)
+            self._normalization_factors = self._backend.astensor(
+                self._normalization_factors
+            )
             # else:
             #     (
             #         self._filtrations_bounds,
@@ -784,9 +860,11 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             ]
             # axis, filtration_values
             filtration_values = [
-                self._backend.astensor(compute_grid(
-                    f_ax.T, resolution=self.resolution, strategy=self.grid_strategy
-                ))
+                self._backend.astensor(
+                    compute_grid(
+                        f_ax.T, resolution=self.resolution, strategy=self.grid_strategy
+                    )
+                )
                 for f_ax in filtration_values
             ]
             self._infered_grids = filtration_values

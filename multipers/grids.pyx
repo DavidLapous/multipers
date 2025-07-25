@@ -168,39 +168,39 @@ def _compute_grid_numpy(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
+    api = api_from_tensors(filtrations_values)
     try:
         a,b=drop_quantiles
     except:
         a,b=drop_quantiles,drop_quantiles
 
     if a != 0 or b != 0:
-        boxes = np.asarray([np.quantile(filtration, [a, b], axis=1, method='closest_observation') for filtration in filtrations_values])
-        min_filtration, max_filtration = np.min(boxes, axis=(0,1)), np.max(boxes, axis=(0,1)) # box, birth/death, filtration
+        boxes = api.astensor([api.quantile_closest(filtration, [a, b], axis=1) for filtration in filtrations_values])
+        min_filtration, max_filtration = api.minvalues(boxes, axis=(0,1)), api.maxvalues(boxes, axis=(0,1)) # box, birth/death, filtration
         filtrations_values = [
                 filtration[(m<filtration) * (filtration <M)] 
                 for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
                 ]
 
-    to_unique = lambda f : np.unique(f) if isinstance(f,np.ndarray) else f.unique()
     ## match doesn't work with cython BUG
     if strategy == "exact":
-        F=tuple(to_unique(f) for f in filtrations_values)
+        F=tuple(api.unique(f) for f in filtrations_values)
     elif strategy == "quantile":
-        F = tuple(to_unique(f) for f in filtrations_values)
+        F = tuple(api.unique(f) for f in filtrations_values)
         max_resolution = [min(len(f),r) for f,r in zip(F,resolution)]
-        F = tuple( np.quantile(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0, method='closest_observation') for f,r in zip(F, resolution) )
+        F = tuple( api.quantile_closest(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
         if unique:
-            F = tuple(to_unique(f) for f in F)
+            F = tuple(api.unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
                 return _compute_grid_numpy(filtrations_values=filtrations_values, resolution=resolution, strategy="quantile",_q_factor=1.5*_q_factor)
     elif strategy == "regular":
-        F = tuple(np.linspace(np.min(f),np.max(f),num=r, dtype=np.asarray(f).dtype) for f,r in zip(filtrations_values, resolution))
+        F = tuple(_todo_regular(f,r,api) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_closest":
-        F = tuple(_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
+        F = tuple(_todo_regular_closest(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_left":
-        F = tuple(_todo_regular_left(f,r, unique) for f,r in zip(filtrations_values, resolution))
-    elif strategy == "torch_regular_closest":
-        F = tuple(_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
+        F = tuple(_todo_regular_left(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
+    # elif strategy == "torch_regular_closest":
+    #     F = tuple(_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "partition":
         F = tuple(_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "precomputed":
@@ -214,29 +214,71 @@ def _compute_grid_numpy(
 def todense(grid, bool product_order=False):
     if len(grid) == 0:
         return np.empty(0)
-    if not isinstance(grid[0], np.ndarray):
-        import torch
-        assert isinstance(grid[0], torch.Tensor)
-        from multipers.torch.diff_grids import todense
-        return todense(grid)
-    dtype = grid[0].dtype
-    if product_order:
-        return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
-    mesh = np.meshgrid(*grid)
-    coordinates = np.concatenate(tuple(stuff.ravel()[:,None] for stuff in mesh), axis=1, dtype=dtype)
-    return coordinates
+    api = api_from_tensors(grid)
+    # if product_order:
+    #     if not api.backend ==np:
+    #         raise NotImplementedError("only numpy here.")
+    #     return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
+    return api.cartesian_product(*grid)
+    # if not isinstance(grid[0], np.ndarray):
+    #     import torch
+    #     assert isinstance(grid[0], torch.Tensor)
+    #     from multipers.torch.diff_grids import todense
+    #     return todense(grid)
+    # dtype = grid[0].dtype
+    # if product_order:
+    #     return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
+    # mesh = np.meshgrid(*grid)
+    # coordinates = np.stack(mesh, axis=-1).reshape(-1, len(grid)).astype(dtype)
+    # return coordinates
 
 
 
 ## TODO : optimize. Pykeops ?
-def _todo_regular_closest(some_float[:] f, int r, bool unique):
+def _todo_regular(f, int r, api):
+    with api.no_grad():
+        return api.linspace(api.min(f), api.max(f), r)
+
+def _project_on_1d_grid(f,grid, bool unique, api):
+    # api=api_from_tensors(f,grid)
+    if f.ndim != 1:
+        raise ValueError(f"Got ndim!=1. {f=}")
+    f = api.unique(f)
+    with api.no_grad():
+        _f = api.LazyTensor(f[:, None, None])
+        _f_reg = api.LazyTensor(grid[None, :, None])
+        indices = (_f - _f_reg).abs().argmin(0).ravel()
+    f = api.cat([f, api.tensor([api.inf])])
+    f_proj = f[indices]
+    if unique:
+        f_proj = api.unique(f_proj)
+    return f_proj
+
+def _todo_regular_closest(f, int r, bool unique, api):
+    f = api.astensor(f)
+    with api.no_grad():
+        f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f))
+    return _project_on_1d_grid(f,f_regular,unique,api)
+
+
+    
+def _todo_regular_closest_old(some_float[:] f, int r, bool unique):
     f_array = np.asarray(f)
     f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
     f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)])
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
 
-def _todo_regular_left(some_float[:] f, int r, bool unique):
+def _todo_regular_left(f, int r, bool unique,api):
+    sorted_f = api.sort(f)
+    with api.no_grad():
+        f_regular = api.linspace(sorted_f[0],sorted_f[-1],num=r, dtype=sorted_f.dtype, device=api.device(sorted_f))
+        idx=api.searchsorted(sorted_f,f_regular)
+    f_regular_closest = sorted_f[idx]
+    if unique: f_regular_closest = api.unique(f_regular_closest)
+    return f_regular_closest
+
+def _todo_regular_left_old(some_float[:] f, int r, bool unique):
     sorted_f = np.sort(f)
     f_regular = np.linspace(sorted_f[0],sorted_f[-1],num=r, dtype=sorted_f.dtype)
     f_regular_closest = sorted_f[np.searchsorted(sorted_f,f_regular)]

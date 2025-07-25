@@ -279,10 +279,6 @@ def signed_measure(
                     ignore_inf=ignore_infinite_filtration_values,
                 )
                 fix_mass_default = False
-
-                if "hook" in invariant:
-                    from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
-                    sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
                 if verbose:
                     print("Done.")
             elif filtered_complex_.is_minpres:
@@ -345,9 +341,6 @@ def signed_measure(
                 expand_collapse=expand_collapse,
             )
             fix_mass_default = False
-            if "hook" in invariant:
-                from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
-                sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
             if verbose:
                 print("Done.")
         elif len(degrees) == 1 and degrees[0] is None:
@@ -420,6 +413,10 @@ def signed_measure(
         sms = zero_out_sms(sms, mass_default=mass_default)
         if verbose:
             print("Done.")
+
+    if invariant == "hook":
+        from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
+        sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
     if plot:
         plot_signed_measures(sms)
     return sms

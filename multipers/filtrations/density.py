@@ -1,9 +1,10 @@
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, Union
+
 import numpy as np
 
+from multipers.array_api import api_from_tensor, api_from_tensors
 
-from multipers.array_api import api_from_tensor
 global available_kernels
 available_kernels = Union[
     Literal[
@@ -176,23 +177,24 @@ def _pts_convolution_pykeops(
     Pykeops convolution
     """
     if isinstance(pts, np.ndarray):
-        _asarray_weights = lambda x : np.asarray(x, dtype=pts.dtype)
+        _asarray_weights = lambda x: np.asarray(x, dtype=pts.dtype)
         _asarray_grid = _asarray_weights
     else:
         import torch
-        _asarray_weights = lambda x : torch.from_numpy(x).type(pts.dtype)
-        _asarray_grid = lambda x : x.type(pts.dtype)
+
+        _asarray_weights = lambda x: torch.from_numpy(x).type(pts.dtype)
+        _asarray_grid = lambda x: x.type(pts.dtype)
     kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
-    return kde.fit(
-        pts, sample_weights=_asarray_weights(pts_weights)
-    ).score_samples(_asarray_grid(grid_iterator))
+    return kde.fit(pts, sample_weights=_asarray_weights(pts_weights)).score_samples(
+        _asarray_grid(grid_iterator)
+    )
 
 
 def gaussian_kernel(x_i, y_j, bandwidth):
     D = x_i.shape[-1]
     exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=-1) / 2
     # float is necessary for some reason (pykeops fails)
-    kernel = (exponent).exp() / float((bandwidth*np.sqrt(2 * np.pi))**D) 
+    kernel = (exponent).exp() / float((bandwidth * np.sqrt(2 * np.pi)) ** D)
     return kernel
 
 
@@ -359,49 +361,6 @@ class KDE:
         )
 
 
-def batch_signed_measure_convolutions(
-    signed_measures,  # array of shape (num_data,num_pts,D)
-    x,  # array of shape (num_x, D) or (num_data, num_x, D)
-    bandwidth,  # either float or matrix if multivariate kernel
-    kernel: available_kernels,
-):
-    """
-    Input
-    -----
-     - signed_measures: unragged, of shape (num_data, num_pts, D+1)
-       where last coord is weights, (0 for dummy points)
-     - x : the points to convolve (num_x,D)
-     - bandwidth : the bandwidths or covariance matrix inverse or ... of the kernel
-     - kernel : "gaussian", "multivariate_gaussian", "exponential", or Callable (x_i, y_i, bandwidth)->float
-
-    Output
-    ------
-    Array of shape (num_convolutions, (num_axis), num_data,
-    Array of shape (num_convolutions, (num_axis), num_data, max_x_size)
-    """
-    if signed_measures.ndim == 2:
-        signed_measures = signed_measures[None, :, :]
-    sms = signed_measures[..., :-1]
-    weights = signed_measures[..., -1]
-    if isinstance(signed_measures, np.ndarray):
-        from pykeops.numpy import LazyTensor
-    else:
-        import torch
-
-        assert isinstance(signed_measures, torch.Tensor)
-        from pykeops.torch import LazyTensor
-
-    _sms = LazyTensor(sms[..., None, :].contiguous())
-    _x = x[..., None, :, :].contiguous()
-
-    sms_kernel = _kernel(kernel)(_sms, _x, bandwidth)
-    out = (sms_kernel * weights[..., None, None].contiguous()).sum(
-        signed_measures.ndim - 2
-    )
-    assert out.shape[-1] == 1, "Pykeops bug fixed, TODO : refix this "
-    out = out[..., 0]  ## pykeops bug + ensures its a tensor
-    # assert out.shape == (x.shape[0], x.shape[1]), f"{x.shape=}, {out.shape=}"
-    return out
 
 
 class DTM:
@@ -532,7 +491,7 @@ class KNNmean:
 
         # Symbolic distance matrix:
         if self.metric == "euclidean":
-            D_ij = ((X_i - X_j) ** 2).sum(-1) ** (1/2)
+            D_ij = ((X_i - X_j) ** 2).sum(-1) ** (1 / 2)
         elif self.metric == "manhattan":
             D_ij = (X_i - X_j).abs().sum(-1)
         elif self.metric == "angular":

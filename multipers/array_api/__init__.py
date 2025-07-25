@@ -1,7 +1,15 @@
 import multipers.array_api.numpy as npapi
 
 
-def api_from_tensor(x, *, verbose: bool = False):
+def api_from_tensor(x, *, verbose: bool = False, strict=False):
+    if strict:
+        if npapi.is_tensor(x):
+            return npapi
+        import multipers.array_api.torch as torchapi
+
+        if torchapi.is_tensor(x):
+            return torchapi
+        raise ValueError(f"Unsupported (strict) type {type(x)=}")
     if npapi.is_promotable(x):
         if verbose:
             print("using numpy backend")
