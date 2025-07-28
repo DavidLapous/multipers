@@ -249,7 +249,7 @@ def _project_on_1d_grid(f,grid, bool unique, api):
         _f = api.LazyTensor(f[:, None, None])
         _f_reg = api.LazyTensor(grid[None, :, None])
         indices = (_f - _f_reg).abs().argmin(0).ravel()
-    f = api.cat([f, api.tensor([api.inf])])
+    f = api.cat([f, api.tensor([api.inf], dtype=f.dtype)])
     f_proj = f[indices]
     if unique:
         f_proj = api.unique(f_proj)
@@ -258,7 +258,7 @@ def _project_on_1d_grid(f,grid, bool unique, api):
 def _todo_regular_closest_keops(f, int r, bool unique, api):
     f = api.astensor(f)
     with api.no_grad():
-        f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f))
+        f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f),dtype=f.dtype)
     return _project_on_1d_grid(f,f_regular,unique,api)
 
 def _todo_regular_closest_old(some_float[:] f, int r, bool unique):
