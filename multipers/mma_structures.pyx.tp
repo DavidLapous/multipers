@@ -773,7 +773,7 @@ cdef class PyModule_{{SHORT}}:
               axs = [plt.gca()]
             for image, degree, i in zip(image_vector, degrees, range(num_degrees)):
                 ax = axs[i]
-                temp = multipers.plots.plot_surface(grid, image.T, ax=ax)
+                temp = multipers.plots.plot_surface(grid, image, ax=ax)
                 plt.colorbar(temp, ax = ax)
                 if degree < 0 :
                     ax.set_title(rf"$H_{i}$ $2$-persistence image")
