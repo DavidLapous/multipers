@@ -51,3 +51,12 @@ def api_from_tensors(*args):
 def to_numpy(x):
     api = api_from_tensor(x)
     return api.asnumpy(x)
+
+
+def check_keops():
+    import os
+
+    if os.name == "nt":
+        # see https://github.com/getkeops/keops/pull/421
+        return False
+    return npapi.check_keops()

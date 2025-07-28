@@ -24,6 +24,33 @@ inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = LazyTensor  # type: ignore[no-redef]
 
+# Test keops
+_is_keops_available = None
+
+
+def check_keops():
+    global _is_keops_available
+    if _is_keops_available is not None:
+        return _is_keops_available
+    import pykeops.numpy as pknp
+
+    formula = "SqNorm2(x - y)"
+    var = ["x = Vi(3)", "y = Vj(3)"]
+    expected_res = _np.array([63.0, 90.0])
+    x = _np.arange(1, 10).reshape(-1, 3).astype("float32")
+    y = _np.arange(3, 9).reshape(-1, 3).astype("float32")
+
+    my_conv = pknp.Genred(formula, var)
+    try:
+        _is_keops_available = _np.allclose(my_conv(x, y).flatten(), expected_res)
+    except:
+        from warnings import warn
+
+        warn("Could not initialize keops (numpy). using workarounds")
+        _is_keops_available = False
+
+    return _is_keops_available
+
 
 def from_numpy(x):
     return _np.asarray(x)

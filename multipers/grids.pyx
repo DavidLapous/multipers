@@ -11,6 +11,7 @@ from typing import Iterable,Literal,Optional
 from itertools import product
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
+from multipers.array_api import check_keops
 
 available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -254,14 +255,12 @@ def _project_on_1d_grid(f,grid, bool unique, api):
         f_proj = api.unique(f_proj)
     return f_proj
 
-def _todo_regular_closest(f, int r, bool unique, api):
+def _todo_regular_closest_keops(f, int r, bool unique, api):
     f = api.astensor(f)
     with api.no_grad():
         f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f))
     return _project_on_1d_grid(f,f_regular,unique,api)
 
-
-    
 def _todo_regular_closest_old(some_float[:] f, int r, bool unique):
     f_array = np.asarray(f)
     f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
@@ -285,12 +284,6 @@ def _todo_regular_left_old(some_float[:] f, int r, bool unique):
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
 
-def _torch_regular_closest(f, int r, bool unique=True):
-    import torch
-    f_regular = torch.linspace(f.min(),f.max(), r, dtype=f.dtype)
-    f_regular_closest =torch.tensor([f[(f-x).abs().argmin()] for x in f_regular]) 
-    if unique: f_regular_closest = f_regular_closest.unique()
-    return f_regular_closest
 
 def _todo_partition(some_float[:] data,int resolution, bool unique):
     if data.shape[0] < resolution: resolution=data.shape[0]
@@ -299,6 +292,12 @@ def _todo_partition(some_float[:] data,int resolution, bool unique):
     f = partitions[[i*k for i in range(resolution)]]
     if unique: f= np.unique(f)
     return f
+
+
+if check_keops():
+    _todo_regular_closest = _todo_regular_closest_keops
+else:
+    _todo_regular_closest = _todo_regular_closest_old
 
 
 def compute_bounding_box(stuff, inflate = 0.):
