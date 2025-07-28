@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import multipers.grids as mpg
+import multipers as mp
 
 try:
     import torch
@@ -61,7 +62,7 @@ def test_regular_left():
             1,
         ],
     ).all(), y
-    if torch is not None:
+    if torch is not None and mp.array_api.check_keops():
         import multipers.array_api.torch as torchapi
 
         y_torch = torchapi.from_numpy(y)

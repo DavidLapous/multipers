@@ -264,7 +264,7 @@ def _todo_regular_closest_keops(f, int r, bool unique, api):
 def _todo_regular_closest_old(some_float[:] f, int r, bool unique, api=None):
     f_array = np.asarray(f)
     f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
-    f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)], dtype=f.dtype)
+    f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)], dtype=f_array.dtype)
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
 
