@@ -1,7 +1,6 @@
 from contextlib import nullcontext
 
 import numpy as _np
-from pykeops.numpy import LazyTensor
 from scipy.spatial.distance import cdist
 
 backend = _np
@@ -22,17 +21,18 @@ cdist = cdist  # type: ignore[no-redef]
 unique = _np.unique
 inf = _np.inf
 searchsorted = _np.searchsorted
-LazyTensor = LazyTensor  # type: ignore[no-redef]
+LazyTensor = None
 
 # Test keops
 _is_keops_available = None
 
 
 def check_keops():
-    global _is_keops_available
+    global _is_keops_available, LazyTensor
     if _is_keops_available is not None:
         return _is_keops_available
     import pykeops.numpy as pknp
+    from pykeops.numpy import LazyTensor as LT
 
     formula = "SqNorm2(x - y)"
     var = ["x = Vi(3)", "y = Vj(3)"]
@@ -43,6 +43,7 @@ def check_keops():
     my_conv = pknp.Genred(formula, var)
     try:
         _is_keops_available = _np.allclose(my_conv(x, y).flatten(), expected_res)
+        LazyTensor = LT
     except:
         from warnings import warn
 

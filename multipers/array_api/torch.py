@@ -1,6 +1,5 @@
 import numpy as _np
 import torch as _t
-from pykeops.torch import LazyTensor
 
 backend = _t
 cat = _t.cat
@@ -20,33 +19,36 @@ linspace = _t.linspace
 cartesian_product = _t.cartesian_prod
 inf = _t.inf
 searchsorted = _t.searchsorted
-LazyTensor = LazyTensor  # type: ignore[no-redef]
+LazyTensor = None
 
 
 _is_keops_available = None
 
 
 def check_keops():
-    global _is_keops_available
+    global _is_keops_available, LazyTensor
     if _is_keops_available is not None:
         return _is_keops_available
-    import pykeops.torch as pknp
-
-    formula = "SqNorm2(x - y)"
-    var = ["x = Vi(3)", "y = Vj(3)"]
-    expected_res = _t.tensor([63.0, 90.0])
-    x = _t.arange(1, 10, dtype=_t.float32).view(-1, 3)
-    y = _t.arange(3, 9, dtype=_t.float32).view(-1, 3)
-
-    my_conv = pknp.Genred(formula, var)
     try:
+        import pykeops.torch as pknp
+        from pykeops.torch import LazyTensor as LT
+
+        formula = "SqNorm2(x - y)"
+        var = ["x = Vi(3)", "y = Vj(3)"]
+        expected_res = _t.tensor([63.0, 90.0])
+        x = _t.arange(1, 10, dtype=_t.float32).view(-1, 3)
+        y = _t.arange(3, 9, dtype=_t.float32).view(-1, 3)
+
+        my_conv = pknp.Genred(formula, var)
         _is_keops_available = _t.allclose(
             my_conv(x, y).view(-1), _t.tensor(expected_res).type(_t.float32)
         )
+        LazyTensor = LT
+
     except:
         from warnings import warn
 
-        warn("Could not initialize keops. using workarounds")
+        warn("Could not initialize keops (torch). using workarounds")
 
         _is_keops_available = False
 
