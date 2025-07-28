@@ -46,3 +46,30 @@ def test_regular_closest():
         ), y_torch
     else:
         pytest.skip("Skipping test as torch is not available.")
+
+
+def test_regular_left():
+    x = np.asarray([0.0, 0.08, 0.1, 0.19, 0.21, 1.0]).astype(np.float32)
+    (y,) = mpg.compute_grid([x], strategy="regular_left", resolution=11)
+    assert y.dtype == x.dtype
+    assert np.isclose(
+        y,
+        [
+            0.0,
+            .1,
+            .21,
+            1,
+        ],
+    ).all(), y
+    if torch is not None:
+        import multipers.array_api.torch as torchapi
+
+        y_torch = torchapi.from_numpy(y)
+        assert torch.allclose(
+            y_torch,
+            torch.tensor(
+                [0.0, 0.1, 0.21, 1.0], dtype=torch.float32
+            ),
+        ), y_torch
+    else:
+        pytest.skip("Skipping test as torch is not available.")

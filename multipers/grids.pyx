@@ -271,7 +271,7 @@ def _todo_regular_closest_old(some_float[:] f, int r, bool unique):
 def _todo_regular_left(f, int r, bool unique,api):
     sorted_f = api.sort(f)
     with api.no_grad():
-        f_regular = api.linspace(sorted_f[0],sorted_f[-1],num=r, dtype=sorted_f.dtype, device=api.device(sorted_f))
+        f_regular = api.linspace(sorted_f[0],sorted_f[-1],r, dtype=sorted_f.dtype, device=api.device(sorted_f))
         idx=api.searchsorted(sorted_f,f_regular)
     f_regular_closest = sorted_f[idx]
     if unique: f_regular_closest = api.unique(f_regular_closest)
