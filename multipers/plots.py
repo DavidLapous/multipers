@@ -81,7 +81,8 @@ def _plot_signed_measure_4(
     **plt_kwargs,  # ignored ftm
 ):
     # compute the maximal rectangle area
-    pts = np.clip(pts, a_min=-np.inf, a_max=np.array((*threshold, *threshold))[None, :])
+    pts = np.clip(pts, a_min=-np.inf,
+                  a_max=np.array((*threshold, *threshold))[None, :])
     alpha_rescaling = 0
     for rectangle, weight in zip(pts, weights):
         if rectangle[2] >= x_smoothing * rectangle[0]:
@@ -170,7 +171,8 @@ def plot_signed_measures(signed_measures, threshold=None, size=4):
             nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
         )
     for ax, signed_measure in zip(axes, signed_measures):
-        plot_signed_measure(signed_measure=signed_measure, ax=ax, threshold=threshold)
+        plot_signed_measure(signed_measure=signed_measure,
+                            ax=ax, threshold=threshold)
     plt.tight_layout()
 
 
@@ -200,13 +202,16 @@ def plot_surface(
             cmap = matplotlib.colormaps["gray_r"]
         else:
             cmap = _cmap
+    if discrete_surface or not contour:
+        grid = [np.concatenate([g, [g[-1]*1.1 - g[0]]]) for g in grid]
     if discrete_surface:
         if has_negative_values:
             bounds = np.arange(-5, 6, 1, dtype=int)
         else:
             bounds = np.arange(0, 11, 1, dtype=int)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend="max")
-        im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, norm=norm, **plt_args)
+        im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap,
+                           norm=norm, shading="flat", **plt_args)
         cbar = fig.colorbar(
             matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm),
             spacing="proportional",
@@ -217,9 +222,11 @@ def plot_surface(
 
     if contour:
         levels = plt_args.pop("levels", 50)
-        im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, levels=levels, **plt_args)
+        im = ax.contourf(grid[0], grid[1], hf.T,
+                         cmap=cmap, levels=levels, **plt_args)
     else:
-        im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap, **plt_args)
+        im = ax.pcolormesh(grid[0], grid[1], hf.T,
+                           cmap=cmap,  shading="flat", **plt_args)
     return im
 
 
@@ -314,25 +321,30 @@ def plot2d_PyModule(
                         trivial_summand = False
                     if shapely:
                         list_of_rect.append(
-                            _rectangle_box(birth[0], birth[1], death[0], death[1])
+                            _rectangle_box(
+                                birth[0], birth[1], death[0], death[1])
                         )
                     else:
                         list_of_rect.append(
-                            _rectangle(birth, death, cmap(i / n_summands), alpha)
+                            _rectangle(birth, death, cmap(
+                                i / n_summands), alpha)
                         )
         if not (trivial_summand):
             if separated:
                 fig, ax = plt.subplots()
-                ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
+                ax.set(xlim=[box[0][0], box[1][0]],
+                       ylim=[box[0][1], box[1][1]])
             if shapely:
                 summand_shape = union_all(list_of_rect)
                 if type(summand_shape) is _Polygon:
                     xs, ys = summand_shape.exterior.xy
-                    ax.fill(xs, ys, alpha=alpha, fc=cmap(i / n_summands), ec="None")
+                    ax.fill(xs, ys, alpha=alpha, fc=cmap(
+                        i / n_summands), ec="None")
                 else:
                     for polygon in summand_shape.geoms:
                         xs, ys = polygon.exterior.xy
-                        ax.fill(xs, ys, alpha=alpha, fc=cmap(i / n_summands), ec="None")
+                        ax.fill(xs, ys, alpha=alpha, fc=cmap(
+                            i / n_summands), ec="None")
             else:
                 for rectangle in list_of_rect:
                     ax.add_patch(rectangle)
@@ -396,7 +408,8 @@ def plot_simplicial_complex(
         if len(s) == 2:  # simplexe = segment
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])
-            plt.plot(xx, yy, c=color(density), alpha=1, zorder=10 * density, lw=1.5)
+            plt.plot(xx, yy, c=color(density), alpha=1,
+                     zorder=10 * density, lw=1.5)
         if len(s) == 3:  # simplexe = triangle
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])
