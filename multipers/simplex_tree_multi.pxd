@@ -117,8 +117,8 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void to_std(intptr_t, Line[double],int ) nogil 
     void to_std_linear_projection(intptr_t, vector[double]) nogil
     void squeeze_filtration_inplace(vector[vector[double]] &, bool) nogil
-    void squeeze_filtration(intptr_t, vector[vector[double]] &) nogil
-    void unsqueeze_filtration(intptr_t, vector[vector[double]] &) nogil
+    void squeeze_filtration(intptr_t, vector[vector[double]] &) except + nogil
+    void unsqueeze_filtration(intptr_t, vector[vector[double]] &) except + nogil
     vector[vector[vector[value_type]]] get_filtration_values(const vector[int]&) nogil
 
 
