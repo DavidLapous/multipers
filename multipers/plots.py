@@ -203,6 +203,7 @@ def plot_surface(
         else:
             cmap = _cmap
     if discrete_surface or not contour:
+        # for shading="flat"
         grid = [np.concatenate([g, [g[-1]*1.1 - g[0]]]) for g in grid]
     if discrete_surface:
         if has_negative_values:
