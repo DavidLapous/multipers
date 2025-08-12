@@ -76,8 +76,8 @@ def RipsLowerstar(
         st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
     if api.has_grad(D) or api.has_grad(function):
         from multipers.grids import compute_grid
-
-        grid = compute_grid([D.ravel(), *[f for f in function.T]])
+        filtration_values = [D.ravel(), *[f for f in function.T]]
+        grid = compute_grid(filtration_values)
         st = st.grid_squeeze(grid)
     return st
 

@@ -168,7 +168,7 @@ def _compute_grid_numpy(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
-    api = api_from_tensors(filtrations_values)
+    api = api_from_tensors(*filtrations_values)
     try:
         a,b=drop_quantiles
     except:
@@ -214,7 +214,7 @@ def _compute_grid_numpy(
 def todense(grid, bool product_order=False):
     if len(grid) == 0:
         return np.empty(0)
-    api = api_from_tensors(grid)
+    api = api_from_tensors(*grid)
     # if product_order:
     #     if not api.backend ==np:
     #         raise NotImplementedError("only numpy here.")
