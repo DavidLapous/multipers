@@ -124,8 +124,7 @@ def compute_grid(
     except TypeError:
         pass
 
-    if api is npapi:
-        return _compute_grid_numpy(
+    grid = _compute_grid_numpy(
         initial_grid,
         resolution=resolution, 
         strategy = strategy, 
@@ -133,9 +132,9 @@ def compute_grid(
         _q_factor=_q_factor, 
         drop_quantiles=drop_quantiles,
         dense = dense,
-        )
-    from multipers.torch.diff_grids import get_grid
-    grid = get_grid(strategy)(initial_grid,resolution)
+    )
+    # from multipers.torch.diff_grids import get_grid
+    # grid = get_grid(strategy)(initial_grid,resolution)
     if dense:
         grid = todense(grid)
     return grid
