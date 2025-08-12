@@ -805,7 +805,7 @@ class Multi_critical_filtration {
         res.add_generator(nf);
       }
     }
-    swap(f1, res);
+    std::swap(f1, res);
 
     return f1 != res;
   }
