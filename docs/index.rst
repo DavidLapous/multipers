@@ -107,14 +107,24 @@ For theoretical references,
  - Differentiability and Multiparameter Persistence :cite:p:`scoccolaDifferentiabilityOptimizationMultiparameter2024`
  - multipers :cite:p:`loiseauxMultipersMultiparameterPersistence2024`
 
+
+
+.. toctree::
+  :caption: Build, contribs, and bib
+
+  compilation
+  contributions
+  bibliography
+
+
 .. toctree::
   :caption: Introduction
 
   notebooks/multipers_intro
   notebooks/simplex_tree_by_hand
-  compilation
-  contributions
-  bibliography
+  notebooks/plots
+
+
 
 .. toctree::
   :caption: Filtrations
@@ -125,7 +135,7 @@ For theoretical references,
   notebooks/cubical
 
 .. toctree::
-  :caption: Example zoo:
+  :caption: Example zoo
   
   notebooks/time_series_classification
   notebooks/graph_classification
