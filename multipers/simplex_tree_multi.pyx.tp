@@ -1326,7 +1326,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self,
             filtration_grid:np.ndarray|list|None=None,
             bool coordinate_values=True,
-            bool force=False,
             str strategy:_available_strategies = "exact",
             resolution:Optional[int|list[int]] = None,
             bool coordinates = False,
@@ -1342,8 +1341,6 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         :param coordinate_values: If true, the filtrations values of the simplices will be set to the coordinate of the filtration grid.
         :type coordinate_values: bool
         """
-        if not force and self.is_squeezed:
-            raise Exception("SimplexTree already squeezed, use `force=True` if that's really what you want to do.") 
 
         if grid_strategy is not None:
             warn("`grid_strategy` is deprecated, use `strategy` instead.",DeprecationWarning)
@@ -1353,7 +1350,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             warn("(copy warning) Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
-            return temp.grid_squeeze(subgrid, coordinates=coordinates, inplace=inplace)
+            return temp.grid_squeeze(sanitize_grid(subgrid, numpyfy=True), coordinates=coordinates, inplace=inplace)
 
         #TODO : multi-critical
         if filtration_grid is None:  

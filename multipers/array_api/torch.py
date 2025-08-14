@@ -53,6 +53,8 @@ def check_keops():
         _is_keops_available = False
 
     return _is_keops_available
+
+
 check_keops()
 
 
@@ -101,8 +103,8 @@ def maxvalues(x: _t.Tensor, **kwargs):
     return _t.max(x, **kwargs).values
 
 
-def asnumpy(x):
-    return x.detach().numpy()
+def asnumpy(x: _t.Tensor):
+    return x.cpu().detach().numpy()
 
 
 def is_tensor(x):
