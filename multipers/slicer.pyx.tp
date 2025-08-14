@@ -29,7 +29,7 @@ from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
 from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_line 
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 
 import numpy as np
 cimport cython
@@ -523,6 +523,35 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         self.truc.prune_above_dimension(max_dimension)
         return self
+    {{if not D["IS_KCRITICAL"]}}
+    def make_filtration_non_decreasing(self, bool safe=True):
+        if self.is_squeezed and safe:
+            for i_ in range(self.num_parameters):
+                F = self.filtration_grid[i_]
+                if not (F[1:]>=F[:-1]).all():
+                    raise ValueError("Found non-sorted grid.")
+
+        cdef int i = 0
+        cdef int N = len(self)
+        cdef vector[int] dims = self.truc.get_dimensions()
+        cdef Py_ssize_t num_parameters = self.num_parameters
+        cdef vector[vector[unsigned int]] B = self.truc.get_boundaries() # const issues, I was lazy
+
+        with nogil:
+            for i in range(N):
+                for b in B[i]:
+                    for j in range(num_parameters):
+                        self.truc.get_filtrations()[b][j] = max(
+                                self.truc.get_filtrations()[b][j],
+                                self.truc.get_filtrations()[i][j]
+                         )
+        return self
+
+
+
+
+    {{endif}}
+
     def get_boundaries(self)->tuple[tuple]:
         """
         Returns the boundaries of the generators.

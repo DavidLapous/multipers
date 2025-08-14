@@ -81,7 +81,7 @@ cdef extern from "Persistence_slices_interface.h":
       vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] get_filtration_values() nogil
       vector[int] get_dimensions() nogil
       int get_dimension(int i) nogil
-      vector[vector[uint]] get_boundaries() nogil
+      const vector[vector[uint]]& get_boundaries() nogil
       void coarsen_on_grid_inplace(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
       vector[{{D['FILTRATION_TYPE']}}]& get_filtrations() nogil
       {{if D['COLUMN_TYPE'] is not None}}
