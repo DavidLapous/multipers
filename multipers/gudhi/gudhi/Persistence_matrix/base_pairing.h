@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "boundary_cell_position_to_id_mapper.h"
+#include <gudhi/Persistence_matrix/index_mapper.h>
 
 namespace Gudhi {
 namespace persistence_matrix {
@@ -36,7 +36,7 @@ namespace persistence_matrix {
  * is already managed by the vine update classes.
  */
 struct Dummy_base_pairing {
-  friend void swap([[maybe_unused]] Dummy_base_pairing& d1, [[maybe_unused]] Dummy_base_pairing& d2) {}
+  friend void swap([[maybe_unused]] Dummy_base_pairing& d1, [[maybe_unused]] Dummy_base_pairing& d2) noexcept {}
 };
 
 /**
@@ -44,22 +44,30 @@ struct Dummy_base_pairing {
  * @ingroup persistence_matrix
  *
  * @brief Class managing the barcode for @ref Boundary_matrix if the option was enabled.
- * 
+ *
  * @tparam Master_matrix An instantiation of @ref Matrix from which all types and options are deduced.
  */
 template <class Master_matrix>
-class Base_pairing : public std::conditional<
-                       Master_matrix::Option_list::has_removable_columns,
-                       Cell_position_to_ID_mapper<typename Master_matrix::ID_index, typename Master_matrix::Pos_index>,
-                       Dummy_pos_mapper
-                    >::type
+class Base_pairing
+    : protected std::conditional_t<
+          Master_matrix::Option_list::has_removable_columns,
+          Index_mapper<std::unordered_map<typename Master_matrix::Pos_index, typename Master_matrix::ID_index> >,
+          Dummy_index_mapper>
 {
+ protected:
+  using Pos_index = typename Master_matrix::Pos_index;
+  using ID_index = typename Master_matrix::ID_index;
+  // PIDM = Position to ID Map
+  using PIDM = std::conditional_t<Master_matrix::Option_list::has_removable_columns,
+                                  Index_mapper<std::unordered_map<Pos_index, ID_index> >,
+                                  Dummy_index_mapper>;
+
  public:
-  using Bar = typename Master_matrix::Bar;                            /**< Bar type. */
-  using Barcode = typename Master_matrix::Barcode;                    /**< Barcode type. */
-  using Column_container = typename Master_matrix::Column_container;  /**< Column container type. */
-  using Index = typename Master_matrix::Index;                        /**< Container index type. */
-  using Dimension = typename Master_matrix::Dimension;                /**< Dimension value type. */
+  using Bar = typename Master_matrix::Bar;                           /**< Bar type. */
+  using Barcode = typename Master_matrix::Barcode;                   /**< Barcode type. */
+  using Column_container = typename Master_matrix::Column_container; /**< Column container type. */
+  using Index = typename Master_matrix::Index;                       /**< Container index type. */
+  using Dimension = typename Master_matrix::Dimension;               /**< Dimension value type. */
 
   /**
    * @brief Default constructor.
@@ -72,7 +80,7 @@ class Base_pairing : public std::conditional<
    * @warning The barcode will not be recomputed if the matrix is modified later after calling this method
    * for the first time. So call it only once the matrix is finalized. This behaviour could be changed in the future,
    * if the need is mentioned.
-   * 
+   *
    * @return Const reference to the barcode.
    */
   const Barcode& get_current_barcode();
@@ -80,10 +88,10 @@ class Base_pairing : public std::conditional<
   /**
    * @brief Swap operator.
    */
-  friend void swap(Base_pairing& pairing1, Base_pairing& pairing2) {
+  friend void swap(Base_pairing& pairing1, Base_pairing& pairing2) noexcept
+  {
     if constexpr (Master_matrix::Option_list::has_removable_columns) {
-      swap(static_cast<Cell_position_to_ID_mapper<ID_index, Pos_index>&>(pairing1),
-           static_cast<Cell_position_to_ID_mapper<ID_index, Pos_index>&>(pairing2));
+      swap(static_cast<PIDM&>(pairing1), static_cast<PIDM&>(pairing2));
     }
     pairing1.barcode_.swap(pairing2.barcode_);
     pairing1.deathToBar_.swap(pairing2.deathToBar_);
@@ -92,50 +100,52 @@ class Base_pairing : public std::conditional<
   }
 
  protected:
-  using Pos_index = typename Master_matrix::Pos_index;
-  using ID_index = typename Master_matrix::ID_index;
+  void _remove_last(Pos_index columnIndex);
+  void _insert_id_position(ID_index id, Pos_index pos);
+  void _reset();
+
+ private:
   using Dictionary = typename Master_matrix::Bar_dictionary;
   using Base_matrix = typename Master_matrix::Master_boundary_matrix;
-  //PIDM = Position to ID Map
-  using PIDM = typename std::conditional<Master_matrix::Option_list::has_removable_columns,
-                                         Cell_position_to_ID_mapper<ID_index, Pos_index>,
-                                         Dummy_pos_mapper
-                                        >::type;
 
   Barcode barcode_;       /**< Bar container. */
   Dictionary deathToBar_; /**< Map from death index to bar index. */
+  bool isReduced_;        /**< True if `_reduce()` was called. */
   /**
    * @brief Map from cell ID to cell position. Only stores a pair if ID != position.
    */
-  std::unordered_map<ID_index,Pos_index> idToPosition_;  //TODO: test other map types
-  bool isReduced_;        /**< True if `_reduce()` was called. */
+  std::unordered_map<ID_index, Pos_index> idToPosition_;  // TODO: test other map types
 
   void _reduce();
-  void _remove_last(Pos_index columnIndex);
 
-  //access to inheriting Boundary_matrix class
+  // access to inheriting Boundary_matrix class
   constexpr Base_matrix* _matrix() { return static_cast<Base_matrix*>(this); }
+
   constexpr const Base_matrix* _matrix() const { return static_cast<const Base_matrix*>(this); }
 };
 
 template <class Master_matrix>
-inline Base_pairing<Master_matrix>::Base_pairing() : PIDM(), isReduced_(false) 
+inline Base_pairing<Master_matrix>::Base_pairing() : PIDM(), isReduced_(false)
 {}
 
 template <class Master_matrix>
-inline const typename Base_pairing<Master_matrix>::Barcode& Base_pairing<Master_matrix>::get_current_barcode() 
+inline const typename Base_pairing<Master_matrix>::Barcode& Base_pairing<Master_matrix>::get_current_barcode()
 {
   if (!isReduced_) _reduce();
   return barcode_;
 }
 
 template <class Master_matrix>
-inline void Base_pairing<Master_matrix>::_reduce() 
+inline void Base_pairing<Master_matrix>::_reduce()
 {
+  constexpr const Pos_index nullDeath = Master_matrix::template get_null_value<Pos_index>();
+  constexpr const Index nullIndex = Master_matrix::template get_null_value<Index>();
+
   std::unordered_map<Index, Index> negativeColumns(_matrix()->get_number_of_columns());
 
   auto dim = _matrix()->get_max_dimension();
   std::vector<std::vector<Index> > columnsByDim(dim + 1);
+  for (auto& v : columnsByDim) v.reserve(_matrix()->get_number_of_columns());
   for (unsigned int i = 0; i < _matrix()->get_number_of_columns(); i++) {
     columnsByDim[dim - _matrix()->get_column_dimension(i)].push_back(i);
   }
@@ -145,16 +155,17 @@ inline void Base_pairing<Master_matrix>::_reduce()
       auto& curr = _matrix()->get_column(i);
       if (curr.is_empty()) {
         if (negativeColumns.find(i) == negativeColumns.end()) {
-          barcode_.emplace_back(i, -1, dim);
+          barcode_.emplace_back(i, nullDeath, dim);
         }
       } else {
         ID_index pivot = curr.get_pivot();
         auto it = idToPosition_.find(pivot);
         Index pivotColumnNumber = it == idToPosition_.end() ? pivot : it->second;
         auto itNeg = negativeColumns.find(pivotColumnNumber);
-        Index pivotKiller = itNeg == negativeColumns.end() ? -1 : itNeg->second;
+        Index pivotKiller = itNeg == negativeColumns.end() ? nullIndex : itNeg->second;
 
-        while (pivot != static_cast<ID_index>(-1) && pivotKiller != static_cast<Index>(-1)) {
+        while (pivot != Master_matrix::template get_null_value<ID_index>() &&
+               pivotKiller != Master_matrix::template get_null_value<Index>()) {
           if constexpr (Master_matrix::Option_list::is_z2) {
             curr += _matrix()->get_column(pivotKiller);
           } else {
@@ -170,16 +181,16 @@ inline void Base_pairing<Master_matrix>::_reduce()
           it = idToPosition_.find(pivot);
           pivotColumnNumber = it == idToPosition_.end() ? pivot : it->second;
           itNeg = negativeColumns.find(pivotColumnNumber);
-          pivotKiller = itNeg == negativeColumns.end() ? -1 : itNeg->second;
+          pivotKiller = itNeg == negativeColumns.end() ? nullIndex : itNeg->second;
         }
 
-        if (pivot != static_cast<ID_index>(-1)) {
+        if (pivot != Master_matrix::template get_null_value<ID_index>()) {
           negativeColumns.emplace(pivotColumnNumber, i);
           _matrix()->get_column(pivotColumnNumber).clear();
           barcode_.emplace_back(pivotColumnNumber, i, dim - 1);
         } else {
           curr.clear();
-          barcode_.emplace_back(i, -1, dim);
+          barcode_.emplace_back(i, nullDeath, dim);
         }
       }
     }
@@ -192,7 +203,7 @@ inline void Base_pairing<Master_matrix>::_reduce()
     // map can only be constructed once barcode is sorted
     for (Index i = 0; i < barcode_.size(); ++i) {
       auto d = barcode_[i].death;
-      if (d != static_cast<Pos_index>(-1)) {
+      if (d != Master_matrix::template get_null_value<Pos_index>()) {
         deathToBar_.emplace(d, i);
       }
     }
@@ -202,7 +213,7 @@ inline void Base_pairing<Master_matrix>::_reduce()
 }
 
 template <class Master_matrix>
-inline void Base_pairing<Master_matrix>::_remove_last(Pos_index columnIndex) 
+inline void Base_pairing<Master_matrix>::_remove_last(Pos_index columnIndex)
 {
   static_assert(Master_matrix::Option_list::has_removable_columns, "remove_last not available.");
 
@@ -212,16 +223,31 @@ inline void Base_pairing<Master_matrix>::_remove_last(Pos_index columnIndex)
     if (it == deathToBar_.end()) {  // birth
       barcode_.pop_back();          // sorted by birth and columnIndex has to be the highest one
     } else {                        // death
-      barcode_[it->second].death = -1;
+      barcode_[it->second].death = Master_matrix::template get_null_value<Pos_index>();
       deathToBar_.erase(it);
     };
   }
 
   auto it = PIDM::map_.find(columnIndex);
-  if (it != PIDM::map_.end()){
+  if (it != PIDM::map_.end()) {
     idToPosition_.erase(it->second);
     PIDM::map_.erase(it);
   }
+}
+
+template <class Master_matrix>
+inline void Base_pairing<Master_matrix>::_insert_id_position(ID_index id, Pos_index pos)
+{
+  idToPosition_.emplace(id, pos);
+}
+
+template <class Master_matrix>
+inline void Base_pairing<Master_matrix>::_reset()
+{
+  barcode_.clear();
+  deathToBar_.clear();
+  isReduced_ = false;
+  idToPosition_.clear();
 }
 
 }  // namespace persistence_matrix
