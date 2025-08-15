@@ -5,13 +5,87 @@ from libcpp cimport tuple
 from libc.stdint cimport uintptr_t,intptr_t
 from cpython cimport Py_buffer
 
+# from multipers.dynamic_multi_parameter_filtration cimport Dynamic_multi_parameter_filtration
 
-cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtration":
-    cdef cppclass One_critical_filtration[T=*]:
+
+cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
+    cdef cppclass One_critical_filtration[T]:
         ## Copied from cython vector
+        # ctypedef size_t size_type
+        # ctypedef ptrdiff_t difference_type
+        # ctypedef T value_type
+
+        One_critical_filtration()  except + nogil
+        One_critical_filtration(int)  except + nogil
+        One_critical_filtration(int, T)  except + nogil
+        One_critical_filtration(vector[T]&)  except + nogil
+        One_critical_filtration(vector[T].iterator, vector[T].iterator, int)  except + nogil
+        One_critical_filtration[T]& operator=(const One_critical_filtration[T]&) except + nogil
+        T& operator()(size_t, size_t) nogil
+        size_t num_parameters() nogil
+        size_t num_generators() nogil
+        size_t num_entries() nogil
+        void set_num_generators(size_t) nogil
+        bool is_plus_inf() nogil
+        bool is_minus_inf() nogil
+        bool is_nan() nogil
+        bool is_finite() nogil
+        bool add_generator(vector[T] &x) nogil
+        bool add_generator(vector[T] x) nogil
+        void add_guaranteed_generator(vector[T] &x) nogil
+        void simplify() nogil
+        void remove_empty_generators(bool) nogil
+        bool push_to_least_common_upper_bound(vector[T] &, bool) nogil
+        # bool push_to_least_common_upper_bound(const One_critical_filtration &, bool) nogil
+        bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
+        # bool pull_to_greatest_common_lower_bound(const One_critical_filtration &, bool) nogil
+
+        # specific to Dynamic_multi_parameter_filtration
+        void force_generator_size_to_number_of_parameters(size_t) nogil
+
+cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
+    cdef cppclass Multi_critical_filtration[T]:
+        ## Copied from cython vector
+        # ctypedef size_t size_type
+        # ctypedef ptrdiff_t difference_type
+        # ctypedef T value_type
+
+        Multi_critical_filtration()  except + nogil
+        Multi_critical_filtration(int)  except + nogil
+        Multi_critical_filtration(int, T)  except + nogil
+        Multi_critical_filtration(vector[T]&)  except + nogil
+        Multi_critical_filtration(vector[T].iterator, vector[T].iterator, int)  except + nogil
+        Multi_critical_filtration[T]& operator=(const Multi_critical_filtration[T]&) except + nogil
+        T& operator()(size_t, size_t) nogil
+        size_t num_parameters() nogil
+        size_t num_generators() nogil
+        size_t num_entries() nogil
+        void set_num_generators(size_t) nogil
+        bool is_plus_inf() nogil
+        bool is_minus_inf() nogil
+        bool is_nan() nogil
+        bool is_finite() nogil
+        bool add_generator(vector[T] &x) nogil
+        bool add_generator(vector[T] x) nogil
+        void add_guaranteed_generator(vector[T] &x) nogil
+        void simplify() nogil
+        void remove_empty_generators(bool) nogil
+        bool push_to_least_common_upper_bound(vector[T] &, bool) nogil
+        # bool push_to_least_common_upper_bound(const One_critical_filtration[T] &, bool) nogil
+        bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
+        # bool pull_to_greatest_common_lower_bound(const One_critical_filtration[T] &, bool) nogil
+
+        # specific to Dynamic_multi_parameter_filtration
+        void force_generator_size_to_number_of_parameters(size_t) nogil
+
+
+cdef extern from "gudhi/Multi_persistence/Point.h" namespace "Gudhi::multi_persistence":
+    cdef cppclass Point[T]:
         ctypedef size_t size_type
         ctypedef ptrdiff_t difference_type
         ctypedef T value_type
+        ctypedef T& reference
+        ctypedef T* pointer
 
         cppclass const_iterator
         cppclass iterator:
@@ -115,105 +189,91 @@ cdef extern from "gudhi/One_critical_filtration.h" namespace "Gudhi::multi_filtr
             bint operator<=(const_reverse_iterator)
             bint operator>=(reverse_iterator)
             bint operator>=(const_reverse_iterator)
-        value_type& operator[](size_type)
-        #vector& operator=(vector&)
-        void assign(size_type, const value_type&)
-        void assign[InputIt](InputIt, InputIt) except +
-        value_type& at(size_type) except +
-        value_type& back()
+
+        Point()
+        Point(size_type)
+        Point(size_type, const T &)
+        Point(const vector[T]&)
+        Point& operator=(Point&)
+        reference at(size_type) except +
+        reference operator[](size_type)
+        reference front()
+        reference back()
+        pointer data()
+        const value_type* const_data "data"()
         iterator begin()
         const_iterator const_begin "begin"()
         const_iterator cbegin()
-        size_type capacity()
-        void clear() nogil
-        bint empty() nogil
         iterator end()
         const_iterator const_end "end"()
         const_iterator cend()
-        iterator erase(iterator)
-        iterator erase(iterator, iterator)
-        value_type& front()
-        iterator insert(iterator, const value_type&) except +
-        iterator insert(iterator, size_type, const value_type&) except +
-        iterator insert[InputIt](iterator, InputIt, InputIt) except +
-        size_type max_size()
-        void pop_back()
-        void push_back(value_type&) except + nogil
         reverse_iterator rbegin()
         const_reverse_iterator const_rbegin "rbegin"()
         const_reverse_iterator crbegin()
         reverse_iterator rend()
         const_reverse_iterator const_rend "rend"()
         const_reverse_iterator crend()
-        void reserve(size_type) except + nogil
-        void resize(size_type) except + nogil
-        void resize(size_type, value_type&) except +
-        # size_type size()
-        size_type num_parameters() nogil
-        size_type num_generators() nogil
-        void swap(vector&)
+        size_type size()
 
-        # C++11 methods
-        value_type* data()
-        const value_type* const_data "data"()
-        void shrink_to_fit() except +
-        iterator emplace(const_iterator, ...) except +
-        value_type& emplace_back(...) except +
-
-        ## end of copied from cython vector
-
-        One_critical_filtration()  except + nogil
-        One_critical_filtration(vector[value_type]&) except + nogil
-        One_critical_filtration(One_critical_filtration&) except + nogil
-
-        One_critical_filtration(int) nogil
-        One_critical_filtration& operator=(const One_critical_filtration&) except +
-        @staticmethod
-        vector[value_type]& vector[value_type]() nogil
-        
-        void push_to_least_common_upper_bound(One_critical_filtration[T]&) nogil
-        void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) nogil
-
-        bool is_finite() nogil
-
-        
-cdef extern from "gudhi/Multi_critical_filtration.h" namespace "Gudhi::multi_filtration":
-    cdef cppclass Multi_critical_filtration[T=*]:
-        ctypedef size_t size_type
-        ctypedef One_critical_filtration[T] filtration_type
-        Multi_critical_filtration()  except + nogil
-        Multi_critical_filtration(One_critical_filtration[T]) except +
-        Multi_critical_filtration[T]& operator=(const Multi_critical_filtration[T]&) except +
-        size_t num_parameters() noexcept nogil
-        size_t num_generators() noexcept  nogil
-        void add_guaranteed_generator(One_critical_filtration[T]) nogil
-        void add_generator(One_critical_filtration[T]) nogil
-        void reserve(size_t) noexcept nogil
-        void simplify() nogil
-        void set_num_generators(size_t) nogil
-        One_critical_filtration[T]& operator[](int) nogil
-
-        void push_to_least_common_upper_bound(One_critical_filtration[T]&) except + nogil
-        void pull_to_greatest_common_lower_bound(One_critical_filtration[T]&) except + nogil
+    bint operator<(const Point &, const Point &)
+    bint operator<=(const Point &, const Point &)
+    bint operator>(const Point &, const Point &)
+    bint operator>=(const Point &, const Point &)
+    bint operator==(const Point &, const Point &)
+    bint operator!=(const Point &, const Point &)
+    Point operator-(const Point &)
+    Point operator-(Point, const Point &)
+    Point operator-(Point, double)
+    Point operator-(Point, float)
+    Point operator-(Point, int)
+    Point operator-(double, Point)
+    Point operator-(float, Point)
+    Point operator-(int, Point)
+    Point operator+(Point, const Point &)
+    Point operator+(Point, double)
+    Point operator+(Point, float)
+    Point operator+(Point, int)
+    Point operator+(double, Point)
+    Point operator+(float, Point)
+    Point operator+(int, Point)
+    Point operator*(Point, const Point &)
+    Point operator*(Point, double)
+    Point operator*(Point, float)
+    Point operator*(Point, int)
+    Point operator*(double, Point)
+    Point operator*(float, Point)
+    Point operator*(int, Point)
+    Point operator/(Point, const Point &)
+    Point operator/(Point, double)
+    Point operator/(Point, float)
+    Point operator/(Point, int)
+    Point operator/(double, Point)
+    Point operator/(float, Point)
+    Point operator/(int, Point)
 
 cdef extern from "gudhi/Multi_persistence/Box.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Box[T=*]:
-        ctypedef vector[T] corner_type
+        ctypedef Point[T] corner_type
         Box()   except +
-        Box( vector[T]&,  vector[T]&) nogil 
-        Box( pair[vector[T], vector[T]]&) nogil  
+        # Box(corner_type&, corner_type&) nogil 
+        # Box(pair[Point[T], Point[T]]&) nogil 
+        Box(vector[T]&, vector[T]&) nogil 
+        Box(pair[vector[T], vector[T]]&) nogil  
         void inflate(T)  nogil 
-        const One_critical_filtration[T]& get_lower_corner()  nogil 
-        const One_critical_filtration[T]& get_upper_corner()  nogil 
+        const corner_type& get_lower_corner()  nogil 
+        const corner_type& get_upper_corner()  nogil 
+        bool contains(corner_type&)  nogil
         bool contains(vector[T]&)  nogil
-        pair[One_critical_filtration[T], One_critical_filtration[T]] get_bounding_corners() nogil
+        pair[corner_type, corner_type] get_bounding_corners() nogil
 
 cdef extern from "gudhi/Multi_persistence/Line.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Line[T=*]:
-        ctypedef One_critical_filtration[T] point_type
+        ctypedef Point[T] point_type
         Line()   except + nogil
-        Line(One_critical_filtration[T]&)   except + nogil
-        Line(One_critical_filtration[T]&, One_critical_filtration[T]&)   except + nogil
+        # Line(point_type&)   except + nogil
+        # Line(point_type&, point_type&)   except + nogil
+        Line(vector[T]&)   except + nogil
+        Line(vector[T]&, vector[T]&)   except + nogil
 
 
 

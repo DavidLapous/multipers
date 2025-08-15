@@ -1,11 +1,6 @@
 #pragma once
 
-#include "Simplex_tree_multi_interface.h"
-#include "multi_parameter_rank_invariant/persistence_slices.h"
-#include "tensor/tensor.h"
 #include <algorithm>
-#include <gudhi/One_critical_filtration.h>
-#include <gudhi/truc.h>
 #include <iostream>
 #include <limits>
 #include <oneapi/tbb/enumerable_thread_specific.h>
@@ -14,6 +9,11 @@
 #include <utility>  // std::pair
 #include <vector>
 
+#include "../gudhi/Simplex_tree_multi_interface.h"
+#include "../gudhi/gudhi/Slicer.h"
+#include "../tensor/tensor.h"
+#include "persistence_slices.h"
+
 namespace Gudhi {
 namespace multiparameter {
 namespace hilbert_function {
@@ -21,21 +21,21 @@ namespace hilbert_function {
 // TODO : this function is ugly
 template <typename Filtration, typename indices_type>
 inline typename Filtration::value_type horizontal_line_filtration2(const Filtration &x,
+                                                                   unsigned int gen_index,
                                                                    indices_type height,
                                                                    indices_type i,
                                                                    indices_type j,
                                                                    const std::vector<indices_type> &fixed_values) {
-  const auto &inf = Filtration::Generator::T_inf;
-  for (indices_type k = 0u; k < static_cast<indices_type>(x.size()); k++) {
+  const auto &inf = Filtration::T_inf;
+  for (indices_type k = 0u; k < static_cast<indices_type>(x.num_parameters()); k++) {
     if (k == i || k == j) continue;  // coordinate in the plane
-    if (x[k] > fixed_values[k])      // simplex appears after the plane
+    if (x(gen_index, k) > fixed_values[k])      // simplex appears after the plane
       return inf;
   }
-  if (x[j] <= height)  // simplex apppears in the plane, but is it in the line
-                       // with height "height"
-    return x[i];
-  else
-    return inf;
+  // simplex appears in the plane, but is it in the line with height "height"
+  if (x(gen_index, j) <= height)
+    return x(gen_index, i);
+  return inf;
 }
 
 template <typename index_type>
@@ -56,12 +56,12 @@ inline void compute_2d_hilbert_surface(
     bool zero_pad,
     int expand_collapse_dim = 0) {
   using value_type = typename Filtration::value_type;
-  // if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
+  // if (grid_shape.size() < 2 || st_multi.num_parameters() < 2)
   // 	throw std::invalid_argument("Grid shape has to have at least 2
-  // element."); if (st_multi.get_number_of_parameters() - fixed_values.size()
+  // element."); if (st_multi.num_parameters() - fixed_values.size()
   // != 2) 	throw std::invalid_argument("Fix more values for the
   // simplextree, which has a too big number of parameters");
-  // assert(fixed_values.size() == st_multi.get_number_of_parameters());
+  // assert(fixed_values.size() == st_multi.num_parameters());
 
   constexpr const bool verbose = false;
   index_type I = grid_shape[i + 1], J = grid_shape[j + 1];
@@ -108,7 +108,7 @@ inline void compute_2d_hilbert_surface(
 
     coordinates_container[j + 1] = height;
 
-    Filtration multi_filtration(st_multi.get_number_of_parameters());
+    // Filtration multi_filtration(st_multi.num_parameters());
     auto sh_standard = st_std.complex_simplex_range().begin();
     auto _end = st_std.complex_simplex_range().end();
     auto sh_multi = st_multi.complex_simplex_range().begin();
@@ -116,23 +116,20 @@ inline void compute_2d_hilbert_surface(
       // for (auto [sh_standard, sh_multi] :
       // std::ranges::views::zip(st_std.complex_simplex_range(),
       // st_multi.complex_simplex_range())){ // too bad apple clang exists
-      multi_filtration = st_multi.filtration(*sh_multi);
+      Filtration multi_filtration = st_multi.filtration(*sh_multi);
       typename Simplex_tree_std::Filtration_value horizontal_filtration;
-      if constexpr (Filtration::is_multi_critical) {
-        horizontal_filtration = std::numeric_limits<typename Simplex_tree_std::Filtration_value>::infinity();
-        for (const auto &stuff : multi_filtration)
-          horizontal_filtration = std::min(horizontal_filtration,
-                                           static_cast<Simplex_tree_std::Filtration_value>(
-                                               horizontal_line_filtration2(stuff, height, i, j, fixed_values)));
-      } else {
-        horizontal_filtration = horizontal_line_filtration2(multi_filtration, height, i, j, fixed_values);
+      horizontal_filtration = std::numeric_limits<typename Simplex_tree_std::Filtration_value>::infinity();
+      for (unsigned int g = 0; g < multi_filtration.num_generators(); ++g) {
+        horizontal_filtration = std::min(horizontal_filtration,
+                                         static_cast<Simplex_tree_std::Filtration_value>(horizontal_line_filtration2(
+                                             multi_filtration, g, height, i, j, fixed_values)));
       }
       st_std.assign_filtration(*sh_standard, horizontal_filtration);
 
       if constexpr (verbose) {
-        Gudhi::multi_filtration::One_critical_filtration<int> splx;
-        for (auto vertex : st_multi.simplex_vertex_range(*sh_multi)) splx.push_back(vertex);
-        std::cout << "Simplex " << splx << "/" << st_std.num_simplices() << " Filtration multi "
+        std::cout << "Simplex {";
+        for (auto vertex : st_multi.simplex_vertex_range(*sh_multi)) std::cout << vertex << " ";
+        std::cout << "} / " << st_std.num_simplices() << " Filtration multi "
                   << st_multi.filtration(*sh_multi) << " Filtration 1d " << st_std.filtration(*sh_standard) << "\n";
       }
     }
@@ -173,7 +170,7 @@ inline void compute_2d_hilbert_surface(
           dtype *ptr = &out[coordinates_container];
           auto stop_value = death > static_cast<value_type>(border) ? border : static_cast<index_type>(death);
           // Warning : for some reason linux static casts float inf to -min_int
-          // so min doesnt work.
+          // so min doesn't work.
           if constexpr (verbose) {
             std::cout << "Adding : (";
             for (auto stuff : coordinates_container) std::cout << stuff << ", ";
@@ -300,10 +297,9 @@ void get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Filtrati
   if (coordinates_to_compute.size() < 2)
     throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
 
-  Simplex_tree_std _st;
-  Gudhi::multi_persistence::flatten(_st, st_multi,
-                                    -1);  // copies the st_multi to a standard 1-pers simplextree
-  std::vector<index_type> coordinates_container(st_multi.get_number_of_parameters() + 1);  // +1 for degree
+  // copies the st_multi to a standard 1-pers simplextree without the filtration values
+  Simplex_tree_std _st(st_multi, []([[maybe_unused]] const Filtration &f) -> Simplex_tree_std::Filtration_value { return 0.; });
+  std::vector<index_type> coordinates_container(st_multi.num_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
   // coordinates_container.push_back(0); // degree
   // for (auto c : fixed_values) coordinates_container.push_back(c);
@@ -339,12 +335,12 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  std::vector<indices_type> coordinates_to_compute(st_multi.get_number_of_parameters());
+  std::vector<indices_type> coordinates_to_compute(st_multi.num_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
-  // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
+  // std::views::iota(0,st_multi.num_parameters()))) c=i; // NIK apple
   // clang
-  std::vector<indices_type> fixed_values(st_multi.get_number_of_parameters());
+  std::vector<indices_type> fixed_values(st_multi.num_parameters());
 
   if (verbose) {
     std::cout << "Container shape : ";
@@ -354,9 +350,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
-    for (auto i = 1; i < st_multi.get_number_of_parameters() + 1; i++)
+    for (auto i = 1; i < st_multi.num_parameters() + 1; i++)
       grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
-    // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
+    // for (auto i : std::views::iota(1,st_multi.num_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
@@ -379,9 +375,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   }
 
   // for (indices_type axis :
-  // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
+  // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
+  for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++) container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
@@ -408,12 +404,12 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  std::vector<indices_type> coordinates_to_compute(st_multi.get_number_of_parameters());
+  std::vector<indices_type> coordinates_to_compute(st_multi.num_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
-  // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
+  // std::views::iota(0,st_multi.num_parameters()))) c=i; // NIK apple
   // clang
-  std::vector<indices_type> fixed_values(st_multi.get_number_of_parameters());
+  std::vector<indices_type> fixed_values(st_multi.num_parameters());
 
   if (verbose) {
     std::cout << "Container shape : ";
@@ -423,9 +419,9 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
-    for (auto i = 1; i < st_multi.get_number_of_parameters() + 1; i++)
+    for (auto i = 1; i < st_multi.num_parameters() + 1; i++)
       grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
-    // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
+    // for (auto i : std::views::iota(1,st_multi.num_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
@@ -443,7 +439,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
   });
 
   if (mobius_inversion)
-    for (indices_type axis = 2u; axis < st_multi.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
+    for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++) container.differentiate(axis);
   return;
 }
 
@@ -453,7 +449,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -480,17 +476,12 @@ inline void compute_2d_hilbert_surface(
     const auto &multi_filtration = slicer.get_filtrations();
 
     for (std::size_t k = 0; k < multi_filtration.size(); k++) {
-      value_type horizontal_filtration;
-      if constexpr (Filtration::is_multi_critical) {
-        horizontal_filtration = Filtration::Generator::T_inf;
-        for (const auto &stuff : multi_filtration[k])
-          horizontal_filtration =
-              std::min(horizontal_filtration,
-                       static_cast<value_type>(horizontal_line_filtration2(stuff, height, i, j, fixed_values)));
-      } else {
-        horizontal_filtration = horizontal_line_filtration2(multi_filtration[k], height, i, j, fixed_values);
+      slice_filtration[k] = Filtration::T_inf;
+      for (unsigned int g = 0; g < multi_filtration[k].num_generators(); ++g) {
+        slice_filtration[k] = std::min(slice_filtration[k],
+                                       static_cast<Simplex_tree_std::Filtration_value>(horizontal_line_filtration2(
+                                           multi_filtration[k], g, height, i, j, fixed_values)));
       }
-      slice_filtration[k] = horizontal_filtration;
     }
 
     if constexpr (verbose) {
@@ -498,7 +489,7 @@ inline void compute_2d_hilbert_surface(
       for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
-    using bc_type = typename truc_interface::Truc<PersBackend, Structure, Filtration>::split_barcode;
+    using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Multi_dimensional_flat_barcode;
     if constexpr (PersBackend::is_vine) {
       if (!slicer.has_persistence()) [[unlikely]] {
         slicer.compute_persistence();
@@ -508,14 +499,14 @@ inline void compute_2d_hilbert_surface(
     } else {
       slicer.compute_persistence(ignore_inf);
     }
-    bc_type barcodes = slicer.get_barcode();
+    bc_type barcodes = slicer.template get_flat_barcode<true>();
     index_type degree_index = 0;
     for (auto degree : degrees) {  // TODO range view cartesian product
       const auto &barcode = barcodes[degree];
       coordinates_container[0] = degree_index;
       for (const auto &bar : barcode) {
-        auto birth = bar.first;  // float
-        auto death = bar.second;
+        auto birth = bar[0];  // float
+        auto death = bar[1];
         if (birth > I)  // some birth can be infinite
           continue;
 
@@ -569,7 +560,7 @@ inline void compute_2d_hilbert_surface(
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -619,7 +610,7 @@ void _rec_get_hilbert_surface(
 }
 
 template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
-void get_hilbert_surface(truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
+void get_hilbert_surface(Gudhi::multi_persistence::Slicer<Filtration, PersBackend> &slicer,
                          const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
                          const std::vector<index_type> &grid_shape,
                          const std::vector<index_type> &degrees,
@@ -633,7 +624,7 @@ void get_hilbert_surface(truc_interface::Truc<PersBackend, Structure, Filtration
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
     throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
-  using ThreadSafe = typename truc_interface::Truc<PersBackend, Structure, Filtration>::ThreadSafe;
+  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe;
   ThreadSafe slicer_thread(slicer);
   std::vector<index_type> coordinates_container(slicer_thread.num_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
@@ -653,7 +644,7 @@ template <typename PersBackend,
           typename dtype,
           typename indices_type,
           typename... Args>
-void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
+void get_hilbert_surface_python(Gudhi::multi_persistence::Slicer<Filtration, PersBackend> &slicer,
                                 dtype *data_ptr,
                                 std::vector<indices_type> grid_shape,
                                 const std::vector<indices_type> degrees,
@@ -667,11 +658,11 @@ void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Fil
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  int num_parameters = slicer.num_parameters();
+  int num_parameters = slicer.get_number_of_parameters();
   std::vector<indices_type> coordinates_to_compute(num_parameters);
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
-  // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
+  // std::views::iota(0,st_multi.num_parameters()))) c=i; // NIK apple
   // clang
   std::vector<indices_type> fixed_values(num_parameters);
 
@@ -685,7 +676,7 @@ void get_hilbert_surface_python(truc_interface::Truc<PersBackend, Structure, Fil
     // +1 is bc degree is on first axis.
     for (auto i = 1; i < num_parameters + 1; i++)
       grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
-    // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
+    // for (auto i : std::views::iota(1,st_multi.num_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
@@ -707,7 +698,7 @@ template <typename PersBackend,
           typename indices_type,
           typename... Args>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilbert_signed_measure(
-    truc_interface::Truc<PersBackend, Structure, Filtration> &slicer,
+    Gudhi::multi_persistence::Slicer<Filtration, PersBackend> &slicer,
     dtype *data_ptr,
     std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,
@@ -720,12 +711,12 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  std::vector<indices_type> coordinates_to_compute(slicer.num_parameters());
+  std::vector<indices_type> coordinates_to_compute(slicer.get_number_of_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
-  // std::views::iota(0,st_multi.get_number_of_parameters()))) c=i; // NIK apple
+  // std::views::iota(0,st_multi.num_parameters()))) c=i; // NIK apple
   // clang
-  std::vector<indices_type> fixed_values(slicer.num_parameters());
+  std::vector<indices_type> fixed_values(slicer.get_number_of_parameters());
 
   if (verbose) {
     std::cout << "Container shape : ";
@@ -735,9 +726,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   }
   if (zero_pad) {
     // +1 is bc degree is on first axis.
-    for (auto i = 1u; i < slicer.num_parameters() + 1; i++)
+    for (auto i = 1u; i < slicer.get_number_of_parameters() + 1; i++)
       grid_shape[i]--;  // get hilbert surface computes according to grid_shape.
-    // for (auto i : std::views::iota(1,st_multi.get_number_of_parameters()+1))
+    // for (auto i : std::views::iota(1,st_multi.num_parameters()+1))
     // grid_shape[i]--; // get hilbert surface computes according to grid_shape.
   }
 
@@ -752,9 +743,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   }
 
   // for (indices_type axis :
-  // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
+  // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (indices_type axis = 2; axis < static_cast<indices_type>(slicer.num_parameters() + 1); axis++)
+  for (indices_type axis = 2; axis < static_cast<indices_type>(slicer.get_number_of_parameters() + 1); axis++)
     container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";

@@ -12,11 +12,12 @@
 #define UTILITIES_H
 
 #include <cassert>
-#include <gudhi/Simplex_tree_multi.h>
-#include <gudhi/One_critical_filtration.h>
-#include <gudhi/Multi_persistence/Box.h>
 #include <limits>
 #include <vector>
+
+#include "../gudhi/gudhi/multi_simplex_tree_helpers.h"
+#include "../gudhi/gudhi/Multi_persistence/Box.h"
+#include "../gudhi/Persistence_slices_interface.h"
 
 namespace Gudhi::multiparameter::mma {
 
@@ -24,7 +25,7 @@ constexpr const bool verbose = false;
 
 using index = unsigned int;
 using value_type = double;
-using filtration_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
+using filtration_type = multipers::tmp_interface::Filtration_value<value_type>;
 using multifiltration_type = std::vector<filtration_type>;
 using python_filtration_type = std::vector<value_type>;
 using python_multifiltration_type = std::vector<python_filtration_type>;
@@ -34,9 +35,9 @@ using persistence_pair = std::pair<value_type, value_type>;
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
 using permutation_type = std::vector<std::size_t>;
-using point_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
-using corner_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
-using corners_type = std::pair<std::vector<corner_type>, std::vector<corner_type>>;
+using point_type = Gudhi::multi_persistence::Box<value_type>::Point_t;
+// using corner_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
+// using corners_type = std::pair<std::vector<corner_type>, std::vector<corner_type>>;
 // using python_bar =
 //     std::pair<std::vector<value_type>,
 //               std::vector<value_type>>; // This type is for python
@@ -296,7 +297,7 @@ struct MultiDiagrams {
 void inline threshold_up(point_type &point,
                          const Gudhi::multi_persistence::Box<value_type> &box,
                          const point_type &basepoint) {
-  Gudhi::multi_filtration::One_critical_filtration point_(point);
+  point_type point_(point);
   // if (is_smaller(point, box.get_upper_corner())) return;
   if (point_ <= box.get_upper_corner()) return;
 

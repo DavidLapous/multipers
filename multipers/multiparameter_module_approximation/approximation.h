@@ -1,15 +1,15 @@
 
-/*    This file is part of the MMA Library -
- * https://gitlab.inria.fr/dloiseau/multipers - which is released under MIT. See
- * file LICENSE for full license details. Author(s):       David Loiseaux
+/*    This file is part of the Gudhi Library - https://gudhi.inria.fr/ - which is released under MIT.
+ *    See file LICENSE or go to https://gudhi.inria.fr/licensing/ for full license details.
+ *    Author(s):       David Loiseaux
  *
  *    Copyright (C) 2021 Inria
  *
  *    Modification(s):
- *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence
- * class, renaming and cleanup.
+ *      - 2022/03 Hannah Schreiber: Integration of the new Vineyard_persistence class, renaming and cleanup.
  *      - 2022/05 Hannah Schreiber: Addition of Summand class and Module class.
  */
+
 /**
  * @file approximation.h
  * @author David Loiseaux, Hannah Schreiber
@@ -31,17 +31,15 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <ranges>
 
+#include "../gudhi/Persistence_slices_interface.h"
+#include "../gudhi/gudhi/Dynamic_multi_parameter_filtration.h"
+#include "../gudhi/gudhi/Multi_persistence/Line.h"
+#include "../gudhi/gudhi/Multi_persistence/Box.h"
+#include "../tensor/tensor.h"
 #include "utilities.h"
-
 #include "debug.h"
-#include <Persistence_slices_interface.h>
-#include <gudhi/One_critical_filtration.h>
-#include <gudhi/Multi_critical_filtration.h>
-#include <gudhi/Multi_persistence/Box.h>
-#include <gudhi/Multi_persistence/Line.h>
-#include <tbb/parallel_for.h>
-#include <tensor/tensor.h>
 
 namespace Gudhi {
 namespace multiparameter {
@@ -60,7 +58,7 @@ void threshold_filters_list(std::vector<value_type> &filtersList, const Box<valu
 template <typename value_type>
 class Module {
  public:
-  using filtration_type = Gudhi::multi_filtration::One_critical_filtration<value_type>;
+  using filtration_type = multipers::tmp_interface::Filtration_value<value_type>;
   using module_type = std::vector<Summand<value_type>>;
   using image_type = std::vector<std::vector<value_type>>;
   using get_2dpixel_value_function_type = std::function<value_type(const typename module_type::const_iterator,
@@ -144,7 +142,7 @@ class Module {
   MultiDiagrams<filtration_type, value_type> get_barcodes(const std::vector<Line<value_type>> &lines,
                                                           const dimension_type dimension = -1,
                                                           const bool threshold = false) const;
-  MultiDiagrams<filtration_type, value_type> get_barcodes(const std::vector<filtration_type> &basepoints,
+  MultiDiagrams<filtration_type, value_type> get_barcodes(const std::vector<typename Line<value_type>::Point_t> &basepoints,
                                                           const dimension_type dimension = -1,
                                                           const bool threshold = false) const;
   std::vector<int> euler_curve(const std::vector<filtration_type> &points) const;
@@ -199,7 +197,7 @@ class Module {
     if (a.get_dimension() != b.get_dimension()) return false;
     if (a.box_ != b.box_) return false;
     if (a.size() != b.size()) return false;
-    for (auto i : std::views::iota(0u, a.size())) {
+    for (auto i : std::ranges::views::iota(0u, a.size())) {
       if (a[i] != b[i]) return false;
     }
     return true;
@@ -241,9 +239,9 @@ class Module {
 template <typename value_type>
 class Summand {
  public:
-  using births_type = Gudhi::multi_filtration::Multi_critical_filtration<value_type, false>;
-  using deaths_type = Gudhi::multi_filtration::Multi_critical_filtration<value_type, true>;
-  using filtration_type = typename births_type::Generator;  // same for death
+  using births_type = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type, false, false>;
+  using deaths_type = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type, true, false>;
+  using filtration_type = births_type;  // same for death
   using dimension_type = int;
   Summand();
   Summand(const births_type &birth_corners, const deaths_type &death_corners, dimension_type dimension);
@@ -265,18 +263,18 @@ class Summand {
   std::pair<value_type, value_type> get_bar2(const Line<value_type> &l) const;
   void add_bar(value_type baseBirth,
                value_type baseDeath,
-               const filtration_type &basepoint,
+               const typename Line<value_type>::Point_t &basepoint,
                filtration_type &birth,
                filtration_type &death,
                const bool threshold,
                const Box<value_type> &box);
   void add_bar(const filtration_type &birth, const filtration_type &death);
-  void add_bar(const filtration_type &basepoint, value_type birth, value_type death, const Box<value_type> &);
+  void add_bar(const typename Line<value_type>::Point_t &basepoint, value_type birth, value_type death, const Box<value_type> &);
 
   const std::vector<filtration_type> &get_birth_list() const;
   const std::vector<filtration_type> &get_death_list() const;
-  const Gudhi::multi_filtration::Multi_critical_filtration<value_type> &get_upset() const;
-  const Gudhi::multi_filtration::Multi_critical_filtration<value_type> &get_downset() const;
+  const filtration_type &get_upset() const;
+  const filtration_type &get_downset() const;
   void clean();
 
   void complete_birth(const value_type precision);
@@ -300,7 +298,7 @@ class Summand {
 
   bool contains(const filtration_type &x) const;
 
-  inline Box<value_type> get_bounds() const {
+  Box<value_type> get_bounds() const {
     if (birth_corners_.num_generators() == 0) return Box<value_type>();
     auto dimension = birth_corners_.num_parameters();
     filtration_type m(dimension, std::numeric_limits<value_type>::infinity());
@@ -320,7 +318,7 @@ class Summand {
     return Box(m, M);
   }
 
-  inline void rescale(const std::vector<value_type> &rescale_factors) {
+  void rescale(const std::vector<value_type> &rescale_factors) {
     if (birth_corners_.num_generators() == 0) return;
     auto dimension = birth_corners_.num_parameters();
     for (auto &corner : birth_corners_) {
@@ -335,7 +333,7 @@ class Summand {
     }
   }
 
-  inline void translate(const std::vector<value_type> &translation) {
+  void translate(const std::vector<value_type> &translation) {
     if (birth_corners_.num_generators() == 0) return;
     auto dimension = birth_corners_.num_parameters();
     for (auto &corner : birth_corners_) {
@@ -350,12 +348,11 @@ class Summand {
     }
   }
 
-  inline Summand<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const;
+  Summand<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const;
 
  private:
-  Gudhi::multi_filtration::Multi_critical_filtration<value_type, false>
-      birth_corners_;  // TODO : use Multi_critical_filtration
-  Gudhi::multi_filtration::Multi_critical_filtration<value_type, true> death_corners_;
+  births_type birth_corners_;
+  deaths_type death_corners_;
   value_type distanceTo0_;
   dimension_type dimension_;
 
@@ -377,7 +374,8 @@ class Summand {
 inline void threshold_filters_list(std::vector<filtration_type> &filtersList, const Box<value_type> &box) {
   return;
   for (unsigned int i = 0; i < filtersList.size(); i++) {
-    for (value_type &value : filtersList[i]) {
+    for (unsigned int p = 0; p < filtersList[i].num_parameters(); ++p){
+      value_type &value = filtersList[i](0, p);
       value = std::min(std::max(value, box.get_lower_corner()[i]), box.get_upper_corner()[i]);
     }
   }
@@ -387,13 +385,13 @@ template <class Filtration_value, int axis = 0, bool sign = true>
 class LineIterator {
  public:
   using value_type = typename Filtration_value::value_type;
-  LineIterator(const Filtration_value &basepoint,
-               const Filtration_value &direction,
+  LineIterator(const typename Line<value_type>::Point_t &basepoint,
+               const typename Line<value_type>::Point_t &direction,
                value_type precision,
                int num_iterations)
       : precision(precision), remaining_iterations(num_iterations), current_line(std::move(basepoint), direction) {};
 
-  inline LineIterator<Filtration_value, axis, sign> &operator++() {
+  LineIterator<Filtration_value, axis, sign> &operator++() {
     //
     auto &basepoint = current_line.base_point();
     if (this->is_finished()) return *this;
@@ -403,9 +401,9 @@ class LineIterator {
     return *this;
   }
 
-  inline const Line<value_type> &operator*() const { return current_line; }
+  const Line<value_type> &operator*() const { return current_line; }
 
-  inline LineIterator<Filtration_value, axis, sign> &next(std::size_t i) {
+  LineIterator<Filtration_value, axis, sign> &next(std::size_t i) {
     auto &basepoint = current_line.base_point();
     if (this->is_finished()) return *this;
     // If we didn't reached the end, go to the next line
@@ -414,7 +412,7 @@ class LineIterator {
     return *this;
   }
 
-  inline bool is_finished() const { return remaining_iterations <= 0; }
+  bool is_finished() const { return remaining_iterations <= 0; }
 
  private:
   const value_type precision;
@@ -447,14 +445,14 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
 
     slicer.vineyard_update();
     if constexpr (verbose2) std::cout << slicer << std::endl;
-    const auto &diagram = slicer.get_flat_nodim_barcode();
+    const auto &diagram = slicer.get_flat_barcode();
     module.add_barcode(new_line, std::move(diagram), threshold);
   };
 };
 
-template <class Filtration_value, class Slicer = SimplicialVineMatrixTruc<>>
+template <class Filtration_value, class Slicer = multipers::tmp_interface::SimplicialVineMatrixTruc<>>
 void _rec_mma(Module<typename Filtration_value::value_type> &module,
-              Filtration_value &basepoint,
+              typename Line<value_type>::Point_t &basepoint,
               const std::vector<int> &grid_size,
               int dim_to_iterate,
               Slicer &&current_persistence,
@@ -467,7 +465,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
     return;
   }
   Slicer pers_copy;
-  Filtration_value basepoint_copy;
+  typename Line<value_type>::Point_t basepoint_copy;
   for (int i = 0; i < grid_size[dim_to_iterate]; ++i) {
     // TODO : multithread, but needs matrix to be thread safe + put mutex on
     // module
@@ -482,7 +480,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
 
 template <int axis, class Filtration_value, class Slicer>
 void _rec_mma2(Module<typename Filtration_value::value_type> &module,
-               Filtration_value &&basepoint,
+               typename Line<value_type>::Point_t &&basepoint,
                const Filtration_value &direction,
                const std::vector<int> &grid_size,
                const std::vector<bool> &signs,
@@ -524,7 +522,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
     // TODO : multithread, but needs matrix to be thread safe + put mutex on
     // module
     _rec_mma2<axis, Filtration_value, typename Slicer::ThreadSafe>(module,
-                                                                   Filtration_value(basepoint),
+                                                                   typename Line<value_type>::Point_t(basepoint),
                                                                    direction,
                                                                    grid_size,
                                                                    signs,
@@ -541,7 +539,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
 template <class Slicer, typename value_type>
 Module<value_type> multiparameter_module_approximation(
     Slicer &slicer,
-    const Gudhi::multi_filtration::One_critical_filtration<value_type> &direction,
+    const typename Line<value_type>::Point_t &direction,
     const value_type precision,
     Box<value_type> &box,
     const bool threshold,
@@ -552,7 +550,7 @@ Module<value_type> multiparameter_module_approximation(
   if (verbose) std::cout << "Starting Module Approximation" << std::endl;
   /* using Filtration_value = Slicer::Filtration_value; */
 
-  Gudhi::multi_filtration::One_critical_filtration<value_type> basepoint = box.get_lower_corner();
+  typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
   const std::size_t num_parameters = box.dimension();
   std::vector<int> grid_size(num_parameters);
   std::vector<bool> signs(num_parameters);
@@ -566,7 +564,7 @@ Module<value_type> multiparameter_module_approximation(
     if (b < a) {
       std::swap(a, b);
       int local_shift;
-      if (!direction.num_parameters())
+      if (!direction.size())
         local_shift = grid_size[i];
       else {
         local_shift = direction[i] > 0 ? static_cast<int>(std::ceil(grid_size[i] / direction[i])) : 0;
@@ -636,7 +634,9 @@ Module<value_type> multiparameter_module_approximation(
   // }
   // TODO : change here
   if (verbose) {
-    std::cout << "Grid size " << Gudhi::multi_filtration::One_critical_filtration(grid_size) << " Signs ";
+    std::cout << "Grid size ";
+    for (auto v : grid_size) std::cout << v << " ";
+    std::cout << " Signs ";
     if (signs.empty()) {
       std::cout << "[]";
     } else {
@@ -664,12 +664,14 @@ Module<value_type> multiparameter_module_approximation(
       if (direction.num_parameters() && direction[i] == 0.0) continue;  // skip faces with codim d_i=0
       auto temp_grid_size = grid_size;
       temp_grid_size[i] = 0;
-      if (verbose)
-        std::cout << "Face " << i << "/" << num_parameters << " with grid size "
-                  << Gudhi::multi_filtration::One_critical_filtration(temp_grid_size) << std::endl;
+      if (verbose){
+        std::cout << "Face " << i << "/" << num_parameters << " with grid size ";
+        for (auto v : temp_grid_size) std::cout << v << " ";
+        std::cout << std::endl;
+      }
       // if (!direction.size() || direction[0] > 0)
       _rec_mma2<0>(out,
-                   Gudhi::multi_filtration::One_critical_filtration<value_type>(basepoint),
+                   typename Line<value_type>::Point_t(basepoint),
                    direction,
                    temp_grid_size,
                    signs,
@@ -681,9 +683,11 @@ Module<value_type> multiparameter_module_approximation(
     // last one, we can destroy basepoint & cie
     if (!direction.num_parameters() || direction[0] > 0) {
       grid_size[0] = 0;
-      if (verbose)
-        std::cout << "Face " << num_parameters << "/" << num_parameters << " with grid size "
-                  << Gudhi::multi_filtration::One_critical_filtration(grid_size) << std::endl;
+      if (verbose){
+        std::cout << "Face " << num_parameters << "/" << num_parameters << " with grid size ";
+        for (auto v : grid_size) std::cout << v << " ";
+        std::cout << std::endl;
+      }
       _rec_mma2<1>(out,
                    std::move(basepoint),
                    direction,
@@ -1281,7 +1285,7 @@ std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> Module<
 
 template <typename value_type>
 MultiDiagrams<typename Module<value_type>::filtration_type, value_type> Module<value_type>::get_barcodes(
-    const std::vector<filtration_type> &basepoints,
+    const std::vector<typename Line<value_type>::Point_t> &basepoints,
     const dimension_type dimension,
     const bool threshold) const {
   unsigned int nlines = basepoints.size();
@@ -1459,7 +1463,7 @@ inline typename Module<value_type>::idx_dump_type Module<value_type>::to_idx(
 }
 
 template <typename value_type>
-std::vector<int> inline to_grid_coord(const Gudhi::multi_filtration::One_critical_filtration<value_type> &pt,
+std::vector<int> inline to_grid_coord(const multipers::tmp_interface::Filtration_value<value_type> &pt,
                                       const std::vector<std::vector<value_type>> &grid) {
   std::size_t num_parameters = grid.size();
   std::vector<int> out(num_parameters);
@@ -1976,8 +1980,7 @@ Summand<value_type>::get_bar(const Line<value_type> &l) const {
  * @param basepoint p_basepoint: basepoint of the line of the bar
  * @param birth p_birth: birth container (for memory optimization purposes).
  * Has to be of the size @p basepoint.size()+1.
- * @param death p_death: death container. Same purpose as @p birth but for
- * deathpoint.
+ * @param death p_death: death container. Same purpose as @p birth but for death.
  * @param threshold p_threshold: If true, will threshold the bar with @p box.
  * @param box p_box: Only useful if @p threshold is set to true.
  */
@@ -1985,7 +1988,7 @@ Summand<value_type>::get_bar(const Line<value_type> &l) const {
 template <typename value_type>
 inline void Summand<value_type>::add_bar(value_type baseBirth,
                                          value_type baseDeath,
-                                         const filtration_type &basepoint,
+                                         const typename Line<value_type>::Point_t &basepoint,
                                          filtration_type &birth,
                                          filtration_type &death,
                                          const bool threshold,
@@ -2029,7 +2032,7 @@ inline void Summand<value_type>::add_bar(const filtration_type &birth, const fil
 }
 
 template <typename value_type>
-inline void Summand<value_type>::add_bar(const filtration_type &basepoint,
+inline void Summand<value_type>::add_bar(const typename Line<value_type>::Point_t &basepoint,
                                          value_type birth,
                                          value_type death,
                                          const Box<value_type> &box) {
@@ -2062,12 +2065,12 @@ inline const std::vector<typename Summand<value_type>::filtration_type> &Summand
 }
 
 template <typename value_type>
-const Gudhi::multi_filtration::Multi_critical_filtration<value_type> &Summand<value_type>::get_upset() const {
+const Summand<value_type>::filtration_type &Summand<value_type>::get_upset() const {
   return birth_corners_;
 }
 
 template <typename value_type>
-const Gudhi::multi_filtration::Multi_critical_filtration<value_type> &Summand<value_type>::get_downset() const {
+const Summand<value_type>::filtration_type &Summand<value_type>::get_downset() const {
   return death_corners_;
 };
 

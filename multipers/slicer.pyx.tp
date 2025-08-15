@@ -176,10 +176,10 @@ cdef class {{D['PYTHON_TYPE']}}:
         inf[0] = -inf[0]
         cdef {{D['C_VALUE_TYPE']}}[:,:] F_view 
         for F in filtration_values:
-            cf.push_to_least_common_upper_bound(inf)
+            cf.push_to_least_common_upper_bound(inf, False)
             F_view = np.asarray(F, dtype = {{D['PY_VALUE_TYPE']}} )
             for i in range(F_view.shape[0]):
-                cf.add_generator(_py21c_{{D['SHORT_VALUE_TYPE']}}(F_view[i]))
+                cf.add_generator(_py2p_{{D['SHORT_VALUE_TYPE']}}(F_view[i]))
             c_filtration_values.push_back(cf)
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."

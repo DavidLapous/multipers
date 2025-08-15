@@ -270,7 +270,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             any function that relies on the filtration property, like
             :meth:`persistence`.
         """
-        assert len(filtration)>0 and len(filtration) % self.get_ptr().get_number_of_parameters() == 0
+        assert len(filtration)>0 and len(filtration) % self.get_ptr().num_parameters() == 0
         # self.get_ptr().assign_simplex_filtration(simplex, {{FSHORT}}(<python_filtration_type>filtration))
         {{if is_kcritical}}
         filtration = np.asarray(filtration, dtype={{PYTYPE}})[None,:]
@@ -351,7 +351,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
 
-        cdef One_critical_filtration[{{CTYPE}}] minf = One_critical_filtration[{{CTYPE}}](self.get_ptr().get_number_of_parameters())
+        # TODO: there is probably a better way to get the inf value...
+        cdef One_critical_filtration[{{CTYPE}}] tmp = One_critical_filtration[{{CTYPE}}](self.get_ptr().num_parameters())
+        cdef vector[{{CTYPE}}] minf = vector[{{CTYPE}}](self.get_ptr().num_parameters(), tmp(0,0))
         cdef int simplex_dimension
         with nogil:
             while it != end:
@@ -360,7 +362,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                 if simplex_dimension<dim:
                   preincrement(it)
                   continue
-                dereference(pair_sf.second).pull_to_greatest_common_lower_bound(minf)
+                dereference(pair_sf.second).pull_to_greatest_common_lower_bound(minf, False)
                 preincrement(it)
         self.make_filtration_non_decreasing()
         return self
@@ -419,7 +421,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         :rtype:  bool
         """
         # TODO C++, to be compatible with insert_batch and multicritical filtrations
-        num_parameters = self.get_ptr().get_number_of_parameters()
+        num_parameters = self.get_ptr().num_parameters()
         assert filtration is None or len(filtration) % num_parameters == 0, f"Invalid number \
                 of parameters. Should be {num_parameters}, got {len(filtration)}"
         if filtration is None:
@@ -439,7 +441,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         if self.get_ptr().find_simplex(simplex):
           for i in range(simplices_filtration_to_insert.size()):
             current_filtration_ptr = self.get_ptr().simplex_filtration(simplices_filtration_to_insert[i])
-            dereference(current_filtration_ptr).add_generator(_py21c_{{SHORT}}(filtration))
+            dereference(current_filtration_ptr).add_generator(_py2p_{{SHORT}}(filtration))
           return True ## TODO : we may want to return false if this birth wasn't necessary
         cdef {{Filtration}} cfiltration = _py2kc_{{SHORT}}(filtration[None,:])
         {{else}}
@@ -468,7 +470,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef int[:,:] vertex_array_ = np.asarray(vertex_array, dtype=np.int32)
         cdef Py_ssize_t k = vertex_array_.shape[0]
         cdef Py_ssize_t n = vertex_array_.shape[1]
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
+        cdef int num_parameters = self.get_ptr().num_parameters()    
         cdef bool empty_filtration = (filtrations.size == 0)
         cdef {{CTYPE}}[:,:] F_view = np.asarray(filtrations, dtype = {{PYTYPE}})
 
@@ -507,13 +509,14 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         """
         cdef Py_ssize_t num_vertices = nodes_filtrations.shape[0]
         cdef Py_ssize_t num_parameters = nodes_filtrations.shape[1]
-        assert self.get_ptr().get_number_of_parameters() == num_parameters and self.num_vertices == num_vertices, f"Invalid shape {nodes_filtrations.shape}. Should be (?,{self.num_parameters=})."
+        assert self.get_ptr().num_parameters() == num_parameters and self.num_vertices == num_vertices, f"Invalid shape {nodes_filtrations.shape}. Should be (?,{self.num_parameters=})."
 
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
         cdef Py_ssize_t node_idx = 0
         cdef {{CTYPE}}[:,:] F = nodes_filtrations
         cdef {{CTYPE}} minus_inf = -np.inf
+        cdef {{CTYPE}}* f
         with nogil:
             while it != end:
                 pair_sf = <pair[simplex_type, {{FSHORT}}*]> self.get_ptr().get_simplex_and_filtration(dereference(it))
@@ -524,7 +527,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                             dereference(pair_sf.second)[i][j] = F[node_idx,j]
                     {{else}}
                     for i in range(num_parameters):
-                        dereference(pair_sf.second)[i] = F[node_idx,i]
+                        # Weird cython bug with "Cannot assign to or delete this" otherwise
+                        f = &(dereference(pair_sf.second)(0,i))
+                        f[0] = F[node_idx,i]
                     {{endif}}
                     node_idx += 1
                     # with gil:
@@ -533,10 +538,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     {{if is_kcritical}}
                     for i in range(pair_sf.second.size()):
                         for j in range(num_parameters):
-                            dereference(pair_sf.second)[i][j] = minus_inf
+                            f = &(dereference(pair_sf.second)(i,j))
+                            f[0] = minus_inf
                     {{else}}
                     for i in range(num_parameters):
-                        dereference(pair_sf.second)[i] = minus_inf
+                        f = &(dereference(pair_sf.second)(0,i))
+                        f[0] = minus_inf
                     {{endif}}
                 preincrement(it)
         self.make_filtration_non_decreasing()
@@ -559,12 +566,15 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef int counter =0
         # cdef cnp.ndarray[{{CTYPE}},ndim=1] current_filtration
         cdef {{CTYPE}}[:,:] F = filtration_values 
+        cdef {{CTYPE}}* f
         with nogil:
             while it != end:
                 pair_sf =<pair[simplex_type, {{FSHORT}}*]> self.get_ptr().get_simplex_and_filtration(dereference(it))
 
                 for i in range(num_parameters):
-                    dereference(pair_sf.second)[i] = F[counter,i]
+                    # Weird cython bug with "Cannot assign to or delete this" otherwise
+                    f = &(dereference(pair_sf.second)(0,i))
+                    f[0] = F[counter,i]
                 # current_filtration= F[counter]
                 counter += 1
                 # yield SimplexTreeMulti._pair_simplex_filtration_to_python(out)
@@ -594,7 +604,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        cdef One_critical_filtration[{{CTYPE}}] w
+        cdef vector[{{CTYPE}}] w
+        cdef One_critical_filtration[{{CTYPE}}] f
         cdef int n_parameters = self.num_parameters
         with nogil:
             for i in range(n):
@@ -602,7 +613,8 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     v.push_back(vertex_array[j, i])
                 for j in range(n_parameters):
                     w.push_back(<{{CTYPE}}>filtrations[i,j])
-                self.get_ptr().assign_simplex_filtration(v, w)
+                f = One_critical_filtration[{{CTYPE}}](w.begin(), w.end(), n_parameters)
+                self.get_ptr().assign_simplex_filtration(v, f)
                 v.clear()
                 w.clear()
         if propagate: self.make_filtration_non_decreasing()
@@ -618,7 +630,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
         cdef Simplex_tree_multi_simplex_handle[{{FSHORT}}] sh = dereference(it)
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_parameters = self.get_ptr().num_parameters()
         cdef dict[tuple,int] out = {}
         cdef int dim
         while it != end:
@@ -658,7 +670,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Py_ssize_t k = vertex_array_.shape[0]
         cdef Py_ssize_t n = vertex_array_.shape[1]
         cdef Py_ssize_t max_crit_deg = filtrations_.shape[1]
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()    
+        cdef int num_parameters = self.get_ptr().num_parameters()    
         cdef bool empty_filtration = (filtrations_.size == 0)
 
         if not empty_filtration :
@@ -701,7 +713,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
         cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
         cdef Simplex_tree_multi_simplex_handle[{{FSHORT}}] sh = dereference(it)
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_parameters = self.get_ptr().num_parameters()
         while it != end:
             pair_sf = <pair[simplex_type, {{FSHORT}}*]> self.get_ptr().get_simplex_and_filtration(dereference(it))
             yield (
@@ -731,7 +743,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         """
         cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] it = self.get_ptr().get_skeleton_iterator_begin(dimension)
         cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] end = self.get_ptr().get_skeleton_iterator_end(dimension)
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_parameters = self.get_ptr().num_parameters()
         while it != end:
             # yield self.get_ptr().get_simplex_and_filtration(dereference(it))
             pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
@@ -805,7 +817,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         """
         cdef pair[Simplex_tree_multi_boundary_iterator[{{FSHORT}}], Simplex_tree_multi_boundary_iterator[{{FSHORT}}]] it =  self.get_ptr().get_boundary_iterators(simplex)
 
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_parameters = self.get_ptr().num_parameters()
         while it.first != it.second:
             # yield self.get_ptr().get_simplex_and_filtration(dereference(it))
             pair = self.get_ptr().get_simplex_and_filtration(dereference(it.first))
@@ -1076,7 +1088,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
     @property
     def num_parameters(self)->int:
-        return self.get_ptr().get_number_of_parameters()
+        return self.get_ptr().num_parameters()
     def get_simplices_of_dimension(self, dim:int)->np.ndarray:
         return np.asarray(self.get_ptr().get_simplices_of_dimension(dim), dtype=int)
     def key(self, simplex:list|np.ndarray):
@@ -1430,11 +1442,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         # for s, sf in self.get_simplices():
         #   self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
         # cdef int c_parameter = parameter
-        {{if is_kcritical}}
-        cdef {{FSHORT}} c_F = _py2kc_{{SHORT}}(np.asarray(F,dtype={{PYTYPE}})[None,:])
-        {{else}}
-        cdef {{FSHORT}} c_F = _py21c_{{SHORT}}(np.asarray(F,dtype={{PYTYPE}}))
-        {{endif}}
+        # {{if is_kcritical}}
+        # cdef {{FSHORT}} c_F = _py2kc_{{SHORT}}(np.asarray(F,dtype={{PYTYPE}})[None,:])
+        # {{else}}
+        # cdef {{FSHORT}} c_F = _py21c_{{SHORT}}(np.asarray(F,dtype={{PYTYPE}}))
+        # {{endif}}
+        cdef vector[{{CTYPE}}] c_F = _py2p_{{SHORT}}(np.asarray(F,dtype={{PYTYPE}}))
         with nogil:
             self.get_ptr().fill_lowerstar(c_F, parameter)
         return self
@@ -1459,11 +1472,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
 
         ## Resets the filtration. should be optimizable
         F = np.zeros(shape = self.num_vertices, dtype={{PYTYPE}}) + node_value
-        {{if is_kcritical}}
-        cdef {{FSHORT}} c_F = _py2kc_{{SHORT}}(F[None,:])
-        {{else}}
-        cdef {{FSHORT}} c_F = _py21c_{{SHORT}}(F)
-        {{endif}}
+        # {{if is_kcritical}}
+        # cdef {{FSHORT}} c_F = _py2kc_{{SHORT}}(F[None,:])
+        # {{else}}
+        # cdef {{FSHORT}} c_F = _py21c_{{SHORT}}(F)
+        # {{endif}}
+        cdef vector[{{CTYPE}}] c_F = _py2p_{{SHORT}}(F)
         
         with nogil:
             self.get_ptr().fill_lowerstar(c_F, parameter)
@@ -1471,9 +1485,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         ## Fills the matrix in the 1-skeleton
         cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] it = self.get_ptr().get_skeleton_iterator_begin(1)
         cdef Simplex_tree_multi_skeleton_iterator[{{FSHORT}}] end = self.get_ptr().get_skeleton_iterator_end(1)
-        cdef int num_parameters = self.get_ptr().get_number_of_parameters()
+        cdef int num_parameters = self.get_ptr().num_parameters()
         cdef int num_generators
         cdef int N = c_distance_matrix.shape[0]
+        cdef {{CTYPE}}* f
         with nogil:
             while it != end:
                 pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
@@ -1486,9 +1501,12 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     {{if is_kcritical}}
                     num_generators =pair.second.num_generators() 
                     for k in range(num_generators):
-                        dereference(pair.second)[k][parameter] = c_distance_matrix[i,j]
+                        # Weird cython bug with "Cannot assign to or delete this" otherwise
+                        f = &(dereference(pair.second)(k,parameter))
+                        f[0] = c_distance_matrix[i,j]
                     {{else}}
-                    dereference(pair.second)[parameter] = c_distance_matrix[i,j]
+                    f = &(dereference(pair.second)(0,parameter))
+                    f[0] = c_distance_matrix[i,j]
                     {{endif}}
                 preincrement(it)
 
@@ -1523,21 +1541,21 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         # FIXME : deal with multicritical filtrations
         import gudhi as gd
         new_simplextree = gd.SimplexTree()
-        assert parameter < self.get_ptr().get_number_of_parameters()
+        assert parameter < self.get_ptr().num_parameters()
         cdef int c_parameter = parameter
         cdef intptr_t old_ptr = self.thisptr
         cdef intptr_t new_ptr = new_simplextree.thisptr
         if basepoint is None:
-          basepoint = np.array([np.inf]*self.get_ptr().get_number_of_parameters())
+          basepoint = np.array([np.inf]*self.get_ptr().num_parameters())
           basepoint[parameter] = 0
         if direction is None:
-          direction = np.array([0]*self.get_ptr().get_number_of_parameters())
+          direction = np.array([0]*self.get_ptr().num_parameters())
           direction[parameter] = 1
         
         basepoint = np.asarray(basepoint, dtype=np.float64)
         direction = np.asarray(direction, dtype=np.float64)
-        cdef One_critical_filtration[double] c_basepoint = _py21c_f64(basepoint)
-        cdef One_critical_filtration[double] c_direction = _py21c_f64(direction)
+        cdef vector[double] c_basepoint = _py2p_f64(basepoint)
+        cdef vector[double] c_direction = _py2p_f64(direction)
         cdef Line[double] c_line = Line[double](c_basepoint, c_direction)
         with nogil:
             self.get_ptr().to_std(new_ptr, c_line, c_parameter)
@@ -1588,7 +1606,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         WARNING : it will resize all the filtrations to this size. 
         """
         self.get_ptr().resize_all_filtrations(num)
-        self.get_ptr().set_number_of_parameters(num)
+        self.get_ptr().set_num_parameters(num)
         return
 
     def __eq__(self, other:SimplexTreeMulti_{{FSHORT}}):

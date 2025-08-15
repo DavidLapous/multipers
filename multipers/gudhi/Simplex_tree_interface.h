@@ -44,7 +44,7 @@ template <class Simplex_tree_options = Simplex_tree_options_for_python>
 class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options>
 {
  public:
-  using Base = Simplex_tree<Simplex_tree_options_for_python>;
+  using Base = Simplex_tree<Simplex_tree_options>;
   using Filtration_value = typename Base::Filtration_value;
   using Vertex_handle = typename Base::Vertex_handle;
   using Simplex_handle = typename Base::Simplex_handle;
@@ -59,6 +59,19 @@ class Simplex_tree_interface : public Simplex_tree<Simplex_tree_options>
   using Siblings = typename Base::Siblings;
   using Node = typename Base::Node;
   typedef bool (*blocker_func_t)(Simplex simplex, void* user_data);
+
+  // CHANGED FROM THE ORIGINAL: constructors from simplex tree
+  Simplex_tree_interface() = default;
+  Simplex_tree_interface(const Base& st) : Base(st) {};
+  Simplex_tree_interface(Base&& st) : Base(std::move(st)) {};
+  Simplex_tree_interface& operator=(const Base& st){
+    Base::operator=(st);
+    return *this;
+  }
+  Simplex_tree_interface& operator=(Base&& st){
+    Base::operator=(std::move(st));
+    return *this;
+  }
 
  public:
   Extended_filtration_data efd;

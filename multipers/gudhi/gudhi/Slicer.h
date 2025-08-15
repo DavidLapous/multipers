@@ -72,13 +72,11 @@ class Slicer
    */
   template <typename Value = T>
   using Barcode = std::vector<Bar<Value>>;
-  // TODO: replace by std::vector<std::array<Value,2> > to avoid double push_back for multi dim version?
   /**
-   * @brief Flat barcode type. All bars are represented by a birth and a death value stored respectively at even and
-   * odd indices of the vector.
+   * @brief Flat barcode type. All bars are represented by a birth and a death value stored in arrays of size 2.
    */
   template <typename Value = T>
-  using Flat_barcode = std::vector<Value>;
+  using Flat_barcode = std::vector<std::array<Value,2> >;
   /**
    * @brief Barcode ordered by dimension type. A vector which has at index \f$ d \f$ the @ref Barcode of dimension
    * \f$ d \f$.
@@ -854,13 +852,13 @@ class Slicer
   Flat_barcode<Value> _get_flat_barcode(int maxDim)
   {
     auto barcodeIndices = persistence_.get_barcode();
-    Flat_barcode<Value> out(barcodeIndices.size() * 2);
+    Flat_barcode<Value> out(barcodeIndices.size());
     Index i = 0;
     Dimension dim;  // dummy
     for (const auto& bar : barcodeIndices) {
       if (bar.dim <= maxDim) {
-        _retrieve_interval(bar, dim, out[i], out[i + 1]);
-        i += 2;
+        _retrieve_interval(bar, dim, out[i][0], out[i][1]);
+        ++i;
       }
     }
     out.resize(i);
@@ -876,8 +874,7 @@ class Slicer
     for (const auto& bar : persistence_.get_barcode()) {
       if (bar.dim <= maxDim) {
         _retrieve_interval(bar, dim, birth, death);
-        out[dim].push_back(birth);
-        out[dim].push_back(death);
+        out[dim].emplace_back({birth, death});
       }
     }
     return out;
