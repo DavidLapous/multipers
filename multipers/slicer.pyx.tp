@@ -309,7 +309,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         {{if D['IS_FLOAT']}}
         self.push_to_line(basepoint,direction)
-        self.truc.compute_persistence(ignore_infinite_filtration_values)
+        self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
         if keep_inf:
             bcs = tuple(np.asarray(stuff, dtype = {{D['PY_VALUE_TYPE']}}) for stuff in self.truc.get_barcode())
         else:
@@ -445,10 +445,10 @@ cdef class {{D['PYTHON_TYPE']}}:
 
         # TODO: Later
         # if len(degrees)>0:
-        #     self.truc.compute_persistence(degrees)
+        #     self.truc.initialize_persistence_computation(degrees)
         # else:
-        #     self.truc.compute_persistence()
-        self.truc.compute_persistence(ignore_infinite_filtration_values)
+        #     self.truc.initialize_persistence_computation()
+        self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
         # return self
         return self.get_barcode()
     def get_barcode(self):

@@ -104,10 +104,11 @@ cdef class PySummand_{{SHORT}}:
         self.sum = summand
         return self
     def get_bounds(self):
-        cdef pair[One_critical_filtration[{{CTYPE}}],One_critical_filtration[{{CTYPE}}]] cbounds
+        cdef pair[vector[{{CTYPE}}],vector[{{CTYPE}}]] cbounds
         with nogil:
             cbounds = self.sum.get_bounds().get_bounding_corners()
-        return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
+        # return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
+        return np.asarray(cbounds.first), np.asarray(cbounds.second)
     @property
     def dtype(self):
       return {{PYTYPE}}
@@ -155,8 +156,8 @@ cdef class PyBox_{{SHORT}}:
         self.box = Box[{{CTYPE}}](bottomCorner, topCorner)
     @property
     def num_parameters(self):
-        cdef size_t dim = self.box.get_lower_corner().num_parameters()
-        if dim == self.box.get_upper_corner().num_parameters():	return dim
+        cdef size_t dim = self.box.get_lower_corner().size()
+        if dim == self.box.get_upper_corner().size():	return dim
         else:	print("Bad box definition.")
     def contains(self, x):
         return self.box.contains(x)
@@ -264,8 +265,8 @@ cdef class PyModule_{{SHORT}}:
         return self.cmod.get_dimension()
     @property
     def num_parameters(self)->int:
-        cdef size_t dim = self.cmod.get_box().get_lower_corner().num_parameters()
-        assert dim == self.cmod.get_box().get_upper_corner().num_parameters(), "Bad box definition, cannot infer num_parameters."
+        cdef size_t dim = self.cmod.get_box().get_lower_corner().size()
+        assert dim == self.cmod.get_box().get_upper_corner().size(), "Bad box definition, cannot infer num_parameters."
         return dim
     def dump(self, path:str|None=None):
         r"""
@@ -307,10 +308,11 @@ cdef class PyModule_{{SHORT}}:
         Computes bounds from the summands' bounds.
         Useful to change this' box.
         """
-        cdef pair[One_critical_filtration[{{CTYPE}}],One_critical_filtration[{{CTYPE}}]] cbounds
+        cdef pair[vector[{{CTYPE}}],vector[{{CTYPE}}]] cbounds
         with nogil:
             cbounds = self.cmod.get_bounds().get_bounding_corners()
-        return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
+        # return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
+        return np.asarray(cbounds.first), np.asarray(cbounds.second)
     def rescale(self,rescale_factors, int degree=-1):
         r"""
         Rescales the fitlration values of the summands by this rescaling vector.
@@ -446,7 +448,7 @@ cdef class PyModule_{{SHORT}}:
             Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
         """
         out = PyMultiDiagram_{{SHORT}}()
-        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py21c_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
+        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py2p_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
         return out
     @staticmethod
     cdef _threshold_bc(bc): 
@@ -478,10 +480,10 @@ cdef class PyModule_{{SHORT}}:
         """
         basepoint = np.asarray(basepoint, dtype={{PYTYPE}})
         if direction is None:
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
         else:
             direction = np.asarray(direction, dtype = {{PYTYPE}})
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoint), _py21c_{{SHORT}}(direction)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
         if full:
@@ -537,7 +539,7 @@ cdef class PyModule_{{SHORT}}:
             num=len(basepoints)
 
         cdef {{CTYPE}}[:,:] basepoints_view = np.asarray(basepoints, dtype = {{PYTYPE}})
-        cdef vector[One_critical_filtration[{{CTYPE}}]] cbasepoints = _py2v1c_{{SHORT}}(basepoints_view)
+        cdef vector[Point[{{CTYPE}}]] cbasepoints = _py2vp_{{SHORT}}(basepoints_view)
 
         out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
         return out
@@ -582,7 +584,7 @@ cdef class PyModule_{{SHORT}}:
         basepoints = np.asarray(basepoints, dtype={{PYTYPE}})
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
-            cbasepoints.push_back(Line[{{CTYPE}}](_py21c_{{SHORT}}(basepoints[i])))
+            cbasepoints.push_back(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoints[i])))
         return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes2(cbasepoints, degree))   
 
     def landscape(self, degree:int, k:int=0,box:Sequence|np.ndarray|None=None, resolution:Sequence=[100,100], bool plot=False):
@@ -999,16 +1001,16 @@ cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
             )
 
 cdef inline Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
-    cdef vector[One_critical_filtration[{{CTYPE}}]] births = _py2v1c_{{SHORT}}(summand_dump[0])
-    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = _py2v1c_{{SHORT}}(summand_dump[1]) 
+    cdef vector[{{CTYPE}}] births = _py2p2_{{SHORT}}(summand_dump[0])
+    cdef vector[{{CTYPE}}] deaths = _py2p2_{{SHORT}}(summand_dump[1]) 
     cdef int dim = summand_dump[2]
-    return Summand[{{CTYPE}}](births,deaths,dim)
+    return Summand[{{CTYPE}}](births, deaths, summand_dump[0].shape[1], dim)
 
 cdef dump_cmod_{{SHORT}}(Module[{{CTYPE}}]& mod):
     cdef Box[{{CTYPE}}] cbox = mod.get_box()
     cdef int dim = mod.get_dimension()
-    cdef cnp.ndarray[{{CTYPE}}, ndim=1] bottom_corner = _ff21cview_{{SHORT}}(&cbox.get_lower_corner())
-    cdef cnp.ndarray[{{CTYPE}}, ndim=1] top_corner = _ff21cview_{{SHORT}}(&cbox.get_upper_corner())
+    cdef cnp.ndarray[{{CTYPE}}, ndim=1] bottom_corner = cbox.get_lower_corner()
+    cdef cnp.ndarray[{{CTYPE}}, ndim=1] top_corner = cbox.get_upper_corner()
     box = np.asarray([bottom_corner, top_corner])
     summands = tuple(dump_summand_{{SHORT}}(summand) for summand in mod)
     return box, summands

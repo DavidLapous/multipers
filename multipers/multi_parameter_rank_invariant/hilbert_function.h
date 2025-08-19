@@ -447,7 +447,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
 ///
 ///
 
-template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
+template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
     tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
@@ -492,12 +492,12 @@ inline void compute_2d_hilbert_surface(
     using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Multi_dimensional_flat_barcode;
     if constexpr (PersBackend::is_vine) {
       if (!slicer.has_persistence()) [[unlikely]] {
-        slicer.compute_persistence();
+        slicer.initialize_persistence_computation();
       } else {
         slicer.vineyard_update();
       }
     } else {
-      slicer.compute_persistence(ignore_inf);
+      slicer.initialize_persistence_computation(ignore_inf);
     }
     bc_type barcodes = slicer.template get_flat_barcode<true>();
     index_type degree_index = 0;
@@ -558,7 +558,7 @@ inline void compute_2d_hilbert_surface(
   return;
 }
 
-template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
+template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(
     tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
                                               std::vector<index_type>>> &thread_stuff,
@@ -582,7 +582,7 @@ void _rec_get_hilbert_surface(
     std::cout << ")." << std::endl;
   }
   if (coordinates_to_compute.size() == 2) {
-    compute_2d_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(thread_stuff,
+    compute_2d_hilbert_surface<PersBackend, Filtration, dtype, index_type>(thread_stuff,
                                                                                       out,  // assumes its a zero tensor
                                                                                       grid_shape,
                                                                                       degrees,
@@ -601,7 +601,7 @@ void _rec_get_hilbert_surface(
     // Updates fixes values that defines the slice
     std::vector<index_type> _fixed_values = fixed_values;  // TODO : do not copy this //thread local
     _fixed_values[coordinate_to_iterate] = z;
-    _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
+    _rec_get_hilbert_surface<PersBackend, Filtration, dtype, index_type>(
         thread_stuff, out, grid_shape, degrees, coordinates_to_compute, _fixed_values, mobius_inverion, zero_pad, ignore_inf);
   });
   // rmq : with mobius_inversion + rec, the coordinates to compute size is 2 =>
@@ -609,7 +609,7 @@ void _rec_get_hilbert_surface(
   // => inversion is only needed for coords > 2
 }
 
-template <typename PersBackend, typename Structure, typename Filtration, typename dtype, typename index_type>
+template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 void get_hilbert_surface(Gudhi::multi_persistence::Slicer<Filtration, PersBackend> &slicer,
                          const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
                          const std::vector<index_type> &grid_shape,
@@ -634,12 +634,11 @@ void get_hilbert_surface(Gudhi::multi_persistence::Slicer<Filtration, PersBacken
   tbb::enumerable_thread_specific<std::pair<ThreadSafe, std::vector<index_type>>> thread_stuff(
       thread_data_initialization);  // this has a fixed size, so
                                     // init should be benefic
-  _rec_get_hilbert_surface<PersBackend, Structure, Filtration, dtype, index_type>(
+  _rec_get_hilbert_surface<PersBackend, Filtration, dtype, index_type>(
       thread_stuff, out, grid_shape, degrees, coordinates_to_compute, fixed_values, mobius_inverion, zero_pad, ignore_inf);
 }
 
 template <typename PersBackend,
-          typename Structure,
           typename Filtration,
           typename dtype,
           typename indices_type,
@@ -692,7 +691,6 @@ void get_hilbert_surface_python(Gudhi::multi_persistence::Slicer<Filtration, Per
 }
 
 template <typename PersBackend,
-          typename Structure,
           typename Filtration,
           typename dtype,
           typename indices_type,

@@ -41,75 +41,68 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
 from multipers.filtrations cimport *
 ctypedef  vector[uint] cycle_type ## its the cycle type of matrix
 
+cdef extern from "gudhi/Multi_parameter_filtered_complex.h" namespace "Gudhi::multi_persistence":
+    cdef cppclass Multi_parameter_filtered_complex[F]:
+        Multi_parameter_filtered_complex()
+        Multi_parameter_filtered_complex(vector[vector[uint32_t]]&, vector[int]&, vector[F]&)
+
+cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
+{{for D in slicers}}
+    {{D['C_TEMPLATE_TYPE']}} build_slicer_from_bitmap "Gudhi::multi_persistence::build_slicer_from_bitmap<Gudhi::multi_persistence::{{D['C_TEMPLATE_TYPE']}}>"(vector[{{D['FILTRATION_TYPE']}}], vector[int]) except + nogil
+    {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree "Gudhi::multi_persistence::build_slicer_from_simplex_tree<Gudhi::multi_persistence::{{D['C_TEMPLATE_TYPE']}}>"(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]) except + nogil
+{{endfor}}
 
 {{for D in slicers}}
-
 #------------------------------------------------------------------------------
-cdef extern from "Persistence_slices_interface.h":
+cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_interface":
   cdef cppclass {{D['C_TEMPLATE_TYPE']}} "{{D['TRUC_TYPE']}}":
       ctypedef {{D['C_VALUE_TYPE']}} value_type
 
       {{D['C_TEMPLATE_TYPE']}}()
-
-      {{if D['IS_SIMPLICIAL']}}
-      {{D['C_TEMPLATE_TYPE']}}(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]*)
-      {{else}}
-      {{D['C_TEMPLATE_TYPE']}}(const vector[vector[unsigned int]]&, const vector[int]&, const vector[{{D['FILTRATION_TYPE']}}]&)
-      {{endif}}
-
+      {{D['C_TEMPLATE_TYPE']}}(Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}]&)
       {{D['C_TEMPLATE_TYPE']}}& operator=(const {{D['C_TEMPLATE_TYPE']}}&)
-      
-      pair[{{D['C_TEMPLATE_TYPE']}}, vector[unsigned int]] colexical_rearange() except + nogil
-      {{D['C_TEMPLATE_TYPE']}} permute(const vector[unsigned int]&) except + nogil
 
-      vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode() nogil
-      vector[vector[pair[int,int]]] get_barcode_idx() nogil
-      vector[vector[vector[pair[int,int]]]] custom_persistences({{D['C_VALUE_TYPE']}}*, int size, bool ignore_inf) except + nogil
-
-      void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
-      void set_one_filtration(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
-      int prune_above_dimension(int) except + nogil 
-
-      vector[{{D['C_VALUE_TYPE']}}] get_one_filtration()
-      # void compute_persistence(vector[bool]) except+ nogil
-      void compute_persistence(bool) except+ nogil # ignore_inf
-      void compute_persistence() except+ nogil # ignore_inf
-      uint32_t num_generators() nogil
-      uint32_t num_parameters() nogil
-      string to_str() nogil
-      pair[One_critical_filtration[{{D['C_VALUE_TYPE']}}], One_critical_filtration[{{D['C_VALUE_TYPE']}}]] get_bounding_box() except + nogil
-      vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] get_filtration_values() nogil
+      uint32_t num_generators "get_number_of_cycle_generators"() nogil
+      uint32_t num_parameters "get_number_of_parameters"() nogil
+      {{if D['IS_VINE']}}
+      vector[uint32_t] get_current_order() nogil
+      void vineyard_update() nogil
+      vector[vector[vector[uint32_t]]] get_representative_cycles(bool) nogil
+      {{endif}}
+      vector[{{D['C_VALUE_TYPE']}}] get_one_filtration "get_slice"()
+      pair[{{D['FILTRATION_TYPE']}}, {{D['FILTRATION_TYPE']}}] get_bounding_box() except + nogil
+      vector[{{D['FILTRATION_TYPE']}}]& get_filtrations "get_filtration_values"() nogil
       vector[int] get_dimensions() nogil
       int get_dimension(int i) nogil
-      vector[vector[uint]] get_boundaries() nogil
-      void coarsen_on_grid_inplace(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
-      vector[{{D['FILTRATION_TYPE']}}]& get_filtrations() nogil
-      {{if D['COLUMN_TYPE'] is not None}}
-      {{D['C_TEMPLATE_TYPE'][:-3]+"i32"}} coarsen_on_grid(vector[vector[{{D['C_VALUE_TYPE']}}]]) nogil
-      {{endif}}
-      {{if D['IS_VINE']}}
-      void vineyard_update() nogil
-      vector[vector[vector[vector[unsigned int]]]] get_representative_cycles(bool, bool) nogil
-      vector[uint32_t] get_current_order() nogil
-      {{endif}}
+      vector[vector[uint32]] get_boundaries() nogil
+      void set_one_filtration "set_slice"(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
+      void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
+      int prune_above_dimension(int) except + nogil 
+      void coarsen_on_grid_inplace "coarsen_on_grid"(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
+      void initialize_persistence_computation(bool) except+ nogil
+      void initialize_persistence_computation() except+ nogil # ignore_inf = true
+      vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode "get_flat_barcode<true, {{D['C_VALUE_TYPE']}}, false>"() nogil
+      vector[vector[pair[int,int]]] get_barcode_idx "get_flat_barcode<true, int, true>"() nogil
 
-      {{if D['IS_KCRITICAL']}}
-      void add_generator(const One_critical_filtration[{{D['C_VALUE_TYPE']}}] &) nogil
-      {{endif}}
+  {{D['C_TEMPLATE_TYPE']}} build_permuted_slicer({{D['C_TEMPLATE_TYPE']}}&, vector[uint32_t]&) except + nogil #permute
+  pair[{{D['C_TEMPLATE_TYPE']}}, vector[uint32_t]] build_permuted_slicer({{D['C_TEMPLATE_TYPE']}}&) except + nogil #colexical_rearange
+  {{if D['COLUMN_TYPE'] is not None}}
+  {{D['C_TEMPLATE_TYPE'][:-3]+"i32"}} build_slicer_coarsen_on_grid({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&) nogil #coarsen_on_grid
+  {{endif}}
+  {{if D['COLUMN_TYPE'] is not None}}
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_projective_cover_kernel({{D['C_TEMPLATE_TYPE']}}&, int) except + nogil #projective_cover_kernel
+  {{endif}}
+  void write_slicer_to_scc_file(string&, {{D['C_TEMPLATE_TYPE']}}&, int, bool, bool, bool, bool) nogil #write_to_scc_file
+  string slicer_to_str({{D['C_TEMPLATE_TYPE']}}&) nogil #to_str
 
-      void write_to_scc_file(const string&, int, int, bool, bool, bool, bool) nogil
-      {{if not D['IS_KCRITICAL']}}
-      void build_from_scc_file(const string&, bool, bool, int) except + nogil
-      {{endif}}
+#------------------------------------------------------------------------------
+cdef extern from "slicer_helpers.h" namespace "Gudhi::multi_persistence":
+  {{if not D['IS_KCRITICAL']}}
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_scc_file(string&, bool, bool, int) except + nogil #build_from_scc_file
+  {{endif}}
+  vector[vector[vector[pair[int,int]]]] custom_persistences "persistence_on_slices<{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}, int, true>"({{D['C_TEMPLATE_TYPE']}}&, {{D['C_VALUE_TYPE']}}*, int, bool) except + nogil
+  vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines "persistence_on_slices"({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, bool) except + nogil
 
-
-      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) except + nogil
-      vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines(vector[pair[vector[{{D['C_VALUE_TYPE']}}],vector[{{D['C_VALUE_TYPE']}}]]],bool) except + nogil
-
-
-      {{if D['COLUMN_TYPE'] is not None}}
-      {{D['C_TEMPLATE_TYPE']}} projective_cover_kernel(int dim) except + nogil
-      {{endif}}
 {{endfor}}
 
 
@@ -120,7 +113,7 @@ from multipers.mma_structures cimport Module
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
 {{for D in slicers}}
   {{if D['IS_VINE'] and D['IS_FLOAT']}}
-  Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, One_critical_filtration[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool) except + nogil
+  Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, vector[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool) except + nogil
   {{endif}}
   {{endfor}}
   pass
@@ -131,7 +124,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 import multipers.slicer as mps
 from cython.operator cimport dereference
 {{for C_VALUE_TYPE,PYTHON_VALUE_TYPE,SHORT_VALUE_TYPE in float_value_types}}
-cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, One_critical_filtration[{{C_VALUE_TYPE}}] direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
+cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, vector[{{C_VALUE_TYPE}}] direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
   import multipers.slicer as mps
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
   cdef Module[{{C_VALUE_TYPE}}] mod

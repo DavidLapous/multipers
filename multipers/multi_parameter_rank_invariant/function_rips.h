@@ -72,8 +72,8 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
     max_st_degree = std::max(node_degree, max_st_degree);
     filtrations.resize(std::max(num_degrees, node_degree));
     if constexpr (verbose) std::cout << "Filtration of node ";
-    for (auto degree_index = 0; degree_index < num_degrees; degree_index++) {
-      if (degrees[degree_index] < node_degree)
+    for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
+      if (degrees[degree_index] < static_cast<int>(node_degree))
         filtrations[degree_index] = filtrations[degrees[degree_index]];
       else
         filtrations[degree_index] = std::numeric_limits<value_type>::infinity();
@@ -104,7 +104,7 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
     // the filtration vector to fill
     _multifiltration &edge_degree_rips_filtration = st_multi.get_filtration_value(*sh_multi);
     edge_degree_rips_filtration.force_generator_size_to_number_of_parameters(0);
-    for (auto degree_index = 0; degree_index < num_degrees; degree_index++) {
+    for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
       value_type edge_filtration_of_degree = edge_filtration;  // copy as we do the max with edges of degree index
       for (int node : st.simplex_vertex_range(*sh_standard)) {
         edge_filtration_of_degree = std::max(edge_filtration_of_degree, edge_filtration_of_nodes[node][degree_index]);
@@ -159,7 +159,8 @@ compute_2d_function_rips(_multi_st &st_multi, // Function rips
 
   // inits default simplextrees
   // copies the st_multi to a standard 1-pers simplextree, and puts its filtration values to 0 for all.
-  Simplex_tree_std _st(st_multi, [](const _multifiltration &f) -> Simplex_tree_std::Filtration_value { return 0.; });
+  Simplex_tree_std _st(
+      st_multi, []([[maybe_unused]] const _multifiltration &f) -> Simplex_tree_std::Filtration_value { return 0.; });
   tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree(_st);
   int max_simplex_dimension =
       *std::max_element(degrees.begin(), degrees.end()) + 1;

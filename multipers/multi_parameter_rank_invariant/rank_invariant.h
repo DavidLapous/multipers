@@ -155,7 +155,6 @@ void compute_rank_invariant_python(
 }
 
 template <class PersBackend,
-          class Structure,
           class MultiFiltration,
           typename dtype,
           typename index_type>
@@ -199,7 +198,6 @@ inline void compute_2d_rank_invariant_of_elbow(
   // BUG : This will break as soon as slicer interface change
 
   using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Multi_dimensional_flat_barcode;
-  bc_type barcodes;
   if constexpr (PersBackend::is_vine) {
     // slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
@@ -212,15 +210,14 @@ inline void compute_2d_rank_invariant_of_elbow(
       //     degrees_index[degree] = true;
       // }
       // slicer.compute_persistence(degrees_index);
-      slicer.compute_persistence();
+      slicer.initialize_persistence_computation();
     } else {
       slicer.vineyard_update();
     }
-    barcodes = slicer.template get_flat_barcode<true>();
   } else {
-    slicer.compute_persistence(ignore_inf);
-    barcodes = slicer.template get_flat_barcode<true>();
+    slicer.initialize_persistence_computation(ignore_inf);
   }
+  bc_type barcodes = slicer.template get_flat_barcode<true>();
 
   // note one_pers not necesary when vine, but does the same computation
 
@@ -258,7 +255,6 @@ inline void compute_2d_rank_invariant_of_elbow(
 };
 
 template <class PersBackend,
-          class Structure,
           class MultiFiltration,
           typename dtype,
           typename index_type>
@@ -284,7 +280,7 @@ inline void compute_2d_rank_invariant(
     tbb::parallel_for(0, Y, [&](index_type J) {
       if constexpr (verbose) std::cout << "Computing elbow " << I << " " << J << "...";
       ThreadSafe &slicer = thread_locals.local();
-      compute_2d_rank_invariant_of_elbow<PersBackend, Structure, MultiFiltration, dtype, index_type>(
+      compute_2d_rank_invariant_of_elbow<PersBackend, MultiFiltration, dtype, index_type>(
           slicer, out, I, J, grid_shape, degrees, flip_death, ignore_inf);
       if constexpr (verbose) std::cout << "Done!" << std::endl;
     });
@@ -292,7 +288,6 @@ inline void compute_2d_rank_invariant(
 }
 
 template <class PersBackend,
-          class Structure,
           class MultiFiltration,
           typename dtype,
           typename indices_type>
@@ -315,7 +310,6 @@ void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltrat
 }
 
 template <typename PersBackend,
-          typename Structure,
           typename MultiFiltration,
           typename dtype = int,
           typename indices_type = int>

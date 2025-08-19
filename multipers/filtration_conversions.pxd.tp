@@ -15,7 +15,7 @@ value_types = [
 }}
 
 # Python to C++ conversions
-from multipers.filtrations cimport One_critical_filtration,Multi_critical_filtration
+from multipers.filtrations cimport One_critical_filtration,Multi_critical_filtration, Point
 from libcpp.vector cimport vector
 from libcpp cimport bool
 cimport numpy as cnp
@@ -29,12 +29,31 @@ from cython.operator cimport dereference
 
 cdef inline vector[{{CTYPE}}] _py2p_{{SHORT}}({{CTYPE}}[:] filtration) noexcept nogil:
     # TODO: Is there no directer way to convert a T[:] into a vector[T]?
-    # A memcpy would be much quicker than a python for loop...
+    # A memcpy would be much quicker than a python/cython for loop...
     # With a continuous memory use, we could also pass the pointers as iterators if we have access to it?
     cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](len(filtration))
     for i in range(len(filtration)):
       f[i] = filtration[i]
     return f
+
+cdef inline vector[{{CTYPE}}] _py2p2_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
+    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[0] * filtrations.shape[1])
+    k = 0
+    for i in range(filtrations.shape[0]):
+        for j in range(filtrations.shape[1]):
+          f[k] = filtrations[i,j]
+          k = k + 1
+    return f
+
+cdef inline vector[Point[{{CTYPE}}]] _py2vp_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
+    cdef vector[Point[{{CTYPE}}]] out
+    cdef Point[{{CTYPE}}] f = Point[{{CTYPE}}](filtrations.shape[1])
+    out.reserve(filtrations.shape[0])
+    for i in range(filtrations.shape[0]):
+        for j in range(filtrations.shape[1]):
+          f[j] = filtrations[i,j]
+        out.emplace_back(f)
+    return out
 
 cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
     # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})

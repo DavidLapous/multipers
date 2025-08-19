@@ -12,7 +12,9 @@
 #define UTILITIES_H
 
 #include <cassert>
+#include <initializer_list>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "../gudhi/gudhi/multi_simplex_tree_helpers.h"
@@ -117,6 +119,7 @@ struct MultiDiagram {  // for python interface
 
   MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m) : multiDiagram(m) {}
 
+  using python_fil = std::vector<typename filtration_type::value_type>;
   using python_bar = std::pair<std::vector<typename filtration_type::value_type>,
                                std::vector<typename filtration_type::value_type>>;  // This type is for python
 
@@ -126,8 +129,12 @@ struct MultiDiagram {  // for python interface
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
         if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && !pt.get_birth().is_plus_inf() &&
-            !pt.get_death().is_minus_inf())
-          out.push_back({pt.get_birth(), pt.get_death()});
+            !pt.get_death().is_minus_inf()){
+          // only works with Dynamic_multi_filtration_value
+          const auto& b = pt.get_birth()[0];
+          const auto& d = pt.get_death()[0];
+          out.push_back({python_fil(b.begin(), b.end()), python_fil(d.begin(), d.end())});
+        }
       }
     }
     /* out.shrink_to_fit(); */
@@ -140,10 +147,11 @@ struct MultiDiagram {  // for python interface
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        const auto &b = pt.get_birth().template as_type<double>();
-        const auto &d = pt.get_death().template as_type<double>();
+        // only works with Dynamic_multi_filtration_value
+        const auto& b = pt.get_birth();
+        const auto& d = pt.get_death();
         assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
-        out.push_back({b[0], d[0], b[1], d[1]});
+        out.emplace_back(std::initializer_list<double>{b(0,0), d(0,0), b(0,1), d(0,1)});
       }
     }
     out.shrink_to_fit();
@@ -203,8 +211,8 @@ struct MultiDiagrams {
           a = -inf;
           b = -inf;
         } else {
-          a = pt.get_birth()[0];
-          b = pt.get_birth()[1];
+          a = pt.get_birth()(0,0);
+          b = pt.get_birth()(0,1);
         }
         if (pt.get_death().is_plus_inf()) {
           c = inf;
@@ -214,8 +222,8 @@ struct MultiDiagrams {
           c = 0;
           d = 0;
         } else {
-          c = pt.get_death()[0];
-          d = pt.get_death()[1];
+          c = pt.get_death()(0,0);
+          d = pt.get_death()(0,1);
         }
         /* out[i].push_back({pt.get_birth()[0], pt.get_death()[0],
          * pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)}); */
@@ -225,10 +233,10 @@ struct MultiDiagrams {
     return out;
   }
 
-  using __for_python_plot_type = std::pair<std::vector<std::pair<double, double>>, std::vector<unsigned int>>;
+  using _for_python_plot_type = std::pair<std::vector<std::pair<double, double>>, std::vector<unsigned int>>;
 
-  __for_python_plot_type _for_python_plot(dimension_type dimension = -1, value_type min_persistence = 0) {
-    __for_python_plot_type out;
+  _for_python_plot_type _for_python_plot(dimension_type dimension = -1, value_type min_persistence = 0) {
+    _for_python_plot_type out;
     auto &bars = out.first;
     auto &summand_idx = out.second;
     bars.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size() * 2);
@@ -236,13 +244,13 @@ struct MultiDiagrams {
     for (const MultiDiagram<filtration_type, value_type> &multiDiagram : this->multiDiagrams) {
       unsigned int count = 0;
       for (const MultiDiagram_point<filtration_type> &bar : multiDiagram) {
-        const auto &birth = bar.get_birth().template as_type<double>();
-        const auto &death = bar.get_death().template as_type<double>();
-        if ((dimension == -1 || bar.get_dimension() == dimension) && birth.size() > 1 && death.size() > 1 &&
-            (death[0] > birth[0] + min_persistence)) {
-          // Checking >1 ensure that filtration is not inf or -inf or nan.
-          bars.push_back({birth[0], death[0]});
-          bars.push_back({birth[1], death[1]});
+        const auto &birth = bar.get_birth();
+        const auto &death = bar.get_death();
+        if ((dimension == -1 || bar.get_dimension() == dimension) && birth.is_finite() && death.is_finite() &&
+            (death(0,0) > birth(0,0) + min_persistence)) {
+          // Checking is_finite ensures that filtration is not inf or -inf or nan.
+          bars.push_back(std::pair<double, double>(birth(0,0), death(0,0)));
+          bars.push_back(std::pair<double, double>(birth(0,1), death(0,1)));
           summand_idx.push_back(count);
         }
         count++;
@@ -259,6 +267,7 @@ struct MultiDiagrams {
 
   iterator end() const { return this->multiDiagrams.end(); }
 
+  using python_fil = std::vector<value_type>;
   using python_bar = std::pair<std::vector<value_type>,
                                std::vector<value_type>>;  // This type is for python
   using barcodes = std::vector<std::vector<python_bar>>;
@@ -272,7 +281,10 @@ struct MultiDiagrams {
     for (unsigned int i = 0; i < nlines; i++) {
       for (unsigned int j = 0; j < nsummands; j++) {
         const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
-        out[i][j] = {pt.get_birth(), pt.get_death()};
+        // only works with Dynamic_multi_filtration_value
+        const auto& b = pt.get_birth()[0];
+        const auto& d = pt.get_death()[0];
+        out[i][j] = {python_fil(b.begin(), b.end()), python_fil(d.begin(), d.end())};
       }
     }
     return out;

@@ -6,7 +6,7 @@ from itertools import product
 ## Columns of the matrix backend.
 # with ordered by their performance on some synthetic benchmarks.
 columns_name = [  # only one column is necessary
-    "Available_columns::" + stuff
+    "multipers::tmp_interface::Available_columns::" + stuff
     for stuff in (
         "INTRUSIVE_SET", # At least one of these is necessary. This one is the default
         # "SET",
@@ -71,7 +71,7 @@ def get_slicer(backend_type, is_vine, is_kcritical, value_type, column_type):
     ctype, pytype, short_type = value_type
     col_idx, col = column_type
     PYTHON_TYPE = f"_{'K' if is_kcritical else ''}Slicer_{backend_type}{col_idx}{'_vine' if is_vine else ''}_{short_type}"
-    CTYPE = f"TrucPythonInterface<BackendsEnum::{backend_type},{'true' if is_vine else 'false'},{'true' if is_kcritical else 'false'},{ctype},{col}>"
+    CTYPE = f"multipers::tmp_interface::TrucPythonInterface<multipers::tmp_interface::BackendsEnum::{backend_type},{'true' if is_vine else 'false'},{'true' if is_kcritical else 'false'},{ctype},{col}>"
     IS_SIMPLICIAL = False
     IS_VINE = is_vine
     IS_KCRITICAL = is_kcritical

@@ -5,8 +5,6 @@ from libcpp cimport tuple
 from libc.stdint cimport uintptr_t,intptr_t
 from cpython cimport Py_buffer
 
-# from multipers.dynamic_multi_parameter_filtration cimport Dynamic_multi_parameter_filtration
-
 
 cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
     cdef cppclass One_critical_filtration[T]:
@@ -190,11 +188,11 @@ cdef extern from "gudhi/Multi_persistence/Point.h" namespace "Gudhi::multi_persi
             bint operator>=(reverse_iterator)
             bint operator>=(const_reverse_iterator)
 
-        Point()
-        Point(size_type)
-        Point(size_type, const T &)
-        Point(const vector[T]&)
-        Point& operator=(Point&)
+        Point() except + nogil
+        Point(size_type) except + nogil
+        Point(size_type, const T &) except + nogil
+        Point(const vector[T]&) except + nogil
+        Point& operator=(Point&) except + nogil
         reference at(size_type) except +
         reference operator[](size_type)
         reference front()
@@ -260,11 +258,14 @@ cdef extern from "gudhi/Multi_persistence/Box.h" namespace "Gudhi::multi_persist
         Box(vector[T]&, vector[T]&) nogil 
         Box(pair[vector[T], vector[T]]&) nogil  
         void inflate(T)  nogil 
-        const corner_type& get_lower_corner()  nogil 
-        const corner_type& get_upper_corner()  nogil 
-        bool contains(corner_type&)  nogil
+        # const corner_type& get_lower_corner()  nogil 
+        # const corner_type& get_upper_corner()  nogil 
+        const vector[T]& get_lower_corner()  nogil 
+        const vector[T]& get_upper_corner()  nogil 
+        # bool contains(corner_type&)  nogil
         bool contains(vector[T]&)  nogil
-        pair[corner_type, corner_type] get_bounding_corners() nogil
+        # pair[corner_type, corner_type] get_bounding_corners() nogil
+        pair[vector[T], vector[T]] get_bounding_corners() nogil
 
 cdef extern from "gudhi/Multi_persistence/Line.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Line[T=*]:

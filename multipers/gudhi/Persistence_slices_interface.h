@@ -181,4 +181,12 @@ using One_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter
 template<typename T>
 using Multi_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<T, false, false>;
 
+template<class Slicer>
+std::string slicer_to_str(const Slicer& s)
+{
+  std::stringstream stream;
+  stream << s;
+  return stream.str();
+}
+
 }  // namespace multipers::tmp_interface

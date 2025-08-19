@@ -76,13 +76,13 @@ def module_approximation_from_slicer(
         approx_mod = PyModule_f32()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py21c_f32(direction_), max_error,Box[float](box),threshold, complete, verbose)
+        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py2p_f32(direction_), max_error,Box[float](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f32)
     elif slicer.dtype == np.float64:
         approx_mod = PyModule_f64()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py21c_f64(direction_), max_error,Box[double](box),threshold, complete, verbose)
+        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py2p_f64(direction_), max_error,Box[double](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f64)
     else:
         raise ValueError(f"Slicer must be float-like. Got {slicer.dtype}.")
