@@ -160,6 +160,12 @@ class Thread_safe_slicer : private Slicer
   const std::vector<T>& get_slice() const { return Slicer::get_slice(); }
 
   /**
+   * @brief Returns a reference to the current slice. It can also be initialized or updated with @ref set_slice
+   * and @ref push_to.
+   */
+  std::vector<T>& get_slice() { return Slicer::get_slice(); }
+
+  /**
    * @brief Returns a const reference to the class computing the persistence of the current slice. It will be
    * initialized with @ref initialize_persistence_computation.
    */

@@ -18,6 +18,7 @@
 #ifndef MP_SLICER_H_INCLUDED
 #define MP_SLICER_H_INCLUDED
 
+#include <array>
 #include <cstddef>
 #include <initializer_list>
 #include <type_traits>
@@ -211,6 +212,12 @@ class Slicer
    * and @ref push_to.
    */
   const std::vector<T>& get_slice() const { return slice_; }
+
+  /**
+   * @brief Returns a reference to the current slice. It can also be initialized or updated with @ref set_slice
+   * and @ref push_to.
+   */
+  std::vector<T>& get_slice() { return slice_; }
 
   /**
    * @brief Returns a const reference to the class computing the persistence of the current slice. It will be
@@ -753,7 +760,7 @@ class Slicer
     for (const auto& bar : persistence_.get_barcode()) {
       if (bar.dim <= maxDim) {
         _retrieve_interval<idx>(bar, dim, birth, death);
-        out[dim].emplace_back({birth, death});
+        out[dim].emplace_back(std::array<Value, 2>{birth, death});
       }
     }
     return out;

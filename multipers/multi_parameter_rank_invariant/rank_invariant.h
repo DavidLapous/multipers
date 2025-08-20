@@ -159,7 +159,7 @@ template <class PersBackend,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
-    typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::ThreadSafe &slicer,  // truc slicer
+    typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe &slicer,  // truc slicer
     const tensor::static_tensor_view<dtype, index_type> &out,                               // assumes its a zero tensor
     const index_type I,
     const index_type J,
@@ -170,7 +170,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     const bool flip_death = false,
     const bool ignore_inf = true) {
   using value_type = typename MultiFiltration::value_type;
-  const auto &filtrations_values = slicer.get_filtrations();
+  const auto &filtrations_values = slicer.get_filtration_values();
   auto num_generators = filtrations_values.size();
   // one_persistence.resize(num_generators); // local variable should be
   // initialized correctly
@@ -194,10 +194,10 @@ inline void compute_2d_rank_invariant_of_elbow(
   index_type degree_index = 0;
   // order_container.resize(slicer.num_generators()); // local variable should
   // be initialized correctly
-  // TODO : use slicer::ThreadSafe instead of maintaining one_pers & order
+  // TODO : use slicer::Thread_safe instead of maintaining one_pers & order
   // BUG : This will break as soon as slicer interface change
 
-  using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Multi_dimensional_flat_barcode;
+  using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::template Multi_dimensional_flat_barcode<>;
   if constexpr (PersBackend::is_vine) {
     // slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
@@ -273,7 +273,7 @@ inline void compute_2d_rank_invariant(
     std::cout << "Shape " << grid_shape[0] << " " << grid_shape[1] << " " << grid_shape[2] << " " << grid_shape[3]
               << " " << grid_shape[4] << std::endl;
 
-  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::ThreadSafe;
+  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe;
   ThreadSafe slicer_thread(slicer);
   tbb::enumerable_thread_specific<ThreadSafe> thread_locals(slicer_thread);
   tbb::parallel_for(0, X, [&](index_type I) {

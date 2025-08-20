@@ -275,8 +275,8 @@ class Summand {
 
   std::vector<filtration_type> get_birth_list() const;
   std::vector<filtration_type> get_death_list() const;
-  const filtration_type &get_upset() const;
-  const filtration_type &get_downset() const;
+  const births_type &get_upset() const;
+  const deaths_type &get_downset() const;
   void clean();
 
   void complete_birth(const value_type precision);
@@ -483,7 +483,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
 
 template <int axis, class Filtration_value, class Slicer>
 void _rec_mma2(Module<typename Filtration_value::value_type> &module,
-               typename Line<value_type>::Point_t &&basepoint,
+               typename Line<typename Filtration_value::value_type>::Point_t &&basepoint,
                const Filtration_value &direction,
                const std::vector<int> &grid_size,
                const std::vector<bool> &signs,
@@ -491,7 +491,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                Slicer &&current_persistence,
                const value_type precision,
                bool threshold) {
-  static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::value_type>);
+  static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::T>);
 
   if (dim_to_iterate <= axis) {
     if (signs[axis]) {
@@ -524,8 +524,8 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
   for (int i = 0; i < grid_size[dim_to_iterate]; ++i) {
     // TODO : multithread, but needs matrix to be thread safe + put mutex on
     // module
-    _rec_mma2<axis, Filtration_value, typename Slicer::ThreadSafe>(module,
-                                                                   typename Line<value_type>::Point_t(basepoint),
+    _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(module,
+                                                                   typename Line<typename Filtration_value::value_type>::Point_t(basepoint),
                                                                    direction,
                                                                    grid_size,
                                                                    signs,
@@ -612,8 +612,8 @@ Module<value_type> multiparameter_module_approximation(
     for (const auto& b : barcode) num_bars += b.size();
     out.resize(num_bars);
     std::size_t i = 0;
-    for (int dim = 0; dim < barcode.size(); ++dim) {
-      for (const auto& bar: barcode[dim]){
+    for (unsigned int dim = 0; dim < barcode.size(); ++dim) {
+      for ([[maybe_unused]] const auto& bar: barcode[dim]){
         out[i].set_dimension(dim);
         ++i;
       }
@@ -661,7 +661,7 @@ Module<value_type> multiparameter_module_approximation(
     for (std::size_t i = 1; i < num_parameters; i++) {
       // the loop is on the faces of the lower box
       // should be parallelizable, up to a mutex on out
-      if (direction.num_parameters() && direction[i] == 0.0) continue;  // skip faces with codim d_i=0
+      if (direction.size() && direction[i] == 0.0) continue;  // skip faces with codim d_i=0
       auto temp_grid_size = grid_size;
       temp_grid_size[i] = 0;
       if (verbose){
@@ -681,7 +681,7 @@ Module<value_type> multiparameter_module_approximation(
                    threshold);
     }
     // last one, we can destroy basepoint & cie
-    if (!direction.num_parameters() || direction[0] > 0) {
+    if (!direction.size() || direction[0] > 0) {
       grid_size[0] = 0;
       if (verbose){
         std::cout << "Face " << num_parameters << "/" << num_parameters << " with grid size ";
@@ -770,7 +770,7 @@ inline void Module<value_type>::_add_bar_with_threshold(const Line<value_type> &
               << " direction " << line.direction() << std::endl;
   }
 
-  auto birth_container = line[birth_filtration];
+  filtration_type birth_container = line[birth_filtration];
   if constexpr (verbose) std::cout << " B: " << birth_container << " B*d: " << birth_filtration * line.direction();
   if (birth_container.is_minus_inf()) {
     if (threshold_in) birth_container = box_.get_lower_corner();
@@ -778,13 +778,13 @@ inline void Module<value_type>::_add_bar_with_threshold(const Line<value_type> &
     bool allInf = true;
     for (std::size_t i = 0U; i < birth_container.num_parameters(); i++) {
       auto t = box_.get_lower_corner()[i];
-      if (birth_container[i] < t - 1e-10) birth_container[i] = threshold_in ? t : -filtration_type::T_inf;
-      if (birth_container[i] != -filtration_type::T_inf) allInf = false;
+      if (birth_container(0,i) < t - 1e-10) birth_container(0,i) = threshold_in ? t : -filtration_type::T_inf;
+      if (birth_container(0,i) != -filtration_type::T_inf) allInf = false;
     }
-    if (allInf) birth_container = filtration_type::minus_inf();
+    if (allInf) birth_container = filtration_type::minus_inf(birth_container.num_parameters());
   }
 
-  auto death_container = line[death_filtration];
+  filtration_type death_container = line[death_filtration];
   if constexpr (verbose) std::cout << " D: " << death_container;
   if (death_container.is_plus_inf()) {
     if (threshold_in) death_container = box_.get_upper_corner();
@@ -792,10 +792,10 @@ inline void Module<value_type>::_add_bar_with_threshold(const Line<value_type> &
     bool allInf = true;
     for (std::size_t i = 0U; i < death_container.num_parameters(); i++) {
       auto t = box_.get_upper_corner()[i];
-      if (death_container[i] > t + 1e-10) death_container[i] = threshold_in ? t : filtration_type::T_inf;
-      if (death_container[i] != filtration_type::T_inf) allInf = false;
+      if (death_container(0,i) > t + 1e-10) death_container(0,i) = threshold_in ? t : filtration_type::T_inf;
+      if (death_container(0,i) != filtration_type::T_inf) allInf = false;
     }
-    if (allInf) death_container = filtration_type::inf();
+    if (allInf) death_container = filtration_type::inf(death_container.num_parameters());
   }
 
   if constexpr (verbose) std::cout << " BT: " << birth_container << " DT: " << death_container << std::endl;
@@ -2108,12 +2108,12 @@ inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_
 }
 
 template <typename value_type>
-const Summand<value_type>::filtration_type &Summand<value_type>::get_upset() const {
+const Summand<value_type>::births_type &Summand<value_type>::get_upset() const {
   return birth_corners_;
 }
 
 template <typename value_type>
-const Summand<value_type>::filtration_type &Summand<value_type>::get_downset() const {
+const Summand<value_type>::deaths_type &Summand<value_type>::get_downset() const {
   return death_corners_;
 };
 
@@ -2218,7 +2218,7 @@ inline void Summand<value_type>::_compute_interleaving(const Box<value_type> &bo
 
 template <typename value_type>
 inline void Summand<value_type>::_add_birth(const filtration_type &birth) {
-  birth_corners_.add_generator(birth);
+  birth_corners_.add_generator(birth[0]);
   return;
 
   // // TODO : DEPRECATE THIS OLD CODE
@@ -2255,7 +2255,7 @@ inline void Summand<value_type>::_add_birth(const filtration_type &birth) {
 
 template <typename value_type>
 inline void Summand<value_type>::_add_death(const filtration_type &death) {
-  death_corners_.add_generator(death);
+  death_corners_.add_generator(death[0]);
   return;
   // // TODO:  Deprecate this old code
   // if (death_corners_.empty()) {
@@ -2322,7 +2322,7 @@ inline value_type Summand<value_type>::_rectangle_volume(const filtration_type &
 
 template <typename value_type>
 inline value_type Summand<value_type>::d_inf(const Generator &a, const Generator &b) const {
-  if (a.empty() || b.empty() || a.size() != b.size()) return inf;
+  if (a.size() == 0 || b.size() == 0 || a.size() != b.size()) return inf;
 
   value_type d = std::abs(a[0] - b[0]);
   for (unsigned int i = 1; i < a.size(); i++) d = std::max(d, std::abs(a[i] - b[i]));
@@ -2366,7 +2366,7 @@ inline void Summand<value_type>::_clean(std::vector<filtration_type> &list, bool
   list.erase(std::remove_if(list.begin(),
                             list.end(),
                             [keep_inf](filtration_type &a) {
-                              return a.empty() || ((!keep_inf) && (a.is_plus_inf() || a.is_minus_inf()));
+                              return a.num_parameters() == 0 || ((!keep_inf) && (a.is_plus_inf() || a.is_minus_inf()));
                             }),
              list.end());
 }

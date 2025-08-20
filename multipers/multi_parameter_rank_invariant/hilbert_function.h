@@ -449,7 +449,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
 
 template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 inline void compute_2d_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -472,14 +472,14 @@ inline void compute_2d_hilbert_surface(
 
     coordinates_container[j + 1] = height;
 
-    auto &slice_filtration = slicer.get_one_filtration();
-    const auto &multi_filtration = slicer.get_filtrations();
+    auto &slice_filtration = slicer.get_slice();
+    const auto &multi_filtration = slicer.get_filtration_values();
 
     for (std::size_t k = 0; k < multi_filtration.size(); k++) {
       slice_filtration[k] = Filtration::T_inf;
       for (unsigned int g = 0; g < multi_filtration[k].num_generators(); ++g) {
         slice_filtration[k] = std::min(slice_filtration[k],
-                                       static_cast<Simplex_tree_std::Filtration_value>(horizontal_line_filtration2(
+                                       static_cast<value_type>(horizontal_line_filtration2(
                                            multi_filtration[k], g, height, i, j, fixed_values)));
       }
     }
@@ -489,9 +489,9 @@ inline void compute_2d_hilbert_surface(
       for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
-    using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Multi_dimensional_flat_barcode;
+    using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::template Multi_dimensional_flat_barcode<>;
     if constexpr (PersBackend::is_vine) {
-      if (!slicer.has_persistence()) [[unlikely]] {
+      if (!slicer.persistence_computation_is_initialized()) [[unlikely]] {
         slicer.initialize_persistence_computation();
       } else {
         slicer.vineyard_update();
@@ -560,7 +560,7 @@ inline void compute_2d_hilbert_surface(
 
 template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(
-    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe,
+    tbb::enumerable_thread_specific<std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe,
                                               std::vector<index_type>>> &thread_stuff,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
@@ -624,9 +624,9 @@ void get_hilbert_surface(Gudhi::multi_persistence::Slicer<Filtration, PersBacken
   // wrapper arount the rec version, that initialize the thread variables.
   if (coordinates_to_compute.size() < 2)
     throw std::logic_error("Not implemented for " + std::to_string(coordinates_to_compute.size()) + "<2 parameters.");
-  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::ThreadSafe;
+  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe;
   ThreadSafe slicer_thread(slicer);
-  std::vector<index_type> coordinates_container(slicer_thread.num_parameters() + 1);  // +1 for degree
+  std::vector<index_type> coordinates_container(slicer_thread.get_number_of_parameters() + 1);  // +1 for degree
   // coordinates_container.reserve(fixed_values.size()+1);
   // coordinates_container.push_back(0); // degree
   // for (auto c : fixed_values) coordinates_container.push_back(c);

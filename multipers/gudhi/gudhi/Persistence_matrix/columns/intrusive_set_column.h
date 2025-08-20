@@ -902,6 +902,8 @@ inline Intrusive_set_column<Master_matrix>& Intrusive_set_column<Master_matrix>:
   operators_ = std::exchange(other.operators_, nullptr);
   entryPool_ = std::exchange(other.entryPool_, nullptr);
   column_ = std::move(other.column_);
+
+  return *this;
 }
 
 template <class Master_matrix>

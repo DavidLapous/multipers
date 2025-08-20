@@ -325,6 +325,17 @@ class Dynamic_multi_parameter_filtration
   }
 
   /**
+   * @brief Returns reference to the requested generator.
+   *
+   * @param g Index of the generator.
+   */
+  Generator &operator[](size_type g)
+  {
+    GUDHI_CHECK(g < generators_.size(), "Out of bound index.");
+    return generators_[g];
+  }
+
+  /**
    * @brief Let \f$ g \f$ be the first value in `indices` and \f$ p \f$ the second value.
    * Returns reference to value of parameter \f$ p \f$ of generator \f$ g \f$.
    * If the value is at +/- inf or NaN and it needs to be modified, @ref force_generator_size_to_number_of_parameters

@@ -483,7 +483,6 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
                 "Filtration value of the simplex tree has to correspond to the MultiFiltrationValue concept.");
 
   using Complex = Multi_parameter_filtered_complex<Fil>;
-  using Index = typename Complex::Index;
 
   const unsigned int numberOfSimplices = simplexTree.num_simplices();
   
@@ -611,7 +610,6 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
     unsigned int size,
     [[maybe_unused]] bool ignoreInf = true) {
   using Barcode = typename Slicer::template Multi_dimensional_flat_barcode<U>;
-  using Thread_safe = typename Slicer::Thread_safe;
 
   if (size == 0) return {};
 
@@ -628,9 +626,9 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
     }
   } else {
 #ifdef GUDHI_USE_TBB
-    tbb::enumerable_thread_specific<Thread_safe> threadLocals(slicer.weak_copy());
+    tbb::enumerable_thread_specific<typename Slicer::Thread_safe> threadLocals(slicer.weak_copy());
     tbb::parallel_for(static_cast<std::size_t>(0), size, [&](const Index& i) {
-      Thread_safe& s = threadLocals.local();
+      typename Slicer::Thread_safe& s = threadLocals.local();
       std::forward<F>(ini_slicer)(s, i);
       s.initialize_persistence_computation(ignoreInf);
       out[i] = s.template get_flat_barcode<true, U, idx>();
