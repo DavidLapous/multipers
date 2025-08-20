@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <utility>
 
 #include "gudhi/multi_simplex_tree_helpers.h"
 #include "gudhi/persistence_matrix_options.h"
@@ -181,8 +183,15 @@ using One_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter
 template<typename T>
 using Multi_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<T, false, false>;
 
+template <typename T>
+using Bar = std::array<T, 2>;
+template <class Slicer, typename T = typename Slicer::T>
+using Barcode = typename Slicer::template Flat_barcode<T>;
+template <class Slicer, typename T = typename Slicer::T>
+using Dim_barcode = typename Slicer::template Multi_dimensional_flat_barcode<T>;
+
 template<class Slicer>
-std::string slicer_to_str(const Slicer& s)
+std::string slicer_to_str(Slicer& s)
 {
   std::stringstream stream;
   stream << s;

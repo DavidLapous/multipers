@@ -24,6 +24,12 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         size_t num_generators() nogil
         size_t num_entries() nogil
         void set_num_generators(size_t) nogil
+        @staticmethod
+        One_critical_filtration inf(int)
+        @staticmethod
+        One_critical_filtration minus_inf(int)
+        @staticmethod
+        One_critical_filtration nan(int)
         bool is_plus_inf() nogil
         bool is_minus_inf() nogil
         bool is_nan() nogil
@@ -34,7 +40,7 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         void simplify() nogil
         void remove_empty_generators(bool) nogil
         bool push_to_least_common_upper_bound(vector[T] &, bool) nogil
-        # bool push_to_least_common_upper_bound(const One_critical_filtration &, bool) nogil
+        bool push_to_least_common_upper_bound(const One_critical_filtration &, bool) nogil
         bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
         # bool pull_to_greatest_common_lower_bound(const One_critical_filtration &, bool) nogil
 
@@ -59,6 +65,12 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         size_t num_generators() nogil
         size_t num_entries() nogil
         void set_num_generators(size_t) nogil
+        @staticmethod
+        Multi_critical_filtration inf(int)
+        @staticmethod
+        Multi_critical_filtration minus_inf(int)
+        @staticmethod
+        Multi_critical_filtration nan(int)
         bool is_plus_inf() nogil
         bool is_minus_inf() nogil
         bool is_nan() nogil
@@ -68,10 +80,11 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         void add_guaranteed_generator(vector[T] &x) nogil
         void simplify() nogil
         void remove_empty_generators(bool) nogil
+        # "push_to_least_common_upper_bound<std::vector<T>>"
         bool push_to_least_common_upper_bound(vector[T] &, bool) nogil
-        # bool push_to_least_common_upper_bound(const One_critical_filtration[T] &, bool) nogil
+        bool push_to_least_common_upper_bound(const Multi_critical_filtration[T] &, bool) nogil
         bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
-        # bool pull_to_greatest_common_lower_bound(const One_critical_filtration[T] &, bool) nogil
+        # bool pull_to_greatest_common_lower_bound(const Multi_critical_filtration[T] &, bool) nogil
 
         # specific to Dynamic_multi_parameter_filtration
         void force_generator_size_to_number_of_parameters(size_t) nogil

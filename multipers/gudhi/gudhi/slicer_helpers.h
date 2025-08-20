@@ -603,7 +603,7 @@ inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& s
 /**
  * @private
  */
-template <bool idx, class Slicer, class F, class U>
+template <bool idx, class U, class Slicer, class F>
 std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persistence_on_slices_(
     Slicer& slicer,
     F&& ini_slicer,
@@ -618,7 +618,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
   if constexpr (Slicer::Persistence::is_vine) {
     std::forward<F>(ini_slicer)(slicer, 0);
     slicer.initialize_persistence_computation(false);
-    out[0] = slicer.template get_barcode<true, U>();
+    out[0] = slicer.template get_flat_barcode<true, U>();
     for (auto i = 1U; i < size; ++i) {
       std::forward<F>(ini_slicer)(slicer, i);
       slicer.vineyard_update();
@@ -677,11 +677,12 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> persist
   GUDHI_CHECK(basePoints.empty() || basePoints[0].size() == slicer.get_number_of_parameters(),
               "There should be as many directions than base points.");
 
-  auto get_direction = [&directions](unsigned int i) -> const std::vector<T>& {
-    return directions.empty() ? std::vector<T>{} : directions[i];
+  std::vector<T> dummy;
+  auto get_direction = [&](unsigned int i) -> const std::vector<T>& {
+    return directions.empty() ? dummy : directions[i];
   };
 
-  return persistence_on_slices_<idx>(
+  return persistence_on_slices_<idx, U>(
       slicer,
       [&](auto s, unsigned int i) { s.push_to(Line<T>(basePoints[i], get_direction(i))); },
       basePoints.size(),
@@ -712,7 +713,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
   GUDHI_CHECK(slices.empty() || slices[0].size() == slicer.get_number_of_cycle_generators(),
               "There should be as many elements in a slice than cells in the slicer.");
 
-  return persistence_on_slices_<idx>(
+  return persistence_on_slices_<idx, U>(
       slicer,
       [&](auto s, unsigned int i) { s.set_slice(slices[i]); },
       slices.size(),
@@ -737,13 +738,13 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
  * potentially in less storage use and better performance. But the parameter will be ignored if
  * PersistenceAlgorithm::is_vine is true.
  */
-template <class Slicer, class T, class U = T, bool idx = false, std::enable_if_t<std::is_arithmetic_v<T>>>
+template <class Slicer, class T, class U = T, bool idx = false, class = std::enable_if_t<std::is_arithmetic_v<T>>>
 std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
 persistence_on_slices(Slicer& slicer, T* slices, unsigned int numberOfSlices, bool ignoreInf = true) {
   auto num_gen = slicer.get_number_of_cycle_generators();
   auto view = Gudhi::Simple_mdspan(slices, numberOfSlices, num_gen);
 
-  return persistence_on_slices_<idx>(
+  return persistence_on_slices_<idx, U>(
       slicer,
       [&](auto s, unsigned int i) {
         T* start = &view(i, 0);

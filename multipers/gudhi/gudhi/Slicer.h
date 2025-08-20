@@ -242,6 +242,10 @@ class Slicer
         b.push_to_least_common_upper_bound(fil);
       }
     }
+    // if constexpr (Gudhi::multi_filtration::RangeTraits<Filtration_value>::is_dynamic_multi_filtration) {
+    //   a.force_generator_size_to_number_of_parameters(0);
+    //   b.force_generator_size_to_number_of_parameters(0);
+    // }
     return std::make_pair(std::move(a), std::move(b));
   }
 
@@ -532,7 +536,9 @@ class Slicer
   friend auto build_slicer_coarsen_on_grid(const Slicer& slicer, const std::vector<std::vector<T>> grid)
   {
     using return_filtration_value = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
-    return Slicer<return_filtration_value, Persistence>(build_complex_coarsen_on_grid(slicer.complex_, grid));
+    using return_complex = decltype(build_complex_coarsen_on_grid(slicer.complex_, grid));
+    using return_pers = typename Persistence::template As_type<return_complex>;
+    return Slicer<return_filtration_value, return_pers>(build_complex_coarsen_on_grid(slicer.complex_, grid));
   }
 
   /**
@@ -580,7 +586,7 @@ class Slicer
   /**
    * @brief Outstream operator.
    */
-  friend std::ostream& operator<<(std::ostream& stream, const Slicer& slicer)
+  friend std::ostream& operator<<(std::ostream& stream, Slicer& slicer)
   {
     stream << "-------------------- Slicer \n";
 

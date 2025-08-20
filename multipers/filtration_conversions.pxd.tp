@@ -83,6 +83,17 @@ cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}({{CTYPE
         out.emplace_back(f)
     return out
 
+cdef inline vector[Multi_critical_filtration[{{CTYPE}}]] _py2vkc_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
+    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+    cdef vector[Multi_critical_filtration[{{CTYPE}}]] out
+    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[1])
+    out.reserve(filtrations.shape[0])
+    for i in range(filtrations.shape[0]):
+        for j in range(filtrations.shape[1]):
+          f[j] = filtrations[i,j]
+        out.emplace_back(f)
+    return out
+
 ###### ------------------- CPP to PY
 
 

@@ -46,15 +46,20 @@ cdef extern from "gudhi/Multi_parameter_filtered_complex.h" namespace "Gudhi::mu
         Multi_parameter_filtered_complex()
         Multi_parameter_filtered_complex(vector[vector[uint32_t]]&, vector[int]&, vector[F]&)
 
-cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
-{{for D in slicers}}
-    {{D['C_TEMPLATE_TYPE']}} build_slicer_from_bitmap "Gudhi::multi_persistence::build_slicer_from_bitmap<Gudhi::multi_persistence::{{D['C_TEMPLATE_TYPE']}}>"(vector[{{D['FILTRATION_TYPE']}}], vector[int]) except + nogil
-    {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree "Gudhi::multi_persistence::build_slicer_from_simplex_tree<Gudhi::multi_persistence::{{D['C_TEMPLATE_TYPE']}}>"(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]) except + nogil
-{{endfor}}
-
 {{for D in slicers}}
 #------------------------------------------------------------------------------
 cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_interface":
+  cdef cppclass Bar[T]:
+      pass
+  
+  cdef cppclass Barcode[S, T]:
+      size_t size()
+      Bar[T]* data()
+
+  cdef cppclass Dim_barcode[S, T]:
+      size_t size()
+      Barcode[S,T]& operator[](size_t)
+
   cdef cppclass {{D['C_TEMPLATE_TYPE']}} "{{D['TRUC_TYPE']}}":
       ctypedef {{D['C_VALUE_TYPE']}} value_type
 
@@ -73,38 +78,57 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
       pair[{{D['FILTRATION_TYPE']}}, {{D['FILTRATION_TYPE']}}] get_bounding_box() except + nogil
       vector[{{D['FILTRATION_TYPE']}}]& get_filtrations "get_filtration_values"() nogil
       vector[int] get_dimensions() nogil
-      int get_dimension(int i) nogil
+      int get_dimension(uint32_t) nogil
       vector[vector[uint32_t]] get_boundaries() nogil
+      vector[uint32_t] get_boundary(uint32_t) nogil
       void set_one_filtration "set_slice"(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
       void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
       int prune_above_dimension(int) except + nogil 
       void coarsen_on_grid_inplace "coarsen_on_grid"(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
       void initialize_persistence_computation(bool) except+ nogil
       void initialize_persistence_computation() except+ nogil # ignore_inf = true
-      vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]] get_barcode "get_flat_barcode<true, {{D['C_VALUE_TYPE']}}, false>"() nogil
-      vector[vector[pair[int,int]]] get_barcode_idx "get_flat_barcode<true, int, true>"() nogil
-
-  {{D['C_TEMPLATE_TYPE']}} build_permuted_slicer({{D['C_TEMPLATE_TYPE']}}&, vector[uint32_t]&) except + nogil #permute
-  pair[{{D['C_TEMPLATE_TYPE']}}, vector[uint32_t]] build_permuted_slicer({{D['C_TEMPLATE_TYPE']}}&) except + nogil #colexical_rearange
-  {{if D['COLUMN_TYPE'] is not None}}
-  {{D['C_TEMPLATE_TYPE'][:-3]+"i32"}} build_slicer_coarsen_on_grid({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&) nogil #coarsen_on_grid
-  {{endif}}
-  {{if D['COLUMN_TYPE'] is not None}}
-  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_projective_cover_kernel({{D['C_TEMPLATE_TYPE']}}&, int) except + nogil #projective_cover_kernel
-  {{endif}}
-  void write_slicer_to_scc_file(string&, {{D['C_TEMPLATE_TYPE']}}&, int, bool, bool, bool, bool) nogil #write_to_scc_file
+      Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}] get_barcode "get_flat_barcode<true, {{D['C_VALUE_TYPE']}}, false>"() nogil
+      Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int] get_barcode_idx "get_flat_barcode<true, int, true>"() nogil
   string slicer_to_str({{D['C_TEMPLATE_TYPE']}}&) nogil #to_str
+  {{D['C_TEMPLATE_TYPE']}} build_permuted_slicer "build_permuted_slicer"({{D['C_TEMPLATE_TYPE']}}&, vector[uint32_t]&) except + nogil #permute
+  pair[{{D['C_TEMPLATE_TYPE']}}, vector[uint32_t]] build_permuted_slicer "build_permuted_slicer"({{D['C_TEMPLATE_TYPE']}}&) except + nogil #colexical_rearange
+  {{if D['COLUMN_TYPE'] is not None}}
+  {{D['C_TEMPLATE_TYPE'][:-3]+"i32"}} build_slicer_coarsen_on_grid "build_slicer_coarsen_on_grid"({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&) nogil #coarsen_on_grid
+  {{endif}}
+  {{if D['COLUMN_TYPE'] is not None}}
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_projective_cover_kernel "build_slicer_from_projective_cover_kernel"({{D['C_TEMPLATE_TYPE']}}&, int) except + nogil #projective_cover_kernel
+  {{endif}}
+  void write_slicer_to_scc_file "write_slicer_to_scc_file"(string&, {{D['C_TEMPLATE_TYPE']}}&, int, bool, bool, bool, bool) nogil #write_to_scc_file
 
 #------------------------------------------------------------------------------
 cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
   {{if not D['IS_KCRITICAL']}}
-  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_scc_file(string&, bool, bool, int) except + nogil #build_from_scc_file
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_scc_file_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_scc_file<{{D['TRUC_TYPE']}}>"(string&, bool, bool, int) except + nogil #build_from_scc_file
   {{endif}}
-  vector[vector[vector[pair[int,int]]]] custom_persistences "persistence_on_slices<{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}, int, true>"({{D['C_TEMPLATE_TYPE']}}&, {{D['C_VALUE_TYPE']}}*, int, bool) except + nogil
-  vector[vector[vector[pair[{{D['C_VALUE_TYPE']}}, {{D['C_VALUE_TYPE']}}]]]] persistence_on_lines "persistence_on_slices"({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, bool) except + nogil
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree "build_slicer_from_simplex_tree<{{D['TRUC_TYPE']}}>"(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]&) except + nogil
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_bitmap_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_bitmap<{{D['TRUC_TYPE']}}>"(vector[{{D['FILTRATION_TYPE']}}], vector[unsigned int]) except + nogil
+  vector[Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int]] custom_persistences "persistence_on_slices<{{D['TRUC_TYPE']}}, {{D['C_VALUE_TYPE']}}, int, true>"({{D['C_TEMPLATE_TYPE']}}&, {{D['C_VALUE_TYPE']}}*, int, bool) except + nogil
+  vector[Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]] persistence_on_lines "persistence_on_slices"({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, bool) except + nogil
+
+cdef inline _b2np_{{D['C_TEMPLATE_TYPE']}}(const Barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]& barcode):
+  cdef Py_ssize_t size = barcode.size() * 2
+  cdef {{D['C_VALUE_TYPE']}}[:] view = <{{D['C_VALUE_TYPE']}}[:size]>(<{{D['C_VALUE_TYPE']}}*>(barcode.data()))
+  return np.array(view) #copy as the barcode will very probably be destroyed afterwards
+
+cdef inline _db2np_{{D['C_TEMPLATE_TYPE']}}(const Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]& barcode):
+  cdef Py_ssize_t dims = barcode.size()
+  return [_b2np_{{D['C_TEMPLATE_TYPE']}}(barcode[i]) for i in range(dims)]
+
+cdef inline _b2np_{{D['C_TEMPLATE_TYPE']}}_idx(const Barcode[{{D['C_TEMPLATE_TYPE']}}, int]& barcode):
+  cdef Py_ssize_t size = barcode.size() * 2
+  cdef int[:] view = <int[:size]>(<int*>(barcode.data()))
+  return np.array(view) #copy as the barcode will very probably be destroyed afterwards
+
+cdef inline _db2np_{{D['C_TEMPLATE_TYPE']}}_idx(const Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int]& barcode):
+  cdef Py_ssize_t dims = barcode.size()
+  return [_b2np_{{D['C_TEMPLATE_TYPE']}}_idx(barcode[i]) for i in range(dims)]
 
 {{endfor}}
-
 
 
 #### MMA Stuff
