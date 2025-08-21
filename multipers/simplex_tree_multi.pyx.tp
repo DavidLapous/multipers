@@ -715,10 +715,29 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             preincrement(it)
 
 
+    def _get_raw_filtration(self):
+       {{if is_kcritical}}
+       raise NotImplementedError("Not implemented for multicritical filtrations")
+       {{else}}
+        if self.is_squeezed:
+            raise NotImplementedError("Not implemented for squeezed filtrations")
+        cdef int num_parameters = self.num_parameters
+        cdef {{CTYPE}}[:,:] current_filtration = np.empty((self.num_simplices, self.num_parameters), dtype=self.dtype)
 
-    def persistence_approximation(self, **kwargs):
-        from multipers.multiparameter_module_approximation import module_approximation
-        return module_approximation(self, **kwargs)
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
+
+        cdef int i=0
+        with nogil:
+            while it != end:
+                pair_sf = <pair[simplex_type, {{FSHORT}}*]> self.get_ptr().get_simplex_and_filtration(dereference(it))
+                for j in range(num_parameters):
+                    current_filtration[i,j] = dereference(pair_sf.second)[j]
+                preincrement(it)
+                i = i+1
+        return np.asarray(current_filtration, dtype=self.dtype)
+        {{endif}}
+
 
 
     def get_skeleton(self, dimension)->Iterable[tuple[np.ndarray,np.ndarray]]:

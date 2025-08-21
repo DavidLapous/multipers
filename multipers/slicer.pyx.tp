@@ -434,7 +434,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
             
             bcs = tuple(tuple(
-                    api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
+                api.stack([F2[bc[:,0]], (F2:=api.cat([F, api.astensor(api.inf)[None]]))[bc[:,1]]], axis=1) 
                     if bc.size>0 
                     else api.empty((0,2), dtype = F.dtype)
                     for bc in bcs_idx
