@@ -31,17 +31,19 @@ def check_keops():
     global _is_keops_available, LazyTensor
     if _is_keops_available is not None:
         return _is_keops_available
-    import pykeops.numpy as pknp
-    from pykeops.numpy import LazyTensor as LT
-
-    formula = "SqNorm2(x - y)"
-    var = ["x = Vi(3)", "y = Vj(3)"]
-    expected_res = _np.array([63.0, 90.0])
-    x = _np.arange(1, 10).reshape(-1, 3).astype("float32")
-    y = _np.arange(3, 9).reshape(-1, 3).astype("float32")
-
-    my_conv = pknp.Genred(formula, var)
     try:
+        if _is_keops_available is not None:
+            return _is_keops_available
+        import pykeops.numpy as pknp
+        from pykeops.numpy import LazyTensor as LT
+
+        formula = "SqNorm2(x - y)"
+        var = ["x = Vi(3)", "y = Vj(3)"]
+        expected_res = _np.array([63.0, 90.0])
+        x = _np.arange(1, 10).reshape(-1, 3).astype("float32")
+        y = _np.arange(3, 9).reshape(-1, 3).astype("float32")
+
+        my_conv = pknp.Genred(formula, var)
         _is_keops_available = _np.allclose(my_conv(x, y).flatten(), expected_res)
         LazyTensor = LT
     except:

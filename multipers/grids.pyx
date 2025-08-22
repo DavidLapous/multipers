@@ -124,8 +124,7 @@ def compute_grid(
     except TypeError:
         pass
 
-    if api is npapi:
-        return _compute_grid_numpy(
+    grid = _compute_grid_numpy(
         initial_grid,
         resolution=resolution, 
         strategy = strategy, 
@@ -133,9 +132,9 @@ def compute_grid(
         _q_factor=_q_factor, 
         drop_quantiles=drop_quantiles,
         dense = dense,
-        )
-    from multipers.torch.diff_grids import get_grid
-    grid = get_grid(strategy)(initial_grid,resolution)
+    )
+    # from multipers.torch.diff_grids import get_grid
+    # grid = get_grid(strategy)(initial_grid,resolution)
     if dense:
         grid = todense(grid)
     return grid
@@ -169,7 +168,7 @@ def _compute_grid_numpy(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
-    api = api_from_tensors(filtrations_values)
+    api = api_from_tensors(*filtrations_values)
     try:
         a,b=drop_quantiles
     except:
@@ -189,7 +188,7 @@ def _compute_grid_numpy(
     elif strategy == "quantile":
         F = tuple(api.unique(f) for f in filtrations_values)
         max_resolution = [min(len(f),r) for f,r in zip(F,resolution)]
-        F = tuple( api.quantile_closest(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
+        F = tuple( api.quantile_closest(f, q=api.linspace(0,1,int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
         if unique:
             F = tuple(api.unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
@@ -203,7 +202,7 @@ def _compute_grid_numpy(
     # elif strategy == "torch_regular_closest":
     #     F = tuple(_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
     elif strategy == "partition":
-        F = tuple(_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolution))
+        F = tuple(_todo_partition(f,r, unique, api) for f,r in zip(filtrations_values, resolution))
     elif strategy == "precomputed":
         F=filtrations_values
     else:
@@ -215,7 +214,7 @@ def _compute_grid_numpy(
 def todense(grid, bool product_order=False):
     if len(grid) == 0:
         return np.empty(0)
-    api = api_from_tensors(grid)
+    api = api_from_tensors(*grid)
     # if product_order:
     #     if not api.backend ==np:
     #         raise NotImplementedError("only numpy here.")
@@ -235,8 +234,10 @@ def todense(grid, bool product_order=False):
 
 
 
-## TODO : optimize. Pykeops ?
 def _todo_regular(f, int r, api):
+    if api.has_grad(f):
+        from warnings import warn
+        warn("`strategy=regular` is not differentiable. Removing grad.")
     with api.no_grad():
         return api.linspace(api.min(f), api.max(f), r)
 
@@ -284,8 +285,14 @@ def _todo_regular_left_old(some_float[:] f, int r, bool unique):
     if unique: f_regular_closest = np.unique(f_regular_closest)
     return f_regular_closest
 
+def _todo_partition(x, int resolution, bool unique, api):
+    if api.has_grad(x):
+        from warnings import warn
+        warn("`strategy=partition` is not differentiable. Removing grad.")
+    out = _todo_partition_(api.asnumpy(x), resolution, unique)
+    return api.from_numpy(out)
 
-def _todo_partition(some_float[:] data,int resolution, bool unique):
+def _todo_partition_(some_float[:] data,int resolution, bool unique):
     if data.shape[0] < resolution: resolution=data.shape[0]
     k = data.shape[0] // resolution
     partitions = np.partition(data, k)

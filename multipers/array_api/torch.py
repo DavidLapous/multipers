@@ -41,7 +41,7 @@ def check_keops():
 
         my_conv = pknp.Genred(formula, var)
         _is_keops_available = _t.allclose(
-            my_conv(x, y).view(-1), _t.tensor(expected_res).type(_t.float32)
+            my_conv(x, y).view(-1), expected_res.type(_t.float32)
         )
         LazyTensor = LT
 
@@ -53,6 +53,9 @@ def check_keops():
         _is_keops_available = False
 
     return _is_keops_available
+
+
+check_keops()
 
 
 def from_numpy(x):
@@ -100,8 +103,8 @@ def maxvalues(x: _t.Tensor, **kwargs):
     return _t.max(x, **kwargs).values
 
 
-def asnumpy(x):
-    return x.detach().numpy()
+def asnumpy(x: _t.Tensor):
+    return x.cpu().detach().numpy()
 
 
 def is_tensor(x):

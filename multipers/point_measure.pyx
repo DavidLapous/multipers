@@ -366,7 +366,7 @@ def rectangle_to_hook_minimal_signed_barcode(pts,w,):
     # print("horizontal:", pts_H)
     
     
-    new_w = api.cat([-w, w, w,  w_proj,w_V,w_H])
+    new_w = np.concatenate([-w, w, w,  w_proj,w_V,w_H])
     
     pts_b0a1 = api.tensor(pts)
     pts_b0a1[:,3] = pts[:,1]

@@ -8,7 +8,7 @@ This library aims to provide easy to use and performant strategies for applied m
 ## Compiled packages
 | Source | Version | Downloads | Platforms | 
 | --- | --- | --- | --- | 
-| [![Conda Recipe](https://img.shields.io/badge/conda-recipe-green.svg)](https://anaconda.org/conda-forge/multipers)| [![Conda Version](https://img.shields.io/conda/vn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |  [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) | 
+| [![Conda Recipe](https://img.shields.io/badge/conda-recipe-green.svg)](https://github.com/conda-forge/multipers-feedstock)| [![Conda Version](https://img.shields.io/conda/vn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |  [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) |[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/multipers.svg)](https://anaconda.org/conda-forge/multipers) | 
 | [![pip Recipe](https://img.shields.io/badge/pip-package-green.svg)](https:///pypi.org/project/multipers) | [![PyPI](https://img.shields.io/pypi/v/multipers?color=green)](https://pypi.org/project/multipers) | [![ pip downloads](https://static.pepy.tech/badge/multipers)](https://pepy.tech/project/multipers) | | 
 
 

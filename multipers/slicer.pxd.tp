@@ -79,7 +79,7 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
       vector[{{D['FILTRATION_TYPE']}}]& get_filtrations "get_filtration_values"() nogil
       vector[int] get_dimensions() nogil
       int get_dimension(uint32_t) nogil
-      vector[vector[uint32_t]] get_boundaries() nogil
+      const vector[vector[uint32_t]]& get_boundaries() nogil
       vector[uint32_t] get_boundary(uint32_t) nogil
       void set_one_filtration "set_slice"(const vector[{{D['C_VALUE_TYPE']}}]&) nogil
       void push_to(const Line[{{D['C_VALUE_TYPE']}}]&) nogil
