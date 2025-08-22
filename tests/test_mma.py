@@ -11,7 +11,7 @@ def test_1():
     st.insert([0], [0, 1])
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
-    mma_pymodule = st.persistence_approximation()
+    mma_pymodule = mp.module_approximation(st)
     assert np.array_equal(mma_pymodule[0].get_birth_list(), [[0.0, 1.0], [1.0, 0.0]])
     assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf, np.inf]])
 
@@ -19,7 +19,7 @@ def test_1():
 def test_img():
     simplextree = mp.SimplexTreeMulti(num_parameters=4)
     simplextree.insert([0], [1, 2, 3, 4])
-    mod = simplextree.persistence_approximation(
+    mod = mp.module_approximation(simplextree,
         box=[[0, 0, 0, 0], [5, 5, 5, 5]], max_error=1.0
     )
     img = mod.representation(resolution=6, kernel="linear")
