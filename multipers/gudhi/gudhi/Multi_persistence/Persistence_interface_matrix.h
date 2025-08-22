@@ -376,8 +376,10 @@ class Persistence_interface_matrix
     }
     stream << "]\n";
     stream << "Permutation:\n";
-    for (auto v : *pers.permutation_) {
-      stream << v << " ";
+    if (pers.permutation_ != nullptr) {
+      for (auto v : *pers.permutation_) {
+        stream << v << " ";
+      }
     }
     stream << "\n";
     if constexpr (Options::has_vine_update && !Options::is_of_boundary_type) {

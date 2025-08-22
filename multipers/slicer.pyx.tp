@@ -215,7 +215,8 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef vector[int] c_generator_dimensions = generator_dimensions
 
         assert num_generators == c_generator_maps.size() == c_filtration_values.size() == c_generator_dimensions.size(), "Invalid input, shape do not coincide."
-        self.truc = {{D['C_TEMPLATE_TYPE']}}(Multi_parameter_filtered_complex[One_critical_filtration[{{D['C_VALUE_TYPE']}}]](c_generator_maps,c_generator_dimensions, c_filtration_values))
+        cdef Multi_parameter_filtered_complex[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] cpx = Multi_parameter_filtered_complex[One_critical_filtration[{{D['C_VALUE_TYPE']}}]](c_generator_maps,c_generator_dimensions, c_filtration_values)
+        self.truc = {{D['C_TEMPLATE_TYPE']}}(cpx)
         self.minpres_degree = -1
     {{endif}}
     
@@ -747,9 +748,8 @@ from libcpp.set cimport set as cset
 #   void _to_boundary(const vector[unsigned int]&, vector[vector[unsigned int]]&, vector[int]&) except + nogil
 #   void get_vertices(unsigned int, cset[unsigned int]&, const vector[vector[unsigned int]]&) nogil
 
-
-{{for pytype,ctype,fshort in dtypes}}
-def _from_bitmap{{fshort}}(image, **slicer_kwargs):
+{{for D in slicers}}
+def _from_bitmap{{D['SHORT_VALUE_TYPE']}}(image, **slicer_kwargs):
     from multipers import Slicer
     dtype = slicer_kwargs.get("dtype", image.dtype)
     slicer_kwargs["dtype"] = dtype

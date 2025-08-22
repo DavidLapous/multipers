@@ -90,7 +90,7 @@ def get_slicer(backend_type, is_vine, is_kcritical, value_type, column_type):
         "IS_KCRITICAL": IS_KCRITICAL,
         "C_VALUE_TYPE": ctype,
         "PY_VALUE_TYPE": pytype,
-        "COLUMN_TYPE": col.split("::")[1],
+        "COLUMN_TYPE": col.split("::")[3],
         "SHORT_VALUE_TYPE": short_type,
         "FILTRATION_TYPE": FILTRATION_TYPE,
         "PERS_BACKEND_TYPE": backend_type,

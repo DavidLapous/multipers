@@ -55,6 +55,7 @@ ctypedef fused some_float:
 ctypedef vector[pair[pair[int,int],pair[float,float]]] edge_list_type
 
 from typing import Any, Union, ClassVar
+from collections.abc import Sequence
 
 cimport numpy as cnp
 import numpy as np
@@ -144,11 +145,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                   default_values=np.asarray([SimplexTreeMulti_{{FSHORT}}.T_minus_inf()]), # I'm not sure why `[]` does not work. Cython bug ? 
                   bool safe_conversion=False,
                   ): #TODO doc
-        {{if is_kcritical}}
-        cdef {{FSHORT}} c_default_values = _py2kc_{{SHORT}}(np.asarray([default_values], dtype= {{PYTYPE}}))
-        {{else}}
-        cdef {{FSHORT}} c_default_values = _py21c_{{SHORT}}(np.asarray(default_values, dtype={{PYTYPE}}))
-        {{endif}}
+        cdef vector[{{CTYPE}}] c_default_values
         cdef intptr_t other_ptr
         cdef char[:] buffer
         cdef size_t buffer_size
@@ -173,8 +170,27 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                     buffer_size = buffer.shape[0]
                     buffer_start = &buffer[0]
 
+                    assert num_parameters > 0
+                    if isinstance(default_values, Sequence):
+                        # tedious way to do a resize
+                        if len(default_values) > num_parameters:
+                            del default_values[num_parameters:]
+                        elif len(default_values) < num_parameters:
+                            default_values.extend([SimplexTreeMulti_{{FSHORT}}.T_minus_inf()] * (num_parameters - len(default_values)))
+                        assert len(default_values) == num_parameters
+                    else:
+                        assert default_values.ndim == 1
+                        # tedious way to do a resize
+                        if default_values.shape[0] > num_parameters:
+                            default_values = default_values[:num_parameters]
+                        elif default_values.shape[0] < num_parameters:
+                            tmp = np.full(num_parameters - default_values.shape[0], SimplexTreeMulti_{{FSHORT}}.T_minus_inf(), dtype=default_values.dtype)
+                            default_values = np.concatenate((default_values, tmp))
+                        assert default_values.shape[0] == num_parameters
+                    c_default_values = np.asarray(default_values, dtype={{PYTYPE}})
+
                     with nogil:
-                        self.get_ptr().from_std(buffer_start, buffer_size, num_parameters, c_default_values)
+                        self.get_ptr().from_std(buffer_start, buffer_size, 0, c_default_values)
             else:
                 raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
         else:

@@ -113,7 +113,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void clear() nogil
   
     
-    void from_std(char*, size_t, int, F&) nogil
+    void from_std(char*, size_t, int, vector[value_type]&) nogil
     void to_std(intptr_t, Line[double],int ) nogil 
     void to_std_linear_projection(intptr_t, vector[double]) nogil
     void squeeze_filtration_inplace(vector[vector[double]] &, bool) nogil

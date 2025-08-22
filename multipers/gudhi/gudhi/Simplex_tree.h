@@ -2934,7 +2934,10 @@ class Simplex_tree {
   void deserialize(const char* buffer, const std::size_t buffer_size, F&& deserialize_filtration_value) {
     GUDHI_CHECK(num_vertices() == 0, std::logic_error("Simplex_tree::deserialize - Simplex_tree must be empty"));
     const char* ptr = buffer;
-    ptr = deserialize_value_from_char_buffer(number_of_parameters_, ptr);
+    // commented for the time the released gudhi version adds number_of_parameters_
+    // multipers uses it to convert a gudhi.SimplexTree to a multipers.SimplexTree
+    // ptr = deserialize_value_from_char_buffer(number_of_parameters_, ptr);
+
     // Needs to read size before recursivity to manage new siblings for children
     Vertex_handle members_size;
     ptr = deserialize_value_from_char_buffer(members_size, ptr);
