@@ -415,7 +415,7 @@ cdef class {{D['PYTHON_TYPE']}}:
     def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->tuple:
         """
         Computes the current persistence, or the persistence
-        given by the filtration one_filtration (num_generators,).
+        given by the filtration one_filtration (num_generators,) or (num_filtrations, num_generators,).
         """
         if one_filtration is not None:
             api = api_from_tensor(one_filtration)
