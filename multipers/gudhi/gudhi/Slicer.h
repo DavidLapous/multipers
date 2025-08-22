@@ -19,7 +19,6 @@
 #define MP_SLICER_H_INCLUDED
 
 #include <array>
-#include <cstddef>
 #include <initializer_list>
 #include <type_traits>
 #include <numeric>  //std::iota
@@ -28,11 +27,6 @@
 #include <vector>
 #include <ostream>
 // #include <sstream>  //std::stringstream, to remove when to_str gets removed
-
-#ifdef GUDHI_USE_TBB
-#include <oneapi/tbb/enumerable_thread_specific.h>
-#include <oneapi/tbb/parallel_for.h>
-#endif
 
 #include <gudhi/Debug_utils.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
@@ -242,10 +236,6 @@ class Slicer
         b.push_to_least_common_upper_bound(fil);
       }
     }
-    // if constexpr (Gudhi::multi_filtration::RangeTraits<Filtration_value>::is_dynamic_multi_filtration) {
-    //   a.force_generator_size_to_number_of_parameters(0);
-    //   b.force_generator_size_to_number_of_parameters(0);
-    // }
     return std::make_pair(std::move(a), std::move(b));
   }
 
@@ -692,7 +682,7 @@ class Slicer
   {
     const Value inf = Gudhi::multi_filtration::MF_T_inf<Value>;
     dim = bar.dim;
-    if constexpr (idx){
+    if constexpr (idx) {
       birth = bar.birth;
       death = -1;
       if (bar.death != Persistence::nullDeath) death = bar.death;

@@ -48,7 +48,7 @@ class Thread_safe_slicer : private Slicer
   using Index = typename Slicer::Index;                       /**< Complex index type. */
   using Dimension = typename Slicer::Dimension;               /**< Dimension type. */
   template <typename Value = T>
-  using Bar = typename Slicer::template Bar<Value>; /**< Bar type. */
+  using Bar = typename Slicer::template Bar<Value>;           /**< Bar type. */
   /**
    * @brief Barcode type. A vector of @ref Bar, a tuple like structure containing birth, death and dimension of a bar.
    */
@@ -305,12 +305,12 @@ class Thread_safe_slicer : private Slicer
    * @param maxDim Maximal dimension to be included in the barcode. If negative, all dimensions are included.
    * Default value: -1.
    */
-  template <bool byDim = true, typename Value = T>
+  template <bool byDim = true, typename Value = T, bool idx = false>
   auto get_barcode(int maxDim = -1)
   {
     // complex in parent is empty, so maxDim needs to be initialized from the outside.
     if (maxDim < 0) maxDim = slicer_->get_max_dimension();
-    return Slicer::template get_barcode<byDim, Value>(maxDim);
+    return Slicer::template get_barcode<byDim, Value, idx>(maxDim);
   }
 
   /**
@@ -324,12 +324,12 @@ class Thread_safe_slicer : private Slicer
    * @param maxDim Maximal dimension to be included in the barcode. If negative, all dimensions are included.
    * Default value: -1.
    */
-  template <bool byDim = false, typename Value = T>
+  template <bool byDim = false, typename Value = T, bool idx = false>
   auto get_flat_barcode(int maxDim = -1)
   {
     // complex in parent is empty, so maxDim needs to be initialized from the outside.
     if (maxDim < 0) maxDim = slicer_->get_max_dimension();
-    return Slicer::template get_flat_barcode<byDim, Value>(maxDim);
+    return Slicer::template get_flat_barcode<byDim, Value, idx>(maxDim);
   }
 
   /**

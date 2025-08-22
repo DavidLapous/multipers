@@ -371,7 +371,7 @@ class Persistence_interface_matrix
     stream << "[\n";
     for (auto i = 0U; i < pers.matrix_.get_number_of_columns(); i++) {
       stream << "[";
-      for (const auto &v : pers.matrix_.get_column(i)) stream << v << ", ";
+      for (const auto& v : pers.matrix_.get_column(i)) stream << v << ", ";
       stream << "]\n";
     }
     stream << "]\n";
@@ -380,7 +380,7 @@ class Persistence_interface_matrix
       stream << v << " ";
     }
     stream << "\n";
-    if constexpr (Options::has_vine_update && !Options::is_of_boundary_type){
+    if constexpr (Options::has_vine_update && !Options::is_of_boundary_type) {
       stream << "ID to position map:\n";
       for (auto v : *pers.idToPos_) {
         stream << v << " ";

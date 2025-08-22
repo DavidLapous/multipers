@@ -1236,10 +1236,9 @@ class Simplex_tree {
     if constexpr (Options::store_filtration){
       if (insertion_strategy == Insertion_strategy::LOWEST)
         return _rec_insert_simplex_and_subfaces_sorted(root(), copy.begin(), copy.end(), filtration);
-      else if (insertion_strategy == Insertion_strategy::HIGHEST)
+      if (insertion_strategy == Insertion_strategy::HIGHEST)
         return _insert_simplex_and_subfaces_at_highest(root(), copy.begin(), copy.end(), filtration);
-      else
-        return _insert_simplex_and_subfaces_at_highest(root(), copy.begin(), copy.end(), 0);
+      return _insert_simplex_and_subfaces_at_highest(root(), copy.begin(), copy.end(), 0);
     } else {
       return _rec_insert_simplex_and_subfaces_sorted(root(), copy.begin(), copy.end(), filtration);
     }
@@ -3006,7 +3005,33 @@ class Simplex_tree {
 // Print a Simplex_tree in os.
 template<typename...T>
 std::ostream& operator<<(std::ostream & os, const Simplex_tree<T...> & st) {
+  using handle = typename Simplex_tree<T...>::Simplex_handle;
+
   if (st.num_parameters() > 1) os << st.num_parameters() << "\n";
+
+  // lexicographical order to ensure total order even with custom filtration values
+  st.initialize_filtration(
+      [&](handle sh1, handle sh2) {
+        if (st.dimension(sh1) < st.dimension(sh2)) return true;
+        if (st.dimension(sh1) > st.dimension(sh2)) return false;
+
+        auto rg1 = st.simplex_vertex_range(sh1);
+        auto rg2 = st.simplex_vertex_range(sh2);
+        auto it1 = rg1.begin();
+        auto it2 = rg2.begin();
+        // same size
+        while (it1 != rg1.end()) {
+          if (*it1 == *it2) {
+            ++it1;
+            ++it2;
+          } else {
+            return *it1 < *it2;
+          }
+        }
+        return false;
+      },
+      [](handle) -> bool { return false; });
+
   for (auto sh : st.filtration_simplex_range()) {
     os << st.dimension(sh) << " ";
     for (auto v : st.simplex_vertex_range(sh)) {
@@ -3014,6 +3039,7 @@ std::ostream& operator<<(std::ostream & os, const Simplex_tree<T...> & st) {
     }
     os << st.filtration(sh) << "\n";  // TODO(VR): why adding the key ?? not read ?? << "     " << st.key(sh) << " \n";
   }
+  st.clear_filtration();
   return os;
 }
 

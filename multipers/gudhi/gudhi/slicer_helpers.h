@@ -34,6 +34,11 @@
 #include <iomanip>
 #include <cmath>
 
+#ifdef GUDHI_USE_TBB
+#include <oneapi/tbb/enumerable_thread_specific.h>
+#include <oneapi/tbb/parallel_for.h>
+#endif
+
 #include <boost/range/iterator_range_core.hpp>
 
 #include <gudhi/Debug_utils.h>
@@ -465,10 +470,12 @@ inline Multi_parameter_filtered_complex<OneCriticalMultiFiltrationValue> build_c
  * @ingroup multi_persistence
  *
  * @brief Builds a complex from the given simplex tree. The complex will be ordered by dimension.
- * 
+ *
+ * @note The key values in the simplex tree nodes will be overwritten.
+ *
  * @tparam SimplexTreeOptions Class following the @ref SimplexTreeOptions concept such that
  * @ref SimplexTreeOptions::Filtration_value follows the @ref MultiFiltrationValue concept.
- * @param simplexTree Simplex tree to convert.
+ * @param simplexTree Simplex tree to convert. The key values of the simplex tree will be overwritten.
  */
 template <class SimplexTreeOptions>
 inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_value> build_complex_from_simplex_tree(
@@ -485,7 +492,7 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
   using Complex = Multi_parameter_filtered_complex<Fil>;
 
   const unsigned int numberOfSimplices = simplexTree.num_simplices();
-  
+
   if (numberOfSimplices == 0) return Complex();
 
   typename Complex::Dimension_container dimensions(numberOfSimplices);
@@ -495,7 +502,7 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
   unsigned int i = 0;
   // keys for boundaries have to be assigned first as we cannot use filtration_simplex_range to ensure that a face
   // appears before its cofaces.
-  for (auto sh : simplexTree.complex_simplex_range()){
+  for (auto sh : simplexTree.complex_simplex_range()) {
     simplexTree.assign_key(sh, i);
     dimensions[i] = simplexTree.dimension(sh);
     ++i;
@@ -505,24 +512,25 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
   std::vector<unsigned int> newToOldIndex(numberOfSimplices);
   std::vector<unsigned int> oldToNewIndex(numberOfSimplices);
   std::iota(newToOldIndex.begin(), newToOldIndex.end(), 0);
-  std::sort(newToOldIndex.begin(), newToOldIndex.end(), [&dimensions](unsigned int i, unsigned int j){
+  std::sort(newToOldIndex.begin(), newToOldIndex.end(), [&dimensions](unsigned int i, unsigned int j) {
     return dimensions[i] < dimensions[j];
   });
   // Is there a way to directly get oldToNewIndex without constructing newToOldIndex?
-  for (unsigned int k = 0; k < numberOfSimplices; ++k){
+  for (unsigned int k = 0; k < numberOfSimplices; ++k) {
     oldToNewIndex[newToOldIndex[k]] = k;
   }
 
-  for (auto sh : simplexTree.complex_simplex_range()){
+  for (auto sh : simplexTree.complex_simplex_range()) {
     auto index = oldToNewIndex[simplexTree.key(sh)];
     dimensions[index] = simplexTree.dimension(sh);
     filtrationValues[index] = simplexTree.filtration(sh);
-    typename Complex::Boundary boundary(dimensions[index] + 1);
+    typename Complex::Boundary boundary(dimensions[index] == 0 ? 0 : dimensions[index] + 1);
     unsigned int j = 0;
-    for (auto b : simplexTree.boundary_simplex_range(sh)){
+    for (auto b : simplexTree.boundary_simplex_range(sh)) {
       boundary[j] = oldToNewIndex[simplexTree.key(b)];
       ++j;
     }
+    std::sort(boundary.begin(), boundary.end());
     boundaries[index] = std::move(boundary);
   }
 
@@ -587,7 +595,7 @@ inline Slicer build_slicer_from_bitmap(const std::vector<typename Slicer::Filtra
  * @ingroup multi_persistence
  *
  * @brief Builds a slicer from the given simplex tree. The inner complex will be ordered by dimension.
- * 
+ *
  * @tparam Slicer The @ref Slicer class with any valid template combination.
  * @tparam SimplexTreeOptions Class following the @ref SimplexTreeOptions concept such that
  * @ref SimplexTreeOptions::Filtration_value follows the @ref MultiFiltrationValue concept.
@@ -604,11 +612,9 @@ inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& s
  * @private
  */
 template <bool idx, class U, class Slicer, class F>
-std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persistence_on_slices_(
-    Slicer& slicer,
-    F&& ini_slicer,
-    unsigned int size,
-    [[maybe_unused]] bool ignoreInf = true) {
+std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
+persistence_on_slices_(Slicer& slicer, F&& ini_slicer, unsigned int size, [[maybe_unused]] bool ignoreInf = true)
+{
   using Barcode = typename Slicer::template Multi_dimensional_flat_barcode<U>;
 
   if (size == 0) return {};
@@ -626,8 +632,9 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
     }
   } else {
 #ifdef GUDHI_USE_TBB
+    using Index = typename Slicer::Index;
     tbb::enumerable_thread_specific<typename Slicer::Thread_safe> threadLocals(slicer.weak_copy());
-    tbb::parallel_for(static_cast<std::size_t>(0), size, [&](const Index& i) {
+    tbb::parallel_for(static_cast<Index>(0), size, [&](const Index& i) {
       typename Slicer::Thread_safe& s = threadLocals.local();
       std::forward<F>(ini_slicer)(s, i);
       s.initialize_persistence_computation(ignoreInf);
@@ -651,7 +658,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
  * @brief Returns the barcodes of all the given lines. A line is represented as a pair with the first element being
  * a point on the line and the second element a vector giving the positive direction of the line. The direction
  * container can be empty: then the slope is assumed to be 1.
- * 
+ *
  * @tparam Slicer Either @ref Slicer or @ref Thread_safe_slicer class with any valid template combination.
  * @tparam T Type of a coordinate element.
  * @tparam U Type of filtration values in the output barcode. Default value: T.
@@ -671,7 +678,8 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> persist
     Slicer& slicer,
     const std::vector<std::vector<T>>& basePoints,
     const std::vector<std::vector<T>>& directions,
-    bool ignoreInf = true) {
+    bool ignoreInf = true)
+{
   GUDHI_CHECK(directions.empty() || directions.size() == basePoints.size(),
               "There should be as many directions than base points.");
   GUDHI_CHECK(basePoints.empty() || basePoints[0].size() == slicer.get_number_of_parameters(),
@@ -684,7 +692,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> persist
 
   return persistence_on_slices_<idx, U>(
       slicer,
-      [&](auto s, unsigned int i) { s.push_to(Line<T>(basePoints[i], get_direction(i))); },
+      [&](auto& s, unsigned int i) { s.push_to(Line<T>(basePoints[i], get_direction(i))); },
       basePoints.size(),
       ignoreInf);
 }
@@ -693,7 +701,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> persist
  * @ingroup multi_persistence
  *
  * @brief Returns the barcodes of all the given slices.
- * 
+ *
  * @tparam Slicer Either @ref Slicer or @ref Thread_safe_slicer class with any valid template combination.
  * @tparam T Type of a slice element.
  * @tparam U Type of filtration values in the output barcode. Default value: T.
@@ -706,18 +714,14 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> persist
  * PersistenceAlgorithm::is_vine is true.
  */
 template <class Slicer, class T, class U = T, bool idx = false>
-std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persistence_on_slices(
-    Slicer& slicer,
-    const std::vector<std::vector<T>>& slices,
-    bool ignoreInf = true) {
+std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
+persistence_on_slices(Slicer& slicer, const std::vector<std::vector<T>>& slices, bool ignoreInf = true)
+{
   GUDHI_CHECK(slices.empty() || slices[0].size() == slicer.get_number_of_cycle_generators(),
               "There should be as many elements in a slice than cells in the slicer.");
 
   return persistence_on_slices_<idx, U>(
-      slicer,
-      [&](auto s, unsigned int i) { s.set_slice(slices[i]); },
-      slices.size(),
-      ignoreInf);
+      slicer, [&](auto& s, unsigned int i) { s.set_slice(slices[i]); }, slices.size(), ignoreInf);
 }
 
 // Mostly for python
@@ -725,7 +729,7 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
  * @ingroup multi_persistence
  *
  * @brief Returns the barcodes of all the given slices.
- * 
+ *
  * @tparam Slicer Either @ref Slicer or @ref Thread_safe_slicer class with any valid template combination.
  * @tparam T Type of a slice element.
  * @tparam U Type of filtration values in the output barcode. Default value: T.
@@ -740,13 +744,14 @@ std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U> > persis
  */
 template <class Slicer, class T, class U = T, bool idx = false, class = std::enable_if_t<std::is_arithmetic_v<T>>>
 std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
-persistence_on_slices(Slicer& slicer, T* slices, unsigned int numberOfSlices, bool ignoreInf = true) {
+persistence_on_slices(Slicer& slicer, T* slices, unsigned int numberOfSlices, bool ignoreInf = true)
+{
   auto num_gen = slicer.get_number_of_cycle_generators();
   auto view = Gudhi::Simple_mdspan(slices, numberOfSlices, num_gen);
 
   return persistence_on_slices_<idx, U>(
       slicer,
-      [&](auto s, unsigned int i) {
+      [&](auto& s, unsigned int i) {
         T* start = &view(i, 0);
         auto r = boost::iterator_range<T*>(start, start + num_gen);
         s.set_slice(r);

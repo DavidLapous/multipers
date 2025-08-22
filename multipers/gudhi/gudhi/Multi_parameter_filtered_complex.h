@@ -44,9 +44,9 @@ template <class MultiFiltrationValue>
 class Multi_parameter_filtered_complex
 {
  public:
-  using Index = std::uint32_t;                     /**< Complex index type. */
-  using Filtration_value = MultiFiltrationValue;   /**< Filtration value type. */
-  using T = typename Filtration_value::value_type; /**< Numerical type of an element in a filtration value. */
+  using Index = std::uint32_t;                        /**< Complex index type. */
+  using Filtration_value = MultiFiltrationValue;      /**< Filtration value type. */
+  using T = typename Filtration_value::value_type;    /**< Numerical type of an element in a filtration value. */
   using Filtration_value_container = std::vector<Filtration_value>; /**< Filtration value container type. */
   using Boundary = std::vector<Index>; /**< Cell boundary type, represented by the complex indices of its faces. */
   using Boundary_container = std::vector<Boundary>;   /**< Boundary container type. */
@@ -377,7 +377,7 @@ class Multi_parameter_filtered_complex
     stream << "}\n";
 
     stream << "Filtration values:\n";
-    stream << "{";
+    stream << "{\n";
     for (auto f : complex.filtrationValues_) stream << f << "\n";
     stream << "}\n";
 

@@ -174,10 +174,7 @@ class Box
   /**
    * @brief Unequality operator. Two boxes are equal if and only if both defining corners are equal.
    */
-  friend bool operator!=(const Box &a, const Box &b)
-  {
-    return !(a == b);
-  }
+  friend bool operator!=(const Box &a, const Box &b) { return !(a == b); }
 
   /**
    * @brief Outstream operator.
