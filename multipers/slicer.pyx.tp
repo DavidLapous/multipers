@@ -417,7 +417,7 @@ cdef class {{D['PYTHON_TYPE']}}:
     def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->tuple:
         """
         Computes the current persistence, or the persistence
-        given by the filtration one_filtration (num_generators,).
+        given by the filtration one_filtration (num_generators,) or (num_filtrations, num_generators,).
         """
         if one_filtration is not None:
             api = api_from_tensor(one_filtration)
@@ -434,9 +434,13 @@ cdef class {{D['PYTHON_TYPE']}}:
                 squeeze = True
 
             bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
-            
+
+            one_filtration = api.cat([
+              one_filtration,
+              api.repeat_interleave(api.astensor(api.inf), one_filtration.shape[0])[:,None],
+            ], axis=1)
             bcs = tuple(tuple(
-                api.stack([F2[bc[:,0]], (F2:=api.cat([F, api.astensor(api.inf)[None]]))[bc[:,1]]], axis=1) 
+                api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
                     if bc.size>0 
                     else api.empty((0,2), dtype = F.dtype)
                     for bc in bcs_idx
