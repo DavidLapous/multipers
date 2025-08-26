@@ -1477,8 +1477,14 @@ std::vector<int> inline to_grid_coord(const Gudhi::multi_filtration::One_critica
       out[i] = grid[i].size() - 1;
     else if (pt[i] <= grid[i][0]) [[unlikely]] {
       out[i] = 0;
-    } else
-      out[i] = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+    } else {
+      auto temp = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+      if (std::abs(grid[i][temp] - pt[i]) < std::abs(grid[i][temp - 1] - pt[i])) {
+        out[i] = temp;
+      } else {
+        out[i] = temp - 1;
+      }
+    }
   }
   return out;
 }
