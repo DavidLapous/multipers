@@ -489,7 +489,9 @@ inline void compute_2d_hilbert_surface(
       for (auto stuff : fixed_values) std::cout << stuff << " ";
       std::cout << "]" << std::endl;
     }
+
     using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::template Multi_dimensional_flat_barcode<>;
+
     if constexpr (PersBackend::is_vine) {
       if (!slicer.persistence_computation_is_initialized()) [[unlikely]] {
         slicer.initialize_persistence_computation();
@@ -499,6 +501,7 @@ inline void compute_2d_hilbert_surface(
     } else {
       slicer.initialize_persistence_computation(ignore_inf);
     }
+
     bc_type barcodes = slicer.template get_flat_barcode<true>();
     index_type degree_index = 0;
     for (auto degree : degrees) {  // TODO range view cartesian product

@@ -176,7 +176,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                         if len(default_values) > num_parameters:
                             del default_values[num_parameters:]
                         elif len(default_values) < num_parameters:
-                            default_values.extend([SimplexTreeMulti_{{FSHORT}}.T_minus_inf()] * (num_parameters - len(default_values)))
+                            padding = [SimplexTreeMulti_{{FSHORT}}.T_minus_inf()] * (num_parameters - len(default_values))
+                            # padding is added at the beginning for the case someone just omitted index 0 which gets
+                            # replaced by the original value.
+                            default_values = padding + default_values
                         assert len(default_values) == num_parameters
                     else:
                         assert default_values.ndim == 1
@@ -184,8 +187,10 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                         if default_values.shape[0] > num_parameters:
                             default_values = default_values[:num_parameters]
                         elif default_values.shape[0] < num_parameters:
-                            tmp = np.full(num_parameters - default_values.shape[0], SimplexTreeMulti_{{FSHORT}}.T_minus_inf(), dtype=default_values.dtype)
-                            default_values = np.concatenate((default_values, tmp))
+                            padding = np.full(num_parameters - default_values.shape[0], SimplexTreeMulti_{{FSHORT}}.T_minus_inf(), dtype=default_values.dtype)
+                            # padding is added at the beginning for the case someone just omitted index 0 which gets
+                            # replaced by the original value.
+                            default_values = np.concatenate((padding, default_values))
                         assert default_values.shape[0] == num_parameters
                     c_default_values = np.asarray(default_values, dtype={{PYTYPE}})
 
@@ -225,6 +230,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self.get_ptr().serialize(buffer_start, buffer_size)
         
         return np_buffer
+
     def __setstate__(self, state):
         """Construct the SimplexTree data structure from a Numpy Array (cf. :func:`~gudhi.SimplexTree.__getstate__`)
         in order to unpickle a SimplexTree.
@@ -240,6 +246,20 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             self.get_ptr().clear()
             # New pointer is a deserialized simplex tree
             self.get_ptr().deserialize(buffer_start, buffer_size)
+        #temporary: deserialize should also update the number of parameters, but to keep compatibility with
+        #current gudhi simplex tree, we have to externalize it for now
+        cdef Simplex_tree_multi_simplex_handle[{{FSHORT}}] sh
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] it = self.get_ptr().get_simplices_iterator_begin()
+        cdef Simplex_tree_multi_simplices_iterator[{{FSHORT}}] end = self.get_ptr().get_simplices_iterator_end()
+        cdef pair[vector[int],{{FSHORT}}*] p
+        if it != end:
+            sh = dereference(it)
+            p = self.get_ptr().get_simplex_and_filtration(sh)
+            self.get_ptr().set_num_parameters((p.second)[0].num_parameters())
+        else:
+            #not ideal, but hopefully sufficient for now
+            #will be corrected once the gudhi simplex tree can dump the number of parameters
+            self.get_ptr().set_num_parameters(0)
 
 
     def copy(self)->SimplexTreeMulti_{{FSHORT}}:
@@ -700,7 +720,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         cdef One_critical_filtration[{{CTYPE}}] w_temp
         cdef {{Filtration}} w
         if empty_filtration:
-            w = {{Filtration}}() # at -inf by default
+            w = {{Filtration}}(num_parameters) # at -inf by default
         with nogil:
             for i in range(n):
                 v.clear()

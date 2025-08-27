@@ -112,8 +112,11 @@ cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
 
 cdef inline _b2np_{{D['C_TEMPLATE_TYPE']}}(const Barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]& barcode):
   cdef Py_ssize_t size = barcode.size() * 2
+  if size == 0:
+    return np.empty(shape=(0, 2), dtype={{D['PY_VALUE_TYPE']}})
   cdef {{D['C_VALUE_TYPE']}}[:] view = <{{D['C_VALUE_TYPE']}}[:size]>(<{{D['C_VALUE_TYPE']}}*>(barcode.data()))
-  return np.array(view) #copy as the barcode will very probably be destroyed afterwards
+  #copy as the barcode will very probably be destroyed afterwards
+  return np.array(view).reshape((-1, 2))
 
 cdef inline _db2np_{{D['C_TEMPLATE_TYPE']}}(const Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]& barcode):
   cdef Py_ssize_t dims = barcode.size()
@@ -121,8 +124,11 @@ cdef inline _db2np_{{D['C_TEMPLATE_TYPE']}}(const Dim_barcode[{{D['C_TEMPLATE_TY
 
 cdef inline _b2np_{{D['C_TEMPLATE_TYPE']}}_idx(const Barcode[{{D['C_TEMPLATE_TYPE']}}, int]& barcode):
   cdef Py_ssize_t size = barcode.size() * 2
+  if size == 0:
+    return np.empty(shape=(0, 2), dtype=np.dtype(int))
   cdef int[:] view = <int[:size]>(<int*>(barcode.data()))
-  return np.array(view) #copy as the barcode will very probably be destroyed afterwards
+  #copy as the barcode will very probably be destroyed afterwards
+  return np.array(view).reshape((-1, 2))
 
 cdef inline _db2np_{{D['C_TEMPLATE_TYPE']}}_idx(const Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int]& barcode):
   cdef Py_ssize_t dims = barcode.size()

@@ -91,11 +91,11 @@ cdef class PySummand_{{SHORT}}:
 
     def get_birth_list(self): 
         cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
-        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
+        return _vff21cview_{{SHORT}}(v, copy = True)
 
     def get_death_list(self):
         cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_death_list()
-        return _vff21cview_{{SHORT}}(v, copy = True, duplicate = self.num_parameters())
+        return _vff21cview_{{SHORT}}(v, copy = True)
     @property
     def degree(self)->int:
         return self.sum.get_dimension()
@@ -1009,8 +1009,9 @@ cdef inline Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
 cdef dump_cmod_{{SHORT}}(Module[{{CTYPE}}]& mod):
     cdef Box[{{CTYPE}}] cbox = mod.get_box()
     cdef int dim = mod.get_dimension()
-    cdef cnp.ndarray[{{CTYPE}}, ndim=1] bottom_corner = cbox.get_lower_corner()
-    cdef cnp.ndarray[{{CTYPE}}, ndim=1] top_corner = cbox.get_upper_corner()
+    # cannot cast const vector[{{CTYPE}}]& to vector[{{CTYPE}}] without the explicit cast
+    cdef vector[{{CTYPE}}] bottom_corner = <vector[{{CTYPE}}]>cbox.get_lower_corner()
+    cdef vector[{{CTYPE}}] top_corner = <vector[{{CTYPE}}]>cbox.get_upper_corner()
     box = np.asarray([bottom_corner, top_corner])
     summands = tuple(dump_summand_{{SHORT}}(summand) for summand in mod)
     return box, summands

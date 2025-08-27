@@ -38,6 +38,8 @@ from libcpp.string cimport string
 from typing import Union
 from cython.operator cimport dereference
 
+from libcpp.algorithm cimport sort
+
 ## WARNING : This is repeated in the pxd file ...
 python_indices_type=np.int32
 python_tensor_dtype = np.int32
@@ -160,6 +162,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         Cython constructor
         """
+        if len(generator_maps) == 0:
+            self.minpres_degree = -1
+            return
         if len(generator_maps)>0 and len(generator_dimensions) == 0 and len(filtration_values) == 0:
           from multipers._slicer_meta import _blocks2boundary_dimension_grades
           generator_maps, generator_dimensions, filtration_values = _blocks2boundary_dimension_grades(
@@ -167,11 +172,13 @@ cdef class {{D['PYTHON_TYPE']}}:
                   inplace=False,
               )
         cdef uint32_t num_generators = len(generator_maps)
+        filtration_values = [np.asarray(f, dtype = {{D['PY_VALUE_TYPE']}} ) for f in filtration_values]
         cdef uint32_t num_param = filtration_values[0].shape[1]
         cdef vector[vector[uint32_t]] c_generator_maps
         cdef vector[Multi_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
         for stuff in generator_maps:
             c_generator_maps.push_back(<vector[uint32_t]>(stuff))
+            sort(c_generator_maps.back().begin(), c_generator_maps.back().end())
         cdef Multi_critical_filtration[{{D['C_VALUE_TYPE']}}] cf = Multi_critical_filtration[{{D['C_VALUE_TYPE']}}](num_param)
         cdef Multi_critical_filtration[{{D['C_VALUE_TYPE']}}] inf = Multi_critical_filtration[{{D['C_VALUE_TYPE']}}].inf(num_param)
         cdef {{D['C_VALUE_TYPE']}}[:,:] F_view 
@@ -211,6 +218,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         c_filtration_values.resize(num_generators)
         for i in range(num_generators):
             c_generator_maps[i]    = <vector[uint32_t]>(generator_maps[i])
+            sort(c_generator_maps[i].begin(), c_generator_maps[i].end())
             c_filtration_values[i] = _py21c_{{D['SHORT_VALUE_TYPE']}}(filtration_values[i])
         cdef vector[int] c_generator_dimensions = generator_dimensions
 
@@ -486,8 +494,16 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the bounding box of the current multifiltration.
         """
         cdef pair[{{D['FILTRATION_TYPE']}}, {{D['FILTRATION_TYPE']}}] box = self.truc.get_bounding_box()
-        cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] a = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.first(0,0), box.first.num_parameters(), True, box.first.num_parameters())
-        cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] b = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.second(0,0), box.first.num_parameters(), True, box.first.num_parameters())
+        if box.first.is_finite():
+            duplicate = 0
+        else:
+            duplicate = box.first.num_parameters()
+        cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] a = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.first(0,0), box.first.num_parameters(), duplicate, True)
+        if box.second.is_finite():
+            duplicate = 0
+        else:
+            duplicate = box.second.num_parameters()
+        cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] b = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.second(0,0), box.first.num_parameters(), duplicate, True)
         return np.asarray([a,b])
     def get_filtrations_values(self)->np.ndarray:
         """
@@ -495,7 +511,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         cdef vector[{{D['FILTRATION_TYPE']}}] v = self.truc.get_filtrations()
         out = [[v[i](g,p) for p in range(self.num_parameters)] for i in range(v.size()) for g in range(v[i].num_generators())]
-        return np.asarray(out)
+        return np.asarray(out, dtype={{D['PY_VALUE_TYPE']}})
     def get_filtration_grid(self,grid_strategy:str="exact", **infer_grid_kwargs):
         return compute_grid(
                 self.get_filtrations_values().T,
@@ -507,9 +523,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if D['IS_KCRITICAL']}}
-        return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
+        return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
         {{else}}
-        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
+        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:
@@ -678,13 +694,19 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         cdef vector[vector[vector[uint32_t]]] cycle_idx = self.truc.get_representative_cycles(update)
         cdef vector[vector[vector[vector[uint32_t]]]] out = vector[vector[vector[vector[uint32_t]]]](cycle_idx.size())
+
         # so, this will be rewritten by cython in c++ to optimize the for loops?
         for i in range(cycle_idx.size()):
             out[i].resize(cycle_idx[i].size())
             for j in range(cycle_idx[i].size()):
-                out[i][j].resize(cycle_idx[i][j].size())
-                for k in range(cycle_idx[i][j].size()):
-                    out[i][j][k] = self.truc.get_boundary(cycle_idx[i][j][k])
+                if cycle_idx[i][j].size() > 0:
+                    # to match the old format, otherwise we can have several empty boundaries for one cycle
+                    if self.truc.get_boundary(cycle_idx[i][j][0]).empty():
+                        out[i][j].push_back(vector[uint32_t]())
+                    else:
+                        out[i][j].resize(cycle_idx[i][j].size())
+                        for k in range(cycle_idx[i][j].size()):
+                            out[i][j][k] = self.truc.get_boundary(cycle_idx[i][j][k])
         return out
     def get_permutation(self):
         """

@@ -408,7 +408,7 @@ class Persistence_interface_matrix
     const auto& boundaries = cpx.get_boundaries();
     const auto& dimensions = cpx.get_dimensions();
     // simplex IDs need to be increasing in order, so the original ones cannot be used
-    Map permutationInv(permutation_->size());
+    Map permutationInv(cpx.get_number_of_cycle_generators());
     Map translated_boundary;
     std::size_t id = 0;
     for (auto i : *permutation_) {

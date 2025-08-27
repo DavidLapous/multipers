@@ -219,7 +219,8 @@ def test_kcritical_batch_insert():
     goal = [
         (array([0, 1, 2]), [array([2.0, 2.0])]),
         (array([0, 1]), [array([0.0, 1.0]), array([1.0, 0.0])]),
-        (array([0, 2]), [array([-1.0, 3.0]), array([0.0, 1.0]), array([1.0, 0.0])]),
+        #[-1, 3] disappears with the intersection of the filtration value of vertex 2
+        (array([0, 2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
         (array([0]), [array([-1.0, -2.0])]),
         (array([1, 2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
         (array([1]), [array([-2.0, -1.0])]),

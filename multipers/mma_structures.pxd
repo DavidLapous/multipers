@@ -17,6 +17,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
         ctypedef pair[vector[T],vector[T]] interval
         Summand() except +
+        Summand(int) except +
         Summand(vector[T]&, vector[T]&, int, int)  except + nogil
         T get_interleaving() nogil
         T get_local_weight(const vector[T]&, const T)  nogil
@@ -82,7 +83,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
     cdef cppclass Module[T=*]:
         ctypedef vector[vector[T]] image_type
         Module()  except + nogil
-        void resize(unsigned int)  nogil
+        void resize(unsigned int, int)  nogil
         Summand[T]& at(unsigned int)  nogil
         vector[Summand[T]].iterator begin()
         vector[Summand[T]].iterator end() 

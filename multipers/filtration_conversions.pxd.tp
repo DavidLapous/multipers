@@ -96,33 +96,41 @@ cdef inline vector[Multi_critical_filtration[{{CTYPE}}]] _py2vkc_{{SHORT}}({{CTY
 
 ###### ------------------- CPP to PY
 
+## tailored for Dynamic_multi_parameter_filtration
+## testing finite or not is not necessary for Multi_parameter_filtration
+## won't work for Degree_rips_filtration
 
 ## CYTHON BUG: using tuples here will cause some weird issues. 
-cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
+cdef inline _ff21cview_{{SHORT}}(One_critical_filtration[{{CTYPE}}]* x, bool copy=False):
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
-  if copy and duplicate and not dereference(x).is_finite():
-    return np.full(shape=duplicate, fill_value=dereference(x)(0,0))
+  if not dereference(x).is_finite():
+    return np.full(shape=num_parameters, fill_value=dereference(x)(0,0))
   cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(&(dereference(x)(0,0)))
   return np.array(x_view) if copy else np.asarray(x_view)
 
-cdef inline _ff21cview2_{{SHORT}}({{CTYPE}}* x, Py_ssize_t num_parameters, bool copy=False, int duplicate=0):
-  if copy and duplicate and not dereference(x).is_finite():
+cdef inline _ff21cview2_{{SHORT}}({{CTYPE}}* x, Py_ssize_t num_parameters, int duplicate, bool copy=False):
+  if duplicate:
     return np.full(shape=duplicate, fill_value=dereference(x))
   cdef {{CTYPE}}[:] x_view = <{{CTYPE}}[:num_parameters]>(x)
   return np.array(x_view) if copy else np.asarray(x_view)
 
-cdef inline _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False, int duplicate=0):
+cdef inline _ff2kcview_{{SHORT}}(Multi_critical_filtration[{{CTYPE}}]* x, bool copy=False):
   cdef Py_ssize_t k = dereference(x).num_generators()
-  return [_ff21cview2_{{SHORT}}(&(dereference(x)(i,0)), dereference(x).num_parameters(), copy=copy, duplicate=duplicate) for i in range(k)]
+  cdef Py_ssize_t p = dereference(x).num_parameters()
+  if dereference(x).is_finite():
+    duplicate = 0
+  else:
+    duplicate = p
+  return [_ff21cview2_{{SHORT}}(&(dereference(x)(i,0)), p, duplicate, copy=copy) for i in range(k)]
 
 
-cdef inline  _vff21cview_{{SHORT}}(vector[One_critical_filtration[{{CTYPE}}]]& x, bool copy = False, int duplicate=0):
+cdef inline  _vff21cview_{{SHORT}}(vector[One_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
   cdef Py_ssize_t num_stuff = x.size()
-  return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy, duplicate=duplicate) for i in range(num_stuff)]
+  return [_ff21cview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
 
-cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]& x, bool copy = False, int duplicate=0):
+cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]& x, bool copy = False):
   cdef Py_ssize_t num_stuff = x.size()
-  return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy, duplicate=duplicate) for i in range(num_stuff)]
+  return [_ff2kcview_{{SHORT}}(&(x[i]), copy=copy) for i in range(num_stuff)]
 
 {{endfor}}
 

@@ -2804,7 +2804,9 @@ class Simplex_tree {
    *   architecture.
    */
   std::size_t get_serialization_size() const {
-    const std::size_t np_byte_size = sizeof(decltype(number_of_parameters_));
+    // commented for the time the released gudhi version adds number_of_parameters_
+    // multipers uses it to convert a gudhi.SimplexTree to a multipers.SimplexTree
+    const std::size_t np_byte_size = 0; //sizeof(decltype(number_of_parameters_));
     const std::size_t vh_byte_size = sizeof(Vertex_handle);
     std::size_t fv_byte_size = 0;
     const std::size_t tree_size = num_simplices_and_filtration_serialization_size(&root_, fv_byte_size);
@@ -2850,7 +2852,9 @@ class Simplex_tree {
   /* 04 0a F(a) 0b F(b) 0c F(c) 0d F(d) 01 0b F(a,b) 00 02 0c F(b,c) 0d F(b,d) 01 0d F(b,c,d) 00 00 01 0d F(c,d) 00 00 */
   void serialize(char* buffer, const std::size_t buffer_size) const {
     char* buffer_end = buffer;
-    buffer_end = serialize_value_to_char_buffer(number_of_parameters_, buffer_end);
+    // commented for the time the released gudhi version adds number_of_parameters_
+    // multipers uses it to convert a gudhi.SimplexTree to a multipers.SimplexTree
+    // buffer_end = serialize_value_to_char_buffer(number_of_parameters_, buffer_end);
     buffer_end = rec_serialize(&root_, buffer_end);
     if (static_cast<std::size_t>(buffer_end - buffer) != buffer_size)
       throw std::invalid_argument("Serialization does not match end of buffer");
