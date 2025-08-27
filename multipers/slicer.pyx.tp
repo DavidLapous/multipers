@@ -404,12 +404,14 @@ cdef class {{D['PYTHON_TYPE']}}:
 
 
 
-    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->tuple:
+    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True, bool verbose=False)->tuple:
         """
         Computes the current persistence, or the persistence
         given by the filtration one_filtration (num_generators,) or (num_filtrations, num_generators,).
         """
         if one_filtration is not None:
+            if verbose:
+                print(f"Computing persistence on custom filtration: {one_filtration.shape=} {one_filtration.dtype=}")
             api = api_from_tensor(one_filtration)
             one_filtration=api.astensor(one_filtration)
             if one_filtration.ndim > 2 or one_filtration.ndim == 0:
@@ -419,18 +421,20 @@ cdef class {{D['PYTHON_TYPE']}}:
                 one_filtration = one_filtration[None]
                 squeeze = True
 
-            {{if D['IS_FLOAT']}}
-            bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
-            {{else}}
-            temp = self.unsqueeze() ## TODO : optimize
-            bcs = temp._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
-            {{endif}}
+            if self.is_squeezed:
+                if verbose:
+                    print(f"Input is squeezed. Unsqueezing it for the line projection.")
+                temp = self.unsqueeze() ## TODO : optimize
+                bcs = temp._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
+            else:
+                bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
 
             num_filtrations = one_filtration.shape[0]
             bcs = tuple(tuple(
                     evaluate_in_grid(
                         np.asarray(bcs[i][j]) if len(bcs[i][j]) else np.empty((0,2), dtype=np.int32),
-                        [one_filtration[i]]*2, input_inf_value=-1
+                        [one_filtration[i]]*2, # 2 bc of 1d barcode
+                        input_inf_value=-1,
                     )
                     for j in range(len(bcs[i])))
                 for i in range(num_filtrations)
@@ -502,7 +506,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         out =  _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
         if not unsqueeze:
             return out
-        return evaluate_in_grid(out, self.filtration_grid)
+        if not self.is_squeezed:
+            raise ValueError(f"Already unsqueezed. Got {unsqueeze=}")
+        return evaluate_in_grid(np.asarray(out), self.filtration_grid)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:
