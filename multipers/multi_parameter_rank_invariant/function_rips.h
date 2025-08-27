@@ -61,7 +61,7 @@ inline get_degree_filtrations( // also return max_degree,filtration_values
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
   for (auto sh : st.complex_simplex_range()) {
-    if (st.dimension() == 0)
+    if (st.dimension(sh) == 0)
       continue;
     value_type filtration = st.filtration(sh);
     for (auto node : st.simplex_vertex_range(sh)) {

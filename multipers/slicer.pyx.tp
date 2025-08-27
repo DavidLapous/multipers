@@ -28,7 +28,7 @@ from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
-from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_line 
+from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_line, _inf_value
 from multipers.array_api import api_from_tensor, api_from_tensors
 
 import numpy as np
@@ -320,19 +320,11 @@ cdef class {{D['PYTHON_TYPE']}}:
         return bcs
         {{else}}
         if not self.is_squeezed:
-            raise ValueError("Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers...")
-        api = api_from_tensor(self.filtration_grid[0])
-        s = self.unsqueeze()
+            raise ValueError("Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers.")
+        api = api_from_tensors(*self.filtration_grid)
         fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
-        projected_fil =_push_pts_to_line(fil, basepoint, direction)
-        s.compute_persistence(projected_fil)
-        bcs_idx = s.get_barcode_idx()
-        bcs = tuple(
-                api.stack([projected_fil[bc[:,0]], projected_fil[bc[:,1]]], axis=1) 
-                if bc.size>0 
-                else api.empty((0,2), dtype = self.filtration_grid[0].dtype)
-                for bc in bcs_idx
-            )
+        projected_fil = _push_pts_to_line(fil, basepoint, direction, api=api)
+        bcs = self.compute_persistence(projected_fil, ignore_infinite_filtration_values=ignore_infinite_filtration_values)
         if full:
             bcs = self._bc_to_full(bcs, basepoint, direction)
         return bcs
@@ -420,10 +412,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         if one_filtration is not None:
             api = api_from_tensor(one_filtration)
             one_filtration=api.astensor(one_filtration)
-            # self.truc.set_one_filtration(one_filtration)
-            # s = self.unsqueeze()
-            # fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
-            # projected_fil =_push_pts_to_line(fil, basepoint, direction)
             if one_filtration.ndim > 2 or one_filtration.ndim == 0:
                 raise ValueError(f"Expected a filtration shape of the form ((num_1_param), num_generators). Got {one_filtration.shape=}")
             squeeze = False
@@ -431,20 +419,23 @@ cdef class {{D['PYTHON_TYPE']}}:
                 one_filtration = one_filtration[None]
                 squeeze = True
 
+            {{if D['IS_FLOAT']}}
             bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
+            {{else}}
+            temp = self.unsqueeze() ## TODO : optimize
+            bcs = temp._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
+            {{endif}}
 
-            one_filtration = api.cat([
-              one_filtration,
-              api.repeat_interleave(api.astensor(api.inf), one_filtration.shape[0])[:,None],
-            ], axis=1)
+            num_filtrations = one_filtration.shape[0]
             bcs = tuple(tuple(
-                api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
-                    if bc.size>0 
-                    else api.empty((0,2), dtype = F.dtype)
-                    for bc in bcs_idx
-                )
-                for bcs_idx,F in zip(bcs,one_filtration)
+                    evaluate_in_grid(
+                        np.asarray(bcs[i][j]) if len(bcs[i][j]) else np.empty((0,2), dtype=np.int32),
+                        [one_filtration[i]]*2, input_inf_value=-1
+                    )
+                    for j in range(len(bcs[i])))
+                for i in range(num_filtrations)
             )
+
             return bcs[0] if squeeze else bcs
 
         # TODO: Later
@@ -453,7 +444,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         # else:
         #     self.truc.compute_persistence()
         self.truc.compute_persistence(ignore_infinite_filtration_values)
-        # return self
         return self.get_barcode()
     def get_barcode(self):
         """
@@ -500,14 +490,19 @@ cdef class {{D['PYTHON_TYPE']}}:
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
             )
-    def get_filtrations(self):
+    def get_filtrations(self, bool unsqueeze = False):
         """
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if D['IS_KCRITICAL']}}
+        if unsqueeze:
+            raise NotImplementedError("Unsqueezed version not implemented for multicritical filtrations.")
         return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
         {{else}}
-        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
+        out =  _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False, duplicate=self.num_parameters)
+        if not unsqueeze:
+            return out
+        return evaluate_in_grid(out, self.filtration_grid)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:
@@ -719,8 +714,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self
 
     def unsqueeze(self, grid=None)->{{D['PYTHON_TYPE'][:-3]+"f64"}}:
-        from multipers.grids import evaluate_in_grid, sanitize_grid
-        from multipers import Slicer
         grid = self.filtration_grid if grid is None else grid
         grid = sanitize_grid(grid, numpyfy=True)
         new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)

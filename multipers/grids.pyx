@@ -369,7 +369,7 @@ def _inf_value(array):
         return torch.iinfo(dtype).max
     raise ValueError(f"Dtype must be integer or floating like (got {dtype})")
 
-def evaluate_in_grid(pts, grid, mass_default=None):
+def evaluate_in_grid(pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None):
     """    
     Input
     -----
@@ -379,28 +379,21 @@ def evaluate_in_grid(pts, grid, mass_default=None):
     assert pts.ndim == 2
     first_filtration = grid[0]
     dtype = first_filtration.dtype
-    if isinstance(first_filtration, np.ndarray):
-        if mass_default is not None:
-            grid = tuple(np.concatenate([g, [m]]) for g,m in zip(grid, mass_default))
-        def empty_like(x):
-            return np.empty_like(x, dtype=dtype)
-    else: 
-        import torch
-        # assert isinstance(first_filtration, torch.Tensor), f"Invalid grid type. Got {type(grid[0])}, expected numpy or torch array."
-        if mass_default is not None:
-            grid = tuple(torch.cat([g, torch.tensor(m)[None]]) for g,m in zip(grid, mass_default))
-        def empty_like(x):
-            return torch.empty(x.shape,dtype=dtype)
+    api = api_from_tensors(*grid)
+    if mass_default is not None:
+        grid = tuple(api.cat([g, api.astensor(m)[None]]) for g,m in zip(grid, mass_default))
+    def empty_like(x):
+        return api.empty(x.shape, dtype=dtype)
 
     coords=empty_like(pts)
     cdef int dim = coords.shape[1]
-    pts_inf = _inf_value(pts)
-    coords_inf = _inf_value(coords)
+    pts_inf = _inf_value(pts) if input_inf_value is None else input_inf_value
+    coords_inf = _inf_value(coords) if output_inf_value is None else output_inf_value
     idx = np.argwhere(pts == pts_inf)
-    pts[idx] == 0
+    pts[idx[:,0],idx[:,1]] = 0
     for i in range(dim):
         coords[:,i] = grid[i][pts[:,i]]
-    coords[idx] = coords_inf
+    coords[idx[:,0],idx[:,1]] = coords_inf
     return coords
 
 def sm_in_grid(pts, weights, grid, mass_default=None):
@@ -452,8 +445,9 @@ def sms_in_grid(sms, grid, mass_default=None):
     return sms
 
 
-def _push_pts_to_line(pts, basepoint, direction=None):
-    api = api_from_tensors(pts, basepoint)
+def _push_pts_to_line(pts, basepoint, direction=None, api=None):
+    if api is None:
+        api = api_from_tensors(pts, basepoint)
     pts = api.astensor(pts)
     basepoint = api.astensor(basepoint)
     num_parameters = basepoint.shape[0]
@@ -479,3 +473,24 @@ def _push_pts_to_line(pts, basepoint, direction=None):
     else:
         xs = xa
     return xs.squeeze()
+
+def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
+    if api is None:
+        api = api_from_tensors(pts,basepoints)
+    cdef int num_lines = len(basepoints)
+    cdef int num_pts = len(pts)
+
+    pts = api.astensor(pts)
+    basepoints = api.astensor(basepoints)
+    if directions is None:
+        directions = [None]*num_lines
+    else:
+        directions = api.astensor(directions)
+
+    out = api.empty((num_lines, num_pts), dtype=pts.dtype)
+    for i in range(num_lines):
+        out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
+    return api.cat(out)
+        
+
+
