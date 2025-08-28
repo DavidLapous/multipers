@@ -22,6 +22,13 @@ unique = _np.unique
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
+abs = _np.abs
+exp = _np.exp
+
+
+def relu(x):
+    return _np.where(x >= 0, x, 0)
+
 
 # Test keops
 _is_keops_available = None

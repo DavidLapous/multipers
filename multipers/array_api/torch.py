@@ -20,6 +20,9 @@ cartesian_product = _t.cartesian_prod
 inf = _t.inf
 searchsorted = _t.searchsorted
 LazyTensor = None
+relu = _t.relu
+abs = _t.abs
+exp = _t.exp
 
 
 _is_keops_available = None
