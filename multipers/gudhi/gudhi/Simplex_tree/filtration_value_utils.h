@@ -49,6 +49,22 @@ constexpr Arithmetic_filtration_value get_infinity_value([[maybe_unused]] const 
 
 /**
  * @ingroup simplex_tree
+ * @brief Returns a filtration value at minus infinity such that it would be equal to the given value if the given value
+ * is also at minus infinity.
+ * This is the overload for when @ref FiltrationValue is an arithmetic type, like double, int etc.
+ * and simply returns either `-std::numeric_limits<Arithmetic_filtration_value>::infinity()` or
+ * `std::numeric_limits<Arithmetic_filtration_value>::lowest()`.
+ */
+template <typename Arithmetic_filtration_value>
+constexpr Arithmetic_filtration_value get_minus_infinity_value([[maybe_unused]] const Arithmetic_filtration_value& f)
+{
+  return std::numeric_limits<Arithmetic_filtration_value>::has_infinity
+             ? -std::numeric_limits<Arithmetic_filtration_value>::infinity()
+             : std::numeric_limits<Arithmetic_filtration_value>::lowest();
+}
+
+/**
+ * @ingroup simplex_tree
  * @brief Given two filtration values at which a simplex exists, stores in the first value the minimal union of births
  * generating a lifetime including those two values.
  * This is the overload for when @ref FiltrationValue is an arithmetic type, like double, int etc.

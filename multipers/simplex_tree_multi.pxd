@@ -72,6 +72,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     dimension_type upper_bound_dimension() nogil
     bool find_simplex(vector[int]& simplex) nogil
     bool insert(vector[int]& simplex, F& filtration) noexcept nogil
+    bool insert_force(vector[int]& simplex, F& filtration) noexcept nogil
     # vector[simplex_filtration_type] get_star(const vector[int]& simplex) nogil
     # vector[simplex_filtration_type] get_cofaces(const vector[int]& simplex, int dimension) nogil
     void expansion(int max_dim)  except + nogil

@@ -135,6 +135,12 @@ class Simplex_tree_multi_interface
     return (result.second);
   }
 
+  bool insert_force(const Simplex &simplex, const Filtration_value &filtration) {
+    Insertion_result result = Base_tree::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::FORCE);
+    Base::clear_filtration();
+    return (result.second);
+  }
+
   // Do not interface this function, only used in alpha complex interface for
   // complex creation
   bool insert_simplex(const Simplex &simplex, const Filtration_value &filtration) {

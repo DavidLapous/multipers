@@ -693,6 +693,9 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
         The i-th simplex has vertices `vertex_array[0,i]`, ...,
         `vertex_array[n,i]` and j-th filtration value `filtrations[i,j,num_parameters]`.
 
+        If the given filtration is not empty, it has to represent a valid filtration even with respect to faces already
+        present in the simplex tree. Contrary to the 1-critical case, no automatic revision is made.
+
         :param vertex_array: the k-simplices to insert.
         :type vertex_array: numpy.array of shape (k+1,n)
         :param filtrations: the filtration values.
@@ -730,7 +733,7 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
                 #filtration
                 if not empty_filtration:
                     w =  _py2kc_{{SHORT}}(filtrations_[i])
-                self.get_ptr().insert(v, w)
+                self.get_ptr().insert_force(v, w)
 
         #repair filtration if necessary
         if empty_filtration:
