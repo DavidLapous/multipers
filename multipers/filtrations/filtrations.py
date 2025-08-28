@@ -79,6 +79,7 @@ def RipsLowerstar(
         filtration_values = [D.ravel(), *[f for f in function.T]]
         grid = compute_grid(filtration_values)
         st = st.grid_squeeze(grid)
+        st._clean_filtration_grid()
     return st
 
 
@@ -239,6 +240,7 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
             ).reshape(slice_shape)
         slicer = from_bitmap(coord_img, **slicer_kwargs)
         slicer.filtration_grid = grid
+        slicer._clean_filtration_grid()
         return slicer
 
     return from_bitmap(image, **slicer_kwargs)

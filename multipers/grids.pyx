@@ -490,7 +490,6 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
     out = api.empty((num_lines, num_pts), dtype=pts.dtype)
     for i in range(num_lines):
         out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
-    return api.cat(out)
-        
+    return out
 
 

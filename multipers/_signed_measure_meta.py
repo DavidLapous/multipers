@@ -2,6 +2,7 @@ from collections.abc import Iterable, Sequence
 from typing import Optional, Union
 
 import numpy as np
+import time
 
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.plots import plot_signed_measures
@@ -176,10 +177,12 @@ def signed_measure(
 
     if not filtered_complex.is_squeezed:
         if verbose:
-            print("Coarsening complex...", end="")
+            print("Coarsening complex...", end="",flush=True)
+            t0 = time.time()
         filtered_complex_ = filtered_complex.grid_squeeze(grid)
+
         if verbose:
-            print("Done.")
+            print(f"Done. ({time.time() - t0:.3f}s)")
     else:
         filtered_complex_ = filtered_complex.copy()
 
@@ -190,26 +193,18 @@ def signed_measure(
         else:
             max_degree = np.max(degrees) + 1
             if verbose:
-                print(f"Pruning simplicies up to {max_degree}...", end="")
+                print(f"Pruning simplicies up to {max_degree}...", end="", flush=True)
+                t0 = time.time()
             if filtered_complex_.dimension > max_degree:
                 filtered_complex_.prune_above_dimension(max_degree)
             if verbose:
-                print("Done.")
+                print(f"Done. ({time.time() - t0:.3f}s)")
 
     num_parameters = filtered_complex.num_parameters
     assert num_parameters == len(
         grid
     ), f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
 
-    # if is_simplextree_multi(filtered_complex_):
-    #     # if num_collapses != 0:
-    #     #     if verbose:
-    #     #         print("Collapsing edges...", end="")
-    #     #     filtered_complex_.collapse_edges(num_collapses)
-    #     #     if verbose:
-    #     #         print("Done.")
-    #     # if backend is not None:
-    #     #     filtered_complex_ = mp.Slicer(filtered_complex_, vineyard=vineyard)
 
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
@@ -217,59 +212,14 @@ def signed_measure(
             print("Input is a slicer.")
         if backend is not None and not filtered_complex_.is_minpres:
             raise ValueError("giving a backend to this function is deprecated")
-        #     from multipers.slicer import minimal_presentation
-        #
-        #     assert (
-        #         invariant != "euler"
-        #     ), "Euler Characteristic cannot be speed up by a backend"
-        #     # This returns a list of reduced complexes
-        #     if verbose:
-        #         print("Reducing complex...", end="")
-        #     reduced_complex = minimal_presentation(
-        #         filtered_complex_,
-        #         degrees=degrees,
-        #         backend=backend,
-        #         vineyard=vineyard,
-        #         verbose=verbose,
-        #     )
-        #     if verbose:
-        #         print("Done.")
-        #     if invariant is not None and "rank" in invariant:
-        #         if verbose:
-        #             print("Computing rank...", end="")
-        #         sms = [
-        #             _rank_from_slicer(
-        #                 s,
-        #                 degrees=[d],
-        #                 n_jobs=n_jobs,
-        #                 # grid_shape=tuple(len(g) for g in grid),
-        #                 zero_pad=fix_mass_default,
-        #                 ignore_inf=ignore_infinite_filtration_values,
-        #             )[0]
-        #             for s, d in zip(reduced_complex, degrees)
-        #         ]
-        #         fix_mass_default = False
-        #         if verbose:
-        #             print("Done.")
-        #     else:
-        #         if verbose:
-        #             print("Reduced slicer. Retrieving measure from it...", end="")
-        #         sms = [
-        #             _signed_measure_from_slicer(
-        #                 s,
-        #                 shift=(
-        #                     reduced_complex.minpres_degree & 1 if d is None else d & 1
-        #                 ),
-        #             )[0]
-        #             for s, d in zip(reduced_complex, degrees)
-        #         ]
-        #         if verbose:
-        #             print("Done.")
         else:  # No backend
-            if invariant is not None and ("rank" in invariant or "hook" in invariant or "rectangle" in invariant):
+            if invariant is not None and (
+                "rank" in invariant or "hook" in invariant or "rectangle" in invariant
+            ):
                 degrees = np.asarray(degrees, dtype=int)
                 if verbose:
-                    print("Computing rank...", end="")
+                    print("Computing rank...", end="", flush=True)
+                    t0 = time.time()
                 sms = _rank_from_slicer(
                     filtered_complex_,
                     degrees=degrees,
@@ -280,10 +230,11 @@ def signed_measure(
                 )
                 fix_mass_default = False
                 if verbose:
-                    print("Done.")
+                    print(f"Done. ({time.time() - t0:.3f}s)")
             elif filtered_complex_.is_minpres:
                 if verbose:
-                    print("Reduced slicer. Retrieving measure from it...", end="")
+                    print("Reduced slicer. Retrieving measure from it...", end="",flush=True)
+                    t0 = time.time()
                 sms = [
                     _signed_measure_from_slicer(
                         filtered_complex_,
@@ -294,21 +245,23 @@ def signed_measure(
                     for d in degrees
                 ]
                 if verbose:
-                    print("Done.")
+                    print(f"Done. ({time.time() - t0:.3f}s)")
             elif (invariant is None or "euler" in invariant) and (
                 len(degrees) == 1 and degrees[0] is None
             ):
                 if verbose:
-                    print("Retrieving measure from slicer...", end="")
+                    print("Retrieving measure from slicer...", end="",flush=True)
+                    t0 = time.time()
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
                     shift=0,  # no minpres
                 )
                 if verbose:
-                    print("Done.")
+                    print(f"Done. ({time.time() - t0:.3f}s)")
             else:
                 if verbose:
-                    print("Computing Hilbert function...", end="")
+                    print("Computing Hilbert function...", end="", flush=True)
+                    t0 = time.time()
                 sms = _hilbert_signed_measure(
                     filtered_complex_,
                     degrees=degrees,
@@ -319,7 +272,7 @@ def signed_measure(
                 )
                 fix_mass_default = False
                 if verbose:
-                    print("Done.")
+                    print(f"Done. ({time.time() - t0:.3f}s)")
 
     elif is_simplextree_multi(filtered_complex_):
         if verbose:
@@ -327,7 +280,9 @@ def signed_measure(
         ## we still have a simplextree here
         if invariant in ["rank_invariant", "rank", "hook", "rectangle"]:
             if verbose:
-                print("Computing rank invariant...", end="")
+                print("Computing rank invariant...", end="", flush=True)
+                t0 = time.time()
+
             assert (
                 num_parameters == 2
             ), "Rank invariant only implemented for 2-parameter modules."
@@ -342,10 +297,11 @@ def signed_measure(
             )
             fix_mass_default = False
             if verbose:
-                print("Done.")
+                print(f"Done. ({time.time() - t0:.3f}s)")
         elif len(degrees) == 1 and degrees[0] is None:
             if verbose:
-                print("Computing Euler Characteristic...", end="")
+                print("Computing Euler Characteristic...", end="", flush=True)
+                t0 = time.time()
             assert invariant is None or invariant in [
                 "euler",
                 "euler_characteristic",
@@ -362,10 +318,11 @@ def signed_measure(
             ]
             fix_mass_default = False
             if verbose:
-                print("Done.")
+                print(f"Done. ({time.time() - t0:.3f}s)")
         else:
             if verbose:
-                print("Computing Hilbert Function...", end="")
+                print("Computing Hilbert Function...", end="", flush=True)
+                t0 = time.time()
             assert invariant is None or invariant in [
                 "hilbert",
                 "hilbert_function",
@@ -384,19 +341,21 @@ def signed_measure(
             )
             fix_mass_default = False
             if verbose:
-                print("Done.")
+                print(f"Done. ({time.time() - t0:.3f}s)")
     else:
         raise ValueError("Filtered complex has to be a SimplexTree or a Slicer.")
 
     if clean:
         if verbose:
-            print("Cleaning measure...", end="")
+            print("Cleaning measure...", end="",flush=True)
+            t0 = time.time()
         sms = clean_sms(sms)
         if verbose:
-            print("Done.")
+            print(f"Done. ({time.time() - t0:.3f}s)")
     if grid is not None and not coordinate_measure:
         if verbose:
-            print("Pushing back the measure to the grid...", end="")
+            print("Pushing back the measure to the grid...", end="", flush=True)
+            t0 = time.time()
         sms = sms_in_grid(
             sms,
             grid=grid,
@@ -404,21 +363,28 @@ def signed_measure(
             # num_parameters=num_parameters,
         )
         if verbose:
-            print("Done.")
+            print(f"Done. ({time.time() - t0:.3f}s)")
 
     if fix_mass_default:
         # TODO : some methods need to use this, this could be optimized
         if verbose:
-            print("Seems that fixing mass default is necessary...", end="")
+            print("Seems that fixing mass default is necessary...", end="", flush=True)
+            t0 = time.time()
         sms = zero_out_sms(sms, mass_default=mass_default)
         if verbose:
-            print("Done.")
+            print(f"Done. ({time.time() - t0:.3f}s)")
 
     if invariant == "hook":
+        if verbose:
+            print("Converting rank decomposition to hook decomposition...", end="",flush=True)
+            t0 = time.time()
         from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
-        sms = [rectangle_to_hook_minimal_signed_barcode(pts,w) for pts,w in sms]
+
+        sms = [rectangle_to_hook_minimal_signed_barcode(pts, w) for pts, w in sms]
+        if verbose:
+            print(f"Done. ({time.time() - t0:.3f}s)")
     if plot:
-        plot_signed_measures(sms)
+        plot_signed_measures(sms, alpha=1 if invariant == "hook" else None)
     return sms
 
 
