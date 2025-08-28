@@ -78,14 +78,9 @@ class Module {
   Summand<value_type> &operator[](size_t index);
 
   const Summand<value_type> &operator[](const size_t index) const;
-  template <class Barcode>
-  void add_barcode(const Barcode &barcode);
-  // void add_barcode(const Line<value_type> &line,
-  //                  const std::vector<std::pair<int, std::pair<value_type, value_type>>> &barcode,
-  //                  const bool threshold);
   void add_barcode(const Line<value_type> &line,
-                   const std::vector<std::array<value_type,2> > &barcode,
-                   const bool threshold);
+                   const std::vector<std::vector<std::array<value_type,2> > > &barcode,
+                   bool threshold);
   typename module_type::iterator begin();
   typename module_type::iterator end();
   typename module_type::const_iterator begin() const;
@@ -449,7 +444,7 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
 
     slicer.vineyard_update();
     if constexpr (verbose2) std::cout << slicer << std::endl;
-    module.add_barcode(new_line, slicer.get_flat_barcode(), threshold);
+    module.add_barcode(new_line, slicer.template get_flat_barcode<true>(), threshold);
   };
 };
 
@@ -617,8 +612,8 @@ Module<value_type> multiparameter_module_approximation(
         out[i].set_dimension(dim);
         ++i;
       }
-      out.add_barcode(current_line, barcode[dim], threshold);
     }
+    out.add_barcode(current_line, barcode, threshold);
 
     if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
   }
@@ -712,46 +707,15 @@ Module<value_type> multiparameter_module_approximation(
 };
 
 template <typename value_type>
-template <class Barcode>
-inline void Module<value_type>::add_barcode(const Barcode &barcode) {
-  constexpr const bool verbose = false;
-  if (barcode.size() != module_.size()) {
-    std::cerr << "Barcode sizes doesn't match. Module is " << std::to_string(module_.size()) << " and barcode is "
-              << std::to_string(barcode.size()) << std::endl;
-  }
-  unsigned int count = 0;
-  for (const auto &bar_ : barcode) {
-    auto &summand = this->operator[](count++);
-    auto &[dim, bar] = bar_;
-    auto &[birth_filtration, death_filtration] = bar;
-    if constexpr (verbose) std::cout << "Birth " << birth_filtration << " Death " << death_filtration << std::endl;
-    summand.add_bar(birth_filtration, death_filtration);
-  }
-}
-
-// template <typename value_type>
-// inline void Module<value_type>::add_barcode(
-//     const Line<value_type> &line,
-//     const std::vector<std::pair<int, std::pair<value_type, value_type>>> &barcode,
-//     const bool threshold_in) {
-//   assert(barcode.size() == module_.size() && "Barcode sizes doesn't match.");
-
-//   auto count = 0U;
-//   for (const auto &extBar : barcode) {
-//     auto &[dim, bar] = extBar;
-//     _add_bar_with_threshold(line, bar, threshold_in, this->operator[](count++));
-//   }
-// }
-
-template <typename value_type>
 inline void Module<value_type>::add_barcode(const Line<value_type> &line,
-                                            const std::vector<std::array<value_type,2> > &barcode,
+                                            const std::vector<std::vector<std::array<value_type,2> > > &barcode,
                                             const bool threshold_in) {
   assert(barcode.size() == module_.size() && "Barcode sizes doesn't match.");
 
   auto count = 0U;
-  for (const auto &bar : barcode) {
-    _add_bar_with_threshold(line, bar, threshold_in, this->operator[](count++));
+  for (const auto &bar_dim : barcode) {
+    for (const auto& bar : bar_dim)
+      _add_bar_with_threshold(line, bar, threshold_in, this->operator[](count++));
   }
 }
 
@@ -810,7 +774,7 @@ inline Module<value_type>::Module(Box<value_type> &box) : box_(box) {}
 
 template <typename value_type>
 inline void Module<value_type>::resize(const unsigned int size, int number_of_parameters) {
-  module_.resize(size, number_of_parameters);
+  module_.resize(size, Summand<value_type>(number_of_parameters));
 }
 
 template <typename value_type>

@@ -431,10 +431,10 @@ class Simplex_tree {
   Simplex_tree()
       : null_vertex_(-1),
         root_(nullptr, null_vertex_),
-        number_of_parameters_(1),
         filtration_vect_(),
         dimension_(-1),
-        dimension_to_be_lowered_(false) {}
+        dimension_to_be_lowered_(false),
+        number_of_parameters_(1) {}
 
   /**
    * @brief Construct the simplex tree as the copy of a given simplex tree with eventually different template
@@ -2998,8 +2998,7 @@ class Simplex_tree {
   Vertex_handle null_vertex_;
   /** \brief Set of simplex tree Nodes representing the vertices.*/
   Siblings root_;
-  int number_of_parameters_;  /**< Stores the number of parameters set by the user. */
-
+  
   // all mutable as their content has no impact on the content of the simplex tree itself
   // they correspond to some kind of cache or helper attributes.
   /** \brief Simplices ordered according to a filtration.*/
@@ -3007,6 +3006,7 @@ class Simplex_tree {
   /** \brief Upper bound on the dimension of the simplicial complex.*/
   mutable int dimension_;
   mutable bool dimension_to_be_lowered_;
+  int number_of_parameters_;  /**< Stores the number of parameters set by the user. */
 };
 
 // Print a Simplex_tree in os.

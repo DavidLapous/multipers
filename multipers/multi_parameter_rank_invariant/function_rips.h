@@ -53,13 +53,14 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
 
   unsigned int num_degrees = degrees.size();
   // puts the st filtration in axis 0 + fitrations for each degrees afterward
-  _multi_st st_multi(Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(
-      st, _multifiltration(static_cast<int>(num_degrees)), 0));
+  _multifiltration default_f(static_cast<int>(num_degrees));
+  default_f.force_generator_size_to_number_of_parameters(0);
+  _multi_st st_multi(Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0));
 
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
   for (const auto &sh : st.complex_simplex_range()) {
-    if (st.dimension() == 0) continue;
+    if (st.dimension(sh) == 0) continue;
     value_type filtration = st.filtration(sh);
     for (auto node : st.simplex_vertex_range(sh)) {
       edge_filtration_of_nodes[node].push_back(filtration);
@@ -103,7 +104,6 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
     value_type edge_filtration = st.filtration(*sh_standard);
     // the filtration vector to fill
     _multifiltration &edge_degree_rips_filtration = st_multi.get_filtration_value(*sh_multi);
-    edge_degree_rips_filtration.force_generator_size_to_number_of_parameters(0);
     for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
       value_type edge_filtration_of_degree = edge_filtration;  // copy as we do the max with edges of degree index
       for (int node : st.simplex_vertex_range(*sh_standard)) {
