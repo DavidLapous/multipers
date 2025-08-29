@@ -189,7 +189,8 @@ def plot_surface(
     **plt_args,
 ):
     import matplotlib
-
+    grid = [to_numpy(g) for g in grid]
+    hf = to_numpy(hf)
     if ax is None:
         ax = plt.gca()
     else:
