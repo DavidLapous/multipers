@@ -24,6 +24,8 @@ searchsorted = _np.searchsorted
 LazyTensor = None
 abs = _np.abs
 exp = _np.exp
+sin = _np.sin
+cos = _np.cos
 
 
 def relu(x):
