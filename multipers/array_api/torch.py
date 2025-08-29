@@ -23,6 +23,8 @@ LazyTensor = None
 relu = _t.relu
 abs = _t.abs
 exp = _t.exp
+sin = _t.sin
+cos = _t.cos
 
 
 _is_keops_available = None
