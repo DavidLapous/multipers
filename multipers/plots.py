@@ -162,7 +162,7 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
         )
 
 
-def plot_signed_measures(signed_measures, threshold=None, size=4):
+def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None):
     num_degrees = len(signed_measures)
     if num_degrees <= 1:
         axes = [plt.gca()]
@@ -172,7 +172,8 @@ def plot_signed_measures(signed_measures, threshold=None, size=4):
         )
     for ax, signed_measure in zip(axes, signed_measures):
         plot_signed_measure(signed_measure=signed_measure,
-                            ax=ax, threshold=threshold)
+                            ax=ax, threshold=threshold,
+                            alpha=alpha)
     plt.tight_layout()
 
 
@@ -188,7 +189,8 @@ def plot_surface(
     **plt_args,
 ):
     import matplotlib
-
+    grid = [to_numpy(g) for g in grid]
+    hf = to_numpy(hf)
     if ax is None:
         ax = plt.gca()
     else:

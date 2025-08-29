@@ -28,7 +28,7 @@ from multipers.filtrations cimport *
 from multipers.filtration_conversions cimport *
 ## TODO: these two are not needed, remove that by updating rank code.
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
-from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_line 
+from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_lines, _inf_value
 from multipers.array_api import api_from_tensor, api_from_tensors
 
 import numpy as np
@@ -37,6 +37,7 @@ from libcpp.string cimport string
 # python_value_type = np.float32
 from typing import Union
 from cython.operator cimport dereference
+import time
 
 from libcpp.algorithm cimport sort
 
@@ -313,10 +314,8 @@ cdef class {{D['PYTHON_TYPE']}}:
     def persistence_on_line(self,basepoint,direction=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
         Computes the persistence on a line L defined by 
-         - a basepoint (num_parameters,) array
-         - an optional direction (num_parameters,) array
-        
-        Warning: This is not parallelizable. Use `persitence_on_lines`.
+         - a basepoint (num_parameters,) or (num_basepoints, num_parameters,) array
+         - an optional direction (num_parameters,) or (num_basepoints, num_parameters,) array
         """
         {{if D['IS_FLOAT']}}
         self.push_to_line(basepoint,direction)
@@ -331,21 +330,25 @@ cdef class {{D['PYTHON_TYPE']}}:
         return bcs
         {{else}}
         if not self.is_squeezed:
-            raise ValueError("Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers...")
-        api = api_from_tensor(self.filtration_grid[0])
-        s = self.unsqueeze()
+            raise ValueError("Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers.")
+        api = api_from_tensors(basepoint, *self.filtration_grid)
+        basepoint = api.astensor(basepoint)
         fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
-        projected_fil =_push_pts_to_line(fil, basepoint, direction)
-        s.compute_persistence(projected_fil)
-        bcs_idx = s.get_barcode_idx()
-        bcs = tuple(
-                api.stack([projected_fil[bc[:,0]], projected_fil[bc[:,1]]], axis=1) 
-                if bc.size>0 
-                else api.empty((0,2), dtype = self.filtration_grid[0].dtype)
-                for bc in bcs_idx
-            )
+        if basepoint.ndim == 0 or basepoint.ndim >2:
+            raise ValueError(f"Expected a basepoint shape of the form (num_parameters,). Got {basepoint.shape=}")
+        if basepoint.ndim == 1:
+            basepoint = basepoint[None]
+        if direction is not None:
+            direction = api.astensor(direction)
+            if direction.ndim == 0 or direction.ndim >2:
+                raise ValueError(f"Expected a direction shape of the form (num_parameters,). Got {direction.shape=}")
+            if direction.ndim == 1:
+                direction = direction[None]
+        projected_fil = _push_pts_to_lines(fil, basepoint, direction, api=api)
+        bcs = self.compute_persistence(projected_fil, ignore_infinite_filtration_values=ignore_infinite_filtration_values)
         if full:
-            bcs = self._bc_to_full(bcs, basepoint, direction)
+            _dirs = [None]*len(basepoint) if direction is None else direction
+            bcs = tuple({{D['PYTHON_TYPE']}}._bc_to_full(bcs, bp, dir) for bcs, bp, dir in zip(bcs,basepoint,_dirs))
         return bcs
         {{endif}}
 
@@ -422,18 +425,16 @@ cdef class {{D['PYTHON_TYPE']}}:
 
 
 
-    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True)->tuple:
+    def compute_persistence(self,one_filtration=None, bool ignore_infinite_filtration_values = True, bool verbose=False)->tuple:
         """
         Computes the current persistence, or the persistence
         given by the filtration one_filtration (num_generators,) or (num_filtrations, num_generators,).
         """
         if one_filtration is not None:
+            if verbose:
+                print(f"Computing persistence on custom filtration: {one_filtration.shape=} {one_filtration.dtype=}")
             api = api_from_tensor(one_filtration)
             one_filtration=api.astensor(one_filtration)
-            # self.truc.set_one_filtration(one_filtration)
-            # s = self.unsqueeze()
-            # fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
-            # projected_fil =_push_pts_to_line(fil, basepoint, direction)
             if one_filtration.ndim > 2 or one_filtration.ndim == 0:
                 raise ValueError(f"Expected a filtration shape of the form ((num_1_param), num_generators). Got {one_filtration.shape=}")
             squeeze = False
@@ -441,20 +442,25 @@ cdef class {{D['PYTHON_TYPE']}}:
                 one_filtration = one_filtration[None]
                 squeeze = True
 
-            bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
+            if self.is_squeezed:
+                if verbose:
+                    print(f"Input is squeezed. Unsqueezing it for the line projection.")
+                temp = self.unsqueeze() ## TODO : optimize
+                bcs = temp._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
+            else:
+                bcs = self._custom_persistences_idx(api.asnumpy(one_filtration),ignore_infinite_filtration_values)
 
-            one_filtration = api.cat([
-              one_filtration,
-              api.repeat_interleave(api.astensor(api.inf), one_filtration.shape[0])[:,None],
-            ], axis=1)
+            num_filtrations = one_filtration.shape[0]
             bcs = tuple(tuple(
-                api.stack([F[bc[:,0]], F[bc[:,1]]], axis=1) 
-                    if bc.size>0 
-                    else api.empty((0,2), dtype = F.dtype)
-                    for bc in bcs_idx
-                )
-                for bcs_idx,F in zip(bcs,one_filtration)
+                    evaluate_in_grid(
+                        np.asarray(bcs[i][j]) if len(bcs[i][j]) else np.empty((0,2), dtype=np.int32),
+                        [one_filtration[i]]*2, # 2 bc of 1d barcode
+                        input_inf_value=-1,
+                    )
+                    for j in range(len(bcs[i])))
+                for i in range(num_filtrations)
             )
+
             return bcs[0] if squeeze else bcs
 
         # TODO: Later
@@ -463,7 +469,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         # else:
         #     self.truc.initialize_persistence_computation()
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
-        # return self
         return self.get_barcode()
     def get_barcode(self):
         """
@@ -518,14 +523,21 @@ cdef class {{D['PYTHON_TYPE']}}:
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
             )
-    def get_filtrations(self):
+    def get_filtrations(self, bool unsqueeze = False):
         """
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if D['IS_KCRITICAL']}}
+        if unsqueeze:
+            raise NotImplementedError("Unsqueezed version not implemented for multicritical filtrations.")
         return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
         {{else}}
-        return _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
+        out =  _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
+        if not unsqueeze:
+            return out
+        if not self.is_squeezed:
+            raise ValueError(f"Already unsqueezed. Got {unsqueeze=}")
+        return evaluate_in_grid(np.asarray(out), self.filtration_grid)
         {{endif}}
 
     def get_dimensions(self)-> np.ndarray:
@@ -751,8 +763,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self
 
     def unsqueeze(self, grid=None)->{{D['PYTHON_TYPE'][:-3]+"f64"}}:
-        from multipers.grids import evaluate_in_grid, sanitize_grid
-        from multipers import Slicer
         grid = self.filtration_grid if grid is None else grid
         grid = sanitize_grid(grid, numpyfy=True)
         new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
@@ -1095,7 +1105,11 @@ def _rank_from_slicer(
     grid_shape_with_degree = np.asarray(np.concatenate([[len(degrees)], grid_shape, grid_shape]), dtype=python_indices_type)
     if verbose:
         print("Container shape: ", grid_shape_with_degree)
+        print("Mallocing...", end="", flush=True)
+        t0 = time.time()
     container_array = np.ascontiguousarray(np.zeros(grid_shape_with_degree, dtype=python_tensor_dtype).ravel())
+    if verbose:
+        print(f" Done. ({time.time()-t0:.3f}s).")
     assert len(container_array) < np.iinfo(python_indices_type).max, "Too large container. Raise an issue on github if you encounter this issue. (Due to tensor's operator[])"
     # if zero_pad:
     #     grid_shape_with_degree[1:] -= 1
@@ -1105,20 +1119,25 @@ def _rank_from_slicer(
 
     ## SLICERS
     if verbose:
-        print("Computing rank invariant...", end="")
+        print("Computing rank invariant...", end="", flush=True)
+        t0 = time.time()
     _compute_rank_invariant(slicer, container_ptr, c_grid_shape, degrees, n_jobs, ignore_inf)
     if verbose:
-        print("Done.")
+        print(f" Done. ({time.time()-t0:.3f}s).")
 
     if verbose:
-        print("Computing Möbius inversion...", end="")
+        print("Computing Möbius inversion...", end="", flush=True)
+        t0 = time.time()
     # if zero_pad:
     #     grid_shape_with_degree[1:] += 1
     rank = container_array.reshape(grid_shape_with_degree)
     rank = tuple(rank_decomposition_by_rectangles(rank_of_degree, threshold=zero_pad) for rank_of_degree in rank)
+    if verbose:
+        print(f" Done. ({time.time()-t0:.3f}s).")
+
     if return_raw:
         return rank
-    out = []
+
     def clean_rank(rank_decomposition):
         (coords, weights) = sparsify(np.ascontiguousarray(rank_decomposition))
         births = coords[:,:num_parameters]
@@ -1128,7 +1147,12 @@ def _rank_from_slicer(
         weights = weights[correct_indices]
         return coords, weights
 
+    if verbose:
+        print("Cleaning output...", end="", flush=True)
+        t0 = time.time()
     out = tuple(clean_rank(rank_decomposition) for rank_decomposition in rank)
     if verbose:
-        print("Done.")
+        print(f" Done. ({time.time()-t0:.3f}s).")
     return out
+# %%
+

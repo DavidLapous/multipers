@@ -1456,12 +1456,18 @@ std::vector<int> inline to_grid_coord(const multipers::tmp_interface::Filtration
   }
   // pt has to be of size num_parameters now
   for (size_t i = 0u; i < num_parameters; ++i) {
-    if (pt[i] >= grid[i].back()) [[unlikely]]
+    if (pt(0,i) >= grid[i].back()) [[unlikely]]
       out[i] = grid[i].size() - 1;
-    else if (pt[i] <= grid[i][0]) [[unlikely]] {
+    else if (pt(0,i) <= grid[i][0]) [[unlikely]] {
       out[i] = 0;
-    } else
-      out[i] = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
+    } else {
+      auto temp = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt(0,i)));
+      if (std::abs(grid[i][temp] - pt(0,i)) < std::abs(grid[i][temp - 1] - pt(0,i))) {
+        out[i] = temp;
+      } else {
+        out[i] = temp - 1;
+      }
+    }
   }
   return out;
 }

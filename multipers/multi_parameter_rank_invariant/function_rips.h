@@ -59,7 +59,7 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
 
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
-  for (const auto &sh : st.complex_simplex_range()) {
+  for (auto sh : st.complex_simplex_range()) {
     if (st.dimension(sh) == 0) continue;
     value_type filtration = st.filtration(sh);
     for (auto node : st.simplex_vertex_range(sh)) {
