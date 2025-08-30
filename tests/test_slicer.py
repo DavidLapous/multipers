@@ -154,7 +154,7 @@ def test_representative_cycles():
     cycles = slicer.get_representative_cycles()
     assert len(cycles) == 3, f"There should be 3 dimensions here, found {len(cycles)}"
     assert (
-        np.asarray(cycles[0]).shape[0] == 7
+        len(cycles[0]) == 7
     ), f"Invalid number of 0-cycles, got {np.asarray(cycles[0]).size}"
     for c in cycles[1]:
         assert (

@@ -14,7 +14,7 @@ from setuptools import Extension, setup
 
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
-Options.fast_fail = True
+Options.fast_fail = False
 # Options.warning_errors = True
 
 try:

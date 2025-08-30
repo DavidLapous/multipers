@@ -1,8 +1,9 @@
 #pragma once
 
-#include "Simplex_tree_multi_interface.h"
 #include <cstdint>
 #include <vector>
+
+#include "../gudhi/Simplex_tree_multi_interface.h"
 
 namespace Gudhi {
 namespace multiparameter {
@@ -19,7 +20,7 @@ using idx_map_type = std::vector<std::map<typename Filtration::value_type, int32
 // O(num_simplices)
 template <typename Filtration>
 idx_map_type<Filtration> build_idx_map(interface_multi<Filtration> &st, const std::vector<int> &simplices_dimensions) {
-  auto num_parameters = st.get_number_of_parameters();
+  auto num_parameters = st.num_parameters();
   if (static_cast<int>(simplices_dimensions.size()) < num_parameters) throw;
   int max_dim = *std::max_element(simplices_dimensions.begin(), simplices_dimensions.end());
   int min_dim = *std::min_element(simplices_dimensions.begin(), simplices_dimensions.end());
