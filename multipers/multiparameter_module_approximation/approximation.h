@@ -710,8 +710,6 @@ template <typename value_type>
 inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::vector<std::array<value_type,2> > > &barcode,
                                             const bool threshold_in) {
-  assert(barcode.size() == module_.size() && "Barcode sizes doesn't match.");
-
   auto count = 0U;
   for (const auto &bar_dim : barcode) {
     for (const auto& bar : bar_dim)
@@ -2271,7 +2269,7 @@ inline value_type Summand<value_type>::_get_max_diagonal(const filtration_type &
                                                          const Box<value_type> &box) const {
   // assumes birth and death to be never NaN
   assert(birth.num_parameters() == death.num_parameters() && "Inputs must be of the same size !");
-  assert(birth.num_parameters() == box.dimension() && "Inputs must be of the same size !");
+  assert(box.is_trivial() || birth.num_parameters() == box.dimension() && "Inputs must be of the same size !");
 
   value_type s = inf;
   bool threshold_flag = !box.is_trivial();
