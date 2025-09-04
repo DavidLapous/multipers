@@ -147,69 +147,69 @@ def scc_parser(path: str| os.PathLike):
     return blocks
 
 
-def scc_parser__old(path: str):
-    """
-    Parse an scc file into the scc python format, aka blocks.
-    """
-    with open(path, "r") as f:
-        lines = f.readlines()
-    # Find scc2020
-    while lines[0].strip() != "scc2020":
-        lines = lines[1:]
-    lines = lines[1:]
-    # stripped scc2020 we can start
-
-    def pass_line(line):
-        return re.match(r"^\s*$|^#", line) is not None
-
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if pass_line(line):
-            continue
-        num_parameters = int(line)
-        lines = lines[i + 1 :]
-        break
-
-    block_sizes = []
-
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if pass_line(line):
-            continue
-        block_sizes = tuple(int(i) for i in line.split(" "))
-        lines = lines[i + 1 :]
-        break
-    blocks = []
-    cdef int counter
-    for block_size in block_sizes:
-        counter = block_size
-        block_filtrations = []
-        block_boundaries = []
-        for i, line in enumerate(lines):
-            if counter == 0:
-                lines = lines[i:]
-                break
-            line = line.strip()
-            if pass_line(line):
-                continue
-            splitted_line = re.match(r"^(?P<floats>[^;]+);(?P<ints>[^;]*)$", line)
-            filtrations = np.asarray(splitted_line.group("floats").split(), dtype=float)
-            boundary = np.asarray(splitted_line.group("ints").split(), dtype=int)
-            block_filtrations.append(filtrations)
-            block_boundaries.append(boundary)
-            # filtration_boundary = line.split(";")
-            # if len(filtration_boundary) == 1:
-            #     # happens when last generators do not have a ";" in the end
-            #     filtration_boundary.append(" ")
-            # filtration, boundary = filtration_boundary
-            # block_filtrations.append(
-            #         tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
-            #         )
-            # block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
-            counter -= 1
-        blocks.append((np.asarray(block_filtrations, dtype=float), tuple(block_boundaries)))
-
-    return blocks
+# def scc_parser__old(path: str):
+#     """
+#     Parse an scc file into the scc python format, aka blocks.
+#     """
+#     with open(path, "r") as f:
+#         lines = f.readlines()
+#     # Find scc2020
+#     while lines[0].strip() != "scc2020":
+#         lines = lines[1:]
+#     lines = lines[1:]
+#     # stripped scc2020 we can start
+#
+#     def pass_line(line):
+#         return re.match(r"^\s*$|^#", line) is not None
+#
+#     for i, line in enumerate(lines):
+#         line = line.strip()
+#         if pass_line(line):
+#             continue
+#         num_parameters = int(line)
+#         lines = lines[i + 1 :]
+#         break
+#
+#     block_sizes = []
+#
+#     for i, line in enumerate(lines):
+#         line = line.strip()
+#         if pass_line(line):
+#             continue
+#         block_sizes = tuple(int(i) for i in line.split(" "))
+#         lines = lines[i + 1 :]
+#         break
+#     blocks = []
+#     cdef int counter
+#     for block_size in block_sizes:
+#         counter = block_size
+#         block_filtrations = []
+#         block_boundaries = []
+#         for i, line in enumerate(lines):
+#             if counter == 0:
+#                 lines = lines[i:]
+#                 break
+#             line = line.strip()
+#             if pass_line(line):
+#                 continue
+#             splitted_line = re.match(r"^(?P<floats>[^;]+);(?P<ints>[^;]*)$", line)
+#             filtrations = np.asarray(splitted_line.group("floats").split(), dtype=float)
+#             boundary = np.asarray(splitted_line.group("ints").split(), dtype=int)
+#             block_filtrations.append(filtrations)
+#             block_boundaries.append(boundary)
+#             # filtration_boundary = line.split(";")
+#             # if len(filtration_boundary) == 1:
+#             #     # happens when last generators do not have a ";" in the end
+#             #     filtration_boundary.append(" ")
+#             # filtration, boundary = filtration_boundary
+#             # block_filtrations.append(
+#             #         tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
+#             #         )
+#             # block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
+#             counter -= 1
+#         blocks.append((np.asarray(block_filtrations, dtype=float), tuple(block_boundaries)))
+#
+#     return blocks
 
 
 def _init_external_softwares(requires=[]):
@@ -239,69 +239,69 @@ def _check_available(soft:str):
     return pathes.get(soft,None) is not None
 
 
-def scc_reduce_from_str(
-        path:str|os.PathLike,
-        bool full_resolution=True,
-        int dimension: int | np.int64 = 1,
-        bool clear: bool = True,
-        id: Optional[str] = None,  # For parallel stuff
-        bool verbose:bool=False,
-        backend:Literal["mpfree","multi_chunk","twopac"]="mpfree"
-        ):
-    """
-    Computes a minimal presentation of the file in path,
-    using mpfree.
-
-    path:PathLike
-    full_resolution: bool
-    dimension: int, presentation dimension to consider
-    clear: bool, removes temporary files if True
-    id: str, temporary files are of this id, allowing for multiprocessing
-    verbose: bool
-    backend: "mpfree", "multi_chunk" or "2pac"
-    """
-    global pathes, input_path, output_path
-    _init_external_softwares(requires=[backend])
-
-
-    resolution_str = "--resolution" if full_resolution else ""
-    # print(mpfree_in_path + id, mpfree_out_path + id)
-    if id is None:
-        id = str(threading.get_native_id())
-    if not os.path.exists(path):
-        raise ValueError(f"No file found at {path}.")
-    if os.path.exists(output_path + id):
-        os.remove(output_path + id)
-    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    if backend == "mpfree":
-        more_verbose = "-v" if verbose else ""
-        command = (
-                f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
-                )
-    elif backend == "multi_chunk":
-        command = (
-                f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
-                )
-    elif backend in ["twopac", "2pac"]:
-        command = (
-                f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
-                )
-    else:
-        raise ValueError(f"Unsupported backend {backend}.")
-    if verbose:
-        print(f"Calling :\n\n {command}")
-    os.system(command)
-
-    blocks = scc_parser(output_path + id)
-    if clear:
-        clear_io(input_path+id, output_path + id)
-
-
-    ## mpfree workaround: last size is 0 but shouldn't...
-    if len(blocks) and not len(blocks[-1][1]):
-        blocks=blocks[:-1]
-
-    return blocks
+# def scc_reduce_from_str(
+#         path:str|os.PathLike,
+#         bool full_resolution=True,
+#         int dimension: int | np.int64 = 1,
+#         bool clear: bool = True,
+#         id: Optional[str] = None,  # For parallel stuff
+#         bool verbose:bool=False,
+#         backend:Literal["mpfree","multi_chunk","twopac"]="mpfree"
+#         ):
+#     """
+#     Computes a minimal presentation of the file in path,
+#     using mpfree.
+#
+#     path:PathLike
+#     full_resolution: bool
+#     dimension: int, presentation dimension to consider
+#     clear: bool, removes temporary files if True
+#     id: str, temporary files are of this id, allowing for multiprocessing
+#     verbose: bool
+#     backend: "mpfree", "multi_chunk" or "2pac"
+#     """
+#     global pathes, input_path, output_path
+#     _init_external_softwares(requires=[backend])
+#
+#
+#     resolution_str = "--resolution" if full_resolution else ""
+#     # print(mpfree_in_path + id, mpfree_out_path + id)
+#     if id is None:
+#         id = str(threading.get_native_id())
+#     if not os.path.exists(path):
+#         raise ValueError(f"No file found at {path}.")
+#     if os.path.exists(output_path + id):
+#         os.remove(output_path + id)
+#     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+#     if backend == "mpfree":
+#         more_verbose = "-v" if verbose else ""
+#         command = (
+#                 f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
+#                 )
+#     elif backend == "multi_chunk":
+#         command = (
+#                 f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
+#                 )
+#     elif backend in ["twopac", "2pac"]:
+#         command = (
+#                 f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
+#                 )
+#     else:
+#         raise ValueError(f"Unsupported backend {backend}.")
+#     if verbose:
+#         print(f"Calling :\n\n {command}")
+#     os.system(command)
+#
+#     blocks = scc_parser(output_path + id)
+#     if clear:
+#         clear_io(input_path+id, output_path + id)
+#
+#
+#     ## mpfree workaround: last size is 0 but shouldn't...
+#     if len(blocks) and not len(blocks[-1][1]):
+#         blocks=blocks[:-1]
+#
+#     return blocks
 
 def scc_reduce_from_str_to_slicer(
         path:str|os.PathLike,
@@ -365,110 +365,110 @@ def scc_reduce_from_str_to_slicer(
         clear_io(input_path+id, output_path + id)
 
 
-def reduce_complex(
-        complex, # Simplextree, Slicer, or str
-        bool full_resolution: bool = True,
-        int dimension: int | np.int64 = 1,
-        bool clear: bool = True,
-        id: Optional[str]=None,  # For parallel stuff
-        bool verbose:bool=False,
-        backend:available_reduce_softs="mpfree"
-        ):
-    """
-    Computes a minimal presentation of the file in path,
-    using `backend`.
-
-    simplextree
-    full_resolution: bool
-    dimension: int, presentation dimension to consider
-    clear: bool, removes temporary files if True
-    id: str, temporary files are of this id, allowing for multiprocessing
-    verbose: bool
-    """
-
-    from multipers.simplex_tree_multi import is_simplextree_multi
-    from multipers.slicer import slicer2blocks
-    if id is None:
-        id = str(threading.get_native_id())
-    path = input_path+id
-    if is_simplextree_multi(complex):
-        complex.to_scc(
-                path=path,
-                rivet_compatible=False,
-                strip_comments=False,
-                ignore_last_generators=False,
-                overwrite=True,
-                reverse_block=False,
-                )
-        dimension = complex.dimension - dimension
-    elif isinstance(complex,str):
-        path = complex
-    elif isinstance(complex, list) or isinstance(complex, tuple):
-        scc2disk(complex,path=path)
-    else:
-        # Assumes its a slicer
-        blocks = slicer2blocks(complex)
-        scc2disk(blocks,path=path)
-        dimension = len(blocks) -2 -dimension
-
-    return scc_reduce_from_str(
-            path=path,
-            full_resolution=full_resolution,
-            dimension=dimension,
-            clear=clear,
-            id=id,
-            verbose=verbose,
-            backend=backend
-            )
-
-
+# def reduce_complex(
+#         complex, # Simplextree, Slicer, or str
+#         bool full_resolution: bool = True,
+#         int dimension: int | np.int64 = 1,
+#         bool clear: bool = True,
+#         id: Optional[str]=None,  # For parallel stuff
+#         bool verbose:bool=False,
+#         backend:available_reduce_softs="mpfree"
+#         ):
+#     """
+#     Computes a minimal presentation of the file in path,
+#     using `backend`.
+#
+#     simplextree
+#     full_resolution: bool
+#     dimension: int, presentation dimension to consider
+#     clear: bool, removes temporary files if True
+#     id: str, temporary files are of this id, allowing for multiprocessing
+#     verbose: bool
+#     """
+#
+#     from multipers.simplex_tree_multi import is_simplextree_multi
+#     from multipers.slicer import slicer2blocks
+#     if id is None:
+#         id = str(threading.get_native_id())
+#     path = input_path+id
+#     if is_simplextree_multi(complex):
+#         complex.to_scc(
+#                 path=path,
+#                 rivet_compatible=False,
+#                 strip_comments=False,
+#                 ignore_last_generators=False,
+#                 overwrite=True,
+#                 reverse_block=False,
+#                 )
+#         dimension = complex.dimension - dimension
+#     elif isinstance(complex,str):
+#         path = complex
+#     elif isinstance(complex, list) or isinstance(complex, tuple):
+#         scc2disk(complex,path=path)
+#     else:
+#         # Assumes its a slicer
+#         blocks = slicer2blocks(complex)
+#         scc2disk(blocks,path=path)
+#         dimension = len(blocks) -2 -dimension
+#
+#     return scc_reduce_from_str(
+#             path=path,
+#             full_resolution=full_resolution,
+#             dimension=dimension,
+#             clear=clear,
+#             id=id,
+#             verbose=verbose,
+#             backend=backend
+#             )
 
 
-def function_delaunay_presentation(
-        point_cloud:np.ndarray,
-        function_values:np.ndarray,
-        id:Optional[str] = None,
-        bool clear:bool = True,
-        bool verbose:bool=False,
-        int degree = -1,
-        bool multi_chunk = False,
-        ):
-    """
-    Computes a function delaunay presentation, and returns it as blocks.
 
-    points : (num_pts, n) float array
-    grades : (num_pts,) float array
-    degree (opt) : if given, computes a minimal presentation of this homological degree first
-    clear:bool, removes temporary files if true
-    degree: computes minimal presentation of this degree if given
-    verbose : bool
-    """
-    if id is None:
-        id = str(threading.get_native_id())
-    global input_path, output_path, pathes
-    backend = "function_delaunay"
-    _init_external_softwares(requires=[backend])
 
-    to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
-    np.savetxt(input_path+id,to_write,delimiter=' ')
-    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    degree_arg = f"--minpres {degree}" if degree >= 0 else ""
-    multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
-    if os.path.exists(output_path + id):
-        os.remove(output_path+ id)
-    command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
-    if verbose:
-        print(command)
-    os.system(command)
-
-    blocks = scc_parser(output_path + id)
-    if clear:
-        clear_io(output_path + id, input_path + id)
-    ## Function Delaunay workaround: last size is 0 but shouldn't...
-    if degree<0 and len(blocks) and not len(blocks[-1][1]):
-        blocks=blocks[:-1]
-
-    return blocks
+# def function_delaunay_presentation(
+#         point_cloud:np.ndarray,
+#         function_values:np.ndarray,
+#         id:Optional[str] = None,
+#         bool clear:bool = True,
+#         bool verbose:bool=False,
+#         int degree = -1,
+#         bool multi_chunk = False,
+#         ):
+#     """
+#     Computes a function delaunay presentation, and returns it as blocks.
+#
+#     points : (num_pts, n) float array
+#     grades : (num_pts,) float array
+#     degree (opt) : if given, computes a minimal presentation of this homological degree first
+#     clear:bool, removes temporary files if true
+#     degree: computes minimal presentation of this degree if given
+#     verbose : bool
+#     """
+#     if id is None:
+#         id = str(threading.get_native_id())
+#     global input_path, output_path, pathes
+#     backend = "function_delaunay"
+#     _init_external_softwares(requires=[backend])
+#
+#     to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
+#     np.savetxt(input_path+id,to_write,delimiter=' ')
+#     verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+#     degree_arg = f"--minpres {degree}" if degree >= 0 else ""
+#     multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
+#     if os.path.exists(output_path + id):
+#         os.remove(output_path+ id)
+#     command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
+#     if verbose:
+#         print(command)
+#     os.system(command)
+#
+#     blocks = scc_parser(output_path + id)
+#     if clear:
+#         clear_io(output_path + id, input_path + id)
+#     ## Function Delaunay workaround: last size is 0 but shouldn't...
+#     if degree<0 and len(blocks) and not len(blocks[-1][1]):
+#         blocks=blocks[:-1]
+#
+#     return blocks
 
 def function_delaunay_presentation_to_slicer(
         slicer,
