@@ -55,10 +55,10 @@ class Box
    * @param upperCorner Second corner of the box. Has to be greater than `lowerCorner`.
    */
   Box(const Point_t &lowerCorner, const Point_t &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner)
-  {
-    GUDHI_CHECK(lowerCorner.size() == upperCorner.size(), "The two corners of the box don't have the same dimension.");
-    GUDHI_CHECK(lowerCorner <= upperCorner, "The first corner is not smaller than the second.");
-  }
+    {
+      GUDHI_CHECK(lowerCorner.size() == upperCorner.size(), std::invalid_argument("The two corners of the box don't have the same dimension."));
+      // GUDHI_CHECK(lowerCorner <= upperCorner, std::invalid_argument("The first corner is not smaller than the second."));
+    }
 
   /**
    * @brief Constructs a box from the two given corners. Assumes that \f$ box.first \le @p box.second \f$ and
@@ -133,7 +133,7 @@ class Box
    */
   bool contains(const Point_t &point) const
   {
-    GUDHI_CHECK(point.size() == lowerCorner_.size(), "Point should not have a different dimension than the box.");
+      GUDHI_CHECK(point.size() == lowerCorner_.size(), std::invalid_argument("Point should not have a different dimension than the box."));
 
     for (unsigned int i = 0; i < point.size(); ++i) {
       T lc = lowerCorner_[i];
