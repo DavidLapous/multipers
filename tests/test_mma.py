@@ -19,8 +19,8 @@ def test_1():
 def test_img():
     simplextree = mp.SimplexTreeMulti(num_parameters=4)
     simplextree.insert([0], [1, 2, 3, 4])
-    mod = mp.module_approximation(simplextree,
-        box=[[0, 0, 0, 0], [5, 5, 5, 5]], max_error=1.0
+    mod = mp.module_approximation(
+        simplextree, box=[[0, 0, 0, 0], [5, 5, 5, 5]], max_error=1.0
     )
     img = mod.representation(resolution=6, kernel="linear")
     assert np.isclose(img[0, 1, 2, 3, 4], 0.5)
@@ -93,9 +93,11 @@ def test_dump_load():
     mod = mp.module_approximation(random_st())
     assert _mod != mod
 
+
 def test_swap_coord_hack():
     import multipers as mp
-    x = mp.data.three_annulus(10,10)
-    s = mp.filtrations.RipsCodensity(points=x, bandwidth=.2)
-    mod = mp.module_approximation(s, direction=[1,0], swap_box_coords=[1])
-    assert mod.num_parameters == 2 
+
+    x = mp.data.three_annulus(10, 10)
+    s = mp.filtrations.RipsCodensity(points=x, bandwidth=0.2)
+    mod = mp.module_approximation(s, direction=[1, 0], swap_box_coords=[1])
+    assert mod.num_parameters == 2
