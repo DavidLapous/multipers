@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <utility>
 
 #include "gudhi/multi_simplex_tree_helpers.h"
 #include "gudhi/persistence_matrix_options.h"
