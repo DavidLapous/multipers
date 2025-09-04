@@ -92,3 +92,10 @@ def test_dump_load():
     assert mod == _mod
     mod = mp.module_approximation(random_st())
     assert _mod != mod
+
+def test_swap_coord_hack():
+    import multipers as mp
+    x = mp.data.three_annulus(10,10)
+    s = mp.filtrations.RipsCodensity(points=x, bandwidth=.2)
+    mod = mp.module_approximation(s, direction=[1,0], swap_box_coords=[1])
+    assert mod.num_parameters == 2 
