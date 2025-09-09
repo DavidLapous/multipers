@@ -2269,7 +2269,7 @@ inline value_type Summand<value_type>::_get_max_diagonal(const filtration_type &
                                                          const Box<value_type> &box) const {
   // assumes birth and death to be never NaN
   assert(birth.num_parameters() == death.num_parameters() && "Inputs must be of the same size !");
-  assert(box.is_trivial() || birth.num_parameters() == box.dimension() && "Inputs must be of the same size !");
+  assert((box.is_trivial() || birth.num_parameters() == box.dimension()) && "Inputs must be of the same size !");
 
   value_type s = inf;
   bool threshold_flag = !box.is_trivial();

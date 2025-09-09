@@ -707,18 +707,18 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef vector[vector[vector[uint32_t]]] cycle_idx = self.truc.get_representative_cycles(update)
         cdef vector[vector[vector[vector[uint32_t]]]] out = vector[vector[vector[vector[uint32_t]]]](cycle_idx.size())
 
-        # so, this will be rewritten by cython in c++ to optimize the for loops?
-        for i in range(cycle_idx.size()):
-            out[i].resize(cycle_idx[i].size())
-            for j in range(cycle_idx[i].size()):
-                if cycle_idx[i][j].size() > 0:
-                    # to match the old format, otherwise we can have several empty boundaries for one cycle
-                    if self.truc.get_boundary(cycle_idx[i][j][0]).empty():
-                        out[i][j].push_back(vector[uint32_t]())
-                    else:
-                        out[i][j].resize(cycle_idx[i][j].size())
-                        for k in range(cycle_idx[i][j].size()):
-                            out[i][j][k] = self.truc.get_boundary(cycle_idx[i][j][k])
+        with nogil:
+            for i in range(cycle_idx.size()):
+                out[i].resize(cycle_idx[i].size())
+                for j in range(cycle_idx[i].size()):
+                    if cycle_idx[i][j].size() > 0:
+                        # to match the old format, otherwise we can have several empty boundaries for one cycle
+                        if self.truc.get_boundary(cycle_idx[i][j][0]).empty():
+                            out[i][j].push_back(vector[uint32_t]())
+                        else:
+                            out[i][j].resize(cycle_idx[i][j].size())
+                            for k in range(cycle_idx[i][j].size()):
+                                out[i][j][k] = self.truc.get_boundary(cycle_idx[i][j][k])
         return out
     def get_permutation(self):
         """

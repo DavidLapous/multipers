@@ -44,7 +44,13 @@ namespace multi_persistence {
  * @class Slicer Slicer.h gudhi/Slicer.h
  * @ingroup multi_persistence
  *
- * @brief Class slicing a multi-parameter persistence module. TODO: more details
+ * @brief Class encoding a filtered complex, presentation or resolution, inducing a multiparameter persistence module
+ * with:
+ * (1) a complex / presentation matrix / resolution matrix
+ * (2) a filtration (indexed by the complex) for each generator of (1), and
+ * (3) tools to compute 1-dimensional slices of the induced multi-parameter persistence module.
+ *
+ * TODO: more details
  *
  * @tparam MultiFiltrationValue Filtration value class respecting the @ref MultiFiltrationValue concept.
  * @tparam PersistenceAlgorithm Class respecting the @ref PersistenceAlgorithm concept. Used to compute persistence,
