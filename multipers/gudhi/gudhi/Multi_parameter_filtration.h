@@ -475,13 +475,16 @@ class Multi_parameter_filtration
    * @brief Returns a copy with entries casted into the type given as template parameter.
    *
    * @tparam U New type for the entries.
+   * @tparam OCo New value for `Co`. Default value: `Co`.
+   * @tparam OEns New value for `Ensure1Criticality`. Note that if `OEns` is set to true and the value is not
+   * 1-critical, the method will throw. Default value: `Ensure1Criticality`.
    * @return Copy with new entry type.
    */
-  template <typename U>
-  Multi_parameter_filtration<U, Co, Ensure1Criticality> as_type() const
+  template <typename U, bool OCo = Co, bool OEns = Ensure1Criticality>
+  Multi_parameter_filtration<U, OCo, OEns> as_type() const
   {
     std::vector<U> out(generators_.begin(), generators_.end());
-    return Multi_parameter_filtration<U, Co, Ensure1Criticality>(std::move(out), num_parameters());
+    return Multi_parameter_filtration<U, OCo, OEns>(std::move(out), num_parameters());
   }
 
   // ACCESS
@@ -522,7 +525,7 @@ class Multi_parameter_filtration
    */
   static Multi_parameter_filtration minus_inf(int number_of_parameters)
   {
-    return Multi_parameter_filtration(number_of_parameters, -T_inf);
+    return Multi_parameter_filtration(number_of_parameters, T_m_inf);
   }
 
   /**
@@ -546,6 +549,11 @@ class Multi_parameter_filtration
   static constexpr bool ensures_1_criticality() { return Ensure1Criticality; }
 
   /**
+   * @brief Returns value of `Co`.
+   */
+  static constexpr bool has_negative_cones() { return Co; }
+
+  /**
    * @brief Returns `true` if and only if the filtration value is considered as plus infinity.
    */
   [[nodiscard]] bool is_plus_inf() const
@@ -562,7 +570,7 @@ class Multi_parameter_filtration
   [[nodiscard]] bool is_minus_inf() const
   {
     for (const T &v : generators_) {
-      if (v != -T_inf) return false;
+      if (v != T_m_inf) return false;
     }
     return true;
   }
@@ -591,7 +599,7 @@ class Multi_parameter_filtration
     bool isInf = true, isMinusInf = true, isNan = true;
     for (const auto &v : generators_) {
       if (v != T_inf) isInf = false;
-      if (v != -T_inf) isMinusInf = false;
+      if (v != T_m_inf) isMinusInf = false;
       if (!_is_nan(v)) isNan = false;
       if (!isInf && !isMinusInf && !isNan) return true;
     }
@@ -797,8 +805,17 @@ class Multi_parameter_filtration
    */
   friend Multi_parameter_filtration operator-(const Multi_parameter_filtration &f)
   {
+    using F = Multi_parameter_filtration;
+
     Underlying_container result(f.generators_);
-    std::for_each(result.begin(), result.end(), [](T &v) { v = -v; });
+    std::for_each(result.begin(), result.end(), [](T &v) {
+      if (v == F::T_inf)
+        v = F::T_m_inf;
+      else if (v == F::T_m_inf)
+        v = F::T_inf;
+      else
+        v = -v;
+    });
     return Multi_parameter_filtration(std::move(result), f.num_parameters());
   }
 
@@ -1582,7 +1599,7 @@ class Multi_parameter_filtration
       for (size_type p = 0; p < num_parameters() && toEmpty; ++p) {
         if (!_is_nan(generators_[p])) allNaN = false;
         if constexpr (Co) {
-          if (generators_[p] != -T_inf) allInf = false;
+          if (generators_[p] != T_m_inf) allInf = false;
         } else {
           if (generators_[p] != T_inf) allInf = false;
         }
@@ -1643,7 +1660,7 @@ class Multi_parameter_filtration
     bool modified = false;
 
     auto push_generator_value = [&](T &val, T valX) {
-      if (exclude_infinite_values && (valX == T_inf || valX == -T_inf)) return;
+      if (exclude_infinite_values && (valX == T_inf || valX == T_m_inf)) return;
       modified |= val < valX;
       val = valX > val ? valX : val;
     };
@@ -1709,7 +1726,7 @@ class Multi_parameter_filtration
     bool modified = false;
 
     auto pull_generator_value = [&](T &val, T valX) {
-      if (exclude_infinite_values && (valX == T_inf || valX == -T_inf)) return;
+      if (exclude_infinite_values && (valX == T_inf || valX == T_m_inf)) return;
       modified |= val > valX;
       val = valX < val ? valX : val;
     };
@@ -1818,7 +1835,7 @@ class Multi_parameter_filtration
     if (f.num_generators() <= 1) return f;
 
     bool nan = true;
-    Underlying_container result(f.num_parameters(), -T_inf);
+    Underlying_container result(f.num_parameters(), T_m_inf);
     for (size_type p = 0; p < f.num_parameters(); ++p) {
       for (size_type g = 0; g < f.num_generators(); ++g) {
         T val = f(g, p);
@@ -2064,19 +2081,11 @@ class Multi_parameter_filtration
   }
 
   /**
-   * @brief Returns a filtration value at infinity with the same number of parameters than the given value.
+   * @brief Returns true if and only if the given filtration value is at plus infinity.
    */
-  friend Multi_parameter_filtration get_infinity_value(const Multi_parameter_filtration &f)
+  friend bool is_positive_infinity(const Multi_parameter_filtration &f)
   {
-    return Multi_parameter_filtration::inf(f.num_parameters());
-  }
-
-  /**
-   * @brief Returns a filtration value at minus infinity with the same number of parameters than the given value.
-   */
-  friend Multi_parameter_filtration get_minus_infinity_value(const Multi_parameter_filtration &f)
-  {
-    return Multi_parameter_filtration::minus_inf(f.num_parameters());
+    return f.is_plus_inf();
   }
 
   /**
@@ -2170,7 +2179,7 @@ class Multi_parameter_filtration
       }
 
       const size_type num_param = f1.num_parameters();
-      Multi_parameter_filtration res(num_param, -_get_default_value());
+      Multi_parameter_filtration res(num_param, Co ? T_m_inf : T_inf);
       std::vector<T> newGen(num_param);
       // TODO: see if the order can be used to avoid g1 * g2 add_generator and
       // perhaps even to replace add_generator by add_guaranteed_generator
@@ -2242,9 +2251,14 @@ class Multi_parameter_filtration
   }
 
   /**
-   * @brief Infinity value of an entry of the filtration value.
+   * @brief Plus infinity value of an entry of the filtration value.
    */
   constexpr static const T T_inf = MF_T_inf<T>;
+
+  /**
+   * @brief Minus infinity value of an entry of the filtration value.
+   */
+  constexpr static const T T_m_inf = MF_T_m_inf<T>;
 
  private:
   Underlying_container generators_; /**< Container of the filtration value elements. */
@@ -2253,7 +2267,7 @@ class Multi_parameter_filtration
   /**
    * @brief Default value of an element in the filtration value.
    */
-  constexpr static T _get_default_value() { return Co ? T_inf : -T_inf; }
+  constexpr static T _get_default_value() { return Co ? T_inf : T_m_inf; }
 
   /**
    * @brief Verifies if @p b is strictly contained in the positive cone originating in `a`.
@@ -2360,10 +2374,10 @@ class Multi_parameter_filtration
     auto itB = b.begin();
     for (std::size_t i = 0; i < a.extent(1); ++i) {
       if (a(0, i) != T_inf) aIsInf = false;
-      if (a(0, i) != -T_inf) aIsMinusInf = false;
+      if (a(0, i) != T_m_inf) aIsMinusInf = false;
       if (!_is_nan(a(0, i))) aIsNaN = false;
       if (*itB != T_inf) bIsInf = false;
-      if (*itB != -T_inf) bIsMinusInf = false;
+      if (*itB != T_m_inf) bIsMinusInf = false;
       if (!_is_nan(*itB)) bIsNaN = false;
       if (!aIsInf && !aIsMinusInf && !aIsNaN && !bIsInf && !bIsMinusInf && !bIsNaN) return;
       ++itB;
@@ -2534,7 +2548,7 @@ class Multi_parameter_filtration
     for (size_type p = 0; p < num_parameters(); ++p) {
       T v = generator_view_(g, p);
       if (v != T_inf) isInf = false;
-      if (v != -T_inf) isMinusInf = false;
+      if (v != T_m_inf) isMinusInf = false;
       if (!_is_nan(v)) isNan = false;
       if (!isInf && !isMinusInf && !isNan) return true;
     }
@@ -2573,24 +2587,13 @@ class numeric_limits<Gudhi::multi_filtration::Multi_parameter_filtration<T, Co, 
   static constexpr bool has_infinity = true;
   static constexpr bool has_quiet_NaN = std::numeric_limits<T>::has_quiet_NaN;
 
-  static constexpr Filtration_value infinity() noexcept(false)
-  {
-    throw std::logic_error(
-        "The infinite value cannot be represented with no finite numbers of parameters."
-        "Use `infinity(number_of_parameters)` instead");
-  };
-
-  static constexpr Filtration_value infinity(std::size_t p) noexcept { return Filtration_value::inf(p); };
+  static constexpr Filtration_value infinity(std::size_t p = 1) noexcept { return Filtration_value::inf(p); };
 
   // non-standard
-  static constexpr Filtration_value minus_infinity() noexcept(false)
+  static constexpr Filtration_value minus_infinity(std::size_t p = 1) noexcept
   {
-    throw std::logic_error(
-        "The infinite value cannot be represented with no finite numbers of parameters."
-        "Use `minus_infinity(number_of_parameters)` instead");
+    return Filtration_value::minus_inf(p);
   };
-
-  static constexpr Filtration_value minus_infinity(std::size_t p) noexcept { return Filtration_value::minus_inf(p); };
 
   static constexpr Filtration_value max() noexcept(false)
   {
@@ -2604,14 +2607,9 @@ class numeric_limits<Gudhi::multi_filtration::Multi_parameter_filtration<T, Co, 
     return Filtration_value(p, std::numeric_limits<T>::max());
   };
 
-  static constexpr Filtration_value quiet_NaN() noexcept(false)
-  {
-    throw std::logic_error(
-        "The NaN value cannot be represented with no finite numbers of parameters."
-        "Use `quiet_NaN(number_of_parameters)` instead");
-  };
+  static constexpr Filtration_value lowest(std::size_t p = 1) noexcept { return Filtration_value::minus_inf(p); };
 
-  static constexpr Filtration_value quiet_NaN(std::size_t p) noexcept(false)
+  static constexpr Filtration_value quiet_NaN(std::size_t p = 1) noexcept(false)
   {
     if constexpr (std::numeric_limits<T>::has_quiet_NaN) {
       return Filtration_value::nan(p);
