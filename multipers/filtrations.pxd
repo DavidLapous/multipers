@@ -44,9 +44,6 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
         # bool pull_to_greatest_common_lower_bound(const One_critical_filtration &, bool) nogil
 
-        # specific to Dynamic_multi_parameter_filtration
-        void force_generator_size_to_number_of_parameters(size_t) nogil
-
 cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
     cdef cppclass Multi_critical_filtration[T]:
         ## Copied from cython vector
@@ -85,9 +82,6 @@ cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tm
         bool push_to_least_common_upper_bound(const Multi_critical_filtration[T] &, bool) nogil
         bool pull_to_greatest_common_lower_bound(vector[T] &, bool) nogil
         # bool pull_to_greatest_common_lower_bound(const Multi_critical_filtration[T] &, bool) nogil
-
-        # specific to Dynamic_multi_parameter_filtration
-        void force_generator_size_to_number_of_parameters(size_t) nogil
 
 
 cdef extern from "gudhi/Multi_persistence/Point.h" namespace "Gudhi::multi_persistence":

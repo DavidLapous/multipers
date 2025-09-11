@@ -53,8 +53,7 @@ inline std::tuple<_multi_st, std::vector<value_type>, int> get_degree_filtration
 
   unsigned int num_degrees = degrees.size();
   // puts the st filtration in axis 0 + fitrations for each degrees afterward
-  _multifiltration default_f(static_cast<int>(num_degrees));
-  default_f.force_generator_size_to_number_of_parameters(0);
+  _multifiltration default_f(static_cast<int>(num_degrees), 0);
   _multi_st st_multi(Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0));
 
   // preprocess

@@ -23,6 +23,7 @@
 #include <limits>  // has_quiet_NaN
 
 #include "Simplex_tree_interface.h"
+#include "Persistence_slices_interface.h"
 #include "gudhi/Multi_filtration/multi_filtration_utils.h"
 #include "gudhi/multi_simplex_tree_helpers.h"
 #include "../multiparameter_module_approximation/format_python-cpp.h"
@@ -325,7 +326,9 @@ class Simplex_tree_multi_interface
     for (const auto &SimplexHandle : Base::complex_simplex_range()) {
       auto& f = Base::get_filtration_value(SimplexHandle);
       if (f.num_parameters() == static_cast<unsigned int>(num)) {
-        for (unsigned int g = 0; g < f.num_generators(); ++g) f.force_generator_size_to_number_of_parameters(g);
+        if constexpr (Gudhi::multi_filtration::RangeTraits<Filtration_value>::is_dynamic_multi_filtration) {
+          for (unsigned int g = 0; g < f.num_generators(); ++g) f.force_generator_size_to_number_of_parameters(g);
+        }
       } else {
         std::vector<typename Filtration_value::value_type> values(num * f.num_generators());
         unsigned int i = 0;
@@ -596,7 +599,7 @@ void inline linear_projection_from_ptr(const uintptr_t ptr, const uintptr_t ptr_
   linear_projection(st, st_multi, args...);
 }
 
-template <typename Filtration = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<float, false, true> >
+template <typename Filtration = multipers::tmp_interface::Filtration_value<float> >
 using options_multi = Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>;
 
 template <typename Filtration, typename... Args>

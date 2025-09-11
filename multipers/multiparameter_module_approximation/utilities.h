@@ -120,20 +120,25 @@ struct MultiDiagram {  // for python interface
   MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m) : multiDiagram(m) {}
 
   using python_fil = std::vector<typename filtration_type::value_type>;
-  using python_bar = std::pair<std::vector<typename filtration_type::value_type>,
-                               std::vector<typename filtration_type::value_type>>;  // This type is for python
+  using python_bar = std::pair<python_fil, python_fil>;  // This type is for python
 
   std::vector<python_bar> get_points(const dimension_type dimension = -1) const {  // dump for python interface
     std::vector<python_bar> out;
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && !pt.get_birth().is_plus_inf() &&
+        if (pt.get_birth().num_generators() > 0 && pt.get_death().num_generators() > 0 && !pt.get_birth().is_plus_inf() &&
             !pt.get_death().is_minus_inf()){
-          // only works with Dynamic_multi_filtration_value
-          const auto& b = pt.get_birth()[0];
-          const auto& d = pt.get_death()[0];
-          out.push_back({python_fil(b.begin(), b.end()), python_fil(d.begin(), d.end())});
+          const auto& b = pt.get_birth();
+          const auto& d = pt.get_death();
+          assert(b.num_parameters() == d.num_parameters());
+          python_fil first(b.num_parameters());
+          python_fil second(b.num_parameters());
+          for (unsigned int i = 0; i < b.num_parameters(); ++i){
+            first[i] = b(0, i);
+            second[i] = d(0, i);
+          }
+          out.push_back(std::make_pair(std::move(first), std::move(second)));
         }
       }
     }
@@ -147,7 +152,6 @@ struct MultiDiagram {  // for python interface
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        // only works with Dynamic_multi_filtration_value
         const auto& b = pt.get_birth();
         const auto& d = pt.get_death();
         assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
@@ -281,10 +285,16 @@ struct MultiDiagrams {
     for (unsigned int i = 0; i < nlines; i++) {
       for (unsigned int j = 0; j < nsummands; j++) {
         const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
-        // only works with Dynamic_multi_filtration_value
-        const auto& b = pt.get_birth()[0];
-        const auto& d = pt.get_death()[0];
-        out[i][j] = {python_fil(b.begin(), b.end()), python_fil(d.begin(), d.end())};
+        const auto& b = pt.get_birth();
+        const auto& d = pt.get_death();
+        assert(b.num_parameters() == d.num_parameters());
+        python_fil first(b.num_parameters());
+        python_fil second(b.num_parameters());
+        for (unsigned int i = 0; i < b.num_parameters(); ++i){
+          first[i] = b(0, i);
+          second[i] = d(0, i);
+        }
+        out[i][j] = std::make_pair(std::move(first), std::move(second));
       }
     }
     return out;

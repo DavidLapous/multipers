@@ -59,7 +59,7 @@ void threshold_filters_list(std::vector<value_type> &filtersList, const Box<valu
 template <typename value_type>
 class Module {
  public:
-  using filtration_type = multipers::tmp_interface::Filtration_value<value_type>;
+  using filtration_type = typename Summand<value_type>::filtration_type;
   using module_type = std::vector<Summand<value_type>>;
   using image_type = std::vector<std::vector<value_type>>;
   using get_2dpixel_value_function_type = std::function<value_type(const typename module_type::const_iterator,
@@ -127,7 +127,7 @@ class Module {
   module_type get_summands_of_dimension(const int dimension) const;
   std::vector<std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>>>
   get_corners_of_dimension(const int dimension) const;
-  MultiDiagram<filtration_type, value_type> get_barcode(const Line<value_type> &l,
+  MultiDiagram<multipers::tmp_interface::Filtration_value<value_type>, value_type> get_barcode(const Line<value_type> &l,
                                                         const dimension_type dimension = -1,
                                                         const bool threshold = false) const;
   std::vector<std::vector<std::pair<value_type, value_type>>> get_barcode2(const Line<value_type> &l,
@@ -135,13 +135,13 @@ class Module {
   std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> get_barcodes2(
       const std::vector<Line<value_type>> &lines,
       const dimension_type dimension = -1) const;
-  MultiDiagrams<filtration_type, value_type> get_barcodes(const std::vector<Line<value_type>> &lines,
+  MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> get_barcodes(const std::vector<Line<value_type>> &lines,
                                                           const dimension_type dimension = -1,
                                                           const bool threshold = false) const;
-  MultiDiagrams<filtration_type, value_type> get_barcodes(const std::vector<typename Line<value_type>::Point_t> &basepoints,
+  MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> get_barcodes(const std::vector<typename Line<value_type>::Point_t> &basepoints,
                                                           const dimension_type dimension = -1,
                                                           const bool threshold = false) const;
-  std::vector<int> euler_curve(const std::vector<filtration_type> &points) const;
+  std::vector<int> euler_curve(const std::vector<multipers::tmp_interface::Filtration_value<value_type>> &points) const;
 
   inline Box<value_type> get_bounds() const;
   inline void rescale(const std::vector<value_type> &rescale_factors, int degree);
@@ -256,7 +256,7 @@ class Summand {
   std::tuple<int, int> distance_idx_to_upper(const filtration_type &x) const;
   std::tuple<int, int> distance_idx_to_lower(const filtration_type &x) const;
   std::vector<int> distance_idx_to(const filtration_type &x, bool full) const;
-  std::pair<filtration_type, filtration_type> get_bar(const Line<value_type> &line) const;
+  std::pair<multipers::tmp_interface::Filtration_value<value_type>, multipers::tmp_interface::Filtration_value<value_type>> get_bar(const Line<value_type> &line) const;
   std::pair<value_type, value_type> get_bar2(const Line<value_type> &l) const;
   void add_bar(value_type baseBirth,
                value_type baseDeath,
@@ -268,8 +268,10 @@ class Summand {
   void add_bar(const filtration_type &birth, const filtration_type &death);
   void add_bar(const typename Line<value_type>::Point_t &basepoint, value_type birth, value_type death, const Box<value_type> &);
 
-  std::vector<filtration_type> get_birth_list() const;
-  std::vector<filtration_type> get_death_list() const;
+  std::vector<filtration_type> _get_birth_list() const;
+  std::vector<filtration_type> _get_death_list() const;
+  std::vector<multipers::tmp_interface::Filtration_value<value_type>> get_birth_list() const;
+  std::vector<multipers::tmp_interface::Filtration_value<value_type>> get_death_list() const;
   const births_type &get_upset() const;
   const deaths_type &get_downset() const;
   void clean();
@@ -1144,8 +1146,8 @@ Module<value_type>::get_corners_of_dimension(const int dimension) const {
   for (const Summand<value_type> &summand : this->module_) {
     if (summand.get_dimension() == dimension) {
       // not optimal and only works for Dynamic_multi_filtration
-      auto birthList = summand.get_birth_list();
-      auto deathList = summand.get_death_list();
+      auto birthList = summand._get_birth_list();
+      auto deathList = summand._get_death_list();
       std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>> corner;
       corner.first.resize(birthList.size());
       corner.second.resize(deathList.size());
@@ -1189,12 +1191,13 @@ std::vector<std::vector<std::pair<value_type, value_type>>> Module<value_type>::
 }
 
 template <typename value_type>
-MultiDiagram<typename Module<value_type>::filtration_type, value_type>
+MultiDiagram<multipers::tmp_interface::Filtration_value<value_type>, value_type>
 Module<value_type>::get_barcode(const Line<value_type> &l, const dimension_type dimension, const bool threshold) const {
+  using F = multipers::tmp_interface::Filtration_value<value_type>;
   constexpr const bool verbose = false;
   if constexpr (verbose)
     std::cout << "Computing barcode of dimension " << dimension << " and threshold " << threshold << std::endl;
-  std::vector<MultiDiagram_point<filtration_type>> barcode(this->size());
+  std::vector<MultiDiagram_point<F>> barcode(this->size());
   std::pair<value_type, value_type> threshold_bounds;
   if (threshold) threshold_bounds = l.get_bounds(this->box_);
   unsigned int summand_idx = 0;
@@ -1207,8 +1210,8 @@ Module<value_type>::get_barcode(const Line<value_type> &l, const dimension_type 
     /* 	break; */
     auto pushed_summand = summand.get_bar(l);
 
-    filtration_type &pbirth = pushed_summand.first;
-    filtration_type &pdeath = pushed_summand.second;
+    F &pbirth = pushed_summand.first;
+    F &pdeath = pushed_summand.second;
     if constexpr (verbose) std::cout << "BAR : " << pbirth << " " << pdeath << std::endl;
     if (threshold) {
       auto min = l[threshold_bounds.first];
@@ -1216,7 +1219,7 @@ Module<value_type>::get_barcode(const Line<value_type> &l, const dimension_type 
       if (!(pbirth < max) || !(pdeath > min)) {
         /* continue; */  // We still need summands to be aligned. The price to
         // pay is some memory.
-        pbirth = std::numeric_limits<filtration_type>::infinity();
+        pbirth = std::numeric_limits<F>::infinity();
         pdeath = pbirth;
       }
       pbirth.push_to_least_common_upper_bound(min);
@@ -1225,16 +1228,16 @@ Module<value_type>::get_barcode(const Line<value_type> &l, const dimension_type 
     barcode[summand_idx++] = MultiDiagram_point(summand.get_dimension(), pbirth, pdeath);
   }
   barcode.resize(summand_idx);
-  return MultiDiagram<filtration_type, value_type>(barcode);
+  return MultiDiagram<F, value_type>(barcode);
 }
 
 template <typename value_type>
-MultiDiagrams<typename Module<value_type>::filtration_type, value_type> Module<value_type>::get_barcodes(
+MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> Module<value_type>::get_barcodes(
     const std::vector<Line<value_type>> &lines,
     const dimension_type dimension,
     const bool threshold) const {
   unsigned int nlines = lines.size();
-  MultiDiagrams<typename Module<value_type>::filtration_type, value_type> out(nlines);
+  MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> out(nlines);
   tbb::parallel_for(0U, nlines, [&](unsigned int i) {
     const Line<value_type> &l = lines[i];
     out[i] = this->get_barcode(l, dimension, threshold);
@@ -1261,12 +1264,12 @@ std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> Module<
 }
 
 template <typename value_type>
-MultiDiagrams<typename Module<value_type>::filtration_type, value_type> Module<value_type>::get_barcodes(
+MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> Module<value_type>::get_barcodes(
     const std::vector<typename Line<value_type>::Point_t> &basepoints,
     const dimension_type dimension,
     const bool threshold) const {
   unsigned int nlines = basepoints.size();
-  MultiDiagrams<typename Module<value_type>::filtration_type, value_type> out(nlines);
+  MultiDiagrams<multipers::tmp_interface::Filtration_value<value_type>, value_type> out(nlines);
   // for (unsigned int i = 0; i < nlines; i++){
   tbb::parallel_for(0U, nlines, [&](unsigned int i) {
     const Line<value_type> &l = Line<value_type>(basepoints[i]);
@@ -1276,13 +1279,13 @@ MultiDiagrams<typename Module<value_type>::filtration_type, value_type> Module<v
 }
 
 template <typename value_type>
-std::vector<int> Module<value_type>::euler_curve(const std::vector<filtration_type> &points) const {
+std::vector<int> Module<value_type>::euler_curve(const std::vector<multipers::tmp_interface::Filtration_value<value_type>> &points) const {
   unsigned int npts = points.size();
   std::vector<int> out(npts);
   // #pragma omp parallel for
   tbb::parallel_for(0U, static_cast<unsigned int>(out.size()), [&](unsigned int i) {
     auto &euler_char = out[i];
-    const filtration_type &point = points[i];
+    const auto &point = points[i];
     /* #pragma omp parallel for reduction(+ : euler_char) */
     for (const Summand<value_type> &I : this->module_) {
       if (I.contains(point)) {
@@ -1416,18 +1419,18 @@ inline typename Module<value_type>::idx_dump_type Module<value_type>::to_idx(
     std::pair<std::vector<std::vector<int>>, std::vector<std::vector<int>>> interval_idx;
 
     auto &birth_idx = interval_idx.first;
-    birth_idx.reserve(interval.get_birth_list().size());
+    birth_idx.reserve(interval._get_birth_list().size());
     auto &death_idx = interval_idx.second;
-    death_idx.reserve(interval.get_death_list().size());
+    death_idx.reserve(interval._get_death_list().size());
 
-    for (const auto &pt : interval.get_birth_list()) {
+    for (const auto &pt : interval._get_birth_list()) {
       std::vector<int> pt_idx(pt.size());
       for (auto i = 0u; i < num_parameters; ++i) {
         pt_idx[i] = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
       }
       birth_idx.push_back(pt_idx);
     }
-    for (const auto &pt : interval.get_death_list()) {
+    for (const auto &pt : interval._get_death_list()) {
       std::vector<int> pt_idx(pt.size());
       for (auto i = 0u; i < num_parameters; ++i) {
         pt_idx[i] = std::distance(grid[i].begin(), std::lower_bound(grid[i].begin(), grid[i].end(), pt[i]));
@@ -1440,7 +1443,7 @@ inline typename Module<value_type>::idx_dump_type Module<value_type>::to_idx(
 }
 
 template <typename value_type>
-std::vector<int> inline to_grid_coord(const multipers::tmp_interface::Filtration_value<value_type> &pt,
+std::vector<int> inline to_grid_coord(const typename Summand<value_type>::filtration_type &pt,
                                       const std::vector<std::vector<value_type>> &grid) {
   std::size_t num_parameters = grid.size();
   std::vector<int> out(num_parameters);
@@ -1487,12 +1490,12 @@ std::vector<std::vector<std::vector<int>>> inline Module<value_type>::to_flat_id
   deaths.reserve(2 * this->size());
   for (auto i = 0u; i < this->size(); ++i) {
     auto &interval = this->operator[](i);
-    idx[0][i] = interval.get_birth_list().size();
-    for (const auto &pt : interval.get_birth_list()) {
+    idx[0][i] = interval._get_birth_list().size();
+    for (const auto &pt : interval._get_birth_list()) {
       births.push_back(to_grid_coord(pt, grid));
     }
-    idx[1][i] = interval.get_death_list().size();
-    for (const auto &pt : interval.get_death_list()) {
+    idx[1][i] = interval._get_death_list().size();
+    for (const auto &pt : interval._get_death_list()) {
       deaths.push_back(to_grid_coord(pt, grid));
     }
   }
@@ -1906,12 +1909,12 @@ inline std::pair<value_type, value_type> Summand<value_type>::get_bar2(const Lin
     std::cout << "Computing bar of this summand of dimension " << this->get_dimension() << std::endl;
   value_type pushed_birth = std::numeric_limits<value_type>::infinity();
   value_type pushed_death = -pushed_birth;
-  for (filtration_type birth : this->get_birth_list()) {
+  for (filtration_type birth : this->_get_birth_list()) {
     value_type pb = l.compute_forward_intersection(birth);
     pushed_birth = std::min(pb, pushed_birth);
   }
   //
-  for (const filtration_type &death : this->get_death_list()) {
+  for (const filtration_type &death : this->_get_death_list()) {
     value_type pd = l.compute_backward_intersection(death);
     pushed_death = std::max(pd, pushed_death);
   }
@@ -1927,16 +1930,17 @@ inline std::pair<value_type, value_type> Summand<value_type>::get_bar2(const Lin
 }
 
 template <typename value_type>
-inline std::pair<typename Summand<value_type>::filtration_type, typename Summand<value_type>::filtration_type>
+inline std::pair<multipers::tmp_interface::Filtration_value<value_type>, multipers::tmp_interface::Filtration_value<value_type>>
 Summand<value_type>::get_bar(const Line<value_type> &l) const {
+  using F = multipers::tmp_interface::Filtration_value<value_type>;
   constexpr const bool verbose = false;
   int num_param = birth_corners_.num_parameters();
   if constexpr (verbose)
     std::cout << "Computing bar of this summand of dimension " << this->get_dimension() << std::endl;
-  filtration_type pushed_birth = filtration_type::inf(num_param);
-  filtration_type pushed_death = filtration_type::minus_inf(num_param);
-  for (const filtration_type& birth : this->get_birth_list()) {
-    filtration_type pb = l[l.compute_forward_intersection(birth)];
+  F pushed_birth = F::inf(num_param);
+  F pushed_death = F::minus_inf(num_param);
+  for (const F& birth : this->get_birth_list()) {
+    F pb = l[l.compute_forward_intersection(birth)];
     if constexpr (verbose)
       std::cout << "Updating birth " << pushed_birth << " with " << pb << " pushed at " << birth << " "
                 << pushed_birth.is_plus_inf();
@@ -1947,8 +1951,8 @@ Summand<value_type>::get_bar(const Line<value_type> &l) const {
     if constexpr (verbose) std::cout << std::endl;
   }
   //
-  for (const filtration_type &death : this->get_death_list()) {
-    filtration_type pd = l[l.compute_backward_intersection(death)];
+  for (const F &death : this->get_death_list()) {
+    F pd = l[l.compute_backward_intersection(death)];
     if constexpr (verbose)
       std::cout << "Updating death " << pushed_death << " with " << pd << " pushed at " << death << " "
                 << pushed_death.is_minus_inf() << pushed_death[0];
@@ -1961,7 +1965,7 @@ Summand<value_type>::get_bar(const Line<value_type> &l) const {
 
   if (!(pushed_birth <= pushed_death)) {
     if constexpr (verbose) std::cout << "Birth <!= Death ! Ignoring this value" << std::endl;
-    return {filtration_type::inf(num_param), filtration_type::inf(num_param)};
+    return {F::inf(num_param), F::inf(num_param)};
   }
   if constexpr (verbose) {
     std::cout << "Final values" << pushed_birth << " ----- " << pushed_death << std::endl;
@@ -2054,7 +2058,7 @@ inline void Summand<value_type>::add_bar(const typename Line<value_type>::Point_
 }
 
 template <typename value_type>
-inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_type>::get_birth_list() const {
+inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_type>::_get_birth_list() const {
   std::vector<filtration_type> res(birth_corners_.num_generators(), filtration_type(birth_corners_.num_parameters()));
   for (unsigned int g = 0; g < birth_corners_.num_generators(); ++g){
     // could be done in a more generic way, but this should be the fastest without changing the current interface
@@ -2069,12 +2073,45 @@ inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_
 }
 
 template <typename value_type>
-inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_type>::get_death_list() const {
-  // TODO: factorize with get_birth_list
+inline std::vector<typename Summand<value_type>::filtration_type> Summand<value_type>::_get_death_list() const {
+  // TODO: factorize with _get_birth_list
   std::vector<filtration_type> res(death_corners_.num_generators(), filtration_type(death_corners_.num_parameters()));
   for (unsigned int g = 0; g < death_corners_.num_generators(); ++g){
     // could be done in a more generic way, but this should be the fastest without changing the current interface
     if constexpr (Gudhi::multi_filtration::RangeTraits<filtration_type>::is_dynamic_multi_filtration)
+      res[g].force_generator_size_to_number_of_parameters(0);
+    for (unsigned int p = 0; p < death_corners_.num_parameters(); ++p){
+      res[g](0,p) = death_corners_(g,p);
+    }
+  }
+
+  return res;
+}
+
+template <typename value_type>
+inline std::vector<multipers::tmp_interface::Filtration_value<value_type>> Summand<value_type>::get_birth_list() const {
+  using F = multipers::tmp_interface::Filtration_value<value_type>;
+  std::vector<F> res(birth_corners_.num_generators(), F(birth_corners_.num_parameters()));
+  for (unsigned int g = 0; g < birth_corners_.num_generators(); ++g){
+    // could be done in a more generic way, but this should be the fastest without changing the current interface
+    if constexpr (Gudhi::multi_filtration::RangeTraits<F>::is_dynamic_multi_filtration)
+      res[g].force_generator_size_to_number_of_parameters(0);
+    for (unsigned int p = 0; p < birth_corners_.num_parameters(); ++p){
+      res[g](0,p) = birth_corners_(g,p);
+    }
+  }
+
+  return res;
+}
+
+template <typename value_type>
+inline std::vector<multipers::tmp_interface::Filtration_value<value_type>> Summand<value_type>::get_death_list() const {
+  // TODO: factorize with _get_birth_list
+  using F = multipers::tmp_interface::Filtration_value<value_type>;
+  std::vector<F> res(death_corners_.num_generators(), F(death_corners_.num_parameters()));
+  for (unsigned int g = 0; g < death_corners_.num_generators(); ++g){
+    // could be done in a more generic way, but this should be the fastest without changing the current interface
+    if constexpr (Gudhi::multi_filtration::RangeTraits<F>::is_dynamic_multi_filtration)
       res[g].force_generator_size_to_number_of_parameters(0);
     for (unsigned int p = 0; p < death_corners_.num_parameters(); ++p){
       res[g](0,p) = death_corners_(g,p);

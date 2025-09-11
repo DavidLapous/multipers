@@ -180,9 +180,9 @@ inline void compute_2d_rank_invariant_of_elbow(
   for (auto i = 0u; i < num_generators; ++i) {
     const auto &f = filtrations_values[i];
     value_type filtration_in_slice = MultiFiltration::T_inf;
-    for (const auto &stuff : f) {
-      value_type x = stuff[0];
-      value_type y = stuff[1];
+    for (unsigned int g = 0; g < f.num_generators(); ++g) {
+      value_type x = f(g,0);
+      value_type y = f(g,1);
 
       filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
     }
