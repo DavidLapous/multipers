@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 
+#include "gudhi/Multi_parameter_filtration.h"
 #include "gudhi/multi_simplex_tree_helpers.h"
 #include "gudhi/persistence_matrix_options.h"
 #include "gudhi/Multi_parameter_filtered_complex.h"
@@ -94,7 +95,7 @@ template <typename Filtration>
 using GraphBackendVine = Gudhi::multiparameter::truc_interface::Persistence_backend_h0<StructureStuff<Filtration>>;
 
 template <typename value_type = float>
-using Filtration_value = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type, false, true>;
+using Filtration_value = Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, true>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using SimplicialNoVineMatrixTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendNoVine<col>>;
@@ -115,7 +116,7 @@ using SimplicialVineGraphTruc =
 
 // multi-critical
 template <typename value_type = float>
-using Multi_critical_filtration_value = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type>;
+using Multi_critical_filtration_value = Gudhi::multi_filtration::Multi_parameter_filtration<value_type>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using KCriticalVineTruc = Gudhi::multi_persistence::Slicer<Multi_critical_filtration_value<>, MatrixBackendVine<col>>;
@@ -125,7 +126,7 @@ using Matrix_interface = std::conditional_t<is_vine, MatrixBackendVine<col>, Mat
 
 template <bool is_k_critical, typename value_type>
 using filtration_options =
-    Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type, false, !is_k_critical>;
+    Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, !is_k_critical>;
 
 template <bool is_vine,
           bool is_k_critical,
@@ -178,9 +179,9 @@ using TrucPythonInterface = Gudhi::multi_persistence::Slicer<
 
 //for python
 template<typename T>
-using One_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<T, false, true>;
+using One_critical_filtration = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, true>;
 template<typename T>
-using Multi_critical_filtration = Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<T, false, false>;
+using Multi_critical_filtration = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, false>;
 
 template <typename T>
 using Bar = std::array<T, 2>;
