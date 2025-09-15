@@ -191,14 +191,14 @@ You can try using `multipers.slicer.to_simplextree`."""
             slicer = _Slicer()._build_from_scc_file(st)
         else:
             if is_simplextree_multi(st):
-                blocks = st._to_scc()
+                slicer = _Slicer().build_from_simplex_tree(st)
                 if st.is_squeezed:
                     filtration_grid = st.filtration_grid
             else:
                 blocks = st
-            slicer = _slicer_from_blocks(
-                blocks, backend, vineyard, is_kcritical, dtype, column_type
-            )
+                slicer = _slicer_from_blocks(
+                    blocks, backend, vineyard, is_kcritical, dtype, column_type
+                )
         if filtration_grid is not None:
             slicer.filtration_grid = filtration_grid
     if reduce:

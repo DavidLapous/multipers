@@ -112,8 +112,9 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void deserialize(const char* buffer, const size_t buffer_size)  except + nogil
     size_t get_serialization_size() nogil
     void clear() nogil
-  
-    
+
+    dimension_type simplex_dimension(const simplex_type&) nogil
+
     void from_std(char*, size_t, int, vector[value_type]&) nogil
     void to_std(intptr_t, Line[double],int ) nogil 
     void to_std_linear_projection(intptr_t, vector[double]) nogil

@@ -47,6 +47,7 @@
 #include <gudhi/Bitmap_cubical_complex.h>
 #include <gudhi/Simplex_tree.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
+#include <gudhi/Multi_filtration/multi_filtration_conversions.h>
 #include <gudhi/Multi_persistence/Line.h>
 
 namespace Gudhi {
@@ -477,8 +478,8 @@ inline Multi_parameter_filtered_complex<OneCriticalMultiFiltrationValue> build_c
  * @ref SimplexTreeOptions::Filtration_value follows the @ref MultiFiltrationValue concept.
  * @param simplexTree Simplex tree to convert. The key values of the simplex tree will be overwritten.
  */
-template <class SimplexTreeOptions>
-inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_value> build_complex_from_simplex_tree(
+template <class MultiFiltrationValue, class SimplexTreeOptions>
+inline Multi_parameter_filtered_complex<MultiFiltrationValue> build_complex_from_simplex_tree(
     Simplex_tree<SimplexTreeOptions>& simplexTree)
 {
   using Fil = typename SimplexTreeOptions::Filtration_value;
@@ -489,7 +490,7 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
   static_assert(Gudhi::multi_filtration::RangeTraits<Fil>::is_multi_filtration,
                 "Filtration value of the simplex tree has to correspond to the MultiFiltrationValue concept.");
 
-  using Complex = Multi_parameter_filtered_complex<Fil>;
+  using Complex = Multi_parameter_filtered_complex<MultiFiltrationValue>;
 
   const unsigned int numberOfSimplices = simplexTree.num_simplices();
 
@@ -524,7 +525,7 @@ inline Multi_parameter_filtered_complex<typename SimplexTreeOptions::Filtration_
   for (auto sh : simplexTree.complex_simplex_range()) {
     auto index = oldToNewIndex[simplexTree.key(sh)];
     dimensions[index] = simplexTree.dimension(sh);
-    filtrationValues[index] = simplexTree.filtration(sh);
+    filtrationValues[index] = Gudhi::multi_filtration::as_type<MultiFiltrationValue>(simplexTree.filtration(sh));
     typename Complex::Boundary boundary(dimensions[index] == 0 ? 0 : dimensions[index] + 1);
     unsigned int j = 0;
     for (auto b : simplexTree.boundary_simplex_range(sh)) {
@@ -605,7 +606,7 @@ inline Slicer build_slicer_from_bitmap(const std::vector<typename Slicer::Filtra
 template <class Slicer, class SimplexTreeOptions>
 inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& simplexTree)
 {
-  auto cpx = build_complex_from_simplex_tree<SimplexTreeOptions>(simplexTree);
+  auto cpx = build_complex_from_simplex_tree<typename Slicer::Filtration_value, SimplexTreeOptions>(simplexTree);
   return Slicer(std::move(cpx));
 }
 

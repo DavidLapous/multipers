@@ -364,6 +364,13 @@ cdef class SimplexTreeMulti_{{FSHORT}}:
             methods).
         """
         return self.get_ptr().dimension()
+    def simplex_dimension(self, vector[int] simplex)->int:
+        """This function returns the dimension of the simplex.
+
+        :returns:  simplex dimension.
+        :rtype:  int
+        """
+        return self.get_ptr().simplex_dimension(simplex)
     def upper_bound_dimension(self)->int:
         """This function returns a valid dimension upper bound of the
         simplicial complex.

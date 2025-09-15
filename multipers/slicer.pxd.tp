@@ -14,6 +14,8 @@ with open("build/tmp/_slicer_names.pkl", "rb") as f:
 
 float_value_types = set((("float",   "np.float32", "f32"), ("double",  "np.float64", "f64")) )
 
+with open("build/tmp/_simplextrees_.pkl", "rb") as f:
+    simplex_trees = pickle.load(f)
 
 }}
 
@@ -73,6 +75,7 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
       vector[uint32_t] get_current_order() nogil
       void vineyard_update() nogil
       vector[vector[vector[uint32_t]]] get_representative_cycles(bool) nogil
+      vector[uint32_t] get_most_persistent_cycle(int, bool) nogil
       {{endif}}
       vector[{{D['C_VALUE_TYPE']}}] get_one_filtration "get_slice"()
       pair[{{D['FILTRATION_TYPE']}}, {{D['FILTRATION_TYPE']}}] get_bounding_box() except + nogil
@@ -105,7 +108,9 @@ cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
   {{if not D['IS_KCRITICAL']}}
   {{D['C_TEMPLATE_TYPE']}} build_slicer_from_scc_file_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_scc_file<{{D['TRUC_TYPE']}}>"(string&, bool, bool, int) except + nogil #build_from_scc_file
   {{endif}}
-  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree "build_slicer_from_simplex_tree<{{D['TRUC_TYPE']}}>"(Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}}, {{D['C_VALUE_TYPE']}}]&) except + nogil
+  {{for CTYPE,PYTYPE,SHORT,Filtration, is_kcritical, FSHORT in simplex_trees}}
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_{{FSHORT}} "Gudhi::multi_persistence::build_slicer_from_simplex_tree<{{D['TRUC_TYPE']}}>"(Simplex_tree_multi_interface[{{Filtration}}, {{CTYPE}}]&) except + nogil
+  {{endfor}}
   {{D['C_TEMPLATE_TYPE']}} build_slicer_from_bitmap_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_bitmap<{{D['TRUC_TYPE']}}>"(vector[{{D['FILTRATION_TYPE']}}], vector[unsigned int]) except + nogil
   vector[Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int]] custom_persistences "persistence_on_slices<{{D['TRUC_TYPE']}}, {{D['C_VALUE_TYPE']}}, int, true>"({{D['C_TEMPLATE_TYPE']}}&, {{D['C_VALUE_TYPE']}}*, int, bool) except + nogil
   vector[Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]] persistence_on_lines "persistence_on_slices"({{D['C_TEMPLATE_TYPE']}}&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, vector[vector[{{D['C_VALUE_TYPE']}}]]&, bool) except + nogil

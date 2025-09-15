@@ -13,6 +13,9 @@ with open("build/tmp/_slicer_names.pkl", "rb") as f:
 
 dtypes = set([(D['PY_VALUE_TYPE'], D['C_VALUE_TYPE'], D['SHORT_VALUE_TYPE']) for D in slicers])
 
+with open("build/tmp/_simplextrees_.pkl", "rb") as f:
+    simplex_trees = pickle.load(f)
+
 }}
 
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
@@ -146,7 +149,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             return
         cdef intptr_t ptr = st.thisptr
         cdef Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}},{{D['C_VALUE_TYPE']}}]* st_ptr = <Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}},{{D['C_VALUE_TYPE']}}]*>(ptr)
-        self.truc = build_slicer_from_simplex_tree(dereference(st_ptr))
+        self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_F{{D['SHORT_VALUE_TYPE']}}(dereference(st_ptr))
         self.minpres_degree = -1
     {{elif D['IS_KCRITICAL']}}
     def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
@@ -720,6 +723,29 @@ cdef class {{D['PYTHON_TYPE']}}:
                             for k in range(cycle_idx[i][j].size()):
                                 out[i][j][k] = self.truc.get_boundary(cycle_idx[i][j][k])
         return out
+    def get_most_persistent_cycle(self, int dim=1, bool update=True, bool idx=False):
+        """
+        Returns the representative cycles with longest bar in the given dimension.
+        Recomputes the generators if update=True
+        """
+        cdef vector[uint32_t] cycle_idx = self.truc.get_most_persistent_cycle(dim, update)
+
+        if idx:
+            return cycle_idx
+
+        cdef vector[vector[uint32_t]] out
+
+        with nogil:
+            if cycle_idx.size() > 0:
+                # to match the old format, otherwise we can have several empty boundaries for one cycle
+                if self.truc.get_boundary(cycle_idx[0]).empty():
+                    out.push_back(vector[uint32_t]())
+                else:
+                    out.resize(cycle_idx.size())
+                    for k in range(cycle_idx.size()):
+                        out[k] = self.truc.get_boundary(cycle_idx[k])
+        return out
+
     def get_permutation(self):
         """
         Returns the current generator permutation (w.r.t. vineyard).
@@ -775,6 +801,18 @@ cdef class {{D['PYTHON_TYPE']}}:
         return new_slicer
     {{endif}}
 
+    def build_from_simplex_tree(self, st):
+        cdef intptr_t ptr = st.thisptr
+        st_name = type(st).__name__
+        f_short = st_name[17:]
+        {{for CTYPE,PYTYPE,SHORT,Filtration, is_kcritical, FSHORT in simplex_trees}}
+        cdef Simplex_tree_multi_interface[{{Filtration}},{{CTYPE}}]* st_ptr_{{FSHORT}}
+        if f_short == "{{FSHORT}}":
+            st_ptr_{{FSHORT}} = <Simplex_tree_multi_interface[{{Filtration}},{{CTYPE}}]*>(ptr)
+            self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_{{FSHORT}}(dereference(st_ptr_{{FSHORT}}))
+        {{endfor}}
+        self.minpres_degree = -1
+        return self
 
 {{endfor}}
 

@@ -20,6 +20,7 @@
 
 #include <array>
 #include <initializer_list>
+#include <limits>
 #include <type_traits>
 #include <numeric>  //std::iota
 #include <utility>  //std::move
@@ -499,6 +500,41 @@ class Slicer
   std::vector<std::vector<Cycle>> get_representative_cycles(bool update = true)
   {
     return _get_representative_cycles(complex_, update);
+  }
+
+  Cycle get_most_persistent_cycle(Dimension dim = 1, bool update = true)
+  {
+    static_assert(Persistence::has_rep_cycles,
+                  "Representative cycles not enabled by the chosen PersistenceAlgorithm class.");
+
+    auto barcodeIndices = persistence_.get_barcode();
+
+    Index maxIndex = -1;
+    Index maxBirth = std::numeric_limits<Index>::max();
+    T maxLength = 0;
+    for (Index i = 0; i < barcodeIndices.size(); ++i) {
+      // barcodeIndices[i] does not work
+      const auto& bar = barcodeIndices(i);
+      if (bar.dim == dim) {
+        if (bar.death == Persistence::nullDeath) {
+          if (maxBirth > bar.birth) {
+            maxBirth = bar.birth;
+            maxIndex = i;
+            maxLength = Filtration_value::T_inf;
+          }
+        } else {
+          T length = std::abs(slice_[bar.death] - slice_[bar.birth]);
+          if (maxLength < length) {
+            maxLength = length;
+            maxIndex = i;
+          }
+        }
+      }
+    }
+
+    if (maxIndex == static_cast<Index>(-1)) return {};
+
+    return persistence_.get_representative_cycle(maxIndex, update);
   }
 
   // FRIENDS

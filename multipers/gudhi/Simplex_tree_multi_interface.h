@@ -125,6 +125,12 @@ class Simplex_tree_multi_interface
 
   bool find_simplex(const Simplex &simplex) { return (Base::find(simplex) != Base::null_simplex()); }
 
+  int simplex_dimension(const Simplex &simplex) {
+    auto sh = Base_tree::find(simplex);
+    if (sh == Base_tree::null_simplex()) return -1;
+    return Base_tree::dimension(sh);
+  }
+
   void assign_simplex_filtration(const Simplex &simplex, const Filtration_value &filtration) {
     Base::assign_filtration(Base::find(simplex), filtration);
     Base::clear_filtration();
