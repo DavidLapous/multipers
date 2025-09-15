@@ -510,10 +510,11 @@ def evaluate_mod_in_grid(mod, grid, box=None):
     (birth_sizes, death_sizes), births, deaths = mod.to_flat_idx(grid)
     births = evaluate_in_grid(births, grid)
     deaths = evaluate_in_grid(deaths, grid)
+    api = api_from_tensors(births, deaths)
     diff_mod = tuple(
         zip(
-            births.split_with_sizes(birth_sizes.tolist()),
-            deaths.split_with_sizes(death_sizes.tolist()),
+            api.split_with_sizes(births,birth_sizes.tolist()),
+            api.split_with_sizes(deaths,death_sizes.tolist()),
         )
     )
     return diff_mod
