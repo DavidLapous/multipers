@@ -10,6 +10,7 @@
 #include "gudhi/Multi_persistence/Persistence_interface_matrix.h"
 #include "gudhi/Multi_persistence/Persistence_interface_cohomology.h"
 #include "gudhi/Dynamic_multi_parameter_filtration.h"
+#include "gudhi/Degree_rips_bifiltration.h"
 #include "gudhi/Slicer.h"
 
 #include "tmp_h0_pers/mma_interface_h0.h"
@@ -28,6 +29,12 @@ enum Column_types_strs : std::uint8_t {
   UNORDERED_SET,
   INTRUSIVE_LIST,
   INTRUSIVE_SET
+};
+
+enum Filtration_containers_strs : std::uint8_t {
+  Dynamic_multi_parameter_filtration,
+  Multi_parameter_filtration,
+  Degree_rips_bifiltration
 };
 
 using Available_columns = Gudhi::persistence_matrix::Column_types;
@@ -124,16 +131,20 @@ using KCriticalVineTruc = Gudhi::multi_persistence::Slicer<Multi_critical_filtra
 template <bool is_vine, Available_columns col = Available_columns::INTRUSIVE_SET>
 using Matrix_interface = std::conditional_t<is_vine, MatrixBackendVine<col>, MatrixBackendNoVine<col>>;
 
-template <bool is_k_critical, typename value_type>
-using filtration_options =
-    Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, !is_k_critical>;
+template <Filtration_containers_strs fil_container,  bool is_k_critical, typename value_type>
+using filtration_options = std::conditional_t<fil_container == Filtration_containers_strs::Dynamic_multi_parameter_filtration,
+                                            Gudhi::multi_filtration::Dynamic_multi_parameter_filtration<value_type, false, !is_k_critical>,
+                                            std::conditional_t<fil_container == Filtration_containers_strs::Multi_parameter_filtration,
+                                                               Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, !is_k_critical>,
+                                                               Gudhi::multi_filtration::Degree_rips_bifiltration<value_type, false, !is_k_critical>>>;
 
 template <bool is_vine,
           bool is_k_critical,
           typename value_type,
-          Available_columns col = Available_columns::INTRUSIVE_SET>
+          Available_columns col = Available_columns::INTRUSIVE_SET,
+          Filtration_containers_strs filt_cont = Filtration_containers_strs::Multi_parameter_filtration>
 using MatrixTrucPythonInterface =
-    Gudhi::multi_persistence::Slicer<filtration_options<is_k_critical, value_type>, Matrix_interface<is_vine, col>>;
+    Gudhi::multi_persistence::Slicer<filtration_options<filt_cont,is_k_critical, value_type>, Matrix_interface<is_vine, col>>;
 
 enum class BackendsEnum : std::uint8_t { Matrix, Graph, Clement, GudhiCohomology };
 
@@ -172,10 +183,11 @@ template <BackendsEnum backend,
           bool is_vine,
           bool is_k_critical,
           typename value_type,
-          Available_columns col = Available_columns::INTRUSIVE_SET>
+          Available_columns col = Available_columns::INTRUSIVE_SET,
+          Filtration_containers_strs filt_cont = Filtration_containers_strs::Multi_parameter_filtration>
 using TrucPythonInterface = Gudhi::multi_persistence::Slicer<
-    filtration_options<is_k_critical, value_type>,
-    PersBackendOpts<backend, is_vine, col, filtration_options<is_k_critical, value_type>>>;
+    filtration_options<filt_cont,is_k_critical, value_type>,
+    PersBackendOpts<backend, is_vine, col, filtration_options<filt_cont,is_k_critical, value_type>>>;
 
 //for python
 template<typename T>

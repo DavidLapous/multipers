@@ -1,10 +1,50 @@
+{{py:
+import pickle
+
+with open("build/tmp/_filtration_names.pkl", "rb") as f:
+  Filtrations=pickle.load(f)
+}}
 from libcpp.utility cimport pair
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp cimport tuple
 from libc.stdint cimport uintptr_t,intptr_t
 from cpython cimport Py_buffer
+from libc.stdint cimport int32_t, int64_t
 
+cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
+{{for f in Filtrations}}
+    cdef cppclass {{f["python"]}} "{{f['c']}}":
+        {{f["python"]}}()  except + nogil
+        {{f["python"]}}(int)  except + nogil
+        {{f["python"]}}(int, {{f["c_value_type"]}})  except + nogil
+        {{f["python"]}}(vector[{{f["c_value_type"]}}]&)  except + nogil
+        {{f["python"]}}(vector[{{f["c_value_type"]}}].iterator, vector[{{f["c_value_type"]}}].iterator, int)  except + nogil
+        {{f["python"]}}& operator=(const {{f["python"]}}&) except + nogil
+        {{f["c_value_type"]}}& operator()(size_t, size_t) nogil
+        size_t num_parameters() nogil
+        size_t num_generators() nogil
+        size_t num_entries() nogil
+        void set_num_generators(size_t) nogil
+        @staticmethod
+        {{f["python"]}} inf(int)
+        @staticmethod
+        {{f["python"]}} minus_inf(int)
+        @staticmethod
+        {{f["python"]}} nan(int)
+        bool is_plus_inf() nogil
+        bool is_minus_inf() nogil
+        bool is_nan() nogil
+        bool is_finite() nogil
+        bool add_generator(vector[{{f["c_value_type"]}}] &x) nogil
+        bool add_generator(vector[{{f["c_value_type"]}}] x) nogil
+        void add_guaranteed_generator(vector[{{f["c_value_type"]}}] &x) nogil
+        void simplify() nogil
+        void remove_empty_generators(bool) nogil
+        bool push_to_least_common_upper_bound(vector[{{f["c_value_type"]}}] &, bool) nogil
+        bool push_to_least_common_upper_bound(const {{f["python"]}} &, bool) nogil
+        bool pull_to_greatest_common_lower_bound(vector[{{f["c_value_type"]}}] &, bool) nogil
+{{endfor}}
 
 cdef extern from "gudhi/Persistence_slices_interface.h" namespace "multipers::tmp_interface":
     cdef cppclass One_critical_filtration[T]:

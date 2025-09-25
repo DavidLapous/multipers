@@ -60,6 +60,9 @@ def process_tempita(fromfile):
     """
     if not was_modified(fromfile) and not full_build:
         return
+    print("#-----------------------------------")
+    print(f"processing {fromfile}.")
+    print("#-----------------------------------")
     with open(fromfile, "r", encoding="utf-8") as f:
         template_content = f.read()
 
@@ -84,6 +87,7 @@ cython_modules = [
 ]
 
 templated_cython_modules = [
+    "filtrations.pxd",
     "filtration_conversions.pxd",
     "slicer.pxd",
     "mma_structures.pyx",
@@ -98,11 +102,6 @@ os.system("python _tempita_grid_gen.py")
 for mod in templated_cython_modules:
     process_tempita(f"multipers/{mod}.tp")
 
-## Broken on mac
-# n_jobs = 1
-# with contextlib.suppress(ImportError):
-#     import joblib
-#     n_jobs = joblib.cpu_count()
 
 cythonize_flags = {
     # "depfile": True,

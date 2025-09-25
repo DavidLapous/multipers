@@ -179,12 +179,12 @@ cdef class {{D['PYTHON_TYPE']}}:
         filtration_values = [np.asarray(f, dtype = {{D['PY_VALUE_TYPE']}} ) for f in filtration_values]
         cdef uint32_t num_param = filtration_values[0].shape[1]
         cdef vector[vector[uint32_t]] c_generator_maps
-        cdef vector[Multi_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
+        cdef vector[{{D['FILTRATION_TYPE']}}] c_filtration_values
         for stuff in generator_maps:
             c_generator_maps.push_back(<vector[uint32_t]>(stuff))
             sort(c_generator_maps.back().begin(), c_generator_maps.back().end())
-        cdef Multi_critical_filtration[{{D['C_VALUE_TYPE']}}] cf = Multi_critical_filtration[{{D['C_VALUE_TYPE']}}](num_param)
-        cdef Multi_critical_filtration[{{D['C_VALUE_TYPE']}}] inf = Multi_critical_filtration[{{D['C_VALUE_TYPE']}}].inf(num_param)
+        cdef {{D['FILTRATION_TYPE']}} cf = {{D['FILTRATION_TYPE']}}(num_param)
+        cdef {{D['FILTRATION_TYPE']}} inf = {{D['FILTRATION_TYPE']}}.inf(num_param)
         cdef {{D['C_VALUE_TYPE']}}[:,:] F_view 
         for F in filtration_values:
             cf.push_to_least_common_upper_bound(inf, False)
@@ -194,7 +194,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             c_filtration_values.push_back(cf)
         cdef vector[int] c_generator_dimensions = generator_dimensions
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
-        cdef Multi_parameter_filtered_complex[Multi_critical_filtration[{{D['C_VALUE_TYPE']}}]] cpx = Multi_parameter_filtered_complex[Multi_critical_filtration[{{D['C_VALUE_TYPE']}}]](c_generator_maps,c_generator_dimensions, c_filtration_values)
+        cdef Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}] cpx = Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}](c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.truc = {{D['C_TEMPLATE_TYPE']}}(cpx)
         self.minpres_degree = -1
     {{else}}
@@ -216,7 +216,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         filtration_values = np.asarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
         assert len(filtration_values) == num_generators, f"Invalid input, shape do not coicide. Got sizes {num_generators,len(generator_dimensions),len(filtration_values)}."
         cdef vector[vector[uint32_t]] c_generator_maps
-        cdef vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] c_filtration_values
+        cdef vector[{{D['FILTRATION_TYPE']}}] c_filtration_values
 
         c_generator_maps.resize(num_generators)
         c_filtration_values.resize(num_generators)
@@ -227,7 +227,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         cdef vector[int] c_generator_dimensions = generator_dimensions
 
         assert num_generators == c_generator_maps.size() == c_filtration_values.size() == c_generator_dimensions.size(), "Invalid input, shape do not coincide."
-        cdef Multi_parameter_filtered_complex[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] cpx = Multi_parameter_filtered_complex[One_critical_filtration[{{D['C_VALUE_TYPE']}}]](c_generator_maps,c_generator_dimensions, c_filtration_values)
+        cdef Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}] cpx = Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}](c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.truc = {{D['C_TEMPLATE_TYPE']}}(cpx)
         self.minpres_degree = -1
     {{endif}}
@@ -533,9 +533,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         {{if D['IS_KCRITICAL']}}
         if unsqueeze:
             raise NotImplementedError("Unsqueezed version not implemented for multicritical filtrations.")
-        return _vff2kcview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
+        return vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False)
         {{else}}
-        out =  _vff21cview_{{D['SHORT_VALUE_TYPE']}}(self.truc.get_filtrations(), copy=False)
+        out =  vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False)
         if not unsqueeze:
             return out
         if not self.is_squeezed:
@@ -683,6 +683,9 @@ cdef class {{D['PYTHON_TYPE']}}:
     @property
     def col_type(self)->str:
       return "{{D['COLUMN_TYPE']}}"
+    @property
+    def container_type(self)->str:
+      return "{{D['FILTRATION_CONTAINER_STR']}}"
     @property
     def is_vine(self)->bool:
       return {{D['IS_VINE']}}
@@ -834,9 +837,9 @@ def _from_bitmap{{D['SHORT_VALUE_TYPE']}}(image, **slicer_kwargs):
     cdef unsigned int num_parameters = image.shape[-1]
     cdef vector[unsigned int] img_shape = image.shape[:-1]
     {{if D['IS_KCRITICAL']}}
-    cdef vector[Multi_critical_filtration[{{D['C_VALUE_TYPE']}}]] vertices = _py2vkc_{{D['SHORT_VALUE_TYPE']}}(image.reshape(-1,num_parameters))
+    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(image.reshape(-1,num_parameters))
     {{else}}
-    cdef vector[One_critical_filtration[{{D['C_VALUE_TYPE']}}]] vertices = _py2v1c_{{D['SHORT_VALUE_TYPE']}}(image.reshape(-1,num_parameters))
+    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(image.reshape(-1,num_parameters))
     {{endif}}
     cdef {{D['C_TEMPLATE_TYPE']}} cslicer = build_slicer_from_bitmap_{{D['C_TEMPLATE_TYPE']}}(vertices, img_shape)
 

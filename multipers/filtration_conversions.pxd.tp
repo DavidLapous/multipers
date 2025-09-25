@@ -12,16 +12,26 @@ value_types = [
   ("double", "np.float64", "f64"),
 ]
 
+
+import pickle
+with open("build/tmp/_filtration_names.pkl", "rb") as f:
+  Filtrations=pickle.load(f)
+
 }}
 
 # Python to C++ conversions
-from multipers.filtrations cimport One_critical_filtration,Multi_critical_filtration, Point
+from multipers.filtrations cimport *
 from libcpp.vector cimport vector
 from libcpp cimport bool
 cimport numpy as cnp
 import numpy as np
 from libc.stdint cimport int32_t, int64_t
 from cython.operator cimport dereference
+
+
+
+
+
 
 {{for CTYPE, PYTYPE, SHORT in value_types}}
 ###### ------------------- PY TO CPP
@@ -134,3 +144,44 @@ cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]&
 
 {{endfor}}
 
+
+{{for f in Filtrations}}
+
+{{if f["multicritical"]}}
+cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
+  cdef Py_ssize_t k = dereference(x).num_generators()
+  cdef Py_ssize_t p = dereference(x).num_parameters()
+  if dereference(x).is_finite():
+    duplicate = 0
+  else:
+    duplicate = p
+  return [_ff21cview2_{{f['short_value_type']}}(&(dereference(x)(i,0)), p, duplicate, copy=copy) for i in range(k)]
+{{else}}
+cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
+  cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
+  if not dereference(x).is_finite():
+    return np.full(shape=num_parameters, fill_value=dereference(x)(0,0))
+  cdef {{f['c_value_type']}}[:] x_view = <{{f['c_value_type']}}[:num_parameters]>(&(dereference(x)(0,0)))
+  return np.array(x_view) if copy else np.asarray(x_view)
+{{endif}}
+
+
+cdef inline  vect_{{f['python']}}_2_python(vector[{{f['python']}}]& x, bool copy = False):
+  cdef Py_ssize_t num_stuff = x.size()
+  return [{{f['python']}}_2_python(&(x[i]), copy=copy) for i in range(num_stuff)]
+
+cdef inline vector[{{f['python']}}] python_2_vect_{{f['python']}}({{f["c_value_type"]}}[:,:] filtrations) noexcept nogil:
+    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+    cdef vector[{{f['python']}}] out
+    cdef vector[{{f["c_value_type"]}}] f = vector[{{f["c_value_type"]}}](filtrations.shape[1])
+    out.reserve(filtrations.shape[0])
+    for i in range(filtrations.shape[0]):
+        for j in range(filtrations.shape[1]):
+          f[j] = filtrations[i,j]
+        out.emplace_back(f)
+    return out
+
+
+
+
+{{endfor}}
