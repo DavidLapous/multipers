@@ -118,6 +118,7 @@ def get_slicer(
         "PY_VALUE_TYPE": pytype,
         "COLUMN_TYPE": col.split("::")[3],
         "SHORT_VALUE_TYPE": short_type,
+        "SHORT_FILTRATION_TYPE": short_filtration_container[filtration_container],
         "FILTRATION_TYPE": FILTRATION_TYPE,
         "FILTRATION_CONTAINER_STR": filtration_container,
         "PERS_BACKEND_TYPE": backend_type,
