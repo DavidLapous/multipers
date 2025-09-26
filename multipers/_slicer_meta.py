@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import  Optional
+from typing import Optional
 
 import numpy as np
 
@@ -105,6 +105,7 @@ def Slicer(
     kcritical: Optional[bool] = None,
     column_type: Optional[_column_type] = None,
     backend: Optional[_valid_pers_backend] = None,
+    filtration_container: Optional[str] = None,
     max_dim: Optional[int] = None,
     return_type_only: bool = False,
 ) -> mps.Slicer_type:
@@ -143,10 +144,12 @@ def Slicer(
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
         backend = st.pers_backend if backend is None else backend
+        filtration_container = st.filtration_container if filtration_container is None else filtration_container
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
         backend = "Matrix" if backend is None else backend
+        filtration_container = "contiguous" if filtration_container is None else filtration_container
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
@@ -154,6 +157,7 @@ def Slicer(
         dtype=dtype,
         col=column_type,
         pers_backend=backend,
+        filtration_container=filtration_container,
     )
     if return_type_only:
         return _Slicer

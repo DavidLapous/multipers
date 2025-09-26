@@ -78,6 +78,18 @@ available_pers_backend = set([
 ])
 
 
+global available_filtration_container
+available_pers_backend = set([
+{{for D in slicers}}
+  "{{D['FILTRATION_CONTAINER_STR']}}",
+{{endfor}}
+])
+_filtration_container_type = Literal[
+{{for D in slicers}}
+  "{{D['FILTRATION_CONTAINER_STR']}}",
+{{endfor}}
+]
+
 
 global column_type
 _column_type = Literal[
@@ -684,7 +696,7 @@ cdef class {{D['PYTHON_TYPE']}}:
     def col_type(self)->str:
       return "{{D['COLUMN_TYPE']}}"
     @property
-    def container_type(self)->str:
+    def filtration_container(self)->str:
       return "{{D['FILTRATION_CONTAINER_STR']}}"
     @property
     def is_vine(self)->bool:
@@ -1039,7 +1051,7 @@ def to_blocks(input):
     raise ValueError("Input cannot be converted to blocks.")
 
 
-def get_matrix_slicer(bool is_vineyard, bool is_k_critical, dtype:type|_valid_dtypes, str col, str pers_backend):
+def get_matrix_slicer(bool is_vineyard, bool is_k_critical, dtype:type|_valid_dtypes, str col, str pers_backend, _filtration_container_type filtration_container):
   """
   Given various parameters, returns the specific slicer type associated with them.
   """
@@ -1047,7 +1059,7 @@ def get_matrix_slicer(bool is_vineyard, bool is_k_critical, dtype:type|_valid_dt
       pass
 {{for D in slicers}}
 {{if not D['IS_SIMPLICIAL']}}
-  elif is_vineyard == {{D['IS_VINE']}} and is_k_critical  ==  {{D['IS_KCRITICAL']}} and np.dtype(dtype) is np.dtype({{D['PY_VALUE_TYPE']}}) and col.lower() == "{{D['COLUMN_TYPE']}}".lower() and "{{D['PERS_BACKEND_TYPE']}}".lower() == pers_backend.lower():
+  elif is_vineyard == {{D['IS_VINE']}} and is_k_critical  ==  {{D['IS_KCRITICAL']}} and np.dtype(dtype) is np.dtype({{D['PY_VALUE_TYPE']}}) and col.lower() == "{{D['COLUMN_TYPE']}}".lower() and "{{D['PERS_BACKEND_TYPE']}}".lower() == pers_backend.lower() and filtration_container == "{{D[FILTRATION_CONTAINER_STR]}}".lower():
     return {{D['PYTHON_TYPE']}}
 {{endif}}
 {{endfor}}
