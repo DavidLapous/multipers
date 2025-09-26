@@ -166,9 +166,9 @@ Filtrations = [
         "python": get_python_filtration_type(F, T, K),
         "c": get_cfiltration_type(F, T, K),
         "c_value_type": T[0],
-        "short_value_type":T[2],
+        "short_value_type": T[2],
         "container": F,
-        "multicritical":K,
+        "multicritical": K,
     }
     for F, T, K in product(filtration_containers, value_types, kcritical_options)
 ]
