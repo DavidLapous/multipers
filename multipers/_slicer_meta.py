@@ -5,7 +5,13 @@ import numpy as np
 
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
-from multipers.slicer import _column_type, _valid_dtype, _valid_pers_backend, is_slicer
+from multipers.slicer import (
+    _column_type,
+    _filtration_container_type,
+    _valid_dtype,
+    _valid_pers_backend,
+    is_slicer,
+)
 
 
 ## TODO : maybe optimize this with cython
@@ -84,6 +90,7 @@ def _slicer_from_blocks(
     is_kcritical: bool,
     dtype: type,
     col: _column_type,
+    filtration_container: _filtration_container_type,
 ):
     boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
         blocks,
@@ -96,10 +103,8 @@ def _slicer_from_blocks(
         dtype,
         col,
         pers_backend,
-        "contiguous",
-    )(
-        boundary, dimensions, multifiltrations
-    )
+        filtration_container,
+    )(boundary, dimensions, multifiltrations)
     return slicer
 
 
@@ -151,12 +156,18 @@ def Slicer(
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
         backend = st.pers_backend if backend is None else backend
-        filtration_container = st.filtration_container if filtration_container is None else filtration_container
+        filtration_container = (
+            st.filtration_container
+            if filtration_container is None
+            else filtration_container
+        )
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
         backend = "Matrix" if backend is None else backend
-        filtration_container = "contiguous" if filtration_container is None else filtration_container
+        filtration_container = (
+            "contiguous" if filtration_container is None else filtration_container
+        )
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
@@ -208,7 +219,13 @@ You can try using `multipers.slicer.to_simplextree`."""
             else:
                 blocks = st
                 slicer = _slicer_from_blocks(
-                    blocks, backend, vineyard, is_kcritical, dtype, column_type
+                    blocks,
+                    backend,
+                    vineyard,
+                    is_kcritical,
+                    dtype,
+                    column_type,
+                    filtration_container,
                 )
         if filtration_grid is not None:
             slicer.filtration_grid = filtration_grid
