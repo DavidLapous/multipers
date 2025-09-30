@@ -90,7 +90,14 @@ def _slicer_from_blocks(
         inplace=False,
         is_kcritical=is_kcritical,
     )
-    slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, col, pers_backend)(
+    slicer = mps.get_matrix_slicer(
+        vineyard,
+        is_kcritical,
+        dtype,
+        col,
+        pers_backend,
+        "contiguous",
+    )(
         boundary, dimensions, multifiltrations
     )
     return slicer
