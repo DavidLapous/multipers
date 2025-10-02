@@ -1776,9 +1776,13 @@ class Multi_parameter_filtration
         std::invalid_argument("The grid should not be smaller than the number of parameters in the filtration value."));
 
     auto project_generator_value = [&](T &val, const OneDimArray &filtration) {
+      typename OneDimArray::value_type _val = static_cast<typename OneDimArray::value_type>(val);
       auto d = std::distance(
           filtration.begin(),
-          std::lower_bound(filtration.begin(), filtration.end(), static_cast<typename OneDimArray::value_type>(val)));
+          std::lower_bound(filtration.begin(), filtration.end(), _val));
+      if (std::abs(_val - filtration[d]) >
+          std::abs(_val - filtration[d == 0 ? 0 : d - 1]))
+        --d;
       val = coordinate ? static_cast<T>(d) : static_cast<T>(filtration[d]);
     };
 

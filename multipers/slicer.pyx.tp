@@ -318,7 +318,13 @@ cdef class {{D['PYTHON_TYPE']}}:
 
     @staticmethod
     cdef _threshold_bcs(const Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}]& bcs):
-        return tuple(np.fromiter((a for a in stuff if a.first < {{D['PYTHON_TYPE']}}._inf_value()),  dtype=np.dtype(({{D['PY_VALUE_TYPE']}},2))) for stuff in _db2np_{{D['C_TEMPLATE_TYPE']}}(bcs))
+        return tuple(
+                np.fromiter(
+                    (a for a in stuff if a[0] < {{D['PYTHON_TYPE']}}._inf_value()),
+                    dtype=np.dtype(({{D['PY_VALUE_TYPE']}},2))
+                ) 
+                for stuff in _db2np_{{D['C_TEMPLATE_TYPE']}}(bcs)
+        )
     @staticmethod
     def _bc_to_full(bcs, basepoint, direction=None):
         # i, (b sv d), coords 

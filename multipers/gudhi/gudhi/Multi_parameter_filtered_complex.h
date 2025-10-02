@@ -22,6 +22,8 @@
 #include <algorithm>
 #include <numeric>
 #include <ostream>
+#include <ranges>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -205,7 +207,7 @@ class Multi_parameter_filtered_complex
       Index p = perm[curr];
       Index i = pos[p];
       if (i != curr) {
-        GUDHI_CHECK(curr < i, "Something is wrong");
+        GUDHI_CHECK(curr < i, std::runtime_error("Got curr " + std::to_string(curr) + " >= i " + std::to_string(i)));
         std::swap(boundaries_[curr], boundaries_[i]);
         std::swap(dimensions_[curr], dimensions_[i]);
         swap(filtrationValues_[curr], filtrationValues_[i]);
@@ -263,32 +265,32 @@ class Multi_parameter_filtered_complex
    * @brief Builds a new complex by reordering the cells in the given complex with the given permutation map.
    */
   friend Multi_parameter_filtered_complex build_permuted_complex(const Multi_parameter_filtered_complex& complex,
-                                                                 const std::vector<Index>& permutation)
-  {
-    if (permutation.size() != complex.get_number_of_cycle_generators())
-      throw std::invalid_argument("Invalid permutation size.");
+                                                                 const std::vector<Index>& permutation) {
+    if (permutation.size() > complex.get_number_of_cycle_generators())
+      throw std::invalid_argument("Invalid permutation size. Got perm size: " + std::to_string(permutation.size()) +
+                                  " while complex size: " + std::to_string(complex.get_number_of_cycle_generators()));
 
-    std::vector<Index> inv(permutation.size());
+    const Index flag = -1;
+    std::vector<Index> inv(complex.get_number_of_cycle_generators(), flag);
     for (Index i = 0; i < permutation.size(); ++i) inv[permutation[i]] = i;
 
-    Boundary_container newBoundaries;
-    newBoundaries.reserve(permutation.size());
-    Dimension_container newDimensions;
-    newDimensions.reserve(permutation.size());
-    Filtration_value_container newFiltrationValues;
-    newBoundaries.reserve(permutation.size());
+    Boundary_container new_generators(permutation.size());
+    Dimension_container new_generator_dimensions(permutation.size());
+    Filtration_value_container newFiltrationValues(permutation.size());
 
-    for (Index i : permutation) {
-      Boundary boundary(complex.boundaries_[i]);
-      for (Index& b : boundary) b = inv[b];
-      std::sort(boundary.begin(), boundary.end());
-      newBoundaries.emplace_back(std::move(boundary));
-      newDimensions.push_back(complex.dimensions_[i]);
-      newFiltrationValues.emplace_back(complex.filtrationValues_[i]);
+    for (auto i : std::views::iota(0u, permutation.size())) {
+      new_generators[i].reserve(complex.boundaries_[permutation[i]].size());
+      for (std::size_t j = 0; j < complex.boundaries_[permutation[i]].size(); j++) {
+        Index stuff = inv[complex.boundaries_[permutation[i]][j]];
+        if (stuff != flag) new_generators[i].push_back(stuff);
+      }
+      std::sort(new_generators[i].begin(), new_generators[i].end());
+      new_generator_dimensions[i] = complex.dimensions_[permutation[i]];
+      newFiltrationValues[i] = complex.filtrationValues_[permutation[i]];
     }
 
     return Multi_parameter_filtered_complex(
-        std::move(newBoundaries), std::move(newDimensions), std::move(newFiltrationValues));
+        std::move(new_generators), std::move(new_generator_dimensions), std::move(newFiltrationValues));
   }
 
   /**

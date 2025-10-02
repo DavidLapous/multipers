@@ -21,6 +21,8 @@
 #include <array>
 #include <initializer_list>
 #include <limits>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <numeric>  //std::iota
 #include <utility>  //std::move
@@ -545,8 +547,10 @@ class Slicer
    */
   friend Slicer build_permuted_slicer(const Slicer& slicer, const std::vector<Index>& permutation)
   {
-    GUDHI_CHECK(permutation.size() > slicer.get_number_of_cycle_generators(),
-                "Too many elements in permutation vector.");
+    GUDHI_CHECK(permutation.size() < slicer.get_number_of_cycle_generators(),
+                std::invalid_argument(
+                    "Too many elements in permutation vector. Got perm size: " + std::to_string(permutation.size()) +
+                    " while this->size: " + std::to_string(slicer.get_number_of_cycle_generators())));
     return Slicer(build_permuted_complex(slicer.complex_, permutation));
   }
 

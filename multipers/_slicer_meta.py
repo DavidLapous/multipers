@@ -88,7 +88,7 @@ def _slicer_from_blocks(
     pers_backend: _valid_pers_backend,
     vineyard: bool,
     is_kcritical: bool,
-    dtype: type,
+    dtype: _valid_dtype,
     col: _column_type,
     filtration_container: _filtration_container_type,
 ):
