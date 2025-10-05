@@ -288,7 +288,7 @@ class Projective_cover_kernel
       int colIdx = *it;
       GUDHI_CHECK(static_cast<Index>(colIdx) > i, std::runtime_error("(update) Column not registered in the right order."));
       auto prev = filtValues[colIdx];
-      if (prev < filtValues[i]) {
+      if (!(prev >= filtValues[i])) {
         prev.push_to_least_common_upper_bound(filtValues[i]);
         if (is_strict_less_than_lexicographically(gridValue, prev)) {
           lexicoIt.insert(prev, colIdx);
