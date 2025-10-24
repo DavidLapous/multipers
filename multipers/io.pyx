@@ -1,4 +1,5 @@
 import re
+import tempfile
 from gudhi import SimplexTree
 import gudhi as gd
 import numpy as np
@@ -106,16 +107,6 @@ cdef dict[str,str|None] pathes = {
 # multi_chunk_out_path:str|os.PathLike = "multipers_multi_chunk_output.scc"
 # function_delaunay_out_path:str|os.PathLike = "function_delaunay_output.scc"
 # function_delaunay_in_path:str|os.PathLike = "function_delaunay_input.txt" # point cloud
-input_path:str|os.PathLike = "multipers_input.scc"
-output_path:str|os.PathLike = "multipers_output.scc"
-
-def _put_temp_files_to_ram():
-    global input_path,output_path
-    shm_memory = "/tmp/"  # on unix, we can write in RAM instead of disk.
-    if os.access(shm_memory, os.W_OK) and not input_path.startswith(shm_memory):
-        input_path = shm_memory + input_path
-        output_path = shm_memory + output_path
-_put_temp_files_to_ram()
 
 
 ## TODO : optimize with Python.h ?
@@ -309,7 +300,6 @@ def scc_reduce_from_str_to_slicer(
         bool full_resolution=True,
         int dimension: int | np.int64 = 1,
         bool clear: bool = True,
-        id: Optional[str] = None,  # For parallel stuff
         bool verbose:bool=False,
         backend:Literal["mpfree","multi_chunk","twopac"]="mpfree",
         shift_dimension=0
@@ -327,43 +317,38 @@ def scc_reduce_from_str_to_slicer(
     verbose: bool
     backend: "mpfree", "multi_chunk" or "2pac"
     """
-    global pathes, input_path, output_path
+    global pathes
     _init_external_softwares(requires=[backend])
 
+    with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
+        output_path = os.path.join(tmpdir, "multipers_output.scc")
 
-    resolution_str = "--resolution" if full_resolution else ""
-    # print(mpfree_in_path + id, mpfree_out_path + id)
-    if id is None:
-        id = str(threading.get_native_id())
-    if not os.path.exists(path):
-        raise ValueError(f"No file found at {path}.")
-    if os.path.exists(output_path + id):
-        os.remove(output_path + id)
-    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    if backend == "mpfree":
-        more_verbose = "-v" if verbose else ""
-        command = (
-                f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path+id} {verbose_arg}"
-                )
-    elif backend == "multi_chunk":
-        command = (
-                f"{pathes[backend]}  {path} {output_path+id} {verbose_arg}"
-                )
-    elif backend in ["twopac", "2pac"]:
-        command = (
-                f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path+id} {verbose_arg}"
-                )
-    else:
-        raise ValueError(f"Unsupported backend {backend}.")
-    if verbose:
-        print(f"Calling :\n\n {command}")
-    os.system(command)
+        resolution_str = "--resolution" if full_resolution else ""
 
-    slicer._build_from_scc_file(path=output_path+id, shift_dimension=shift_dimension)
+        if not os.path.exists(path):
+            raise ValueError(f"No file found at {path}.")
 
-    if clear:
-        clear_io(input_path+id, output_path + id)
+        verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+        if backend == "mpfree":
+            more_verbose = "-v" if verbose else ""
+            command = (
+                    f"{pathes[backend]} {more_verbose} {resolution_str} --dim={dimension} {path} {output_path} {verbose_arg}"
+                    )
+        elif backend == "multi_chunk":
+            command = (
+                    f"{pathes[backend]}  {path} {output_path} {verbose_arg}"
+                    )
+        elif backend in ["twopac", "2pac"]:
+            command = (
+                    f"{pathes[backend]} -f {path} --scc-input -n{dimension} --save-resolution-scc {output_path} {verbose_arg}"
+                    )
+        else:
+            raise ValueError(f"Unsupported backend {backend}.")
+        if verbose:
+            print(f"Calling :\n\n {command}")
+        os.system(command)
 
+        slicer._build_from_scc_file(path=output_path, shift_dimension=shift_dimension)
 
 # def reduce_complex(
 #         complex, # Simplextree, Slicer, or str
@@ -474,7 +459,6 @@ def function_delaunay_presentation_to_slicer(
         slicer,
         point_cloud:np.ndarray,
         function_values:np.ndarray,
-        id:Optional[str] = None,
         bool clear:bool = True,
         bool verbose:bool=False,
         int degree = -1,
@@ -491,38 +475,26 @@ def function_delaunay_presentation_to_slicer(
     degree: computes minimal presentation of this degree if given
     verbose : bool
     """
-    if id is None:
-        id = str(threading.get_native_id())
-    global input_path, output_path, pathes
-    backend = "function_delaunay"
-    _init_external_softwares(requires=[backend])
+    global pathes
 
-    to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
-    np.savetxt(input_path+id,to_write,delimiter=' ')
-    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-    degree_arg = f"--minpres {degree}" if degree >= 0 else ""
-    multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
-    if os.path.exists(output_path + id):
-        os.remove(output_path+ id)
-    command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
-    if verbose:
-        print(command)
-    os.system(command)
+    with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
+        input_path = os.path.join(tmpdir, "multipers_input.scc")
+        output_path = os.path.join(tmpdir, "multipers_output.scc")
 
-    slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1 if degree <= 0 else degree-1 )
+        backend = "function_delaunay"
+        _init_external_softwares(requires=[backend])
 
-    if clear:
-        clear_io(output_path + id, input_path + id)
+        to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
+        np.savetxt(input_path,to_write,delimiter=' ')
+        verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+        degree_arg = f"--minpres {degree}" if degree >= 0 else ""
+        multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
+        command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path} {output_path} {verbose_arg} --no-delaunay-compare"
+        if verbose:
+            print(command)
+        os.system(command)
 
-
-
-def clear_io(*args):
-    """Removes temporary files"""
-    global input_path,output_path
-    for x in [input_path,output_path] + list(args):
-        if os.path.exists(x):
-            os.remove(x)
-
+        slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
 
 
 
