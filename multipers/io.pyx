@@ -212,7 +212,6 @@ def _init_external_softwares(requires=[]):
             any = any or (soft in requires) 
 
     if any:
-        _put_temp_files_to_ram()
         for soft in requires:
             if pathes[soft] is None:
                 global doc_soft_urls
