@@ -645,7 +645,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         str backend:Literal["mpfree", "2pac"]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard={{D['IS_VINE']}}, 
-        id :Optional[str] = None,
         dtype = {{D['PY_VALUE_TYPE']}},
         **minpres_kwargs
         )->Slicer_type:
@@ -653,7 +652,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         See :func:`multipers.slicer.minimal_presentation`.
         """
-        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, id=id, **minpres_kwargs)
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, **minpres_kwargs)
         return new_slicer
 
     @property
@@ -858,7 +857,6 @@ def minimal_presentation(
         str backend:Literal["mpfree", "2pac", ""]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard=True, 
-        id :Optional[str] =None,
         dtype:type|_valid_dtypes=None,
         int n_jobs = -1,
         bool force=False,
@@ -887,8 +885,6 @@ def minimal_presentation(
     assert degree>=0, f"Degree not provided."
     if not np.any(slicer.get_dimensions() == degree):
         return type(slicer)()
-    if id is None:
-        id = str(threading.get_native_id())
     if dtype is None:
         dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
