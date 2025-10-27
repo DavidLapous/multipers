@@ -877,11 +877,11 @@ def minimal_presentation(
     _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
-            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
+            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs)
         return tuple(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
-        # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+        # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs) for d in degrees)
     assert degree>=0, f"Degree not provided."
     if not np.any(slicer.get_dimensions() == degree):
         return type(slicer)()
