@@ -181,7 +181,6 @@ def scc_reduce_from_str_to_slicer(
     full_resolution: bool
     dimension: int, presentation dimension to consider
     clear: bool, removes temporary files if True
-    id: str, temporary files are of this id, allowing for multiprocessing
     verbose: bool
     backend: "mpfree", "multi_chunk" or "2pac"
     """
@@ -270,15 +269,12 @@ def rhomboid_tiling_to_slicer(
         int k_max,
         int degree = -1,
         bool reduce=True,
-        id:Optional[str] = None,
         bool clear:bool = True,
         bool verbose:bool=False,
         bool multi_chunk = False,
         ):
     """TODO"""
-    if id is None:
-        id = str(threading.get_native_id())
-    global input_path, output_path, pathes
+    global pathes
     backend = "rhomboid_tiling"
     _init_external_softwares(requires=[backend])
     if point_cloud.ndim != 2 or not point_cloud.shape[1] in [2,3]:
@@ -295,7 +291,7 @@ def rhomboid_tiling_to_slicer(
         if verbose:
             print(command)
         os.system(command)
-        slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1 if degree <= 0 else degree-1 )
+        slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
 
 
 
