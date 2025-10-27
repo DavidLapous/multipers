@@ -32,4 +32,4 @@ def test_io_parallel(backend):
     dgms = Parallel(n_jobs=-1, backend=backend)(delayed(io_fd_mpfree)(x) for x in X)
 
     for dgm in dgms:
-        assert_sm_pair(ground_truth, dgm, exact=False, reg=0)
+        assert_sm_pair(ground_truth, dgm, exact=False, reg=0, max_error= 1e-10)
