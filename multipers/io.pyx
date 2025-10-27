@@ -21,6 +21,7 @@ doc_soft_urls = {
         "multi_chunk":"https://bitbucket.org/mkerber/multi_chunk/",
         "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
         "2pac":"https://gitlab.com/flenzen/2pac",
+        "rhomboid_tiling":"https://github.com/odinhg/rhomboidtiling_newer_cgal_version",
         }
 doc_soft_easy_install = {
         "mpfree":f"""
@@ -65,6 +66,11 @@ make
 cp 2pac $CONDA_PREFIX/bin
 ```
 """,
+        "rhomboid_tiling":f"""
+git clone {doc_soft_urls["rhomboid_tiling"]} rhomboid_tiling
+sh build.sh
+cp orderk $CONDA_PREFIX/bin/rhomboid_tiling
+"""
         }
 doc_soft_urls = defaultdict(lambda:"<Unknown url>", doc_soft_urls)
 doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
@@ -505,6 +511,40 @@ def function_delaunay_presentation_to_slicer(
     if os.path.exists(output_path + id):
         os.remove(output_path+ id)
     command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path+id} {output_path+id} {verbose_arg} --no-delaunay-compare"
+    if verbose:
+        print(command)
+    os.system(command)
+
+    slicer._build_from_scc_file(path=output_path+id, shift_dimension=-1 if degree <= 0 else degree-1 )
+
+    if clear:
+        clear_io(output_path + id, input_path + id)
+def rhomboid_tiling_to_slicer(
+        slicer,
+        point_cloud:np.ndarray,
+        int k_max,
+        int degree = -1,
+        bool reduce=True,
+        id:Optional[str] = None,
+        bool clear:bool = True,
+        bool verbose:bool=False,
+        bool multi_chunk = False,
+        ):
+    """TODO"""
+    if id is None:
+        id = str(threading.get_native_id())
+    global input_path, output_path, pathes
+    backend = "rhomboid_tiling"
+    _init_external_softwares(requires=[backend])
+    if point_cloud.ndim != 2 or not point_cloud.shape[1] in [2,3]:
+        raise ValueError("point_cloud should be a 2d array of shape (-,2) or (-,3). Got {point_cloud.shape=}")
+    np.savetxt(input_path+id,point_cloud,delimiter=' ')
+    verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+    degree_arg = f"--minpres {degree}" if degree >= 0 else ""
+    multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
+    if os.path.exists(output_path + id):
+        os.remove(output_path+ id)
+    command = f"{pathes[backend]} {input_path+id} {output_path+id} {point_cloud.shape[1]} {k_max} scc {degree}"
     if verbose:
         print(command)
     os.system(command)
