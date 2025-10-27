@@ -13,9 +13,6 @@ import threading
 import cython
 cimport cython
 
-# from multipers.filtration_conversions cimport *
-# from multipers.mma_structures cimport boundary_matrix,float,pair,vector,intptr_t
-# cimport numpy as cnp
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
         "mpfree":"https://bitbucket.org/mkerber/mpfree/",
@@ -105,14 +102,6 @@ cdef dict[str,str|None] pathes = {
         "multi_chunk":None,
         }
 
-# mpfree_in_path:str|os.PathLike = "multipers_mpfree_input.scc"
-# mpfree_out_path:str|os.PathLike = "multipers_mpfree_output.scc"
-# twopac_in_path:str|os.PathLike = "multipers_twopac_input.scc"
-# twopac_out_path:str|os.PathLike = "multipers_twopac_output.scc"
-# multi_chunk_in_path:str|os.PathLike = "multipers_multi_chunk_input.scc"
-# multi_chunk_out_path:str|os.PathLike = "multipers_multi_chunk_output.scc"
-# function_delaunay_out_path:str|os.PathLike = "function_delaunay_output.scc"
-# function_delaunay_in_path:str|os.PathLike = "function_delaunay_input.txt" # point cloud
 
 
 ## TODO : optimize with Python.h ?
@@ -144,69 +133,6 @@ def scc_parser(path: str| os.PathLike):
     return blocks
 
 
-# def scc_parser__old(path: str):
-#     """
-#     Parse an scc file into the scc python format, aka blocks.
-#     """
-#     with open(path, "r") as f:
-#         lines = f.readlines()
-#     # Find scc2020
-#     while lines[0].strip() != "scc2020":
-#         lines = lines[1:]
-#     lines = lines[1:]
-#     # stripped scc2020 we can start
-#
-#     def pass_line(line):
-#         return re.match(r"^\s*$|^#", line) is not None
-#
-#     for i, line in enumerate(lines):
-#         line = line.strip()
-#         if pass_line(line):
-#             continue
-#         num_parameters = int(line)
-#         lines = lines[i + 1 :]
-#         break
-#
-#     block_sizes = []
-#
-#     for i, line in enumerate(lines):
-#         line = line.strip()
-#         if pass_line(line):
-#             continue
-#         block_sizes = tuple(int(i) for i in line.split(" "))
-#         lines = lines[i + 1 :]
-#         break
-#     blocks = []
-#     cdef int counter
-#     for block_size in block_sizes:
-#         counter = block_size
-#         block_filtrations = []
-#         block_boundaries = []
-#         for i, line in enumerate(lines):
-#             if counter == 0:
-#                 lines = lines[i:]
-#                 break
-#             line = line.strip()
-#             if pass_line(line):
-#                 continue
-#             splitted_line = re.match(r"^(?P<floats>[^;]+);(?P<ints>[^;]*)$", line)
-#             filtrations = np.asarray(splitted_line.group("floats").split(), dtype=float)
-#             boundary = np.asarray(splitted_line.group("ints").split(), dtype=int)
-#             block_filtrations.append(filtrations)
-#             block_boundaries.append(boundary)
-#             # filtration_boundary = line.split(";")
-#             # if len(filtration_boundary) == 1:
-#             #     # happens when last generators do not have a ";" in the end
-#             #     filtration_boundary.append(" ")
-#             # filtration, boundary = filtration_boundary
-#             # block_filtrations.append(
-#             #         tuple(float(x) for x in filtration.split(" ") if len(x) > 0)
-#             #         )
-#             # block_boundaries.append(tuple(int(x) for x in boundary.split(" ") if len(x) > 0))
-#             counter -= 1
-#         blocks.append((np.asarray(block_filtrations, dtype=float), tuple(block_boundaries)))
-#
-#     return blocks
 
 
 def _init_external_softwares(requires=[]):
