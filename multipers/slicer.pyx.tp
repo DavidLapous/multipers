@@ -688,7 +688,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         str backend:Literal["mpfree", "2pac"]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard={{D['IS_VINE']}}, 
-        id :Optional[str] = None,
         dtype = {{D['PY_VALUE_TYPE']}},
         **minpres_kwargs
         )->Slicer_type:
@@ -696,7 +695,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         See :func:`multipers.slicer.minimal_presentation`.
         """
-        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, id=id, **minpres_kwargs)
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, **minpres_kwargs)
         return new_slicer
 
     @property
@@ -934,7 +933,6 @@ def minimal_presentation(
         str backend:Literal["mpfree", "2pac", ""]="mpfree", 
         str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard=True, 
-        id :Optional[str] =None,
         dtype:type|_valid_dtypes=None,
         int n_jobs = -1,
         bool force=False,
@@ -946,7 +944,8 @@ def minimal_presentation(
     and returns it as a slicer.
     Backends differents than `mpfree` are unstable.
     """
-    from multipers.io import _init_external_softwares, input_path, scc_reduce_from_str_to_slicer
+    from multipers.io import _init_external_softwares, scc_reduce_from_str_to_slicer
+    import tempfile
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
         warn(f"(unnecessary computation) The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
@@ -954,32 +953,32 @@ def minimal_presentation(
     _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
-            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs)
+            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs)
         return tuple(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
-        # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, id=id, **minpres_kwargs) for d in degrees)
+        # return tuple(minimal_presentation(slicer, degree=d, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs) for d in degrees)
     assert degree>=0, f"Degree not provided."
     if not np.any(slicer.get_dimensions() == degree):
         return type(slicer)()
-    if id is None:
-        id = str(threading.get_native_id())
     if dtype is None:
         dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
-    slicer.to_scc(path=input_path+id, strip_comments=True, degree=degree-1, unsqueeze = False)
-    new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
-    if backend=="mpfree":
-        shift_dimension=degree-1
-    else:
-        shift_dimension=degree
-    scc_reduce_from_str_to_slicer(path=input_path+id, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
+    with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
+        tmp_path = os.path.join(tmpdir, "multipers.scc")
+        slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree-1, unsqueeze = False)
+        new_slicer = multipers.Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+        if backend=="mpfree":
+            shift_dimension=degree-1
+        else:
+            shift_dimension=degree
+        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
 
-    new_slicer.minpres_degree = degree
-    new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-    if new_slicer.is_squeezed and auto_clean:
-        new_slicer = new_slicer._clean_filtration_grid()
-    return new_slicer
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
 
 
 def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:

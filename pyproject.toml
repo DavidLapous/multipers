@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multipers"
-version = "2.3.5b2"
+version = "2.3.5b3"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [

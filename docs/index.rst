@@ -100,13 +100,16 @@ Please cite `multipers` if using it in a research paper. You can use the key
   }
 
 
-For theoretical references,
- - Module Approximation :cite:p:`loiseauxFastStableEfficient2022`
+For theoretical references:
+ - Module Approximation :cite:p:`loiseauxMultiparameterModuleApproximation2025`
  - Module Decomposition Representations :cite:p:`loiseauxFrameworkFastStable2023`
  - Signed Barcodes as Signed Measures :cite:p:`loiseauxStableVectorizationMultiparameter2023`
  - Differentiability and Multiparameter Persistence :cite:p:`scoccolaDifferentiabilityOptimizationMultiparameter2024`
  - multipers :cite:p:`loiseauxMultipersMultiparameterPersistence2024`
-
+ - mpfree :cite:p:`kerberFastMinimalPresentations2021`
+ - function_delaunay :cite:p:`alonsoDelaunayBifiltrationsFunctions2024`
+ - filtration_domination :cite:p:`alonsoFiltrationdominationBifilteredGraphs2023`
+ - Core bifiltration :cite:p:`blaserCoreBifiltration2024`
 
 
 .. toctree::
