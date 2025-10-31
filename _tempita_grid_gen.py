@@ -1,3 +1,4 @@
+import os
 import pickle
 from itertools import product
 
@@ -23,10 +24,13 @@ columns_name = [  # only one column is necessary
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
     ("int32_t", "np.int32", "i32"),  # necessary
-    ("int64_t", "np.int64",   "i64"),
-    ("float",   "np.float32", "f32"),
+    # ("int64_t", "np.int64",   "i64"),
+    # ("float",   "np.float32", "f32"),
     ("double", "np.float64", "f64"),  # necessary
 ]
+COARSENNED_VALUE_TYPE = ("int32_t", "np.int32", "i32")
+REAL_VALUE_TYPE = ("double", "np.float64", "f64")
+
 
 ## True needed for MMA, and False is default value
 vineyards_values = [
@@ -52,8 +56,8 @@ matrix_types = [
 ]
 
 filtration_containers = [
-    "Dynamic_multi_parameter_filtration",
-    "Degree_rips_bifiltration",
+    # "Dynamic_multi_parameter_filtration",
+    # "Degree_rips_bifiltration",
     "Multi_parameter_filtration",
 ]
 short_filtration_container = {
@@ -83,6 +87,11 @@ def check_combination(
             return False
     if backend_type in ["Graph", "GudhiCohomology"]:
         if column_type[0] != 0:
+            return False
+    if filtration_container == "flat":
+        if not is_kcritical:
+            return False
+        if value_type[0] == "f":
             return False
     return True
 
@@ -152,15 +161,22 @@ slicers = [
 ]
 
 
+os.makedirs("build/tmp", exist_ok=True)
+
+
+print("#----------------------")
 print("#----------------------")
 print("Value_types")
+print("#----------------------")
 print("#----------------------")
 print(*value_types, sep="\n")
 with open("build/tmp/_value_types.pkl", "wb") as f:
     pickle.dump(value_types, f)
 
 print("#----------------------")
+print("#----------------------")
 print("Filtrations")
+print("#----------------------")
 print("#----------------------")
 Filtrations = [
     {
@@ -179,39 +195,85 @@ with open("build/tmp/_filtration_names.pkl", "wb") as f:
 
 
 print("#----------------------")
+print("#----------------------")
 print("Slicers")
+print("#----------------------")
 print("#----------------------")
 print(*slicers, sep="\n")
 with open("build/tmp/_slicer_names.pkl", "wb") as f:
     pickle.dump(slicers, f)
 
-## Simplextree
 
-Filtrations_types = [
-    (
-        ("Multi_critical_filtration", True)
-        if kcritical
-        else ("One_critical_filtration", False)
+print("#----------------------")
+print("#----------------------")
+print("SimplexTrees")
+print("#----------------------")
+print("#----------------------")
+
+
+def get_simplextree_class_name(is_kcritical, value_type, filtration_container):
+    ctype, pytype, short_type = value_type
+    python_filtration = get_python_filtration_type(
+        filtration_container, value_type, is_kcritical
     )
-    for kcritical in kcritical_options
+    python_class_name = (
+        "_SimplexTreeMulti_"
+        + short_filtration_container[filtration_container]
+        + "_"
+        + ("K" if is_kcritical else "")
+        + short_type
+    )
+    return python_class_name
+
+
+def get_simplextree(is_kcritical, value_type, filtration_container):
+    ctype, pytype, short_type = value_type
+    IS_KCRITICAL = is_kcritical
+    python_filtration = get_python_filtration_type(
+        filtration_container, value_type, is_kcritical
+    )
+    OneKpython_filtration = get_python_filtration_type(
+        filtration_container, value_type, False
+    )
+    python_class_name = get_simplextree_class_name(
+        is_kcritical, value_type, filtration_container
+    )
+    coarsenned_class_name = get_simplextree_class_name(
+        is_kcritical, COARSENNED_VALUE_TYPE, filtration_container
+    )
+    real_class_name = get_simplextree_class_name(
+        is_kcritical, REAL_VALUE_TYPE, filtration_container
+    )
+    return {
+        "IS_KCRITICAL": IS_KCRITICAL,
+        "CTYPE": ctype,
+        "PY_VALUE_TYPE": pytype,
+        "PYTYPE": pytype,
+        "SHORT_VALUE_TYPE": short_type,
+        "SHORT_FILTRATION_TYPE": short_filtration_container[filtration_container],
+        "PyFil": python_filtration,
+        "CFil": get_cfiltration_type(filtration_container, value_type, is_kcritical),
+        "FILTRATION_CONTAINER_STR": filtration_container,
+        "IS_FLOAT": short_type[0] == "f",
+        "PY_CLASS_NAME": python_class_name,
+        "COARSENNED_PY_CLASS_NAME": coarsenned_class_name,
+        "REAL_PY_CLASS_NAME": real_class_name,
+        "ST_INTERFACE": (
+            "Simplex_tree_multi_interface[" + python_filtration + ", " + ctype + "]"
+        ),
+        "C2P_Fil": f"{python_filtration}_2_python",
+        "P2C_Fil": f"python_2_{python_filtration}",
+        "P2C_1KFil": f"python_2_{OneKpython_filtration}",
+        "C2P_vFil": f"vect_{python_filtration}_2_python",
+        "OneCriticalFil": OneKpython_filtration,
+    }
+
+
+st_list = [
+    get_simplextree(*args)
+    for args in product(kcritical_options, value_types, filtration_containers)
 ]
-
-
-## CTYPE, PYTYPE, SHORT, FILTRATION
-to_iter = [
-    (
-        CTYPE,
-        PYTYPE,
-        SHORT,
-        Filtration + "[" + CTYPE + "]",
-        is_kcritical,
-        ("K" if is_kcritical else "") + "F" + SHORT,
-    )
-    for (CTYPE, PYTYPE, SHORT), (Filtration, is_kcritical) in product(
-        value_types, Filtrations_types
-    )
-]
-
+print(*st_list, sep="\n")
 
 with open("build/tmp/_simplextrees_.pkl", "wb") as f:
-    pickle.dump(to_iter, f)
+    pickle.dump(st_list, f)

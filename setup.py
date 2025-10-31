@@ -1,9 +1,9 @@
-# import contextlib
-import filecmp
 import os
-import shutil
 import platform
+import subprocess
 import sys
+import filecmp
+import shutil
 
 from pathlib import Path
 import numpy as np
@@ -16,16 +16,6 @@ Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
-
-try:
-    os.mkdir("build")
-except FileExistsError:
-    pass
-
-try:
-    os.mkdir("build/tmp")
-except FileExistsError:
-    pass
 
 
 def was_modified(file):
@@ -46,6 +36,9 @@ def was_modified(file):
 full_build = False
 if was_modified("_tempita_grid_gen.py"):
     full_build = True
+
+os.makedirs("build/tmp", exist_ok=True)
+
 
 
 # credit to sklearn with just a few modifications:
@@ -95,9 +88,9 @@ templated_cython_modules = [
     "slicer.pyx",
 ]
 
-## generates some parameter files (Tempita fails with python<3.12)
+# generates some parameter files (Tempita fails with python<3.12)
 # TODO: see if there is a way to avoid _tempita_grid_gen.py or a nicer way to do it
-os.system("python _tempita_grid_gen.py")
+subprocess.run([sys.executable, "_tempita_grid_gen.py"], check=True)
 
 for mod in templated_cython_modules:
     process_tempita(f"multipers/{mod}.tp")
@@ -130,7 +123,7 @@ cython_compiler_directives = {
 
 # When venv is not properly set, we have to add the current python path
 # removes lib / python3.x / site-packages
-PYTHON_ENV_PATH = sys.prefix
+PYTHON_ENV_PATH = Path(sys.prefix)
 
 cpp_dirs = [
     "multipers/gudhi",
@@ -139,14 +132,14 @@ cpp_dirs = [
     # "multipers/multi_parameter_rank_invariant",
     # "multipers/tensor",
     np.get_include(),
-    PYTHON_ENV_PATH + "/include/", # Unix
-    PYTHON_ENV_PATH + "/Library/include/", # Windows
+    PYTHON_ENV_PATH / "include",  # Unix
+    PYTHON_ENV_PATH / "Library"/"include",  # Windows
 ]
 cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
 library_dirs = [
-    PYTHON_ENV_PATH + "/lib/", # Unix
-    PYTHON_ENV_PATH + "/Library/lib/", # Windows
+    PYTHON_ENV_PATH / "lib",  # Unix
+    PYTHON_ENV_PATH / "Library" / "lib",  # Windows
 ]
 
 library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dirs]
@@ -168,6 +161,8 @@ extensions = [
             "-O3",  # -Ofast disables infinity values for filtration values
             "-fassociative-math",
             "-funsafe-math-optimizations",
+            "-DGUDHI_USE_TBB",
+            "-DWITH_TBB=ON"
             # "-g",
             # "-march=native",
             "/std:c++20" if platform.system() == "Windows" else "-std=c++20",
@@ -176,7 +171,7 @@ extensions = [
             "-Wextra" if platform.system() != "Windows" else "",
             # "-Werror" if platform.system() != "Windows" else "",
         ],
-        extra_link_args=[],  ## mvec for python312
+        extra_link_args=[], 
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         libraries=["tbb"],
@@ -194,3 +189,4 @@ if __name__ == "__main__":
             **cythonize_flags,
         ),
     )
+
