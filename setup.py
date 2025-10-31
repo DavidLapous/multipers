@@ -17,6 +17,7 @@ Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
+os.makedirs("build/tmp", exist_ok=True)
 
 def was_modified(file):
     tail = os.path.basename(file)
@@ -37,7 +38,6 @@ full_build = False
 if was_modified("_tempita_grid_gen.py"):
     full_build = True
 
-os.makedirs("build/tmp", exist_ok=True)
 
 
 
