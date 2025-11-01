@@ -190,7 +190,7 @@ cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:] fi
   cdef {{f["python"]}} out = {{f['python']}}(num_parameters) 
   cdef {{f['c_value_type']}}* x
   for i in range(num_parameters):
-    x = &out(i,0)
+    x = &out(0,i)
     x[0] = filtration[i]
   return out
 {{endif}}
