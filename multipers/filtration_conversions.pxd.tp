@@ -183,11 +183,17 @@ cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:,:] 
     out.simplify()
     return out
 {{else}}
-cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:] filtration) noexcept nogil:
-    cdef {{f["python"]}} out = _py2p_{{f['short_value_type']}}(filtration)
-    return out
-{{endif}}
 
+
+cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:] filtration) noexcept nogil:
+  cdef int num_parameters = filtration.shape[0]
+  cdef {{f["python"]}} out = {{f['python']}}(num_parameters) 
+  cdef {{f['c_value_type']}}* x
+  for i in range(num_parameters):
+    x = &out(i,0)
+    x[0] = filtration[i]
+  return out
+{{endif}}
 
 cdef inline vector[{{f['python']}}] python_2_vect_{{f['python']}}({{f["c_value_type"]}}[:,:] filtrations) noexcept nogil:
     # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
