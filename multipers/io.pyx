@@ -262,7 +262,6 @@ def function_delaunay_presentation_to_slicer(
 
         slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
 
-
 def rhomboid_tiling_to_slicer(
         slicer,
         point_cloud:np.ndarray,

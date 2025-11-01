@@ -1,21 +1,22 @@
 #pragma once
-#include <gudhi/Simplex_tree_multi.h>
-#include "gudhi/truc.h"
-#include "multi_parameter_rank_invariant/persistence_slices.h"
-#include "tensor/tensor.h"
+
 #include <algorithm>
 #include <cstddef>
-#include <gudhi/One_critical_filtration.h>
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <ostream>
 #include <utility>  // std::pair
 #include <vector>
 
+#include "../gudhi/gudhi/multi_simplex_tree_helpers.h"
+#include "../gudhi/gudhi/Slicer.h"
+#include "../tensor/tensor.h"
+#include "persistence_slices.h"
+
 namespace Gudhi {
 namespace multiparameter {
 namespace rank_invariant { 
-using Index = truc_interface::index_type;
+// using Index = truc_interface::index_type;
 
 // using Elbow = std::vector<std::pair<>>;grid
 template <typename index_type>
@@ -74,18 +75,11 @@ inline void compute_2d_rank_invariant_of_elbow(
   auto sh_multi = st_multi.complex_simplex_range().begin();
   for (; sh_standard != _end; ++sh_multi, ++sh_standard) {
     const Filtration &multi_filtration = st_multi.filtration(*sh_multi);
-    value_type filtration_in_slice;
-    if constexpr (Filtration::is_multi_critical) {
-      filtration_in_slice = inf;
-      for (const auto &stuff : multi_filtration) {
-        value_type x = stuff[0];
-        value_type y = stuff[1];
-        filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
-      }
-    } else {
-      value_type x = multi_filtration[0];
-      value_type y = multi_filtration[1];
-      filtration_in_slice = get_slice_rank_filtration(x, y, I, J);
+    value_type filtration_in_slice = inf;
+    for (unsigned int g = 0; g < multi_filtration.num_generators(); ++g){
+      value_type x = multi_filtration(g, 0);
+      value_type y = multi_filtration(g, 1);
+      filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
     }
     _st_container.assign_filtration(*sh_standard, filtration_in_slice);
   }
@@ -124,10 +118,9 @@ inline void compute_2d_rank_invariant(
     const std::vector<index_type> &degrees,
     bool expand_collapse) {
   if (degrees.size() == 0) return;
-  assert(st_multi.get_number_of_parameters() == 2);
-  Simplex_tree_std st_;
-  Gudhi::multi_persistence::flatten(st_, st_multi,
-                                    0);  // copies the st_multi to a standard 1-pers simplextree
+  assert(st_multi.num_parameters() == 2);
+  // copies the st_multi to a standard 1-pers simplextree
+  Simplex_tree_std st_ = Gudhi::multi_persistence::make_one_dimensional<Gudhi::multiparameter::Simplex_tree_float>(st_multi, 0);
   const int max_dim = expand_collapse ? *std::max_element(degrees.begin(), degrees.end()) + 1 : 0;
   index_type X = grid_shape[1];
   index_type Y = grid_shape[2];                                                // First axis is degree
@@ -162,12 +155,11 @@ void compute_rank_invariant_python(
 }
 
 template <class PersBackend,
-          class Structure,
-          class MultiFiltration = Gudhi::multi_filtration::One_critical_filtration<float>,
+          class MultiFiltration,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
-    typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe &slicer,  // truc slicer
+    typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe &slicer,  // truc slicer
     const tensor::static_tensor_view<dtype, index_type> &out,                               // assumes its a zero tensor
     const index_type I,
     const index_type J,
@@ -178,7 +170,7 @@ inline void compute_2d_rank_invariant_of_elbow(
     const bool flip_death = false,
     const bool ignore_inf = true) {
   using value_type = typename MultiFiltration::value_type;
-  const auto &filtrations_values = slicer.get_filtrations();
+  const auto &filtrations_values = slicer.get_filtration_values();
   auto num_generators = filtrations_values.size();
   // one_persistence.resize(num_generators); // local variable should be
   // initialized correctly
@@ -187,32 +179,25 @@ inline void compute_2d_rank_invariant_of_elbow(
   if constexpr (verbose) std::cout << "filtration_in_slice : [ ";
   for (auto i = 0u; i < num_generators; ++i) {
     const auto &f = filtrations_values[i];
-    value_type filtration_in_slice = MultiFiltration::Generator::T_inf;
-    if constexpr (MultiFiltration::is_multi_critical) {
-      for (const auto &stuff : f) {
-        value_type x = stuff[0];
-        value_type y = stuff[1];
+    value_type filtration_in_slice = MultiFiltration::T_inf;
+    for (unsigned int g = 0; g < f.num_generators(); ++g) {
+      value_type x = f(g,0);
+      value_type y = f(g,1);
 
-        filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
-      }
-    } else {
-      value_type x = f[0];
-      value_type y = f[1];
-      filtration_in_slice = get_slice_rank_filtration(x, y, I, J);
+      filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
     }
     if constexpr (verbose) std::cout << filtration_in_slice << ",";
-    slicer.get_one_filtration()[i] = filtration_in_slice;
+    slicer.get_slice()[i] = filtration_in_slice;
   }
   if constexpr (verbose) std::cout << "\b]" << std::endl;
 
   index_type degree_index = 0;
   // order_container.resize(slicer.num_generators()); // local variable should
   // be initialized correctly
-  // TODO : use slicer::ThreadSafe instead of maintaining one_pers & order
+  // TODO : use slicer::Thread_safe instead of maintaining one_pers & order
   // BUG : This will break as soon as slicer interface change
 
-  using bc_type = typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::split_barcode;
-  bc_type barcodes;
+  using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::template Multi_dimensional_flat_barcode<>;
   if constexpr (PersBackend::is_vine) {
     // slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
@@ -225,15 +210,14 @@ inline void compute_2d_rank_invariant_of_elbow(
       //     degrees_index[degree] = true;
       // }
       // slicer.compute_persistence(degrees_index);
-      slicer.compute_persistence();
+      slicer.initialize_persistence_computation();
     } else {
       slicer.vineyard_update();
     }
-    barcodes = slicer.get_barcode();
   } else {
-    slicer.compute_persistence(ignore_inf);
-    barcodes = slicer.get_barcode();
+    slicer.initialize_persistence_computation(ignore_inf);
   }
+  bc_type barcodes = slicer.template get_flat_barcode<true>();
 
   // note one_pers not necesary when vine, but does the same computation
 
@@ -243,13 +227,13 @@ inline void compute_2d_rank_invariant_of_elbow(
     if (degree >= static_cast<index_type>(barcodes.size())) continue;
     const auto &barcode = barcodes[degree];
     for (const auto &bar : barcode) {
-      if (bar.first > Y + I) continue;
+      if (bar[0] > Y + I) continue;
       if constexpr (verbose)
-        std::cout << bar.first << " " << bar.second << "checkinf: " << MultiFiltration::Generator::T_inf << " ==? "
-                  << (bar.first == MultiFiltration::Generator::T_inf) << std::endl;
-      auto birth = static_cast<index_type>(bar.first);
+        std::cout << bar[0] << " " << bar[1] << "checkinf: " << MultiFiltration::T_inf << " ==? "
+                  << (bar[0] == MultiFiltration::T_inf) << std::endl;
+      auto birth = static_cast<index_type>(bar[0]);
       auto death = static_cast<index_type>(
-          std::min(bar.second,
+          std::min(bar[1],
                    static_cast<typename MultiFiltration::value_type>(Y + I)));  // I,J atteints, pas X ni Y
       if constexpr (false) std::cout << "Birth " << birth << " Death " << death << std::endl;
       for (auto intermediate_birth = birth; intermediate_birth < death; intermediate_birth++) {
@@ -271,12 +255,11 @@ inline void compute_2d_rank_invariant_of_elbow(
 };
 
 template <class PersBackend,
-          class Structure,
-          class MultiFiltration = Gudhi::multi_filtration::One_critical_filtration<float>,
+          class MultiFiltration,
           typename dtype,
           typename index_type>
 inline void compute_2d_rank_invariant(
-    truc_interface::Truc<PersBackend, Structure, MultiFiltration> &slicer,
+    Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> &grid_shape,
     const std::vector<index_type> &degrees,
@@ -290,14 +273,14 @@ inline void compute_2d_rank_invariant(
     std::cout << "Shape " << grid_shape[0] << " " << grid_shape[1] << " " << grid_shape[2] << " " << grid_shape[3]
               << " " << grid_shape[4] << std::endl;
 
-  using ThreadSafe = typename truc_interface::Truc<PersBackend, Structure, MultiFiltration>::ThreadSafe;
+  using ThreadSafe = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe;
   ThreadSafe slicer_thread(slicer);
   tbb::enumerable_thread_specific<ThreadSafe> thread_locals(slicer_thread);
   tbb::parallel_for(0, X, [&](index_type I) {
     tbb::parallel_for(0, Y, [&](index_type J) {
       if constexpr (verbose) std::cout << "Computing elbow " << I << " " << J << "...";
       ThreadSafe &slicer = thread_locals.local();
-      compute_2d_rank_invariant_of_elbow<PersBackend, Structure, MultiFiltration, dtype, index_type>(
+      compute_2d_rank_invariant_of_elbow<PersBackend, MultiFiltration, dtype, index_type>(
           slicer, out, I, J, grid_shape, degrees, flip_death, ignore_inf);
       if constexpr (verbose) std::cout << "Done!" << std::endl;
     });
@@ -305,11 +288,10 @@ inline void compute_2d_rank_invariant(
 }
 
 template <class PersBackend,
-          class Structure,
-          class MultiFiltration = Gudhi::multi_filtration::One_critical_filtration<float>,
+          class MultiFiltration,
           typename dtype,
           typename indices_type>
-void compute_rank_invariant_python(truc_interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
+void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>& slicer,
                                    dtype *data_ptr,
                                    const std::vector<indices_type> grid_shape,
                                    const std::vector<indices_type> degrees,
@@ -328,12 +310,11 @@ void compute_rank_invariant_python(truc_interface::Truc<PersBackend, Structure, 
 }
 
 template <typename PersBackend,
-          typename Structure,
           typename MultiFiltration,
           typename dtype = int,
           typename indices_type = int>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_rank_signed_measure(
-    truc_interface::Truc<PersBackend, Structure, MultiFiltration> slicer,
+    Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>& slicer,
     dtype *data_ptr,
     const std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,
@@ -352,9 +333,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
   }
 
   // for (indices_type axis :
-  // std::views::iota(2,st_multi.get_number_of_parameters()+1)) // +1 for the
+  // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (std::size_t axis = 0u; axis < slicer.num_parameters() + 1; axis++) container.differentiate(axis);
+  for (std::size_t axis = 0u; axis < slicer.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;

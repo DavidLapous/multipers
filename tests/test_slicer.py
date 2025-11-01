@@ -145,7 +145,7 @@ def test_representative_cycles():
         {3, 6},
     ]
     truc = [list(machin) for machin in truc]
-    slicer = mp.slicer._Slicer_Matrix0_vine_f64(
+    slicer = mp.slicer._ContiguousSlicer_Matrix0_vine_f64(
         truc,
         np.array([max(len(x) - 1, 0) for x in truc]),
         np.array([list(range(len(truc))), list(range(len(truc)))]).T,
@@ -154,7 +154,7 @@ def test_representative_cycles():
     cycles = slicer.get_representative_cycles()
     assert len(cycles) == 3, f"There should be 3 dimensions here, found {len(cycles)}"
     assert (
-        np.asarray(cycles[0]).shape[0] == 7
+        len(cycles[0]) == 7
     ), f"Invalid number of 0-cycles, got {np.asarray(cycles[0]).size}"
     for c in cycles[1]:
         assert (

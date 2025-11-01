@@ -25,7 +25,7 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 
-#include <naive_merge_tree.h>
+#include "naive_merge_tree.h"
 
 namespace Gudhi {
 namespace multiparameter {
