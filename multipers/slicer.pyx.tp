@@ -165,7 +165,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             return
         cdef intptr_t ptr = st.thisptr
         cdef Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}},{{D['C_VALUE_TYPE']}}]* st_ptr = <Simplex_tree_multi_interface[{{D['FILTRATION_TYPE']}},{{D['C_VALUE_TYPE']}}]*>(ptr)
-        self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_F{{D['SHORT_VALUE_TYPE']}}(dereference(st_ptr))
+        self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}(dereference(st_ptr))
         self.minpres_degree = -1
     {{elif D['IS_KCRITICAL']}}
     def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
@@ -832,7 +832,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         {{for ST in simplex_trees}}
         cdef {{ST["ST_INTERFACE"]}}* st_ptr_{{ST["PyFil"]}} = <{{ST["ST_INTERFACE"]}}*>(ptr)
         if self.ftype == "{{ST['PyFil']}}":
-            self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_{{D['SHORT_FILTRATION_TYPE']}}(dereference(st_ptr_{{ST["PyFil"]}}))
+            self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}(dereference(st_ptr_{{ST["PyFil"]}}))
             self.minpres_degree = -1
             return self
         {{endfor}}
