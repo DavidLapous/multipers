@@ -109,8 +109,7 @@ cdef extern from "gudhi/slicer_helpers.h" namespace "Gudhi::multi_persistence":
   {{D['C_TEMPLATE_TYPE']}} build_slicer_from_scc_file_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_scc_file<{{D['TRUC_TYPE']}}>"(string&, bool, bool, int) except + nogil #build_from_scc_file
   {{endif}}
   {{for ST in simplex_trees}}
-  # WARN : updating locals {{locals().update(ST)}}
-  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_simplex_tree<{{D['TRUC_TYPE']}}>"(Simplex_tree_multi_interface[{{PyFil}}, {{CTYPE}}]&) except + nogil
+  {{D['C_TEMPLATE_TYPE']}} build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_{{ST["PyFil"]}} "Gudhi::multi_persistence::build_slicer_from_simplex_tree<{{D['TRUC_TYPE']}}>"({{ST["ST_INTERFACE"]}}&) except + nogil
   {{endfor}}
   {{D['C_TEMPLATE_TYPE']}} build_slicer_from_bitmap_{{D['C_TEMPLATE_TYPE']}} "Gudhi::multi_persistence::build_slicer_from_bitmap<{{D['TRUC_TYPE']}}>"(vector[{{D['FILTRATION_TYPE']}}], vector[unsigned int]) except + nogil
   vector[Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int]] custom_persistences "persistence_on_slices<{{D['TRUC_TYPE']}}, {{D['C_VALUE_TYPE']}}, int, true>"({{D['C_TEMPLATE_TYPE']}}&, {{D['C_VALUE_TYPE']}}*, int, bool) except + nogil
