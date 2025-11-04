@@ -162,7 +162,7 @@ extensions = [
             "-fassociative-math",
             "-funsafe-math-optimizations",
             "-DGUDHI_USE_TBB",
-            "-DWITH_TBB=ON"
+            "-DWITH_TBB=ON",
             # "-g",
             # "-march=native",
             "/std:c++20" if platform.system() == "Windows" else "-std=c++20",
