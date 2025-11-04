@@ -50,6 +50,6 @@ def get_sm_st(x, n_jobs=1, to_slicer=False,invariant="hilbert"):
 @pytest.mark.parametrize("invariant", ["hilbert"])
 def test_st_sm_parallel(backend, slicer, invariant):
     ground_truth = get_sm_st(x, n_jobs=1, to_slicer = not slicer)
-    sms = Parallel(n_jobs=-1, backend=backend)(delayed(get_sm_st)(x,-1,slicer,invariant) for x in [x] * 15)
+    sms = Parallel(n_jobs=-1, backend=backend)(delayed(get_sm_st)(x,-1,slicer,invariant) for _ in range(15))
     for sm in sms:
         assert_sm_pair(ground_truth, sm, exact=False, reg=0, max_error=1e-12)
