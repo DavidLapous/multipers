@@ -1,5 +1,6 @@
 #pragma once
 
+#include <oneapi/tbb/task_arena.h>
 #include "../gudhi/gudhi/Flag_complex_edge_collapser.h"
 #include "../gudhi/gudhi/Persistent_cohomology.h"
 #include "../gudhi/gudhi/Multi_persistence/Box.h"
@@ -45,6 +46,7 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
                                          const std::vector<degree_type> &degrees,
                                          int num_collapses,
                                          int expansion_dim) {
+  
   std::vector<Barcode> out(degrees.size());
   // static_assert(!interface_std_like::Options::is_multi_parameter,
   //               "Can only compute persistence for 1-parameter simplextrees.");
@@ -60,8 +62,12 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
   else if (expansion_dim > 0) {
     st.expansion(expansion_dim);
   }
-
-  st.initialize_filtration(true);  // true is ignore_infinite_values
+  tbb::task_arena arena(1);
+  arena.execute(
+    [&]{
+      st.initialize_filtration(true);  // true is ignore_infinite_values
+    }
+  );
   constexpr int coeff_field_characteristic = 11;
   constexpr typename interface_std_like::Filtration_value min_persistence = 0;
 

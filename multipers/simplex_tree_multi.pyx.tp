@@ -141,7 +141,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
     @property
     def is_kcritical(self)->bool:
       return {{IS_KCRITICAL}}
-    # The real cython constructor
+    @staticmethod
+    def _isinstance(other)->bool:
+        return isinstance(other, {{PY_CLASS_NAME}})
     def __cinit__(self, other = None, int num_parameters=-1, 
                   default_values=np.asarray([{{D["PY_CLASS_NAME"]}}.T_minus_inf()]), # I'm not sure why `[]` does not work. Cython bug ? 
                   bool safe_conversion=False,

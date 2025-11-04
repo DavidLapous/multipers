@@ -33,7 +33,7 @@ from multipers.filtration_conversions cimport *
 from multipers.point_measure import sparsify, rank_decomposition_by_rectangles
 from multipers.grids import compute_grid, sanitize_grid, evaluate_in_grid, _push_pts_to_lines, _inf_value
 from multipers.array_api import api_from_tensor, api_from_tensors
-
+import multipers.simplex_tree_multi as _st_
 import numpy as np
 cimport cython
 from libcpp.string cimport string
@@ -831,7 +831,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         # f_short = st_name[17:]
         {{for ST in simplex_trees}}
         cdef {{ST["ST_INTERFACE"]}}* st_ptr_{{ST["PyFil"]}} = <{{ST["ST_INTERFACE"]}}*>(ptr)
-        if self.ftype == "{{ST['PyFil']}}":
+        if _st_.{{ST["PY_CLASS_NAME"]}}._isinstance(st):
             self.truc = build_slicer_from_simplex_tree_{{D['C_TEMPLATE_TYPE']}}_{{ST["PyFil"]}}(dereference(st_ptr_{{ST["PyFil"]}}))
             self.minpres_degree = -1
             return self
