@@ -158,7 +158,7 @@ extensions = [
         ],
         language="c++",
         extra_compile_args=[
-            "-O3",  # -Ofast disables infinity values for filtration values
+            "/O2" if platform.system() == "Windows" else "-O3",  # -Ofast disables infinity values for filtration values
             "-fassociative-math",
             "-funsafe-math-optimizations",
             "-DGUDHI_USE_TBB",
