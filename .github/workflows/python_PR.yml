@@ -76,7 +76,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
+        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build llvm-openmp -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler cxx-compiler  -c conda-forge 
@@ -151,7 +151,7 @@ jobs:
     - name: tests
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp -c conda-forge
         micromamba activate test
         pip install dist/*.whl
 
