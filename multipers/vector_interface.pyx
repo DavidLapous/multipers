@@ -3,7 +3,6 @@ from multipers.vector_interface cimport *
 import numpy as np
 import multipers as mp
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False) 
 cdef vector[pair[double, double]] array_view_to_vect_pair(double[:, :] arr_view) noexcept nogil:
@@ -59,6 +58,6 @@ def aida(s, bool sort=True, bool verbose=False):
         out.append(_Slicer(
             [[]]*len(FG) + B,
             [degree]*len(FG) + [degree+1]*len(FR),
-            np.concatenate([FG,FR], dtype=np.float64)
+            np.asarray(FG) if len(FR) == 0 else np.concatenate([FG,FR], dtype=np.float64)
         ))
     return out
