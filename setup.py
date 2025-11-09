@@ -135,9 +135,9 @@ cpp_dirs = [
     np.get_include(),
     PYTHON_ENV_PATH / "include",  # Unix
     PYTHON_ENV_PATH / "Library"/"include",  # Windows
-    "../AIDA/src",
-    "../AIDA/include",
-    "../AIDA/Persistence-Algebra/include",
+    "AIDA/src",
+    "AIDA/include",
+    "AIDA/Persistence-Algebra/include",
 ]
 cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
@@ -152,8 +152,8 @@ library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dir
 ## AIDA stuff
 
 AIDA_PATHS = [
-    Path("../AIDA/src"),
-    Path("../AIDA/include"), # In case there are C++ files in include
+    Path("AIDA/src"),
+    Path("AIDA/include"), # In case there are C++ files in include
 ]
 
 # Recursively collect all .cpp files from the AIDA directories
