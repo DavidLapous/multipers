@@ -83,6 +83,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
     cdef cppclass Module[T=*]:
         ctypedef vector[vector[T]] image_type
         Module()  except + nogil
+        Module(const vector[intptr_t]&)
         void resize(unsigned int, int)  nogil
         Summand[T]& at(unsigned int)  nogil
         vector[Summand[T]].iterator begin()
@@ -119,8 +120,10 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[T] get_interleavings(Box[T]) nogil
         vector[int] get_degree_splits() nogil
         void compute_distances_to(T*,vector[vector[T]],bool, int) nogil
-        
+        void add_modules_from_ptr(const vector[intptr_t]& modules)
+        Module[T] permute_summands(const vector[int]&)
 
+    Module[T] direct_sum[T](const Module[T]&, const Module[T]&) noexcept nogil
 
 
 

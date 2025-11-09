@@ -147,16 +147,29 @@ cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]&
 
 {{for f in Filtrations}}
 
-{{if f["multicritical"]}}
+{{if f["multicritical"] or f["container"] == "Degree_rips_bifiltration"}}
 cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
   cdef Py_ssize_t k = dereference(x).num_generators()
+
+  {{if f["container"] == "Degree_rips_bifiltration"}}
+
+  cdef int num_parameters = 2
+  cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,1)))
+  return np.concatenate([np.asarray(data_view, dtype={{f["py_value_type"]}})[:,None], np.arange(k, dtype={{f["py_value_type"]}})[:,None]], axis=1)
+
+  {{else}}
+
   cdef Py_ssize_t p = dereference(x).num_parameters()
   if dereference(x).is_finite():
     duplicate = 0
   else:
     duplicate = p
   return [_ff21cview2_{{f['short_value_type']}}(&(dereference(x)(i,0)), p, duplicate, copy=copy) for i in range(k)]
+
+  {{endif}}
+
 {{else}}
+# Assumes it's contiguous
 cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
   if not dereference(x).is_finite():
@@ -164,7 +177,6 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
   cdef {{f['c_value_type']}}[:] x_view = <{{f['c_value_type']}}[:num_parameters]>(&(dereference(x)(0,0)))
   return np.array(x_view) if copy else np.asarray(x_view)
 {{endif}}
-
 
 cdef inline  vect_{{f['python']}}_2_python(vector[{{f['python']}}]& x, bool copy = False):
   cdef Py_ssize_t num_stuff = x.size()
@@ -205,8 +217,5 @@ cdef inline vector[{{f['python']}}] python_2_vect_{{f['python']}}({{f["c_value_t
           f[j] = filtrations[i,j]
         out.emplace_back(f)
     return out
-
-
-
 
 {{endfor}}

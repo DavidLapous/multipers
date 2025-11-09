@@ -127,14 +127,14 @@ struct MultiDiagram {  // for python interface
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        if (pt.get_birth().num_generators() > 0 && pt.get_death().num_generators() > 0 && !pt.get_birth().is_plus_inf() &&
-            !pt.get_death().is_minus_inf()){
-          const auto& b = pt.get_birth();
-          const auto& d = pt.get_death();
+        if (pt.get_birth().num_generators() > 0 && pt.get_death().num_generators() > 0 &&
+            !pt.get_birth().is_plus_inf() && !pt.get_death().is_minus_inf()) {
+          const auto &b = pt.get_birth();
+          const auto &d = pt.get_death();
           assert(b.num_parameters() == d.num_parameters());
           python_fil first(b.num_parameters());
           python_fil second(b.num_parameters());
-          for (unsigned int i = 0; i < b.num_parameters(); ++i){
+          for (unsigned int i = 0; i < b.num_parameters(); ++i) {
             first[i] = b(0, i);
             second[i] = d(0, i);
           }
@@ -152,10 +152,10 @@ struct MultiDiagram {  // for python interface
     out.reserve(multiDiagram.size());
     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
       if (dimension == -1 || pt.get_dimension() == dimension) {
-        const auto& b = pt.get_birth();
-        const auto& d = pt.get_death();
+        const auto &b = pt.get_birth();
+        const auto &d = pt.get_death();
         assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
-        out.emplace_back(std::initializer_list<double>{b(0,0), d(0,0), b(0,1), d(0,1)});
+        out.emplace_back(std::initializer_list<double>{b(0, 0), d(0, 0), b(0, 1), d(0, 1)});
       }
     }
     out.shrink_to_fit();
@@ -215,8 +215,8 @@ struct MultiDiagrams {
           a = -inf;
           b = -inf;
         } else {
-          a = pt.get_birth()(0,0);
-          b = pt.get_birth()(0,1);
+          a = pt.get_birth()(0, 0);
+          b = pt.get_birth()(0, 1);
         }
         if (pt.get_death().is_plus_inf()) {
           c = inf;
@@ -226,8 +226,8 @@ struct MultiDiagrams {
           c = 0;
           d = 0;
         } else {
-          c = pt.get_death()(0,0);
-          d = pt.get_death()(0,1);
+          c = pt.get_death()(0, 0);
+          d = pt.get_death()(0, 1);
         }
         /* out[i].push_back({pt.get_birth()[0], pt.get_death()[0],
          * pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)}); */
@@ -251,10 +251,10 @@ struct MultiDiagrams {
         const auto &birth = bar.get_birth();
         const auto &death = bar.get_death();
         if ((dimension == -1 || bar.get_dimension() == dimension) && birth.is_finite() && death.is_finite() &&
-            (death(0,0) > birth(0,0) + min_persistence)) {
+            (death(0, 0) > birth(0, 0) + min_persistence)) {
           // Checking is_finite ensures that filtration is not inf or -inf or nan.
-          bars.push_back(std::pair<double, double>(birth(0,0), death(0,0)));
-          bars.push_back(std::pair<double, double>(birth(0,1), death(0,1)));
+          bars.push_back(std::pair<double, double>(birth(0, 0), death(0, 0)));
+          bars.push_back(std::pair<double, double>(birth(0, 1), death(0, 1)));
           summand_idx.push_back(count);
         }
         count++;
@@ -285,12 +285,12 @@ struct MultiDiagrams {
     for (unsigned int i = 0; i < nlines; i++) {
       for (unsigned int j = 0; j < nsummands; j++) {
         const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
-        const auto& b = pt.get_birth();
-        const auto& d = pt.get_death();
+        const auto &b = pt.get_birth();
+        const auto &d = pt.get_death();
         assert(b.num_parameters() == d.num_parameters());
         python_fil first(b.num_parameters());
         python_fil second(b.num_parameters());
-        for (unsigned int i = 0; i < b.num_parameters(); ++i){
+        for (unsigned int i = 0; i < b.num_parameters(); ++i) {
           first[i] = b(0, i);
           second[i] = d(0, i);
         }
@@ -402,6 +402,8 @@ void inline threshold_down(point_type &point,
   }
   for (unsigned int i = 0; i < point.size(); i++) point[i] += threshold;
 }
+
+
 
 }  // namespace Gudhi::multiparameter::mma
 

@@ -37,8 +37,7 @@ namespace multi_persistence {
  * @tparam T Type of the coordinates of the Box.
  */
 template <typename T>
-class Box
-{
+class Box {
  public:
   using Point_t = Point<T>; /**< Type of a point in \f$\mathbb R^n\f$. */
 
@@ -54,11 +53,11 @@ class Box
    * @param lowerCorner First corner of the box. Has to be smaller than `upperCorner`.
    * @param upperCorner Second corner of the box. Has to be greater than `lowerCorner`.
    */
-  Box(const Point_t &lowerCorner, const Point_t &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner)
-  {
+  Box(const Point_t &lowerCorner, const Point_t &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {
     GUDHI_CHECK(lowerCorner.size() == upperCorner.size(),
                 std::invalid_argument("The two corners of the box don't have the same dimension."));
-    // GUDHI_CHECK(lowerCorner <= upperCorner, std::invalid_argument("The first corner is not smaller than the second."));
+    // GUDHI_CHECK(lowerCorner <= upperCorner, std::invalid_argument("The first corner is not smaller than the
+    // second."));
   }
 
   /**
@@ -108,8 +107,7 @@ class Box
    *
    * Throws if both corners don't have the same dimension.
    */
-  [[nodiscard]] bool is_trivial() const
-  {
+  [[nodiscard]] bool is_trivial() const {
     if (lowerCorner_.size() == 0 || upperCorner_.size() == 0) return true;
     if (lowerCorner_.size() != upperCorner_.size())
       throw std::logic_error("Upper and lower corner do not have the same dimension");
@@ -135,8 +133,7 @@ class Box
   /**
    * @brief Returns true if and only if the given point is inside the box.
    */
-  bool contains(const Point_t &point) const
-  {
+  bool contains(const Point_t &point) const {
     GUDHI_CHECK(point.size() == lowerCorner_.size(),
                 std::invalid_argument("Point should not have a different dimension than the box."));
 
@@ -162,8 +159,7 @@ class Box
    *
    * @param delta Inflation coefficient.
    */
-  void inflate(T delta)
-  {
+  void inflate(T delta) {
     lowerCorner_ -= delta;
     upperCorner_ += delta;
   }
@@ -171,8 +167,7 @@ class Box
   /**
    * @brief Equality operator. Two boxes are equal if and only if both defining corners are equal.
    */
-  friend bool operator==(const Box &a, const Box &b)
-  {
+  friend bool operator==(const Box &a, const Box &b) {
     return a.upperCorner_ == b.upperCorner_ && a.lowerCorner_ == b.lowerCorner_;
   }
 
@@ -184,8 +179,7 @@ class Box
   /**
    * @brief Outstream operator.
    */
-  friend std::ostream &operator<<(std::ostream &os, const Box &box)
-  {
+  friend std::ostream &operator<<(std::ostream &os, const Box &box) {
     os << "Box -- Bottom corner : ";
     os << box.get_lower_corner();
     os << ", Top corner : ";
@@ -193,11 +187,25 @@ class Box
     return os;
   }
 
+  template <typename U>
+  friend Box<U> smallest_enclosing_box(const Box<U> &a, const Box<U> &b);
+
  private:
   Point_t lowerCorner_; /**< Lowest of defining corners. */
   Point_t upperCorner_; /**< Greatest of defining corners. */
 };
 
+template <typename T>
+Box<T> smallest_enclosing_box(const Box<T> &a, const Box<T> &b) {
+  Box<T> box;
+  auto &lower = box.get_lower_corner();
+  auto &upper = box.get_upper_corner();
+  for (unsigned int i = 0; i < a.dimension(); ++i) {
+    lower[i] = std::min(a.get_lower_corner()[i], b.get_lower_corner()[i]);
+    upper[i] = std::max(a.get_upper_corner()[i], b.get_upper_corner()[i]);
+  }
+  return box;
+}
 }  // namespace multi_persistence
 }  // namespace Gudhi
 

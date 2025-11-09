@@ -201,12 +201,25 @@ cdef class PyModule_{{SHORT}}:
             for summand in c_other:
                 self.cmod.add_summand(summand, dim)
         return self
+    def _add_mmas(self, mmas):
+        for mma in mmas:
+            self.merge(mma)
+        return self
+
+    def permute_summands(self, permutation):
+        cdef int[:] c_perm = np.asarray(permutation, dtype=np.int32) 
+        other = PyModule_{{SHORT}}()
+        other.cmod = self.cmod.permute_summands(permutation)
+        return other
 
     def _set_from_ptr(self, intptr_t module_ptr):
         r"""
         Copy module from a memory pointer. Unsafe.
         """
         self.cmod = move(dereference(<Module[{{CTYPE}}]*>(module_ptr)))
+    def _get_ptr(self):
+        cdef intptr_t ptr = <intptr_t>(&self.cmod)
+        return ptr
     def set_box(self, box):
         assert len(box) == 2, "Box format is [low, hight]"
         pybox = PyBox_{{SHORT}}(box[0], box[1])
@@ -220,8 +233,8 @@ cdef class PyModule_{{SHORT}}:
         """
         pmodule = PyModule_{{SHORT}}()
         cdef Box[{{CTYPE}}] c_box = self.cmod.get_box()
-        pmodule.cmod.set_box(c_box) 
         with nogil:
+            pmodule.cmod.set_box(c_box) 
             for summand in self.cmod:
                 if summand.get_dimension() == degree:
                     pmodule.cmod.add_summand(summand)
@@ -339,7 +352,9 @@ cdef class PyModule_{{SHORT}}:
         """
         if len(self) ==0:
             return np.empty((self.num_parameters,0))
-        values = tuple(tuple(stuff) if len(stuff:=get_summand_filtration_values_{{SHORT}}(summand)) == self.num_parameters else list(stuff) + [[]]*(self.num_parameters - len(stuff)) for summand in self.cmod)
+        values = tuple(
+                tuple(stuff) 
+                if len(stuff:=get_summand_filtration_values_{{SHORT}}(summand)) == self.num_parameters else list(stuff) + [[]]*(self.num_parameters - len(stuff)) for summand in self.cmod)
         try:
           values = tuple(np.concatenate([
             f[parameter]
@@ -401,7 +416,8 @@ cdef class PyModule_{{SHORT}}:
                 self.plot(dims[dim_idx],box=box, separated = separated, **kwargs)
             return
         corners = self.cmod.get_corners_of_dimension(degree)
-        plot2d_PyModule(corners, box=box, dimension=degree, **kwargs)
+        interleavings = self.get_module_of_degree(degree).get_interleavings()
+        plot2d_PyModule(corners, box=box, dimension=degree, interleavings = interleavings, **kwargs)
         return
     def degree_splits(self):
         return np.asarray(self.cmod.get_degree_splits(), dtype=np.int64)

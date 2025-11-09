@@ -281,6 +281,9 @@ def plot2d_PyModule(
     xlabel=None,
     ylabel=None,
     cmap=None,
+    outline_width=.1,
+    outline_threshold=np.inf,
+    interleavings=None,
 ):
     import matplotlib
 
@@ -309,7 +312,7 @@ def plot2d_PyModule(
         ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
     n_summands = len(corners)
     for i in range(n_summands):
-        trivial_summand = True
+        summand_interleaving = 0 if interleavings is None else interleavings[i]
         list_of_rect = []
         for birth in corners[i][0]:
             if len(birth) == 1:
@@ -320,8 +323,8 @@ def plot2d_PyModule(
                     death = np.asarray([death[0]] * 2)
                 death = np.asarray(death).clip(max=box[1])
                 if death[1] > birth[1] and death[0] > birth[0]:
-                    if trivial_summand and _d_inf(birth, death) > min_persistence:
-                        trivial_summand = False
+                    if interleavings is None:
+                        summand_interleaving = max(_d_inf(birth, death),summand_interleaving)
                     if shapely:
                         list_of_rect.append(
                             _rectangle_box(
@@ -332,7 +335,8 @@ def plot2d_PyModule(
                             _rectangle(birth, death, cmap(
                                 i / n_summands), alpha)
                         )
-        if not (trivial_summand):
+        if summand_interleaving > min_persistence:
+            outline_summand = "black" if (summand_interleaving > outline_threshold) else None
             if separated:
                 fig, ax = plt.subplots()
                 ax.set(xlim=[box[0][0], box[1][0]],
@@ -342,12 +346,12 @@ def plot2d_PyModule(
                 if type(summand_shape) is _Polygon:
                     xs, ys = summand_shape.exterior.xy
                     ax.fill(xs, ys, alpha=alpha, fc=cmap(
-                        i / n_summands), ec="None")
+                        i / n_summands), ec=outline_summand, lw=outline_width, ls="-")
                 else:
                     for polygon in summand_shape.geoms:
                         xs, ys = polygon.exterior.xy
                         ax.fill(xs, ys, alpha=alpha, fc=cmap(
-                            i / n_summands), ec="None")
+                            i / n_summands), ec=outline_summand, lw=outline_width, ls="-")
             else:
                 for rectangle in list_of_rect:
                     ax.add_patch(rectangle)
