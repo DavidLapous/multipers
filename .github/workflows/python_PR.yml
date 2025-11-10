@@ -84,6 +84,7 @@ jobs:
         micromamba install c-compiler cxx-compiler  -c conda-forge 
 
     - name: tree
+      shell: bash -el {0}
       run: |
         micromamba activate build
         tree
