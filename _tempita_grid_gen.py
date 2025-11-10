@@ -183,6 +183,7 @@ Filtrations = [
         "python": get_python_filtration_type(F, T, K),
         "c": get_cfiltration_type(F, T, K),
         "c_value_type": T[0],
+        "py_value_type": T[1],
         "short_value_type": T[2],
         "container": F,
         "multicritical": K,
