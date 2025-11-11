@@ -154,6 +154,7 @@ library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dir
 AIDA_PATHS = [
     Path("AIDA/src"),
     Path("AIDA/include"), # In case there are C++ files in include
+    Path("AIDA/Persistence-Algebra/include"),
 ]
 
 # Recursively collect all .cpp files from the AIDA directories

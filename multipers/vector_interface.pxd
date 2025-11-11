@@ -1,6 +1,6 @@
 
 from libcpp.utility cimport pair
-from libc.stdint cimport uint16_t
+from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t, int64_t
 from libcpp.vector cimport vector
 from libcpp cimport bool, float
 
