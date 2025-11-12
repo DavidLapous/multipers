@@ -14,7 +14,8 @@ def test_indecomposable():
     F = [[0,1],[1,0],[2,2]]
 
     # an indecomposable
-    s = mp.Slicer(return_type_only=True)(B,D,F).minpres(7)
+    s = mp.Slicer(return_type_only=True)(B,D,F)
+    s.minpres_degree=7
     s = s.to_colexical()
     s2 = aida(s)
     assert len(s2) == 1
