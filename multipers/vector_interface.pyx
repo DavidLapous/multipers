@@ -19,10 +19,10 @@ def _aida(col_degrees, row_degrees, matrix):
   truc.config.show_info = True
   truc.config.sort_output = True
   truc.config.sort = True
-  cdef vector[multipers_interface_output] stuff2 = truc.multipers_interface(stuff)
+  cdef multipers_interface_output stuff2 = truc.multipers_interface(stuff)
   out = []
-  for i in range(stuff2.size()):
-    out.append((stuff2[i].col_degrees, stuff2[i].row_degrees, stuff2[i].matrix))
+  for i in range(stuff2.summands.size()):
+    out.append((stuff2.summands[i].col_degrees, stuff2.summands[i].row_degrees, stuff2.summands[i].matrix))
   return out
 
 def aida(s, bool sort=True, bool verbose=False, bool progress = False):
@@ -44,7 +44,7 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
 
     cdef AIDA_functor truc 
     cdef multipers_interface_input stuff 
-    cdef vector[multipers_interface_output] stuff2
+    cdef multipers_interface_output stuff2
     with nogil:
         truc.config.show_info = verbose
         truc.config.sort_output = False
@@ -54,17 +54,17 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
         stuff2 = truc.multipers_interface(stuff)
     out = []
     _Slicer = mp.Slicer(return_type_only=True, dtype=np.float64)
-    out = [_Slicer() for _ in range(stuff2.size())]
+    out = [_Slicer() for _ in range(stuff2.summands.size())]
     dim_container_ = s.get_dimensions().copy()
     cdef int32_t[:] dim_container = np.asarray(dim_container_, dtype=np.int32)
     cdef list boundary_container
     cdef vector[pair[double,double]] FR
     cdef vector[pair[double,double]] FG
     cdef vector[vector[int]] B
-    for i in range(stuff2.size()):
-        FR = stuff2[i].col_degrees
-        FG = stuff2[i].row_degrees
-        B = stuff2[i].matrix
+    for i in range(stuff2.summands.size()):
+        FR = stuff2.summands[i].col_degrees
+        FG = stuff2.summands[i].row_degrees
+        B = stuff2.summands[i].matrix
 
         for j in range(FG.size()):
             dim_container[j] = degree

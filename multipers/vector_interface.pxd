@@ -22,12 +22,6 @@ cdef extern from "config.hpp":
 
 
 cdef extern from "aida_interface.hpp":
-  cdef cppclass multipers_interface_output "aida::multipers_interface_output<int>":
-    multipers_interface_output(const vector[pair[double,double]]&, const vector[pair[double,double]]&, const vector[vector[int]]&) except + nogil
-    multipers_interface_output() except + nogil
-    vector[pair[double,double]] col_degrees
-    vector[pair[double,double]] row_degrees
-    vector[vector[int]] matrix
 
   cdef cppclass multipers_interface_input "aida::multipers_interface_input<int>":
     multipers_interface_input(const vector[pair[double,double]]&, const vector[pair[double,double]]&, const vector[vector[int]]&) except + nogil
@@ -36,9 +30,16 @@ cdef extern from "aida_interface.hpp":
     vector[pair[double,double]] row_degrees
     vector[vector[int]] matrix
 
+  cdef cppclass multipers_interface_output "aida::multipers_interface_output<int>":
+    multipers_interface_output() except + nogil
+    vector[multipers_interface_input] summands
+    # vector[pair[double,double]] col_degrees
+    # vector[pair[double,double]] row_degrees
+    # vector[vector[int]] matrix
+
   cdef cppclass AIDA_functor "aida::AIDA_functor":
     AIDA_functor() except + nogil
-    vector[multipers_interface_output] multipers_interface(multipers_interface_input&) except + nogil
+    multipers_interface_output multipers_interface(multipers_interface_input&) except + nogil
     aida_config config
 
 
