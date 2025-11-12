@@ -75,7 +75,7 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba create -n build python=${{matrix.python-version}} pip wheel tree -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
         micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
@@ -84,9 +84,11 @@ jobs:
         micromamba install c-compiler cxx-compiler  -c conda-forge 
 
     - name: tree
+      if: ${{ matrix.os != 'windows-latest' }}
       shell: bash -el {0}
       run: |
         micromamba activate build
+        micrommaba install tree -c conda-forge
         tree
     - name: (windows) add dlls
       if: ${{ matrix.os == 'windows-latest' }}
