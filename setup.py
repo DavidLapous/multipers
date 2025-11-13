@@ -137,7 +137,7 @@ cpp_dirs = [
     PYTHON_ENV_PATH / "Library"/"include",  # Windows
     "AIDA/src",
     "AIDA/include",
-    "AIDA/Persistence-Algebra/include",
+    "Persistence-Algebra/include",
 ]
 cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
@@ -154,7 +154,6 @@ library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dir
 AIDA_PATHS = [
     Path("AIDA/src"),
     Path("AIDA/include"), # In case there are C++ files in include
-    Path("AIDA/Persistence-Algebra/include"),
 ]
 
 # Recursively collect all .cpp files from the AIDA directories
@@ -204,7 +203,7 @@ extensions = [
         extra_link_args=[],
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb"],
+        libraries=["tbb", "boost_system", "boost_timer"],
         library_dirs=library_dirs,
     )
     for module in cython_modules
