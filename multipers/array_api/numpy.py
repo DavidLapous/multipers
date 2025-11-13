@@ -31,9 +31,11 @@ cos = _np.cos
 def relu(x):
     return _np.where(x >= 0, x, 0)
 
+
 def split_with_sizes(arr, sizes):
     indices = _np.cumsum(sizes)[:-1]
     return _np.split(arr, indices)
+
 
 # Test keops
 _is_keops_available = None

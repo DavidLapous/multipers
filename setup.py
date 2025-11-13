@@ -19,6 +19,7 @@ Options.fast_fail = True
 
 os.makedirs("build/tmp", exist_ok=True)
 
+
 def was_modified(file):
     tail = os.path.basename(file)
     new_file = "build/tmp/" + tail
@@ -37,8 +38,6 @@ def was_modified(file):
 full_build = False
 if was_modified("_tempita_grid_gen.py"):
     full_build = True
-
-
 
 
 # credit to sklearn with just a few modifications:
@@ -134,7 +133,7 @@ cpp_dirs = [
     # "multipers/tensor",
     np.get_include(),
     PYTHON_ENV_PATH / "include",  # Unix
-    PYTHON_ENV_PATH / "Library"/"include",  # Windows
+    PYTHON_ENV_PATH / "Library" / "include",  # Windows
     "AIDA/src",
     "AIDA/include",
     "Persistence-Algebra/include",
@@ -153,14 +152,14 @@ library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dir
 
 AIDA_PATHS = [
     Path("AIDA/src"),
-    Path("AIDA/include"), # In case there are C++ files in include
+    Path("AIDA/include"),
 ]
 
 # Recursively collect all .cpp files from the AIDA directories
 AIDA_CPP_SOURCES = []
 for p in AIDA_PATHS:
     # Use Path.rglob('*.cpp') to recursively find all .cpp files
-    AIDA_CPP_SOURCES.extend([str(file) for file in p.rglob('*.cpp')])
+    AIDA_CPP_SOURCES.extend([str(file) for file in p.rglob("*.cpp")])
 
 print("AIDA files:")
 print(AIDA_CPP_SOURCES)
@@ -171,17 +170,23 @@ print(cpp_dirs)
 print("Library dirs:")
 print(library_dirs)
 
+
+def cpp_lib_deps(module):
+    if module == "vector_interface":
+        return ["boost_system", "boost_timer"]
+    else:
+        return ["tbb"]
+
+
 extensions = [
     Extension(
         f"multipers.{module}",
-        sources=([
-            f"multipers/{module}.pyx",
-        ]
-        + (
-            AIDA_CPP_SOURCES
-            if module == "vector_interface"
-            else []
-        )),
+        sources=(
+            [
+                f"multipers/{module}.pyx",
+            ]
+            + (AIDA_CPP_SOURCES if module == "vector_interface" else [])
+        ),
         language="c++",
         extra_compile_args=[
             "-O3"
@@ -203,7 +208,7 @@ extensions = [
         extra_link_args=[],
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb", "boost_system", "boost_timer"],
+        libraries=cpp_lib_deps(module),
         library_dirs=library_dirs,
     )
     for module in cython_modules
@@ -218,4 +223,3 @@ if __name__ == "__main__":
             **cythonize_flags,
         ),
     )
-

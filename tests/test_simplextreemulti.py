@@ -9,6 +9,7 @@ import multipers as mp
 from multipers.tests import assert_st_simplices, random_st
 from multipers.simplex_tree_multi import available_dtype
 
+
 def test_1():
     st = mp.SimplexTreeMulti(num_parameters=2)
     st.insert([0], [0, 1])
@@ -177,9 +178,9 @@ def test_serialize():
     assert not stm == stm2
     st1 = stm.project_on_line(parameter=0)
     stm = mp.SimplexTreeMulti(st1, num_parameters=3)
-    assert st1 == stm.project_on_line(
-        parameter=0
-    ), "Gudhi<->Multipers conversion failed"
+    assert st1 == stm.project_on_line(parameter=0), (
+        "Gudhi<->Multipers conversion failed"
+    )
 
 
 @pytest.mark.skipif(
@@ -187,7 +188,6 @@ def test_serialize():
     reason="kcritical simplextree not compiled, skipping this test",
 )
 def test_kcritical_batch_insert():
-
     st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
 
     vertices = [[0, 1]]
