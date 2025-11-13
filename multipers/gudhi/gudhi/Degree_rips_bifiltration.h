@@ -199,15 +199,17 @@ class Degree_rips_bifiltration
     }
   }
 
+  // cannot use = default as it triggers "dummy_g_ may be used uninitialized" compiler warning for nothing
   /**
    * @brief Copy constructor.
    */
-  Degree_rips_bifiltration(const Degree_rips_bifiltration &other) = default;
+  Degree_rips_bifiltration(const Degree_rips_bifiltration &other) : generators_(other.generators_) {}
 
+  // cannot use = default as it triggers "dummy_g_ may be used uninitialized" compiler warning for nothing
   /**
    * @brief Move constructor.
    */
-  Degree_rips_bifiltration(Degree_rips_bifiltration &&other) noexcept = default;
+  Degree_rips_bifiltration(Degree_rips_bifiltration &&other) noexcept : generators_(std::move(other.generators_)) {}
 
   /**
    * @brief Copy constructor.
@@ -225,15 +227,23 @@ class Degree_rips_bifiltration
 
   ~Degree_rips_bifiltration() = default;
 
+  // cannot use = default as it triggers "dummy_g_ may be used uninitialized" compiler warning for nothing
   /**
    * @brief Assign operator.
    */
-  Degree_rips_bifiltration &operator=(const Degree_rips_bifiltration &other) = default;
+  Degree_rips_bifiltration &operator=(const Degree_rips_bifiltration &other) {
+    generators_ = other.generators_;
+    return *this;
+  }
 
+  // cannot use = default as it triggers "dummy_g_ may be used uninitialized" compiler warning for nothing
   /**
    * @brief Move assign operator.
    */
-  Degree_rips_bifiltration &operator=(Degree_rips_bifiltration &&other) noexcept = default;
+  Degree_rips_bifiltration &operator=(Degree_rips_bifiltration &&other) noexcept {
+    generators_ = std::move(other.generators_);
+    return *this;
+  }
 
   /**
    * @brief Assign operator.
@@ -1447,7 +1457,7 @@ class Degree_rips_bifiltration
    * @return false Otherwise.
    */
   template <class Iterator>
-  bool add_generator(Iterator genStart, Iterator genEnd)
+  bool add_generator(Iterator genStart, [[maybe_unused]] Iterator genEnd)
   {
     GUDHI_CHECK(std::distance(genStart, genEnd) == 2,
                 std::invalid_argument("Wrong range size. Should correspond to the number of parameters."));
