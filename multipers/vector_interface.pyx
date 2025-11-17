@@ -27,7 +27,7 @@ def _aida(col_degrees, row_degrees, matrix):
 
 def aida(s, bool sort=True, bool verbose=False, bool progress = False):
     if s.num_parameters != 2 or not s.is_minpres:
-        raise ValueError("AIDA is only compatible with 2-parameter minimal presentations.")
+        raise ValueError(f"AIDA is only compatible with 2-parameter minimal presentations. Got {s.num_parameters=} and {s.is_minpres=}.")
     cdef bool is_squeezed = s.is_squeezed
 
     cdef int degree = s.minpres_degree 

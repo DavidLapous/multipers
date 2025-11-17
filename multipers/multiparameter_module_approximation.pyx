@@ -185,10 +185,7 @@ def module_approximation(
     if box is None:
         if verbose:
             print("No box given. Using filtration bounds to infer it.")
-        if is_simplextree_multi(input):
-            box = input.filtration_bounds()
-        else:
-            box = input.filtration_bounds()
+        box = input.filtration_bounds()
         if verbose:
             print(f"Using {box=}.",flush=True)
     box = np.asarray(box)
