@@ -29,6 +29,7 @@ cos = _t.cos
 
 _is_keops_available = None
 
+
 def split_with_sizes(arr, sizes):
     return arr.split_with_sizes(sizes)
 

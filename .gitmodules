@@ -2,3 +2,7 @@
 	path = AIDA
 	url = https://github.com/JanJend/AIDA
 	branch = hn_computation
+[submodule "Persistence-Algebra"]
+	path = Persistence-Algebra
+	url = https://github.com/JanJend/Persistence-Algebra
+	branch = aida-changes
