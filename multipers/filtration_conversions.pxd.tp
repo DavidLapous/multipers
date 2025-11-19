@@ -154,7 +154,7 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
   {{if f["container"] == "Degree_rips_bifiltration"}}
 
   cdef int num_parameters = 2
-  cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,1)))
+  cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,0)))
   return np.concatenate([np.asarray(data_view, dtype={{f["py_value_type"]}})[:,None], np.arange(k, dtype={{f["py_value_type"]}})[:,None]], axis=1)
 
   {{else}}

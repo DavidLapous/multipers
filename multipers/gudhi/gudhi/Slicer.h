@@ -235,7 +235,7 @@ class Slicer
   std::pair<Filtration_value, Filtration_value> get_bounding_box() const
   {
     Filtration_value a = Filtration_value::inf(get_number_of_parameters());
-    Filtration_value b = -a;
+    Filtration_value b = Filtration_value::minus_inf(get_number_of_parameters());
     for (const Filtration_value& fil : complex_.get_filtration_values()) {
       if (fil.num_generators() > 1) {
         a.pull_to_greatest_common_lower_bound(factorize_below(fil));
