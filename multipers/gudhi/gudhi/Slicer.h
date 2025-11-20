@@ -239,7 +239,10 @@ class Slicer
     for (const Filtration_value& fil : complex_.get_filtration_values()) {
       if (fil.num_generators() > 1) {
         a.pull_to_greatest_common_lower_bound(factorize_below(fil));
-        b.push_to_least_common_upper_bound(factorize_above(fil));
+        // Because of Degree_rips_bifiltration
+        Filtration_value above = factorize_above(fil);
+        auto g = above.num_generators() - 1;
+        b.push_to_least_common_upper_bound({above(g, 0), above(g, 1)});
       } else {
         a.pull_to_greatest_common_lower_bound(fil);
         b.push_to_least_common_upper_bound(fil);

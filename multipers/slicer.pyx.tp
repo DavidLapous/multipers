@@ -524,17 +524,31 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the bounding box of the current multifiltration.
         """
         cdef pair[{{D['FILTRATION_TYPE']}}, {{D['FILTRATION_TYPE']}}] box = self.truc.get_bounding_box()
+
+        {{if "Flat" in D['FILTRATION_TYPE']}}
+
+        a = np.asarray([box.first(0,0), box.first(0,1)])
+        g = box.second.num_generators() - 1
+        b = np.asarray([box.second(g,0), box.second(g,1)])
+
+        {{else}}
+
         if box.first.is_finite():
             duplicate = 0
         else:
             duplicate = box.first.num_parameters()
         cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] a = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.first(0,0), box.first.num_parameters(), duplicate, True)
+
         if box.second.is_finite():
             duplicate = 0
         else:
             duplicate = box.second.num_parameters()
         cdef cnp.ndarray[{{D['C_VALUE_TYPE']}}, ndim=1] b = _ff21cview2_{{D['SHORT_VALUE_TYPE']}}(&box.second(0,0), box.first.num_parameters(), duplicate, True)
+        
+        {{endif}}
+
         return np.asarray([a,b])
+
     def get_filtrations_values(self)->np.ndarray:
         """
         Returns the current filtration values of the slicer.
