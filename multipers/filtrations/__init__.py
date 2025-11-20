@@ -7,6 +7,7 @@ from .filtrations import (
     RipsCodensity,
     RipsLowerstar,
 )
+
 __all__ = [
     "CoreDelaunay",
     "Cubical",

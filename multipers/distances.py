@@ -46,8 +46,8 @@ def sm2diff(sm1, sm2, threshold=None):
     x = backend_concatenate(pts1[pos_indices1], pts2[neg_indices2])
     y = backend_concatenate(pts1[neg_indices1], pts2[pos_indices2])
     if threshold is not None:
-        x[x>threshold]=threshold
-        y[y>threshold]=threshold
+        x[x > threshold] = threshold
+        y[y > threshold] = threshold
     return x, y
 
 

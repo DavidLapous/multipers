@@ -8,7 +8,7 @@ def noisy_annulus(
     r2: float = 2,
     dim: int = 2,
     center: np.ndarray | list | None = None,
-    **kwargs
+    **kwargs,
 ) -> np.ndarray:
     """Generates a noisy annulus dataset.
 
@@ -47,7 +47,7 @@ def noisy_annulus(
 
 def three_annulus(num_pts: int = 500, num_outliers: int = 500):
     q, r = divmod(num_pts, 3)
-    num_pts_1, num_pts_2, num_pts_3 =  q, q + (r > 0), q + (r > 1)
+    num_pts_1, num_pts_2, num_pts_3 = q, q + (r > 0), q + (r > 1)
     X = np.block(
         [
             [np.random.uniform(low=-2, high=2, size=(num_outliers, 2))],

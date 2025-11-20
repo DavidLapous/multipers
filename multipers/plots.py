@@ -81,8 +81,7 @@ def _plot_signed_measure_4(
     **plt_kwargs,  # ignored ftm
 ):
     # compute the maximal rectangle area
-    pts = np.clip(pts, a_min=-np.inf,
-                  a_max=np.array((*threshold, *threshold))[None, :])
+    pts = np.clip(pts, a_min=-np.inf, a_max=np.array((*threshold, *threshold))[None, :])
     alpha_rescaling = 0
     for rectangle, weight in zip(pts, weights):
         if rectangle[2] >= x_smoothing * rectangle[0]:
@@ -171,9 +170,9 @@ def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None):
             nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
         )
     for ax, signed_measure in zip(axes, signed_measures):
-        plot_signed_measure(signed_measure=signed_measure,
-                            ax=ax, threshold=threshold,
-                            alpha=alpha)
+        plot_signed_measure(
+            signed_measure=signed_measure, ax=ax, threshold=threshold, alpha=alpha
+        )
     plt.tight_layout()
 
 
@@ -189,6 +188,7 @@ def plot_surface(
     **plt_args,
 ):
     import matplotlib
+
     grid = [to_numpy(g) for g in grid]
     hf = to_numpy(hf)
     if ax is None:
@@ -206,15 +206,16 @@ def plot_surface(
             cmap = _cmap
     if discrete_surface or not contour:
         # for shading="flat"
-        grid = [np.concatenate([g, [g[-1]*1.1 - .1*g[0]]]) for g in grid]
+        grid = [np.concatenate([g, [g[-1] * 1.1 - 0.1 * g[0]]]) for g in grid]
     if discrete_surface:
         if has_negative_values:
             bounds = np.arange(-5, 6, 1, dtype=int)
         else:
             bounds = np.arange(0, 11, 1, dtype=int)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend="max")
-        im = ax.pcolormesh(grid[0], grid[1], hf.T, cmap=cmap,
-                           norm=norm, shading="flat", **plt_args)
+        im = ax.pcolormesh(
+            grid[0], grid[1], hf.T, cmap=cmap, norm=norm, shading="flat", **plt_args
+        )
         cbar = fig.colorbar(
             matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm),
             spacing="proportional",
@@ -225,19 +226,19 @@ def plot_surface(
 
     if contour:
         levels = plt_args.pop("levels", 50)
-        im = ax.contourf(grid[0], grid[1], hf.T,
-                         cmap=cmap, levels=levels, **plt_args)
+        im = ax.contourf(grid[0], grid[1], hf.T, cmap=cmap, levels=levels, **plt_args)
     else:
-        im = ax.pcolormesh(grid[0], grid[1], hf.T,
-                           cmap=cmap,  shading="flat", **plt_args)
+        im = ax.pcolormesh(
+            grid[0], grid[1], hf.T, cmap=cmap, shading="flat", **plt_args
+        )
     return im
 
 
 def plot_surfaces(HF, size=4, **plt_args):
     grid, hf = HF
-    assert (
-        hf.ndim == 3
-    ), f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
+    assert hf.ndim == 3, (
+        f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
+    )
     num_degrees = hf.shape[0]
     fig, axes = plt.subplots(
         nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
@@ -281,6 +282,9 @@ def plot2d_PyModule(
     xlabel=None,
     ylabel=None,
     cmap=None,
+    outline_width=0.1,
+    outline_threshold=np.inf,
+    interleavings=None,
 ):
     import matplotlib
 
@@ -309,7 +313,7 @@ def plot2d_PyModule(
         ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
     n_summands = len(corners)
     for i in range(n_summands):
-        trivial_summand = True
+        summand_interleaving = 0 if interleavings is None else interleavings[i]
         list_of_rect = []
         for birth in corners[i][0]:
             if len(birth) == 1:
@@ -320,34 +324,50 @@ def plot2d_PyModule(
                     death = np.asarray([death[0]] * 2)
                 death = np.asarray(death).clip(max=box[1])
                 if death[1] > birth[1] and death[0] > birth[0]:
-                    if trivial_summand and _d_inf(birth, death) > min_persistence:
-                        trivial_summand = False
+                    if interleavings is None:
+                        summand_interleaving = max(
+                            _d_inf(birth, death), summand_interleaving
+                        )
                     if shapely:
                         list_of_rect.append(
-                            _rectangle_box(
-                                birth[0], birth[1], death[0], death[1])
+                            _rectangle_box(birth[0], birth[1], death[0], death[1])
                         )
                     else:
                         list_of_rect.append(
-                            _rectangle(birth, death, cmap(
-                                i / n_summands), alpha)
+                            _rectangle(birth, death, cmap(i / n_summands), alpha)
                         )
-        if not (trivial_summand):
+        if summand_interleaving > min_persistence:
+            outline_summand = (
+                "black" if (summand_interleaving > outline_threshold) else None
+            )
             if separated:
                 fig, ax = plt.subplots()
-                ax.set(xlim=[box[0][0], box[1][0]],
-                       ylim=[box[0][1], box[1][1]])
+                ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
             if shapely:
                 summand_shape = union_all(list_of_rect)
                 if type(summand_shape) is _Polygon:
                     xs, ys = summand_shape.exterior.xy
-                    ax.fill(xs, ys, alpha=alpha, fc=cmap(
-                        i / n_summands), ec="None")
+                    ax.fill(
+                        xs,
+                        ys,
+                        alpha=alpha,
+                        fc=cmap(i / n_summands),
+                        ec=outline_summand,
+                        lw=outline_width,
+                        ls="-",
+                    )
                 else:
                     for polygon in summand_shape.geoms:
                         xs, ys = polygon.exterior.xy
-                        ax.fill(xs, ys, alpha=alpha, fc=cmap(
-                            i / n_summands), ec="None")
+                        ax.fill(
+                            xs,
+                            ys,
+                            alpha=alpha,
+                            fc=cmap(i / n_summands),
+                            ec=outline_summand,
+                            lw=outline_width,
+                            ls="-",
+                        )
             else:
                 for rectangle in list_of_rect:
                     ax.add_patch(rectangle)
@@ -411,8 +431,7 @@ def plot_simplicial_complex(
         if len(s) == 2:  # simplexe = segment
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])
-            plt.plot(xx, yy, c=color(density), alpha=1,
-                     zorder=10 * density, lw=1.5)
+            plt.plot(xx, yy, c=color(density), alpha=1, zorder=10 * density, lw=1.5)
         if len(s) == 3:  # simplexe = triangle
             xx = np.array([pts[a, 0] for a in s])
             yy = np.array([pts[a, 1] for a in s])

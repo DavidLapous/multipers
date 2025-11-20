@@ -21,9 +21,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "multiparameter_module_approximation/utilities.h"
-#include <gudhi/Simplex_tree.h>
-#include <gudhi/Simplex_tree_multi.h>
+#include "../gudhi/gudhi/Simplex_tree.h"
+#include "utilities.h"
 
 namespace Gudhi::multiparameter::mma {
 
@@ -105,7 +104,7 @@ bool inline is_strictly_smaller_simplex(const boundary_type &s1,
 
 template <typename Options>
 using scc_type =
-    std::vector<std::pair<std::vector<std::vector<typename Options::value_type>>, boundary_matrix>>;
+    std::vector<std::pair<std::vector<std::vector<typename Options::Filtration_value::value_type>>, boundary_matrix>>;
 template <typename STOptions>
 inline scc_type<STOptions> simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
   scc_type<STOptions> out(st.dimension() + 1);
@@ -126,17 +125,19 @@ inline scc_type<STOptions> simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st
     auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
     const typename STOptions::Filtration_value &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
-
-    block_filtrations.push_back(static_cast<typename STOptions::Filtration_value::Generator>(simplex_filtration));
+    block_filtrations.emplace_back(simplex_filtration.num_parameters());
+    for (unsigned int p = 0; p < simplex_filtration.num_parameters(); ++p){
+      block_filtrations.back()[p] = simplex_filtration(0, p);
+    }
   }
   return out;
 }
 template <typename Options>
 using kscc_type =
-    std::vector<std::pair<std::vector<std::vector<std::vector< typename Options::value_type >>>, boundary_matrix>>;
+    std::vector<std::pair<std::vector<std::vector<std::vector< typename Options::Filtration_value::value_type >>>, boundary_matrix>>;
 template <typename STOptions>
 inline kscc_type<STOptions> kcritical_simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
-  static_assert(STOptions::Filtration_value::is_multi_critical);
+  // static_assert(STOptions::Filtration_value::is_multi_critical);
   kscc_type<STOptions> out(st.dimension() + 1);
   if (st.num_simplices() <= 0)
     return out;
@@ -155,9 +156,14 @@ inline kscc_type<STOptions> kcritical_simplextree_to_scc(Gudhi::Simplex_tree<STO
     auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
     const typename STOptions::Filtration_value &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
-    block_filtrations.push_back(
-        std::vector<std::vector<typename STOptions::Filtration_value::value_type>>(
-            simplex_filtration.begin(), simplex_filtration.end()));
+    block_filtrations.emplace_back(
+        simplex_filtration.num_generators(),
+        std::vector<typename STOptions::Filtration_value::value_type>(simplex_filtration.num_parameters()));
+    for (unsigned int g = 0; g < simplex_filtration.num_generators(); ++g) {
+      for (unsigned int p = 0; p < simplex_filtration.num_parameters(); ++p) {
+        block_filtrations.back()[g][p] = simplex_filtration(g, p);
+      }
+    }
   }
   return out;
 }
@@ -189,9 +195,9 @@ function_simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
     const auto &simplex_filtration = st.filtration(simplex);
     block_matrix.push_back(key_boundary_container);
     std::vector<std::vector<value_type>> _filtration;
-    for (std::size_t i = 0; i < simplex_filtration.size(); i++) {
+    for (std::size_t i = 0; i < simplex_filtration.num_parameters(); i++) {
       _filtration.push_back(
-          {static_cast<value_type>(simplex_filtration[i]), static_cast<value_type>(i)});
+          {static_cast<value_type>(simplex_filtration(0,i)), static_cast<value_type>(i)});
     }
     block_filtrations.push_back(_filtration);
   }
@@ -216,10 +222,10 @@ using flattened_scc_type =
               std::vector<std::vector<unsigned int>>>;
 
 template <typename Options>
-flattened_scc_type<Options> inline simplextree_to_ordered_bf(
+flattened_scc_type<typename Options::Filtration_value> inline simplextree_to_ordered_bf(
     Gudhi::Simplex_tree<Options> &st) {
   auto scc = simplextree_to_scc<Options>(st);
-  flattened_scc_type<Options> out;
+  flattened_scc_type<typename Options::Filtration_value> out;
   auto &[filtration, boundary] = out;
   std::size_t num_simplices = 0;
   std::vector<std::size_t> cumsum_sizes = {0, 0};

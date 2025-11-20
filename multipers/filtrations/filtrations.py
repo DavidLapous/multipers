@@ -42,9 +42,9 @@ def RipsLowerstar(
      - function : ArrayLike of shape (num_data, num_parameters -1)
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    assert (
-        points is not None or distance_matrix is not None
-    ), "`points` or `distance_matrix` has to be given."
+    assert points is not None or distance_matrix is not None, (
+        "`points` or `distance_matrix` has to be given."
+    )
     if distance_matrix is None:
         api = api_from_tensor(points)
         points = api.astensor(points)
@@ -76,6 +76,7 @@ def RipsLowerstar(
         st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
     if api.has_grad(D) or api.has_grad(function):
         from multipers.grids import compute_grid
+
         filtration_values = [D.ravel(), *[f for f in function.T]]
         grid = compute_grid(filtration_values)
         st = st.grid_squeeze(grid)
@@ -95,9 +96,9 @@ def RipsCodensity(
     """
     Computes the Rips density filtration.
     """
-    assert (
-        bandwidth is None or dtm_mass is None
-    ), "Density estimation is either via kernels or dtm."
+    assert bandwidth is None or dtm_mass is None, (
+        "Density estimation is either via kernels or dtm."
+    )
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -144,9 +145,9 @@ def DelaunayLowerstar(
         warn("Cannot keep points gradient unless using `flagify=True`.")
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
-    assert (
-        function.ndim == 1
-    ), "Delaunay Lowerstar is only compatible with 1 additional parameter."
+    assert function.ndim == 1, (
+        "Delaunay Lowerstar is only compatible with 1 additional parameter."
+    )
     slicer = from_function_delaunay(
         api.asnumpy(points),
         api.asnumpy(function),
@@ -192,9 +193,9 @@ def DelaunayCodensity(
     """
     TODO
     """
-    assert (
-        bandwidth is None or dtm_mass is None
-    ), "Density estimation is either via kernels or dtm."
+    assert bandwidth is None or dtm_mass is None, (
+        "Density estimation is either via kernels or dtm."
+    )
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -283,9 +284,9 @@ def CoreDelaunay(
 
     assert len(ks) > 0, "The parameter ks must contain at least one value."
     assert np.all(ks > 0), "All values in ks must be positive."
-    assert np.all(
-        ks <= len(points)
-    ), "All values in ks must be less than or equal to the number of points in the point cloud."
+    assert np.all(ks <= len(points)), (
+        "All values in ks must be less than or equal to the number of points in the point cloud."
+    )
     assert len(points) > 0, "The point cloud must contain at least one point."
     assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
     assert beta >= 0, f"The parameter beta must be positive, got {beta}."

@@ -126,12 +126,14 @@ def signed_measure(
     if degree is not None or len(degrees) == 0:
         degrees = list(degrees) + [degree]
     if None in degrees:
-        assert (
-            len(degrees) == 1
-        ), f"Can only compute one invariant at the time. Got {degrees=}, {invariant=}."
+        assert len(degrees) == 1, (
+            f"Can only compute one invariant at the time. Got {degrees=}, {invariant=}."
+        )
         assert invariant is None or not (
             "hilbert" in invariant or "rank" in invariant
-        ), f"Hilbert and Rank cannot compute `None` degree. got {degrees=}, {invariant=}."
+        ), (
+            f"Hilbert and Rank cannot compute `None` degree. got {degrees=}, {invariant=}."
+        )
         invariant = "euler"
     if clean is None:
         clean = True if None in degrees else False
@@ -147,9 +149,9 @@ def signed_measure(
         "hook",
     ]
 
-    assert (
-        not plot or filtered_complex.num_parameters == 2
-    ), f"Can only plot 2d measures. Got {filtered_complex.num_parameters=}."
+    assert not plot or filtered_complex.num_parameters == 2, (
+        f"Can only plot 2d measures. Got {filtered_complex.num_parameters=}."
+    )
 
     if grid is None:
         if not filtered_complex.is_squeezed:
@@ -177,7 +179,7 @@ def signed_measure(
 
     if not filtered_complex.is_squeezed:
         if verbose:
-            print("Coarsening complex...", end="",flush=True)
+            print("Coarsening complex...", end="", flush=True)
             t0 = time.time()
         filtered_complex_ = filtered_complex.grid_squeeze(grid)
 
@@ -201,10 +203,9 @@ def signed_measure(
                 print(f"Done. ({time.time() - t0:.3f}s)")
 
     num_parameters = filtered_complex.num_parameters
-    assert num_parameters == len(
-        grid
-    ), f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
-
+    assert num_parameters == len(grid), (
+        f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
+    )
 
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
@@ -233,7 +234,11 @@ def signed_measure(
                     print(f"Done. ({time.time() - t0:.3f}s)")
             elif filtered_complex_.is_minpres:
                 if verbose:
-                    print("Reduced slicer. Retrieving measure from it...", end="",flush=True)
+                    print(
+                        "Reduced slicer. Retrieving measure from it...",
+                        end="",
+                        flush=True,
+                    )
                     t0 = time.time()
                 sms = [
                     _signed_measure_from_slicer(
@@ -250,7 +255,7 @@ def signed_measure(
                 len(degrees) == 1 and degrees[0] is None
             ):
                 if verbose:
-                    print("Retrieving measure from slicer...", end="",flush=True)
+                    print("Retrieving measure from slicer...", end="", flush=True)
                     t0 = time.time()
                 sms = _signed_measure_from_slicer(
                     filtered_complex_,
@@ -283,9 +288,9 @@ def signed_measure(
                 print("Computing rank invariant...", end="", flush=True)
                 t0 = time.time()
 
-            assert (
-                num_parameters == 2
-            ), "Rank invariant only implemented for 2-parameter modules."
+            assert num_parameters == 2, (
+                "Rank invariant only implemented for 2-parameter modules."
+            )
             assert not coordinate_measure, "Not implemented"
             from multipers.simplex_tree_multi import _rank_signed_measure as smri
 
@@ -347,7 +352,7 @@ def signed_measure(
 
     if clean:
         if verbose:
-            print("Cleaning measure...", end="",flush=True)
+            print("Cleaning measure...", end="", flush=True)
             t0 = time.time()
         sms = clean_sms(sms)
         if verbose:
@@ -376,7 +381,11 @@ def signed_measure(
 
     if invariant == "hook":
         if verbose:
-            print("Converting rank decomposition to hook decomposition...", end="",flush=True)
+            print(
+                "Converting rank decomposition to hook decomposition...",
+                end="",
+                flush=True,
+            )
             t0 = time.time()
         from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
 

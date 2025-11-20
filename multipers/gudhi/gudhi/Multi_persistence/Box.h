@@ -5,7 +5,8 @@
  *    Copyright (C) 2023 Inria
  *
  *    Modification(s):
- *      - 2024/08 Hannah Schreiber: doc
+ *      - 2024/08 Hannah Schreiber: documentation
+ *      - 2025/03 Hannah Schreiber: Change of point types.
  *      - YYYY/MM Author: Description of the modification
  */
 
@@ -15,15 +16,16 @@
  * @brief Contains the @ref Gudhi::multi_persistence::Box class.
  */
 
-#ifndef BOX_H_INCLUDED
-#define BOX_H_INCLUDED
+#ifndef MP_BOX_H_INCLUDED
+#define MP_BOX_H_INCLUDED
 
 #include <ostream>  //std::ostream
 
 #include <gudhi/Debug_utils.h>
-#include <gudhi/One_critical_filtration.h>
+#include <gudhi/Multi_persistence/Point.h>
+#include <gudhi/Multi_filtration/multi_filtration_utils.h>
 
-namespace Gudhi{
+namespace Gudhi {
 namespace multi_persistence {
 
 /**
@@ -32,18 +34,17 @@ namespace multi_persistence {
  *
  * @brief Simple box in \f$\mathbb R^n\f$ defined by two diametrically opposite corners.
  *
- * @tparam T Type of the coordinates of the Box. Has to follow the conditions of the template parameter of
- * @ref One_critical_filtration "".
+ * @tparam T Type of the coordinates of the Box.
  */
 template <typename T>
 class Box {
  public:
-  using Point = Gudhi::multi_filtration::One_critical_filtration<T>; /**< Type of a point in \f$\mathbb R^n\f$. */
+  using Point_t = Point<T>; /**< Type of a point in \f$\mathbb R^n\f$. */
 
   /**
    * @brief Default constructor. Constructs a trivial box with corners at minus infinity.
    */
-  Box() {}
+  Box() = default;
 
   /**
    * @brief Constructs a box from the two given corners. Assumes that \f$ lowerCorner \le @p upperCorner \f$ and
@@ -52,9 +53,11 @@ class Box {
    * @param lowerCorner First corner of the box. Has to be smaller than `upperCorner`.
    * @param upperCorner Second corner of the box. Has to be greater than `lowerCorner`.
    */
-  Box(const Point &lowerCorner, const Point &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {
-    GUDHI_CHECK(lowerCorner.size() == upperCorner.size() || !lowerCorner.is_finite() || !upperCorner.is_finite(),
-                "The two corners of the box don't have the same dimension.");
+  Box(const Point_t &lowerCorner, const Point_t &upperCorner) : lowerCorner_(lowerCorner), upperCorner_(upperCorner) {
+    GUDHI_CHECK(lowerCorner.size() == upperCorner.size(),
+                std::invalid_argument("The two corners of the box don't have the same dimension."));
+    // GUDHI_CHECK(lowerCorner <= upperCorner, std::invalid_argument("The first corner is not smaller than the
+    // second."));
   }
 
   /**
@@ -63,82 +66,93 @@ class Box {
    *
    * @param box Pair of corners defining the wished box.
    */
-  Box(const std::pair<Point, Point> &box) : Box(box.first, box.second) {}
+  Box(const std::pair<Point_t, Point_t> &box) : Box(box.first, box.second) {}
 
   /**
    * @brief Returns the lowest of both defining corners.
    */
-  const Point &get_lower_corner() const { return lowerCorner_; }
+  const Point_t &get_lower_corner() const { return lowerCorner_; }
 
   /**
    * @brief Returns the lowest of both defining corners.
    */
-  Point &get_lower_corner() { return lowerCorner_; }
+  Point_t &get_lower_corner() { return lowerCorner_; }
 
   /**
    * @brief Returns the greatest of both defining corners.
    */
-  Point &get_upper_corner() { return upperCorner_; }
+  Point_t &get_upper_corner() { return upperCorner_; }
 
   /**
    * @brief Returns the greatest of both defining corners.
    */
-  const Point &get_upper_corner() const { return upperCorner_; }
+  const Point_t &get_upper_corner() const { return upperCorner_; }
 
   /**
    * @brief Returns a pair of const references to both defining corners.
    */
-  std::pair<const Point &, const Point &> get_bounding_corners() const { return {lowerCorner_, upperCorner_}; }
+  std::pair<const Point_t &, const Point_t &> get_bounding_corners() const { return {lowerCorner_, upperCorner_}; }
 
   /**
    * @brief Returns a pair of references to both defining corners.
    */
-  std::pair<Point &, Point &> get_bounding_corners() { return {lowerCorner_, upperCorner_}; }
+  std::pair<Point_t &, Point_t &> get_bounding_corners() { return {lowerCorner_, upperCorner_}; }
 
   /**
    * @brief Returns true if and only if one of the following is true:
    * - one of the corners is empty
-   * - one of the corners has value NaN
+   * - one of the corners contains the value NaN
    * - both corners have value infinity
    * - both corners have value minus infinity
-   * - both corners are finite but don't have the same dimension.
+   *
+   * Throws if both corners don't have the same dimension.
    */
-  bool is_trivial() const {
-    return lowerCorner_.empty() || upperCorner_.empty() || lowerCorner_.is_nan() || upperCorner_.is_nan() ||
-           (lowerCorner_.is_plus_inf() && upperCorner_.is_plus_inf()) ||
-           (lowerCorner_.is_minus_inf() && upperCorner_.is_minus_inf()) ||
-           (lowerCorner_.is_finite() && upperCorner_.is_finite() &&
-            lowerCorner_.num_parameters() != upperCorner_.num_parameters());
+  [[nodiscard]] bool is_trivial() const {
+    if (lowerCorner_.size() == 0 || upperCorner_.size() == 0) return true;
+    if (lowerCorner_.size() != upperCorner_.size())
+      throw std::logic_error("Upper and lower corner do not have the same dimension");
+
+    T inf = Point_t::T_inf;
+    T m_inf = Point_t::T_m_inf;
+
+    bool lowerIsInf = true, lowerIsMinusInf = true;
+    bool upperIsInf = true, upperIsMinusInf = true;
+    for (unsigned int i = 0; i < lowerCorner_.size(); ++i) {
+      T lc = lowerCorner_[i];
+      T uc = upperCorner_[i];
+      if (Gudhi::multi_filtration::_is_nan(lc) || Gudhi::multi_filtration::_is_nan(uc)) return true;
+      if (lc != inf) lowerIsInf = false;
+      if (lc != m_inf) lowerIsMinusInf = false;
+      if (uc != inf) upperIsInf = false;
+      if (uc != m_inf) upperIsMinusInf = false;
+      if ((!lowerIsInf && !lowerIsMinusInf) || (!upperIsInf && !upperIsMinusInf)) return false;
+    }
+    return (lowerIsInf && upperIsInf) || (lowerIsMinusInf && upperIsMinusInf);
   }
 
   /**
    * @brief Returns true if and only if the given point is inside the box.
-   * If the box is not {-infinity, infinity} and the given point is finite, but has not the same dimension
-   * than the box, the point is considered outside.
    */
-  bool contains(const Point &point) const {
-    if (point.is_nan() || is_trivial()) return false;
-    if (point.is_plus_inf()) return upperCorner_.is_plus_inf();
-    if (point.is_minus_inf()) return lowerCorner_.is_minus_inf();
+  bool contains(const Point_t &point) const {
+    GUDHI_CHECK(point.size() == lowerCorner_.size(),
+                std::invalid_argument("Point should not have a different dimension than the box."));
 
-    if ((lowerCorner_.is_finite() && point.size() != lowerCorner_.size()) ||
-        (upperCorner_.is_finite() && point.size() != upperCorner_.size())) {
-      // TODO: make it a warning, with future GUDHI_CHECK version?
-      // std::cerr << "Box and point are not of the same dimension." << std::endl;
-      return false;
+    for (unsigned int i = 0; i < point.size(); ++i) {
+      T lc = lowerCorner_[i];
+      T uc = upperCorner_[i];
+      T p = point[i];
+      if (Gudhi::multi_filtration::_is_nan(p) || Gudhi::multi_filtration::_is_nan(lc) ||
+          Gudhi::multi_filtration::_is_nan(uc))
+        return false;
+      if (lc > p || uc < p) return false;
     }
-
-    return lowerCorner_ <= point && point <= upperCorner_;
+    return true;
   }
 
   /**
-   * @brief Returns the dimension of the box. If the box is trivial or both corners are infinite, the dimension is 0.
+   * @brief Returns the dimension of the box.
    */
-  std::size_t dimension() const {
-    if (is_trivial()) return 0;
-    if (lowerCorner_.is_minus_inf() && upperCorner_.is_plus_inf()) return 0;  // not so sure what we want to do here
-    return lowerCorner_.is_finite() ? lowerCorner_.size() : upperCorner_.size();
-  }
+  [[nodiscard]] std::size_t dimension() const { return lowerCorner_.size(); }
 
   /**
    * @brief Inflates the box by delta.
@@ -149,14 +163,23 @@ class Box {
     lowerCorner_ -= delta;
     upperCorner_ += delta;
   }
-  friend bool operator==(const Box& a, const Box&b){
+
+  /**
+   * @brief Equality operator. Two boxes are equal if and only if both defining corners are equal.
+   */
+  friend bool operator==(const Box &a, const Box &b) {
     return a.upperCorner_ == b.upperCorner_ && a.lowerCorner_ == b.lowerCorner_;
   }
 
   /**
+   * @brief Unequality operator. Two boxes are equal if and only if both defining corners are equal.
+   */
+  friend bool operator!=(const Box &a, const Box &b) { return !(a == b); }
+
+  /**
    * @brief Outstream operator.
    */
-  friend std::ostream &operator<<(std::ostream &os, const Box<T> &box) {
+  friend std::ostream &operator<<(std::ostream &os, const Box &box) {
     os << "Box -- Bottom corner : ";
     os << box.get_lower_corner();
     os << ", Top corner : ";
@@ -164,11 +187,26 @@ class Box {
     return os;
   }
 
+  template <typename U>
+  friend Box<U> smallest_enclosing_box(const Box<U> &a, const Box<U> &b);
+
  private:
-  Point lowerCorner_; /**< Lowest of defining corners. */
-  Point upperCorner_; /**< Greatest of defining corners. */
+  Point_t lowerCorner_; /**< Lowest of defining corners. */
+  Point_t upperCorner_; /**< Greatest of defining corners. */
 };
 
-}}  // namespace Gudhi::multi_persistence
+template <typename T>
+Box<T> smallest_enclosing_box(const Box<T> &a, const Box<T> &b) {
+  Box<T> box;
+  auto &lower = box.get_lower_corner();
+  auto &upper = box.get_upper_corner();
+  for (unsigned int i = 0; i < a.dimension(); ++i) {
+    lower[i] = std::min(a.get_lower_corner()[i], b.get_lower_corner()[i]);
+    upper[i] = std::max(a.get_upper_corner()[i], b.get_upper_corner()[i]);
+  }
+  return box;
+}
+}  // namespace multi_persistence
+}  // namespace Gudhi
 
-#endif  // BOX_H_INCLUDED
+#endif  // MP_BOX_H_INCLUDED

@@ -118,9 +118,9 @@ def test_hook_decomposition():
     )
     sm_hook = rectangle_to_hook_minimal_signed_barcode(*sm_rank)
     pts_hook, w_hook = sm_hook
-    assert np.array_equal(
-        pts_hook, [[0, 0, 0, 1], [0, 0, 1, 0], [0, 0, 1, 1]]
-    ), pts_hook
+    assert np.array_equal(pts_hook, [[0, 0, 0, 1], [0, 0, 1, 0], [0, 0, 1, 1]]), (
+        pts_hook
+    )
     assert np.array_equal(w_hook, [1, 1, -1]), w_hook
 
     B = [

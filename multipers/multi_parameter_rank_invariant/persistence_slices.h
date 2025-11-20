@@ -1,25 +1,21 @@
 #pragma once
 
-#include "gudhi/Flag_complex_edge_collapser.h"
-#include <gudhi/Persistent_cohomology.h>
-#include <gudhi/Simplex_tree_multi.h>
-#include <gudhi/Multi_persistence/Box.h>
+#include <oneapi/tbb/task_arena.h>
+#include "../gudhi/gudhi/Flag_complex_edge_collapser.h"
+#include "../gudhi/gudhi/Persistent_cohomology.h"
+#include "../gudhi/gudhi/Multi_persistence/Box.h"
+#include "../gudhi/gudhi/Simplex_tree/simplex_tree_options.h"
+#include "../gudhi/gudhi/Simplex_tree.h"
 
 namespace Gudhi {
 namespace multiparameter {
 
-struct Simplex_tree_float {  // smaller simplextrees
-  typedef linear_indexing_tag Indexing_tag;
+struct Simplex_tree_float : Gudhi::Simplex_tree_options_default {  // smaller simplextrees
   typedef std::int32_t Vertex_handle;
   typedef float Filtration_value;
-  typedef std::uint32_t Simplex_key;
-  static const bool store_key = true;
-  static const bool store_filtration = true;
-  static const bool contiguous_vertices = false;  // TODO OPTIMIZATION : maybe make the simplextree contiguous when
-                                                  // calling grid_squeeze ?
+  // TODO: OPTIMIZATION, maybe make the simplextree contiguous when calling grid_squeeze ?
+  // static const bool contiguous_vertices = true;
   static const bool link_nodes_by_label = true;
-  static const bool stable_simplex_handles = false;
-  static const bool is_multi_parameter = false;
 };
 
 // using Simplex_tree_float = Simplex_tree_options_fast_persistence;
@@ -50,9 +46,10 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
                                          const std::vector<degree_type> &degrees,
                                          int num_collapses,
                                          int expansion_dim) {
+  
   std::vector<Barcode> out(degrees.size());
-  static_assert(!interface_std_like::Options::is_multi_parameter,
-                "Can only compute persistence for 1-parameter simplextrees.");
+  // static_assert(!interface_std_like::Options::is_multi_parameter,
+  //               "Can only compute persistence for 1-parameter simplextrees.");
   const bool verbose = false;
   if (num_collapses > 0) {
     auto collapsed_st = collapse_edges(st, num_collapses);
@@ -65,8 +62,12 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
   else if (expansion_dim > 0) {
     st.expansion(expansion_dim);
   }
-
-  st.initialize_filtration(true);  // true is ignore_infinite_values
+  tbb::task_arena arena(1);
+  arena.execute(
+    [&]{
+      st.initialize_filtration(true);  // true is ignore_infinite_values
+    }
+  );
   constexpr int coeff_field_characteristic = 11;
   constexpr typename interface_std_like::Filtration_value min_persistence = 0;
 

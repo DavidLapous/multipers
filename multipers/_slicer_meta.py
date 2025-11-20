@@ -1,11 +1,17 @@
 from copy import deepcopy
-from typing import  Optional
+from typing import Optional
 
 import numpy as np
 
 import multipers.slicer as mps
 from multipers.simplex_tree_multi import is_simplextree_multi
-from multipers.slicer import _column_type, _valid_dtype, _valid_pers_backend, is_slicer
+from multipers.slicer import (
+    _column_type,
+    _filtration_container_type,
+    _valid_dtype,
+    _valid_pers_backend,
+    is_slicer,
+)
 
 
 ## TODO : maybe optimize this with cython
@@ -82,17 +88,23 @@ def _slicer_from_blocks(
     pers_backend: _valid_pers_backend,
     vineyard: bool,
     is_kcritical: bool,
-    dtype: type,
+    dtype: _valid_dtype,
     col: _column_type,
+    filtration_container: _filtration_container_type,
 ):
     boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
         blocks,
         inplace=False,
         is_kcritical=is_kcritical,
     )
-    slicer = mps.get_matrix_slicer(vineyard, is_kcritical, dtype, col, pers_backend)(
-        boundary, dimensions, multifiltrations
-    )
+    slicer = mps.get_matrix_slicer(
+        vineyard,
+        is_kcritical,
+        dtype,
+        col,
+        pers_backend,
+        filtration_container,
+    )(boundary, dimensions, multifiltrations)
     return slicer
 
 
@@ -105,6 +117,7 @@ def Slicer(
     kcritical: Optional[bool] = None,
     column_type: Optional[_column_type] = None,
     backend: Optional[_valid_pers_backend] = None,
+    filtration_container: Optional[str] = None,
     max_dim: Optional[int] = None,
     return_type_only: bool = False,
 ) -> mps.Slicer_type:
@@ -143,10 +156,18 @@ def Slicer(
         vineyard = st.is_vine if vineyard is None else vineyard
         column_type = st.col_type if column_type is None else column_type
         backend = st.pers_backend if backend is None else backend
+        filtration_container = (
+            st.filtration_container
+            if filtration_container is None
+            else filtration_container
+        )
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
         backend = "Matrix" if backend is None else backend
+        filtration_container = (
+            "contiguous" if filtration_container is None else filtration_container
+        )
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
@@ -154,6 +175,7 @@ def Slicer(
         dtype=dtype,
         col=column_type,
         pers_backend=backend,
+        filtration_container=filtration_container,
     )
     if return_type_only:
         return _Slicer
@@ -191,14 +213,20 @@ You can try using `multipers.slicer.to_simplextree`."""
             slicer = _Slicer()._build_from_scc_file(st)
         else:
             if is_simplextree_multi(st):
-                blocks = st._to_scc()
+                slicer = _Slicer().build_from_simplex_tree(st)
                 if st.is_squeezed:
                     filtration_grid = st.filtration_grid
             else:
                 blocks = st
-            slicer = _slicer_from_blocks(
-                blocks, backend, vineyard, is_kcritical, dtype, column_type
-            )
+                slicer = _slicer_from_blocks(
+                    blocks,
+                    backend,
+                    vineyard,
+                    is_kcritical,
+                    dtype,
+                    column_type,
+                    filtration_container,
+                )
         if filtration_grid is not None:
             slicer.filtration_grid = filtration_grid
     if reduce:

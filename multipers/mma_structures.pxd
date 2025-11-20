@@ -17,7 +17,8 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
         ctypedef pair[vector[T],vector[T]] interval
         Summand() except +
-        Summand(vector[One_critical_filtration[T]]&, vector[One_critical_filtration[T]]&, int)  except + nogil
+        Summand(int) except +
+        Summand(vector[T]&, vector[T]&, int, int)  except + nogil
         T get_interleaving() nogil
         T get_local_weight(const vector[T]&, const T)  nogil
         void add_bar(T, T, const vector[T]&, vector[T]&, vector[T]&, const bool, const interval&) nogil
@@ -82,7 +83,8 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
     cdef cppclass Module[T=*]:
         ctypedef vector[vector[T]] image_type
         Module()  except + nogil
-        void resize(unsigned int)  nogil
+        Module(const vector[intptr_t]&)
+        void resize(unsigned int, int)  nogil
         Summand[T]& at(unsigned int)  nogil
         vector[Summand[T]].iterator begin()
         vector[Summand[T]].iterator end() 
@@ -103,7 +105,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[image_type] get_vectorization(const T, const T, const bool, Box[T], unsigned int, unsigned int)  nogil
         MultiDiagram[One_critical_filtration[T], T] get_barcode(Line[T]&, const int, const bool)  nogil
         vector[vector[pair[T,T]]] get_barcode2(Line[T]&, const int)  nogil
-        MultiDiagrams[One_critical_filtration[T],T] get_barcodes(const vector[One_critical_filtration[T]]& , const int, const bool )  nogil
+        MultiDiagrams[One_critical_filtration[T],T] get_barcodes(const vector[Point[T]]& , const int, const bool )  nogil
         vector[vector[vector[pair[T,T]]]] get_barcodes2(const vector[Line[T]]& , const int, )  nogil
         image_type get_landscape(const int,const unsigned int,Box[T],const vector[unsigned int]&)  nogil
         vector[image_type] get_landscapes(const int,const vector[unsigned int],Box[T],const vector[unsigned int]&)  nogil
@@ -118,8 +120,10 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[T] get_interleavings(Box[T]) nogil
         vector[int] get_degree_splits() nogil
         void compute_distances_to(T*,vector[vector[T]],bool, int) nogil
-        
+        void add_modules_from_ptr(const vector[intptr_t]& modules)
+        Module[T] permute_summands(const vector[int]&)
 
+    Module[T] direct_sum[T](const Module[T]&, const Module[T]&) noexcept nogil
 
 
 

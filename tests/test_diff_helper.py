@@ -27,9 +27,9 @@ def test_h1_rips_density():
             for indices in sm_indices
         ]
     )
-    assert np.array_equal(
-        reconstructed_measure, pts
-    ), "Reconstructed measure is not equal to original measure ?"
+    assert np.array_equal(reconstructed_measure, pts), (
+        "Reconstructed measure is not equal to original measure ?"
+    )
 
 
 def test_h0_rips_density():
@@ -46,9 +46,9 @@ def test_h0_rips_density():
     (sm,) = mp.signed_measure(st, degree=0, plot=True, mass_default=None)
     pts, weights = sm
     _, unmappable_points = st.pts_to_indices(pts, simplices_dimensions=[1, 0])
-    assert (
-        pts[unmappable_points[:, 0]][:, 0] == 0
-    ).all(), "Unmapped points of H0 have to be the nodes of the rips."
+    assert (pts[unmappable_points[:, 0]][:, 0] == 0).all(), (
+        "Unmapped points of H0 have to be the nodes of the rips."
+    )
 
 
 # def test_h1_rips_density_rank():
