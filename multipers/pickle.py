@@ -87,4 +87,3 @@ def load(path: str):
             return load_with_axis(sms)
         case _:
             raise Exception("Invalid Signed Measure !")
-

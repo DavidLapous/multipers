@@ -76,13 +76,13 @@ def module_approximation_from_slicer(
         approx_mod = PyModule_f32()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py21c_f32(direction_), max_error,Box[float](box),threshold, complete, verbose)
+        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py2p_f32(direction_), max_error,Box[float](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f32)
     elif slicer.dtype == np.float64:
         approx_mod = PyModule_f64()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py21c_f64(direction_), max_error,Box[double](box),threshold, complete, verbose)
+        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py2p_f64(direction_), max_error,Box[double](box),threshold, complete, verbose)
         ptr = <intptr_t>(&mod_f64)
     else:
         raise ValueError(f"Slicer must be float-like. Got {slicer.dtype}.")
@@ -174,6 +174,8 @@ def module_approximation(
             mod.merge(m, input[i].minpres_degree)
         return mod
     if len(input) == 0:
+        if verbose:
+            print("Empty input, returning the trivial module.")
         return PyModule_f64()
     if input.is_squeezed:
         if not ignore_warnings:
@@ -181,15 +183,18 @@ def module_approximation(
         input = input.unsqueeze()
 
     if box is None:
-        if is_simplextree_multi(input):
-            box = input.filtration_bounds()
-        else:
-            box = input.filtration_bounds()
+        if verbose:
+            print("No box given. Using filtration bounds to infer it.")
+        box = input.filtration_bounds()
+        if verbose:
+            print(f"Using {box=}.",flush=True)
     box = np.asarray(box)
 
     # empty coords
     zero_idx = box[1] == box[0]
     if np.any(zero_idx):
+        if not ignore_warnings:
+            warn(f"Got {(box[1] == box[0])=} trivial box coordinates.")
         box[1] += zero_idx
 
     for i in swap_box_coords:
@@ -228,7 +233,6 @@ Returning the trivial module.
             verbose=verbose,
             direction=direction,
             )
-
 
 
 

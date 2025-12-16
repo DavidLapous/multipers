@@ -7,6 +7,7 @@ from numpy import array
 
 import multipers as mp
 from multipers.tests import assert_st_simplices, random_st
+from multipers.simplex_tree_multi import available_dtype
 
 
 def test_1():
@@ -42,14 +43,8 @@ def test_3():
     st.insert([0, 1], 1)
     st.insert([1], 0)
     # converts the simplextree into a multiparameter simplextree
-    for dtype in [np.int32, np.int64, np.float32, np.float64]:
-        try:
-            st_multi = mp.SimplexTreeMulti(st, num_parameters=4, dtype=dtype)
-        except KeyError:
-            import sys
-
-            print(f"type {dtype} not compiled, skipping.", file=sys.stderr)
-            continue  ## dtype not compiled
+    for dtype in available_dtype:
+        st_multi = mp.SimplexTreeMulti(st, num_parameters=4, dtype=dtype)
         minf = -np.inf if isinstance(dtype(1), np.floating) else np.iinfo(dtype).min
         it = [
             (array([0, 1]), array([1.0, minf, minf, minf])),
@@ -183,9 +178,9 @@ def test_serialize():
     assert not stm == stm2
     st1 = stm.project_on_line(parameter=0)
     stm = mp.SimplexTreeMulti(st1, num_parameters=3)
-    assert st1 == stm.project_on_line(
-        parameter=0
-    ), "Gudhi<->Multipers conversion failed"
+    assert st1 == stm.project_on_line(parameter=0), (
+        "Gudhi<->Multipers conversion failed"
+    )
 
 
 @pytest.mark.skipif(
@@ -193,7 +188,6 @@ def test_serialize():
     reason="kcritical simplextree not compiled, skipping this test",
 )
 def test_kcritical_batch_insert():
-
     st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
 
     vertices = [[0, 1]]

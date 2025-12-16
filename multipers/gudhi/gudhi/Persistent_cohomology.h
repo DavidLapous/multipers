@@ -40,7 +40,7 @@ namespace persistent_cohomology {
 /** \brief Computes the persistent cohomology of a filtered complex.
  *
  * \ingroup persistent_cohomology
- * 
+ *
  * The computation is implemented with a Compressed Annotation Matrix
  * (CAM)\cite DBLP:conf/esa/BoissonnatDM13,
  * and is adapted to the computation of Multi-Field Persistent Homology (MF)
@@ -165,8 +165,10 @@ class Persistent_cohomology {
    *
    * Assumes that the filtration provided by the simplicial complex is
    * valid. Undefined behavior otherwise. */
-  void compute_persistent_cohomology(Filtration_value min_interval_length = 0,
-                                     const bool is_simplicial_and_starting_from_dim_0 = true) {
+  void compute_persistent_cohomology(Filtration_value min_interval_length = 0) {
+    if (dim_max_ <= 0)
+      return;  // --------->>
+
     interval_length_policy.set_length(min_interval_length);
     Simplex_key idx_fil = -1;
     std::vector<Simplex_key> vertices; // so we can check the connected components at the end
@@ -175,20 +177,16 @@ class Persistent_cohomology {
       cpx_->assign_key(sh, ++idx_fil);
       dsets_.make_set(cpx_->key(sh));
       int dim_simplex = cpx_->dimension(sh);
-      if (is_simplicial_and_starting_from_dim_0){
-        switch (dim_simplex) {
-          case 0:
-            vertices.push_back(idx_fil);
-            break;
-          case 1:
-            update_cohomology_groups_edge(sh);
-            break;
-          default:
-            update_cohomology_groups(sh, dim_simplex);
-            break;
-        }
-      } else {
-        update_cohomology_groups(sh, dim_simplex);
+      switch (dim_simplex) {
+        case 0:
+          vertices.push_back(idx_fil);
+          break;
+        case 1:
+          update_cohomology_groups_edge(sh);
+          break;
+        default:
+          update_cohomology_groups(sh, dim_simplex);
+          break;
       }
     }
     // Compute infinite intervals of dimension 0
@@ -203,6 +201,32 @@ class Persistent_cohomology {
       persistent_pairs_.emplace_back(
           cpx_->simplex(zero_idx.second), cpx_->null_simplex(), coeff_field_.characteristic());
     }
+    // Compute infinite interval of dimension > 0
+    for (auto cocycle : transverse_idx_) {
+      persistent_pairs_.emplace_back(
+          cpx_->simplex(cocycle.first), cpx_->null_simplex(), cocycle.second.characteristics_);
+    }
+  }
+
+  /**
+   * @private
+   * Temporary patch to make the computation of more general FilteredComplex possible
+   * Will be removed when a better solution was agreed on.
+   */
+  void compute_persistent_cohomology_without_optimizations(Filtration_value min_interval_length = 0) {
+    if (dim_max_ <= 0)
+      return;  // --------->>
+
+    interval_length_policy.set_length(min_interval_length);
+    Simplex_key idx_fil = -1;
+    // Compute all finite intervals
+    for (auto sh : cpx_->filtration_simplex_range()) {
+      cpx_->assign_key(sh, ++idx_fil);
+      dsets_.make_set(cpx_->key(sh));
+      int dim_simplex = cpx_->dimension(sh);
+      update_cohomology_groups(sh, dim_simplex);
+    }
+
     // Compute infinite interval of dimension > 0
     for (auto cocycle : transverse_idx_) {
       persistent_pairs_.emplace_back(

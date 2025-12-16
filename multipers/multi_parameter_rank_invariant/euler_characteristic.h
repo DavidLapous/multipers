@@ -3,12 +3,10 @@
 #include <iostream>
 #include <vector>
 #include <utility>  // std::pair
-#include "Simplex_tree_multi_interface.h"
-#include "multi_parameter_rank_invariant/persistence_slices.h"
 
-// #include <gudhi/Simplex_tree/multi_filtrations/Finitely_critical_filtrations.h>
-
-#include "tensor/tensor.h"
+#include "../gudhi/Simplex_tree_multi_interface.h"
+#include "../tensor/tensor.h"
+#include "persistence_slices.h"
 
 
 namespace Gudhi::multiparameter::euler_characteristic{
@@ -21,11 +19,11 @@ void get_euler_surface(
 	bool mobius_inversion,
 	bool zero_pad
 	){
-	std::vector<index_type> coordinate_container(st_multi.get_number_of_parameters()); 
+	std::vector<index_type> coordinate_container(st_multi.num_parameters()); 
 	for (auto sh : st_multi.complex_simplex_range()){
 		const auto& multi_filtration = st_multi.filtration(sh);
-		for (index_type i=0u; i<st_multi.get_number_of_parameters(); i++){
-			coordinate_container[i] = static_cast<index_type>(multi_filtration[i]);
+		for (index_type i=0u; i<st_multi.num_parameters(); i++){
+			coordinate_container[i] = static_cast<index_type>(multi_filtration(0,i));
 		}
 		int sign = 1-2*(st_multi.dimension(sh) % 2);
 		if (mobius_inversion && zero_pad)

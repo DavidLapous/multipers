@@ -1,9 +1,9 @@
-# import contextlib
-import filecmp
 import os
-import shutil
 import platform
+import subprocess
 import sys
+import filecmp
+import shutil
 
 from pathlib import Path
 import numpy as np
@@ -17,15 +17,7 @@ Options.embed_pos_in_docstring = True
 Options.fast_fail = True
 # Options.warning_errors = True
 
-try:
-    os.mkdir("build")
-except FileExistsError:
-    pass
-
-try:
-    os.mkdir("build/tmp")
-except FileExistsError:
-    pass
+os.makedirs("build/tmp", exist_ok=True)
 
 
 def was_modified(file):
@@ -60,6 +52,9 @@ def process_tempita(fromfile):
     """
     if not was_modified(fromfile) and not full_build:
         return
+    print("#-----------------------------------")
+    print(f"processing {fromfile}.")
+    print("#-----------------------------------")
     with open(fromfile, "r", encoding="utf-8") as f:
         template_content = f.read()
 
@@ -81,9 +76,11 @@ cython_modules = [
     "point_measure",
     "grids",
     "slicer",
+    "vector_interface",
 ]
 
 templated_cython_modules = [
+    "filtrations.pxd",
     "filtration_conversions.pxd",
     "slicer.pxd",
     "mma_structures.pyx",
@@ -91,18 +88,13 @@ templated_cython_modules = [
     "slicer.pyx",
 ]
 
-## generates some parameter files (Tempita fails with python<3.12)
+# generates some parameter files (Tempita fails with python<3.12)
 # TODO: see if there is a way to avoid _tempita_grid_gen.py or a nicer way to do it
-os.system("python _tempita_grid_gen.py")
+subprocess.run([sys.executable, "_tempita_grid_gen.py"], check=True)
 
 for mod in templated_cython_modules:
     process_tempita(f"multipers/{mod}.tp")
 
-## Broken on mac
-# n_jobs = 1
-# with contextlib.suppress(ImportError):
-#     import joblib
-#     n_jobs = joblib.cpu_count()
 
 cythonize_flags = {
     # "depfile": True,
@@ -131,7 +123,7 @@ cython_compiler_directives = {
 
 # When venv is not properly set, we have to add the current python path
 # removes lib / python3.x / site-packages
-PYTHON_ENV_PATH = sys.prefix
+PYTHON_ENV_PATH = Path(sys.prefix)
 
 cpp_dirs = [
     "multipers/gudhi",
@@ -140,17 +132,37 @@ cpp_dirs = [
     # "multipers/multi_parameter_rank_invariant",
     # "multipers/tensor",
     np.get_include(),
-    PYTHON_ENV_PATH + "/include/", # Unix
-    PYTHON_ENV_PATH + "/Library/include/", # Windows
+    PYTHON_ENV_PATH / "include",  # Unix
+    PYTHON_ENV_PATH / "Library" / "include",  # Windows
+    "AIDA/src",
+    "AIDA/include",
+    "Persistence-Algebra/include",
 ]
 cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
 
 library_dirs = [
-    PYTHON_ENV_PATH + "/lib/", # Unix
-    PYTHON_ENV_PATH + "/Library/lib/", # Windows
+    PYTHON_ENV_PATH / "lib",  # Unix
+    PYTHON_ENV_PATH / "Library" / "lib",  # Windows
 ]
 
 library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dirs]
+
+
+## AIDA stuff
+
+AIDA_PATHS = [
+    Path("AIDA/src"),
+    Path("AIDA/include"),
+]
+
+# Recursively collect all .cpp files from the AIDA directories
+AIDA_CPP_SOURCES = []
+for p in AIDA_PATHS:
+    # Use Path.rglob('*.cpp') to recursively find all .cpp files
+    AIDA_CPP_SOURCES.extend([str(file) for file in p.rglob("*.cpp")])
+
+print("AIDA files:")
+print(AIDA_CPP_SOURCES)
 
 print("Include dirs:")
 print(cpp_dirs)
@@ -158,29 +170,45 @@ print(cpp_dirs)
 print("Library dirs:")
 print(library_dirs)
 
+
+def cpp_lib_deps(module):
+    if module == "vector_interface":
+        return ["boost_system", "boost_timer"]
+    else:
+        return ["tbb"]
+
+
 extensions = [
     Extension(
         f"multipers.{module}",
-        sources=[
-            f"multipers/{module}.pyx",
-        ],
+        sources=(
+            [
+                f"multipers/{module}.pyx",
+            ]
+            + (AIDA_CPP_SOURCES if module == "vector_interface" else [])
+        ),
         language="c++",
         extra_compile_args=[
-            "-O3",  # -Ofast disables infinity values for filtration values
+            "-O3"
+            if platform.system() != "Windows"
+            else "/O2",  # -Ofast disables infinity values for filtration values
             "-fassociative-math",
             "-funsafe-math-optimizations",
+            "-DGUDHI_USE_TBB",
+            "-DWITH_TBB=ON",
             # "-g",
             # "-march=native",
-            "/std:c++20" if platform.system() == "Windows" else "-std=c++20",
+            "-DNDEBUG" if platform.system() != "Windows" else "/DNDEBUG",
+            "-std=c++20" if platform.system() != "Windows" else "/std:c++20",
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
             "-Wextra" if platform.system() != "Windows" else "",
             # "-Werror" if platform.system() != "Windows" else "",
         ],
-        extra_link_args=[],  ## mvec for python312
+        extra_link_args=[],
         include_dirs=cpp_dirs,
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        libraries=["tbb"],
+        libraries=cpp_lib_deps(module),
         library_dirs=library_dirs,
     )
     for module in cython_modules

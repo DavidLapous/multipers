@@ -31,6 +31,7 @@ multipers/slicer.pxd
 multipers/simplex_tree_multi.pyx
 multipers/mma_structures.pyx
 multipers/filtration_conversions.pxd
+multipers/filtrations.pxd
 
 ## Hidden files
 .*

@@ -72,6 +72,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     dimension_type upper_bound_dimension() nogil
     bool find_simplex(vector[int]& simplex) nogil
     bool insert(vector[int]& simplex, F& filtration) noexcept nogil
+    bool insert_force(vector[int]& simplex, F& filtration) noexcept nogil
     # vector[simplex_filtration_type] get_star(const vector[int]& simplex) nogil
     # vector[simplex_filtration_type] get_cofaces(const vector[int]& simplex, int dimension) nogil
     void expansion(int max_dim)  except + nogil
@@ -100,20 +101,21 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void set_keys_to_enumerate() nogil const
     int get_key(const simplex_type) nogil
     void set_key(simplex_type, int) nogil
-    void fill_lowerstar(const F&, int) except+ nogil
+    void fill_lowerstar(vector[value_type]&, int) except+ nogil
     simplex_list get_simplices_of_dimension(int) nogil
     edge_list get_edge_list() nogil
     # euler_char_list euler_char(const vector[filtration_type]&) nogil
     void resize_all_filtrations(int) nogil
-    void set_number_of_parameters(int) nogil
-    int get_number_of_parameters() nogil
+    void set_num_parameters(int) nogil
+    int num_parameters() nogil
     void serialize(char* buffer, const size_t buffer_size)  except + nogil
     void deserialize(const char* buffer, const size_t buffer_size)  except + nogil
     size_t get_serialization_size() nogil
     void clear() nogil
-  
-    
-    void from_std(char*, size_t, int, F&) nogil
+
+    dimension_type simplex_dimension(const simplex_type&) nogil
+
+    void from_std(char*, size_t, int, vector[value_type]&) nogil
     void to_std(intptr_t, Line[double],int ) nogil 
     void to_std_linear_projection(intptr_t, vector[double]) nogil
     void squeeze_filtration_inplace(vector[vector[double]] &, bool) nogil

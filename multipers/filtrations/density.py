@@ -214,13 +214,13 @@ def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
 
 def exponential_kernel(x_i, y_j, bandwidth):
     # 1 / \sigma * exp( norm(x-y, dim=-1))
-    exponent = -(((((x_i - y_j) ** 2)).sum(dim=-1) ** 1 / 2) / bandwidth)
+    exponent = -((((x_i - y_j) ** 2).sum(dim=-1) ** 1 / 2) / bandwidth)
     kernel = exponent.exp() / bandwidth
     return kernel
 
 
 def sinc_kernel(x_i, y_j, bandwidth):
-    norm = ((((x_i - y_j) ** 2)).sum(dim=-1) ** 1 / 2) / bandwidth
+    norm = (((x_i - y_j) ** 2).sum(dim=-1) ** 1 / 2) / bandwidth
     sinc = type(x_i).sinc
     kernel = 2 * sinc(2 * norm) - sinc(norm)
     return kernel
@@ -239,9 +239,7 @@ def _kernel(
         case "sinc":
             return sinc_kernel
         case _:
-            assert callable(
-                kernel
-            ), f"""
+            assert callable(kernel), f"""
             --------------------------
             Unknown kernel {kernel}.
             -------------------------- 
@@ -359,8 +357,6 @@ class KDE:
             if self.return_log
             else density_estimation
         )
-
-
 
 
 class DTM:

@@ -37,7 +37,7 @@ def todense(grid: list[torch.Tensor]):
 
 
 def _exact_grid(filtration_values, r=None):
-    assert r is None
+    # assert r is None
     grid = tuple(_unique_any(f) for f in filtration_values)
     return grid
 

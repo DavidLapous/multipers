@@ -11,7 +11,7 @@ from collections import defaultdict
 cnp.import_array()
 from scipy import sparse
 
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 
 import multipers.grids as mpg
 
@@ -240,6 +240,18 @@ def zero_out_sms(sms, mass_default):
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
     return tuple(zero_out_sm(pts,weights, mass_default) for pts,weights in sms)
+def add_sms(sms):
+    if len(sms) == 0:
+        return (np.empty((0,2)), np.empty())
+    pts = tuple(sm[0][:] for sm in sms)
+    api = api_from_tensor(pts[0])
+    pts = api.cat(pts)
+
+    weights = tuple(sm[1][:] for sm in sms)
+    api = api_from_tensor(weights[0])
+    weights = api.cat(weights)
+    
+    return (pts,weights)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
