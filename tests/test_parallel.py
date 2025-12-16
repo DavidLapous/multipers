@@ -28,6 +28,7 @@ def io_fd_mpfree2(x):
 def test_io_parallel(backend):
     x = mp.data.three_annulus(100, 50)
     X = [x] * 15
+    ground_truth = io_fd_mpfree(x)
     ground_truth = io_fd_mpfree2(x)
     dgms = Parallel(n_jobs=-1, backend=backend)(delayed(io_fd_mpfree)(x) for x in X)
 
