@@ -50,6 +50,7 @@ This library features a bunch of different functions and helpers. See below for 
  - [x] [[Filtration-Domination in Bifiltered Graphs, ALENEX2023]](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. Very useful to speed up, e.g., Rips-Codensity bifiltrations.
  - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SOCG2019]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
  - [x] [[Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology, JAAG]](https://doi.org/10.1137/20M1388425) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert, Rank Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
+ - [ ] [WIP] [[Decomposing Multiparameter Persistence Modules]](https://doi.org/10.4230/LIPIcs.SoCG.2025.41) Using the [AIDA](https://github.com/JanJend/AIDA) and [Persistence-Algebra](https://github.com/JanJend/Persistence-Algebra/) libraries.
  - [x] [[Delaunay Bifiltrations of Functions on Point Clouds, SODA2024]](https://epubs.siam.org/doi/10.1137/1.9781611977912.173) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bifiltrations.
  - [x] [[Delaunay Core Bifiltration]](https://arxiv.org/abs/2405.01214) Bifiltration for point clouds, taking into account the density. Similar to Rips-Density. 
  - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
@@ -66,6 +67,7 @@ If I missed something, or you want to add something, feel free to open an issue.
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
 [Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration).<br>
+Jan Jendrysiak (Module Decomposition).<br>
 
 ## Citation
 Please cite this library when using it in scientific publications;
