@@ -1,7 +1,7 @@
 [submodule "AIDA"]
 	path = AIDA
 	url = https://github.com/JanJend/AIDA
-	branch = hn_computation
+	branch = main
 [submodule "Persistence-Algebra"]
 	path = Persistence-Algebra
 	url = https://github.com/JanJend/Persistence-Algebra
