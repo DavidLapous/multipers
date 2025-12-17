@@ -66,7 +66,7 @@ Out_multi_filtration as_type(const Multi_parameter_filtration<T, Co, Ensure1Crit
     for (std::size_t g = 0; g < f.num_generators(); ++g) {
       maxIndex = maxIndex < f(g, 1) ? f(g, 1) : maxIndex;
     }
-
+    
     std::vector<U> values(maxIndex + 1, inf);
     for (std::size_t g = 0; g < f.num_generators(); ++g) {
       values[f(g, 1)] = f(g, 0);

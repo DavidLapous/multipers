@@ -228,6 +228,7 @@ def signed_measure(
                     zero_pad=fix_mass_default,
                     # grid_shape=tuple(len(g) for g in grid),
                     ignore_inf=ignore_infinite_filtration_values,
+                    verbose=verbose
                 )
                 fix_mass_default = False
                 if verbose:

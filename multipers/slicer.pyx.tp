@@ -562,16 +562,16 @@ cdef class {{D['PYTHON_TYPE']}}:
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
             )
-    def get_filtrations(self, bool unsqueeze = False):
+    def get_filtrations(self, bool unsqueeze = False, bool raw=False):
         """
         Returns a view of the filtration values, as a list of numpy arrays.
         """
         {{if D['IS_KCRITICAL']}}
         if unsqueeze:
             raise NotImplementedError("Unsqueezed version not implemented for multicritical filtrations.")
-        return vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False)
+        return vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False, raw=raw)
         {{else}}
-        out =  vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False)
+        out =  vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False, raw=raw)
         if not unsqueeze:
             return out
         if not self.is_squeezed:
@@ -638,7 +638,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             bool coordinates=True,
             bool inplace = False,
             grid_strategy=None
-        )->{{D['PYTHON_TYPE'][:-3]+"i32"}}|{{D['PYTHON_TYPE']}}:
+        )->{{COARSENNED_PY_CLASS_NAME}}|{{D['PYTHON_TYPE']}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
 
@@ -673,7 +673,7 @@ cdef class {{D['PYTHON_TYPE']}}:
           {{if D['COLUMN_TYPE'] is None}}
           raise ValueError("WIP")
           {{else}}
-          out = {{D['PYTHON_TYPE'][:-3]+"i32"}}()
+          out = {{COARSENNED_PY_CLASS_NAME}}()
           out.truc = build_slicer_coarsen_on_grid(self.truc, grid)
           if coordinates:
               out.filtration_grid = sanitize_grid(filtration_grid)
@@ -816,7 +816,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         with nogil:
           write_slicer_to_scc_file(c_path, self.truc, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse)
 
-    {{if not D['IS_KCRITICAL']}}
     def _build_from_scc_file(self, path:os.PathLike, bool rivet_compatible = False, bool reverse = False, int shift_dimension = 0)->{{D['PYTHON_TYPE']}}:
         """
         Builds the slicer from the given scc file. Should be empty before, otherwise will be completely overwritten.
@@ -826,18 +825,26 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.truc = build_slicer_from_scc_file_{{D['C_TEMPLATE_TYPE']}}(c_path, rivet_compatible, reverse, shift_dimension)
         return self
 
-    def unsqueeze(self, grid=None)->{{D['PYTHON_TYPE'][:-3]+"f64"}}:
+    def unsqueeze(self, grid=None)->{{REAL_PY_CLASS_NAME}}:
         grid = self.filtration_grid if grid is None else grid
         grid = sanitize_grid(grid, numpyfy=True)
+        {{if D['IS_KCRITICAL']}}
+        cdef int num_generators = len(self)
+        current_filtration = self.get_filtrations()
+        new_filtrations = tuple(
+                evaluate_in_grid(np.asarray(current_filtration[i], dtype=np.int32), grid)
+                for i in range(num_generators)
+        )
+        {{else}}
         new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
-        new_slicer = {{D['PYTHON_TYPE'][:-3]+"f64"}}(
+        {{endif}}
+        new_slicer = {{REAL_PY_CLASS_NAME}}(
             self.get_boundaries(),
             self.get_dimensions(),
             new_filtrations,
         )
         new_slicer.minpres_degree=self.minpres_degree
         return new_slicer
-    {{endif}}
 
     def build_from_simplex_tree(self, st):
         cdef intptr_t ptr = st.thisptr

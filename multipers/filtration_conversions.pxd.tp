@@ -148,14 +148,18 @@ cdef inline  _vff2kcview_{{SHORT}}(vector[Multi_critical_filtration[{{CTYPE}}]]&
 {{for f in Filtrations}}
 
 {{if f["multicritical"] or f["container"] == "Degree_rips_bifiltration"}}
-cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
+cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False, bool raw=False):
   cdef Py_ssize_t k = dereference(x).num_generators()
 
   {{if f["container"] == "Degree_rips_bifiltration"}}
 
   cdef int num_parameters = 2
+
   cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,0)))
-  return np.concatenate([np.asarray(data_view, dtype={{f["py_value_type"]}})[:,None], np.arange(k, dtype={{f["py_value_type"]}})[:,None]], axis=1)
+  numpy_view = np.asarray(data_view, dtype={{f["py_value_type"]}})
+  if raw:
+    return numpy_view
+  return np.concatenate([numpy_view[:,None], np.arange(k, dtype={{f["py_value_type"]}})[:,None]], axis=1)
 
   {{else}}
 
@@ -164,13 +168,14 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
     duplicate = 0
   else:
     duplicate = p
+  # TODO  : make it contiguous
   return [_ff21cview2_{{f['short_value_type']}}(&(dereference(x)(i,0)), p, duplicate, copy=copy) for i in range(k)]
 
   {{endif}}
 
 {{else}}
 # Assumes it's contiguous
-cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
+cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False, bool raw=False):
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
   if not dereference(x).is_finite():
     return np.full(shape=num_parameters, fill_value=dereference(x)(0,0))
@@ -178,9 +183,9 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False):
   return np.array(x_view) if copy else np.asarray(x_view)
 {{endif}}
 
-cdef inline  vect_{{f['python']}}_2_python(vector[{{f['python']}}]& x, bool copy = False):
+cdef inline  vect_{{f['python']}}_2_python(vector[{{f['python']}}]& x, bool copy = False, bool raw=False):
   cdef Py_ssize_t num_stuff = x.size()
-  return [{{f['python']}}_2_python(&(x[i]), copy=copy) for i in range(num_stuff)]
+  return [{{f['python']}}_2_python(&(x[i]), copy=copy, raw=raw) for i in range(num_stuff)]
 
 
 {{if f["multicritical"]}}
