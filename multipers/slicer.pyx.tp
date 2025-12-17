@@ -826,6 +826,9 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self
 
     def unsqueeze(self, grid=None)->{{REAL_PY_CLASS_NAME}}:
+    {{if SHORT_FILTRATION_TYPE=="Flat"}}
+        raise NotImplementedError("There is no reasonable implementation (yet).")
+    {{else}}
         grid = self.filtration_grid if grid is None else grid
         grid = sanitize_grid(grid, numpyfy=True)
         {{if D['IS_KCRITICAL']}}
@@ -845,6 +848,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         )
         new_slicer.minpres_degree=self.minpres_degree
         return new_slicer
+    {{endif}}
 
     def build_from_simplex_tree(self, st):
         cdef intptr_t ptr = st.thisptr
