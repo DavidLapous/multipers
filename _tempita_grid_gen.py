@@ -96,7 +96,7 @@ def check_combination(
     return True
 
 
-def get_slicer(
+def get_slicer_python_class_names(
     backend_type, is_vine, is_kcritical, value_type, column_type, filtration_container
 ):
     stuff = locals()
@@ -104,15 +104,23 @@ def get_slicer(
     col_idx, col = column_type
     PYTHON_TYPE = f"_{'K' if is_kcritical else ''}{short_filtration_container[filtration_container]}Slicer_{backend_type}{col_idx}{'_vine' if is_vine else ''}_{short_type}"
     CTYPE = f"multipers::tmp_interface::TrucPythonInterface<multipers::tmp_interface::BackendsEnum::{backend_type},{'true' if is_vine else 'false'},{'true' if is_kcritical else 'false'},{ctype},{col},multipers::tmp_interface::Filtration_containers_strs::{filtration_container}>"
-    IS_SIMPLICIAL = False
-    IS_VINE = is_vine
-    IS_KCRITICAL = is_kcritical
-    # FILTRATION_TYPE = (
-    #     ("Multi_critical_filtration" if is_kcritical else "One_critical_filtration")
-    #     + "["
-    #     + ctype
-    #     + "]"
-    # )
+    return PYTHON_TYPE, CTYPE
+
+
+def get_slicer(
+    backend_type, is_vine, is_kcritical, value_type, column_type, filtration_container
+):
+    stuff = locals()
+    ctype, pytype, short_type = value_type
+    col_idx, col = column_type
+    PYTHON_TYPE, CTYPE = get_slicer_python_class_names(
+        backend_type,
+        is_vine,
+        is_kcritical,
+        value_type,
+        column_type,
+        filtration_container,
+    )
     FILTRATION_TYPE = get_python_filtration_type(
         filtration_container, value_type, is_kcritical
     )
@@ -120,9 +128,9 @@ def get_slicer(
         "TRUC_TYPE": CTYPE,
         "C_TEMPLATE_TYPE": "C" + PYTHON_TYPE,
         "PYTHON_TYPE": PYTHON_TYPE,
-        "IS_SIMPLICIAL": IS_SIMPLICIAL,
-        "IS_VINE": IS_VINE,
-        "IS_KCRITICAL": IS_KCRITICAL,
+        "IS_SIMPLICIAL": False,
+        "IS_VINE": is_vine,
+        "IS_KCRITICAL": is_kcritical,
         "C_VALUE_TYPE": ctype,
         "PY_VALUE_TYPE": pytype,
         "COLUMN_TYPE": col.split("::")[3],
@@ -132,6 +140,22 @@ def get_slicer(
         "FILTRATION_CONTAINER_STR": filtration_container,
         "PERS_BACKEND_TYPE": backend_type,
         "IS_FLOAT": short_type[0] == "f",
+        "REAL_PY_CLASS_NAME": get_slicer_python_class_names(
+            backend_type,
+            is_vine,
+            is_kcritical,
+            REAL_VALUE_TYPE,
+            column_type,
+            filtration_container,
+        )[0],
+        "COARSENNED_PY_CLASS_NAME": get_slicer_python_class_names(
+            backend_type,
+            is_vine,
+            is_kcritical,
+            COARSENNED_VALUE_TYPE,
+            column_type,
+            filtration_container,
+        )[0],
     }
 
 
