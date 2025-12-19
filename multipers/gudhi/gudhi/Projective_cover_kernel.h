@@ -18,8 +18,8 @@
 #ifndef MP_PROJECTIVE_COVER_KERNEL_H_INCLUDED
 #define MP_PROJECTIVE_COVER_KERNEL_H_INCLUDED
 
-#include <stdexcept>
-#include <utility>  //std::move
+#include <stdexcept>  //std::invalid_argument, std::runtime_error
+#include <utility>    //std::move
 #include <vector>
 #include <set>
 
@@ -84,13 +84,16 @@ class Projective_cover_kernel
     GUDHI_CHECK_code(
       Index i = 0;
       for (; i < complex.get_number_of_cycle_generators() - 1; ++i) {
-        GUDHI_CHECK(filtValues[i].num_generators() == 1, std::invalid_argument("Only available for 1-critical modules."));
-        GUDHI_CHECK(dimensions[i] <= dimensions[i + 1], std::invalid_argument("Cells have to be ordered by dimension."));
+        GUDHI_CHECK(filtValues[i].num_generators() == 1,
+                    std::invalid_argument("Only available for 1-critical modules."));
+        GUDHI_CHECK(dimensions[i] <= dimensions[i + 1],
+                    std::invalid_argument("Cells have to be ordered by dimension."));
         if (dimensions[i] == dimensions[i + 1])
           GUDHI_CHECK(is_less_or_equal_than_lexicographically<true>(filtValues[i], filtValues[i + 1]),
                       std::invalid_argument("Cells with same dimension have to be ordered co-lexicographically."));
       }
-      GUDHI_CHECK(filtValues[i].num_generators() == 1, std::invalid_argument("Only available for 1-critical modules."));
+      GUDHI_CHECK(filtValues[i].num_generators() == 1,
+                  std::invalid_argument("Only available for 1-critical modules."));
     )
 
     Index startDim1, startDim2, end;
@@ -286,7 +289,8 @@ class Projective_cover_kernel
     it++;
     for (; it != pivotCache[pivot].end(); ++it) {
       int colIdx = *it;
-      GUDHI_CHECK(static_cast<Index>(colIdx) > i, std::runtime_error("(update) Column not registered in the right order."));
+      GUDHI_CHECK(static_cast<Index>(colIdx) > i,
+                  std::runtime_error("(update) Column not registered in the right order."));
       auto prev = filtValues[colIdx];
       if (!(prev >= filtValues[i])) {
         prev.push_to_least_common_upper_bound(filtValues[i]);
