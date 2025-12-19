@@ -22,6 +22,8 @@
 #include <gmpxx.h>
 #include <stdexcept>
 
+#include <gudhi/Debug_utils.h>
+
 namespace Gudhi {
 namespace persistence_fields {
 
@@ -258,14 +260,14 @@ class Multi_field_element
    */
   friend bool operator!=(const Multi_field_element& f, const Element& v) { return !(v == f); }
 
-  /**
-   * @brief Assign operator.
-   */
-  Multi_field_element& operator=(const Element& value)
-  {
-    mpz_mod(element_.get_mpz_t(), value.get_mpz_t(), productOfAllCharacteristics_.get_mpz_t());
-    return *this;
-  }
+  // /**
+  //  * @brief Assign operator.
+  //  */
+  // Multi_field_element& operator=(const Element& value)
+  // {
+  //   mpz_mod(element_.get_mpz_t(), value.get_mpz_t(), productOfAllCharacteristics_.get_mpz_t());
+  //   return *this;
+  // }
 
   /**
    * @brief Swap operator.
@@ -302,6 +304,9 @@ class Multi_field_element
   [[nodiscard]] std::pair<Multi_field_element, Characteristic> get_partial_inverse(
       const Characteristic& productOfCharacteristics) const
   {
+    GUDHI_CHECK(productOfCharacteristics >= 0 && productOfCharacteristics <= productOfAllCharacteristics_,
+                "The given product is not the product of a subset of the current Multi-field characteristics.");
+
     Characteristic QR;
     mpz_gcd(QR.get_mpz_t(), element_.get_mpz_t(), productOfCharacteristics.get_mpz_t());  // QR <- gcd(x,QS)
 
@@ -344,8 +349,11 @@ class Multi_field_element
    */
   static Multi_field_element get_partial_multiplicative_identity(const Characteristic& productOfCharacteristics)
   {
-    if (productOfCharacteristics == 0) {
-      return Multi_field_element<minimum, maximum>(multiplicativeID_);
+    GUDHI_CHECK(productOfCharacteristics >= 0 && productOfCharacteristics <= productOfAllCharacteristics_,
+                "The given product is not the product of a subset of the current Multi-field characteristics.");
+
+    if (productOfCharacteristics == 0 || productOfCharacteristics == productOfAllCharacteristics_) {
+      return get_multiplicative_identity();
     }
     Multi_field_element<minimum, maximum> mult;
     for (unsigned int idx = 0; idx < primes_.size(); ++idx) {

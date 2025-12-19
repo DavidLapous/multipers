@@ -23,6 +23,8 @@
 #include <stdexcept>
 #include <numeric>
 
+#include <gudhi/Debug_utils.h>
+
 namespace Gudhi {
 namespace persistence_fields {
 
@@ -346,17 +348,17 @@ class Shared_multi_field_element_with_small_characteristics
     return !(v == f);
   }
 
-  /**
-   * @brief Assign operator.
-   *
-   * @tparam Integer_type A native integer type. Should be able to contain the characteristic if signed.
-   */
-  template <typename Integer_type, class = isInteger<Integer_type> >
-  Shared_multi_field_element_with_small_characteristics& operator=(const Integer_type& value)
-  {
-    element_ = _get_value(value);
-    return *this;
-  }
+  // /**
+  //  * @brief Assign operator.
+  //  *
+  //  * @tparam Integer_type A native integer type. Should be able to contain the characteristic if signed.
+  //  */
+  // template <typename Integer_type, class = isInteger<Integer_type> >
+  // Shared_multi_field_element_with_small_characteristics& operator=(const Integer_type& value)
+  // {
+  //   element_ = _get_value(value);
+  //   return *this;
+  // }
 
   /**
    * @brief Swap operator.
@@ -392,6 +394,9 @@ class Shared_multi_field_element_with_small_characteristics
   std::pair<Shared_multi_field_element_with_small_characteristics, Characteristic> get_partial_inverse(
       Characteristic productOfCharacteristics) const
   {
+    GUDHI_CHECK(productOfCharacteristics >= 0 && productOfCharacteristics <= productOfAllCharacteristics_,
+                "The given product is not the product of a subset of the current Multi-field characteristics.");
+
     Characteristic gcd = std::gcd(element_, productOfAllCharacteristics_);
 
     if (gcd == productOfCharacteristics)
@@ -437,7 +442,10 @@ class Shared_multi_field_element_with_small_characteristics
   static Shared_multi_field_element_with_small_characteristics get_partial_multiplicative_identity(
       const Characteristic& productOfCharacteristics)
   {
-    if (productOfCharacteristics == 0) {
+    GUDHI_CHECK(productOfCharacteristics >= 0 && productOfCharacteristics <= productOfAllCharacteristics_,
+                "The given product is not the product of a subset of the current Multi-field characteristics.");
+
+    if (productOfCharacteristics == 0 || productOfCharacteristics == productOfAllCharacteristics_) {
       return Shared_multi_field_element_with_small_characteristics(multiplicativeID_);
     }
     Shared_multi_field_element_with_small_characteristics mult;
