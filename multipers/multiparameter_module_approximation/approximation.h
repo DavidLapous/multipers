@@ -170,7 +170,7 @@ class Module {
   Module<value_type> permute_summands(const std::vector<int> &permutation){
     Module<value_type> out;
     out.set_box(this->get_box());
-    out.resize(this->size(), this->box_.dimension());
+    out.resize(this->size(), this->box_.get_dimension());
     for (size_t i = 0; i < permutation.size(); ++i) {
       out[i] = this->module_[permutation[i]];
     }
@@ -590,7 +590,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
   /* using Filtration_value = Slicer::Filtration_value; */
 
   typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
-  const std::size_t num_parameters = box.dimension();
+  const std::size_t num_parameters = box.get_dimension();
   std::vector<int> grid_size(num_parameters);
   std::vector<bool> signs(num_parameters);
   int signs_shifts = 0;
@@ -2346,7 +2346,7 @@ inline value_type Summand<value_type>::_get_max_diagonal(const filtration_type &
                                                          const Box<value_type> &box) const {
   // assumes birth and death to be never NaN
   assert(birth.num_parameters() == death.num_parameters() && "Inputs must be of the same size !");
-  assert((box.is_trivial() || birth.num_parameters() == box.dimension()) && "Inputs must be of the same size !");
+  assert((box.is_trivial() || birth.num_parameters() == box.get_dimension()) && "Inputs must be of the same size !");
 
   value_type s = inf;
   bool threshold_flag = !box.is_trivial();
@@ -2434,7 +2434,7 @@ Module<value_type> direct_sum(const Module<value_type> &a, const Module<value_ty
   out.module_.resize(a.size() + b.size());
   std::copy(a.module_.begin(), a.module_.end(), out.module_.begin());
   std::copy(b.module_.begin(), b.module_.end(), out.module_.begin() + a.size());
-  out.box_ = smallest_enclosing_box(a.box_, b.box_);
+  out.box_ = get_smallest_enclosing_box(a.box_, b.box_);
   return out;
 }
 
