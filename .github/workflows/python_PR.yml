@@ -157,6 +157,11 @@ jobs:
       with:
         name: sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
+    - name: Install OpenMP on macOS for pykeops
+      if: ${{ startsWith(matrix.os, 'macos-') }}
+      shell: bash
+      run: |
+        brew install libomp
     - name: tests
       shell: bash -el {0}
       run: |
