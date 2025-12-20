@@ -20,6 +20,7 @@ def io_fd_mpfree2(x):
     return mp.signed_measure(s, degree=1, invariant="hilbert")[0]
 
 
+@pytest.fixture(scope="session")
 @pytest.mark.skipif(
     not (mio._check_available("mpfree") and mio._check_available("function_delaunay")),
     reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
@@ -51,6 +52,7 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
 
+@pytest.fixture(scope="session")
 @pytest.mark.flaky(reruns=2)
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 @pytest.mark.parametrize("slicer", [False, True])

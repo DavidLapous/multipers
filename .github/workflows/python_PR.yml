@@ -103,6 +103,7 @@ jobs:
         ls
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
+          export MACOSX_DEPLOYMENT_TARGET=11.0  
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           # export MACOSX_DEPLOYMENT_TARGET="13.0"
