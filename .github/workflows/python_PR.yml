@@ -157,16 +157,18 @@ jobs:
       with:
         name: sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
-    - name: Install OpenMP on macOS for pykeops
-      if: ${{ startsWith(matrix.os, 'macos-') }}
-      shell: bash
-      run: |
-        brew install libomp
     - name: tests
       shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp -c conda-forge
         micromamba activate test
+
+        if [ "$RUNNER_OS" == "macOS" ]; then
+            # pykeops workaround
+            brew install llvm libomp
+            export CXX=$(brew --prefix llvm)/bin/clang++
+        fi
+
         pip install dist/*.whl
 
         cd tests
