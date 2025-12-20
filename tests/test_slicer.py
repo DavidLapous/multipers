@@ -339,7 +339,7 @@ def test_astypes():
     st = random_st()
 
     for vine in [True, False]:
-        for kcritical in [True,False]:
+        for kcritical in [True, False]:
             for dtype in mp.slicer.available_dtype:
                 # for dtype in [np.int32,np.float64]:
                 for ftype in mp.slicer.available_filtration_container:
@@ -359,3 +359,5 @@ def test_astypes():
                             assert s.ftype.split("_")[0] == ftype
                             assert s.col_type == col
                             assert s.pers_backend == pers_backend
+    s = mp.Slicer(st)
+    assert s.get_ptr() == s.astype().get_ptr()

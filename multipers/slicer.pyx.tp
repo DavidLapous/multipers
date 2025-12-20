@@ -281,7 +281,10 @@ cdef class {{D['PYTHON_TYPE']}}:
             str pers_backend="{{D['PERS_BACKEND_TYPE']}}", 
             str filtration_container:_filtration_container_type = "{{D['SHORT_FILTRATION_TYPE']}}"
             ):
-        return get_matrix_slicer(vineyard, kcritical, dtype, col, pers_backend, filtration_container)(self)
+        newSlicer = get_matrix_slicer(vineyard, kcritical, dtype, col, pers_backend, filtration_container)
+        if newSlicer == {{D['PYTHON_TYPE']}}:
+            return self
+        return newSlicer(self)
 
     def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
         # assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"
