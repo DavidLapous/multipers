@@ -204,8 +204,8 @@ You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
         filtration_grid = None
-        if max_dim is not None:  # no test for simplex tree?
-            st.prune_above_dimension(max_dim)
+        # if max_dim is not None:  # no test for simplex tree?
+        #     st.prune_above_dimension(max_dim)
         if isinstance(st, str):  # is_kcritical should be false
             slicer = _Slicer()._build_from_scc_file(st)
         else:
