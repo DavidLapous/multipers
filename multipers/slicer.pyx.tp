@@ -65,7 +65,7 @@ available_columns = set((
 global available_dtype
 available_dtype = set([
 {{for D in slicers}}
-  "{{D['PY_VALUE_TYPE']}}",
+  {{D['PY_VALUE_TYPE']}},
 {{endfor}}
 ])
 
@@ -140,7 +140,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self.minpres_degree>=0
     @property
     def ftype(self)->str:
-        return "{{FILTRATION_TYPE}}"
+        return "{{SHORT_FILTRATION_TYPE}}"
     @staticmethod
     def _inf_value():
         return np.asarray(np.inf,dtype={{D['PY_VALUE_TYPE']}}) if issubclass({{D['PY_VALUE_TYPE']}},np.floating) else np.iinfo({{D['PY_VALUE_TYPE']}}).max
@@ -273,6 +273,15 @@ cdef class {{D['PYTHON_TYPE']}}:
         self.minpres_degree = -1
     {{endif}}
     
+    def astype(self,
+            bool vineyard={{IS_VINE}},
+            bool is_k_critical={{IS_KCRITICAL}},
+            dtype:type|_valid_dtypes={{PY_VALUE_TYPE}}, 
+            str col = "{{COLUMN_TYPE}}", 
+            str pers_backend="{{D['PERS_BACKEND_TYPE']}}", 
+            str filtration_container:_filtration_container_type = "{{D['SHORT_FILTRATION_TYPE']}}"
+            ):
+        return get_matrix_slicer(vineyard, is_k_critical, dtype, col, pers_backend, filtration_container)(self)
 
     def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
         # assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"

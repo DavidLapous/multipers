@@ -333,4 +333,26 @@ def test_clean_filtration_grid():
     assert_sm(sm1, sm2)
 
 
-# %%
+def test_astypes():
+    from multipers.tests import random_st
+
+    st = random_st()
+
+    for vine in [True, False]:
+        for dtype in mp.slicer.available_dtype:
+            # for dtype in [np.int32,np.float64]:
+            for ftype in mp.slicer.available_filtration_container:
+                for col in mp.slicer.available_columns:
+                    for pers_backend in mp.slicer.available_pers_backend:
+                        s = mp.Slicer(st).astype(
+                            vineyard=vine,
+                            dtype=dtype,
+                            filtration_container=ftype,
+                            col=col,
+                            pers_backend=pers_backend,
+                        )
+                        assert s.is_vine == vine
+                        assert s.dtype == dtype
+                        assert s.ftype.split("_")[0] == ftype
+                        assert s.col_type == col
+                        assert s.pers_backend == pers_backend
