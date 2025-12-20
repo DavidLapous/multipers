@@ -144,7 +144,8 @@ def Slicer(
     ------
     The corresponding slicer.
     """
-
+    if max_dim is not None:
+        raise DeprecationWarning("deprecated parameter.")
     if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
         dtype = st.dtype if dtype is None else dtype
         is_kcritical = st.is_kcritical if kcritical is None else kcritical
@@ -182,19 +183,15 @@ def Slicer(
     if st is None:
         return _Slicer()
     elif mps.is_slicer(st):
-        max_dim_idx = (
-            None
-            if max_dim is None
-            else np.searchsorted(st.get_dimensions(), max_dim + 1)
-        )
-        slicer = _Slicer(
-            st.get_boundaries()[slice(None, max_dim_idx)],
-            st.get_dimensions()[slice(None, max_dim_idx)],
-            st.get_filtrations()[slice(None, max_dim_idx)],
-        )
-        if st.is_squeezed:
-            slicer.filtration_grid = st.filtration_grid
-        slicer.minpres_degree = st.minpres_degree
+        # max_dim_idx = (
+        #     None
+        #     if max_dim is None
+        #     else np.searchsorted(st.get_dimensions(), max_dim + 1)
+        # )
+        slicer = _Slicer(st)
+        # if st.is_squeezed:
+        #     slicer.filtration_grid = st.filtration_grid
+        # slicer.minpres_degree = st.minpres_degree
     elif is_simplextree_multi(st) and backend == "Graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:

@@ -185,6 +185,19 @@ cdef class {{D['PYTHON_TYPE']}}:
         if len(generator_maps) == 0:
             self.minpres_degree = -1
             return
+
+        # copy constructors / astypes
+        cdef intptr_t other_ptr
+        {{for D2 in slicers}} 
+        if isinstance(generator_maps,{{D2['PYTHON_TYPE']}}):
+          other_ptr = <intptr_t>(generator_maps.get_ptr())
+          with nogil:
+            self.truc = {{D['C_TEMPLATE_TYPE']}}((<{{D2['C_TEMPLATE_TYPE']}} *>(other_ptr))[0])
+          self.filtration_grid = generator_maps.filtration_grid
+          self.minpres_degree=generator_maps.minpres_degree
+          return
+        {{endfor}}
+
         if len(generator_maps)>0 and len(generator_dimensions) == 0 and len(filtration_values) == 0:
           from multipers._slicer_meta import _blocks2boundary_dimension_grades
           generator_maps, generator_dimensions, filtration_values = _blocks2boundary_dimension_grades(
@@ -228,6 +241,18 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         Cython constructor
         """
+
+
+        {{for D2 in slicers}} 
+        if isinstance(generator_maps,{{D2['PYTHON_TYPE']}}):
+          other_ptr = <intptr_t>(generator_maps.get_ptr())
+          with nogil:
+            self.truc = {{D['C_TEMPLATE_TYPE']}}((<{{D2['C_TEMPLATE_TYPE']}} *>(other_ptr))[0])
+          self.filtration_grid = generator_maps.filtration_grid
+          self.minpres_degree=generator_maps.minpres_degree
+          return
+        {{endfor}}
+
         cdef uint32_t num_generators = len(generator_maps)
         filtration_values = np.asarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
         assert len(filtration_values) == num_generators, f"Invalid input, shape do not coicide. Got sizes {num_generators,len(generator_dimensions),len(filtration_values)}."
@@ -248,6 +273,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         self.minpres_degree = -1
     {{endif}}
     
+
     def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
         # assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"
         new_slicer = {{D['PYTHON_TYPE']}}()

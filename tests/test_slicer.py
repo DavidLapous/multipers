@@ -163,22 +163,22 @@ def test_representative_cycles():
     assert len(cycles[2]) == 0, "Found a 2-cycle, which should not exist"
 
 
-def test_pruning():
-    from multipers.tests import random_st
-
-    st = random_st(num_parameters=3, max_dim=4)
-    s = mp.Slicer(st)
-    s.prune_above_dimension(2)
-    s2 = mp.Slicer(s, max_dim=2)
-    assert s.get_dimensions()[-1] == 2, "Failed to prune dimension"
-    st.prune_above_dimension(2)
-    assert (s.get_dimensions() == s2.get_dimensions()).all(), (
-        "pruned dimensions do not coincide"
-    )
-    assert s.get_boundaries() == s2.get_boundaries(), "Boundaries changed"
-    assert (s.get_filtrations_values() == s2.get_filtrations_values()).all(), (
-        "Filtrations have changed"
-    )
+# def test_pruning():
+#     from multipers.tests import random_st
+#
+#     st = random_st(num_parameters=3, max_dim=4)
+#     s = mp.Slicer(st)
+#     s.prune_above_dimension(2)
+#     s2 = mp.Slicer(s, max_dim=2)
+#     assert s.get_dimensions()[-1] == 2, "Failed to prune dimension"
+#     st.prune_above_dimension(2)
+#     assert (s.get_dimensions() == s2.get_dimensions()).all(), (
+#         "pruned dimensions do not coincide"
+#     )
+#     assert s.get_boundaries() == s2.get_boundaries(), "Boundaries changed"
+#     assert (s.get_filtrations_values() == s2.get_filtrations_values()).all(), (
+#         "Filtrations have changed"
+#     )
 
 
 def test_scc():

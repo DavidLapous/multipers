@@ -67,7 +67,10 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
 
       {{D['C_TEMPLATE_TYPE']}}()
       {{D['C_TEMPLATE_TYPE']}}(Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}]&)
-      {{D['C_TEMPLATE_TYPE']}}& operator=(const {{D['C_TEMPLATE_TYPE']}}&)
+
+      {{for D2 in slicers}}
+      {{D['C_TEMPLATE_TYPE']}}(const {{D2['C_TEMPLATE_TYPE']}}&) nogil
+      {{endfor}}
 
       uint32_t num_generators "get_number_of_cycle_generators"() nogil
       uint32_t num_parameters "get_number_of_parameters"() nogil
