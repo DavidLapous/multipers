@@ -275,13 +275,13 @@ cdef class {{D['PYTHON_TYPE']}}:
     
     def astype(self,
             bool vineyard={{IS_VINE}},
-            bool is_k_critical={{IS_KCRITICAL}},
+            bool kcritical={{IS_KCRITICAL}},
             dtype:type|_valid_dtypes={{PY_VALUE_TYPE}}, 
             str col = "{{COLUMN_TYPE}}", 
             str pers_backend="{{D['PERS_BACKEND_TYPE']}}", 
             str filtration_container:_filtration_container_type = "{{D['SHORT_FILTRATION_TYPE']}}"
             ):
-        return get_matrix_slicer(vineyard, is_k_critical, dtype, col, pers_backend, filtration_container)(self)
+        return get_matrix_slicer(vineyard, kcritical, dtype, col, pers_backend, filtration_container)(self)
 
     def to_colexical(self, bool return_permutation = False)->{{D['PYTHON_TYPE']}}|tuple[{{D['PYTHON_TYPE']}},np.ndarray]:
         # assert not self.is_squeezed, "Unsqueeze first, this is not implented yet for squeezed slicers"
