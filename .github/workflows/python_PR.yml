@@ -160,7 +160,7 @@ jobs:
     - name: tests
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp pytest-rerunfailures -c conda-forge
         micromamba activate test
 
         if [ "$RUNNER_OS" == "macOS" ]; then
