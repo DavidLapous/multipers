@@ -21,7 +21,7 @@ python_tensor_dtype = np.int32
 ctypedef pair[vector[vector[indices_type]], vector[tensor_dtype]] signed_measure_type
 
 
-from multipers.simplex_tree_multi import SimplexTreeMulti_Ff64
+from multipers.simplex_tree_multi import _SimplexTreeMulti_Flat_Kf64
 from gudhi.simplex_tree import SimplexTree
 
 cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::multiparameter::function_rips":
@@ -34,16 +34,18 @@ import multipers.grids as mpg
 
 
 
-def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0):
+def get_degree_rips(st, vector[int] degrees, grid_strategy="exact", resolution=0, bool return_raw=False, out_type=_SimplexTreeMulti_Flat_Kf64):
 	assert isinstance(st,SimplexTree), "Input has to be a Gudhi simplextree for now."
 	assert st.dimension() == 1, "Simplextree has to be of dimension 1. You can use the `prune_above_dimension` method."
-	degree_rips_st = SimplexTreeMulti_Ff64(num_parameters=degrees.size())
+	degree_rips_st = out_type(num_parameters=degrees.size())
 	cdef intptr_t simplextree_ptr = st.thisptr
 	cdef intptr_t st_multi_ptr = degree_rips_st.thisptr
 	cdef pair[vector[value_type],int] out
 	with nogil:
 		out = get_degree_rips_st_python(simplextree_ptr, st_multi_ptr, degrees)
 	filtrations = np.asarray(out.first)
+	if return_raw:
+		return filtrations, degree_rips_st
 	cdef int max_degree = out.second
 	cdef bool inf_flag = filtrations[-1] == np.inf
 	if inf_flag:
