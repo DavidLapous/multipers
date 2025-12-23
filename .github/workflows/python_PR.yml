@@ -162,8 +162,8 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp pytest-rerunfailures -c conda-forge
-        micromamba install gudhi -c conda-forge ## Little workaround for lagging pip versions
         micromamba activate test
+        micromamba install gudhi -c conda-forge ## Little workaround for lagging pip versions
 
         if [ "$RUNNER_OS" == "macOS" ]; then
             # pykeops workaround
