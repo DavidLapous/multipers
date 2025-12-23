@@ -57,7 +57,7 @@ matrix_types = [
 
 filtration_containers = [
     # "Dynamic_multi_parameter_filtration",
-    # "Degree_rips_bifiltration",
+    "Degree_rips_bifiltration",
     "Multi_parameter_filtration",
 ]
 short_filtration_container = {
