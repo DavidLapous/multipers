@@ -62,7 +62,7 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     ctypedef pair[simplex_type, F*] simplex_filtration_type
     Simplex_tree_multi_interface() nogil
     Simplex_tree_multi_interface(Simplex_tree_multi_interface&) nogil
-    F* simplex_filtration(const vector[int]& simplex) nogil
+    F* simplex_filtration(const vector[int]& simplex) except + nogil 
     void assign_simplex_filtration(vector[int]& simplex, const F& filtration) noexcept nogil
     void initialize_filtration() nogil
     int num_vertices() nogil

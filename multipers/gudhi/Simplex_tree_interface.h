@@ -12,6 +12,7 @@
 #define INCLUDE_SIMPLEX_TREE_INTERFACE_H_
 
 #include <cstddef>
+#include <string>
 #include <vector>
 #include <utility>  // std::pair
 #include <tuple>

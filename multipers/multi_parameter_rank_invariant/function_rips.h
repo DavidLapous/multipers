@@ -3,9 +3,9 @@
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <limits>
+#include <stdexcept>
 
 #include "../gudhi/Simplex_tree_multi_interface.h"
-#include "../gudhi/Persistence_slices_interface.h"
 #include "../tensor/tensor.h"
 #include "persistence_slices.h"
 
@@ -44,16 +44,14 @@ std::pair<std::map<value_type, unsigned int>, std::vector<value_type>> inline ra
 // axis is the rips, and the others are the filtrations of the node at each
 // degree in degrees Assumes that the degrees are sorted, and unique
 // also return max_degree,filtration_values
-inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtrations(
+inline flat_multi_st get_degree_filtrations(
     python_interface::interface_std &st,
     const std::vector<int> &degrees) {
   constexpr const bool verbose = false;
   using filtration_lists = std::vector<std::vector<value_type>>;
 
-  assert(st.dimension() == 1);  // the st slices will be expanded + collapsed after being filled.
-  std::vector<value_type> rips_filtration_values = {0};  // vector that will hold the used filtration values
-  rips_filtration_values.reserve(st.num_simplices());
-  unsigned int max_st_degree = 0;
+  if (st.dimension() != 1)
+    throw std::invalid_argument("get_degree_filtrations only works for 1-dimensional simplex trees.");
 
   unsigned int num_degrees = degrees.size();
   // puts the st filtration in axis 0 + fitrations for each degrees afterward
@@ -70,12 +68,11 @@ inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtra
     }
   }
 
-  for (auto &filtrations : edge_filtration_of_nodes) {  // todo : parallel ?
-    std::sort(filtrations.begin(), filtrations.end());
+  tbb::parallel_for(static_cast<size_t>(0u), st.num_vertices(), [&](size_t  i){
+    auto& filtrations = edge_filtration_of_nodes[i];
+    tbb::parallel_sort(filtrations.begin(), filtrations.end());
     unsigned int node_degree = filtrations.size();
-    max_st_degree = std::max(node_degree, max_st_degree);
     filtrations.resize(std::max(num_degrees, node_degree));
-    if constexpr (verbose) std::cout << "Filtration of node ";
     for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
       if (degrees[degree_index] < static_cast<int>(node_degree))
         filtrations[degree_index] = filtrations[degrees[degree_index]];
@@ -86,14 +83,8 @@ inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtra
     filtrations.resize(num_degrees);
     std::reverse(filtrations.begin(),
                  filtrations.end());  // degree is in opposite direction
-    for (value_type filtration_value : filtrations)
-      rips_filtration_values.push_back(filtration_value);  // we only do that here to have a smaller grid.
-    if constexpr (verbose) std::cout << "\n";
-  }
-  // sort + unique the filtration values
-  std::sort(rips_filtration_values.begin(), rips_filtration_values.end());
-  rips_filtration_values.erase(std::unique(rips_filtration_values.begin(), rips_filtration_values.end()),
-                               rips_filtration_values.end());
+  });
+
 
   // fills the degree_rips simplextree with lower star
   auto sh_standard = st.complex_simplex_range().begin();  // waiting for c++23 & zip to remove this garbage
@@ -107,7 +98,7 @@ inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtra
     value_type edge_filtration = st.filtration(*sh_standard);
     // the filtration vector to fill
 
-    std::vector<value_type> edge_degree_rips_filtration(num_degrees);
+    std::vector<value_type> edge_degree_rips_filtration(num_degrees, std::numeric_limits<value_type>::infinity());
     // = st_multi.get_filtration_value(*sh_multi);
     // auto &edge_degree_rips_filtration = st_multi.get_filtration_value(*sh_multi);
     // edge_degree_rips_filtration.set_num_generators(num_degrees);
@@ -119,37 +110,23 @@ inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtra
       }
       std::cout << "]  to : ";
     }
-    for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
+    for (auto degree_index = 0u; degree_index < num_degrees; degree_index++) {
       value_type edge_filtration_of_degree = edge_filtration;  // copy as we do the max with edges of degree index
       for (int node : st.simplex_vertex_range(*sh_standard)) {
         edge_filtration_of_degree = std::max(edge_filtration_of_degree, edge_filtration_of_nodes[node][degree_index]);
-        // if (edge_filtration_of_degree == std::numeric_limits<value_type>::infinity()) {
-        //   edge_degree_rips_filtration.set_num_generators(degree_index + 1);
-        //   break;
-        // }
-        // if constexpr (verbose) {
-        //   std::cout << std::to_string(node) << ",";
-        // }
       }
 
-      // fills the correct value in the edge filtration
-      // std::cout << edge_filtration_of_degree << std::endl;
-      // if (edge_filtration_of_degree == std::numeric_limits<value_type>::infinity()) {
-      //   // edge_degree_rips_filtration.set_num_generators(degree_index);
-      //   continue;
-      // }
       edge_degree_rips_filtration[degree_index] = edge_filtration_of_degree;
-      // if constexpr (verbose) {
-      //   std::cout << "] to "<< std::to_string(edge_filtration_of_degree);
-      // }
+      if (edge_filtration_of_degree == std::numeric_limits<value_type>::infinity()) break;
     }
 
     if constexpr (verbose) {
-      for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++)
-        std::cout << " " << std::to_string(edge_degree_rips_filtration[k]);
+      for (auto k = 0u; k < num_degrees; k++) std::cout << " " << std::to_string(edge_degree_rips_filtration[k]);
     }
-    std::reverse(edge_degree_rips_filtration.begin(), edge_degree_rips_filtration.end());
+    // std::reverse(edge_degree_rips_filtration.begin(), edge_degree_rips_filtration.end());
     auto &to_update = st_multi.get_filtration_value(*sh_multi);
+    if (edge_degree_rips_filtration.size() != num_degrees)
+      throw std::overflow_error("edge_degree_rips of invalid size");
     to_update.set_num_generators(edge_degree_rips_filtration.size());
     for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++) {
       to_update(k, 0) = edge_degree_rips_filtration[k];
@@ -165,32 +142,30 @@ inline std::tuple<flat_multi_st, std::vector<value_type>, int> get_degree_filtra
   }
 
   // fills the dimension 0 simplices
-  {                                                        // scope for count;
-    for (auto vertex : st_multi.complex_vertex_range()) {  // should be in increasing order
-      auto &vertex_filtration = st_multi.get_filtration_value(st_multi.find({vertex}));
-      if constexpr (verbose) {
-        std::cout << "Setting filtration of node " << vertex << " to ";
-        for (auto degree_index = 0u; degree_index < num_degrees; degree_index++) {
-          std::cout << edge_filtration_of_nodes[vertex][degree_index] << " ";
-        }
-        std::cout << "\n";
+  for (auto vertex : st_multi.complex_vertex_range()) {  // should be in increasing order
+    auto &vertex_filtration = st_multi.get_filtration_value(st_multi.find({vertex}));
+    if constexpr (verbose) {
+      std::cout << "Setting filtration of node " << vertex << " to ";
+      for (auto degree_index = 0u; degree_index < num_degrees; degree_index++) {
+        std::cout << edge_filtration_of_nodes[vertex][degree_index] << " ";
       }
+      std::cout << "\n";
+    }
 
-      // vertex_filtration =
-      //     _multifiltration(edge_filtration_of_nodes[vertex].begin(), edge_filtration_of_nodes[vertex].end());
-      // vertex_filtration = _multifiltration(2, 0);
-      vertex_filtration.set_num_generators(edge_filtration_of_nodes[vertex].size());
-      for (auto k = 0u; k < edge_filtration_of_nodes[vertex].size(); k++) {
-        vertex_filtration(edge_filtration_of_nodes[vertex].size()-k-1, 0) = edge_filtration_of_nodes[vertex][k];
-      }
-      if constexpr (verbose){
-        std::cout << "Filtration of node " << std::to_string(vertex) << " :\n" << vertex_filtration << "\n";
-      }
+    if (edge_filtration_of_nodes[vertex].size() > num_degrees)
+      throw std::overflow_error("Edge filtration of node of bad size");
+
+    vertex_filtration.set_num_generators(num_degrees);
+    for (auto k = 0u; k < num_degrees; k++) {
+      vertex_filtration(k, 0) = edge_filtration_of_nodes[vertex][k];
+    }
+    if constexpr (verbose) {
+      std::cout << "Filtration of node " << std::to_string(vertex) << " :\n" << vertex_filtration << "\n";
     }
   }
   if constexpr (verbose) std::cout << std::endl;
 
-  return {st_multi, rips_filtration_values, max_st_degree};
+  return st_multi;
 }
 
 // assumes that the degree is 1
@@ -291,9 +266,9 @@ std::pair<std::vector<value_type>, int> inline get_degree_rips_st_python(const i
                                                                          const std::vector<int> &degrees) {
   auto &st_std = python_interface::get_simplextree_from_pointer<python_interface::interface_std>(simplextree_ptr);
   auto &st_multi_python_container = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
-  auto [st_multi, rips_filtration_values, max_node_degree] = get_degree_filtrations(st_std, degrees);
+  auto st_multi= get_degree_filtrations(st_std, degrees);
   st_multi_python_container = std::move(st_multi);
-  return {rips_filtration_values, max_node_degree};
+  return {{}, 0};
 }
 
 template <typename dtype, typename indices_type>

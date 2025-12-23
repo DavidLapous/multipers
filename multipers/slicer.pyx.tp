@@ -592,8 +592,16 @@ cdef class {{D['PYTHON_TYPE']}}:
         Returns the current filtration values of the slicer.
         """
         cdef vector[{{D['FILTRATION_TYPE']}}] v = self.truc.get_filtrations()
-        out = [[v[i](g,p) for p in range(self.num_parameters)] for i in range(v.size()) for g in range(v[i].num_generators())]
-        return np.asarray(out, dtype={{D['PY_VALUE_TYPE']}})
+        # shape num_splx, num_gens, num_parameters
+        cdef vector[{{C_VALUE_TYPE}}] out
+        with nogil:
+            out.reserve(self.truc.num_generators())
+            for i in range(v.size()):
+                for g in range(v[i].num_generators()):
+                    for p in range(v[i].num_parameters()):
+                        out.push_back(v[i](g,p))
+        # out = [[v[i](g,p) for p in range(self.num_parameters)] for i in range(v.size()) for g in range(v[i].num_generators())]
+        return np.asarray(out, dtype={{D['PY_VALUE_TYPE']}}).reshape(-1, self.num_parameters)
     def get_filtration_grid(self,grid_strategy:str="exact", **infer_grid_kwargs):
         return compute_grid(
                 self.get_filtrations_values().T,
