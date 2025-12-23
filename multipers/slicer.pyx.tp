@@ -595,7 +595,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         # shape num_splx, num_gens, num_parameters
         cdef vector[{{C_VALUE_TYPE}}] out
         with nogil:
-            out.reserve(self.truc.num_generators()*self.num_parameters())
+            out.reserve(self.truc.num_generators()*self.truc.num_parameters())
             for i in range(v.size()):
                 for g in range(v[i].num_generators()):
                     for p in range(v[i].num_parameters()):
