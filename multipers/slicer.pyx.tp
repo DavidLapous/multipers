@@ -140,7 +140,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self.minpres_degree>=0
     @property
     def ftype(self)->str:
-        return "{{SHORT_FILTRATION_TYPE}}"
+        return "{{FILTRATION_TYPE}}"
     @staticmethod
     def _inf_value():
         return np.asarray(np.inf,dtype={{D['PY_VALUE_TYPE']}}) if issubclass({{D['PY_VALUE_TYPE']}},np.floating) else np.iinfo({{D['PY_VALUE_TYPE']}}).max

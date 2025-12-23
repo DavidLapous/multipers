@@ -1473,6 +1473,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
     @property
     def ftype(self)->type:
       return "{{PyFil}}"
+    @property
+    def filtration_container(self)->type:
+      return "{{SHORT_FILTRATION_TYPE}}"
     def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float|tuple=0, split_dimension:bool=False)->np.ndarray:
         """
         Returns the filtrations bounds of the finite filtration values.

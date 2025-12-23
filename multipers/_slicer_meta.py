@@ -149,26 +149,26 @@ def Slicer(
     if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
         dtype = st.dtype if dtype is None else dtype
         is_kcritical = st.is_kcritical if kcritical is None else kcritical
-    else:
-        dtype = np.float64 if dtype is None else dtype
-        is_kcritical = False if kcritical is None else kcritical
-
-    if is_slicer(st, allow_minpres=False):
-        vineyard = st.is_vine if vineyard is None else vineyard
-        column_type = st.col_type if column_type is None else column_type
-        backend = st.pers_backend if backend is None else backend
         filtration_container = (
             st.filtration_container
             if filtration_container is None
             else filtration_container
         )
     else:
-        vineyard = False if vineyard is None else vineyard
-        column_type = "INTRUSIVE_SET" if column_type is None else column_type
-        backend = "Matrix" if backend is None else backend
+        dtype = np.float64 if dtype is None else dtype
+        is_kcritical = False if kcritical is None else kcritical
         filtration_container = (
             "contiguous" if filtration_container is None else filtration_container
         )
+
+    if is_slicer(st, allow_minpres=False):
+        vineyard = st.is_vine if vineyard is None else vineyard
+        column_type = st.col_type if column_type is None else column_type
+        backend = st.pers_backend if backend is None else backend
+    else:
+        vineyard = False if vineyard is None else vineyard
+        column_type = "INTRUSIVE_SET" if column_type is None else column_type
+        backend = "Matrix" if backend is None else backend
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
