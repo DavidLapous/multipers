@@ -356,7 +356,7 @@ def test_astypes():
                             assert s.is_kcritical == kcritical
                             assert s.is_vine == vine
                             assert s.dtype == dtype
-                            assert s.ftype.split("_")[0] == ftype
+                            assert s.filtration_container == ftype
                             assert s.col_type == col
                             assert s.pers_backend == pers_backend
     s = mp.Slicer(st)
