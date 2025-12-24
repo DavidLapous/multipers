@@ -92,8 +92,9 @@ def module_approximation_from_slicer(
 
     if unsqueeze_grid is not None:
         if verbose:
-            print("Reevaluating module in filtration grid...",end="")
+            print("Reevaluating module in filtration grid...",end="", flush=True)
         approx_mod.evaluate_in_grid(unsqueeze_grid)
+        approx_mod.set_box(mp.grids.compute_bounding_box(approx_mod))
         if verbose:
             print("Done.",flush=True)
 
@@ -102,20 +103,18 @@ def module_approximation_from_slicer(
 def module_approximation(
         input:Union[SimplexTreeMulti_type,Slicer_type, tuple],
         box:Optional[np.ndarray]=None,
-        float max_error=-1, 
+        double max_error=-1, 
         int nlines=557,
+        bool from_coordinate = False,
         slicer_backend:Literal["matrix","clement","graph"]="matrix",
-        minpres:Optional[Literal["mpfree"]]=None,
-        degree:Optional[int]=None,
         bool complete=True, 
         bool threshold=False, 
         bool verbose=False,
         bool ignore_warnings=False,
-        vector[float] direction = [],
+        vector[double] direction = [],
         vector[int] swap_box_coords = [],
         *,
         int n_jobs = -1,
-        bool unsqueeze = False,
         )->PyModule_type:
     """Computes an interval module approximation of a multiparameter filtration.
 
@@ -141,15 +140,6 @@ def module_approximation(
         If given, the line are drawn with this angle.
         **Warning**: You must ensure that the first line, defined by box,
         captures a generic barcode.
-    slicer_backend: Either "matrix","clement", or "graph".
-        If a simplextree is given, it is first converted to this structure,
-        with different choices of backends.
-    minpres: (Optional) "mpfree" only for the moment.
-        If given, and the input is a simplextree, 
-        computes a minimal presentation before starting the computation.
-        A degree has to be given.
-    degree: int Only required when minpres is given.
-        Homological degree of the minimal degree.
     threshold: bool
         When true, intersects the module support with the box,
         i.e. no more infinite summands.
@@ -170,10 +160,10 @@ def module_approximation(
         if len(input) == 0:
             return PyModule_f64()
         if n_jobs <= 1: 
-            modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords) for slicer in input)
+            modules = tuple(module_approximation(slicer, box, max_error, nlines, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords) for slicer in input)
         else:
             modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords)
+                delayed(module_approximation)(slicer, box, max_error, nlines,  complete, threshold, verbose, ignore_warnings, direction, swap_box_coords)
                 for slicer in input
             ))
         box = modules[0].get_box()
@@ -191,14 +181,16 @@ def module_approximation(
         if not ignore_warnings:
             warn("(copy warning) Got a squeezed input. ")
         if verbose:
-            print("Preparing filtration (unsqueeze)... ",end="")
-        if unsqueeze:
-            unsqueeze_grid = input.filtration_grid
+            print("Preparing filtration (unsqueeze)... ",end="", flush=True)
+        if from_coordinates:
+            from multipers.grids import sanitize_grid
+            unsqueeze_grid = sanitize_grid(input.filtration_grid, numpyfy=True, add_inf=True)
             input = input.astype(dtype=np.float64)
             if direction.size() == 0:
-                direction = np.asarray([len(g) for g in unsqueeze_grid], dtype=input.dtype)
+                direction = np.asarray([g.size for g in unsqueeze_grid], dtype=np.float64)
+                max_error = .5
             if verbose:
-                print(f"Updated direction to {direction=}. ",end="")
+                print(f"Updated `direction` to {direction=}, and `max_error` to `0.5` ",end="")
 
         else:
             input = input.unsqueeze()
@@ -247,7 +239,7 @@ Returning the trivial module.
         )
     if is_simplextree_multi(input):
         from multipers._slicer_meta import Slicer
-        input = Slicer(input,backend=slicer_backend, vineyard=True)
+        input = Slicer(input,backend="matrix", vineyard=True)
     assert is_slicer(input), "First argument must be a simplextree or a slicer !"
     return module_approximation_from_slicer(
             slicer=input,
