@@ -422,6 +422,19 @@ cdef class PyModule_{{SHORT}}:
     def degree_splits(self):
         return np.asarray(self.cmod.get_degree_splits(), dtype=np.int64)
 {{if SHORT[0] == 'f'}}
+    def evaluate_in_grid(self, grid):
+        grid = mpg.sanitize_grid(grid, numpyfy=True)
+        cdef size_t num_parameters = len(grid)
+        if num_parameters != self.num_parameters:
+            raise ValueError(f"Invalid grid size. Got {len(grid)=} != {self.num_parameters=}")
+        cdef vector[vector[{{CTYPE}}]] cgrid = vector[vector[{{CTYPE}}]](num_parameters)
+        for i in range(num_parameters):
+            cgrid[i] = grid[i]
+        self.cmod.evaluate_in_grid(cgrid)
+        return self
+        
+
+
     def _compute_pixels(self,coordinates:np.ndarray,
                                          degrees=None, box=None, {{CTYPE}} delta=.1, 
                                          {{CTYPE}} p=1., bool normalize=False, int n_jobs=0):

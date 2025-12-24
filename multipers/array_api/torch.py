@@ -30,6 +30,11 @@ cos = _t.cos
 _is_keops_available = None
 
 
+def clip(x, min=None, max=None):
+    return _t.clamp(x, min, max)
+
+
+
 def split_with_sizes(arr, sizes):
     return arr.split_with_sizes(sizes)
 

@@ -58,6 +58,7 @@ def module_approximation_from_slicer(
         bool verbose=False,
         list[float] direction = [],
         bool warnings = True,
+        unsqueeze_grid = None,
         )->PyModule_type:
 
     cdef Module[float] mod_f32
@@ -68,8 +69,8 @@ def module_approximation_from_slicer(
             warn(r"(copy warning) Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
         from multipers._slicer_meta import Slicer
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
-    if slicer.is_squeezed:
-        raise ValueError("Got a squeezed slicer. Should have been unsqueezed before !")
+    # if slicer.is_squeezed and unsqueeze_grid not None:
+    #     raise ValueError("Got a squeezed slicer. Should have been unsqueezed before !")
 
     direction_ = np.asarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
@@ -89,6 +90,13 @@ def module_approximation_from_slicer(
 
     approx_mod._set_from_ptr(ptr)
 
+    if unsqueeze_grid is not None:
+        if verbose:
+            print("Reevaluating module in filtration grid...",end="")
+        approx_mod.evaluate_in_grid(unsqueeze_grid)
+        if verbose:
+            print("Done.",flush=True)
+
     return approx_mod
 
 def module_approximation(
@@ -104,10 +112,11 @@ def module_approximation(
         bool verbose=False,
         bool ignore_warnings=False,
         id="",
-        list[float] direction = [],
-        list[int] swap_box_coords = [],
+        vector[float] direction = [],
+        vector[int] swap_box_coords = [],
         *,
         int n_jobs = -1,
+        bool unsqueeze = False,
         )->PyModule_type:
     """Computes an interval module approximation of a multiparameter filtration.
 
@@ -177,10 +186,23 @@ def module_approximation(
         if verbose:
             print("Empty input, returning the trivial module.")
         return PyModule_f64()
+
+    unsqueeze_grid = None
     if input.is_squeezed:
         if not ignore_warnings:
             warn("(copy warning) Got a squeezed input. ")
-        input = input.unsqueeze()
+        if verbose:
+            print("Preparing filtration (unsqueeze)... ",end="\n")
+        if unsqueeze:
+            unsqueeze_grid = input.filtration_grid
+            input = input.astype(dtype=np.float64)
+            if direction.size() == 0:
+                direction = [len(g) for g in unsqueeze_grid]
+
+        else:
+            input = input.unsqueeze()
+        if verbose:
+            print("Done.", flush=True)
 
     if box is None:
         if verbose:
@@ -188,8 +210,10 @@ def module_approximation(
         box = input.filtration_bounds()
         if verbose:
             print(f"Using {box=}.",flush=True)
-    box = np.asarray(box)
 
+    box = np.asarray(box)
+    if box.ndim !=2:
+        raise ValueError(f"Invalid box dimension. Got {box.ndim=} != 2")
     # empty coords
     zero_idx = box[1] == box[0]
     if np.any(zero_idx):
@@ -202,7 +226,7 @@ def module_approximation(
     num_parameters = box.shape[1]
     if num_parameters <=0:
         num_parameters = box.shape[1]
-    assert len(direction) == 0 or len(direction) == len(box[0]), f"Invalid line direction, has to be 0 or {num_parameters=}"
+    assert direction.size() == 0 or direction.size() == box[0].size, f"Invalid line direction size, has to be 0 or {num_parameters=}"
 
     prod = sum(np.abs(box[1] - box[0])[:i].prod() * np.abs(box[1] - box[0])[i+1:].prod() for i in range(0,num_parameters))
 
@@ -232,6 +256,7 @@ Returning the trivial module.
             threshold=threshold,
             verbose=verbose,
             direction=direction,
+            unsqueeze_grid=unsqueeze_grid,
             )
 
 

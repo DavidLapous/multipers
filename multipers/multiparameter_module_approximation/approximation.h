@@ -167,7 +167,8 @@ class Module {
       const dimension_type dimension = -1,
       const bool threshold = false) const;
   std::vector<int> euler_curve(const std::vector<multipers::tmp_interface::Filtration_value<value_type>> &points) const;
-  Module<value_type> permute_summands(const std::vector<int> &permutation){
+
+  Module<value_type> permute_summands(const std::vector<int> &permutation) {
     Module<value_type> out;
     out.set_box(this->get_box());
     out.resize(this->size(), this->box_.get_dimension());
@@ -219,7 +220,22 @@ class Module {
   idx_dump_type to_idx(const std::vector<std::vector<value_type>> &grid) const;
   Module<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const;
 
+  void snap_to_integers() {
+    for (auto &summand : module_) {
+      summand.snap_to_integers();
+    }
+  }
+
   std::vector<std::vector<std::vector<int>>> to_flat_idx(const std::vector<std::vector<value_type>> &grid) const;
+
+  void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
+    // for (auto &summand : module_) {
+      // summand.evaluate_in_grid(grid);
+    // }
+    tbb::parallel_for(size_t(0), module_.size(), [&](size_t i){
+      module_[i].evaluate_in_grid(grid);
+    });
+  }
 
   std::vector<int> inline get_degree_splits() const;
 
@@ -387,6 +403,59 @@ class Summand {
   }
 
   Summand<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const;
+
+  void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
+    if (birth_corners_.num_generators() == 0) return;
+    auto snap = [](value_type x, value_type max) {
+      value_type a = std::floor(x);
+      value_type b = std::ceil(x);
+      size_t out;
+      if (x - a < b - x)
+        out = static_cast<size_t>(std::max(a,value_type(0)));
+      else
+        out = static_cast<size_t>(std::min(b, max));
+      return out;
+    };
+    auto todo = [&grid, &snap](auto &corners) {
+      return [&grid, &corners, &snap](size_t g) {
+        // auto &x = corners[i];
+        // for (auto g = 0u; g < x.num_generators(); ++g) {
+          for (auto p = 0u; p < corners.num_parameters(); ++p) {
+            corners(g, p) = grid[p][snap(corners(g, p), grid[p].size())];
+          }
+        // }
+      };
+    };
+
+    tbb::parallel_for(size_t(0),birth_corners_.size(), todo(birth_corners_));
+    if (death_corners_.num_generators() == 0) return;
+    tbb::parallel_for(size_t(0),death_corners_.size(), todo(death_corners_));
+  };
+
+  void snap_to_integers() {
+    if (birth_corners_.num_generators() == 0) return;
+    auto dimension = birth_corners_.num_parameters();
+    auto snap = [](value_type x) {
+      value_type a = std::floor(x);
+      value_type b = std::ceil(x);
+      if (x - a < b - x)
+        return a;
+      else
+        return b;
+    };
+    for (unsigned int g = 0; g < birth_corners_.num_generators(); ++g) {
+      for (unsigned int p = 0; p < dimension; ++p) {
+        auto &x = birth_corners_(g, p);
+        x = snap(x);
+      }
+    }
+    for (unsigned int g = 0; g < death_corners_.num_generators(); ++g) {
+      for (unsigned int p = 0; p < dimension; ++p) {
+        auto &x = death_corners_(g, p);
+        x = snap(x);
+      }
+    }
+  }
 
  private:
   using Generator = typename births_type::Generator;

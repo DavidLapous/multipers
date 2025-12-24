@@ -121,7 +121,9 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         vector[int] get_degree_splits() nogil
         void compute_distances_to(T*,vector[vector[T]],bool, int) nogil
         void add_modules_from_ptr(const vector[intptr_t]& modules)
-        Module[T] permute_summands(const vector[int]&)
+        Module[T] permute_summands(const vector[int]&) nogil
+        void snap_to_integers() nogil
+        void evaluate_in_grid(const vector[vector[T]]&) except + nogil
 
     Module[T] direct_sum[T](const Module[T]&, const Module[T]&) noexcept nogil
 

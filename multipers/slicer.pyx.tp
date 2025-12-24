@@ -683,7 +683,9 @@ cdef class {{D['PYTHON_TYPE']}}:
             resolution:Optional[int]=None,
             bool coordinates=True,
             bool inplace = False,
-            grid_strategy=None
+            grid_strategy=None,
+            threshold_min=None,
+            threshold_max=None,
         )->{{COARSENNED_PY_CLASS_NAME}}|{{D['PYTHON_TYPE']}}:
         """
         Coarsen the filtration values on a grid. This is necessary to compute some invariants.
@@ -702,14 +704,19 @@ cdef class {{D['PYTHON_TYPE']}}:
         if self.is_squeezed:
             warn("(copy warning) Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
-            subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
+            subgrid = compute_grid(self.filtration_grid, strategy=strategy,
+                                   resolution=resolution,
+                                   threshold_min=threshold_min,
+                                   threshold_max=threshold_max)
             return temp.grid_squeeze(subgrid, coordinates=coordinates, inplace=inplace)
 
         if filtration_grid is None:
             filtration_grid = compute_grid(
                     self.get_filtrations_values().T,
                     strategy=strategy,
-                    resolution=resolution)
+                    resolution=resolution,
+                    threshold_min=threshold_min,
+                    threshold_max=threshold_max,)
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] grid = filtration_grid
         if inplace or not coordinates:
             self.truc.coarsen_on_grid_inplace(grid, coordinates)
@@ -871,22 +878,29 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.truc = build_slicer_from_scc_file_{{D['C_TEMPLATE_TYPE']}}(c_path, rivet_compatible, reverse, shift_dimension)
         return self
 
-    def unsqueeze(self, grid=None)->{{REAL_PY_CLASS_NAME}}:
+    @cython.boundscheck(False)  
+    @cython.wraparound(False)
+    def unsqueeze(self, grid=None, bool inf_overflow = True)->{{REAL_PY_CLASS_NAME}}:
     {{if SHORT_FILTRATION_TYPE=="Flat"}}
         raise NotImplementedError("There is no reasonable implementation (yet).")
     {{else}}
         grid = self.filtration_grid if grid is None else grid
-        grid = sanitize_grid(grid, numpyfy=True)
-        {{if D['IS_KCRITICAL']}}
+        grid = sanitize_grid(grid, numpyfy=True, add_inf = inf_overflow)
+
         cdef int num_generators = len(self)
+        grid_size = np.array([len(g) for g in grid], dtype=np.int32)
+
+        {{if D['IS_KCRITICAL']}}
         current_filtration = self.get_filtrations()
         new_filtrations = tuple(
-                evaluate_in_grid(np.asarray(current_filtration[i], dtype=np.int32), grid)
+                evaluate_in_grid(np.asarray(current_filtration[i], dtype=np.int32).clip(None, grid_size-1), grid)
                 for i in range(num_generators)
         )
         {{else}}
-        new_filtrations = evaluate_in_grid(np.asarray(self.get_filtrations(), dtype=np.int32), grid)
+        F = np.asarray(self.get_filtrations(), dtype=np.int32).clip(None, grid_size-1)
+        new_filtrations = evaluate_in_grid(F, grid)
         {{endif}}
+        # TODO : optimize
         new_slicer = {{REAL_PY_CLASS_NAME}}(
             self.get_boundaries(),
             self.get_dimensions(),

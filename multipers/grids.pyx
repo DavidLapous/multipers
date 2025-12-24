@@ -24,17 +24,36 @@ ctypedef fused some_float:
     float
     double
 
-def sanitize_grid(grid, bool numpyfy=False):
-    if len(grid) == 0:
+def sanitize_grid(grid, bool numpyfy=False, bool add_inf=False):
+    cdef int num_parameters = len(grid)
+    if num_parameters == 0:
         raise ValueError("empty filtration grid")
     api = api_from_tensors(*grid)
     if numpyfy:
-        grid = tuple(api.asnumpy(g) for g in grid)
+        grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = tuple(api.astensor(g) for g in grid) 
+        grid = tuple(api.astensor(grid[i]) for i in range(num_parameters))
+    if add_inf:
+        api = api_from_tensors(grid[0])
+        inf = api.astensor(_inf_value(grid[0]))
+        grid = tuple(
+            grid[i] if grid[i][-1] == inf
+            else api.cat([grid[i], inf[None]])
+            for i in range(num_parameters)
+        )
     assert np.all([g.ndim==1 for g in grid])
     return grid
+
+def threshold_slice(a, m,M):
+    if m is not None:
+        a = a[a>=m]
+    if M is not None:
+        a = a[a<=M]
+    return a
+
+
+
 
 def compute_grid(
         x,
@@ -44,6 +63,8 @@ def compute_grid(
         some_float _q_factor=1., 
         drop_quantiles=[0,0],
         bool dense = False,
+        threshold_min = None,
+        threshold_max = None,
         ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -98,31 +119,28 @@ def compute_grid(
             initial_grid = tuple(f[0].T for f in x)
             api = api_from_tensors(*initial_grid)
             initial_grid = api.cat(initial_grid, axis=1)
-            # if isinstance(initial_grid[0], np.ndarray):
-            #     initial_grid = np.concatenate(initial_grid, axis=1)
-            # else:
-            #     is_numpy_compatible = False
-            #     import torch
-            #     assert isinstance(first[0], torch.Tensor), "Only numpy and torch are supported ftm."
-            #     initial_grid = torch.cat(initial_grid, axis=1)
         ## is grid-like (num_params, num_pts)
         else:
             api = api_from_tensors(*x)
             initial_grid = tuple(api.astensor(f) for f in x)
-            # elif isinstance(first,list) or isinstance(first, tuple) or isinstance(first, np.ndarray):
-            #     initial_grid = tuple(f for f in x)
-            # else:
-            #     is_numpy_compatible = False
-            #     import torch
-            #     assert isinstance(first, torch.Tensor), "Only numpy and torch are supported ftm."
-            #     initial_grid = x
 
-    num_parameters = len(initial_grid)
+    cdef int num_parameters = len(initial_grid)
     try:
         int(resolution)
         resolution = [resolution]*num_parameters
     except TypeError:
         pass
+   
+    if threshold_min is not None or threshold_max is not None:
+        if threshold_min is None:
+            threshold_min = [None]*num_parameters
+        if threshold_max is None:
+            threshold_max = [None]*num_parameters
+
+        initial_grid = [
+            threshold_slice(x,a,b) 
+            for x,a,b in zip(initial_grid, threshold_min, threshold_max)
+        ]
 
     grid = _compute_grid_numpy(
         initial_grid,

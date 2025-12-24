@@ -28,6 +28,10 @@ sin = _np.sin
 cos = _np.cos
 
 
+def clip(x, min=None, max=None):
+    return _np.clip(x, a_min=min, a_max=max)
+
+
 def relu(x):
     return _np.where(x >= 0, x, 0)
 

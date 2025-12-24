@@ -1370,7 +1370,12 @@ cdef class {{D["PY_CLASS_NAME"]}}:
 
 
 
-    def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, drop_quantiles:float|tuple=0, grid_strategy:_available_strategies="exact")->Iterable[np.ndarray]:
+    def get_filtration_grid(self, resolution:Iterable[int]|None=None,
+                            degrees:Iterable[int]|None=None,
+                            drop_quantiles:float|tuple=0,
+                            grid_strategy:_available_strategies="exact",
+                            threshold_min=None,
+                            threshold_max=None,)->Iterable[np.ndarray]:
         """
         Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 
@@ -1398,9 +1403,13 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         # removes duplicate + sort (nan at the end)
         filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
         # removes nan
-        filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
+        filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else
+                              filtration for filtration in filtrations_values]
 
-        return compute_grid(filtrations_values, resolution=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
+        return compute_grid(filtrations_values,
+                            resolution=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles,
+                            threshold_min=threshold_min,
+                            threshold_max=threshold_max)
 
 
     def grid_squeeze(
@@ -1412,6 +1421,8 @@ cdef class {{D["PY_CLASS_NAME"]}}:
             bool coordinates = False,
             grid_strategy=None,
             bool inplace=False,
+            threshold_min=None,
+            threshold_max=None,
             **filtration_grid_kwargs
         )->{{COARSENNED_PY_CLASS_NAME}} | {{PY_CLASS_NAME}}:
         """
@@ -1430,12 +1441,19 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         if self.is_squeezed:
             warn("(copy warning) Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
-            subgrid = compute_grid(self.filtration_grid, strategy=strategy, resolution=resolution)
+            subgrid = compute_grid(
+                    self.filtration_grid, strategy=strategy, resolution=resolution,
+                    threshold_min=threshold_min, threshold_max=threshold_max
+            )
             return temp.grid_squeeze(sanitize_grid(subgrid, numpyfy=True), coordinates=coordinates, inplace=inplace)
 
         #TODO : multi-critical
         if filtration_grid is None:  
-            filtration_grid = self.get_filtration_grid(grid_strategy=strategy, resolution=resolution, **filtration_grid_kwargs)
+            filtration_grid = self.get_filtration_grid(grid_strategy=strategy,
+                                                       resolution=resolution,
+                                                       threshold_min=threshold_min,
+                                                       threshold_max=threshold_max,
+                                                       **filtration_grid_kwargs)
         else:
             filtration_grid = sanitize_grid(filtration_grid)
             if len(filtration_grid) != self.num_parameters:
