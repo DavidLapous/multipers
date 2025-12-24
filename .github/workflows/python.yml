@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: 'latest'
@@ -46,10 +48,10 @@ jobs:
     needs: create_sources
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        os: ["ubuntu-latest", "macos-13", "macos-14","windows-latest"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        os: ["ubuntu-latest", "macos-15-intel", "macos-latest","windows-latest"]
         # https://docs.github.com/en/actions/reference/github-hosted-runners-reference
-      fail-fast: true
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/download-artifact@v4
@@ -86,11 +88,18 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost-devel python-build -c conda-forge
+        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build llvm-openmp -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler cxx-compiler  -c conda-forge 
 
+    - name: tree
+      if: ${{ matrix.os != 'windows-latest' }}
+      shell: bash -el {0}
+      run: |
+        micromamba activate build
+        micromamba install tree -c conda-forge
+        tree
     - name: (windows) add dlls
       if: ${{ matrix.os == 'windows-latest' }}
       shell: pwsh
@@ -104,6 +113,7 @@ jobs:
         ls
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
+          export MACOSX_DEPLOYMENT_TARGET=11.0  
           export CXXFLAGS="-fno-aligned-new" # Macos workaround
           export CFLAGS="-fno-aligned-new" # Macos workaround
           # export MACOSX_DEPLOYMENT_TARGET="13.0"
@@ -132,7 +142,7 @@ jobs:
           done
           mv wheelhouse/*.whl . # retrieves repaired wheels
         fi
-        if [[ ${{ matrix.os }} == "macos-13" ]]; then
+        if [[ ${{ matrix.os }} == "macos-".*"-intel" ]]; then
           micromamba install delocate -c conda-forge
           for wheel_file in multipers*macosx*x86*.whl; do
             delocate-listdeps $wheel_file
@@ -142,7 +152,7 @@ jobs:
           mv wheelhouse/*.whl . # retrieves repaired wheels
         fi
 
-        if [[ ${{ matrix.os }} == "macos-14" ]]; then
+        if [[ ${{ matrix.os }} == "macos-latest" ]]; then
           pip install delocate --upgrade
           for wheel_file in multipers*macosx*arm64*.whl; do
             delocate-listdeps $wheel_file
@@ -161,8 +171,16 @@ jobs:
     - name: tests
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp pytest-rerunfailures -c conda-forge
         micromamba activate test
+        micromamba install gudhi -c conda-forge ## Little workaround for lagging pip versions
+
+        if [ "$RUNNER_OS" == "macOS" ]; then
+            # pykeops workaround
+            brew install llvm libomp
+            export CXX=$(brew --prefix llvm)/bin/clang++
+        fi
+
         pip install dist/*.whl
 
         cd tests
