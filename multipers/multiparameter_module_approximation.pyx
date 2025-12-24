@@ -94,7 +94,8 @@ def module_approximation_from_slicer(
         if verbose:
             print("Reevaluating module in filtration grid...",end="", flush=True)
         approx_mod.evaluate_in_grid(unsqueeze_grid)
-        approx_mod.set_box(mp.grids.compute_bounding_box(approx_mod))
+        from multipers.grids import compute_bounding_box
+        approx_mod.set_box(compute_bounding_box(approx_mod))
         if verbose:
             print("Done.",flush=True)
 
@@ -105,7 +106,7 @@ def module_approximation(
         box:Optional[np.ndarray]=None,
         double max_error=-1, 
         int nlines=557,
-        bool from_coordinate = False,
+        bool from_coordinates = False,
         slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool complete=True, 
         bool threshold=False, 
@@ -126,7 +127,7 @@ def module_approximation(
         Trade-off between approximation and computational complexity.
         Upper bound of the module approximation, in bottleneck distance, 
         for interval-decomposable modules.
-    nlines: int = 200
+    nlines: int = 557
         Alternative to max_error;
         specifies the number of persistence computation used for the approximation.
     box : (Optional) pair of list of floats
