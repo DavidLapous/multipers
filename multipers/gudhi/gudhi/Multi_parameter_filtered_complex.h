@@ -29,6 +29,7 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/Multi_parameter_filtration.h>  //for lex order
 #include <gudhi/Multi_filtration/multi_filtration_conversions.h>
+#include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi {
 namespace multi_persistence {
@@ -317,9 +318,14 @@ class Multi_parameter_filtered_complex
    */
   void coarsen_on_grid(const std::vector<std::vector<T> >& grid, bool coordinate = true)
   {
-    for (auto gen = 0U; gen < filtrationValues_.size(); ++gen) {
+    // for (auto gen = 0U; gen < filtrationValues_.size(); ++gen) {
+    //   filtrationValues_[gen].project_onto_grid(grid, coordinate);
+    // }
+    tbb::parallel_for(Index(0), Index(filtrationValues_.size()), [&](Index gen) {
+      // TODO : preallocate for tbb
       filtrationValues_[gen].project_onto_grid(grid, coordinate);
-    }
+    });
+
   }
 
   /**

@@ -39,6 +39,7 @@
 #include <gudhi/Projective_cover_kernel.h>
 #include <gudhi/persistence_interval.h>
 #include <gudhi/slicer_helpers.h>
+#include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi {
 namespace multi_persistence {
@@ -695,9 +696,12 @@ class Slicer
   void _push_to(const Complex& complex, const Line<U>& line)
   {
     const auto& filtrationValues = complex.get_filtration_values();
-    for (Index i = 0U; i < filtrationValues.size(); i++) {
+    tbb::parallel_for(Index(0), Index(filtrationValues.size()), [&](Index i){
       slice_[i] = line.template compute_forward_intersection<T>(filtrationValues[i]);
-    }
+    });
+    // for (Index i = 0U; i < filtrationValues.size(); i++) {
+    //   slice_[i] = line.template compute_forward_intersection<T>(filtrationValues[i]);
+    // }
   }
 
   void _initialize_persistence_computation(const Complex& complex, const bool ignoreInf = true)
