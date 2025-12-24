@@ -230,11 +230,9 @@ class Module {
 
   void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
     // for (auto &summand : module_) {
-      // summand.evaluate_in_grid(grid);
+    // summand.evaluate_in_grid(grid);
     // }
-    tbb::parallel_for(size_t(0), module_.size(), [&](size_t i){
-      module_[i].evaluate_in_grid(grid);
-    });
+    tbb::parallel_for(size_t(0), module_.size(), [&](size_t i) { module_[i].evaluate_in_grid(grid); });
   }
 
   std::vector<int> inline get_degree_splits() const;
@@ -406,30 +404,32 @@ class Summand {
 
   void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
     if (birth_corners_.num_generators() == 0) return;
-    auto snap = [](value_type x, value_type max) {
+    auto num_parameters = birth_corners_.num_parameters();
+    auto snap = [](value_type x) {
       value_type a = std::floor(x);
       value_type b = std::ceil(x);
       size_t out;
       if (x - a < b - x)
-        out = static_cast<size_t>(std::max(a,value_type(0)));
+        out = static_cast<size_t>(a);
       else
-        out = static_cast<size_t>(std::min(b, max));
+        out = static_cast<size_t>(b);
       return out;
     };
-    auto todo = [&grid, &snap](auto &corners) {
-      return [&grid, &corners, &snap](size_t g) {
+    auto todo = [&](auto &corners) {
+      return [&](size_t g) {
         // auto &x = corners[i];
         // for (auto g = 0u; g < x.num_generators(); ++g) {
-          for (auto p = 0u; p < corners.num_parameters(); ++p) {
-            corners(g, p) = grid[p][snap(corners(g, p), grid[p].size())];
-          }
+        for (auto p = 0u; p < corners.num_parameters(); ++p) {
+          value_type snapped = snap(corners(g, p));
+          corners(g, p) = (snapped >= grid[p].size() ? filtration_type::inf(num_parameters)(0,p) : grid[p][snapped]);
+        }
         // }
       };
     };
 
-    tbb::parallel_for(size_t(0),birth_corners_.size(), todo(birth_corners_));
+    tbb::parallel_for(size_t(0), birth_corners_.size(), todo(birth_corners_));
     if (death_corners_.num_generators() == 0) return;
-    tbb::parallel_for(size_t(0),death_corners_.size(), todo(death_corners_));
+    tbb::parallel_for(size_t(0), death_corners_.size(), todo(death_corners_));
   };
 
   void snap_to_integers() {
