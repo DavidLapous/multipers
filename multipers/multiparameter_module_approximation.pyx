@@ -111,7 +111,6 @@ def module_approximation(
         bool threshold=False, 
         bool verbose=False,
         bool ignore_warnings=False,
-        id="",
         vector[float] direction = [],
         vector[int] swap_box_coords = [],
         *,
@@ -171,10 +170,10 @@ def module_approximation(
         if len(input) == 0:
             return PyModule_f64()
         if n_jobs <= 1: 
-            modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, id, direction, swap_box_coords) for slicer in input)
+            modules = tuple(module_approximation(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords) for slicer in input)
         else:
             modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, id, direction, swap_box_coords)
+                delayed(module_approximation)(slicer, box, max_error, nlines, slicer_backend, minpres, degree, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords)
                 for slicer in input
             ))
         box = modules[0].get_box()
@@ -192,12 +191,14 @@ def module_approximation(
         if not ignore_warnings:
             warn("(copy warning) Got a squeezed input. ")
         if verbose:
-            print("Preparing filtration (unsqueeze)... ",end="\n")
+            print("Preparing filtration (unsqueeze)... ",end="")
         if unsqueeze:
             unsqueeze_grid = input.filtration_grid
             input = input.astype(dtype=np.float64)
             if direction.size() == 0:
-                direction = [len(g) for g in unsqueeze_grid]
+                direction = np.asarray([len(g) for g in unsqueeze_grid], dtype=input.dtype)
+            if verbose:
+                print(f"Updated direction to {direction=}. ",end="")
 
         else:
             input = input.unsqueeze()
@@ -258,7 +259,4 @@ Returning the trivial module.
             direction=direction,
             unsqueeze_grid=unsqueeze_grid,
             )
-
-
-
 
