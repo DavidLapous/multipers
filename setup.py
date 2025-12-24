@@ -79,6 +79,14 @@ cython_modules = [
     "vector_interface",
 ]
 
+
+def arch_module_blacklist(module: str):
+    if platform.system() == "Windows" and module == "vector_interface":
+        # Persistence-Algebra doesn't compile yet here
+        return False
+    return True
+
+
 templated_cython_modules = [
     "filtrations.pxd",
     "filtration_conversions.pxd",
@@ -212,6 +220,7 @@ extensions = [
         library_dirs=library_dirs,
     )
     for module in cython_modules
+    if arch_module_blacklist(module)
 ]
 
 if __name__ == "__main__":
