@@ -48,9 +48,9 @@ This library features a bunch of different functions and helpers. See below for 
  - [x] [[Differentiability and Optimization of Multiparameter Persistent Homology, ICML2024]](https://proceedings.mlr.press/v235/scoccola24a.html) An approach to compute a (clarke) gradient for any reasonable multiparameter persistent invariant. Currently, any `multipers` computation is auto-differentiable using this strategy, provided that the input are pytorch gradient capable tensor.
  - [x] [[Multiparameter Persistence Landscapes, JMLR]](https://jmlr.org/papers/v21/19-054.html) A vectorization technic for multiparameter persistence modules.
  - [x] [[Filtration-Domination in Bifiltered Graphs, ALENEX2023]](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. Very useful to speed up, e.g., Rips-Codensity bifiltrations.
- - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SOCG2019]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
+ - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SoCG2019]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
  - [x] [[Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology, JAAG]](https://doi.org/10.1137/20M1388425) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert, Rank Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
- - [ ] [WIP] [[Decomposing Multiparameter Persistence Modules]](https://doi.org/10.4230/LIPIcs.SoCG.2025.41) Using the [AIDA](https://github.com/JanJend/AIDA) and [Persistence-Algebra](https://github.com/JanJend/Persistence-Algebra/) libraries.
+ - [ ] [WIP] [[Decomposing Multiparameter Persistence Modules, SoCG2025]](https://doi.org/10.4230/LIPIcs.SoCG.2025.41) Using the [AIDA](https://github.com/JanJend/AIDA) and [Persistence-Algebra](https://github.com/JanJend/Persistence-Algebra/) libraries.
  - [x] [[Delaunay Bifiltrations of Functions on Point Clouds, SODA2024]](https://epubs.siam.org/doi/10.1137/1.9781611977912.173) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bifiltrations.
  - [x] [[Delaunay Core Bifiltration]](https://arxiv.org/abs/2405.01214) Bifiltration for point clouds, taking into account the density. Similar to Rips-Density. 
  - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
@@ -91,4 +91,3 @@ you can use the following journal bibtex entry
 ## Contributions
 Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
 In particular, if you have a nice example or application that is not taken care in the documentation (see the `./docs/notebooks/` folder), please contact me to add it there.
-

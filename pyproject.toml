@@ -47,7 +47,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Visualization",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["TDA", "Persistence", "Multiparameter", "sklearn"]
+keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 
 [project.urls]
 source = "https://github.com/DavidLapous/multipers"
