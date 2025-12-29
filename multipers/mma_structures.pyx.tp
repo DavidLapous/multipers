@@ -146,8 +146,8 @@ cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     
     num_parameters = pts.shape[1]
     out = [np.unique(pts[:,parameter]) for parameter in range(num_parameters)]
-    out = [f[:-1] if f[-1] == np.inf else f for f in out]
-    out = [f[1:]  if f[0] == -np.inf else f for f in out]
+    out = [f[:-1] if len(f)>0 and f[-1] == np.inf else f for f in out]
+    out = [f[1:]  if len(f)>0 and f[0] == -np.inf else f for f in out]
     return out
 
 cdef class PyBox_{{SHORT}}:
