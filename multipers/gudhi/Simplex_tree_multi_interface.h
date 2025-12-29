@@ -293,17 +293,18 @@ class Simplex_tree_multi_interface
   //   }
   // }
 
-  using simplices_list = std::vector<std::vector<int>>;
+  using simplices_list = std::vector<int>;
 
   simplices_list get_simplices_of_dimension(int dimension) {
     simplices_list simplex_list;
-    simplex_list.reserve(Base::num_simplices());
+    simplex_list.reserve(Base::num_simplices() * (dimension + 1));
     for (auto simplexhandle : Base::skeleton_simplex_range(dimension)) {
       if (Base::dimension(simplexhandle) == dimension) {
-        std::vector<int> simplex;
-        simplex.reserve(dimension + 1);
-        for (int vertex : Base::simplex_vertex_range(simplexhandle)) simplex.push_back(vertex);
-        simplex_list.push_back(simplex);
+        // std::vector<int> simplex;
+        // simplex.reserve(dimension + 1);
+        // for (int vertex : Base::simplex_vertex_range(simplexhandle)) simplex.push_back(vertex);
+        // simplex_list.push_back(simplex);
+        for (int vertex : Base::simplex_vertex_range(simplexhandle)) simplex_list.push_back(vertex);
       }
     }
     /*	simplex_list.shrink_to_fit();*/
@@ -431,6 +432,10 @@ class Simplex_tree_multi_interface
     st_coord_type &out = *(st_coord_type *)outptr;  // TODO : maybe fix this.
     std::vector<int> simplex_vertex;
     for (const auto &simplex_handle : Base::complex_simplex_range()) {
+    // tbb::enumerable_thread_specific<std::vector<int>> simplex_vertex_cache;
+    // tbb::parallel_for_each(Base::complex_simplex_range(), [&](const auto& simplex_handle){
+      // auto& simplex_vertex = simplex_vertex_cache.local();
+      // simplex_vertex.clear();
       const auto &simplex_filtration = Base::filtration(simplex_handle);
       if constexpr (verbose) std::cout << "Filtration_value " << simplex_filtration << "\n";
       const auto &coords = compute_coordinates_in_grid(simplex_filtration, grid);
@@ -439,6 +444,7 @@ class Simplex_tree_multi_interface
       out.insert_simplex(simplex_vertex, coords);
       if constexpr (verbose) std::cout << "Coords in st" << out.filtration(out.find(simplex_vertex)) << std::endl;
       simplex_vertex.clear();
+    // });
     }
   }
 

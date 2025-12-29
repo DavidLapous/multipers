@@ -27,7 +27,7 @@ from multipers.filtrations cimport *
 
 ctypedef int dimension_type
 ctypedef vector[int] simplex_type
-ctypedef vector[simplex_type] simplex_list
+ctypedef vector[int] simplex_list
 ctypedef vector[pair[pair[int,int], pair[double, double]]] edge_list
 ctypedef vector[int] euler_char_list
 

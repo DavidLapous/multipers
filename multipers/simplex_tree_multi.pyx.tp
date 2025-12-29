@@ -1157,7 +1157,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
     def num_parameters(self)->int:
         return self.get_ptr().num_parameters()
     def get_simplices_of_dimension(self, dim:int)->np.ndarray:
-        return np.asarray(self.get_ptr().get_simplices_of_dimension(dim), dtype=int)
+        cdef vector[int] out = self.get_ptr().get_simplices_of_dimension(dim)
+        cdef int[:] out_view = <int[:out.size()]>(&(out[0]))
+        return np.array(out_view).reshape(-1, dim+1)
     def key(self, simplex:list|np.ndarray):
         return self.get_ptr().get_key(simplex)
     def set_keys_to_enumerate(self)->None:
