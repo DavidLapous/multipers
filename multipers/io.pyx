@@ -86,7 +86,7 @@ def _path_init(soft:str|os.PathLike):
     if pathes[soft] is not None:
         verbose_arg = "> /dev/null 2>&1"
         test = os.system(pathes[soft] + " --help " + verbose_arg)
-        if test:
+        if test % 256!=0:
             from warnings import warn
             warn(f"""
             Found external software {soft} at {pathes[soft]}
