@@ -196,6 +196,11 @@ def Slicer(
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
+
+    elif is_simplextree_multi(st):
+        slicer = _Slicer().build_from_simplex_tree(st)
+        if st.is_squeezed:
+            slicer.filtration_grid = st.filtration_grid
     elif backend == "Graph":
         raise ValueError(
             """
@@ -203,29 +208,21 @@ Graph is simplicial, incompatible with minpres.
 You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
-        filtration_grid = None
         # if max_dim is not None:  # no test for simplex tree?
         #     st.prune_above_dimension(max_dim)
         if isinstance(st, str):  # is_kcritical should be false
             slicer = _Slicer()._build_from_scc_file(st)
         else:
-            if is_simplextree_multi(st):
-                slicer = _Slicer().build_from_simplex_tree(st)
-                if st.is_squeezed:
-                    filtration_grid = st.filtration_grid
-            else:
-                blocks = st
-                slicer = _slicer_from_blocks(
-                    blocks,
-                    backend,
-                    vineyard,
-                    is_kcritical,
-                    dtype,
-                    column_type,
-                    filtration_container,
-                )
-        if filtration_grid is not None:
-            slicer.filtration_grid = filtration_grid
+            blocks = st
+            slicer = _slicer_from_blocks(
+                blocks,
+                backend,
+                vineyard,
+                is_kcritical,
+                dtype,
+                column_type,
+                filtration_container,
+            )
     if reduce:
         slicer = mps.minimal_presentation(
             slicer,
