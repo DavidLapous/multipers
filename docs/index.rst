@@ -136,6 +136,7 @@ For theoretical references:
   notebooks/function_delaunay
   notebooks/delaunay_core_bifiltration
   notebooks/cubical
+  notebooks/degree_rips_interface
 
 .. toctree::
   :caption: Example zoo
@@ -143,7 +144,6 @@ For theoretical references:
   notebooks/time_series_classification
   notebooks/graph_classification
   notebooks/molecular_embedding
-  notebooks/degree_rips_interface
   notebooks/immuno_img
 
 .. toctree::

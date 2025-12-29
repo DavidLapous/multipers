@@ -11,6 +11,7 @@ from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
+import multipers as _mp
 
 try:
     import pykeops
@@ -247,12 +248,78 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
     return from_bitmap(image, **slicer_kwargs)
 
 
-def DegreeRips(*, points=None, distance_matrix=None, ks=None, threshold_radius=None):
+def DegreeRips(
+    *,
+    simplex_tree=None,
+    degrees=None,
+    points=None,
+    distance_matrix=None,
+    ks=None,
+    threshold_radius=None,
+    num=None,
+    squeeze_strategy="exact",
+    squeeze_resolution=None,
+    squeeze=True,
+):
     """
     The DegreeRips filtration.
     """
 
-    raise NotImplementedError("Use the default implentation ftm.")
+    if simplex_tree is None:
+        if distance_matrix is None:
+            if points is None:
+                raise ValueError(
+                    "A simplextree, a distance matrix or a point cloud has to be given."
+                )
+            api = api_from_tensor(points)
+            points = api.astensor(points)
+            D = api.cdist(points, points)
+        else:
+            api = api_from_tensor(distance_matrix)
+            D = api.astensor(distance_matrix)
+
+        if threshold_radius is None:
+            threshold_radius = api.min(api.maxvalues(D, axis=1))
+        st = gd.SimplexTree.create_from_array(
+            api.asnumpy(D), max_filtration=threshold_radius
+        )
+        rips_filtration = api.unique(D.ravel())
+    else:
+        st = simplex_tree
+        rips_filtration = None
+
+    if ks is None or rips_filtration is None:
+        from warnings import warn
+
+        warn(
+            "(copy warning) Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
+        )
+        _temp_st = _mp.SimplexTreeMulti(
+            st, num_parameters=1
+        )  # Gudhi is missing some functionality
+        if ks is None:
+            max_degree = (
+                np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
+            )
+            ks = (
+                np.arange(max_degree)
+                if num is None
+                else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
+            )
+        if rips_filtration is None:
+            rips_filtration = _mp.grids.compute_grid(_temp_st)[0]
+
+    from multipers.function_rips import get_degree_rips
+
+    st_multi = get_degree_rips(st, degrees=ks)
+    if squeeze:
+        F = [rips_filtration, ks.astype(np.float64)]
+        F = _mp.grids.compute_grid(
+            F, strategy=squeeze_strategy, resolution=squeeze_resolution
+        )
+        st_multi = st_multi.grid_squeeze(F)
+        st_multi.filtration_grid = (F[0], F[1] - F[1][-1])  # degrees are negative
+    return st_multi
 
 
 def CoreDelaunay(
