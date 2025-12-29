@@ -188,10 +188,11 @@ def module_approximation(
             unsqueeze_grid = sanitize_grid(input.filtration_grid, numpyfy=True, add_inf=True)
             input = input.astype(dtype=np.float64)
             if direction.size() == 0:
-                direction = np.asarray([g.size for g in unsqueeze_grid], dtype=np.float64)
-                max_error = .5
+                _direction = np.asarray([1/g.size for g in unsqueeze_grid], dtype=np.float64)
+                _direction /= np.sqrt((_direction**2).sum())
+                direction = _direction
             if verbose:
-                print(f"Updated `direction` to {direction=}, and `max_error` to `0.5` ",end="")
+                print(f"Updated  `{direction=}`, and `{max_error=}` ",end="")
 
         else:
             input = input.unsqueeze()
@@ -227,9 +228,10 @@ def module_approximation(
     if max_error <= 0:
         max_error = (prod/nlines)**(1/(num_parameters-1))
 
-    if not ignore_warnings and prod >= 10_000:
+    estimated_nlines = prod/(max_error**(num_parameters -1))
+    if not ignore_warnings and estimated_nlines >= 10_000:
         raise ValueError(f"""
-Warning : the number of lines (around {np.round(prod)}) may be too high. 
+Warning : the number of lines (around {np.round(estimated_nlines)}) may be too high. 
 This may be due to extreme box or filtration bounds :
 
 {box=}
