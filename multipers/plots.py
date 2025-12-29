@@ -1,7 +1,7 @@
 from typing import Optional
-from warnings import warn
 
 import matplotlib.colors as mcolors
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
@@ -267,6 +267,9 @@ def _d_inf(a, b):
     return np.min(np.abs(b - a))
 
 
+HAS_SHAPELY = None
+
+
 def plot2d_PyModule(
     corners,
     box,
@@ -278,113 +281,169 @@ def plot2d_PyModule(
     verbose=False,
     save=False,
     dpi=200,
-    shapely=True,
     xlabel=None,
     ylabel=None,
     cmap=None,
-    outline_width=0.1,
+    outline_width=0.2,
     outline_threshold=np.inf,
     interleavings=None,
+    backend=None,
 ):
-    import matplotlib
+    global HAS_SHAPELY
+    if HAS_SHAPELY is None:
+        try:
+            import shapely
+            from shapely import union_all
 
-    try:
-        from shapely import union_all
-        from shapely.geometry import Polygon as _Polygon
-        from shapely.geometry import box as _rectangle_box
+            HAS_SHAPELY = True
+        except ImportError:
+            HAS_SHAPELY = False
+            from warnings import warn
 
-        shapely = True and shapely
-    except ImportError:
-        shapely = False
-        warn(
-            "Shapely not installed. Fallbacking to matplotlib. The plots may be inacurate."
-        )
-    if alpha is None:
-        alpha = 0.8 if shapely else 1
-    if not shapely and alpha != 1:
-        warn("Opacity without shapely will lead to incorect plots.")
-    cmap = (
+            warn(
+                "Shapely is not installed. MMA plots may be imprecise.",
+                ImportWarning,
+            )
+    if not HAS_SHAPELY:
+        backend = "matplotlib" if backend is None else backend
+        alpha = 1 if alpha is None else alpha
+    else:
+        backend = "shapely" if backend is None else backend
+        alpha = 0.8 if alpha is None else alpha
+
+    cmap_instance = (
         matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
     )
-    box = list(box)
-    if not (separated):
-        # fig, ax = plt.subplots()
+
+    box = np.asarray(box)
+    if not separated:
         ax = plt.gca()
         ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
+
     n_summands = len(corners)
+
     for i in range(n_summands):
         summand_interleaving = 0 if interleavings is None else interleavings[i]
-        list_of_rect = []
-        for birth in corners[i][0]:
-            if len(birth) == 1:
-                birth = np.asarray([birth[0]] * 2)
-            birth = np.asarray(birth).clip(min=box[0])
-            for death in corners[i][1]:
-                if len(death) == 1:
-                    death = np.asarray([death[0]] * 2)
-                death = np.asarray(death).clip(max=box[1])
-                if death[1] > birth[1] and death[0] > birth[0]:
-                    if interleavings is None:
-                        summand_interleaving = max(
-                            _d_inf(birth, death), summand_interleaving
-                        )
-                    if shapely:
-                        list_of_rect.append(
-                            _rectangle_box(birth[0], birth[1], death[0], death[1])
-                        )
-                    else:
-                        list_of_rect.append(
-                            _rectangle(birth, death, cmap(i / n_summands), alpha)
-                        )
-        if summand_interleaving > min_persistence:
-            outline_summand = (
-                "black" if (summand_interleaving > outline_threshold) else None
+
+        births = np.asarray(corners[i][0])
+        deaths = np.asarray(corners[i][1])
+
+        if births.size == 0 or deaths.size == 0:
+            continue
+
+        if births.ndim == 1:
+            births = births[None, :]
+        if deaths.ndim == 1:
+            deaths = deaths[None, :]
+        if births.ndim != 2 or deaths.ndim != 2:
+            raise ValueError(
+                f"Invalid corners format. Got {births.shape=}, {deaths.shape=}"
             )
-            if separated:
-                fig, ax = plt.subplots()
-                ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
-            if shapely:
-                summand_shape = union_all(list_of_rect)
-                if type(summand_shape) is _Polygon:
-                    xs, ys = summand_shape.exterior.xy
-                    ax.fill(
-                        xs,
-                        ys,
-                        alpha=alpha,
-                        fc=cmap(i / n_summands),
-                        ec=outline_summand,
-                        lw=outline_width,
-                        ls="-",
-                    )
-                else:
-                    for polygon in summand_shape.geoms:
-                        xs, ys = polygon.exterior.xy
-                        ax.fill(
-                            xs,
-                            ys,
-                            alpha=alpha,
-                            fc=cmap(i / n_summands),
-                            ec=outline_summand,
-                            lw=outline_width,
-                            ls="-",
-                        )
-            else:
-                for rectangle in list_of_rect:
-                    ax.add_patch(rectangle)
-            if separated:
-                if xlabel:
-                    plt.xlabel(xlabel)
-                if ylabel:
-                    plt.ylabel(ylabel)
-                if dimension >= 0:
-                    plt.title(rf"$H_{dimension}$ $2$-persistence")
-    if not (separated):
-        if xlabel is not None:
+
+        b_expanded = births[:, None, :]
+        d_expanded = deaths[None, :, :]
+
+        births_grid, deaths_grid = np.broadcast_arrays(b_expanded, d_expanded)
+        births_flat = births_grid.reshape(-1, 2)
+        deaths_flat = deaths_grid.reshape(-1, 2)
+
+        births_flat = np.maximum(births_flat, box[0])
+        deaths_flat = np.minimum(deaths_flat, box[1])
+
+        is_valid = np.all(deaths_flat > births_flat, axis=1)
+
+        if not np.any(is_valid):
+            continue
+
+        valid_births = births_flat[is_valid]
+        valid_deaths = deaths_flat[is_valid]
+
+        if interleavings is None:
+            diffs = valid_deaths - valid_births
+            d_infs = np.min(diffs, axis=1)
+            current_max_interleaving = np.max(d_infs) if d_infs.size > 0 else 0
+            summand_interleaving = max(summand_interleaving, current_max_interleaving)
+
+        if summand_interleaving <= min_persistence:
+            continue
+
+        # --- Plotting ---
+        color = cmap_instance(i / n_summands)
+        outline_summand = (
+            "black" if (summand_interleaving > outline_threshold) else None
+        )
+
+        if separated:
+            fig, ax = plt.subplots()
+            ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
+
+        if HAS_SHAPELY:
+            # OPTIMIZATION: Shapely Union
+            import shapely
+            from shapely import union_all
+
+            rects = shapely.box(
+                valid_births[:, 0],
+                valid_births[:, 1],
+                valid_deaths[:, 0],
+                valid_deaths[:, 1],
+            )
+            summand_shape = union_all(rects)
+
+            geoms = getattr(summand_shape, "geoms", [summand_shape])
+            for geom in geoms:
+                if geom.is_empty:
+                    continue
+                xs, ys = geom.exterior.xy
+                ax.fill(
+                    xs,
+                    ys,
+                    alpha=alpha,
+                    fc=color,
+                    ec=outline_summand,
+                    lw=outline_width,
+                    ls="-",
+                )
+        else:
+            from matplotlib.collections import PolyCollection
+
+            # Construct vertices: (N, 4, 2)
+            # (x0, y0), (x0, y1), (x1, y1), (x1, y0)
+            verts = np.stack(
+                [
+                    np.stack([valid_births[:, 0], valid_births[:, 1]], axis=1),
+                    np.stack([valid_births[:, 0], valid_deaths[:, 1]], axis=1),
+                    np.stack([valid_deaths[:, 0], valid_deaths[:, 1]], axis=1),
+                    np.stack([valid_deaths[:, 0], valid_births[:, 1]], axis=1),
+                ],
+                axis=1,
+            )
+
+            pc = PolyCollection(
+                verts,
+                facecolors=color,
+                edgecolors=outline_summand,
+                alpha=alpha,
+                linewidths=outline_width,
+            )
+            ax.add_collection(pc)
+
+        if separated:
+            if xlabel:
+                plt.xlabel(xlabel)
+            if ylabel:
+                plt.ylabel(ylabel)
+            if dimension >= 0:
+                plt.title(f"$\\mathrm{{H}}_{dimension}$ 2-persistence")
+
+    if not separated:
+        if xlabel:
             plt.xlabel(xlabel)
-        if ylabel is not None:
+        if ylabel:
             plt.ylabel(ylabel)
         if dimension >= 0:
-            plt.title(rf"$H_{dimension}$ $2$-persistence")
+            plt.title(f"$\\mathrm{{H}}_{dimension}$ 2-persistence")
+
     return
 
 
