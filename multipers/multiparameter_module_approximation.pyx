@@ -223,7 +223,7 @@ def module_approximation(
         num_parameters = box.shape[1]
     assert direction.size() == 0 or direction.size() == box[0].size, f"Invalid line direction size, has to be 0 or {num_parameters=}"
 
-    prod = sum(np.abs(box[1] - box[0])[:i].prod() * np.abs(box[1] - box[0])[i+1:].prod() for i in range(0,num_parameters))
+    prod = sum(np.abs(box[1] - box[0])[:i].prod() * np.abs(box[1] - box[0])[i+1:].prod() for i in range(0,num_parameters) if (direction.size() ==0 or direction[i]!=0))
 
     if max_error <= 0:
         max_error = (prod/nlines)**(1/(num_parameters-1))
