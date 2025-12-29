@@ -44,9 +44,7 @@ std::pair<std::map<value_type, unsigned int>, std::vector<value_type>> inline ra
 // axis is the rips, and the others are the filtrations of the node at each
 // degree in degrees Assumes that the degrees are sorted, and unique
 // also return max_degree,filtration_values
-inline flat_multi_st get_degree_filtrations(
-    python_interface::interface_std &st,
-    const std::vector<int> &degrees) {
+inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st, const std::vector<int> &degrees) {
   constexpr const bool verbose = false;
   using filtration_lists = std::vector<std::vector<value_type>>;
 
@@ -68,8 +66,8 @@ inline flat_multi_st get_degree_filtrations(
     }
   }
 
-  tbb::parallel_for(static_cast<size_t>(0u), st.num_vertices(), [&](size_t  i){
-    auto& filtrations = edge_filtration_of_nodes[i];
+  tbb::parallel_for(static_cast<size_t>(0u), st.num_vertices(), [&](size_t i) {
+    auto &filtrations = edge_filtration_of_nodes[i];
     tbb::parallel_sort(filtrations.begin(), filtrations.end());
     unsigned int node_degree = filtrations.size();
     filtrations.resize(std::max(num_degrees, node_degree));
@@ -85,7 +83,6 @@ inline flat_multi_st get_degree_filtrations(
                  filtrations.end());  // degree is in opposite direction
   });
 
-
   // fills the degree_rips simplextree with lower star
   auto sh_standard = st.complex_simplex_range().begin();  // waiting for c++23 & zip to remove this garbage
   auto _end = st.complex_simplex_range().end();
@@ -99,9 +96,6 @@ inline flat_multi_st get_degree_filtrations(
     // the filtration vector to fill
 
     std::vector<value_type> edge_degree_rips_filtration(num_degrees, std::numeric_limits<value_type>::infinity());
-    // = st_multi.get_filtration_value(*sh_multi);
-    // auto &edge_degree_rips_filtration = st_multi.get_filtration_value(*sh_multi);
-    // edge_degree_rips_filtration.set_num_generators(num_degrees);
 
     if constexpr (verbose) {
       std::cout << "\nSetting filtration of edge [";
@@ -131,14 +125,7 @@ inline flat_multi_st get_degree_filtrations(
     for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++) {
       to_update(k, 0) = edge_degree_rips_filtration[k];
     }
-    // st_multi.get_filtration_value(*sh_multi).swap((_multifiltration(std::move(edge_degree_rips_filtration))));
     if constexpr (verbose) std::cout << "\n" << st_multi.get_filtration_value(*sh_multi) << std::endl;
-    // std::reverse(edge_degree_rips_filtration.begin(), edge_degree_rips_filtration.end());
-
-    // std::cout <<  st_multi.get_filtration_value(*sh_multi) <<std::endl;
-
-    // edge_degree_rips_filtration.clea
-    // std::cout <<  st_multi.get_filtration_value(*sh_multi) <<std::endl;
   }
 
   // fills the dimension 0 simplices
@@ -261,14 +248,13 @@ inline void compute_2d_function_rips(
 
 // python interface
 
-std::pair<std::vector<value_type>, int> inline get_degree_rips_st_python(const intptr_t simplextree_ptr,
-                                                                         const intptr_t st_multi_ptr,
-                                                                         const std::vector<int> &degrees) {
+inline void get_degree_rips_st_python(const intptr_t simplextree_ptr,
+                                      const intptr_t st_multi_ptr,
+                                      const std::vector<int> &degrees) {
   auto &st_std = python_interface::get_simplextree_from_pointer<python_interface::interface_std>(simplextree_ptr);
   auto &st_multi_python_container = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
-  auto st_multi= get_degree_filtrations(st_std, degrees);
+  auto st_multi = get_degree_filtrations(st_std, degrees);
   st_multi_python_container = std::move(st_multi);
-  return {{}, 0};
 }
 
 template <typename dtype, typename indices_type>
