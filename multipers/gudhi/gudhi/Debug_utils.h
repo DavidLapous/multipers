@@ -23,7 +23,14 @@
   #define GUDHI_CHECK(expression, excpt) ((expression) ? (void) 0 : (throw excpt))
   #define GUDHI_CHECK_code(CODE) CODE
 #else
-  #define GUDHI_CHECK(expression, excpt) (void) 0
+  #if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 13)
+    #define GUDHI_ASSUME(expr) __builtin_assume(expr)
+  #elif defined(_MSC_VER)
+    #define GUDHI_ASSUME(expr) __assume(expr)
+  #else
+    #define GUDHI_ASSUME(expr) ((void)0)
+  #endif
+  #define GUDHI_CHECK(expression, excpt) GUDHI_ASSUME(expression)
   #define GUDHI_CHECK_code(CODE)
 #endif
 
