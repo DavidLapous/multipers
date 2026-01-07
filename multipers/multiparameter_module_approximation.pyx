@@ -95,7 +95,8 @@ def module_approximation_from_slicer(
             print("Reevaluating module in filtration grid...",end="", flush=True)
         approx_mod.evaluate_in_grid(unsqueeze_grid)
         from multipers.grids import compute_bounding_box
-        approx_mod.set_box(compute_bounding_box(approx_mod))
+        if len(approx_mod):
+            approx_mod.set_box(compute_bounding_box(approx_mod))
         if verbose:
             print("Done.",flush=True)
 
@@ -107,7 +108,6 @@ def module_approximation(
         double max_error=-1, 
         int nlines=557,
         bool from_coordinates = False,
-        slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool complete=True, 
         bool threshold=False, 
         bool verbose=False,
@@ -160,14 +160,26 @@ def module_approximation(
         assert np.unique([s.minpres_degree for s in input]).shape[0] == len(input), "Multiple modules are at the same degree, cannot merge modules" 
         if len(input) == 0:
             return PyModule_f64()
-        if n_jobs <= 1: 
-            modules = tuple(module_approximation(slicer, box, max_error, nlines, complete, threshold, verbose, ignore_warnings, direction, swap_box_coords) for slicer in input)
-        else:
-            modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(module_approximation)(slicer, box, max_error, nlines,  complete, threshold, verbose, ignore_warnings, direction, swap_box_coords)
-                for slicer in input
-            ))
-        box = modules[0].get_box()
+        modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
+            delayed(module_approximation)(
+                input=slicer,
+                box=box,
+                max_error=max_error,
+                nlines=nlines,
+                from_coordinates=from_coordinates,
+                complete=complete,
+                threshold=threshold,
+                verbose=verbose,
+                ignore_warnings=ignore_warnings,
+                direction=direction,
+                swap_box_coords=swap_box_coords,
+            )
+            for slicer in input
+        ))
+        box = np.array([
+            np.min([m.get_box()[0] for m in modules], axis=0),
+            np.max([m.get_box()[1] for m in modules], axis=0),
+        ])
         mod = PyModule_f64().set_box(box)
         for i,m in enumerate(modules):
             mod.merge(m, input[i].minpres_degree)
@@ -176,6 +188,16 @@ def module_approximation(
         if verbose:
             print("Empty input, returning the trivial module.")
         return PyModule_f64()
+
+
+    cdef bool is_degenerate=False
+    for i in range(direction.size()):
+        if direction[i]<0:
+            raise ValueError(f"Got an invalid negative direction. {direction=}")
+        if direction[i] == 0:
+            is_degenerate=True
+    if is_degenerate and not ignore_warnings:
+        warn("Got a degenerate direction. This function may fail if the first line is not generic.")
 
     unsqueeze_grid = None
     if input.is_squeezed:
@@ -199,6 +221,8 @@ def module_approximation(
         if verbose:
             print("Done.", flush=True)
 
+
+
     if box is None:
         if verbose:
             print("No box given. Using filtration bounds to infer it.")
@@ -217,7 +241,7 @@ def module_approximation(
         box[1] += zero_idx
 
     for i in swap_box_coords:
-        box[0,i], box[1,i] = box[1,i], box[0,i]
+        box[[0,1],i] = box[[1,0],i]
     num_parameters = box.shape[1]
     if num_parameters <=0:
         num_parameters = box.shape[1]
@@ -236,14 +260,15 @@ This may be due to extreme box or filtration bounds :
 
 {box=}
 
-Try to increase the precision parameter, or set `ignore_warning=True` to compute this module. 
+Try to increase the precision parameter, or set `ignore_warnings=True` to compute this module. 
 Returning the trivial module.
 """
         )
     if is_simplextree_multi(input):
         from multipers._slicer_meta import Slicer
         input = Slicer(input,backend="matrix", vineyard=True)
-    assert is_slicer(input), "First argument must be a simplextree or a slicer !"
+    if not is_slicer(input):
+        raise ValueError("First argument must be a simplextree or a slicer !")
     return module_approximation_from_slicer(
             slicer=input,
             box=box,

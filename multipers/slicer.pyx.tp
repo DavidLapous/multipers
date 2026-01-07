@@ -680,7 +680,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             self, 
             filtration_grid=None,
             strategy="exact",
-            resolution:Optional[int]=None,
+            resolution:Optional[int|Iterable[int]]=None,
             bool coordinates=True,
             bool inplace = False,
             grid_strategy=None,

@@ -711,7 +711,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
     Timer timer("Initializing mma...\n", verbose);
     // fills the first barcode
     slicer.push_to(current_line);
-    slicer.initialize_persistence_computation();
+    slicer.initialize_persistence_computation(false);
     auto barcode = slicer.template get_flat_barcode<true>();
     auto num_bars = 0;
     for (const auto &b : barcode) num_bars += b.size();
