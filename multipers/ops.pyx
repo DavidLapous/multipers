@@ -94,13 +94,36 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
 def one_criticalify(
         slicer,
         bool reduce=False,
-        str algo:Literal["path","tree"]="path",
         degree:Optional[int]=None,
         bool clear = True,
         swedish:Optional[bool] = None,
         bool verbose = False,
         bool kcritical=False,
+        str algo:Literal["path","tree"]="path",
     ):
+    """
+    Computes a free implicit representation  of a given multi-critical
+    multifiltration of a given homological degree (i.e., for a given
+    homological degree, a quasi-isomorphic 1-critical filtration), or free
+    resolution of the multifiltration (i.e., quasi-isomorphic 1-critical chain
+    complex).
+
+    From [Fast free resolutions of bifiltered chain complexes](https://doi.org/10.48550/arXiv.2512.08652), 
+    whose code is available here: https://bitbucket.org/mkerber/multi_critical
+
+    Parameters:
+     - slicer : multicritical filtration to represent
+     - reduce : returns a (or multiple, see degree) minimal presentation(s) instead of the chain complex.
+     - degree : If an int is given, and `reduce` is true, only returns the minimal presentation of this degree.
+                If None is given and `reduce` is true, returns a minimal presentation of all possible degrees.
+                If reduce is false : has no effect.
+     - clear : Clears the temporary files.
+     - swedish : if True, `reduce=True` and `degree=None` skips the computation of the 1critical chain complex,
+                 and directly (sequentially) computes the individual minimal presentations.
+     - verbose : shows log
+     - kcritical : do not use
+     - algo : see ref.
+    """
     from multipers.io import _multi_critical_from_slicer
     from multipers.slicer import is_slicer
     if not is_slicer(slicer):
