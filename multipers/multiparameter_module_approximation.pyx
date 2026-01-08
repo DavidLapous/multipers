@@ -156,7 +156,7 @@ def module_approximation(
         homology of this multi-filtration.
     """
     if isinstance(input, tuple) or isinstance(input, list):
-        assert all(s.is_minpres for s in input), "Modules cannot be merged unless they are minimal presentations."
+        assert all(s.is_minpres or len(s)==0 for s in input), "Modules cannot be merged unless they are minimal presentations."
         assert np.unique([s.minpres_degree for s in input]).shape[0] == len(input), "Multiple modules are at the same degree, cannot merge modules" 
         if len(input) == 0:
             return PyModule_f64()

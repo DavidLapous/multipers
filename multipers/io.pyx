@@ -331,7 +331,7 @@ def _multi_critical_from_slicer(
           need_split = True
           reduce_arg += r" --minpres-all"
         else:
-          reduce_arg += fr" --mipres {degree}"
+          reduce_arg += fr" --minpres {degree}"
       verbose_arg = "> /dev/null 2>&1" if not verbose else ""
 
       command = f"{pathes['multi_critical']} --{algo} {reduce_arg} {input_path} {output_path} {verbose_arg}"
@@ -347,7 +347,7 @@ def _multi_critical_from_slicer(
         num_degrees=len(files)
         ss = tuple(newSlicer()._build_from_scc_file(files[i], shift_dimension=i-1).minpres(i) for i in range(num_degrees))
         return ss
-      return newSlicer()._build_from_scc_file(str(output_path), shift_dimension=-1)
+      return newSlicer()._build_from_scc_file(str(output_path), shift_dimension=-1 if degree is None else degree-1)
 
 
 

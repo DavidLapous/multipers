@@ -148,12 +148,19 @@ def one_criticalify(
         raise ValueError(f"Invalid input. Expected `SlicerType` got {type(slicer)=}.")
     if not slicer.is_kcritical:
         return slicer
-    return _multi_critical_from_slicer(
+    if slicer.is_squeezed:
+        F = slicer.filtration_grid
+    else:
+        F = None
+    out = _multi_critical_from_slicer(
            slicer, reduce=reduce, algo=algo,
            degree=degree, clear=clear,
            swedish=swedish, verbose=verbose,
            kcritical=kcritical
     )
+    out.filtration_grid = F
+    
+    return out
 
 def minimal_presentation(
         slicer,
@@ -196,7 +203,7 @@ def minimal_presentation(
     _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
-            return minimal_presentation(slicer, degree=degree, backend=backend, **minpres_kwargs)
+            return minimal_presentation(slicer, degree=degree, backend=backend, force=force, auto_clean=auto_clean)
         return tuple(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )

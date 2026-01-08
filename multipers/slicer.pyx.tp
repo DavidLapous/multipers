@@ -753,7 +753,6 @@ cdef class {{D['PYTHON_TYPE']}}:
         int degree=-1, 
         list[int] degrees=[],
         str backend:Literal["mpfree", "2pac"]="mpfree", 
-        str slicer_backend:Literal["matrix","clement","graph"]="matrix",
         bool vineyard={{D['IS_VINE']}}, 
         dtype = {{D['PY_VALUE_TYPE']}},
         **minpres_kwargs
@@ -763,7 +762,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         See :func:`multipers.slicer.minimal_presentation`.
         """
         from multipers.ops import minimal_presentation
-        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, slicer_backend=slicer_backend, dtype=dtype, vineyard=vineyard, **minpres_kwargs)
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend)
         return new_slicer
 
     @property
