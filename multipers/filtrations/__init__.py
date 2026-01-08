@@ -6,6 +6,7 @@ from .filtrations import (
     DelaunayLowerstar,
     RipsCodensity,
     RipsLowerstar,
+    RhomboidBifiltration,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "DelaunayLowerstar",
     "RipsCodensity",
     "RipsLowerstar",
+    "RhomboidBifiltration",
 ]

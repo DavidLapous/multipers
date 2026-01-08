@@ -330,6 +330,7 @@ def CoreDelaunay(
     precision: str = "safe",
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
+    positive_degree: bool = False,
 ) -> SimplexTreeMulti_type:
     """
     Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
@@ -421,7 +422,12 @@ def CoreDelaunay(
         max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
         critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
         filtrations = np.stack(
-            (critical_radii, -ks * np.ones_like(critical_radii)), axis=-1
+            (
+                critical_radii,
+                (ks[-1] - ks if positive_degree else -ks)
+                * np.ones_like(critical_radii),
+            ),
+            axis=-1,
         )
         simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
 
@@ -429,3 +435,46 @@ def CoreDelaunay(
         print("Done computing the Delaunay Core Bifiltration.")
 
     return simplex_tree_multi
+
+
+def RhomboidBifiltration(
+    x,
+    k_max: int,
+    degree: int,
+    verbose: bool = False,
+):
+    """
+    Rhomboid Tiling bifiltration.
+    This (1-critical) bifiltration is quasi-isomorphic to the (multi-critical) multicover bifiltration.
+    From [Computing the Multicover Bifiltration](https://doi.org/10.1007/s00454-022-00476-8), whose code
+    can be found here: https://github.com/geoo89/rhomboidtiling
+
+    Parameters
+     - x: 2d or 3d point cloud, of shape `(num_points,dimension)`.
+     - k_max(int): maximum number of cover to consider
+     - degree: dimension to consider
+     - verbose:bool
+    """
+    from multipers.io import _rhomboid_tiling_to_slicer
+    from multipers import Slicer
+
+    api = api_from_tensor(x)
+    if api.has_grad(x):
+        from warnings import warn
+
+        warn(
+            "Found a gradient in input, which cannot be processed by RhomboidBifiltration."
+        )
+    x = api.asnumpy(x)
+    if x.ndim not in (2, 3):
+        raise ValueError("Only 2-3D dimensional point cloud are supported.")
+    out = Slicer()
+    _rhomboid_tiling_to_slicer(
+        slicer=out,
+        point_cloud=x,
+        k_max=k_max,
+        verbose=verbose,
+        degree=degree,
+    )
+
+    return out

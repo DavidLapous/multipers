@@ -20,6 +20,7 @@ doc_soft_urls = {
         "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
         "2pac":"https://gitlab.com/flenzen/2pac",
         "rhomboid_tiling":"https://github.com/odinhg/rhomboidtiling_newer_cgal_version",
+        "multi_critical":"https://bitbucket.org/mkerber/multi_critical",
         }
 doc_soft_easy_install = {
         "mpfree":f"""
@@ -66,9 +67,20 @@ cp 2pac $CONDA_PREFIX/bin
 """,
         "rhomboid_tiling":f"""
 git clone {doc_soft_urls["rhomboid_tiling"]} rhomboid_tiling
+cd rhomboid_tiling
 sh build.sh
 cp orderk $CONDA_PREFIX/bin/rhomboid_tiling
-"""
+""",
+        "multi_critical":f"""
+```sh
+git clone https://bitbucket.org/mkerber/multi_critical
+cd multi_critical
+cmake . --fresh
+make
+cp multi_critical $CONDA_PREFIX/bin/
+cd ..
+""",
+
         }
 doc_soft_urls = defaultdict(lambda:"<Unknown url>", doc_soft_urls)
 doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
@@ -100,6 +112,8 @@ cdef dict[str,str|None] pathes = {
         "2pac":None,
         "function_delaunay":None,
         "multi_chunk":None,
+        "multi_critical":None,
+        "rhomboid_tiling":None
         }
 
 
@@ -262,16 +276,14 @@ def function_delaunay_presentation_to_slicer(
 
         slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
 
-def rhomboid_tiling_to_slicer(
+def _rhomboid_tiling_to_slicer(
         slicer,
         point_cloud:np.ndarray,
         int k_max,
         int degree = -1,
-        bool reduce=True,
         bool clear:bool = True,
-        bool verbose:bool=False,
-        bool multi_chunk = False,
-        ):
+        bool verbose=False,
+    ):
     """TODO"""
     global pathes
     backend = "rhomboid_tiling"
@@ -284,15 +296,58 @@ def rhomboid_tiling_to_slicer(
         np.savetxt(input_path,point_cloud,delimiter=' ')
 
         verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-        degree_arg = f"--minpres {degree}" if degree >= 0 else ""
-        multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
-        command = f"{pathes[backend]} {input_path} {output_path} {point_cloud.shape[1]} {k_max} scc {degree}"
+        command = f"{pathes[backend]} {input_path} {output_path} {point_cloud.shape[1]} {k_max} scc {degree} {verbose_arg}"
         if verbose:
             print(command)
         os.system(command)
         slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
 
 
+def _multi_critical_from_slicer(
+        slicer,
+        bool reduce=False,
+        str algo:Literal["path","tree"]="path",
+        degree:Optional[int]=None,
+        bool clear = True,
+        swedish:Optional[bool] = None,
+        bool verbose = False,
+        bool kcritical=False,
+        **slicer_kwargs,
+    ):
+    _init_external_softwares(requires=["multi_critical"])
+    cdef bool need_split = False
+    swedish = degree is not None if swedish is None else swedish
+    from multipers import Slicer
+    newSlicer = Slicer(slicer,return_type_only=True, kcritical=kcritical, **slicer_kwargs)
+    with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
+      input_path = os.path.join(tmpdir, "multipers_input.scc")
+      output_path = os.path.join(tmpdir, "multipers_output.scc")
+      slicer.to_scc(input_path)
+      reduce_arg = ""
+      if reduce:
+        if swedish:
+          reduce_arg += r" --swedish"
+        if degree is None:
+          need_split = True
+          reduce_arg += r" --minpres-all"
+        else:
+          reduce_arg += fr" --mipres {degree}"
+      verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+
+      command = f"{pathes['multi_critical']} --{algo} {reduce_arg} {input_path} {output_path} {verbose_arg}"
+      if verbose:
+        print(command)
+      os.system(command)
+      if need_split:
+        os.system(f"awk \'/scc2020/ {{n++}} {{print > (\"{tmpdir}/multipers_block_\" n \".scc\")}}\' {output_path}")
+        from glob import glob
+        import re
+        files = glob(tmpdir + "/multipers_block_*.scc")
+        files.sort(key=lambda f: int(re.search(r'\d+', f).group()))
+        num_degrees=len(files)
+        ss = tuple(newSlicer()._build_from_scc_file(files[i], shift_dimension=i-1).minpres(i) for i in range(num_degrees))
+        return ss
+      return newSlicer()._build_from_scc_file(str(output_path), shift_dimension=-1)
 
 
 
