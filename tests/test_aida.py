@@ -6,8 +6,8 @@ from multipers.tests import assert_sm
 import pytest
 
 mpfree_flag = mp.io._check_available("mpfree")
-mpv = pytest.importorskip(
-    "multipers.vector_interface",
+mpo = pytest.importorskip(
+    "multipers.ops",
     reason="AIDA wasn't compiled. Check the blacklist in `setup.py`.",
 )
 
@@ -21,7 +21,7 @@ def test_indecomposable():
     s = mp.Slicer(return_type_only=True)(B, D, F)
     s.minpres_degree = 7
     s = s.to_colexical()
-    s2 = mpv.aida(s)
+    s2 = mpo.aida(s)
     assert len(s2) == 1
     s2 = s2[0].to_colexical()
     assert s == s2
@@ -36,7 +36,7 @@ def test_equality():
     degree = 1
     s = mp.Slicer(st).minpres(degree)
     (sm1,) = mp.signed_measure(s, degree=degree, invariant="hilbert")
-    s_ = mpv.aida(s)
+    s_ = mpo.aida(s)
     sms = Parallel(n_jobs=-1, backend="threading")(
         delayed(
             lambda x: mp.signed_measure(

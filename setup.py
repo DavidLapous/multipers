@@ -76,12 +76,12 @@ cython_modules = [
     "point_measure",
     "grids",
     "slicer",
-    "vector_interface",
+    "ops",
 ]
 
 
 def arch_module_blacklist(module: str):
-    if platform.system() == "Windows" and module == "vector_interface":
+    if platform.system() == "Windows" and module == "ops":
         # Persistence-Algebra doesn't compile yet here
         return False
     return True
@@ -180,7 +180,7 @@ print(library_dirs)
 
 
 def cpp_lib_deps(module):
-    if module == "vector_interface":
+    if module == "ops":
         return ["boost_system", "boost_timer"]
     else:
         return ["tbb"]
@@ -193,7 +193,7 @@ extensions = [
             [
                 f"multipers/{module}.pyx",
             ]
-            + (AIDA_CPP_SOURCES if module == "vector_interface" else [])
+            + (AIDA_CPP_SOURCES if module == "ops" else [])
         ),
         language="c++",
         extra_compile_args=[

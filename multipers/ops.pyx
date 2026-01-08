@@ -90,3 +90,84 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
         out[i] = s_summand
             
     return out
+
+def one_criticalify(
+        slicer,
+        bool reduce=False,
+        str algo:Literal["path","tree"]="path",
+        degree:Optional[int]=None,
+        bool clear = True,
+        swedish:Optional[bool] = None,
+        bool verbose = False,
+        bool kcritical=False,
+    ):
+    from multipers.io import _multi_critical_from_slicer
+    from multipers.slicer import is_slicer
+    if not is_slicer(slicer):
+        raise ValueError(f"Invalid input. Expected `SlicerType` got {type(slicer)=}.")
+    if not slicer.is_kcritical:
+        return slicer
+    return _multi_critical_from_slicer(
+           slicer, reduce=reduce, algo=algo,
+           degree=degree, clear=clear,
+           swedish=swedish, verbose=verbose,
+           kcritical=kcritical
+    )
+
+def minimal_presentation(
+        slicer,
+        int degree = -1, 
+        degrees:Iterable[int]=[],
+        str backend:Literal["mpfree", "2pac", ""]="mpfree", 
+        str slicer_backend:Literal["matrix","clement","graph"]="matrix",
+        bool vineyard=True, 
+        dtype:type|_valid_dtypes=None,
+        int n_jobs = -1,
+        bool force=False,
+        bool auto_clean = True,
+        **minpres_kwargs
+        ):
+    """
+    Computes a minimal presentation of the multifiltered complex given by the slicer,
+    and returns it as a slicer.
+    Backends differents than `mpfree` are unstable.
+    """
+    from multipers.io import _init_external_softwares, scc_reduce_from_str_to_slicer
+    from joblib import Parallel, delayed
+    from multipers.slicer import is_slicer
+    from multipers import Slicer
+    import os
+    import tempfile
+
+    if is_slicer(slicer) and slicer.is_minpres and not force:
+        from warnings import warn
+        warn(f"(unnecessary computation) The slicer seems to be already reduced, from homology of degree {slicer.minpres_degree}.")
+        return slicer
+    _init_external_softwares(requires=[backend])
+    if len(degrees)>0:
+        def todo(int degree):
+            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs)
+        return tuple(
+          Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
+        )
+    assert degree>=0, f"Degree not provided."
+    if not np.any(slicer.get_dimensions() == degree):
+        return type(slicer)()
+    if dtype is None:
+        dtype = slicer.dtype
+    dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
+    with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
+        tmp_path = os.path.join(tmpdir, "multipers.scc")
+        slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree-1, unsqueeze = False)
+        new_slicer = Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+        if backend=="mpfree":
+            shift_dimension=degree-1
+        else:
+            shift_dimension=degree
+        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
+
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
