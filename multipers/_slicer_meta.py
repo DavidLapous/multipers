@@ -120,6 +120,7 @@ def Slicer(
     filtration_container: Optional[str] = None,
     max_dim: Optional[int] = None,
     return_type_only: bool = False,
+    _shift_dimension: int = 0,
 ) -> mps.Slicer_type:
     """
     Given a simplextree or blocks (a.k.a scc for python),
@@ -144,6 +145,13 @@ def Slicer(
     ------
     The corresponding slicer.
     """
+    if reduce:
+        from warnings import warn
+
+        warn(
+            "Deprecated argument `reduce`. just reduce it afterwards.",
+            DeprecationWarning,
+        )
     if max_dim is not None:
         raise DeprecationWarning("deprecated parameter.")
     if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
@@ -180,23 +188,18 @@ def Slicer(
     )
     if return_type_only:
         return _Slicer
+
     if st is None:
         return _Slicer()
     elif mps.is_slicer(st):
-        # max_dim_idx = (
-        #     None
-        #     if max_dim is None
-        #     else np.searchsorted(st.get_dimensions(), max_dim + 1)
-        # )
         slicer = _Slicer(st)
-        # if st.is_squeezed:
-        #     slicer.filtration_grid = st.filtration_grid
-        # slicer.minpres_degree = st.minpres_degree
     elif is_simplextree_multi(st) and backend == "Graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
 
+    elif isinstance(st, str):
+        slicer = _Slicer()._build_from_scc_file(st, shift_dimension=_shift_dimension)
     elif is_simplextree_multi(st):
         slicer = _Slicer().build_from_simplex_tree(st)
         if st.is_squeezed:
@@ -208,21 +211,16 @@ Graph is simplicial, incompatible with minpres.
 You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
-        # if max_dim is not None:  # no test for simplex tree?
-        #     st.prune_above_dimension(max_dim)
-        if isinstance(st, str):  # is_kcritical should be false
-            slicer = _Slicer()._build_from_scc_file(st)
-        else:
-            blocks = st
-            slicer = _slicer_from_blocks(
-                blocks,
-                backend,
-                vineyard,
-                is_kcritical,
-                dtype,
-                column_type,
-                filtration_container,
-            )
+        blocks = st
+        slicer = _slicer_from_blocks(
+            blocks,
+            backend,
+            vineyard,
+            is_kcritical,
+            dtype,
+            column_type,
+            filtration_container,
+        )
     if reduce:
         slicer = mps.minimal_presentation(
             slicer,
