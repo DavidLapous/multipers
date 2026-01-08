@@ -26,6 +26,24 @@ def _aida(col_degrees, row_degrees, matrix):
   return out
 
 def aida(s, bool sort=True, bool verbose=False, bool progress = False):
+    """
+    Decomposes (a minimal presentation of a) 2-parameter persistence module as
+    a direct sum of indecomposables.
+
+    From [Decomposing Multiparameter Persistence Modules](https://doi.org/10.4230/LIPIcs.SoCG.2025.41).
+
+    Parameters:
+     - s : The slicer to reduce. Has to be a minimal presentation.
+     - verbose : shows log.
+     - progress : shows a progress bar
+     - sort : sorts the input first in a colexical order (debug)
+    """
+
+    from multipers.slicer import is_slicer
+    if not is_slicer(s):
+        raise ValueError(f"Input has to be a slicer. Got {type(s)=}.")
+    if not s.is_minpres:
+        raise ValueError(f"AIDA takes a minimal presentation as an input. Got {s.minpres_degree=}.")
     if s.num_parameters != 2 or not s.is_minpres:
         raise ValueError(f"AIDA is only compatible with 2-parameter minimal presentations. Got {s.num_parameters=} and {s.is_minpres=}.")
     cdef bool is_squeezed = s.is_squeezed
@@ -142,18 +160,27 @@ def minimal_presentation(
         int degree = -1, 
         degrees:Iterable[int]=[],
         str backend:Literal["mpfree", "2pac", ""]="mpfree", 
-        str slicer_backend:Literal["matrix","clement","graph"]="matrix",
-        bool vineyard=True, 
-        dtype:type|_valid_dtypes=None,
         int n_jobs = -1,
         bool force=False,
         bool auto_clean = True,
-        **minpres_kwargs
         ):
     """
-    Computes a minimal presentation of the multifiltered complex given by the slicer,
-    and returns it as a slicer.
+    Computes a minimal presentation a (1-critical) multifiltered  complex.
+
+    From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
+    whose code is available here: https://bitbucket.org/mkerber/mpfree
+
     Backends differents than `mpfree` are unstable.
+
+    Parameters:
+     - slicer : the filtration/free implicit representation to reduce
+     - degree : the homological degree to reduce
+     - degrees : a list of homological degrees to reduce. Output will be a list.
+     - backend : a callable `scc`-compatible backend
+     - n_jobs : process minpres in parallel if degrees is given
+     - force : if input is already reduced, force the re-computation of the minimal presentation.
+     - auto_clean : if input is squeezed, some filtraton values may disappear.
+       This is a postprocessing to remove unnecessary coordinates.
     """
     from multipers.io import _init_external_softwares, scc_reduce_from_str_to_slicer
     from joblib import Parallel, delayed
@@ -169,25 +196,23 @@ def minimal_presentation(
     _init_external_softwares(requires=[backend])
     if len(degrees)>0:
         def todo(int degree):
-            return minimal_presentation(slicer, degree=degree, backend=backend, slicer_backend=slicer_backend, vineyard=vineyard, **minpres_kwargs)
+            return minimal_presentation(slicer, degree=degree, backend=backend, **minpres_kwargs)
         return tuple(
           Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
     assert degree>=0, f"Degree not provided."
     if not np.any(slicer.get_dimensions() == degree):
         return type(slicer)()
-    if dtype is None:
-        dtype = slicer.dtype
     dimension = slicer.dimension - degree # latest  = L-1, which is empty, -1 for degree 0, -2 for degree 1 etc.
     with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
         tmp_path = os.path.join(tmpdir, "multipers.scc")
         slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree-1, unsqueeze = False)
-        new_slicer = Slicer(None,backend=slicer_backend, vineyard=vineyard, dtype=dtype)
+        new_slicer = type(slicer)()
         if backend=="mpfree":
             shift_dimension=degree-1
         else:
             shift_dimension=degree
-        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, **minpres_kwargs)
+        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension)
 
         new_slicer.minpres_degree = degree
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
