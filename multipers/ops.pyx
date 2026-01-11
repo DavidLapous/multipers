@@ -158,8 +158,11 @@ def one_criticalify(
            swedish=swedish, verbose=verbose,
            kcritical=kcritical
     )
-    out.filtration_grid = F
-    
+    if is_slicer(out, allow_minpres=False):
+        out.filtration_grid = F
+    else:
+        for stuff in out:
+            stuff.filtration_grid = F
     return out
 
 def minimal_presentation(
