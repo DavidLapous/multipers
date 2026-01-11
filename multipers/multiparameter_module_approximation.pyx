@@ -156,8 +156,10 @@ def module_approximation(
         homology of this multi-filtration.
     """
     if isinstance(input, tuple) or isinstance(input, list):
-        assert all(s.is_minpres or len(s)==0 for s in input), "Modules cannot be merged unless they are minimal presentations."
-        assert np.unique([s.minpres_degree for s in input]).shape[0] == len(input), "Multiple modules are at the same degree, cannot merge modules" 
+        
+        assert all(is_slicer(s) and (s.is_minpres or len(s)==0) for s in input), "Modules cannot be merged unless they are minimal presentations."
+        
+        assert (np.unique([s.minpres_degree for s in input if len(s)], return_counts=True)[1] <=1).all(), "Multiple modules are at the same degree, cannot merge modules" 
         if len(input) == 0:
             return PyModule_f64()
         modules = tuple(Parallel(n_jobs=n_jobs, prefer="threads")(
@@ -177,8 +179,8 @@ def module_approximation(
             for slicer in input
         ))
         box = np.array([
-            np.min([m.get_box()[0] for m in modules], axis=0),
-            np.max([m.get_box()[1] for m in modules], axis=0),
+            np.min([m.get_box()[0] for m in modules if len(m)], axis=0),
+            np.max([m.get_box()[1] for m in modules if len(m)], axis=0),
         ])
         mod = PyModule_f64().set_box(box)
         for i,m in enumerate(modules):

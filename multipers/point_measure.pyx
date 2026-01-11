@@ -113,6 +113,8 @@ def integrate_measure(
                 resolution=resolution,
                 **get_fitration_kwargs
                 )
+    if pts.size == 0:
+        return np.empty()
     resolution = np.asarray([len(f) for f in filtration_grid])
     cdef int num_pts = pts.shape[0]
     cdef int num_parameters = pts.shape[1]

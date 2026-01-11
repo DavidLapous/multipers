@@ -322,7 +322,7 @@ def _multi_critical_from_slicer(
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
       input_path = os.path.join(tmpdir, "multipers_input.scc")
       output_path = os.path.join(tmpdir, "multipers_output.scc")
-      slicer.to_scc(input_path)
+      slicer.to_scc(input_path, degree=0, strip_comments=True)
       reduce_arg = ""
       if reduce:
         if swedish:
@@ -331,7 +331,7 @@ def _multi_critical_from_slicer(
           need_split = True
           reduce_arg += r" --minpres-all"
         else:
-          reduce_arg += fr" --minpres {degree}"
+          reduce_arg += fr" --minpres {slicer.dimension - degree+2}"
       verbose_arg = "> /dev/null 2>&1" if not verbose else ""
 
       command = f"{pathes['multi_critical']} --{algo} {reduce_arg} {input_path} {output_path} {verbose_arg}"
@@ -347,7 +347,10 @@ def _multi_critical_from_slicer(
         num_degrees=len(files)
         ss = tuple(newSlicer()._build_from_scc_file(files[i], shift_dimension=i-1).minpres(i) for i in range(num_degrees))
         return ss
-      return newSlicer()._build_from_scc_file(str(output_path), shift_dimension=-1 if degree is None else degree-1)
+      out = newSlicer()._build_from_scc_file(str(output_path), shift_dimension=degree-1 if reduce else -2)
+      if reduce:
+          out = out.minpres(degree)
+      return out
 
 
 

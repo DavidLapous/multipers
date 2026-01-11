@@ -123,6 +123,11 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
       throw std::overflow_error("edge_degree_rips of invalid size");
     to_update.set_num_generators(edge_degree_rips_filtration.size());
     for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++) {
+      if (edge_degree_rips_filtration[k] == std::numeric_limits<value_type>::infinity()) {
+        to_update.set_num_generators(k);
+        break;
+      }
+
       to_update(k, 0) = edge_degree_rips_filtration[k];
     }
     if constexpr (verbose) std::cout << "\n" << st_multi.get_filtration_value(*sh_multi) << std::endl;
