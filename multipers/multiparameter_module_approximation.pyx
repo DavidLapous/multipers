@@ -205,8 +205,6 @@ def module_approximation(
         input = input.grid_squeeze()
     unsqueeze_grid = None
     if input.is_squeezed:
-        if not ignore_warnings:
-            warn("(copy warning) Got a squeezed input. ")
         if verbose:
             print("Preparing filtration (unsqueeze)... ",end="", flush=True)
         if from_coordinates:
@@ -219,6 +217,9 @@ def module_approximation(
                 direction = _direction
             if verbose:
                 print(f"Updated  `{direction=}`, and `{max_error=}` ",end="")
+        else:
+            if not ignore_warnings:
+                warn("(copy warning) Got a squeezed input. ")
 
         else:
             input = input.unsqueeze()
