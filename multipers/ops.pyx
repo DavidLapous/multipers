@@ -173,6 +173,7 @@ def minimal_presentation(
         int n_jobs = -1,
         bool force=False,
         bool auto_clean = True,
+        bool verbose=False,
         ):
     """
     Computes a minimal presentation a (1-critical) multifiltered  complex.
@@ -222,11 +223,9 @@ def minimal_presentation(
             shift_dimension=degree-1
         else:
             shift_dimension=degree
-        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension)
+        scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension, verbose=verbose)
 
-        if degree is not None:
-            new_slicer.minpres(degree)
-
+        new_slicer.minpres_degree = degree
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
