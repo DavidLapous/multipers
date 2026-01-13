@@ -10,6 +10,7 @@ from multipers import (
     multiparameter_module_approximation,
     simplex_tree_multi,
     slicer,
+    ops,
 )
 from multipers._signed_measure_meta import signed_measure
 
@@ -30,4 +31,5 @@ __all__ = [
     "Slicer",
     "module_approximation",
     "SimplexTreeMulti",
+    "ops",
 ]
