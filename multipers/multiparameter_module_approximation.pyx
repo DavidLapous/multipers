@@ -191,6 +191,10 @@ def module_approximation(
             print("Empty input, returning the trivial module.")
         return PyModule_f64()
 
+    if is_simplextree_multi(input):
+        from multipers._slicer_meta import Slicer
+        input = Slicer(input,backend="matrix", vineyard=True)
+
 
     cdef bool is_degenerate=False
     for i in range(direction.size()):
@@ -267,9 +271,7 @@ Try to increase the precision parameter, or set `ignore_warnings=True` to comput
 Returning the trivial module.
 """
         )
-    if is_simplextree_multi(input):
-        from multipers._slicer_meta import Slicer
-        input = Slicer(input,backend="matrix", vineyard=True)
+
     if not is_slicer(input):
         raise ValueError("First argument must be a simplextree or a slicer !")
     return module_approximation_from_slicer(
