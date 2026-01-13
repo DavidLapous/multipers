@@ -137,10 +137,12 @@ For theoretical references:
   notebooks/delaunay_core_bifiltration
   notebooks/cubical
   notebooks/degree_rips_interface
+  notebooks/rhomboid_bifiltration
 
 .. toctree::
   :caption: Example zoo
   
+  notebooks/representative_cycles
   notebooks/time_series_classification
   notebooks/graph_classification
   notebooks/molecular_embedding
