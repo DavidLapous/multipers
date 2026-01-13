@@ -224,7 +224,9 @@ def minimal_presentation(
             shift_dimension=degree
         scc_reduce_from_str_to_slicer(path=tmp_path, slicer=new_slicer, dimension=dimension, backend=backend, shift_dimension=shift_dimension)
 
-        new_slicer.minpres_degree = degree
+        if degree is not None:
+            new_slicer.minpres(degree)
+
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()

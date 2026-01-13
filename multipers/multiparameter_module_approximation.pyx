@@ -220,8 +220,6 @@ def module_approximation(
         else:
             if not ignore_warnings:
                 warn("(copy warning) Got a squeezed input. ")
-
-        else:
             input = input.unsqueeze()
         if verbose:
             print("Done.", flush=True)
