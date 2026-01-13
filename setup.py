@@ -142,6 +142,8 @@ cpp_dirs = [
     np.get_include(),
     PYTHON_ENV_PATH / "include",  # Unix
     PYTHON_ENV_PATH / "Library" / "include",  # Windows
+    "/usr/include/",
+    "/usr/local/include",
     "AIDA/src",
     "AIDA/include",
     "Persistence-Algebra/include",
