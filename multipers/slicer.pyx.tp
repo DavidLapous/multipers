@@ -755,14 +755,15 @@ cdef class {{D['PYTHON_TYPE']}}:
         str backend:Literal["mpfree", "2pac"]="mpfree", 
         bool vineyard={{D['IS_VINE']}}, 
         dtype = {{D['PY_VALUE_TYPE']}},
-        **minpres_kwargs
+        bool force = False,
+        bool auto_clean = True,
         )->Slicer_type:
         """
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         See :func:`multipers.slicer.minimal_presentation`.
         """
         from multipers.ops import minimal_presentation
-        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend)
+        new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, force=force, auto_clean=auto_clean)
         return new_slicer
 
     @property
