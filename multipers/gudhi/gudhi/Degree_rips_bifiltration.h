@@ -37,6 +37,7 @@
 #include <gudhi/Simplex_tree/filtration_value_utils.h>
 #include <gudhi/Multi_parameter_filtration.h>
 #include <gudhi/Dynamic_multi_parameter_filtration.h>
+#include <oneapi/tbb/concurrent_vector.h>
 
 namespace Gudhi::multi_filtration {
 
@@ -1707,7 +1708,7 @@ class Degree_rips_bifiltration
 
     GUDHI_CHECK_code(const OneDimArray &indices = grid[1]);
     const OneDimArray &values = grid[0];
-    for (size_type g = 0; g < num_generators(); ++g) {
+    auto todo = [&](size_type g) {
       GUDHI_CHECK_code(GUDHI_CHECK(static_cast<size_type>(indices[g]) == g, std::invalid_argument("Unvalid grid.")));
 
       auto v = static_cast<typename OneDimArray::value_type>(generators_[g]);
@@ -1716,7 +1717,14 @@ class Degree_rips_bifiltration
         --d;
       }
       generators_[g] = coordinate ? static_cast<T>(d) : static_cast<T>(values[d]);
+    };
+#ifdef GUDHI_USE_TBB
+    tbb::parallel_for(size_type{0}, num_generators(), [&](size_type g) { todo(g); });
+#else
+    for (size_type g = 0; g < num_generators(); ++g) {
+      todo(g);
     }
+#endif
   }
 
   // FONCTIONNALITIES
@@ -1832,6 +1840,17 @@ class Degree_rips_bifiltration
 
     if (f.num_generators() == 1) return project_generator(0);
 
+#ifdef GUDHI_USE_TBB
+    std::vector<U> projections(f.num_generators());
+    tbb::parallel_for(size_type{0}, f.num_generators(), [&](size_type g) {
+      projections[g] = project_generator(g);
+    });
+    if constexpr (Co) {
+      return *std::max_element(projections.begin(), projections.end());
+    } else {
+      return *std::min_element(projections.begin(), projections.end());
+    }
+#else
     if constexpr (Co) {
       U projection = std::numeric_limits<U>::lowest();
       for (size_type g = 0; g < f.num_generators(); ++g) {
@@ -1847,6 +1866,7 @@ class Degree_rips_bifiltration
       }
       return projection;
     }
+#endif
   }
 
   /**

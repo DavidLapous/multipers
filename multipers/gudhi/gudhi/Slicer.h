@@ -21,7 +21,6 @@
 #include <array>
 #include <initializer_list>
 #include <limits>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <numeric>  //std::iota

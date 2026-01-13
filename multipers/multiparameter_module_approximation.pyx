@@ -201,6 +201,8 @@ def module_approximation(
     if is_degenerate and not ignore_warnings:
         warn("Got a degenerate direction. This function may fail if the first line is not generic.")
 
+    if from_coordinates and not input.is_squeezed:
+        input = input.grid_squeeze()
     unsqueeze_grid = None
     if input.is_squeezed:
         if not ignore_warnings:

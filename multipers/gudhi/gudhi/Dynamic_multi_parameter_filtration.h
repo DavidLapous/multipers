@@ -34,6 +34,7 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/Multi_filtration/Multi_parameter_generator.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
+#include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi::multi_filtration {
 
@@ -1854,9 +1855,15 @@ class Dynamic_multi_parameter_filtration
         grid.size() >= num_parameters(),
         std::invalid_argument("The grid should not be smaller than the number of parameters in the filtration value."));
 
+#ifdef GUDHI_USE_TBB
+    tbb::parallel_for(size_type(0), num_generators(), [&](size_type i){
+      generators_[i].project_onto_grid(grid, coordinate);
+    });
+#else
     for (Generator &g : generators_) {
       g.project_onto_grid(grid, coordinate);
     }
+#endif
 
     if (!coordinate && num_generators() > 1) simplify();
   }

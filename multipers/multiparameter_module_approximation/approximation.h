@@ -820,10 +820,22 @@ template <typename value_type>
 inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::vector<std::array<value_type, 2>>> &barcode,
                                             const bool threshold_in) {
+#ifdef GUDHI_USE_TBB
+  std::vector<std::size_t> shifts(barcode.size(),0U);
+  for (std::size_t i = 1U; i < barcode.size(); i++) {
+    shifts[i] = shifts[i - 1] + barcode[i - 1].size();
+  }
+  tbb::parallel_for(size_t(0), barcode.size(), [&](size_t dim) {
+    tbb::parallel_for(size_t(0), barcode[dim].size(), [&](size_t j) {
+      _add_bar_with_threshold(line, barcode[dim][j], threshold_in, this->operator[](shifts[dim] + j));
+    });
+  });
+#else
   auto count = 0U;
   for (const auto &bar_dim : barcode) {
     for (const auto &bar : bar_dim) _add_bar_with_threshold(line, bar, threshold_in, this->operator[](count++));
   }
+#endif
 }
 
 template <typename value_type>

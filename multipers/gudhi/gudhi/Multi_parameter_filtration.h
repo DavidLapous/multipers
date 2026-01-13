@@ -35,6 +35,7 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/simple_mdspan.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
+#include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi::multi_filtration {
 
@@ -1786,15 +1787,31 @@ class Multi_parameter_filtration
 
     // TODO: verify if this really makes a differences in the 1-critical case, otherwise just keep the general case
     if constexpr (Ensure1Criticality) {
+#ifdef GUDHI_USE_TBB
+      tbb::parallel_for(size_type(0), num_parameters(), [&](size_type p){
+        project_generator_value(generators_[p], grid[p]);
+      });
+#else
       for (size_type p = 0; p < num_parameters(); ++p) {
         project_generator_value(generators_[p], grid[p]);
       }
+#endif
     } else {
+
+#ifdef GUDHI_USE_TBB
+
+      tbb::parallel_for(size_type(0), num_generators(), [&](size_type g) {
+        tbb::parallel_for(size_type(0), num_parameters(), [&](size_type p) {
+          project_generator_value(generator_view_(g, p), grid[p]);
+        });
+      });
+#else
       for (size_type g = 0; g < num_generators(); ++g) {
         for (size_type p = 0; p < num_parameters(); ++p) {
           project_generator_value(generator_view_(g, p), grid[p]);
         }
       }
+#endif
 
       if (!coordinate && num_generators() > 1) simplify();
     }

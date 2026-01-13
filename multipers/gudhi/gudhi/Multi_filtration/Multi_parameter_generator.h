@@ -34,6 +34,7 @@
 #include <gudhi/Debug_utils.h>
 #include <gudhi/simple_mdspan.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
+#include <oneapi/tbb/parallel_for.h>
 
 namespace Gudhi::multi_filtration {
 
@@ -1358,8 +1359,7 @@ class Multi_parameter_generator
    * the values are set to the values at the coordinates of the projection.
    */
   template <typename OneDimArray>
-  void project_onto_grid(const std::vector<OneDimArray> &grid, bool coordinate = true)
-  {
+  void project_onto_grid(const std::vector<OneDimArray> &grid, bool coordinate = true) {
     GUDHI_CHECK(
         grid.size() >= generator_.size(),
         std::invalid_argument("The grid should not be smaller than the number of parameters in the filtration value."));
@@ -1368,7 +1368,7 @@ class Multi_parameter_generator
 
     if (!is_finite()) generator_.resize(grid.size(), generator_[0]);
 
-    for (size_type p = 0; p < generator_.size(); ++p) {
+    auto todo = [&](size_type p) {
       const auto &filtration = grid[p];
       auto v = static_cast<typename OneDimArray::value_type>(generator_[p]);
       auto d = std::distance(filtration.begin(), std::lower_bound(filtration.begin(), filtration.end(), v));
@@ -1376,7 +1376,14 @@ class Multi_parameter_generator
         --d;
       }
       generator_[p] = coordinate ? static_cast<T>(d) : static_cast<T>(filtration[d]);
+    };
+#ifdef GUDHI_USE_TBB
+    tbb::parallel_for(size_type(0), generator_.size(), todo);
+#else
+    for (size_type p = 0; p < generator_.size(); ++p) {
+      todo(p);
     }
+#endif
   }
 
   // FONCTIONNALITIES
