@@ -259,7 +259,7 @@ def DegreeRips(
     num=None,
     squeeze_strategy="exact",
     squeeze_resolution=None,
-    squeeze=True,
+    squeeze=False,
 ):
     """
     The DegreeRips filtration.
