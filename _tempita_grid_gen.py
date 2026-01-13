@@ -52,7 +52,7 @@ matrix_types = [
     "Matrix",  # necessary
     # "Graph",
     # "Clement",
-    # "GudhiCohomology",
+    "GudhiCohomology",
 ]
 
 filtration_containers = [
