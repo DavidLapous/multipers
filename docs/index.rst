@@ -139,10 +139,16 @@ For theoretical references:
   notebooks/degree_rips_interface
   notebooks/rhomboid_bifiltration
 
+
+.. toctree::
+  :caption: Operations
+
+  notebooks/representative_cycles
+  notebooks/AIDA
+
 .. toctree::
   :caption: Example zoo
-  
-  notebooks/representative_cycles
+
   notebooks/time_series_classification
   notebooks/graph_classification
   notebooks/molecular_embedding
