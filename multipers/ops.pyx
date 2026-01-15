@@ -71,7 +71,7 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
         stuff = multipers_interface_input(col_degree, row_degree, matrix)
         stuff2 = truc.multipers_interface(stuff)
     out = []
-    _Slicer = mp.Slicer(return_type_only=True, dtype=np.float64)
+    _Slicer = mp.Slicer(s, return_type_only=True, dtype=np.float64)
     out = [_Slicer() for _ in range(stuff2.summands.size())]
     dim_container_ = s.get_dimensions().copy()
     cdef int32_t[:] dim_container = np.asarray(dim_container_, dtype=np.int32)
