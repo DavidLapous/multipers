@@ -14,7 +14,7 @@ columns_name = [  # only one column is necessary
         # "HEAP",
         # "UNORDERED_SET",
         # "NAIVE_VECTOR",
-        # "VECTOR",
+        "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
         # "SMALL_VECTOR",
@@ -24,8 +24,8 @@ columns_name = [  # only one column is necessary
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
     ("int32_t", "np.int32", "i32"),  # necessary
-    # ("int64_t", "np.int64",   "i64"),
-    # ("float",   "np.float32", "f32"),
+    ("int64_t", "np.int64",   "i64"),
+    ("float",   "np.float32", "f32"),
     ("double", "np.float64", "f64"),  # necessary
 ]
 COARSENNED_VALUE_TYPE = ("int32_t", "np.int32", "i32")
