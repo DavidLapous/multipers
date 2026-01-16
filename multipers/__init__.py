@@ -1,4 +1,5 @@
 from importlib.metadata import version as _version
+import sys
 
 __version__ = _version("multipers")
 # Doc
@@ -10,14 +11,17 @@ from multipers import (
     multiparameter_module_approximation,
     simplex_tree_multi,
     slicer,
-    ops,
 )
-from multipers._signed_measure_meta import signed_measure
+
+if sys.platform != "win32":
+    from multipers import ops
+
 
 # Shortcuts
 from multipers._slicer_meta import Slicer
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.simplex_tree_multi import SimplexTreeMulti
+from multipers._signed_measure_meta import signed_measure
 
 __all__ = [
     "data",
@@ -31,5 +35,7 @@ __all__ = [
     "Slicer",
     "module_approximation",
     "SimplexTreeMulti",
-    "ops",
 ]
+
+if sys.platform != "win32":
+    __all__.append("ops")
