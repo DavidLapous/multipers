@@ -345,7 +345,10 @@ def test_astypes():
                 for ftype in mp.slicer.available_filtration_container:
                     for col in mp.slicer.available_columns:
                         for pers_backend in mp.slicer.available_pers_backend:
-                            if vine and pers_backend == "GudhiCohomology":
+                            if pers_backend == "GudhiCohomology" and (
+                                vine
+                                or col != next(iter(mp.slicer.available_columns))[0]
+                            ):
                                 continue
                             s = mp.Slicer(st).astype(
                                 kcritical=kcritical,

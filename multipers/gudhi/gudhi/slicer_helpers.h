@@ -298,7 +298,7 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
   int minDim = maxDim;
   const auto& dimensions = complex.get_dimensions();
 
-  std::vector<std::vector<std::size_t> > indicesByDim(maxDim + 1);
+  std::vector<std::vector<std::size_t>> indicesByDim(maxDim + 1);
   std::vector<std::size_t> shiftedIndices(complex.get_number_of_cycle_generators());
   for (std::size_t i = 0; i < complex.get_number_of_cycle_generators(); ++i) {
     auto dim = dimensions[i];
@@ -649,7 +649,8 @@ persistence_on_slices_(Slicer& slicer, F&& ini_slicer, unsigned int size, [[mayb
     tbb::enumerable_thread_specific<typename Slicer::Thread_safe> threadLocals(slicer.weak_copy());
     tbb::parallel_for(static_cast<Index>(0), size, [&](const Index& i) {
       typename Slicer::Thread_safe& s = threadLocals.local();
-      std::forward<F>(ini_slicer)(s, i);
+      // std::forward<F>(ini_slicer)(s, i);
+      tbb::this_task_arena::isolate([&] { std::forward<F>(ini_slicer)(slicer, i); });
       s.initialize_persistence_computation(ignoreInf);
       out[i] = s.template get_flat_barcode<true, U, idx>();
     });
