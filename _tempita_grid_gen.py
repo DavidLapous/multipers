@@ -88,10 +88,10 @@ def check_combination(
     if backend_type in ["Graph", "GudhiCohomology"]:
         if column_type[0] != 0:
             return False
-    if filtration_container == "flat":
+    if filtration_container == "Degree_rips_bifiltration":
         if not is_kcritical:
             return False
-        if value_type[0] == "f":
+        if value_type[-1][0] == "f":
             return False
     return True
 
