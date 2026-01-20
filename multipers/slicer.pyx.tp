@@ -792,7 +792,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         Updates the barcode, on a line, using the vineyard algorithm.
         """
         self.push_to_line(basepoint,direction)
-        self.truc.vineyard_update()
+        self.truc.update_persistence_computation()
         return self
     def get_representative_cycles(self, bool update=True):
         """

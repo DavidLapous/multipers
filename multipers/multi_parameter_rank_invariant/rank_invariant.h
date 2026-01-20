@@ -212,7 +212,7 @@ inline void compute_2d_rank_invariant_of_elbow(
       // slicer.compute_persistence(degrees_index);
       slicer.initialize_persistence_computation();
     } else {
-      slicer.vineyard_update();
+      slicer.update_persistence_computation();
     }
   } else {
     slicer.initialize_persistence_computation(ignore_inf);

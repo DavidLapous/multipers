@@ -7,7 +7,8 @@
 #include "gudhi/multi_simplex_tree_helpers.h"
 #include "gudhi/persistence_matrix_options.h"
 #include "gudhi/Multi_parameter_filtered_complex.h"
-#include "gudhi/Multi_persistence/Persistence_interface_matrix.h"
+#include "gudhi/Multi_persistence/Persistence_interface_vineyard.h"
+#include "gudhi/Multi_persistence/Persistence_interface_homology.h"
 #include "gudhi/Multi_persistence/Persistence_interface_cohomology.h"
 #include "gudhi/Dynamic_multi_parameter_filtration.h"
 #include "gudhi/Degree_rips_bifiltration.h"
@@ -39,26 +40,26 @@ enum Filtration_containers_strs : std::uint8_t {
 
 using Available_columns = Gudhi::persistence_matrix::Column_types;
 
-template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
-struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
-  using Index = std::uint32_t;
-  static const bool has_matrix_maximal_dimension_access = false;
-  static const bool has_column_pairings = true;
-  static const bool has_vine_update = true;
-  static const bool can_retrieve_representative_cycles = true;
-};
+// template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
+// struct Multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+//   using Index = std::uint32_t;
+//   static const bool has_matrix_maximal_dimension_access = false;
+//   static const bool has_column_pairings = true;
+//   static const bool has_vine_update = true;
+//   static const bool can_retrieve_representative_cycles = true;
+// };
 
-template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
-struct Multi_persistence_Clement_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
-  using Index = std::uint32_t;
-  static const bool has_matrix_maximal_dimension_access = false;
-  static const bool has_column_pairings = true;
-  static const bool has_vine_update = true;
-  static const bool is_of_boundary_type = false;
-  static const Gudhi::persistence_matrix::Column_indexation_types column_indexation_type =
-      Gudhi::persistence_matrix::Column_indexation_types::POSITION;
-  static const bool can_retrieve_representative_cycles = true;
-};
+// template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
+// struct Multi_persistence_Clement_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+//   using Index = std::uint32_t;
+//   static const bool has_matrix_maximal_dimension_access = false;
+//   static const bool has_column_pairings = true;
+//   static const bool has_vine_update = true;
+//   static const bool is_of_boundary_type = false;
+//   static const Gudhi::persistence_matrix::Column_indexation_types column_indexation_type =
+//       Gudhi::persistence_matrix::Column_indexation_types::POSITION;
+//   static const bool can_retrieve_representative_cycles = true;
+// };
 
 template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
 struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
@@ -68,50 +69,61 @@ struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_op
   static const bool has_vine_update = false;
 };
 
-template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET,
-          bool row_access = true>
-struct fix_presentation_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
-  using Index = std::uint32_t;
-  static const bool has_row_access = row_access;
-  static const bool has_map_column_container = false;
-  static const bool has_removable_columns = false;  // WARN : idx will change if map is not true
+// template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET,
+//           bool row_access = true>
+// struct fix_presentation_options : Gudhi::persistence_matrix::Default_options<column_type, true> {
+//   using Index = std::uint32_t;
+//   static const bool has_row_access = row_access;
+//   static const bool has_map_column_container = false;
+//   static const bool has_removable_columns = false;  // WARN : idx will change if map is not true
+// };
+
+template <Gudhi::persistence_matrix::Column_types col = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
+struct Multi_persistence_vineyard_ru_options : Gudhi::vineyard::Default_vineyard_options {
+  static constexpr bool is_RU = true;
+  static const Gudhi::persistence_matrix::Column_types column_type = col;
 };
 
-template <Available_columns col>
-using BackendOptionsWithVine = Multi_persistence_options<col>;
+template <Gudhi::persistence_matrix::Column_types col = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET>
+struct Multi_persistence_vineyard_chain_options : Gudhi::vineyard::Default_vineyard_options {
+  static constexpr bool is_RU = false;
+  static const Gudhi::persistence_matrix::Column_types column_type = col;
+};
+
+// template <Available_columns col>
+// using BackendOptionsWithVine = Multi_persistence_options<col>;
 template <Available_columns col>
 using BackendOptionsWithoutVine = No_vine_multi_persistence_options<col>;
 
-template <Available_columns col>
-using ClementBackendOptionsWithVine = Multi_persistence_Clement_options<col>;
+// template <Available_columns col>
+// using ClementBackendOptionsWithVine = Multi_persistence_Clement_options<col>;
 
 // using SimplicialStructure = Gudhi::multiparameter::truc_interface::SimplicialStructure;
 template <typename Filtration>
 using StructureStuff = Gudhi::multi_persistence::Multi_parameter_filtered_complex<Filtration>;
 
-template <Available_columns col>
-using MatrixBackendNoVine = Gudhi::multi_persistence::Persistence_interface_matrix<BackendOptionsWithoutVine<col>>;
+template <Available_columns col, class Filtration>
+using MatrixBackendNoVine = Gudhi::multi_persistence::Persistence_interface_homology<BackendOptionsWithoutVine<col>, Filtration>;
 
 template <Available_columns col>
-using MatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_matrix<BackendOptionsWithVine<col>>;
+using MatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineyard<Multi_persistence_vineyard_ru_options<col>>;
 
 template <Available_columns col>
-using ClementMatrixBackendVine =
-    Gudhi::multi_persistence::Persistence_interface_matrix<ClementBackendOptionsWithVine<col>>;
+using ClementMatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineyard<Multi_persistence_vineyard_chain_options<col>>;
 template <typename Filtration>
 using GraphBackendVine = Gudhi::multiparameter::truc_interface::Persistence_backend_h0<StructureStuff<Filtration>>;
 
 template <typename value_type = float>
 using Filtration_value = Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, true>;
 
-template <Available_columns col = Available_columns::INTRUSIVE_SET>
-using SimplicialNoVineMatrixTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendNoVine<col>>;
+template <class Filtration, Available_columns col = Available_columns::INTRUSIVE_SET>
+using SimplicialNoVineMatrixTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendNoVine<col, Filtration>>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using GeneralVineTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendVine<col>>;
 
-template <Available_columns col = Available_columns::INTRUSIVE_SET>
-using GeneralNoVineTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendNoVine<col>>;
+template <class Filtration, Available_columns col = Available_columns::INTRUSIVE_SET>
+using GeneralNoVineTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, MatrixBackendNoVine<col, Filtration>>;
 
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using GeneralVineClementTruc = Gudhi::multi_persistence::Slicer<Filtration_value<>, ClementMatrixBackendVine<col>>;
@@ -128,8 +140,8 @@ using Multi_critical_filtration_value = Gudhi::multi_filtration::Multi_parameter
 template <Available_columns col = Available_columns::INTRUSIVE_SET>
 using KCriticalVineTruc = Gudhi::multi_persistence::Slicer<Multi_critical_filtration_value<>, MatrixBackendVine<col>>;
 
-template <bool is_vine, Available_columns col = Available_columns::INTRUSIVE_SET>
-using Matrix_interface = std::conditional_t<is_vine, MatrixBackendVine<col>, MatrixBackendNoVine<col>>;
+template <bool is_vine, class Filtration, Available_columns col = Available_columns::INTRUSIVE_SET>
+using Matrix_interface = std::conditional_t<is_vine, MatrixBackendVine<col>, MatrixBackendNoVine<col, Filtration>>;
 
 template <Filtration_containers_strs fil_container,  bool is_k_critical, typename value_type>
 using filtration_options = std::conditional_t<fil_container == Filtration_containers_strs::Dynamic_multi_parameter_filtration,
@@ -138,13 +150,12 @@ using filtration_options = std::conditional_t<fil_container == Filtration_contai
                                                                Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, !is_k_critical>,
                                                                Gudhi::multi_filtration::Degree_rips_bifiltration<value_type, false, !is_k_critical>>>;
 
-template <bool is_vine,
-          bool is_k_critical,
-          typename value_type,
-          Available_columns col = Available_columns::INTRUSIVE_SET,
-          Filtration_containers_strs filt_cont = Filtration_containers_strs::Multi_parameter_filtration>
-using MatrixTrucPythonInterface =
-    Gudhi::multi_persistence::Slicer<filtration_options<filt_cont,is_k_critical, value_type>, Matrix_interface<is_vine, col>>;
+// template <bool is_vine,
+//           bool is_k_critical,
+//           typename value_type,
+//           Available_columns col = Available_columns::INTRUSIVE_SET,
+//           Filtration_containers_strs filt_cont = Filtration_containers_strs::Multi_parameter_filtration>
+// using MatrixTrucPythonInterface = Gudhi::multi_persistence::Slicer<filtration_options<filt_cont,is_k_critical, value_type>, Matrix_interface<is_vine, Filtration, col>>;
 
 enum class BackendsEnum : std::uint8_t { Matrix, Graph, Clement, GudhiCohomology };
 
@@ -154,7 +165,7 @@ struct PersBackendOptsImpl;
 
 template <bool is_vine, Available_columns col, typename Filtration>
 struct PersBackendOptsImpl<BackendsEnum::Matrix, is_vine, col, Filtration> {
-  using type = Matrix_interface<is_vine, col>;
+  using type = Matrix_interface<is_vine, Filtration, col>;
 };
 
 template <bool is_vine, Available_columns col, typename Filtration>

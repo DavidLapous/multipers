@@ -435,14 +435,10 @@ inline void compute_2d_hilbert_surface(
     using bc_type =
         typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::template Multi_dimensional_flat_barcode<>;
 
-    if constexpr (PersBackend::is_vine) {
-      if (!slicer.persistence_computation_is_initialized()) [[unlikely]] {
-        slicer.initialize_persistence_computation();
-      } else {
-        slicer.vineyard_update();
-      }
-    } else {
+    if (!slicer.persistence_computation_is_initialized()) [[unlikely]] {
       slicer.initialize_persistence_computation(ignore_inf);
+    } else {
+      slicer.update_persistence_computation(ignore_inf);
     }
 
     bc_type barcodes = slicer.template get_flat_barcode<true>();

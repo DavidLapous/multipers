@@ -76,7 +76,6 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
       uint32_t num_parameters "get_number_of_parameters"() nogil
       {{if D['IS_VINE']}}
       vector[uint32_t] get_current_order() nogil
-      void vineyard_update() nogil
       vector[vector[vector[uint32_t]]] get_representative_cycles(bool) nogil
       vector[uint32_t] get_most_persistent_cycle(int, bool) nogil
       {{endif}}
@@ -92,7 +91,9 @@ cdef extern from "Persistence_slices_interface.h" namespace "multipers::tmp_inte
       int prune_above_dimension(int) except + nogil 
       void coarsen_on_grid_inplace "coarsen_on_grid"(vector[vector[{{D['C_VALUE_TYPE']}}]], bool) nogil
       void initialize_persistence_computation(bool) except+ nogil
-      void initialize_persistence_computation() except+ nogil # ignore_inf = true
+      void initialize_persistence_computation() except+ nogil # ignore_inf = false
+      void update_persistence_computation(bool) except+ nogil
+      void update_persistence_computation() except+ nogil # ignore_inf = false
       Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, {{D['C_VALUE_TYPE']}}] get_barcode "get_flat_barcode<true, {{D['C_VALUE_TYPE']}}, false>"() nogil
       Dim_barcode[{{D['C_TEMPLATE_TYPE']}}, int] get_barcode_idx "get_flat_barcode<true, int, true>"() nogil
   string slicer_to_str({{D['C_TEMPLATE_TYPE']}}&) nogil #to_str
