@@ -91,8 +91,8 @@ def check_combination(
     if filtration_container == "Degree_rips_bifiltration":
         if not is_kcritical:
             return False
-        if value_type[-1][0] == "f":
-            return False
+        # if value_type[-1][0] == "f": # needed for mma 
+        #     return False
     return True
 
 
