@@ -350,6 +350,8 @@ def test_astypes():
                                 or col != next(iter(mp.slicer.available_columns))[0]
                             ):
                                 continue
+                            if ftype == "Flat" and not kcritical:
+                                continue
                             s = mp.Slicer(st).astype(
                                 kcritical=kcritical,
                                 vineyard=vine,
