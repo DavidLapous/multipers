@@ -364,7 +364,7 @@ def plot2d_PyModule(
             current_max_interleaving = np.max(d_infs) if d_infs.size > 0 else 0
             summand_interleaving = max(summand_interleaving, current_max_interleaving)
 
-        if summand_interleaving <= min_persistence:
+        if summand_interleaving < min_persistence:
             continue
 
         # --- Plotting ---
