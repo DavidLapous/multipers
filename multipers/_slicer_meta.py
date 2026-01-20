@@ -132,10 +132,6 @@ def Slicer(
      - `multipers.module_approximation(this, *args)`
      - `multipers.signed_measure(this, *args)`
 
-    Note : it is recommended and sometime required to apply
-        a minimal presentation before computing these functions !
-    `mp.slicer.minimal_presentation(slicer, *args, **kwargs)`
-
     Input
     -----
      - st : SimplexTreeMulti or scc-like blocks or path to scc file
@@ -222,7 +218,8 @@ You can try using `multipers.slicer.to_simplextree`."""
             filtration_container,
         )
     if reduce:
-        slicer = mps.minimal_presentation(
+        from multipers.ops import minimal_presentation
+        slicer = minimal_presentation(
             slicer,
             backend=reduce_backend,
             slicer_backend=backend,

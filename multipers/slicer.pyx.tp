@@ -760,7 +760,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         )->Slicer_type:
         """
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
-        See :func:`multipers.slicer.minimal_presentation`.
+        See :func:`multipers.ops.minimal_presentation`.
         """
         from multipers.ops import minimal_presentation
         new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, force=force, auto_clean=auto_clean)
