@@ -309,7 +309,7 @@ def _multi_critical_from_slicer(
         str algo:Literal["path","tree"]="path",
         degree:Optional[int]=None,
         bool clear = True,
-        swedish:Optional[bool] = None,
+        swedish = None,
         bool verbose = False,
         bool kcritical=False,
         **slicer_kwargs,
