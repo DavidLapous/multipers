@@ -416,7 +416,7 @@ cdef class PyModule_{{SHORT}}:
                 self.plot(dims[dim_idx],box=box, separated = separated, **kwargs)
             return
         corners = self.cmod.get_corners_of_dimension(degree)
-        interleavings = self.get_module_of_degree(degree).get_interleavings()
+        interleavings = self.get_module_of_degree(degree).get_interleavings(box)
         plot2d_PyModule(corners, box=box, dimension=degree, interleavings = interleavings, **kwargs)
         return
     def degree_splits(self):

@@ -381,6 +381,13 @@ cdef class {{D['PYTHON_TYPE']}}:
          - an optional direction (num_parameters,) or (num_basepoints, num_parameters,) array
         """
         {{if D['IS_FLOAT']}}
+        api = api_from_tensors(basepoint)
+        basepoint = api.asnumpy(basepoint)
+        direction = None if direction is None else api.asnumpy(direction)
+        if api.has_grad(basepoint) or (direction is not None and api.has_grad(direction)):
+            from warnings import warn
+            warn("Ignored gradient from input. Use a squeezed slicer for autodiff.")
+
         self.push_to_line(basepoint,direction)
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
         if keep_inf:
@@ -424,11 +431,18 @@ cdef class {{D['PYTHON_TYPE']}}:
 
       return tuple(tuple(np.array(bc_idx_degree, dtype=int) for bc_idx_degree in _db2np_{{D['C_TEMPLATE_TYPE']}}_idx(bc_idx)) for bc_idx in custom_persistences(self.truc, &arr_view[0,0], size, ignore_inf))
 
-    def persistence_on_lines(self, basepoints=None, directions=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
+    def persistence_on_lines(self, basepoints, directions=None, bool keep_inf=True, bool full=False, bool ignore_infinite_filtration_values = True):
         """
         Same as `persistence_on_line`, but with vineyards operation between
         lines if `self.is_vine`, and in parallel otherwise.
         """
+        api = api_from_tensors(basepoints)
+        basepoints = api.asnumpy(basepoints)
+        directions = None if directions is None else api.asnumpy(directions)
+        if api.has_grad(basepoints) or (directions is not None and api.has_grad(directions)):
+            from warnings import warn
+            warn("Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines).")
+
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_basepoints = basepoints
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_directions
         cdef vector[pair[vector[{{D['C_VALUE_TYPE']}}], vector[{{D['C_VALUE_TYPE']}}]]] c_truc

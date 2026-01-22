@@ -30,7 +30,7 @@ value_types = [
 ]
 COARSENNED_VALUE_TYPE = ("int32_t", "np.int32", "i32")
 REAL_VALUE_TYPE = ("double", "np.float64", "f64")
-
+assert COARSENNED_VALUE_TYPE in value_types and REAL_VALUE_TYPE in value_types
 
 ## True needed for MMA, and False is default value
 vineyards_values = [
@@ -91,7 +91,7 @@ def check_combination(
     if filtration_container == "Degree_rips_bifiltration":
         if not is_kcritical:
             return False
-        # if value_type[-1][0] == "f": # needed for mma 
+        # if value_type[-1][0] == "f": # needed for mma
         #     return False
     return True
 
@@ -224,6 +224,8 @@ print("#----------------------")
 print("Slicers")
 print("#----------------------")
 print("#----------------------")
+print(*[s["PYTHON_TYPE"] for s in slicers], sep="\n")
+print("----------------------")
 print(*slicers, sep="\n")
 with open("build/tmp/_slicer_names.pkl", "wb") as f:
     pickle.dump(slicers, f)
