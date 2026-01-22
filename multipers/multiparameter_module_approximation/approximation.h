@@ -20,6 +20,7 @@
 #define APPROXIMATION_H_INCLUDED
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -403,33 +404,36 @@ class Summand {
   Summand<int64_t> grid_squeeze(const std::vector<std::vector<value_type>> &grid) const;
 
   void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
+    using T = typename filtration_type::value_type;
     if (birth_corners_.num_generators() == 0) return;
-    auto num_parameters = birth_corners_.num_parameters();
-    auto snap = [](value_type x) {
-      value_type a = std::floor(x);
-      value_type b = std::ceil(x);
-      size_t out;
+    auto snap = [](T x) {
+      T a = std::floor(x);
+      T b = std::ceil(x);
+      std::size_t out;
       if (x - a < b - x)
-        out = static_cast<size_t>(a);
+        out = static_cast<std::size_t>(a);
       else
-        out = static_cast<size_t>(b);
+        out = static_cast<std::size_t>(b);
       return out;
     };
     auto todo = [&](auto &corners) {
-      return [&](size_t g) {
+      return [&](std::size_t g) {
         // auto &x = corners[i];
         // for (auto g = 0u; g < x.num_generators(); ++g) {
         for (auto p = 0u; p < corners.num_parameters(); ++p) {
-          value_type snapped = snap(corners(g, p));
-          corners(g, p) = (snapped >= grid[p].size() ? filtration_type::inf(num_parameters)(0,p) : grid[p][snapped]);
+          assert(corners(g, p) >= 0);
+          if (corners(g, p) != filtration_type::T_inf) {
+            std::size_t snapped = snap(corners(g, p));
+            corners(g, p) = (snapped >= grid[p].size() ? filtration_type::T_inf : grid[p][snapped]);
+          }
         }
         // }
       };
     };
 
-    tbb::parallel_for(size_t(0), birth_corners_.size(), todo(birth_corners_));
+    tbb::parallel_for(std::size_t(0), birth_corners_.size(), todo(birth_corners_));
     if (death_corners_.num_generators() == 0) return;
-    tbb::parallel_for(size_t(0), death_corners_.size(), todo(death_corners_));
+    tbb::parallel_for(std::size_t(0), death_corners_.size(), todo(death_corners_));
   };
 
   void snap_to_integers() {

@@ -312,13 +312,20 @@ def _multi_critical_from_slicer(
         swedish = None,
         bool verbose = False,
         bool kcritical=False,
+        str filtration_container = "flat",
         **slicer_kwargs,
     ):
     _init_external_softwares(requires=["multi_critical"])
     cdef bool need_split = False
     swedish = degree is not None if swedish is None else swedish
     from multipers import Slicer
-    newSlicer = Slicer(slicer,return_type_only=True, kcritical=kcritical, **slicer_kwargs)
+    newSlicer = Slicer(
+            slicer,
+            return_type_only=True, 
+            kcritical=kcritical, 
+            filtration_container=filtration_container,
+            **slicer_kwargs
+    )
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "multipers_input.scc")
         output_path = os.path.join(tmpdir, "multipers_output.scc")
