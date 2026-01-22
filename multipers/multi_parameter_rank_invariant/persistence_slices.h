@@ -62,7 +62,7 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
       st.prune_above_dimension(1);
       st.expansion(expansion_dim);
     }
-    st.initialize_filtration(true);  // true is ignore_infinite_values
+    tbb::this_task_arena::isolate([&]{st.initialize_filtration(true);});  // true is ignore_infinite_values
     constexpr int coeff_field_characteristic = 11;
     constexpr typename interface_std_like::Filtration_value min_persistence = 0;
 
