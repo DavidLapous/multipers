@@ -197,7 +197,10 @@ class Persistence_interface_homology
   template <class Filtration_range>
   void _initialize_order(const Filtration_range& filtrationValues, bool ignoreInf)
   {
-    GUDHI_CHECK_code(const auto& boundaryMatrix = complex_->get_boundaries();)
+    // GUDHI_CHECK_code(const auto& boundaryMatrix = complex_->get_boundaries();)
+    // Cannot use GUDHI_CHECK_code here because of the added GUDHI_ASSUME in multipers
+    // TODO: Things need to be reorganize later
+    [[maybe_unused]] const auto& boundaryMatrix = complex_->get_boundaries();
     const auto& dimensions = complex_->get_dimensions();
 
     GUDHI_CHECK(boundaryMatrix.size() == dimensions.size(),
