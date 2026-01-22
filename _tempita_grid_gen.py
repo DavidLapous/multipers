@@ -14,7 +14,7 @@ columns_name = [  # only one column is necessary
         # "HEAP",
         # "UNORDERED_SET",
         # "NAIVE_VECTOR",
-        "VECTOR",
+        # "VECTOR",
         # "INTRUSIVE_LIST",
         # "LIST",
         # "SMALL_VECTOR",
