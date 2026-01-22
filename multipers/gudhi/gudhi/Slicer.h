@@ -542,7 +542,6 @@ class Slicer
       ++i;
     }
 
-    std::cout << maxIndex << "\n";
     if (maxIndex == static_cast<Index>(-1)) return {};
 
     auto cycle = persistence_.get_representative_cycle(maxIndex, update);

@@ -31,13 +31,16 @@
 #include <vector>
 #include <initializer_list>
 
+#ifdef GUDHI_USE_TBB
+#include <oneapi/tbb/parallel_for.h>
+#endif
+
 #include <gudhi/Debug_utils.h>
 #include <gudhi/simple_mdspan.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
 #include <gudhi/Simplex_tree/filtration_value_utils.h>
 #include <gudhi/Multi_parameter_filtration.h>
 #include <gudhi/Dynamic_multi_parameter_filtration.h>
-#include <oneapi/tbb/concurrent_vector.h>
 
 namespace Gudhi::multi_filtration {
 
@@ -1708,7 +1711,8 @@ class Degree_rips_bifiltration
 
     GUDHI_CHECK_code(const OneDimArray &indices = grid[1]);
     const OneDimArray &values = grid[0];
-    auto todo = [&](size_type g) {
+
+    auto project_generator = [&](size_type g) {
       GUDHI_CHECK_code(GUDHI_CHECK(static_cast<size_type>(indices[g]) == g, std::invalid_argument("Unvalid grid.")));
 
       auto v = static_cast<typename OneDimArray::value_type>(generators_[g]);
@@ -1718,11 +1722,12 @@ class Degree_rips_bifiltration
       }
       generators_[g] = coordinate ? static_cast<T>(d) : static_cast<T>(values[d]);
     };
+
 #ifdef GUDHI_USE_TBB
-    tbb::parallel_for(size_type{0}, num_generators(), [&](size_type g) { todo(g); });
+    tbb::parallel_for(size_type(0), num_generators(), project_generator);
 #else
     for (size_type g = 0; g < num_generators(); ++g) {
-      todo(g);
+      project_generator(g);
     }
 #endif
   }
@@ -1842,9 +1847,7 @@ class Degree_rips_bifiltration
 
 #ifdef GUDHI_USE_TBB
     std::vector<U> projections(f.num_generators());
-    tbb::parallel_for(size_type{0}, f.num_generators(), [&](size_type g) {
-      projections[g] = project_generator(g);
-    });
+    tbb::parallel_for(size_type{0}, f.num_generators(), [&](size_type g) { projections[g] = project_generator(g); });
     if constexpr (Co) {
       return *std::max_element(projections.begin(), projections.end());
     } else {
