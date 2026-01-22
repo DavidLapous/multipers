@@ -312,7 +312,7 @@ def _multi_critical_from_slicer(
         swedish = None,
         bool verbose = False,
         bool kcritical=False,
-        str filtration_container = "flat",
+        str filtration_container = "contiguous",
         **slicer_kwargs,
     ):
     _init_external_softwares(requires=["multi_critical"])

@@ -118,6 +118,7 @@ def one_criticalify(
         bool verbose = False,
         bool kcritical=False,
         str algo:Literal["path","tree"]="path",
+        str filtration_container="contiguous",
     ):
     """
     Computes a free implicit representation  of a given multi-critical
@@ -156,7 +157,8 @@ def one_criticalify(
            slicer, reduce=reduce, algo=algo,
            degree=degree, clear=clear,
            swedish=swedish, verbose=verbose,
-           kcritical=kcritical
+           kcritical=kcritical,
+           filtration_container=filtration_container,
     )
     if is_slicer(out, allow_minpres=False):
         out.filtration_grid = F
