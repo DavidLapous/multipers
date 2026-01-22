@@ -300,6 +300,7 @@ def signed_measure(
                 mass_default=mass_default,
                 degrees=degrees,
                 expand_collapse=expand_collapse,
+                n_jobs=n_jobs,
             )
             fix_mass_default = False
             if verbose:
