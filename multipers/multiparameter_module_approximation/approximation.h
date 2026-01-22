@@ -556,7 +556,7 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
     if constexpr (verbose) std::cout << "Line basepoint " << new_line.base_point() << std::endl;
     slicer.push_to(new_line);
 
-    slicer.vineyard_update();
+    slicer.update_persistence_computation();
     if constexpr (verbose2) std::cout << slicer << std::endl;
     module.add_barcode(new_line, slicer.template get_flat_barcode<true>(), threshold);
   };
@@ -586,7 +586,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
     _rec_mma(module, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy, precision, threshold);
     basepoint[dim_to_iterate] += precision;
     // current_persistence.push_to(Line(basepoint));
-    // current_persistence.vineyard_update();
+    // current_persistence.update_persistence_computation();
   }
 }
 
@@ -645,7 +645,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
         threshold);
     basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
     // current_persistence.push_to(Line(basepoint));
-    // current_persistence.vineyard_update();
+    // current_persistence.update_persistence_computation();
   }
 }
 
