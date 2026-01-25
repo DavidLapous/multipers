@@ -30,14 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+        uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.14' 
+          python-version: '3.13' 
       - name: Build doc
         shell: bash
         run: |
-          pip install multipers sphinxcontrib-bibtex myst-nb sphinx_rtd_theme
+          pip install multipers sphinxcontrib-bibtex myst-nb sphinx_rtd_theme --only-binary multipers --no-cache-dir --upgrade
           cd docs
           sh build_doc.sh
       - name: Setup Pages
