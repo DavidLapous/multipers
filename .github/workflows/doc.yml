@@ -37,7 +37,7 @@ jobs:
       - name: Build doc
         shell: bash
         run: |
-          pip install multipers sphinxcontrib-bibtex myst-nb sphinx_rtd_theme --only-binary multipers --no-cache-dir --upgrade
+          pip install multipers sphinxcontrib-bibtex myst-nb sphinx_rtd_theme pandas networkx torch --only-binary multipers --no-cache-dir --upgrade
           cd docs
           sh build_doc.sh
       - name: Setup Pages
