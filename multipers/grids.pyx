@@ -160,6 +160,13 @@ def compute_grid(
 
 
 
+def todense(grid, bool product_order=False, api=None):
+    if len(grid) == 0:
+        return np.empty(0)
+    if api is None:
+        api = api_from_tensors(*grid)
+    return api.cartesian_product(*grid)
+
 
 def _compute_grid_numpy(
         filtrations_values,
@@ -206,7 +213,7 @@ def _compute_grid_numpy(
     elif strategy == "quantile":
         F = tuple(api.unique(f) for f in filtrations_values)
         max_resolution = [min(len(f),r) for f,r in zip(F,resolution)]
-        F = tuple( api.quantile_closest(f, q=api.linspace(0,1,int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
+        F = tuple(api.quantile_closest(f, q=api.linspace(0,1,int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
         if unique:
             F = tuple(api.unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
@@ -226,29 +233,8 @@ def _compute_grid_numpy(
     else:
         raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
     if dense:
-        return todense(F)
+        return todense(F, api=api)
     return F
-
-def todense(grid, bool product_order=False):
-    if len(grid) == 0:
-        return np.empty(0)
-    api = api_from_tensors(*grid)
-    # if product_order:
-    #     if not api.backend ==np:
-    #         raise NotImplementedError("only numpy here.")
-    #     return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
-    return api.cartesian_product(*grid)
-    # if not isinstance(grid[0], np.ndarray):
-    #     import torch
-    #     assert isinstance(grid[0], torch.Tensor)
-    #     from multipers.torch.diff_grids import todense
-    #     return todense(grid)
-    # dtype = grid[0].dtype
-    # if product_order:
-    #     return np.fromiter(product(*grid), dtype=np.dtype((dtype, len(grid))), count=np.prod([len(f) for f in grid]))
-    # mesh = np.meshgrid(*grid)
-    # coordinates = np.stack(mesh, axis=-1).reshape(-1, len(grid)).astype(dtype)
-    # return coordinates
 
 
 

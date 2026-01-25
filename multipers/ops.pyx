@@ -57,6 +57,7 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
     cdef double[:,:] col_degree_ = np.asarray(F[D==degree+1], dtype = np.float64)
     cdef vector[pair[double,double]] row_degree = array_view_to_vect_pair(row_degree_)
     cdef vector[pair[double,double]] col_degree = array_view_to_vect_pair(col_degree_)
+    cdef int64_t i,j
     i,j = np.searchsorted(D, [degree+1,degree+2])
     cdef vector[vector[int]] matrix = s.get_boundaries()[i:j]
 
@@ -87,7 +88,7 @@ def aida(s, bool sort=True, bool verbose=False, bool progress = False):
         for j in range(FG.size()):
             dim_container[j] = degree
         for j in range(FG.size(),FG.size()+FR.size()):
-            dim_container[j] = degree +1
+            dim_container[j] = degree + 1
 
         boundary_container = [[] for _ in range(FG.size())]
         boundary_container.extend(B)
