@@ -162,7 +162,7 @@ def signed_measure(
             grid = filtered_complex.filtration_grid
 
     if mass_default is None:
-        mass_default = mass_default
+        pass
     elif isinstance(mass_default, str):
         if mass_default == "auto":
             mass_default = np.array([1.1 * np.max(f) - 0.1 * np.min(f) for f in grid])
@@ -228,7 +228,7 @@ def signed_measure(
                     zero_pad=fix_mass_default,
                     # grid_shape=tuple(len(g) for g in grid),
                     ignore_inf=ignore_infinite_filtration_values,
-                    verbose=verbose
+                    verbose=verbose,
                 )
                 fix_mass_default = False
                 if verbose:

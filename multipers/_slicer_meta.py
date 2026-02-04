@@ -52,8 +52,7 @@ def _blocks2boundary_dimension_grades(
                 b[0] if len(b[0]) > 0 else np.empty((0, num_parameters))
                 for b in rblocks
             ),
-            dtype=filtration_type,
-        )
+        ).astype(filtration_type)
     boundary = tuple(x + S[i] for i, b in enumerate(rblocks) for x in b[1])
     dimensions = np.fromiter(
         (i for i, b in enumerate(rblocks) for _ in range(len(b[0]))), dtype=int
@@ -62,6 +61,7 @@ def _blocks2boundary_dimension_grades(
 
 
 def _slicer_from_simplextree(st, backend, vineyard):
+    backend = backend.lower() if isinstance(backend, str) else backend
     if vineyard:
         if backend == "matrix":
             slicer = mps._SlicerVineSimplicial(st)
@@ -172,7 +172,7 @@ def Slicer(
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = "INTRUSIVE_SET" if column_type is None else column_type
-        backend = "Matrix" if backend is None else backend
+        backend = "matrix" if backend is None else backend
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
@@ -189,7 +189,7 @@ def Slicer(
         return _Slicer()
     elif mps.is_slicer(st):
         slicer = _Slicer(st)
-    elif is_simplextree_multi(st) and backend == "Graph":
+    elif is_simplextree_multi(st) and backend == "graph":
         slicer = _slicer_from_simplextree(st, backend, vineyard)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
@@ -219,6 +219,7 @@ You can try using `multipers.slicer.to_simplextree`."""
         )
     if reduce:
         from multipers.ops import minimal_presentation
+
         slicer = minimal_presentation(
             slicer,
             backend=reduce_backend,
