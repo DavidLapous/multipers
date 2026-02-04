@@ -764,10 +764,10 @@ cdef class {{D['PYTHON_TYPE']}}:
         return self
 
     def minpres(self,
-        int degree=-1, 
-        list[int] degrees=[],
-        str backend:Literal["mpfree", "2pac"]="mpfree", 
-        bool vineyard={{D['IS_VINE']}}, 
+        int degree=-1,
+        degrees=None,
+        str backend:Literal["mpfree", "2pac"]="mpfree",
+        bool vineyard={{D['IS_VINE']}},
         dtype = {{D['PY_VALUE_TYPE']}},
         bool force = False,
         bool auto_clean = True,
@@ -776,6 +776,8 @@ cdef class {{D['PYTHON_TYPE']}}:
         Computes the minimal presentation of the slicer, and returns it as a new slicer.
         See :func:`multipers.ops.minimal_presentation`.
         """
+        if degrees is None:
+            degrees = []
         from multipers.ops import minimal_presentation
         new_slicer = minimal_presentation(self, degree=degree, degrees=degrees, backend=backend, force=force, auto_clean=auto_clean)
         return new_slicer
