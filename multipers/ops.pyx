@@ -122,7 +122,7 @@ def one_criticalify(
         str filtration_container="contiguous",
     ):
     """
-    Computes a free implicit representation  of a given multi-critical
+    Computes a free implicit representation of a given multi-critical
     multifiltration of a given homological degree (i.e., for a given
     homological degree, a quasi-isomorphic 1-critical filtration), or free
     resolution of the multifiltration (i.e., quasi-isomorphic 1-critical chain
@@ -138,7 +138,7 @@ def one_criticalify(
                 If None is given and `reduce` is true, returns a minimal presentation of all possible degrees.
                 If reduce is false : has no effect.
      - clear : Clears the temporary files.
-     - swedish : if True, `reduce=True` and `degree=None` skips the computation of the 1critical chain complex,
+     - swedish : if True, `reduce=True` and `degree=None` skips the computation of the 1-critical chain complex,
                  and directly (sequentially) computes the individual minimal presentations.
      - verbose : shows log
      - kcritical : do not use
@@ -179,12 +179,12 @@ def minimal_presentation(
         bool verbose=False,
         ):
     """
-    Computes a minimal presentation a (1-critical) multifiltered  complex.
+    Computes a minimal presentation of a (1-critical) multifiltered complex.
 
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
 
-    Backends differents than `mpfree` are unstable.
+    Backends different than `mpfree` are unstable.
 
     Parameters:
      - slicer : the filtration/free implicit representation to reduce
@@ -193,7 +193,7 @@ def minimal_presentation(
      - backend : a callable `scc`-compatible backend
      - n_jobs : process minpres in parallel if degrees is given
      - force : if input is already reduced, force the re-computation of the minimal presentation.
-     - auto_clean : if input is squeezed, some filtraton values may disappear.
+     - auto_clean : if input is squeezed, some filtration values may disappear.
        This is a postprocessing to remove unnecessary coordinates.
     """
     from multipers.io import _init_external_softwares, scc_reduce_from_str_to_slicer
