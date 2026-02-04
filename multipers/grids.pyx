@@ -212,12 +212,25 @@ def _compute_grid_numpy(
         F=tuple(api.unique(f) for f in filtrations_values)
     elif strategy == "quantile":
         F = tuple(api.unique(f) for f in filtrations_values)
-        max_resolution = [min(len(f),r) for f,r in zip(F,resolution)]
-        F = tuple(api.quantile_closest(f, q=api.linspace(0,1,int(r*_q_factor)), axis=0) for f,r in zip(F, resolution) )
+        max_resolution = [min(len(f), r) for f, r in zip(F, resolution)]
+        F = tuple(
+            api.quantile_closest(
+                f,
+                q=api.linspace(0, 1, int(r * _q_factor)),
+                axis=0,
+            )
+            for f, r in zip(F, resolution)
+        )
+
         if unique:
             F = tuple(api.unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
-                return _compute_grid_numpy(filtrations_values=filtrations_values, resolution=resolution, strategy="quantile",_q_factor=1.5*_q_factor)
+                return _compute_grid_numpy(
+                    filtrations_values=filtrations_values,
+                    resolution=resolution,
+                    strategy="quantile",
+                    _q_factor=1.5 * _q_factor,
+                )
     elif strategy == "regular":
         F = tuple(_todo_regular(f,r,api) for f,r in zip(filtrations_values, resolution))
     elif strategy == "regular_closest":
