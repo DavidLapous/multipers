@@ -73,7 +73,7 @@ cp orderk $CONDA_PREFIX/bin/rhomboid_tiling
 """,
         "multi_critical":f"""
 ```sh
-git clone https://bitbucket.org/mkerber/multi_critical
+git clone {doc_soft_urls["multi_critical"]}
 cd multi_critical
 cmake . --fresh
 make
