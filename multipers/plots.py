@@ -448,7 +448,13 @@ def plot2d_PyModule(
 
 
 def plot_simplicial_complex(
-    st, pts: ArrayLike, x: float, y: float, mma=None, degree=None
+    st, 
+    pts: ArrayLike,
+    x: float,
+    y: float,
+    mma=None,
+    degree=None,
+    show_pos:bool=True,
 ):
     """
     Scatters the points, with the simplices in the filtration at coordinates (x,y).
@@ -466,7 +472,8 @@ def plot_simplicial_complex(
         plt.vlines(x, b, d, color="k", linestyle="--")
         plt.hlines(y, a, c, color="k", linestyle="--")
         plt.scatter([x], [y], c="r", zorder=10)
-        plt.text(x + 0.01 * (b - a), y + 0.01 * (d - c), f"({x},{y})")
+        if show_pos:
+            plt.text(x + 0.01 * (b - a), y + 0.01 * (d - c), f"({x},{y})")
         return
 
     pts = np.asarray(pts)
