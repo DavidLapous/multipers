@@ -13,8 +13,8 @@ from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
 from multipers.array_api import check_keops
 
-available_strategies = ["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
-Lstrategies = Literal["regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
+available_strategies = ["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
+Lstrategies = Literal["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 
 ctypedef fused some_int:
     int32_t
@@ -53,6 +53,74 @@ def threshold_slice(a, m,M):
     return a
 
 
+def get_exact_grid(
+        x,
+        resolution=None,
+        strategy="exact",
+        threshold_min=None,
+        threshold_max=None,
+        bool return_api=False,
+    ):
+    """
+    Computes an initial exact grid 
+    """
+    from multipers.slicer import is_slicer
+    from multipers.simplex_tree_multi import is_simplextree_multi
+    from multipers.mma_structures import is_mma
+
+    if resolution is not None and strategy == "exact":
+        raise ValueError("The 'exact' strategy does not support resolution.")
+    if strategy != "exact":
+        assert resolution is not None, "A resolution is required for non-exact strategies"
+
+    cdef bool is_numpy_compatible = True
+    if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
+        initial_grid = x.filtration_grid
+        api = api_from_tensors(*initial_grid)
+    elif is_slicer(x):
+        initial_grid = x.get_filtrations_values().T
+        api = npapi
+    elif is_simplextree_multi(x):
+        initial_grid = x.get_filtration_grid()
+        api = npapi
+    elif is_mma(x):
+        initial_grid = x.get_filtration_values()
+        api = npapi
+    elif isinstance(x, np.ndarray):
+        initial_grid = x
+        api = npapi
+    else:
+        x = tuple(x)
+        if len(x) == 0:
+            return [], npapi
+        first = x[0]
+        ## is_sm, i.e., iterable tuple(pts,weights)
+        if isinstance(first, tuple) and getattr(first[0], "shape", None) is not None:
+            initial_grid = tuple(f[0].T for f in x)
+            api = api_from_tensors(*initial_grid)
+            initial_grid = api.cat(initial_grid, axis=1)
+        ## is grid-like (num_params, num_pts)
+        else:
+            api = api_from_tensors(*x)
+            initial_grid = tuple(api.astensor(f) for f in x)
+
+    cdef int num_parameters = len(initial_grid)
+
+    if threshold_min is not None or threshold_max is not None:
+        if threshold_min is None:
+            threshold_min = [None]*num_parameters
+        if threshold_max is None:
+            threshold_max = [None]*num_parameters
+
+        initial_grid = [
+            threshold_slice(xx,a,b) 
+            for xx,a,b in zip(initial_grid, threshold_min, threshold_max)
+        ]
+    if return_api:
+        return initial_grid, api
+    return initial_grid
+
+
 
 
 def compute_grid(
@@ -84,63 +152,24 @@ def compute_grid(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
 
-    from multipers.slicer import is_slicer
-    from multipers.simplex_tree_multi import is_simplextree_multi
-    from multipers.mma_structures import is_mma
-
-    if resolution is not None and strategy == "exact":
-        raise ValueError("The 'exact' strategy does not support resolution.")
-    if strategy != "exact":
-        assert resolution is not None, "A resolution is required for non-exact strategies"
-
-
-    cdef bool is_numpy_compatible = True
-    if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
-        initial_grid = x.filtration_grid
-        api = api_from_tensors(*initial_grid)
-    elif is_slicer(x):
-        initial_grid = x.get_filtrations_values().T
-        api = npapi
-    elif is_simplextree_multi(x):
-        initial_grid = x.get_filtration_grid()
-        api = npapi
-    elif is_mma(x):
-        initial_grid = x.get_filtration_values()
-        api = npapi
-    elif isinstance(x, np.ndarray):
-        initial_grid = x
-        api = npapi
-    else:
-        x = tuple(x)
-        if len(x) == 0: return []
-        first = x[0]
-        ## is_sm, i.e., iterable tuple(pts,weights)
-        if isinstance(first, tuple) and getattr(first[0], "shape", None) is not None:
-            initial_grid = tuple(f[0].T for f in x)
-            api = api_from_tensors(*initial_grid)
-            initial_grid = api.cat(initial_grid, axis=1)
-        ## is grid-like (num_params, num_pts)
-        else:
-            api = api_from_tensors(*x)
-            initial_grid = tuple(api.astensor(f) for f in x)
-
+    # Extract initial_grid and api using the helper function
+    initial_grid, api = get_exact_grid(
+        x,
+        resolution=resolution,
+        strategy=strategy,
+        threshold_min=threshold_min,
+        threshold_max=threshold_max,
+        return_api=True,
+    )
+    if len(initial_grid) == 0:
+        return initial_grid
     cdef int num_parameters = len(initial_grid)
     try:
         int(resolution)
         resolution = [resolution]*num_parameters
     except TypeError:
         pass
-   
-    if threshold_min is not None or threshold_max is not None:
-        if threshold_min is None:
-            threshold_min = [None]*num_parameters
-        if threshold_max is None:
-            threshold_max = [None]*num_parameters
 
-        initial_grid = [
-            threshold_slice(x,a,b) 
-            for x,a,b in zip(initial_grid, threshold_min, threshold_max)
-        ]
 
     grid = _compute_grid_numpy(
         initial_grid,
@@ -150,12 +179,48 @@ def compute_grid(
         _q_factor=_q_factor, 
         drop_quantiles=drop_quantiles,
         dense = dense,
+        api = api,
     )
-    # from multipers.torch.diff_grids import get_grid
-    # grid = get_grid(strategy)(initial_grid,resolution)
     if dense:
         grid = todense(grid)
     return grid
+
+def compute_grid_from_iterable(
+        xs,
+        resolution:Optional[int|Iterable[int]]=None, 
+        strategy:Lstrategies="exact", 
+        bool unique=True, 
+        some_float _q_factor=1., 
+        drop_quantiles=[0,0],
+        bool dense = False,
+        threshold_min = None,
+        threshold_max = None,
+        ):
+    initial_grids = tuple(get_exact_grid(
+        x,
+        resolution=resolution,
+        strategy=strategy,
+        threshold_min=threshold_min,
+        threshold_max=threshold_max,
+    ) for x in xs)
+    api = api_from_tensors(*initial_grids[0])
+    cdef int num_parameters = len(initial_grids[0])
+    grid = tuple(
+        api.cat([x[i] for x in initial_grids]) for i in range(num_parameters)
+    )
+    return compute_grid(
+        grid,
+        resolution=resolution,
+        strategy=strategy,
+        unique=unique,
+        _q_factor=_q_factor,
+        drop_quantiles=drop_quantiles,
+        dense=dense,
+    )
+
+
+
+
 
 
 
@@ -176,6 +241,7 @@ def _compute_grid_numpy(
         some_float _q_factor=1., 
         drop_quantiles=[0,0],
         bool dense = False,
+        api = None,
         ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -193,7 +259,8 @@ def _compute_grid_numpy(
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
     num_parameters = len(filtrations_values)
-    api = api_from_tensors(*filtrations_values)
+    if api is None:
+        api = api_from_tensors(*filtrations_values)
     try:
         a,b=drop_quantiles
     except:
@@ -361,30 +428,53 @@ def coarsen_points(some_float[:,:] points, strategy="exact", int resolution=-1, 
     return push_to_grid(points, grid, coordinate)
 
 def _inf_value(array):
-    if isinstance(array, type|np.dtype):
-        dtype = np.dtype(array) # torch types are not types
+    """Return a backend-appropriate representation of +inf for `array`'s dtype.
+
+    Accepts numpy dtype/ndarray and torch dtype/tensor when available.
+    """
+    # prefer numpy handling first
+    if isinstance(array, np.dtype):
+        dtype = array
     elif isinstance(array, np.ndarray):
         dtype = np.dtype(array.dtype)
     else:
-        import torch
-        if isinstance(array, torch.Tensor):
-            dtype=array.dtype
-        elif isinstance(array, torch.dtype):
-            dtype=array
-        else:
-            raise ValueError(f"unknown input of type {type(array)=} {array=}")
+        # try numpy coercion first (handles python scalars/types)
+        try:
+            dtype = np.dtype(array)
+        except Exception:
+            # fall back to torch if available
+            try:
+                import torch
+            except Exception:
+                torch = None
+            if torch is not None and isinstance(array, torch.Tensor):
+                dtype = array.dtype
+            elif torch is not None and isinstance(array, torch.dtype):
+                dtype = array
+            else:
+                raise ValueError(f"unknown input of type {type(array)=} {array=}")
 
     if isinstance(dtype, np.dtype):
-        if dtype.kind == 'f':
-            return np.asarray(np.inf,dtype=dtype)
-        if dtype.kind == 'i':
+        # https://numpy.org/doc/stable/reference/arrays.scalars.html
+        if np.issubdtype(dtype, np.inexact):
+            return np.asarray(np.inf, dtype=dtype)
+        if np.issubdtype(dtype, np.integer):
             return np.iinfo(dtype).max
-    # torch only here.
-    if dtype.is_floating_point:
-        return torch.tensor(torch.inf, dtype=dtype)
-    else:
+        raise ValueError(f"`dtype` must be integer or floating like (got {dtype=}).")
+
+    # torch dtype path
+    try:
+        import torch
+    except Exception:
+        torch = None
+
+    if torch is not None and isinstance(dtype, torch.dtype):
+        if dtype.is_floating_point:
+            return torch.tensor(float('inf'), dtype=dtype)
+        # integer-like
         return torch.iinfo(dtype).max
-    raise ValueError(f"Dtype must be integer or floating like (got {dtype})")
+
+    raise ValueError(f"Unsupported dtype object: {dtype!r}")
 
 def evaluate_in_grid(pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None):
     """    
@@ -393,7 +483,8 @@ def evaluate_in_grid(pts, grid, mass_default=None, input_inf_value=None, output_
      - pts: of the form array[int, ndim=2]
      - grid of the form Iterable[array[float, ndim=1]]
     """
-    assert pts.ndim == 2
+    if pts.ndim != 2:
+        raise ValueError(f"`pts` must have ndim == 2. Got {pts.ndim}.")
     first_filtration = grid[0]
     dtype = first_filtration.dtype
     api = api_from_tensors(*grid)
@@ -535,3 +626,5 @@ def evaluate_mod_in_grid(mod, grid, box=None):
         )
     )
     return diff_mod
+
+
