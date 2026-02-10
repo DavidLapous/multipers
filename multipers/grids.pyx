@@ -70,8 +70,8 @@ def get_exact_grid(
 
     if resolution is not None and strategy == "exact":
         raise ValueError("The 'exact' strategy does not support resolution.")
-    if strategy != "exact":
-        assert resolution is not None, "A resolution is required for non-exact strategies"
+    if strategy != "exact" and resolution is None:
+        raise ValueError("A resolution is required for non-exact strategies")
 
     cdef bool is_numpy_compatible = True
     if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:

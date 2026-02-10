@@ -103,3 +103,56 @@ def test_sanity_torch():
                 assert f.requires_grad, f"Grad not working for {strat=}"
             if strat not in ["exact", "precomputed"]:
                 assert len(f) <= 10, f"invalid resolution for {strat=}"
+
+
+def test_errors_and_edge_cases():
+    # empty input should return an empty grid
+    out = mpg.compute_grid([])
+    assert out == []
+
+    # providing a resolution for exact strategy is invalid
+    with pytest.raises(ValueError):
+        mpg.compute_grid([np.array([0.0, 1.0])], resolution=5, strategy="exact")
+
+    # missing resolution for non-exact strategy should raise (assertion)
+    with pytest.raises(ValueError):
+        mpg.compute_grid([np.array([0.0, 1.0])], resolution=None, strategy="regular")
+
+    # invalid strategy name should raise ValueError
+    with pytest.raises(ValueError):
+        mpg.compute_grid(
+            [np.array([0.0, 1.0])], resolution=3, strategy="this_is_not_a_strategy"
+        )
+
+    # sanitize_grid should raise on empty grid
+    with pytest.raises(ValueError):
+        mpg.sanitize_grid((), numpyfy=True)
+
+
+def test_quantile_and_partition_and_torch():
+    # quantile strategy should return requested number of quantiles including endpoints
+    x = np.linspace(0.0, 1.0, 101).astype(np.float32)
+    (y,) = mpg.compute_grid([x], resolution=5, strategy="quantile")
+    assert y.dtype == x.dtype
+    assert len(y) == 5
+    assert np.isclose(y[0], 0.0)
+    assert np.isclose(y[-1], 1.0)
+
+    # partition strategy should select values from the original array
+    data = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=np.float32)
+    (p,) = mpg.compute_grid([data], resolution=4, strategy="partition")
+    assert p.dtype == data.dtype
+    assert len(p) <= 4
+    assert set(np.asarray(p)).issubset(set(np.asarray(data)))
+
+    # torch backend: ensure dtype and values are preserved for regular strategy
+    if torch is not None:
+        import multipers.array_api.torch as torchapi
+
+        t = torch.linspace(0.0, 1.0, 101, dtype=torch.float32)
+        (rt,) = mpg.compute_grid([t], resolution=5, strategy="regular")
+        # rt may be a backend tensor; convert to numpy for checks
+        rt_np = torchapi.asnumpy(rt) if hasattr(torchapi, "asnumpy") else np.asarray(rt)
+        assert np.isclose(rt_np, np.linspace(0.0, 1.0, 5)).all()
+    else:
+        pytest.skip("Skipping torch-specific checks as torch is not available.")

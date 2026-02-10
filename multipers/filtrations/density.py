@@ -3,7 +3,7 @@ from typing import Any, Literal, Union
 
 import numpy as np
 import multipers.array_api.numpy as _npapi
-from multipers.array_api import api_from_tensor, available_api
+from multipers.array_api import api_from_tensor
 
 global available_kernels
 available_kernels = Union[
@@ -46,7 +46,6 @@ def convolution_signed_measures(
     api = api_from_tensor(iterable_of_signed_measures[0][0][0])
     match backend:
         case "sklearn":
-
             if api is not _npapi:
                 raise ValueError(
                     f"The sklearn backend only supports numpy. Got {api=}."
@@ -216,7 +215,7 @@ def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
     exponent = -(z.weightedsqnorm(covariance_matrix_inverse.flatten()) / 2)
     return (
         float((2 * np.pi) ** (-dim / 2))
-        * (covariance_matrix_inverse.det().sqrt())
+        * (np.sqrt(np.linalg.det(covariance_matrix_inverse)))
         * exponent.exp()
     )
 
@@ -356,9 +355,7 @@ class KDE:
             return kernel
         density_estimation = kernel.sum(dim=0).squeeze() / kernel.shape[0]  # mean
         return (
-            self.api.log(density_estimation)
-            if self.return_log
-            else density_estimation
+            self.api.log(density_estimation) if self.return_log else density_estimation
         )
 
 
