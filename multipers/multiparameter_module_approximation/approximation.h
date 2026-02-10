@@ -28,6 +28,7 @@
 #include <iterator>
 #include <limits>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/task_arena.h>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -142,7 +143,12 @@ class Module {
   std::vector<image_type> get_landscapes(const dimension_type dimension,
                                          const std::vector<unsigned int> ks,
                                          const Box<value_type> &box,
-                                         const std::vector<unsigned int> &resolution) const;
+                                         const std::vector<unsigned int> &resolution,
+                                         const int n_jobs = 0) const;
+  std::vector<image_type> get_landscapes(const dimension_type dimension,
+                                         const std::vector<unsigned int> ks,
+                                         const std::vector<std::vector<value_type>> grid,
+                                         const int n_jobs = 0) const;
   void add_summand(Summand<value_type> summand, int degree = -1);
   Box<value_type> get_box() const;
   void set_box(Box<value_type> box);
@@ -656,168 +662,172 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
                                                        Box<value_type> &box,
                                                        const bool threshold,
                                                        const bool complete,
-                                                       const bool verbose) {
+                                                       const bool verbose,
+                                                       const int n_jobs) {
   static_assert(std::is_same_v<typename Slicer::Filtration_value::value_type,
                                value_type>);  // Value type can be exposed to python interface.
   if (verbose) std::cout << "Starting Module Approximation" << std::endl;
   /* using Filtration_value = Slicer::Filtration_value; */
 
-  typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
-  const std::size_t num_parameters = box.get_dimension();
-  std::vector<int> grid_size(num_parameters);
-  std::vector<bool> signs(num_parameters);
-  int signs_shifts = 0;
-  int arg_max_signs_shifts = -1;
-  for (std::size_t i = 0; i < num_parameters; i++) {
-    auto &a = box.get_lower_corner()[i];
-    auto &b = box.get_upper_corner()[i];
-    grid_size[i] = static_cast<int>(std::ceil((std::fabs(b - a) / precision))) + 1;
-    signs[i] = b > a;
-    if (b < a) {
-      std::swap(a, b);
-      int local_shift;
-      if (!direction.size())
-        local_shift = grid_size[i];
-      else {
-        local_shift = direction[i] > 0 ? static_cast<int>(std::ceil(grid_size[i] / direction[i])) : 0;
+  oneapi::tbb::task_arena arena(n_jobs);
+  return arena.execute([&] {
+    typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
+    const std::size_t num_parameters = box.get_dimension();
+    std::vector<int> grid_size(num_parameters);
+    std::vector<bool> signs(num_parameters);
+    int signs_shifts = 0;
+    int arg_max_signs_shifts = -1;
+    for (std::size_t i = 0; i < num_parameters; i++) {
+      auto &a = box.get_lower_corner()[i];
+      auto &b = box.get_upper_corner()[i];
+      grid_size[i] = static_cast<int>(std::ceil((std::fabs(b - a) / precision))) + 1;
+      signs[i] = b > a;
+      if (b < a) {
+        std::swap(a, b);
+        int local_shift;
+        if (!direction.size())
+          local_shift = grid_size[i];
+        else {
+          local_shift = direction[i] > 0 ? static_cast<int>(std::ceil(grid_size[i] / direction[i])) : 0;
+        }
+        if (local_shift > signs_shifts) {
+          signs_shifts = std::max(signs_shifts, local_shift);
+          arg_max_signs_shifts = i;
+        }
       }
-      if (local_shift > signs_shifts) {
-        signs_shifts = std::max(signs_shifts, local_shift);
-        arg_max_signs_shifts = i;
-      }
+
+      // fix the box
     }
-
-    // fix the box
-  }
-  if (signs_shifts > 0) {
-    for (std::size_t i = 0; i < num_parameters; i++)
-      grid_size[i] += signs_shifts;  // this may be too much for large num_parameters
-    grid_size[arg_max_signs_shifts] = 1;
-    if (verbose)
-      std::cout << "Had to flatten/shift coordinate " << arg_max_signs_shifts << " by " << signs_shifts << std::endl;
-  }
-  Module<value_type> out(box);
-  box.inflate(2 * precision);  // for infinte summands
-
-  if (verbose) std::cout << "Num parameters : " << num_parameters << std::endl;
-  if (verbose) std::cout << "Box : " << box << std::endl;
-  if (num_parameters < 1) return out;
-
-  // first line to compute
-  // TODO: change here
-  // for (auto i = 0u; i < basepoint.size() - 1; i++)
-  //   basepoint[i] -= box.get_upper_corner().back();
-  // basepoint.back() = 0;
-  Line<value_type> current_line(basepoint, direction);
-  if (verbose) std::cout << "First line basepoint " << basepoint << std::endl;
-
-  {
-    Timer timer("Initializing mma...\n", verbose);
-    // fills the first barcode
-    slicer.push_to(current_line);
-    slicer.initialize_persistence_computation(false);
-    auto barcode = slicer.template get_flat_barcode<true>();
-    auto num_bars = 0;
-    for (const auto &b : barcode) num_bars += b.size();
-    out.resize(num_bars, num_parameters);
-    std::size_t i = 0;
-    for (unsigned int dim = 0; dim < barcode.size(); ++dim) {
-      for ([[maybe_unused]] const auto &bar : barcode[dim]) {
-        out[i].set_dimension(dim);
-        ++i;
-      }
+    if (signs_shifts > 0) {
+      for (std::size_t i = 0; i < num_parameters; i++)
+        grid_size[i] += signs_shifts;  // this may be too much for large num_parameters
+      grid_size[arg_max_signs_shifts] = 1;
+      if (verbose)
+        std::cout << "Had to flatten/shift coordinate " << arg_max_signs_shifts << " by " << signs_shifts << std::endl;
     }
-    out.add_barcode(current_line, barcode, threshold);
+    Module<value_type> out(box);
+    box.inflate(2 * precision);  // for infinte summands
 
-    if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
-  }
-  // TODO : change here
-  // std::vector<int> grid_size(num_parameters - 1);
-  // auto h = box.get_upper_corner().back() - box.get_lower_corner().back();
-  // for (int i = 0; i < num_parameters - 1; i++) {
-  //   auto a = box.get_lower_corner()[i];
-  //   auto b = box.get_upper_corner()[i];
-  //   grid_size[i] =
-  //       static_cast<unsigned int>(std::ceil((std::abs(b - a + h) /
-  //       precision)));
-  // }
-  // TODO : change here
-  if (verbose) {
-    std::cout << "Grid size ";
-    for (auto v : grid_size) std::cout << v << " ";
-    std::cout << " Signs ";
-    if (signs.empty()) {
-      std::cout << "[]";
-    } else {
-      std::cout << "[";
-      for (std::size_t i = 0; i < signs.size() - 1; i++) {
-        std::cout << signs[i] << ", ";
+    if (verbose) std::cout << "Num parameters : " << num_parameters << std::endl;
+    if (verbose) std::cout << "Box : " << box << std::endl;
+    if (num_parameters < 1) return out;
+
+    // first line to compute
+    // TODO: change here
+    // for (auto i = 0u; i < basepoint.size() - 1; i++)
+    //   basepoint[i] -= box.get_upper_corner().back();
+    // basepoint.back() = 0;
+    Line<value_type> current_line(basepoint, direction);
+    if (verbose) std::cout << "First line basepoint " << basepoint << std::endl;
+
+    {
+      Timer timer("Initializing mma...\n", verbose);
+      // fills the first barcode
+      slicer.push_to(current_line);
+      slicer.initialize_persistence_computation(false);
+      auto barcode = slicer.template get_flat_barcode<true>();
+      auto num_bars = 0;
+      for (const auto &b : barcode) num_bars += b.size();
+      out.resize(num_bars, num_parameters);
+      std::size_t i = 0;
+      for (unsigned int dim = 0; dim < barcode.size(); ++dim) {
+        for ([[maybe_unused]] const auto &bar : barcode[dim]) {
+          out[i].set_dimension(dim);
+          ++i;
+        }
       }
-      std::cout << signs.back() << "]";
-    }
-    std::cout << std::endl;
-    std::cout << "Max error " << precision << std::endl;
-  }
+      out.add_barcode(current_line, barcode, threshold);
 
-  {
-    Timer timer("Computing mma...", verbose);
-    // actual computation. -1 as line grid is n-1 dim, -1 as we start from 0
-    // _rec_mma(out, basepoint, grid_size, num_parameters - 2, slicer,
-    // precision,
-    //          threshold);
+      if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
+    }
     // TODO : change here
-
-    for (std::size_t i = 1; i < num_parameters; i++) {
-      // the loop is on the faces of the lower box
-      // should be parallelizable, up to a mutex on out
-      if (direction.size() && direction[i] == 0.0) continue;  // skip faces with codim d_i=0
-      auto temp_grid_size = grid_size;
-      temp_grid_size[i] = 0;
-      if (verbose) {
-        std::cout << "Face " << i << "/" << num_parameters << " with grid size ";
-        for (auto v : temp_grid_size) std::cout << v << " ";
-        std::cout << std::endl;
+    // std::vector<int> grid_size(num_parameters - 1);
+    // auto h = box.get_upper_corner().back() - box.get_lower_corner().back();
+    // for (int i = 0; i < num_parameters - 1; i++) {
+    //   auto a = box.get_lower_corner()[i];
+    //   auto b = box.get_upper_corner()[i];
+    //   grid_size[i] =
+    //       static_cast<unsigned int>(std::ceil((std::abs(b - a + h) /
+    //       precision)));
+    // }
+    // TODO : change here
+    if (verbose) {
+      std::cout << "Grid size ";
+      for (auto v : grid_size) std::cout << v << " ";
+      std::cout << " Signs ";
+      if (signs.empty()) {
+        std::cout << "[]";
+      } else {
+        std::cout << "[";
+        for (std::size_t i = 0; i < signs.size() - 1; i++) {
+          std::cout << signs[i] << ", ";
+        }
+        std::cout << signs.back() << "]";
       }
-      // if (!direction.size() || direction[0] > 0)
-      _rec_mma2<0>(out,
-                   typename Line<value_type>::Point_t(basepoint),
-                   direction,
-                   temp_grid_size,
-                   signs,
-                   num_parameters - 1,
-                   slicer.weak_copy(),
-                   precision,
-                   threshold);
+      std::cout << std::endl;
+      std::cout << "Max error " << precision << std::endl;
     }
-    // last one, we can destroy basepoint & cie
-    if (!direction.size() || direction[0] > 0) {
-      grid_size[0] = 0;
-      if (verbose) {
-        std::cout << "Face " << num_parameters << "/" << num_parameters << " with grid size ";
-        for (auto v : grid_size) std::cout << v << " ";
-        std::cout << std::endl;
-      }
-      _rec_mma2<1>(out,
-                   std::move(basepoint),
-                   direction,
-                   grid_size,
-                   signs,
-                   num_parameters - 1,
-                   std::move(slicer),
-                   precision,
-                   threshold);
-    }
-  }
 
-  {  // for Timer
-    Timer timer("Cleaning output ... ", verbose);
-    out.clean();
-    if (complete) {
-      if (verbose) std::cout << "Completing output ...";
-      for (std::size_t i = 0; i < num_parameters; i++) out.fill(precision);
+    {
+      Timer timer("Computing mma...", verbose);
+      // actual computation. -1 as line grid is n-1 dim, -1 as we start from 0
+      // _rec_mma(out, basepoint, grid_size, num_parameters - 2, slicer,
+      // precision,
+      //          threshold);
+      // TODO : change here
+
+      for (std::size_t i = 1; i < num_parameters; i++) {
+        // the loop is on the faces of the lower box
+        // should be parallelizable, up to a mutex on out
+        if (direction.size() && direction[i] == 0.0) continue;  // skip faces with codim d_i=0
+        auto temp_grid_size = grid_size;
+        temp_grid_size[i] = 0;
+        if (verbose) {
+          std::cout << "Face " << i << "/" << num_parameters << " with grid size ";
+          for (auto v : temp_grid_size) std::cout << v << " ";
+          std::cout << std::endl;
+        }
+        // if (!direction.size() || direction[0] > 0)
+        _rec_mma2<0>(out,
+                     typename Line<value_type>::Point_t(basepoint),
+                     direction,
+                     temp_grid_size,
+                     signs,
+                     num_parameters - 1,
+                     slicer.weak_copy(),
+                     precision,
+                     threshold);
+      }
+      // last one, we can destroy basepoint & cie
+      if (!direction.size() || direction[0] > 0) {
+        grid_size[0] = 0;
+        if (verbose) {
+          std::cout << "Face " << num_parameters << "/" << num_parameters << " with grid size ";
+          for (auto v : grid_size) std::cout << v << " ";
+          std::cout << std::endl;
+        }
+        _rec_mma2<1>(out,
+                     std::move(basepoint),
+                     direction,
+                     grid_size,
+                     signs,
+                     num_parameters - 1,
+                     std::move(slicer),
+                     precision,
+                     threshold);
+      }
     }
-  }  // Timer death
-  return out;
+
+    {  // for Timer
+      Timer timer("Cleaning output ... ", verbose);
+      out.clean();
+      if (complete) {
+        if (verbose) std::cout << "Completing output ...";
+        for (std::size_t i = 0; i < num_parameters; i++) out.fill(precision);
+      }
+    }  // Timer death
+    return out;
+  });
 };
 
 template <typename value_type>
@@ -825,7 +835,7 @@ inline void Module<value_type>::add_barcode(const Line<value_type> &line,
                                             const std::vector<std::vector<std::array<value_type, 2>>> &barcode,
                                             const bool threshold_in) {
 #ifdef GUDHI_USE_TBB
-  std::vector<std::size_t> shifts(barcode.size(),0U);
+  std::vector<std::size_t> shifts(barcode.size(), 0U);
   for (std::size_t i = 1U; i < barcode.size(); i++) {
     shifts[i] = shifts[i - 1] + barcode[i - 1].size();
   }
@@ -1210,19 +1220,49 @@ std::vector<typename Module<value_type>::image_type> Module<value_type>::get_lan
     const dimension_type dimension,
     const std::vector<unsigned int> ks,
     const Box<value_type> &box,
-    const std::vector<unsigned int> &resolution) const {
+    const std::vector<unsigned int> &resolution,
+    const int n_jobs) const {
   std::vector<Module::image_type> images(ks.size());
   for (auto &image : images) image.resize(resolution[0], std::vector<value_type>(resolution[1]));
   value_type stepX = (box.get_upper_corner()[0] - box.get_lower_corner()[0]) / resolution[0];
   value_type stepY = (box.get_upper_corner()[1] - box.get_lower_corner()[1]) / resolution[1];
 
-  tbb::parallel_for(0U, resolution[0], [&](unsigned int i) {
-    tbb::parallel_for(0U, resolution[1], [&](unsigned int j) {
-      std::vector<value_type> landscapes = this->get_landscape_values(
-          {box.get_lower_corner()[0] + stepX * i, box.get_lower_corner()[1] + stepY * j}, dimension);
-      for (const auto k : ks) {
-        images[k][i][j] = k < landscapes.size() ? landscapes[k] : 0;
-      }
+  oneapi::tbb::task_arena arena(n_jobs);
+  arena.execute([&] {
+    tbb::parallel_for(0U, resolution[0], [&](unsigned int i) {
+      tbb::parallel_for(0U, resolution[1], [&](unsigned int j) {
+        std::vector<value_type> landscapes = this->get_landscape_values(
+            {box.get_lower_corner()[0] + stepX * i, box.get_lower_corner()[1] + stepY * j}, dimension);
+        for (size_t k_idx = 0; k_idx < ks.size(); ++k_idx) {
+          unsigned int k = ks[k_idx];
+          images[k_idx][i][j] = k < landscapes.size() ? landscapes[k] : 0;
+        }
+      });
+    });
+  });
+  return images;
+}
+
+template <typename value_type>
+std::vector<typename Module<value_type>::image_type> Module<value_type>::get_landscapes(
+    const dimension_type dimension,
+    const std::vector<unsigned int> ks,
+    const std::vector<std::vector<value_type>> grid,
+    const int n_jobs) const {
+  if (grid.size() != 2) throw std::invalid_argument("Grid must be 2D.");
+  std::vector<Module::image_type> images(ks.size());
+  for (auto &image : images) image.resize(grid[0].size(), std::vector<value_type>(grid[1].size()));
+
+  oneapi::tbb::task_arena arena(n_jobs);
+  arena.execute([&] {
+    tbb::parallel_for(0U, (unsigned int)grid[0].size(), [&](unsigned int i) {
+      tbb::parallel_for(0U, (unsigned int)grid[1].size(), [&](unsigned int j) {
+        std::vector<value_type> landscapes = this->get_landscape_values({grid[0][i], grid[1][j]}, dimension);
+        for (size_t k_idx = 0; k_idx < ks.size(); ++k_idx) {
+          unsigned int k = ks[k_idx];
+          images[k_idx][i][j] = k < landscapes.size() ? landscapes[k] : 0;
+        }
+      });
     });
   });
   return images;

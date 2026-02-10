@@ -108,7 +108,8 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
         MultiDiagrams[One_critical_filtration[T],T] get_barcodes(const vector[Point[T]]& , const int, const bool )  nogil
         vector[vector[vector[pair[T,T]]]] get_barcodes2(const vector[Line[T]]& , const int, )  nogil
         image_type get_landscape(const int,const unsigned int,Box[T],const vector[unsigned int]&)  nogil
-        vector[image_type] get_landscapes(const int,const vector[unsigned int],Box[T],const vector[unsigned int]&)  nogil
+        vector[image_type] get_landscapes(const int,const vector[unsigned int],Box[T],const vector[unsigned int]&, int)  nogil
+        vector[image_type] get_landscapes(const int,const vector[unsigned int],const vector[vector[T]], int)  nogil
         vector[int] euler_curve(const vector[One_critical_filtration[T]]&) nogil
         void rescale(vector[T]&, int) nogil
         void translate(vector[T]&, int) nogil

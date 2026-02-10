@@ -59,6 +59,7 @@ def module_approximation_from_slicer(
         list[float] direction = [],
         bool warnings = True,
         unsqueeze_grid = None,
+        int n_jobs = -1,
         )->PyModule_type:
 
     cdef Module[float] mod_f32
@@ -77,13 +78,13 @@ def module_approximation_from_slicer(
         approx_mod = PyModule_f32()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py2p_f32(direction_), max_error,Box[float](box),threshold, complete, verbose)
+        mod_f32 = _multiparameter_module_approximation_f32(slicer,_py2p_f32(direction_), max_error,Box[float](box),threshold, complete, verbose, n_jobs)
         ptr = <intptr_t>(&mod_f32)
     elif slicer.dtype == np.float64:
         approx_mod = PyModule_f64()
         if box is None:
             box = slicer.filtration_bounds()
-        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py2p_f64(direction_), max_error,Box[double](box),threshold, complete, verbose)
+        mod_f64 = _multiparameter_module_approximation_f64(slicer,_py2p_f64(direction_), max_error,Box[double](box),threshold, complete, verbose, n_jobs)
         ptr = <intptr_t>(&mod_f64)
     else:
         raise ValueError(f"Slicer must be float-like. Got {slicer.dtype}.")
@@ -283,5 +284,6 @@ Returning the trivial module.
             verbose=verbose,
             direction=direction,
             unsqueeze_grid=unsqueeze_grid,
+            n_jobs=n_jobs,
             )
 

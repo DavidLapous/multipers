@@ -150,7 +150,7 @@ from multipers.mma_structures cimport Module
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
 {{for D in slicers}}
   {{if D['IS_VINE'] and D['IS_FLOAT']}}
-  Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, vector[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool) except + nogil
+  Module[{{D['C_VALUE_TYPE']}}] multiparameter_module_approximation({{D['C_TEMPLATE_TYPE']}}&, vector[{{D['C_VALUE_TYPE']}}]&, {{D['C_VALUE_TYPE']}}, Box[{{D['C_VALUE_TYPE']}}]&, bool, bool, bool, int) except + nogil
   {{endif}}
   {{endfor}}
   pass
@@ -161,7 +161,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 import multipers.slicer as mps
 from cython.operator cimport dereference
 {{for C_VALUE_TYPE,PYTHON_VALUE_TYPE,SHORT_VALUE_TYPE in float_value_types}}
-cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, vector[{{C_VALUE_TYPE}}] direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose):
+cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHORT_VALUE_TYPE}}(object slicer, vector[{{C_VALUE_TYPE}}] direction, {{C_VALUE_TYPE}} max_error, Box[{{C_VALUE_TYPE}}] box, bool threshold, bool complete, bool verbose, int n_jobs):
   import multipers.slicer as mps
   cdef intptr_t slicer_ptr = <intptr_t>(slicer.get_ptr())
   cdef Module[{{C_VALUE_TYPE}}] mod
@@ -171,7 +171,7 @@ cdef inline Module[{{C_VALUE_TYPE}}] _multiparameter_module_approximation_{{SHOR
   {{if D['IS_VINE'] and D['SHORT_VALUE_TYPE'] == SHORT_VALUE_TYPE}} 
   elif isinstance(slicer, mps.{{D['PYTHON_TYPE']}}):
     with nogil:
-      mod = multiparameter_module_approximation(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose)
+      mod = multiparameter_module_approximation(dereference(<{{D['C_TEMPLATE_TYPE']}}*>(slicer_ptr)), direction, max_error, box, threshold, complete, verbose, n_jobs)
     return mod
   {{endif}}
   {{endfor}}

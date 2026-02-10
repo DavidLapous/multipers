@@ -649,7 +649,7 @@ cdef class PyModule_{{SHORT}}:
             plt.imshow(out.T, origin="lower", extent=extent, aspect=aspect)
         return out
 
-    def landscapes(self, degree:int, ks:list|np.ndarray=[0],box=None, resolution:list|np.ndarray=[100,100], bool plot=False):
+    def landscapes(self, degree:int, ks:list|np.ndarray=[0],box=None, resolution:list|np.ndarray=[100,100], grid=None, int n_jobs=0, bool plot=False):
         r"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
 
         Parameters
@@ -663,6 +663,10 @@ cdef class PyModule_{{SHORT}}:
             Resolution of the image.
          - box = None : in the format [[a,b], [c,d]]
             If nontrivial, compute the landscape of this box. Default is the PyModule box.
+         - grid = None : list of list of float
+            The grid to compute the landscapes in. If provided, box and resolution are ignored.
+         - n_jobs = 0 : int
+            The number of threads to use.
          - plot = True : bool
             If true, plots the images;
         Returns
@@ -672,9 +676,12 @@ cdef class PyModule_{{SHORT}}:
 
         """
         import matplotlib.pyplot as plt
+        if grid is not None:
+            out = np.array(self.cmod.get_landscapes(degree, ks, grid, n_jobs))
+            return out
         if box is None:
             box = self.get_box()
-        out = np.array(self.cmod.get_landscapes(degree, ks, Box[{{CTYPE}}](box), resolution))
+        out = np.array(self.cmod.get_landscapes(degree, ks, Box[{{CTYPE}}](box), resolution, n_jobs))
         if plot:
             to_plot = np.sum(out, axis=0)
             aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
