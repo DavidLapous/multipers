@@ -1,5 +1,8 @@
 import numpy as _np
 import torch as _t
+import multipers.api as _mpapi
+import sys
+_mpapi.available_api.append(sys.modules[__name__])
 
 backend = _t
 cat = _t.cat
@@ -23,6 +26,7 @@ LazyTensor = None
 relu = _t.relu
 abs = _t.abs
 exp = _t.exp
+log = _t.log
 sin = _t.sin
 cos = _t.cos
 
@@ -32,7 +36,6 @@ _is_keops_available = None
 
 def clip(x, min=None, max=None):
     return _t.clamp(x, min, max)
-
 
 
 def split_with_sizes(arr, sizes):

@@ -1,5 +1,5 @@
 import multipers.array_api.numpy as npapi
-
+available_api = [npapi]
 
 def api_from_tensor(x, *, verbose: bool = False, strict=False):
     if strict:

@@ -24,6 +24,7 @@ searchsorted = _np.searchsorted
 LazyTensor = None
 abs = _np.abs
 exp = _np.exp
+log = _np.log
 sin = _np.sin
 cos = _np.cos
 
