@@ -1,8 +1,9 @@
-from typing import Optional
+from typing import Optional, Union, Any
 
 import matplotlib.colors as mcolors
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import numpy as np
 from matplotlib.colors import ListedColormap
 from numpy.typing import ArrayLike
@@ -161,7 +162,7 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
         )
 
 
-def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None):
+def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None, s=None):
     num_degrees = len(signed_measures)
     if num_degrees <= 1:
         axes = [plt.gca()]
@@ -171,7 +172,7 @@ def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None):
         )
     for ax, signed_measure in zip(axes, signed_measures):
         plot_signed_measure(
-            signed_measure=signed_measure, ax=ax, threshold=threshold, alpha=alpha
+            signed_measure=signed_measure, ax=ax, threshold=threshold, alpha=alpha, s=s
         )
     plt.tight_layout()
 
@@ -181,10 +182,12 @@ def plot_surface(
     hf,
     fig=None,
     ax=None,
-    cmap: Optional[str] = None,
-    discrete_surface: bool = False,
-    has_negative_values: bool = False,
+    cmap: Optional[Union[str, Any]] = None,
+    discrete_surface: Optional[bool] = None,
+    has_negative_values: Optional[bool] = None,
     contour: bool = True,
+    threshold_max=10,
+    threshold_min=-10,
     **plt_args,
 ):
     import matplotlib
@@ -198,30 +201,70 @@ def plot_surface(
     if hf.ndim == 3 and hf.shape[0] == 1:
         hf = hf[0]
     assert hf.ndim == 2, "Can only plot a 2d surface"
+    if discrete_surface is None:
+        discrete_surface = np.issubdtype(hf.dtype, np.integer)
     fig = plt.gcf() if fig is None else fig
+    cmap_arg = plt_args.pop("cmap", None)
     if cmap is None:
-        if discrete_surface:
+        if cmap_arg is not None:
+            cmap = cmap_arg
+        elif discrete_surface:
+            if has_negative_values is None:
+                has_negative_values = np.any(hf.ravel() < 0)
             cmap = matplotlib.colormaps["gray_r"]
         else:
             cmap = _cmap
+
+    if isinstance(cmap, str):
+        cmap = matplotlib.colormaps[cmap]
+    assert cmap is not None
+
+    plt_args.pop("norm", None)
+    plt_args.pop("shading", None)
+
     if discrete_surface or not contour:
-        # for shading="flat"
-        grid = [np.concatenate([g, [g[-1] * 1.1 - 0.1 * g[0]]]) for g in grid]
+        new_grid = []
+        for g in grid:
+            if len(g) > 1:
+                step = g[-1] - g[-2]
+                new_grid.append(np.concatenate([g, [g[-1] + step]]))
+            else:
+                new_grid.append(np.concatenate([g, [g[-1] + 1]]))
+        grid = new_grid
+
     if discrete_surface:
-        if has_negative_values:
-            bounds = np.arange(-5, 6, 1, dtype=int)
-        else:
-            bounds = np.arange(0, 11, 1, dtype=int)
-        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N, extend="max")
+        # Fix 1 & 3: Bounds and small threshold handling
+        t_min = threshold_min if has_negative_values else 0
+        t_max = max(threshold_max, t_min + 1)
+        bounds = np.arange(t_min, t_max + 1, 1, dtype=int)
+
+        # Fix: Ensure colormap has enough colors for all discrete bins
+        n_bins = len(bounds)
+        if cmap.N < n_bins:
+            if hasattr(cmap, "resampled"):
+                cmap = cmap.resampled(n_bins)
+            else:
+                cmap = mcolors.LinearSegmentedColormap.from_list(
+                    "resampled", cmap(np.linspace(0, 1, n_bins))
+                )
+
+        norm = mcolors.BoundaryNorm(bounds, cmap.N, extend="max")
+
         im = ax.pcolormesh(
             grid[0], grid[1], hf.T, cmap=cmap, norm=norm, shading="flat", **plt_args
         )
         cbar = fig.colorbar(
-            matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm),
+            cm.ScalarMappable(cmap=cmap, norm=norm),
             spacing="proportional",
             ax=ax,
         )
-        cbar.set_ticks(ticks=bounds, labels=bounds)
+        # Limit the number of ticks to 10
+        if len(bounds) > 10:
+            indices = np.linspace(0, len(bounds) - 1, 10, dtype=int)
+            ticks = bounds[indices]
+        else:
+            ticks = bounds
+        cbar.set_ticks(ticks=ticks, labels=ticks)
         return im
 
     if contour:
@@ -236,9 +279,22 @@ def plot_surface(
 
 def plot_surfaces(HF, size=4, **plt_args):
     grid, hf = HF
+    hf = to_numpy(hf)
     assert hf.ndim == 3, (
         f"Found hf.shape = {hf.shape}, expected ndim = 3 : degree, 2-parameter surface."
     )
+
+    if "discrete_surface" not in plt_args:
+        plt_args["discrete_surface"] = np.issubdtype(hf.dtype, np.integer)
+
+    if plt_args["discrete_surface"]:
+        if "has_negative_values" not in plt_args:
+            plt_args["has_negative_values"] = bool(np.any(hf < 0))
+        if "threshold_min" not in plt_args:
+            plt_args["threshold_min"] = int(np.floor(np.min(hf)))
+        if "threshold_max" not in plt_args:
+            plt_args["threshold_max"] = int(np.ceil(np.max(hf)))
+
     num_degrees = hf.shape[0]
     fig, axes = plt.subplots(
         nrows=1, ncols=num_degrees, figsize=(num_degrees * size, size)
@@ -448,13 +504,13 @@ def plot2d_PyModule(
 
 
 def plot_simplicial_complex(
-    st, 
+    st,
     pts: ArrayLike,
     x: float,
     y: float,
     mma=None,
     degree=None,
-    show_pos:bool=True,
+    show_pos: bool = True,
 ):
     """
     Scatters the points, with the simplices in the filtration at coordinates (x,y).
