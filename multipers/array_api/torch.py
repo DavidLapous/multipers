@@ -1,6 +1,6 @@
 import numpy as _np
 import torch as _t
-import multipers.api as _mpapi
+import multipers.array_api as _mpapi
 import sys
 _mpapi.available_api.append(sys.modules[__name__])
 

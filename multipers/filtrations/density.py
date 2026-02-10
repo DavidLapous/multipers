@@ -2,8 +2,8 @@ from collections.abc import Callable, Iterable
 from typing import Any, Literal, Union
 
 import numpy as np
-
-from multipers.array_api import api_from_tensor, api_from_tensors
+import multipers.array_api.numpy as _npapi
+from multipers.array_api import api_from_tensor, available_api
 
 global available_kernels
 available_kernels = Union[
@@ -46,6 +46,11 @@ def convolution_signed_measures(
     api = api_from_tensor(iterable_of_signed_measures[0][0][0])
     match backend:
         case "sklearn":
+
+            if api is not _npapi:
+                raise ValueError(
+                    f"The sklearn backend only supports numpy. Got {api=}."
+                )
 
             def convolution_signed_measures_on_grid(
                 signed_measures,
@@ -143,8 +148,12 @@ def _pts_convolution_sparse_old(
     if len(pts) == 0:
         # warn("Found a trivial signed measure !")
         return np.zeros(len(grid_iterator))
+    if kernel == "multivariate_gaussian":
+        kernel = "gaussian"
+    if kernel == "sinc":
+        raise ValueError("Sinc kernel is not supported by sklearn backend.")
     kde = KernelDensity(
-        kernel=kernel, bandwidth=bandwidth, rtol=1e-4, **more_kde_args
+        kernel=kernel, bandwidth=bandwidth, **more_kde_args
     )  # TODO : check rtol
     pos_indices = pts_weights > 0
     neg_indices = pts_weights < 0
@@ -190,7 +199,7 @@ def _pts_convolution_pykeops(
     )
 
 
-def gaussian_kernel(x_i, y_j, bandwidth):
+def gaussian_kernel(x_i, y_j, bandwidth, **kwargs):
     D = x_i.shape[-1]
     exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=-1) / 2
     # float is necessary for some reason (pykeops fails)
@@ -212,9 +221,9 @@ def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
     )
 
 
-def exponential_kernel(x_i, y_j, bandwidth):
+def exponential_kernel(x_i, y_j, bandwidth, **kwargs):
     # 1 / \sigma * exp( norm(x-y, dim=-1))
-    exponent = -((((x_i - y_j) ** 2).sum(dim=-1) ** 1 / 2) / bandwidth)
+    exponent = -((((x_i - y_j) ** 2).sum(dim=-1) ** 0.5) / bandwidth)
     kernel = exponent.exp() / bandwidth
     return kernel
 
@@ -263,6 +272,7 @@ class KDE:
         bandwidth: Any = 1,
         kernel: available_kernels = "gaussian",
         return_log: bool = False,
+        **kwargs,
     ):
         """
         bandwidth : numeric
@@ -272,22 +282,15 @@ class KDE:
         self.bandwidth = bandwidth
         self.kernel: available_kernels = kernel
         self._kernel = None
-        self._backend = None
+        self.api = None
         self._sample_weights = None
         self.return_log = return_log
+        self.kwargs = kwargs
 
     def fit(self, X, sample_weights=None, y=None):
         self.X = X
         self._sample_weights = sample_weights
-        if isinstance(X, np.ndarray):
-            self._backend = np
-        else:
-            import torch
-
-            if isinstance(X, torch.Tensor):
-                self._backend = torch
-            else:
-                raise Exception("Unsupported backend.")
+        self.api = api_from_tensor(X)
         self._kernel = _kernel(self.kernel)
         return self
 
@@ -340,20 +343,20 @@ class KDE:
         log_probs : tensor (m)
                 log probability densities for each of the queried points in `Y`
         """
-        assert self._backend is not None and self._kernel is not None, "Fit first."
+        assert self.api is not None and self._kernel is not None, "Fit first."
         X = self.X if X is None else X
         if X.shape[0] == 0:
-            return self._backend.zeros((Y.shape[0]))
+            return self.api.zeros((Y.shape[0]))
         assert Y.shape[1] == X.shape[1] and X.ndim == Y.ndim == 2
         lazy_x, lazy_y, w = self.to_lazy(X, Y, x_weights=self._sample_weights)
-        kernel = self._kernel(lazy_x, lazy_y, self.bandwidth)
+        kernel = self._kernel(lazy_x, lazy_y, self.bandwidth, **self.kwargs)
         if w is not None:
             kernel *= w
         if return_kernel:
             return kernel
         density_estimation = kernel.sum(dim=0).squeeze() / kernel.shape[0]  # mean
         return (
-            self._backend.log(density_estimation)
+            self.api.log(density_estimation)
             if self.return_log
             else density_estimation
         )
@@ -377,7 +380,7 @@ class DTM:
         self._ks = None
         self._kdtree = None
         self._X = None
-        self._backend = None
+        self.api = None
 
     def fit(self, X, sample_weights=None, y=None):
         if len(self.masses) == 0:
@@ -385,15 +388,8 @@ class DTM:
         assert np.max(self.masses) <= 1, "All masses should be in (0,1]."
         from sklearn.neighbors import KDTree
 
-        if not isinstance(X, np.ndarray):
-            import torch
-
-            assert isinstance(X, torch.Tensor), "Backend has to be numpy of torch"
-            _X = X.detach()
-            self._backend = "torch"
-        else:
-            _X = X
-            self._backend = "numpy"
+        self.api = api_from_tensor(X)
+        _X = self.api.asnumpy(X)
         self._ks = np.array([int(mass * X.shape[0]) + 1 for mass in self.masses])
         self._kdtree = KDTree(_X, metric=self.metric, **self._kdtree_kwargs)
         self._X = X
@@ -413,19 +409,21 @@ class DTM:
         -------
         the DTMs of Y, for each mass in masses.
         """
+        if self.api is None:
+            raise ValueError("Fit first")
         if len(self.masses) == 0:
-            return np.empty((0, len(Y)))
+            return self.api.empty((0, len(Y)))
         assert (
             self._ks is not None and self._kdtree is not None and self._X is not None
         ), f"Fit first. Got {self._ks=}, {self._kdtree=}, {self._X=}."
         assert Y.ndim == 2
-        if self._backend == "torch":
-            _Y = Y.detach().numpy()
-        else:
+        if self.api is _npapi:
             _Y = Y
+        else:
+            _Y = self.api.asnumpy(Y)
         NN_Dist, NN = self._kdtree.query(_Y, self._ks.max(), return_distance=True)
         DTMs = np.array([((NN_Dist**2)[:, :k].mean(1)) ** 0.5 for k in self._ks])
-        return DTMs
+        return self.api.astensor(DTMs)
 
     def score_samples_diff(self, Y):
         """Returns the kernel density estimates of each point in `Y`.
@@ -447,12 +445,13 @@ class DTM:
                 log probability densities for each of the queried points in `Y`
         """
         import torch
+        from multipers.array_api import torch
 
         if len(self.masses) == 0:
             return torch.empty(0, len(Y))
 
         assert Y.ndim == 2
-        assert self._backend == "torch", "Use the non-diff version with numpy."
+        assert self.api is torch, "Use the non-diff version with numpy."
         assert (
             self._ks is not None and self._kdtree is not None and self._X is not None
         ), f"Fit first. Got {self._ks=}, {self._kdtree=}, {self._X=}."
