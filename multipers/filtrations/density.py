@@ -30,7 +30,7 @@ def convolution_signed_measures(
     Parameters
     ----------
 
-     - iterable_of_signed_measures : (num_signed_measure) x [ (npts) x (num_parameters), (npts)]
+     - iterable_of_signed_measures : (num_signed_measure) x [ (npts,num_parameters), (npts)]
      - filtrations : (num_parameter) x (filtration values)
      - flatten : bool
      - n_jobs : int
@@ -42,7 +42,7 @@ def convolution_signed_measures(
     """
     from multipers.grids import todense
 
-    grid_iterator = todense(filtrations, product_order=True)
+    grid_iterator = todense(filtrations)
     api = api_from_tensor(iterable_of_signed_measures[0][0][0])
     match backend:
         case "sklearn":
@@ -82,6 +82,7 @@ def convolution_signed_measures(
                             grid_iterator=grid_iterator,
                             bandwidth=bandwidth,
                             kernel=kernel,
+                            api=api,
                             **kwargs,
                         )
                         for pts, weights in signed_measures
@@ -99,6 +100,7 @@ def convolution_signed_measures(
                 grid_iterator=grid_iterator,
                 bandwidth=bandwidth,
                 kernel=kernel,
+                api=api,
                 **kwargs,
             )
 
@@ -174,27 +176,32 @@ def _pts_convolution_sparse_old(
 
 
 def _pts_convolution_pykeops(
-    pts: np.ndarray,
-    pts_weights: np.ndarray,
+    pts,
+    pts_weights,
     grid_iterator,
     kernel: available_kernels = "gaussian",
     bandwidth=0.1,
+    api=None,
     **more_kde_args,
 ):
     """
     Pykeops convolution
     """
-    if isinstance(pts, np.ndarray):
-        _asarray_weights = lambda x: np.asarray(x, dtype=pts.dtype)
-        _asarray_grid = _asarray_weights
-    else:
-        import torch
-
-        _asarray_weights = lambda x: torch.from_numpy(x).type(pts.dtype)
-        _asarray_grid = lambda x: x.type(pts.dtype)
+    if api is None:
+        api = api_from_tensor(pts)
+    # if isinstance(pts, np.ndarray):
+    #     _asarray_weights = lambda x: np.asarray(x, dtype=pts.dtype)
+    #     _asarray_grid = _asarray_weights
+    # else:
+    #     import torch
+    #
+    #     _asarray_weights = lambda x: torch.from_numpy(x).type(pts.dtype)
+    #     _asarray_grid = lambda x: x.type(pts.dtype)
+    pts = api.astensor(pts)
+    dtype=pts.dtype
     kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
-    return kde.fit(pts, sample_weights=_asarray_weights(pts_weights)).score_samples(
-        _asarray_grid(grid_iterator)
+    return kde.fit(pts, sample_weights=api.astype(pts_weights, dtype),api=api).score_samples(
+        api.astype(grid_iterator, dtype)
     )
 
 
@@ -286,10 +293,10 @@ class KDE:
         self.return_log = return_log
         self.kwargs = kwargs
 
-    def fit(self, X, sample_weights=None, y=None):
+    def fit(self, X, sample_weights=None, y=None, api=None):
         self.X = X
         self._sample_weights = sample_weights
-        self.api = api_from_tensor(X)
+        self.api = api_from_tensor(X) if api is None else api
         self._kernel = _kernel(self.kernel)
         return self
 

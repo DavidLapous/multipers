@@ -29,6 +29,9 @@ sin = _np.sin
 cos = _np.cos
 
 
+def astype(x,dtype):
+    return astensor(x).astype(dtype=dtype)
+
 def clip(x, min=None, max=None):
     return _np.clip(x, a_min=min, a_max=max)
 

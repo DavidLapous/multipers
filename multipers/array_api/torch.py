@@ -31,6 +31,10 @@ sin = _t.sin
 cos = _t.cos
 
 
+def astype(x, dtype):
+    return astensor(x).type(dtype)
+
+
 _is_keops_available = None
 
 

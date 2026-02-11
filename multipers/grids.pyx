@@ -225,7 +225,7 @@ def compute_grid_from_iterable(
 
 
 
-def todense(grid, bool product_order=False, api=None):
+def todense(grid, api=None):
     if len(grid) == 0:
         return np.empty(0)
     if api is None:
