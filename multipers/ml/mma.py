@@ -136,7 +136,7 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
             if self.expand_dim is not None:
                 x.expansion(self.expand_dim)
             if self.minpres_degrees is not None:
-                x = mp.slicer.minimal_presentation(
+                x = mp.ops.minimal_presentation(
                     mp.Slicer(x), degrees=self.minpres_degrees, vineyard=True
                 )
             mod = mp.module_approximation(
@@ -171,6 +171,15 @@ class SimplexTree2MMA(FilteredComplex2MMA):
         for key in keys:
             if key.startswith("__"):
                 stuff.pop(key)
+        # Expand nested persistence_kwargs if present (avoid passing a single
+        # dict under the key 'persistence_kwargs' which later gets forwarded
+        # to mp.module_approximation and triggers unexpected keyword errors).
+        if "persistence_kwargs" in stuff and isinstance(stuff["persistence_kwargs"], dict):
+            nested = stuff.pop("persistence_kwargs")
+            # avoid overwriting explicit keys
+            for k, v in nested.items():
+                if k not in stuff:
+                    stuff[k] = v
         super().__init__(**stuff)
         from warnings import warn
 
