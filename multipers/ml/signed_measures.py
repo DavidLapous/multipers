@@ -106,6 +106,7 @@ def sm_convolution(
     ).reshape(sms.shape[0], *(len(g) for g in grid))
     if plot:
         from multipers.plots import plot_surfaces
+
         plot_surfaces((grid, convs), **plt_kwargs)
     return convs
 
@@ -221,17 +222,19 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
 
     def _input_checks(self, X):
         assert len(X) > 0, "No filtered complex found. Cannot fit."
-        assert self._is_filtered_complex(
-            X[0][0]
-        ), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        assert self._is_filtered_complex(X[0][0]), (
+            f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        )
         self._num_axis = len(X[0])
         first = X[0][0]
-        assert (
-            not mp.slicer.is_slicer(first) or not self.expand
-        ), "Cannot expand slicers."
+        assert not mp.slicer.is_slicer(first) or not self.expand, (
+            "Cannot expand slicers."
+        )
         assert not mp.slicer.is_slicer(first) or not (
             isinstance(first, Union[tuple, list]) and first[0].is_minpres
-        ), "Multi-degree minpres are not supported yet as an input. This can still be computed by providing a backend."
+        ), (
+            "Multi-degree minpres are not supported yet as an input. This can still be computed by providing a backend."
+        )
 
     def _infer_filtration(self, X):
         self.num_parameters = X[0][0].num_parameters
@@ -247,9 +250,9 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
             for ax in range(self._num_axis)
         )
         num_parameters = len(filtrations[0][0])
-        assert (
-            num_parameters == self.num_parameters
-        ), f"Internal error, got {num_parameters=} and {self.num_parameters=}"
+        assert num_parameters == self.num_parameters, (
+            f"Internal error, got {num_parameters=} and {self.num_parameters=}"
+        )
 
         filtrations_values = [
             [
@@ -695,9 +698,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self._normalization_factors = None
         self.deep_format = deep_format
         self.unrag = unrag
-        assert (
-            not self.deep_format or not self.unsparse or not self.integrate
-        ), "One post processing at the time."
+        assert not self.deep_format or not self.unsparse or not self.integrate, (
+            "One post processing at the time."
+        )
         self.verbose = verbose
         self._num_degrees = 0
         self.integrate = integrate
@@ -781,7 +784,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             return
         assert self._check_sm(  ## vaguely checks that its a signed measure
             _sm := X[0][0][0]
-        ), f"Cannot take this input. # data, axis, degrees, sm.\n Got {_sm} of type {type(_sm)}"
+        ), (
+            f"Cannot take this input. # data, axis, degrees, sm.\n Got {_sm} of type {type(_sm)}"
+        )
 
         self._has_axis = True
         self._num_axis = len(X[0])
@@ -808,16 +813,16 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         if isinstance(self.resolution, int):
             self.resolution = [self.resolution] * self.num_parameters
         self.resolution = np.asarray(self.resolution, dtype=int)
-        assert (
-            self.resolution.shape[0] == self.num_parameters
-        ), "Resolution doesn't have a proper size."
+        assert self.resolution.shape[0] == self.num_parameters, (
+            "Resolution doesn't have a proper size."
+        )
 
     def _check_weights(self):
         if self.filtrations_weights is None:
             return
-        assert (
-            self.filtrations_weights.shape[0] == self.num_parameters
-        ), "Filtration weights don't have a proper size"
+        assert self.filtrations_weights.shape[0] == self.num_parameters, (
+            "Filtration weights don't have a proper size"
+        )
 
     def _infer_grids(self, X):
         # Computes normalization factors
@@ -939,7 +944,14 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
 
         return integrate_measure(sm[0], sm[1], filtrations)
 
-    def _rescale_measures(self, X):
+    def _rescale_measures(self, X, *, axis_iterator=None, normalization_factors=None):
+        axis_iterator = self._axis_iterator if axis_iterator is None else axis_iterator
+        normalization_factors = (
+            self._normalization_factors
+            if normalization_factors is None
+            else normalization_factors
+        )
+
         def rescale_from_sparse(sparse_signed_measure):
             if self.axis == -1 and self._has_axis:
                 return tuple(
@@ -948,74 +960,89 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                         filtration_weights=self.filtrations_weights,
                         normalize_scales=n,
                     )
-                    for ax, n in zip(
-                        self._axis_iterator, self._normalization_factors, strict=True
-                    )
+                    for ax, n in zip(axis_iterator, normalization_factors, strict=True)
                 )
-            return rescale_sparse_signed_measure(  ## axis iterator is of size 1 here
+            return rescale_sparse_signed_measure(
                 sparse_signed_measure,
                 filtration_weights=self.filtrations_weights,
-                normalize_scales=self._normalization_factors[0],
+                normalize_scales=normalization_factors[0],
             )
 
         out = tuple(rescale_from_sparse(x) for x in X)
         return out
 
     def transform(self, X):
-        if not self._has_axis or self.axis == -1:
-            out = X
-        else:
-            out = tuple(x[self.axis] for x in X)
-            # same format for everyone
+        has_axis = self._has_axis
+        axis_iterator = self._axis_iterator
+
+        if has_axis and self.axis != -1:
+            X = tuple(x[self.axis] for x in X)
+            if self._num_axis == 1:
+                has_axis = False
+                axis_iterator = [slice(None)]
 
         if self._normalization_factors is not None:
-            out = self._rescale_measures(out)
+            normalization_factors = self._normalization_factors
+            if not has_axis and self._has_axis:
+                normalization_factors = normalization_factors[self.axis : self.axis + 1]
+            X = self._rescale_measures(
+                X,
+                axis_iterator=axis_iterator,
+                normalization_factors=normalization_factors,
+            )
 
         if self.plot:
-            # assert ax != -1, "Not implemented"
-            self._plot_signed_measures(out)
+            if has_axis:
+                raise NotImplementedError(
+                    "Plotting is only supported after axis selection collapses the axis metadata."
+                )
+            self._plot_signed_measures(X)
         if self.integrate:
+            if has_axis:
+                raise NotImplementedError(
+                    "Integration is only supported after axis selection collapses the axis metadata."
+                )
             filtrations = self._infered_grids
             # if self.axis != -1:
             ax = 0  # if self.axis is None else self.axis # TODO deal with axis -1
 
             assert ax != -1, "Not implemented. Can only integrate with axis"
             # try:
-            out = np.asarray(
+            X = np.asarray(
                 [
                     [
                         self._integrate_measure(x[degree], filtrations=filtrations[ax])
                         for degree in range(self._num_degrees)
                     ]
-                    for x in out
+                    for x in X
                 ]
             )
             # except:
             # print(self.axis, ax, filtrations)
             if self.flatten:
-                out = out.reshape((len(X), -1))
+                X = X.reshape((len(X), -1))
             # else:
             # out = [[[self._integrate_measure(x[axis][degree],filtrations=filtrations[degree].T) for degree in range(self._num_degrees)] for axis in range(self._num_axis)] for x in out]
         elif self.unsparse:
-            out = [self.unsparse_signed_measure(x) for x in out]
+            X = [self.unsparse_signed_measure(x) for x in X]
         elif self.deep_format:
             num_degrees = self._num_degrees
-            out = tuple(
-                tuple(sm2deep(sm[axis][degree]) for sm in out)
+            X = tuple(
+                tuple(sm2deep(sm[axis][degree]) for sm in X)
                 for degree in range(num_degrees)
-                for axis in self._axis_iterator
+                for axis in axis_iterator
             )
             if self.unrag:
                 max_num_pts = np.max(
-                    [sm.shape[0] for sm_of_axis in out for sm in sm_of_axis]
+                    [sm.shape[0] for sm_of_axis in X for sm in sm_of_axis]
                 )
-                num_axis_degree = len(out)
-                num_data = len(out[0])
+                num_axis_degree = len(X)
+                num_data = len(X[0])
                 assert num_axis_degree == num_degrees * (
-                    self._num_axis if self._has_axis else 1
+                    self._num_axis if has_axis else 1
                 ), f"Bad axis/degree count. Got {num_axis_degree} (Internal error)"
-                num_parameters = out[0][0].shape[1]
-                dtype = out[0][0].dtype
+                num_parameters = X[0][0].shape[1]
+                dtype = X[0][0].dtype
                 unragged_tensor = self._backend.zeros(
                     (
                         num_axis_degree,
@@ -1027,11 +1054,11 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 )
                 for ax in range(num_axis_degree):
                     for data in range(num_data):
-                        sm = out[ax][data]
+                        sm = X[ax][data]
                         a, b = sm.shape
                         unragged_tensor[ax, data, :a, :b] = sm
-                out = unragged_tensor
-        return out
+                X = unragged_tensor
+        return X
 
 
 class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
@@ -1103,16 +1130,20 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         # Infers if the input is sparse given X
         if len(X) == 0:
             return self
-        if isinstance(X[0][0], tuple):
+        first = X[0]
+        if isinstance(first[0], tuple):
             self._is_input_sparse = True
 
-            self._api = api_from_tensor(X[0][0][0], verbose=self.progress)
+            self._api = api_from_tensor(first[0][0], verbose=self.progress)
         else:
             self._is_input_sparse = False
 
             self._api = api_from_tensor(X, verbose=self.progress)
         # print(f"IMG output is set to {'sparse' if self.sparse else 'matrix'}")
         if not self._is_input_sparse:
+            from warnings import warn
+
+            warn("Using non-sparse inputs is no longer be maintained.")
             self._input_resolution = X[0][0].shape
             try:
                 b = float(self.bandwidth)
@@ -1132,7 +1163,8 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             )
         # If not sparse : a grid has to be defined
         if self._refit:
-            # print("Fitting a grid...", end="")
+            if self.progress:
+                print("Fitting a grid...", end="")
             pts = self._api.cat(
                 [sm[0] for signed_measures in X for sm in signed_measures]
             ).T
@@ -1141,7 +1173,8 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
                 strategy=self.grid_strategy,
                 resolution=self.resolution,
             )
-            # print('Done.')
+            if self.progress:
+                print("Done")
         if self.filtration_grid is not None:
             self.diameter = self._api.norm(
                 self._api.astensor([f[-1] - f[0] for f in self.filtration_grid])
@@ -1172,18 +1205,17 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             self.bandwidth if self.bandwidth > 0 else -self.bandwidth * self.diameter
         )
         # COMPILE KEOPS FIRST
-        dummyx = [X[0]]
-        dummyf = [f[:2] for f in self.filtration_grid]
-        convolution_signed_measures(
-            dummyx,
-            filtrations=dummyf,
-            bandwidth=bandwidth,
-            flatten=self.flatten,
-            n_jobs=1,
-            kernel=self.kernel,
-            backend=self.backend,
-        )
-
+        # dummyx = [X[0]]
+        # dummyf = [f[:2] for f in self.filtration_grid]
+        # convolution_signed_measures(
+        #     dummyx,
+        #     filtrations=dummyf,
+        #     bandwidth=bandwidth,
+        #     flatten=self.flatten,
+        #     n_jobs=1,
+        #     kernel=self.kernel,
+        #     backend=self.backend,
+        # )
         return convolution_signed_measures(
             X,
             filtrations=self.filtration_grid,
@@ -1388,9 +1420,9 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
             self.scales = np.asarray(self.scales)
             if self.scales.ndim == 1:
                 self.scales = np.asarray([self.scales])
-        assert (
-            self.scales[0] is None or self.scales.ndim == 2
-        ), "Scales have to be either None or a list of scales !"
+        assert self.scales[0] is None or self.scales.ndim == 2, (
+            "Scales have to be either None or a list of scales !"
+        )
         self._childs_to_fit = [
             clone(self._init_child).set_params(scales=scales).fit([x[axis] for x in X])
             for axis, scales in product(self._axe_iterator, self.scales)
@@ -1403,7 +1435,7 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
             delayed(self._childs_to_fit[child_id].transform)([x[axis] for x in X])
             for child_id, (axis, _) in tqdm(
                 enumerate(product(self._axe_iterator, self.scales)),
-                desc=f"Computing distances matrices of axis, and scales",
+                desc="Computing distances matrices of axis, and scales",
                 disable=not self.progress,
                 total=len(self._childs_to_fit),
             )
@@ -1617,7 +1649,7 @@ def tensor_möbius_inversion(
         raise TypeError(
             f"Unsupported betti shape. {num_indices}\
             has to be either {num_parameters} or \
-            {2*num_parameters}."
+            {2 * num_parameters}."
         )
     points_filtration = np.asarray(betti_sparse.indices().T, dtype=int)
     weights = np.asarray(betti_sparse.values(), dtype=int)
