@@ -21,19 +21,13 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         threshold: float = -np.inf,
         complex: Literal["alpha", "rips", "delaunay"] = "rips",
         sparse: Optional[float] = None,
-        num_collapses: int = -2,
         kernel: available_kernels = "gaussian",
         log_density: bool = True,
-        expand_dim: int = 1,
         progress: bool = False,
         n_jobs: Optional[int] = None,
         fit_fraction: float = 1,
         verbose: bool = False,
         safe_conversion: bool = False,
-        output_type: Optional[
-            Literal["slicer", "simplextree", "slicer_vine", "slicer_novine"]
-        ] = None,
-        reduce_degrees: Optional[Iterable[int]] = None,
     ) -> None:
         """
         (Rips or Alpha or Delaunay) + (Density Estimation or DTM) 1-critical 2-filtration.
@@ -43,8 +37,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
          - bandwidth : real : The kernel density estimation bandwidth, or the DTM mass. If negative, it replaced by abs(bandwidth)*(radius of the dataset)
          - threshold : real,  max edge lenfth of the rips or max alpha square of the alpha
          - sparse : real, sparse rips (c.f. rips doc) WARNING : ONLY FOR RIPS
-         - num_collapse : int, Number of edge collapses applied to the simplextrees, WARNING : ONLY FOR RIPS
-         - expand_dim : int, expand the rips complex to this dimension. WARNING : ONLY FOR RIPS
          - kernel : the kernel used for density estimation. Available ones are, e.g., "dtm", "gaussian", "exponential".
          - progress : bool, shows the calculus status
          - n_jobs : number of processes
@@ -53,12 +45,11 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 
         Output
         ------
-        A list of SimplexTreeMulti whose first parameter is a rips and the second is the codensity.
+        A list of filtered complexes whose first parameter is a rips and the second is the codensity.
         """
         super().__init__()
         self.bandwidths = bandwidths
         self.masses = masses
-        self.num_collapses = num_collapses
         self.kernel = kernel
         self.log_density = log_density
         self.progress = progress
@@ -67,21 +58,12 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.n_jobs = n_jobs
         self._scale = np.empty((0,))
         self.fit_fraction = fit_fraction
-        self.expand_dim = expand_dim
         self.verbose = verbose
         self.complex = complex
         self.threshold = threshold
         self.sparse = sparse
         self._get_sts = lambda: Exception("Fit first")
         self.safe_conversion = safe_conversion
-        self.output_type = output_type
-        self._output_type = None
-        self.reduce_degrees = reduce_degrees
-        self._vineyard = None
-
-        assert output_type != "simplextree" or reduce_degrees is None, (
-            "Reduced complex are not simplicial. Cannot return a simplextree."
-        )
         return
 
     def _get_distance_quantiles_and_threshold(self, X, qs):
@@ -121,7 +103,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         return self._scale
 
     def _get_sts_rips(self, x):
-        assert self._output_type is not None and self._vineyard is not None
         if self.sparse is None:
             st_init = gd.SimplexTree.create_from_array(
                 cdist(x, x), max_filtration=self._threshold
@@ -141,37 +122,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             # RIPS has contigus vertices, so vertices are ordered.
             st_copy.fill_lowerstar(codensity, parameter=1)
 
-        def reduce(st):
-            if self.verbose:
-                print("Num simplices :", st.num_simplices)
-            if isinstance(self.num_collapses, int):
-                st.collapse_edges(num=self.num_collapses)
-                if self.verbose:
-                    print(", after collapse :", st.num_simplices, end="")
-            elif self.num_collapses == "full":
-                st.collapse_edges(full=True)
-                if self.verbose:
-                    print(", after collapse :", st.num_simplices, end="")
-            if self.expand_dim > 1:
-                st.expansion(self.expand_dim)
-                if self.verbose:
-                    print(", after expansion :", st.num_simplices, end="")
-            if self.verbose:
-                print("")
-            if self._output_type == "slicer":
-                st = mp.Slicer(st, vineyard=self._vineyard)
-                if self.reduce_degrees is not None:
-                    st = mp.ops.minimal_presentation(
-                        st, degrees=self.reduce_degrees, vineyard=self._vineyard
-                    )
-            return st
-
-        return Parallel(backend="threading", n_jobs=self.n_jobs)(
-            delayed(reduce)(st) for st in sts
-        )
+        return sts
 
     def _get_sts_alpha(self, x: np.ndarray, return_alpha=False):
-        assert self._output_type is not None and self._vineyard is not None
         alpha_complex = gd.AlphaComplex(points=x)
         st = alpha_complex.create_simplex_tree(max_alpha_square=self._threshold**2)
         vertices = np.array([i for (i,), _ in st.get_skeleton(0)])
@@ -192,17 +145,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             alligned_codensity[vertices] = codensity
             # alligned_codensity = np.array([codensity[i] if i in vertices else np.nan for i in range(max_vertices)])
             st_copy.fill_lowerstar(alligned_codensity, parameter=1)
-        if "slicer" in self._output_type:
-            sts2 = (mp.Slicer(st, vineyard=self._vineyard) for st in sts)
-            if self.reduce_degrees is not None:
-                sts = tuple(
-                    mp.ops.minimal_presentation(
-                        s, degrees=self.reduce_degrees, vineyard=self._vineyard
-                    )
-                    for s in sts2
-                )
-            else:
-                sts = tuple(sts2)
         if return_alpha:
             return alpha_complex, sts
         return sts
@@ -216,18 +158,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 c,
                 verbose=self.verbose,
                 clear=not self.verbose,
-                vineyard=self._vineyard,
             )
-            if self._output_type == "simplextree":
-                slicer = mps.to_simplextree(slicer)
-            elif self.reduce_degrees is not None:
-                slicer = mp.ops.minimal_presentation(
-                    slicer,
-                    degrees=self.reduce_degrees,
-                    # vineyard=self._vineyard,
-                )
-            else:
-                slicer = slicer
             return slicer
 
         sts = Parallel(backend="threading", n_jobs=self.n_jobs)(
@@ -263,32 +194,15 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         match self.complex:
             case "rips":
                 self._get_sts = self._get_sts_rips
-                _pref_output = "simplextree"
             case "alpha":
                 self._get_sts = self._get_sts_alpha
-                _pref_output = "simplextree"
             case "delaunay":
                 self._get_sts = self._get_sts_delaunay
-                _pref_output = "slicer"
             case _:
                 raise ValueError(
                     f"Invalid complex \
                 {self.complex}. Possible choises are rips, delaunay, or alpha."
                 )
-        self._vineyard = (
-            False if self.output_type is None else "novine" not in self.output_type
-        )
-        self._output_type = (
-            _pref_output
-            if self.output_type is None
-            else (
-                "simplextree"
-                if (
-                    self.output_type == "simplextree" or self.reduce_degrees is not None
-                )
-                else "slicer"
-            )
-        )
 
     def _define_bandwidths(self, X):
         qs = [q for q in [*-np.asarray(self.bandwidths)] if 0 <= q <= 1]
@@ -305,7 +219,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self._define_sts()
         self._define_bandwidths(X)
         # PRECOMPILE FIRST
-        print(X[0][:2])
         self._get_codensities(X[0][:2], X[0][:2])
         return self
 
@@ -330,19 +243,13 @@ class PointCloud2SimplexTree(PointCloud2FilteredComplex):
         threshold: float = np.inf,
         complex: Literal["alpha", "rips", "delaunay"] = "rips",
         sparse: float | None = None,
-        num_collapses: int = -2,
         kernel: available_kernels = "gaussian",
         log_density: bool = True,
-        expand_dim: int = 1,
         progress: bool = False,
         n_jobs: Optional[int] = None,
         fit_fraction: float = 1,
         verbose: bool = False,
         safe_conversion: bool = False,
-        output_type: Optional[
-            Literal["slicer", "simplextree", "slicer_vine", "slicer_novine"]
-        ] = None,
-        reduce_degrees: Optional[Iterable[int]] = None,
     ) -> None:
         stuff = locals()
         stuff.pop("self")
@@ -354,3 +261,119 @@ class PointCloud2SimplexTree(PointCloud2FilteredComplex):
         from warnings import warn
 
         warn("This class is deprecated, use PointCloud2FilteredComplex instead.")
+
+
+class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
+    """Apply common preprocessing steps to filtered complexes.
+
+    This transformer expects the nested structure returned by
+    ``PointCloud2FilteredComplex`` (lists/tuples of SimplexTreeMulti or Slicer
+    instances) and applies:
+
+    1. Optional edge collapses when the item is a ``SimplexTreeMulti``.
+    2. Optional minimal presentation reduction (typically for slicers).
+    """
+
+    def __init__(
+        self,
+        num_collapses: int = 0,
+        reduce_degrees: Optional[Iterable[int]] = None,
+        expand_dim: int | None = None,
+        vineyard: Optional[bool] = None,
+        pers_backend: Optional[str] = None,
+        column_type: Optional[str] = None,
+        dtype: Optional[np.dtype] = None,
+        kcritical: Optional[bool] = None,
+        filtration_container: Optional[str] = None,
+        output_type: Optional[Literal["simplextree", "slicer"]] = None,
+        n_jobs: Optional[int] = None,
+    ) -> None:
+        super().__init__()
+        self.num_collapses = num_collapses
+        self.reduce_degrees = reduce_degrees
+        self.expand_dim = expand_dim
+        self.vineyard = vineyard
+        self.pers_backend = pers_backend
+        self.column_type = column_type
+        self.dtype = dtype
+        self.kcritical = kcritical
+        self.filtration_container = filtration_container
+        self.output_type = output_type
+        self.n_jobs = n_jobs
+        self._is_st = None
+
+    def fit(self, X, y=None):
+        self._is_st = mp.simplex_tree_multi.is_simplextree_multi(X[0])
+        if not self._is_st:
+            assert mp.slicer.is_slicer(X[0], allow_minpres=False)
+
+        if self.num_collapses is not None and not self._is_st:
+            raise ValueError(
+                "Edge collapsing is only supported for SimplexTreeMulti inputs."
+            )
+        if self.output_type == "simplextree" and self.reduce_degrees is not None:
+            raise ValueError(
+                "Minimal presentations are not simplicial; cannot return a simplextree."
+            )
+        return self
+
+    def _process_complex(self, cplx):
+        if self._is_st:
+            cplx.collapse_edges(num=self.num_collapses)
+            if self.expand_dim is not None and self.expand_dim > 1:
+                cplx.expansion(self.expand_dim)
+        if self.reduce_degrees is not None:
+            if self._is_st:
+                cplx = mp.Slicer(
+                    cplx,
+                    vineyard=self.vineyard,
+                    backend=self.pers_backend,
+                    column_type=self.column_type,
+                    dtype=self.dtype,
+                    kcritical=self.kcritical,
+                    filtration_container=self.filtration_container,
+                )
+            else:
+                cplx.astype(
+                    vineyard=self.vineyard,
+                    backend=self.pers_backend,
+                    column_type=self.column_type,
+                    dtype=self.dtype,
+                    kcritical=self.kcritical,
+                    filtration_container=self.filtration_container,
+                )
+            cplx = mp.ops.minimal_presentation(
+                cplx,
+                degrees=self.reduce_degrees,
+            )
+        if self.output_type == "simplextree":
+            if mp.slicer.is_slicer(cplx, allow_minpres=True):
+                cplx = mp.slicer.to_simplextree(cplx)
+        elif self.output_type == "slicer":
+            if not mp.slicer.is_slicer(cplx, allow_minpres=True):
+                cplx = mp.Slicer(
+                    cplx,
+                    vineyard=self.vineyard,
+                    backend=self.pers_backend,
+                    column_type=self.column_type,
+                    dtype=self.dtype,
+                    kcritical=self.kcritical,
+                    filtration_container=self.filtration_container,
+                )
+        return cplx
+
+    def _process(self, item):
+        if mp.simplex_tree_multi.is_simplextree_multi(item) or mp.slicer.is_slicer(
+            item, allow_minpres=False
+        ):
+            return self._process_complex(item)
+        if isinstance(item, tuple):
+            return tuple(self._process(sub_item) for sub_item in item)
+        if isinstance(item, list):
+            return [self._process(sub_item) for sub_item in item]
+        return item
+
+    def transform(self, X):
+        return Parallel(backend="threading", n_jobs=self.n_jobs)(
+            delayed(self._process)(entry) for entry in X
+        )
