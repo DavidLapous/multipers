@@ -2,6 +2,7 @@ import numpy as _np
 import torch as _t
 import multipers.array_api as _mpapi
 import sys
+
 _mpapi.available_api.append(sys.modules[__name__])
 
 backend = _t
@@ -29,6 +30,8 @@ exp = _t.exp
 log = _t.log
 sin = _t.sin
 cos = _t.cos
+matmul = _t.matmul
+einsum = _t.einsum
 
 
 def astype(x, dtype):
@@ -138,3 +141,21 @@ def is_promotable(x):
 
 def has_grad(x):
     return x.requires_grad
+
+
+def to_device(x, device):
+    if device is None:
+        return x
+    return x.to(device)
+
+
+def size(x):
+    return x.numel()
+
+
+def dtype_is_float(dtype):
+    return getattr(dtype, "is_floating_point", False)
+
+
+def dtype_default():
+    return _t.get_default_dtype()

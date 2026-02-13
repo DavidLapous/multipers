@@ -27,10 +27,13 @@ exp = _np.exp
 log = _np.log
 sin = _np.sin
 cos = _np.cos
+matmul = _np.matmul
+einsum = _np.einsum
 
 
-def astype(x,dtype):
+def astype(x, dtype):
     return astensor(x).astype(dtype=dtype)
+
 
 def clip(x, min=None, max=None):
     return _np.clip(x, a_min=min, a_max=max)
@@ -126,3 +129,26 @@ def is_promotable(x):
 
 def has_grad(_):
     return False
+
+
+def to_device(x, device):
+    if device is None or str(device) in {"None", "cpu"}:
+        return x
+    raise ValueError(
+        f"NumPy backend only supports CPU tensors, requested device {device!r}."
+    )
+
+
+def size(x):
+    return int(_np.size(x))
+
+
+def dtype_is_float(dtype):
+    try:
+        return _np.issubdtype(_np.dtype(dtype), _np.floating)
+    except TypeError:
+        return False
+
+
+def dtype_default():
+    return _np.array(0.0).dtype
