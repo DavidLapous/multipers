@@ -303,9 +303,20 @@ class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
         self._is_st = None
 
     def fit(self, X, y=None):
-        self._is_st = mp.simplex_tree_multi.is_simplextree_multi(X[0])
-        if not self._is_st:
-            assert mp.slicer.is_slicer(X[0], allow_minpres=False)
+        if not X:
+            raise ValueError("FilteredComplexPreprocess requires non-empty input")
+
+        first = X[0]
+        while isinstance(first, (list, tuple)):
+            if len(first) == 0:
+                raise ValueError("Cannot infer complex type from empty container")
+            first = first[0]
+
+        self._is_st = mp.simplex_tree_multi.is_simplextree_multi(first)
+        if not self._is_st and not mp.slicer.is_slicer(first, allow_minpres=False):
+            raise ValueError(
+                "FilteredComplexPreprocess expects SimplexTreeMulti or Slicer inputs."
+            )
 
         if self.num_collapses is not None and not self._is_st:
             raise ValueError(
@@ -362,16 +373,16 @@ class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
                 )
         return cplx
 
-    def _process(self, item):
-        if mp.simplex_tree_multi.is_simplextree_multi(item) or mp.slicer.is_slicer(
-            item, allow_minpres=False
+    def _process(self, cplx):
+        if mp.simplex_tree_multi.is_simplextree_multi(cplx) or mp.slicer.is_slicer(
+            cplx, allow_minpres=False
         ):
-            return self._process_complex(item)
-        if isinstance(item, tuple):
-            return tuple(self._process(sub_item) for sub_item in item)
-        if isinstance(item, list):
-            return [self._process(sub_item) for sub_item in item]
-        return item
+            return self._process_complex(cplx)
+        if isinstance(cplx, tuple):
+            return tuple(self._process(sub_item) for sub_item in cplx)
+        if isinstance(cplx, list):
+            return [self._process(sub_item) for sub_item in cplx]
+        return cplx
 
     def transform(self, X):
         return Parallel(backend="threading", n_jobs=self.n_jobs)(
