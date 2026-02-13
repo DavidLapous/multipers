@@ -13,7 +13,7 @@ np.random.seed(0)
     reason="Detected windows. Pykeops is not compatible with windows yet. Skipping this ftm.",
 )
 def test_throw_test():
-    import multipers.ml.point_clouds as mmp
+    import multipers.ml.filtered_complex as mmp
 
     pts = np.array([[1, 1], [2, 2]], dtype=np.float32)
     st = mmp.PointCloud2FilteredComplex(masses=[0.1]).fit_transform([pts])[0][0]
@@ -23,15 +23,21 @@ def test_throw_test():
     ).fit_transform([pts])[0][0]
     assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
 
-    st = mmp.PointCloud2FilteredComplex(
-        masses=[0.1], complex="alpha", output_type="slicer_novine"
-    ).fit_transform([pts])[0][0]
+    st = mmp.PointCloud2FilteredComplex(masses=[0.1], complex="alpha").fit_transform(
+        [pts]
+    )[0][0]
+    st = mmp.FilteredComplexPreprocess(
+        output_type="slicer", vineyard=False
+    ).fit_transform([st])[0]
     assert isinstance(st, mp.slicer.Slicer_type)
     assert st.is_vine is False
 
-    st = mmp.PointCloud2FilteredComplex(
-        masses=[0.1], complex="alpha", output_type="slicer"
-    ).fit_transform([pts])[0][0]
+    st = mmp.PointCloud2FilteredComplex(masses=[0.1], complex="alpha").fit_transform(
+        [pts]
+    )[0][0]
+    st = mmp.FilteredComplexPreprocess(
+        output_type="slicer", vineyard=True
+    ).fit_transform([st])[0]
     assert isinstance(st, mp.slicer.Slicer_type)
     assert st.is_vine
 

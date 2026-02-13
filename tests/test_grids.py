@@ -3,6 +3,7 @@ import pytest
 
 import multipers as mp
 import multipers.grids as mpg
+import contextlib
 
 try:
     import torch
@@ -62,7 +63,7 @@ def test_regular_left():
             1,
         ],
     ).all(), y
-    if torch is not None and mp.array_api.check_keops():
+    if torch is not None:
         import multipers.array_api.torch as torchapi
 
         y_torch = torchapi.from_numpy(y)
@@ -95,9 +96,26 @@ def test_sanity_torch():
         img = torch.rand(size=(50, 50, k)).requires_grad_()
         s = mp.filtrations.Cubical(img)
         for strat in mp.grids.available_strategies:
-            _s = s.grid_squeeze(
-                strategy=strat, resolution=None if strat == "exact" else 10
-            )
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(
+                    pytest.warns(
+                        UserWarning, match="Squeezing an already squeezed slicer"
+                    )
+                )
+                if strat in {"regular", "partition"}:
+                    stack.enter_context(
+                        pytest.warns(
+                            UserWarning,
+                            match=(
+                                "strategy=regular"
+                                if strat == "regular"
+                                else "strategy=partition"
+                            ),
+                        )
+                    )
+                _s = s.grid_squeeze(
+                    strategy=strat, resolution=None if strat == "exact" else 10
+                )
             f = _s.filtration_grid[0]
             if strat not in ["regular", "partition"]:
                 assert f.requires_grad, f"Grad not working for {strat=}"

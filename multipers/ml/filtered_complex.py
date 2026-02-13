@@ -276,7 +276,7 @@ class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        num_collapses: int = 0,
+        num_collapses: int | Literal["full"] | None = None,
         reduce_degrees: Optional[Iterable[int]] = None,
         expand_dim: int | None = None,
         vineyard: Optional[bool] = None,
@@ -329,8 +329,11 @@ class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
         return self
 
     def _process_complex(self, cplx):
-        if self._is_st:
-            cplx.collapse_edges(num=self.num_collapses)
+        if self._is_st and self.num_collapses is not None:
+            if self.num_collapses == "full":
+                cplx.collapse_edges(full=True)
+            else:
+                cplx.collapse_edges(num=self.num_collapses)
             if self.expand_dim is not None and self.expand_dim > 1:
                 cplx.expansion(self.expand_dim)
         if self.reduce_degrees is not None:
