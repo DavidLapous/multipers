@@ -1204,18 +1204,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         bandwidth = (
             self.bandwidth if self.bandwidth > 0 else -self.bandwidth * self.diameter
         )
-        # COMPILE KEOPS FIRST
-        # dummyx = [X[0]]
-        # dummyf = [f[:2] for f in self.filtration_grid]
-        # convolution_signed_measures(
-        #     dummyx,
-        #     filtrations=dummyf,
-        #     bandwidth=bandwidth,
-        #     flatten=self.flatten,
-        #     n_jobs=1,
-        #     kernel=self.kernel,
-        #     backend=self.backend,
-        # )
         return convolution_signed_measures(
             X,
             filtrations=self.filtration_grid,
