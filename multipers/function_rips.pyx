@@ -43,17 +43,6 @@ def get_degree_rips(st, vector[int] degrees):
 	with nogil:
 		get_degree_rips_st_python(simplextree_ptr, st_multi_ptr, degrees)
 	return degree_rips_st
-	# cdef int max_degree = out.second
-	# cdef bool inf_flag = filtrations[-1] == np.inf
-	# if inf_flag:
-	# 	filtrations = filtrations[:-1]
-	# filtrations, = mpg.compute_grid([filtrations],strategy=grid_strategy,resolution=resolution)
-	# if inf_flag:
-	# 	filtrations = np.concatenate([filtrations, [np.inf]])
-	# degree_rips_st.grid_squeeze([filtrations, degrees], inplace=True, coordinate_values=True)
-	# degree_rips_st.filtration_grid = mpg.sanitize_grid([filtrations, np.asarray(degrees)])
-	# # degree_rips_st._is_function_simplextree=True
-	# return degree_rips_st,max_degree
 
 def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0):
 	assert st_multi.is_squeezed, "Squeeze first !"
