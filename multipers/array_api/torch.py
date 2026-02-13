@@ -34,6 +34,10 @@ matmul = _t.matmul
 einsum = _t.einsum
 
 
+def argsort(x, axis=-1):
+    return _t.argsort(x, dim=axis)
+
+
 def astype(x, dtype):
     return astensor(x).type(dtype)
 

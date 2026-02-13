@@ -210,7 +210,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         self.enforce_null_mass = enforce_null_mass
         self._default_mass_location = None
         self.flatten = flatten
-        self.num_parameters: int = 0
+        self._num_parameters: int | None = None
 
         return
 
@@ -237,7 +237,7 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         )
 
     def _infer_filtration(self, X):
-        self.num_parameters = X[0][0].num_parameters
+        self._num_parameters = X[0][0].num_parameters
         indices = np.random.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
@@ -250,8 +250,8 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
             for ax in range(self._num_axis)
         )
         num_parameters = len(filtrations[0][0])
-        assert num_parameters == self.num_parameters, (
-            f"Internal error, got {num_parameters=} and {self.num_parameters=}"
+        assert num_parameters == self._num_parameters, (
+            f"Internal error, got {num_parameters=} and {self._num_parameters=}"
         )
 
         filtrations_values = [
@@ -285,8 +285,17 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         self._params_check()
         self._input_checks(X)
 
-        if isinstance(self.resolution, int):
-            self.resolution = [self.resolution] * self.num_parameters
+        if not self._num_parameters:
+            first = X[0][0]
+            if hasattr(first, "num_parameters"):
+                self._num_parameters = first.num_parameters
+            else:
+                raise ValueError(
+                    "Could not infer the number of filtration parameters from the input."
+                )
+
+        if isinstance(self.resolution, int) and self._num_parameters:
+            self.resolution = [self.resolution] * self._num_parameters
 
         self.individual_grid = (
             self.individual_grid
@@ -685,7 +694,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
     ):
         super().__init__()
         self.filtrations_weights = filtrations_weights
-        self.num_parameters: int = 0
+        self._num_parameters: int = 0
         self.plot = plot
         self.unsparse = unsparse
         self.n_jobs = n_jobs
@@ -806,21 +815,21 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         else:
             first_sm = X[0]
         self._num_degrees = len(first_sm)
-        self.num_parameters = first_sm[0][0].shape[1]
+        self._num_parameters = first_sm[0][0].shape[1]
 
     def _check_resolution(self):
-        assert self.num_parameters > 0, "Num parameters hasn't been initialized."
+        assert self._num_parameters > 0, "Num parameters hasn't been initialized."
         if isinstance(self.resolution, int):
-            self.resolution = [self.resolution] * self.num_parameters
+            self.resolution = [self.resolution] * self._num_parameters
         self.resolution = np.asarray(self.resolution, dtype=int)
-        assert self.resolution.shape[0] == self.num_parameters, (
+        assert self.resolution.shape[0] == self._num_parameters, (
             "Resolution doesn't have a proper size."
         )
 
     def _check_weights(self):
         if self.filtrations_weights is None:
             return
-        assert self.filtrations_weights.shape[0] == self.num_parameters, (
+        assert self.filtrations_weights.shape[0] == self._num_parameters, (
             "Filtration weights don't have a proper size"
         )
 

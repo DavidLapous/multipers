@@ -31,6 +31,10 @@ matmul = _np.matmul
 einsum = _np.einsum
 
 
+def argsort(x, axis=-1):
+    return _np.argsort(x, axis=axis)
+
+
 def astype(x, dtype):
     return astensor(x).astype(dtype=dtype)
 
