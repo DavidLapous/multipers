@@ -155,9 +155,13 @@ def one_criticalify(
     else:
         F = None
     out = _multi_critical_from_slicer(
-           slicer, reduce=reduce, algo=algo,
-           degree=degree, clear=clear,
-           swedish=swedish, verbose=verbose,
+           slicer,
+           reduce=reduce,
+           algo=algo,
+           degree=degree,
+           clear=clear,
+           swedish=swedish,
+           verbose=verbose,
            kcritical=kcritical,
            filtration_container=filtration_container,
     )

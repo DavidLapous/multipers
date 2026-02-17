@@ -191,7 +191,7 @@ def plot_surface(
     ax=None,
     cmap: Optional[Union[str, Any]] = None,
     discrete_surface: Optional[bool] = None,
-    has_negative_values: Optional[bool] = None,
+    has_negative_values: Optional[bool | np.bool_] = None,
     contour: bool = True,
     threshold_max=10,
     threshold_min=-10,

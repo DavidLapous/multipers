@@ -85,7 +85,7 @@ cd ..
 doc_soft_urls = defaultdict(lambda:"<Unknown url>", doc_soft_urls)
 doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
 
-available_reduce_softs = Literal["mpfree","multi_chunk","2pac"]
+available_reduce_softs = Literal["mpfree","multi_chunk","2pac", "multi_critical"]
 
 def _path_init(soft:str|os.PathLike):
     a = which(f"./{soft}")
@@ -339,7 +339,7 @@ def _multi_critical_from_slicer(
                 reduce_arg += r" --minpres-all"
             else:
                 reduce_arg += fr" --minpres {slicer.dimension - degree+2}"
-        verbose_arg = "> /dev/null 2>&1" if not verbose else ""
+        verbose_arg = "> /dev/null 2>&1" if not verbose else "--verbose"
 
         command = f"{pathes['multi_critical']} --{algo} {reduce_arg} {input_path} {output_path} {verbose_arg}"
         if verbose:
