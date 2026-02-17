@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib.colors import ListedColormap
+from matplotlib.collections import LineCollection
 from numpy.typing import ArrayLike
 
 from multipers.array_api import to_numpy
@@ -84,51 +85,49 @@ def _plot_signed_measure_4(
     # compute the maximal rectangle area
     pts = np.clip(pts, a_min=-np.inf, a_max=np.array((*threshold, *threshold))[None, :])
     alpha_rescaling = 0
-    for rectangle, weight in zip(pts, weights):
+    for rectangle in pts:
         if rectangle[2] >= x_smoothing * rectangle[0]:
             alpha_rescaling = max(
                 alpha_rescaling,
                 (rectangle[2] / x_smoothing - rectangle[0])
                 * (rectangle[3] - rectangle[1]),
             )
-    # draw the rectangles
+
+    segments = []
+    rgba_list = []
     for rectangle, weight in zip(pts, weights):
-        # draw only the rectangles that have not been reduced to the empty set
-        if rectangle[2] >= x_smoothing * rectangle[0]:
-            # make the alpha channel proportional to the rectangle's area
-            if area_alpha:
-                _plot_rectangle(
-                    rectangle=[
-                        rectangle[0],
-                        rectangle[1],
-                        rectangle[2] / x_smoothing,
-                        rectangle[3],
-                    ],
-                    weight=weight,
-                    alpha=(
-                        (rectangle[2] / x_smoothing - rectangle[0])
-                        * (rectangle[3] - rectangle[1])
-                        / alpha_rescaling
-                        if alpha is None
-                        else alpha
-                    ),
-                    **plt_kwargs,
-                )
-            else:
-                _plot_rectangle(
-                    rectangle=[
-                        rectangle[0],
-                        rectangle[1],
-                        rectangle[2] / x_smoothing,
-                        rectangle[3],
-                    ],
-                    weight=weight,
-                    alpha=1 if alpha is None else alpha,
-                    **plt_kwargs,
-                )
+        if rectangle[2] < x_smoothing * rectangle[0]:
+            continue
+        start = (rectangle[0], rectangle[1])
+        end = (rectangle[2] / x_smoothing, rectangle[3])
+        segments.append([start, end])
+        color_base = "blue" if weight > 0 else "red"
+        if area_alpha:
+            density_alpha = (
+                (end[0] - start[0]) * (end[1] - start[1]) / (alpha_rescaling or 1)
+                if alpha is None
+                else alpha
+            )
+        else:
+            density_alpha = 1 if alpha is None else alpha
+        rgba_list.append(mcolors.to_rgba(color_base, alpha=density_alpha))
+
+    if not segments:
+        return
+
+    ax = plt.gca()
+    lc_kwargs = plt_kwargs.copy()
+    label = lc_kwargs.pop("label", None)
+    lc_kwargs.pop("alpha", None)
+    lc_kwargs.pop("color", None)
+    collection = LineCollection(segments, colors=rgba_list, **lc_kwargs)
+    if label:
+        collection.set_label(label)
+    ax.add_collection(collection)
+    ax.autoscale_view()
 
 
-def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
+def plot_signed_measure(signed_measure, threshold=None, ax=None, s=None, **plt_kwargs):
     if ax is None:
         ax = plt.gca()
     else:
@@ -152,9 +151,10 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
         )
 
     assert num_parameters in (2, 4)
+
     if num_parameters == 2:
         _plot_signed_measure_2(
-            pts=pts, weights=weights, threshold=threshold, **plt_kwargs
+            pts=pts, weights=weights, threshold=threshold, s=s, **plt_kwargs
         )
     else:
         _plot_signed_measure_4(
@@ -162,7 +162,9 @@ def plot_signed_measure(signed_measure, threshold=None, ax=None, **plt_kwargs):
         )
 
 
-def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None, s=None):
+def plot_signed_measures(
+    signed_measures, threshold=None, size=4, alpha=None, s=None, **plot_kwargs
+):
     num_degrees = len(signed_measures)
     if num_degrees <= 1:
         axes = [plt.gca()]
@@ -172,7 +174,12 @@ def plot_signed_measures(signed_measures, threshold=None, size=4, alpha=None, s=
         )
     for ax, signed_measure in zip(axes, signed_measures):
         plot_signed_measure(
-            signed_measure=signed_measure, ax=ax, threshold=threshold, alpha=alpha, s=s
+            signed_measure=signed_measure,
+            ax=ax,
+            threshold=threshold,
+            alpha=alpha,
+            s=s,
+            **plot_kwargs,
         )
     plt.tight_layout()
 
