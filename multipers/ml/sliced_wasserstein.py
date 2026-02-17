@@ -62,7 +62,7 @@ def _compute_signed_measure_parts(X):
     return XX
 
 
-def _compute_signed_measure_projections(X, num_directions, scales):
+def _compute_signed_measure_projections(X, num_directions, scales, api=None):
     """
     This is a function for projecting the points of a list of signed measures onto a fixed number of lines sampled uniformly. This function can be used as a preprocessing step in order to speed up the running time for computing all pairwise sliced Wasserstein distances on a list of signed measures.
 
@@ -70,6 +70,7 @@ def _compute_signed_measure_projections(X, num_directions, scales):
         X (list of n tuples): list of signed measures.
         num_directions (int): number of lines evenly sampled from [-pi/2,pi/2] in order to approximate and speed up the distance computation.
         scales (array of shape D): scales associated to the dimensions.
+        api: optional array API module to use for conversions.
 
     Returns:
         list of n pairs of numpy arrays of shape (num x num_directions): list of positive and negative projected signed measures.
@@ -94,9 +95,10 @@ def _compute_signed_measure_projections(X, num_directions, scales):
         first_candidate = _first_array_like(entry)
         if first_candidate is not None:
             break
-    api = api_from_tensor(
-        first_candidate if first_candidate is not None else np.asarray(0.0)
-    )
+    if api is None:
+        api = api_from_tensor(
+            first_candidate if first_candidate is not None else np.asarray(0.0)
+        )
 
     def _collect_leaves(obj):
         leaves = []
@@ -482,6 +484,9 @@ class SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
             y (n x 1 array): signed measure labels (unused).
         """
         self.measures_ = X
+        self._api = api_from_tensor(
+            X[0][0] if isinstance(X, list) and len(X) > 0 else np.asarray(0.0)
+        )
         return self
 
     def transform(self, X):
@@ -501,6 +506,7 @@ class SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
             num_directions=self.num_directions,
             scales=self.scales,
             n_jobs=self.n_jobs,
+            api=self._api,
         )
 
     def __call__(self, meas1, meas2):
