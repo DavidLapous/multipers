@@ -499,7 +499,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
     {{if not IS_KCRITICAL}}
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def insert_batch(self,  vertex_array,  filtrations)->{{PY_CLASS_NAME}}:
+    def insert_batch(self,  vertex_array,  filtrations = np.empty((0,0)))->{{PY_CLASS_NAME}}:
         """Inserts k-simplices given by a sparse array in a format similar
         to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
         The n-th simplex has vertices `vertex_array[0,n]`, ...,
@@ -698,7 +698,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def insert_batch(self, vertex_array, filtrations)->{{PY_CLASS_NAME}} :
+    def insert_batch(self, vertex_array, filtrations = np.empty((0,0,0)))->{{PY_CLASS_NAME}} :
         """Inserts k-simplices given by a sparse array in a format similar
         to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
         The i-th simplex has vertices `vertex_array[0,i]`, ...,
