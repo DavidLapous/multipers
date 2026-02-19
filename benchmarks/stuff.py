@@ -8,7 +8,7 @@ import pandas as pd
 
 import multipers as mp
 import multipers.grids as mpg
-import multipers.ml.point_clouds as mmp
+import multipers.ml.filtered_complex as mmp
 from multipers.data import noisy_annulus, orbit, three_annulus
 from multipers.simplex_tree_multi import SimplexTreeMulti_type
 from multipers.slicer import Slicer_type, available_columns
@@ -39,7 +39,7 @@ available_dtype = [np.float64]
 def fill_timing(arg, f):
     timings[arg] = timeit(f, number=num_repetition) / num_repetition
     terminal_width = shutil.get_terminal_size().columns
-    left = str(args)
+    left = str(arg)
     right = f"{timings[arg]:.4f}"
     num_dots = max(terminal_width - (len(left) + len(right) + 2), 0)
     print(f"{left} {'.' * num_dots} {right}", end="\n")
@@ -57,13 +57,17 @@ for args in product(
 ):
     n, dataset, cplx, inv, degree, vine, dtype, col = args
     pts = np.asarray(available_dataset[dataset](n))
-    st: SimplexTreeMulti_type = mmp.PointCloud2FilteredComplex(
+    cplx = mmp.PointCloud2FilteredComplex(
         complex=cplx,
         bandwidths=[0.2],
-        num_collapses=2,
-        output_type="simplextree",
+    ).fit_transform([pts])
+    filtered_complexes = cplx[0]
+    st = mmp.FilteredComplexPreprocess(
+        num_collapses=None if cplx == "delaunay" else 2,
         expand_dim=degree + 1,
-    ).fit_transform([pts])[0][0]
+        output_type="simplextree",
+    ).fit_transform([filtered_complexes])[0]
+    st = st[0]
     s = mp.Slicer(st, vineyard=(vine == "vine"), dtype=dtype, column_type=col).minpres(
         degree=degree
     )
