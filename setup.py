@@ -183,7 +183,7 @@ print(library_dirs)
 
 def cpp_lib_deps(module):
     if module == "ops":
-        return ["boost_system", "boost_timer"]
+        return ["boost_system", "boost_timer", "omp", ]
     else:
         return ["tbb"]
 
