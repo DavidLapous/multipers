@@ -1,8 +1,20 @@
 [submodule "AIDA"]
-	path = AIDA
+	path = ext/AIDA
 	url = https://github.com/JanJend/AIDA
 	branch = main
 [submodule "Persistence-Algebra"]
-	path = Persistence-Algebra
+	path = ext/Persistence-Algebra
 	url = https://github.com/JanJend/Persistence-Algebra
 	branch = aida-changes
+[submodule "ext/mpfree"]
+	path = ext/mpfree
+	url = https://bitbucket.org/mkerber/mpfree/
+[submodule "ext/multi_chunk"]
+	path = ext/multi_chunk
+	url = https://bitbucket.org/mkerber/multi_chunk
+[submodule "ext/multi_critical"]
+	path = ext/multi_critical
+	url = https://bitbucket.org/mkerber/multi_critical.git
+[submodule "ext/function_delaunay"]
+	path = ext/function_delaunay
+	url = https://bitbucket.org/mkerber/function_delaunay/
