@@ -55,8 +55,6 @@ def threshold_slice(a, m,M):
 
 def get_exact_grid(
         x,
-        resolution=None,
-        strategy="exact",
         threshold_min=None,
         threshold_max=None,
         bool return_api=False,
@@ -68,41 +66,32 @@ def get_exact_grid(
     from multipers.simplex_tree_multi import is_simplextree_multi
     from multipers.mma_structures import is_mma
 
-    if resolution is not None and strategy == "exact":
-        raise ValueError("The 'exact' strategy does not support resolution.")
-    if strategy != "exact" and resolution is None:
-        raise ValueError("A resolution is required for non-exact strategies")
 
     cdef bool is_numpy_compatible = True
     if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
         initial_grid = x.filtration_grid
         api = api_from_tensors(*initial_grid)
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
     elif is_slicer(x):
         initial_grid = x.get_filtrations_values().T
         api = npapi
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
     elif is_simplextree_multi(x):
         initial_grid = x.get_filtration_grid()
         api = npapi
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
     elif is_mma(x):
         initial_grid = x.get_filtration_values()
         api = npapi
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
     elif isinstance(x, np.ndarray):
-        initial_grid = x
         api = npapi
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in x)
     else:
-        x = tuple(x)
         if len(x) == 0:
             return [], npapi
-        first = x[0]
-        ## is_sm, i.e., iterable tuple(pts,weights)
-        if isinstance(first, tuple) and getattr(first[0], "shape", None) is not None:
-            initial_grid = tuple(f[0].T for f in x)
-            api = api_from_tensors(*initial_grid)
-            initial_grid = api.cat(initial_grid, axis=1)
-        ## is grid-like (num_params, num_pts)
-        else:
-            api = api_from_tensors(*x)
-            initial_grid = tuple(api.astensor(f) for f in x)
+        api = api_from_tensors(*x)
+        initial_grid = tuple(api.unique(api.astensor(f)) for f in x)
 
     cdef int num_parameters = len(initial_grid)
 
@@ -155,8 +144,6 @@ def compute_grid(
     # Extract initial_grid and api using the helper function
     initial_grid, api = get_exact_grid(
         x,
-        resolution=resolution,
-        strategy=strategy,
         threshold_min=threshold_min,
         threshold_max=threshold_max,
         return_api=True,
@@ -178,7 +165,6 @@ def compute_grid(
         unique = unique, 
         _q_factor=_q_factor, 
         drop_quantiles=drop_quantiles,
-        dense = dense,
         api = api,
     )
     if dense:
@@ -198,8 +184,6 @@ def compute_grid_from_iterable(
         ):
     initial_grids = tuple(get_exact_grid(
         x,
-        resolution=resolution,
-        strategy=strategy,
         threshold_min=threshold_min,
         threshold_max=threshold_max,
     ) for x in xs)
@@ -234,13 +218,12 @@ def todense(grid, api=None):
 
 
 def _compute_grid_numpy(
-        filtrations_values,
+        tuple filtrations_values,
         resolution=None, 
         strategy:Lstrategies="exact", 
         bool unique=True, 
         some_float _q_factor=1., 
         drop_quantiles=[0,0],
-        bool dense = False,
         api = None,
         ):
     """
@@ -266,6 +249,23 @@ def _compute_grid_numpy(
     except:
         a,b=drop_quantiles,drop_quantiles
 
+    ## match doesn't work with cython BUG
+    if strategy == "exact":
+        if resolution is not None:
+            raise ValueError(f"Exact strategy cannot have a resolution. Got {resolution=}.")
+        return filtrations_values
+    if resolution is None:
+        raise ValueError(f"Strategy {strategy} need a resolution. Got {resolution=}.")
+    if strategy == "regular_closest":
+        return tuple(_todo_regular_closest(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
+    if strategy == "regular":
+        return tuple(_todo_regular(f,r,api) for f,r in zip(filtrations_values, resolution))
+    if strategy == "regular_left":
+        return tuple(_todo_regular_left(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
+    if strategy == "partition":
+        return tuple(_todo_partition(f,r, unique, api) for f,r in zip(filtrations_values, resolution))
+    if strategy == "precomputed":
+        return filtrations_values
     if a != 0 or b != 0:
         boxes = api.astensor([api.quantile_closest(filtration, [a, b], axis=1) for filtration in filtrations_values])
         min_filtration, max_filtration = api.minvalues(boxes, axis=(0,1)), api.maxvalues(boxes, axis=(0,1)) # box, birth/death, filtration
@@ -274,11 +274,9 @@ def _compute_grid_numpy(
                 for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
                 ]
 
-    ## match doesn't work with cython BUG
-    if strategy == "exact":
-        F=tuple(api.unique(f) for f in filtrations_values)
-    elif strategy == "quantile":
-        F = tuple(api.unique(f) for f in filtrations_values)
+    if strategy == "quantile":
+        F = filtrations_values
+        # F = tuple(api.unique(f) for f in filtrations_values)
         max_resolution = [min(len(f), r) for f, r in zip(F, resolution)]
         F = tuple(
             api.quantile_closest(
@@ -298,23 +296,8 @@ def _compute_grid_numpy(
                     strategy="quantile",
                     _q_factor=1.5 * _q_factor,
                 )
-    elif strategy == "regular":
-        F = tuple(_todo_regular(f,r,api) for f,r in zip(filtrations_values, resolution))
-    elif strategy == "regular_closest":
-        F = tuple(_todo_regular_closest(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
-    elif strategy == "regular_left":
-        F = tuple(_todo_regular_left(f,r, unique,api) for f,r in zip(filtrations_values, resolution))
-    # elif strategy == "torch_regular_closest":
-    #     F = tuple(_torch_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolution))
-    elif strategy == "partition":
-        F = tuple(_todo_partition(f,r, unique, api) for f,r in zip(filtrations_values, resolution))
-    elif strategy == "precomputed":
-        F=filtrations_values
-    else:
-        raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
-    if dense:
-        return todense(F, api=api)
-    return F
+        return F
+    raise ValueError(f"Invalid strategy {strategy}. Pick something in {available_strategies}.")
 
 
 
