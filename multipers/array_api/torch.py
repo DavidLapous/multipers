@@ -15,6 +15,7 @@ empty = _t.empty
 where = _t.where
 no_grad = _t.no_grad
 cdist = _t.cdist
+pdist = _t.pdist
 zeros = _t.zeros
 min = _t.min
 max = _t.max

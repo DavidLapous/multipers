@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 
 import numpy as _np
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist
 
 backend = _np
 cat = _np.concatenate
@@ -18,6 +18,7 @@ min = _np.min
 max = _np.max
 repeat_interleave = _np.repeat
 cdist = cdist  # type: ignore[no-redef]
+pdist = pdist  # type: ignore[no-redef]
 unique = _np.unique
 inf = _np.inf
 searchsorted = _np.searchsorted
