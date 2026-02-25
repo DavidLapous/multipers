@@ -36,7 +36,11 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
 
 }  // namespace multipers
 
-#if __has_include(<mpfree/mpfree.h>) && __has_include(<mpp_utils/Graded_matrix.h>)
+#ifndef MULTIPERS_DISABLE_MPFREE_INTERFACE
+#define MULTIPERS_DISABLE_MPFREE_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_MPFREE_INTERFACE && __has_include(<mpfree/mpfree.h>) && __has_include(<mpp_utils/Graded_matrix.h>)
 #define MULTIPERS_HAS_MPFREE_INTERFACE 1
 #include <mpfree/mpfree.h>
 #include <mpp_utils/Graded_matrix.h>

@@ -39,6 +39,8 @@ full_build = False
 if was_modified("_tempita_grid_gen.py"):
     full_build = True
 
+IS_WINDOWS = platform.system() == "Windows"
+
 
 # credit to sklearn with just a few modifications:
 # https://github.com/scikit-learn/scikit-learn/blob/156ef1b7fe9bc0ee5b281634cfd56b9c54e83277/sklearn/_build_utils/tempita.py
@@ -84,12 +86,11 @@ cython_modules = [
 ]
 
 
-def arch_module_blacklist(module: str):
-    if platform.system() == "Windows" and module in [
-        "ops",
+def should_build_module(module: str):
+    if IS_WINDOWS and module in [
         "ext_interface._aida_interface",
     ]:
-        # Persistence-Algebra doesn't compile yet here
+        # Persistence-Algebra and AIDA extension do not compile on Windows.
         return False
     return True
 
@@ -203,6 +204,24 @@ def module_cpp_dirs(module: str):
     return dirs
 
 
+ext_interface_disable_macros = {
+    "ext_interface._aida_interface": "MULTIPERS_DISABLE_AIDA_INTERFACE",
+    "ext_interface._mpfree_interface": "MULTIPERS_DISABLE_MPFREE_INTERFACE",
+    "ext_interface._function_delaunay_interface": "MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE",
+    "ext_interface._multi_critical_interface": "MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE",
+}
+
+
+def module_define_macros(module: str):
+    macros: list[tuple[str, str | None]] = [
+        ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")
+    ]
+    disable_macro = ext_interface_disable_macros.get(module)
+    if IS_WINDOWS and disable_macro is not None:
+        macros.append((disable_macro, "1"))
+    return macros
+
+
 library_dirs = [
     PYTHON_ENV_PATH / "lib",  # Unix
     PYTHON_ENV_PATH / "Library" / "lib",  # Windows
@@ -281,7 +300,7 @@ build_commands = {
     "editable_wheel",
 }
 should_build_aida = any(cmd in requested_commands for cmd in build_commands)
-if arch_module_blacklist("ext_interface._aida_interface") and should_build_aida:
+if should_build_module("ext_interface._aida_interface") and should_build_aida and not IS_WINDOWS:
     AIDA_STATIC_LIBRARY = build_aida_static_library()
     print("AIDA static library:")
     print(AIDA_STATIC_LIBRARY)
@@ -322,15 +341,15 @@ extensions = [
             ]
             + (
                 [
-                    "/O2",  
+                    "/O2",
                     "/DNDEBUG",
                     "/std:c++20",
                     "/W1",
                     "/WX-",
                 ]
-                if platform.system() == "Windows"
+                if IS_WINDOWS
                 else [
-                    "-O3",# -Ofast disables infinity values for filtration values
+                    "-O3",  # -Ofast disables infinity values for filtration values
                     "-fassociative-math",
                     "-funsafe-math-optimizations",
                     "-DNDEBUG",
@@ -345,12 +364,12 @@ extensions = [
         if module == "ext_interface._aida_interface" and AIDA_STATIC_LIBRARY
         else [],
         include_dirs=module_cpp_dirs(module),
-        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+        define_macros=module_define_macros(module),
         libraries=cpp_lib_deps(module),
         library_dirs=library_dirs,
     )
     for module in cython_modules
-    if arch_module_blacklist(module)
+    if should_build_module(module)
 ]
 
 if __name__ == "__main__":

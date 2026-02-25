@@ -13,6 +13,10 @@
 #define FUNCTION_DELAUNAY_TIMERS 0
 #endif
 
+#ifndef MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+#define MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE 0
+#endif
+
 #if FUNCTION_DELAUNAY_TIMERS
 #if __has_include(<function_delaunay/boost_timers.h>)
 #include <function_delaunay/boost_timers.h>
@@ -71,7 +75,7 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
 
 }  // namespace multipers
 
-#if __has_include(<function_delaunay/function_delaunay_with_meb.h>) && \
+#if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE && __has_include(<function_delaunay/function_delaunay_with_meb.h>) && \
     __has_include(<function_delaunay/Point_with_densities.h>)
 #define MULTIPERS_HAS_FUNCTION_DELAUNAY_INTERFACE 1
 #include <Eigen/Core>

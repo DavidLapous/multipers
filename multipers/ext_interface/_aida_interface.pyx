@@ -46,6 +46,10 @@ cdef extern from "aida_interface.hpp":
     aida_config config
 
 
+def _is_available():
+    return True
+
+
 def aida(s, bint sort=True, bint verbose=False, bint progress=False):
     """
     Decomposes (a minimal presentation of a) 2-parameter persistence module as

@@ -51,7 +51,11 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
 
 }  // namespace multipers
 
-#if __has_include(<multi_critical/free_resolution.h>) && __has_include(<mpp_utils/Graded_matrix.h>) && \
+#ifndef MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+#define MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE && __has_include(<multi_critical/free_resolution.h>) && \
     __has_include(<mpfree/mpfree.h>) && __has_include(<multi_chunk/multi_chunk.h>)
 #define MULTIPERS_HAS_MULTI_CRITICAL_INTERFACE 1
 

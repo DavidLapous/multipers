@@ -692,7 +692,14 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         Returns the ordered dimensions of the generators.
         """
-        return np.asarray(self.truc.get_dimensions())
+        cdef vector[int] dimensions = self.truc.get_dimensions()
+        cdef Py_ssize_t num_dimensions = dimensions.size()
+        if num_dimensions == 0:
+            return np.empty(0, dtype=np.int32)
+        return np.asarray(
+            <int[:num_dimensions]>(<int*>dimensions.data()),
+            dtype=np.int32,
+        ).copy()
     @property 
     def dimension(self)-> int:
         """

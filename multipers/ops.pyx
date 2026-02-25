@@ -3,8 +3,20 @@ from typing import Iterable, Literal, Optional
 
 
 def aida(s, bool sort=True, bool verbose=False, bool progress=False):
+    import importlib.util
+
+    if importlib.util.find_spec("multipers.ext_interface._aida_interface") is None:
+        raise RuntimeError(
+            "AIDA in-memory interface is not available in this build. "
+            "Rebuild multipers with AIDA support to enable this backend."
+        )
     from multipers.ext_interface import _aida_interface
 
+    if not _aida_interface._is_available():
+        raise RuntimeError(
+            "AIDA in-memory interface is not available in this build. "
+            "Rebuild multipers with AIDA support to enable this backend."
+        )
     return _aida_interface.aida(s, sort=sort, verbose=verbose, progress=progress)
 
 
@@ -75,12 +87,9 @@ def minimal_presentation(
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
     """
-    from multipers.io import _init_external_softwares, scc_reduce_from_str_to_slicer
+    from multipers.io import _minimal_presentation_from_slicer
     from joblib import Parallel, delayed
     from multipers.slicer import is_slicer
-    from multipers.ext_interface import _mpfree_interface
-    import os
-    import tempfile
 
     if is_slicer(slicer) and slicer.is_minpres and not force:
         from warnings import warn
@@ -105,46 +114,15 @@ def minimal_presentation(
             Parallel(n_jobs=n_jobs, backend="threading")(delayed(todo)(d) for d in degrees)
         )
     assert degree >= 0, "Degree not provided."
-    if not np.any(slicer.get_dimensions() == degree):
+    dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
+    idx = np.searchsorted(dimensions, degree)
+    if idx >= dimensions.shape[0] or dimensions[idx] != degree:
         return type(slicer)()
 
-    if backend == "mpfree":
-        if _mpfree_interface._is_available():
-            new_slicer = _mpfree_interface.minimal_presentation(
-                slicer,
-                degree=degree,
-                verbose=verbose,
-                use_chunk=True,
-                use_clearing=True,
-                full_resolution=True,
-            )
-            new_slicer.minpres_degree = degree
-            new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-            if new_slicer.is_squeezed and auto_clean:
-                new_slicer = new_slicer._clean_filtration_grid()
-            return new_slicer
-
-    _init_external_softwares(requires=[backend])
-    dimension = slicer.dimension - degree
-    with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
-        tmp_path = os.path.join(tmpdir, "multipers.scc")
-        slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree - 1, unsqueeze=False)
-        new_slicer = type(slicer)()
-        if backend == "mpfree":
-            shift_dimension = degree - 1
-        else:
-            shift_dimension = degree
-        scc_reduce_from_str_to_slicer(
-            path=tmp_path,
-            slicer=new_slicer,
-            dimension=dimension,
-            backend=backend,
-            shift_dimension=shift_dimension,
-            verbose=verbose,
-        )
-
-        new_slicer.minpres_degree = degree
-        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-        if new_slicer.is_squeezed and auto_clean:
-            new_slicer = new_slicer._clean_filtration_grid()
-        return new_slicer
+    return _minimal_presentation_from_slicer(
+        slicer,
+        degree=degree,
+        backend=backend,
+        auto_clean=auto_clean,
+        verbose=verbose,
+    )

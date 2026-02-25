@@ -236,6 +236,61 @@ def scc_reduce_from_str_to_slicer(
         slicer._build_from_scc_file(path=output_path, shift_dimension=shift_dimension)
 
 
+def _minimal_presentation_from_slicer(
+        slicer,
+        int degree,
+        str backend="mpfree",
+        bool auto_clean=True,
+        bool verbose=False,
+    ):
+    """
+    Computes a minimal presentation from a slicer, using the in-memory bridge when
+    available and falling back to SCC file I/O otherwise.
+    """
+    if backend == "mpfree":
+        from multipers.ext_interface import _mpfree_interface
+
+        if _mpfree_interface._is_available():
+            new_slicer = _mpfree_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                use_chunk=True,
+                use_clearing=True,
+                full_resolution=True,
+            )
+            new_slicer.minpres_degree = degree
+            new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+            if new_slicer.is_squeezed and auto_clean:
+                new_slicer = new_slicer._clean_filtration_grid()
+            return new_slicer
+
+    _init_external_softwares(requires=[backend])
+    dimension = slicer.dimension - degree
+    with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
+        tmp_path = os.path.join(tmpdir, "multipers.scc")
+        slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree - 1, unsqueeze=False)
+        new_slicer = type(slicer)()
+        if backend == "mpfree":
+            shift_dimension = degree - 1
+        else:
+            shift_dimension = degree
+        scc_reduce_from_str_to_slicer(
+            path=tmp_path,
+            slicer=new_slicer,
+            dimension=dimension,
+            backend=backend,
+            shift_dimension=shift_dimension,
+            verbose=verbose,
+        )
+
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
+
 
 
 
