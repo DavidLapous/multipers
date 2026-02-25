@@ -105,9 +105,9 @@ jobs:
         ls
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
-          export macosx_deployment_target=11.0  
-          export cxxflags="-fno-aligned-new" # macos workaround
-          export cflags="-fno-aligned-new" # macos workaround
+          export MACOSX_DEPLOYMENT_TARGET=11.0  
+          # export cxxflags="-fno-aligned-new" # macos workaround
+          # export cflags="-fno-aligned-new" # macos workaround
           # export macosx_deployment_target="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
@@ -118,6 +118,27 @@ jobs:
 
         python setup.py build_ext -j4 --inplace
         python -m build . --no-isolation --wheel
+
+    - name: Check wheel payload
+      shell: bash -el {0}
+      run: |
+        micromamba activate build
+        python - <<'PY'
+        import zipfile
+        from pathlib import Path
+
+        bad_suffixes = {".pyx", ".pxd", ".tp", ".cpp", ".hpp", ".h"}
+        for wheel in Path("dist").glob("*.whl"):
+            with zipfile.ZipFile(wheel) as zf:
+                bad = [
+                    name
+                    for name in zf.namelist()
+                    if name.startswith("multipers/") and Path(name).suffix in bad_suffixes
+                ]
+            if bad:
+                raise RuntimeError(f"Found forbidden source files in {wheel}: {bad[:10]}")
+            print(f"{wheel.name}: OK")
+        PY
 
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}

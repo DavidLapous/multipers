@@ -320,9 +320,9 @@ def cpp_lib_deps(module):
     if module.startswith("ext_interface._"):
         libs = ["boost_system", "boost_timer", "boost_chrono", "gmp"]
         if IS_WINDOWS:
-            libs.append("vcomp")      # MSVC OpenMP
+            libs.append("vcomp")  # MSVC OpenMP
         else:
-            libs.append("omp")        # Linux/macOS OpenMP
+            libs.append("omp")  # Linux/macOS OpenMP
         return libs
     elif module in ["ops", "io"]:
         return []

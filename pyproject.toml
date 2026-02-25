@@ -77,3 +77,26 @@ tracker = "https://github.com/DavidLapous/multipers/issues"
 # # automatic search for packages
 [tool.setuptools.packages.find]
 include = ["multipers*"]
+exclude = [
+  "tests*",
+  "docs*",
+  "ext*",
+  "multipers.tests",
+  "multipers.tests.*",
+  "multipers.docs",
+  "multipers.docs.*",
+]
+
+[tool.setuptools.exclude-package-data]
+"*" = [
+  "*.pyx",
+  "*.pxd",
+  "*.tp",
+  "*.cpp",
+  "*.hpp",
+  "*.h",
+  "*.md",
+  "*.txt",
+  "ext/*",
+  "ext/**/*",
+]
