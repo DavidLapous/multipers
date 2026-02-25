@@ -147,6 +147,7 @@ base_cpp_dirs = [
     PYTHON_ENV_PATH / "include",  # Unix
     PYTHON_ENV_PATH / "include" / "eigen3",  # Eigen
     PYTHON_ENV_PATH / "Library" / "include",  # Windows
+    PYTHON_ENV_PATH / "Library" / "include" / "eigen3",  # Windows
     # "/usr/include/",
     # "/usr/local/include",
 ]
