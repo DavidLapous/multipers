@@ -310,23 +310,35 @@ extensions = [
             ]
         ),
         language="c++",
-        extra_compile_args=[
-            "-O3"
-            if platform.system() != "Windows"
-            else "/O2",  # -Ofast disables infinity values for filtration values
-            "-fassociative-math",
-            "-funsafe-math-optimizations",
-            "-DGUDHI_USE_TBB",
-            "-DWITH_TBB=ON",
-            # "-g",
-            # "-march=native",
-            "-DNDEBUG" if platform.system() != "Windows" else "/DNDEBUG",
-            "-std=c++20" if platform.system() != "Windows" else "/std:c++20",
-            # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
-            "-Wall",
-            "-Wextra" if platform.system() != "Windows" else "/W1",
-            # "-Werror" if platform.system() != "Windows" else "",
-        ],
+        extra_compile_args=(
+            [
+                "-DGUDHI_USE_TBB",
+                "-DWITH_TBB=ON",
+                # "-g",
+                # "-march=native",
+                # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
+                # "-Werror",
+            ]
+            + (
+                [
+                    "/O2",  
+                    "/DNDEBUG",
+                    "/std:c++20",
+                    "/W1",
+                    "/WX-",
+                ]
+                if platform.system() == "Windows"
+                else [
+                    "-O3",# -Ofast disables infinity values for filtration values
+                    "-fassociative-math",
+                    "-funsafe-math-optimizations",
+                    "-DNDEBUG",
+                    "-std=c++20",
+                    "-Wall",
+                    "-Wextra",
+                ]
+            )
+        ),
         extra_link_args=[],
         extra_objects=[AIDA_STATIC_LIBRARY]
         if module == "ext_interface._aida_interface" and AIDA_STATIC_LIBRARY
