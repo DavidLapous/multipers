@@ -11,7 +11,7 @@ np.random.seed(0)
 
 def io_fd_mpfree(x):
     s = mp.filtrations.DelaunayCodensity(points=x, bandwidth=0.2)
-    s = s.minpres(1).to_colexical()
+    s = mp.Slicer(s).minpres(1).to_colexical()
     return mp.signed_measure(s, degree=1, invariant="hilbert")[0]
 
 

@@ -186,6 +186,7 @@ def test_scc():
 
     import multipers as mp
     from multipers.distances import sm_distance
+    import multipers.ext_interface._mpfree_interface as _mpfree_interface
     from multipers.io import _check_available
     from multipers.tests import random_st
 
@@ -217,6 +218,27 @@ def test_scc():
         (a,) = mp.signed_measure(s, degree=1)
         (b,) = mp.signed_measure(s2, degree=1)
         assert sm_distance(a, b) == 0
+
+        if _mpfree_interface._is_available():
+            np.random.seed(3)
+            st = random_st(npts=200)
+            s = mp.Slicer(st).grid_squeeze(inplace=True)
+            s.filtration_grid = []
+            s.to_scc("truc.scc")
+
+            previous_is_available = _mpfree_interface._is_available
+            try:
+                _mpfree_interface._is_available = lambda: True
+                s_in_memory = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
+
+                _mpfree_interface._is_available = lambda: False
+                s_external = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
+            finally:
+                _mpfree_interface._is_available = previous_is_available
+
+            (m,) = mp.signed_measure(s_in_memory, degree=1)
+            (e,) = mp.signed_measure(s_external, degree=1)
+            assert sm_distance(m, e) == 0
     else:
         pytest.skip("Skipped a test bc `mpfree` was not found.")
 
@@ -235,6 +257,166 @@ def test_bitmap():
     )
 
 
+def test_get_filtrations_view_flag_one_critical():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [0.0, 1.0])
+    st.insert([1], [2.0, 3.0])
+    st.insert([0, 1], [4.0, 5.0])
+    s = mp.Slicer(st)
+
+    copied = s.get_filtrations(view=False)
+    assert isinstance(copied, np.ndarray)
+    assert copied.shape == (len(s), s.num_parameters)
+
+    viewed = s.get_filtrations(view=True)
+    viewed[0][0] = viewed[0][0] + 10.0
+    assert np.isclose(s.get_filtrations(view=True)[0][0], viewed[0][0])
+
+    copied_after = s.get_filtrations(view=False)
+    copied_after[0, 0] = copied_after[0, 0] + 5.0
+    assert not np.isclose(copied_after[0, 0], s.get_filtrations(view=True)[0][0])
+
+    copied_alias = s.get_filtrations(copy=True)
+    viewed_alias = s.get_filtrations(copy=False)
+    assert isinstance(copied_alias, np.ndarray)
+    assert isinstance(viewed_alias, list)
+
+
+def test_get_filtration_single_view_one_critical():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [0.0, 1.0])
+    st.insert([1], [2.0, 3.0])
+    st.insert([0, 1], [4.0, 5.0])
+    s = mp.Slicer(st)
+
+    f0 = s.get_filtration(0)
+    f0[0] = f0[0] + 10.0
+    assert np.isclose(s.get_filtration(0)[0], f0[0])
+    assert np.allclose(s.get_filtration(-1), s.get_filtrations(view=True)[-1])
+
+    with pytest.raises(IndexError):
+        s.get_filtration(len(s))
+
+
+def test_get_boundaries_copy_and_packed_one_critical():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [0.0, 1.0])
+    st.insert([1], [2.0, 3.0])
+    st.insert([0, 1], [4.0, 5.0])
+    s = mp.Slicer(st)
+
+    boundaries = s.get_boundaries()
+    assert isinstance(boundaries, tuple)
+    assert all(isinstance(row, np.ndarray) for row in boundaries)
+
+    boundaries[0][:] = 123
+    refreshed = s.get_boundaries()
+    assert refreshed[0].size == 0
+
+    indptr, indices = s.get_boundaries(packed=True)
+    rebuilt = tuple(indices[indptr[i] : indptr[i + 1]] for i in range(len(indptr) - 1))
+    assert len(rebuilt) == len(boundaries)
+    for a, b in zip(refreshed, rebuilt):
+        assert np.array_equal(a, b)
+
+
+def test_get_filtrations_packed_one_critical_raises():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [0.0, 1.0])
+    st.insert([1], [2.0, 3.0])
+    st.insert([0, 1], [4.0, 5.0])
+    s = mp.Slicer(st)
+
+    with pytest.raises(ValueError):
+        s.get_filtrations(packed=True)
+
+
+def test_get_filtrations_packed_multicritical():
+    x = np.random.uniform(size=(100, 2))
+    st = mp.filtrations.CoreDelaunay(x, ks=np.arange(1, 8).tolist())
+    s = mp.Slicer(st)
+    if not s.is_kcritical:
+        pytest.skip("Expected k-critical slicer for packed multicritical test.")
+
+    indptr, grades = s.get_filtrations(packed=True)
+    dense = s.get_filtrations(view=False)
+
+    assert indptr.shape == (len(s) + 1,)
+    assert indptr[0] == 0
+    assert indptr[-1] == grades.shape[0]
+    assert grades.shape[1] == s.num_parameters
+
+    num_check = min(len(s), 30)
+    for i in range(num_check):
+        a = np.asarray(dense[i], dtype=np.float64).reshape(-1, s.num_parameters)
+        b = grades[indptr[i] : indptr[i + 1]]
+        assert np.allclose(a, b)
+
+    with pytest.raises(ValueError):
+        s.get_filtrations(view=True, packed=True)
+
+
+def test_get_filtration_single_view_multicritical():
+    x = np.random.uniform(size=(100, 2))
+    st = mp.filtrations.CoreDelaunay(x, ks=np.arange(1, 8).tolist())
+    s = mp.Slicer(st)
+    if not s.is_kcritical:
+        pytest.skip(
+            "Expected k-critical slicer for multicritical single filtration test."
+        )
+
+    all_views = s.get_filtrations(view=True)
+    for i in [0, min(len(s) - 1, 5), -1]:
+        got = np.asarray(s.get_filtration(i), dtype=np.float64).reshape(
+            -1, s.num_parameters
+        )
+        ref = np.asarray(all_views[i], dtype=np.float64).reshape(-1, s.num_parameters)
+        assert np.allclose(got, ref)
+
+
+def test_get_boundaries_packed_multicritical():
+    x = np.random.uniform(size=(100, 2))
+    st = mp.filtrations.CoreDelaunay(x, ks=np.arange(1, 8).tolist())
+    s = mp.Slicer(st)
+    if not s.is_kcritical:
+        pytest.skip("Expected k-critical slicer for packed boundaries test.")
+
+    boundaries = s.get_boundaries()
+    indptr, indices = s.get_boundaries(packed=True)
+
+    assert indptr.shape == (len(s) + 1,)
+    assert indptr[0] == 0
+    assert indptr[-1] == indices.shape[0]
+
+    num_check = min(len(s), 30)
+    for i in range(num_check):
+        expected = boundaries[i]
+        got = indices[indptr[i] : indptr[i + 1]]
+        assert np.array_equal(expected, got)
+
+
+def test_get_filtrations_unsqueeze_multicritical():
+    from multipers.grids import evaluate_in_grid
+
+    x = np.random.uniform(size=(100, 2))
+    st = mp.filtrations.CoreDelaunay(x, ks=np.arange(1, 8).tolist())
+    s = mp.Slicer(st)
+    if not s.is_kcritical:
+        pytest.skip("Expected k-critical slicer for multicritical unsqueeze test.")
+
+    ss = s.grid_squeeze()
+    out = ss.get_filtrations(unsqueeze=True)
+
+    idx, grades = ss.get_filtrations(packed=True)
+    unsqueezed_grades = evaluate_in_grid(np.asarray(grades).copy(), ss.filtration_grid)
+
+    num_check = min(len(ss), 30)
+    for i in range(num_check):
+        expected = unsqueezed_grades[idx[i] : idx[i + 1]]
+        got = np.asarray(out[i], dtype=np.float64).reshape(-1, ss.num_parameters)
+        assert np.allclose(got, expected)
+
+
 @pytest.mark.skipif(
     not fd_flag or not mpfree_flag,
     reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
@@ -247,12 +429,14 @@ def test_external(dim, degree):
     X = np.random.uniform(size=(100, dim))
     f = np.random.uniform(size=(X.shape[0]))
     fd = mps.from_function_delaunay(X, f)
-    assert np.array_equal(np.unique(fd.get_dimensions()), np.arange(dim + 2))
+    assert mp.simplex_tree_multi.is_simplextree_multi(fd)
+    assert np.array_equal(np.unique(mp.Slicer(fd).get_dimensions()), np.arange(dim + 2))
     fd_ = mps.from_function_delaunay(X, f, degree=degree)
+    assert mps.is_slicer(fd_)
     assert np.array_equal(
         np.unique(fd_.get_dimensions()), [degree, degree + 1]
     )  ## only does presentations
-    fd_ = fd.minpres(degree=degree)
+    fd_ = mp.Slicer(fd).minpres(degree=degree)
     assert np.array_equal(
         np.unique(fd_.get_dimensions()), [degree, degree + 1, degree + 2]
     )  ## resolution by default
