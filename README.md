@@ -71,7 +71,7 @@ If I missed something, or you want to add something, feel free to open an issue.
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
 [Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration),<br>
 [Michael Kerber](https://www.geometrie.tugraz.at/kerber/) (`mpfree`, `function_delaunay`, `multi_critical` `multi_chunck` backends),<br>
-Jan Jendrysiak (Module Decomposition)x<br>
+Jan Jendrysiak (Module Decomposition).<br>
 
 ## Licensing
 
