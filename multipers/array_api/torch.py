@@ -113,7 +113,6 @@ def unique(x, assume_sorted=False, _mean=False):
     if not assume_sorted:
         x = x.sort().values
     _, c = _t.unique_consecutive(x, return_counts=True)
-    c = c.to(x.device)
     if _mean:
         x = _t.segment_reduce(data=x, reduce="mean", lengths=c, unsafe=True, axis=0)
     else:

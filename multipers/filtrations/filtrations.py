@@ -192,8 +192,9 @@ def DelaunayLowerstar(
             grid = get_exact_grid([distance_values, function])
             _log_step("computed exact grid")
             slicer = slicer.grid_squeeze(grid)
+            _log_step("grid-squeezed")
             slicer = slicer._clean_filtration_grid()
-            _log_step("grid-squeezed and cleaned")
+            _log_step("cleaned grid")
         if reduce_degree >= 0:
             slicer = _mp.Slicer(slicer)
             _log_step("converted back to slicer")
