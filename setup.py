@@ -300,7 +300,11 @@ build_commands = {
     "editable_wheel",
 }
 should_build_aida = any(cmd in requested_commands for cmd in build_commands)
-if should_build_module("ext_interface._aida_interface") and should_build_aida and not IS_WINDOWS:
+if (
+    should_build_module("ext_interface._aida_interface")
+    and should_build_aida
+    and not IS_WINDOWS
+):
     AIDA_STATIC_LIBRARY = build_aida_static_library()
     print("AIDA static library:")
     print(AIDA_STATIC_LIBRARY)
@@ -314,7 +318,10 @@ print(library_dirs)
 
 def cpp_lib_deps(module):
     if module.startswith("ext_interface._"):
-        return ["boost_system", "boost_timer", "boost_chrono", "omp", "gmp"]
+        libs =  ["boost_system", "boost_timer", "boost_chrono", "omp", "gmp"]
+        if IS_WINDOWS:
+            libs.append("vcomp")
+        return libs
     elif module in ["ops", "io"]:
         return []
     else:
@@ -346,6 +353,7 @@ extensions = [
                     "/std:c++20",
                     "/W1",
                     "/WX-",
+                    "/openmp",
                 ]
                 if IS_WINDOWS
                 else [
