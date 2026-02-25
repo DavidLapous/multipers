@@ -324,7 +324,7 @@ extensions = [
             "-std=c++20" if platform.system() != "Windows" else "/std:c++20",
             # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
             "-Wall",
-            "-Wextra" if platform.system() != "Windows" else "",
+            "-Wextra" if platform.system() != "Windows" else "/W1",
             # "-Werror" if platform.system() != "Windows" else "",
         ],
         extra_link_args=[],
