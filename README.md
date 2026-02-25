@@ -38,16 +38,6 @@ We hence recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/w
 Documentation and build instructions are available
 [here](https://davidlapous.github.io/multipers/compilation.html).
 
-## Licensing
-
-`multipers` distributions that include the compiled external interfaces are provided under
-**GPL-3.0-or-later**.
-
-This is due to linked GPL/LGPL third-party components used by the build, notably
-`AIDA`, `Persistence-Algebra`, `function_delaunay`, `mpfree`, `multi_critical`, and
-`multi_chunk`.
-
-See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.
 
 
 ## Features, and linked projects
@@ -79,8 +69,20 @@ If I missed something, or you want to add something, feel free to open an issue.
 [Luis Scoccola](https://luisscoccola.com/) 
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
-[Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration).<br>
-Jan Jendrysiak (Module Decomposition).<br>
+[Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration),<br>
+[Michael Kerber](https://www.geometrie.tugraz.at/kerber/) (`mpfree`, `function_delaunay`, `multi_critical` `multi_chunck` backends),<br>
+Jan Jendrysiak (Module Decomposition)x<br>
+
+## Licensing
+
+`multipers` distributions that include the compiled external interfaces are provided under
+**GPL-3.0-or-later**.
+
+This is due to linked GPL/LGPL third-party components used by the build, notably
+`AIDA`, `Persistence-Algebra`, `function_delaunay`, `mpfree`, `multi_critical`, and
+`multi_chunk`.
+
+See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.
 
 ## Citation
 Please cite this library when using it in scientific publications;
