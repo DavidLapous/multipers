@@ -4,12 +4,19 @@ from multipers.point_measure import add_sms
 from multipers.tests import random_st
 from multipers.tests import assert_sm
 import pytest
+import sys
+from typing import Any
 
 mpfree_flag = mp.io._check_available("mpfree")
-mpo = pytest.importorskip(
-    "multipers.ops",
-    reason="AIDA wasn't compiled. Check the blacklist in `setup.py`.",
+pytestmark = pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="AIDA tests are skipped on Windows.",
 )
+
+if not sys.platform.startswith("win"):
+    import multipers.ops as mpo
+else:
+    mpo: Any = None
 
 
 def test_indecomposable():
