@@ -78,7 +78,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build llvm-openmp -c conda-forge
+        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler cxx-compiler  -c conda-forge 
@@ -104,8 +104,8 @@ jobs:
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export MACOSX_DEPLOYMENT_TARGET=11.0  
-          export CXXFLAGS="-fno-aligned-new" # Macos workaround
-          export CFLAGS="-fno-aligned-new" # Macos workaround
+          # export CXXFLAGS="-fno-aligned-new" # Macos workaround
+          # export CFLAGS="-fno-aligned-new" # Macos workaround
           # export MACOSX_DEPLOYMENT_TARGET="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then

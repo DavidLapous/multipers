@@ -1,6 +1,10 @@
 recursive-include multipers *.py *.so *.tp *.pxd *.h *.pyx *.dll *.dylib *.lib *.pyd
-recursive-include ext/AIDA *.hpp *.cpp
-recursive-include ext/Persistence-Algebra/include *.hpp
+graft ext/AIDA
+graft ext/Persistence-Algebra
+graft ext/function_delaunay
+graft ext/mpfree
+graft ext/multi_chunk
+graft ext/multi_critical
 include _tempita_grid_gen.py
 include LICENSE
 include ext/AIDA/LICENSE
@@ -8,3 +12,4 @@ include ext/Persistence-Algebra/LICENSE
 include THIRD_PARTY_NOTICES.md
 recursive-include licenses *
 global-exclude  multipers/*.cpp
+global-exclude .git
