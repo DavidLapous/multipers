@@ -477,7 +477,7 @@ cdef class PyModule_{{SHORT}}:
             Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
         """
         out = PyMultiDiagram_{{SHORT}}()
-        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py2p_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
+        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py2p_{{SHORT}}(np.ascontiguousarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
         return out
     @staticmethod
     cdef _threshold_bc(bc): 
@@ -507,11 +507,11 @@ cdef class PyModule_{{SHORT}}:
 
         tuple[np.ndarray of shape (num_bars,2)] or tuple[array of shape (num_bar, 2, num_parameters)]
         """
-        basepoint = np.asarray(basepoint, dtype={{PYTYPE}})
+        basepoint = np.ascontiguousarray(basepoint, dtype={{PYTYPE}})
         if direction is None:
             bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
         else:
-            direction = np.asarray(direction, dtype = {{PYTYPE}})
+            direction = np.ascontiguousarray(direction, dtype = {{PYTYPE}})
             bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
@@ -610,7 +610,7 @@ cdef class PyModule_{{SHORT}}:
         else :
             num=len(basepoints)
 
-        basepoints = np.asarray(basepoints, dtype={{PYTYPE}})
+        basepoints = np.ascontiguousarray(basepoints, dtype={{PYTYPE}})
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
             cbasepoints.push_back(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoints[i])))
@@ -843,8 +843,8 @@ cdef class PyModule_{{SHORT}}:
             if len(points.shape) == 1:
                 points = [points]
 
-        cdef {{CTYPE}}[:,:] points_view = np.asarray(points, dtype = {{PYTYPE}})
-        cdef vector[One_critical_filtration[{{CTYPE}}]] c_points = _py2v1c_{{SHORT}}(points_view)
+        cdef {{CTYPE}}[:,::1] points_view = np.ascontiguousarray(points, dtype = {{PYTYPE}})
+        cdef vector[One_critical_filtration[{{CTYPE}}]] c_points = python_2_vect_1c_{{SHORT}}(points_view)
         # cdef One_critical_filtration temp
         # for point in points:
         #     temp.clear()
@@ -1037,10 +1037,12 @@ cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
             )
 
 cdef inline Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
-    cdef vector[{{CTYPE}}] births = _py2p2_{{SHORT}}(summand_dump[0])
-    cdef vector[{{CTYPE}}] deaths = _py2p2_{{SHORT}}(summand_dump[1]) 
+    cdef {{CTYPE}}[:,::1] births_view = np.ascontiguousarray(summand_dump[0], dtype={{PYTYPE}})
+    cdef {{CTYPE}}[:,::1] deaths_view = np.ascontiguousarray(summand_dump[1], dtype={{PYTYPE}})
+    cdef vector[{{CTYPE}}] births = _py2p2_{{SHORT}}(births_view)
+    cdef vector[{{CTYPE}}] deaths = _py2p2_{{SHORT}}(deaths_view)
     cdef int dim = summand_dump[2]
-    return Summand[{{CTYPE}}](births, deaths, summand_dump[0].shape[1], dim)
+    return Summand[{{CTYPE}}](births, deaths, births_view.shape[1], dim)
 
 cdef dump_cmod_{{SHORT}}(Module[{{CTYPE}}]& mod):
     cdef Box[{{CTYPE}}] cbox = mod.get_box()

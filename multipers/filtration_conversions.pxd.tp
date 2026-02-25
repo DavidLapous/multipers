@@ -6,12 +6,12 @@ Filtrations conversions between python and C++
 
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
+  ("int", "np.intc", "int"),
   ("int32_t", "np.int32", "i32"),
   ("int64_t", "np.int64", "i64"),
   ("float", "np.float32", "f32"),
   ("double", "np.float64", "f64"),
 ]
-
 
 import pickle
 with open("build/tmp/_filtration_names.pkl", "rb") as f:
@@ -22,37 +22,45 @@ with open("build/tmp/_filtration_names.pkl", "rb") as f:
 # Python to C++ conversions
 from multipers.filtrations cimport *
 from libcpp.vector cimport vector
+from libcpp.utility cimport pair
 from libcpp cimport bool
 cimport numpy as cnp
 import numpy as np
+from multipers.grids import evaluate_in_grid
+from libc.string cimport memcpy
 from libc.stdint cimport int32_t, int64_t
 from cython.operator cimport dereference
 
 
-
-
+cdef inline _apply_grid_if_any(object out, object grid):
+  if grid is None:
+    return out
+  if isinstance(out, np.ndarray):
+    return evaluate_in_grid(out, grid)
+  return evaluate_in_grid(np.asarray(out), grid)
 
 
 {{for CTYPE, PYTYPE, SHORT in value_types}}
 ###### ------------------- PY TO CPP
 #### ---------- 
 
-cdef inline vector[{{CTYPE}}] _py2p_{{SHORT}}({{CTYPE}}[:] filtration) noexcept nogil:
-    # TODO: Is there no directer way to convert a T[:] into a vector[T]?
-    # A memcpy would be much quicker than a python/cython for loop...
-    # With a continuous memory use, we could also pass the pointers as iterators if we have access to it?
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](len(filtration))
-    for i in range(len(filtration)):
-      f[i] = filtration[i]
+cdef inline vector[{{CTYPE}}] _py2p_{{SHORT}}({{CTYPE}}[::1] filtration) noexcept nogil:
+    cdef Py_ssize_t n = filtration.shape[0]
+    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](n)
+    if n > 0:
+      memcpy(&f[0], &filtration[0], n * sizeof({{CTYPE}}))
     return f
 
-cdef inline vector[{{CTYPE}}] _py2p2_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[0] * filtrations.shape[1])
-    k = 0
-    for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-          f[k] = filtrations[i,j]
-          k = k + 1
+cdef inline vector[{{CTYPE}}] _py2p2_{{SHORT}}({{CTYPE}}[:,::1] filtrations) noexcept nogil:
+    cdef Py_ssize_t num_pts = filtrations.shape[0]
+    cdef Py_ssize_t num_parameters = filtrations.shape[1]
+    cdef Py_ssize_t i
+    cdef Py_ssize_t k
+    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](num_pts * num_parameters)
+    if num_pts > 0 and num_parameters > 0:
+      for i in range(num_pts):
+        k = i * num_parameters
+        memcpy(&f[k], &filtrations[i, 0], num_parameters * sizeof({{CTYPE}}))
     return f
 
 cdef inline vector[Point[{{CTYPE}}]] _py2vp_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
@@ -65,42 +73,34 @@ cdef inline vector[Point[{{CTYPE}}]] _py2vp_{{SHORT}}({{CTYPE}}[:,:] filtrations
         out.emplace_back(f)
     return out
 
-cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
-    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[0] * filtrations.shape[1])
-    cdef int k = 0;
-    for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-            f[k] = filtrations[i,j]
-            k = k + 1
-    cdef Multi_critical_filtration[{{CTYPE}}] out = Multi_critical_filtration[{{CTYPE}}](f.begin(), f.end(), filtrations.shape[1])
+cdef inline Multi_critical_filtration[{{CTYPE}}] _py2kc_{{SHORT}}({{CTYPE}}[:,::1] filtrations) noexcept nogil:
+    cdef vector[{{CTYPE}}] values = _py2p2_{{SHORT}}(filtrations)
+    cdef Multi_critical_filtration[{{CTYPE}}] out = Multi_critical_filtration[{{CTYPE}}](values.begin(), values.end(), filtrations.shape[1])
     out.simplify()
     return out
 
-cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}({{CTYPE}}[:] filtration) noexcept nogil:
+cdef inline One_critical_filtration[{{CTYPE}}] _py21c_{{SHORT}}({{CTYPE}}[::1] filtration) noexcept nogil:
     cdef One_critical_filtration[{{CTYPE}}] out = _py2p_{{SHORT}}(filtration)
     return out
 
 
-cdef inline vector[One_critical_filtration[{{CTYPE}}]] _py2v1c_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
-    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+cdef inline vector[One_critical_filtration[{{CTYPE}}]] python_2_vect_1c_{{SHORT}}({{CTYPE}}[:,::1] filtrations) noexcept nogil:
     cdef vector[One_critical_filtration[{{CTYPE}}]] out
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[1])
+    cdef vector[{{CTYPE}}] f
+    cdef Py_ssize_t i
     out.reserve(filtrations.shape[0])
     for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-          f[j] = filtrations[i,j]
+        f = _py2p_{{SHORT}}(filtrations[i])
         out.emplace_back(f)
     return out
 
-cdef inline vector[Multi_critical_filtration[{{CTYPE}}]] _py2vkc_{{SHORT}}({{CTYPE}}[:,:] filtrations) noexcept nogil:
-    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+cdef inline vector[Multi_critical_filtration[{{CTYPE}}]] python_2_vect_kc_{{SHORT}}({{CTYPE}}[:,::1] filtrations) noexcept nogil:
     cdef vector[Multi_critical_filtration[{{CTYPE}}]] out
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[1])
+    cdef vector[{{CTYPE}}] f
+    cdef Py_ssize_t i
     out.reserve(filtrations.shape[0])
     for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-          f[j] = filtrations[i,j]
+        f = _py2p_{{SHORT}}(filtrations[i])
         out.emplace_back(f)
     return out
 
@@ -158,8 +158,11 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False, bool r
   cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,0)))
   numpy_view = np.asarray(data_view, dtype={{f["py_value_type"]}})
   if raw:
-    return numpy_view
-  return np.concatenate([numpy_view[:,None], np.arange(k, dtype={{f["py_value_type"]}})[:,None]], axis=1)
+    return np.array(numpy_view, copy=True) if copy else numpy_view
+  out = np.empty((k, num_parameters), dtype={{f["py_value_type"]}})
+  out[:, 0] = numpy_view
+  out[:, 1] = np.arange(k, dtype={{f["py_value_type"]}})
+  return out
 
   {{else}}
 
@@ -187,39 +190,185 @@ cdef inline  vect_{{f['python']}}_2_python(vector[{{f['python']}}]& x, bool copy
   cdef Py_ssize_t num_stuff = x.size()
   return [{{f['python']}}_2_python(&(x[i]), copy=copy, raw=raw) for i in range(num_stuff)]
 
+cdef inline Py_ssize_t _infer_num_parameters_{{f['python']}}(vector[{{f['python']}}]& x, Py_ssize_t num_parameters):
+  if num_parameters >= 0:
+    return num_parameters
+  if x.size() == 0:
+    return 0
+  return x[0].num_parameters()
+
+cdef inline vect_{{f['python']}}_2_packed(vector[{{f['python']}}]& x, bool raw=False, Py_ssize_t num_parameters=-1):
+  cdef Py_ssize_t num_stuff = x.size()
+  cdef Py_ssize_t i, j, g
+  cdef Py_ssize_t total_grades, num_gen, offset
+  cdef {{f['c_value_type']}} fill_value
+  cdef {{f['c_value_type']}}[::1] grades_1d_view
+  cdef {{f['c_value_type']}}[:, ::1] grades_view
+
+  
+  indptr = np.empty(num_stuff + 1, dtype=np.int64)
+  cdef int64_t[::1] indptr_view = indptr
+
+  indptr_view[0] = 0
+
+  {{if f["container"] == "Degree_rips_bifiltration"}}
+  for i in range(num_stuff):
+    num_gen = x[i].num_generators()
+    indptr_view[i + 1] = indptr_view[i] + num_gen
+
+  total_grades = indptr_view[num_stuff]
+
+  if raw: # degree rips container only stores the 1st parameter
+    grades_1d = np.empty(total_grades, dtype={{f['py_value_type']}})
+    grades_1d_view = grades_1d
+    with nogil:
+      for i in range(num_stuff):
+        num_gen = x[i].num_generators()
+        offset = indptr_view[i]
+        if num_gen > 0:
+          memcpy(&grades_1d_view[offset], &x[i](0, 0), num_gen * sizeof({{f['c_value_type']}}))
+    return indptr, grades_1d
+
+  grades = np.empty((total_grades, 2), dtype={{f['py_value_type']}})
+  grades_view = grades
+  with nogil:
+    for i in range(num_stuff):
+      num_gen = x[i].num_generators()
+      offset = indptr_view[i]
+      for g in range(num_gen):
+        grades_view[offset + g, 0] = x[i](g, 0)
+        grades_view[offset + g, 1] = g
+  return indptr, grades
+
+  {{elif f["container"] in ["Multi_parameter_filtration", "Dynamic_multi_parameter_filtration"] and f["multicritical"]}}
+  for i in range(num_stuff):
+    num_gen = x[i].num_generators()
+    indptr_view[i + 1] = indptr_view[i] + num_gen
+
+  total_grades = indptr_view[num_stuff]
+  num_parameters = _infer_num_parameters_{{f['python']}}(x, num_parameters)
+
+  grades = np.empty((total_grades, num_parameters), dtype={{f['py_value_type']}})
+  grades_view = grades
+
+  with nogil:
+    for i in range(num_stuff):
+      num_gen = x[i].num_generators()
+      offset = indptr_view[i]
+      if not x[i].is_finite():
+        for g in range(num_gen):
+          fill_value = x[i](g, 0)
+          for j in range(num_parameters):
+            grades_view[offset + g, j] = fill_value
+      else:
+        for g in range(num_gen):
+          for j in range(num_parameters):
+            grades_view[offset + g, j] = x[i](g, j)
+  return indptr, grades
+
+  {{elif f["container"] in ["Multi_parameter_filtration", "Dynamic_multi_parameter_filtration"]}}
+  for i in range(num_stuff):
+    indptr_view[i + 1] = i + 1
+
+  num_parameters = _infer_num_parameters_{{f['python']}}(x, num_parameters)
+
+  grades = np.empty((num_stuff, num_parameters), dtype={{f['py_value_type']}})
+  grades_view = grades
+
+  with nogil:
+    for i in range(num_stuff):
+      if not x[i].is_finite():
+        fill_value = x[i](0, 0)
+        for j in range(num_parameters):
+          grades_view[i, j] = fill_value
+      else:
+        for j in range(num_parameters):
+          grades_view[i, j] = x[i](0, j)
+  return indptr, grades
+
+  {{else}}
+  raise RuntimeError("Unsupported filtration container: {{f['container']}}")
+  {{endif}}
+
+{{if not f["multicritical"] and f["container"] != "Degree_rips_bifiltration"}}
+cdef inline vect_{{f['python']}}_2_numpy_copy(vector[{{f['python']}}]& x, Py_ssize_t num_parameters = -1):
+  cdef Py_ssize_t num_stuff = x.size()
+  cdef {{f['c_value_type']}} fill_value
+
+  num_parameters = _infer_num_parameters_{{f['python']}}(x, num_parameters)
+
+  out = np.empty((num_stuff, num_parameters), dtype={{f['py_value_type']}})
+  cdef {{f['c_value_type']}}[:, ::1] out_view = out
+
+  with nogil:
+    for i in range(num_stuff):
+      if not x[i].is_finite():
+        fill_value = x[i](0,0)
+        for j in range(num_parameters):
+          out_view[i, j] = fill_value
+      else:
+        # for j in range(num_parameters):
+        #   out_view[i, j] = x[i](0,j)
+        if num_parameters > 0:
+          memcpy(&out_view[i, 0], &x[i](0, 0), num_parameters * sizeof({{f['c_value_type']}}))
+
+  return out
+{{endif}}
+
+cdef inline vect_{{f['python']}}_2_python_copy(
+    vector[{{f['python']}}]& x,
+    bool raw=False,
+    Py_ssize_t num_parameters=-1,
+    grid=None,
+):
+  {{if f["container"] == "Degree_rips_bifiltration" and f["multicritical"]}}
+  idx, grades = vect_{{f['python']}}_2_packed(x, raw=raw, num_parameters=num_parameters)
+  grades = _apply_grid_if_any(grades, grid)
+  return [grades[idx[i]:idx[i + 1]] for i in range(len(idx) - 1)]
+
+  {{elif f["container"] in ["Multi_parameter_filtration", "Dynamic_multi_parameter_filtration"] and f["multicritical"]}}
+  idx, grades = vect_{{f['python']}}_2_packed(x, raw=raw, num_parameters=num_parameters)
+  grades = _apply_grid_if_any(grades, grid)
+  return [[row for row in grades[idx[i]:idx[i + 1]]] for i in range(len(idx) - 1)]
+
+  {{elif f["container"] in ["Multi_parameter_filtration", "Dynamic_multi_parameter_filtration"]}}
+  if raw:
+    out = vect_{{f['python']}}_2_python(x, copy=True, raw=True)
+  else:
+    out = vect_{{f['python']}}_2_numpy_copy(x, num_parameters)
+  return _apply_grid_if_any(out, grid)
+
+  {{elif f["container"] == "Degree_rips_bifiltration"}}
+  out = vect_{{f['python']}}_2_python(x, copy=True, raw=raw)
+  return _apply_grid_if_any(out, grid)
+
+  {{else}}
+  raise RuntimeError("Unsupported filtration container: {{f['container']}}")
+  {{endif}}
+
 
 {{if f["multicritical"]}}
-cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:,:] filtrations) noexcept nogil:
-    cdef vector[{{CTYPE}}] f = vector[{{CTYPE}}](filtrations.shape[0] * filtrations.shape[1])
-    cdef int k = 0;
-    for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-            f[k] = filtrations[i,j]
-            k = k + 1
-    cdef {{f['python']}} out = {{f['python']}}(f.begin(), f.end(), filtrations.shape[1])
+cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:,::1] filtrations) noexcept nogil:
+    cdef vector[{{f['c_value_type']}}] values = _py2p2_{{f['short_value_type']}}(filtrations)
+    cdef {{f['python']}} out = {{f['python']}}(values.begin(), values.end(), filtrations.shape[1])
     out.simplify()
     return out
 {{else}}
 
 
-cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[:] filtration) noexcept nogil:
-  cdef int num_parameters = filtration.shape[0]
-  cdef {{f["python"]}} out = {{f['python']}}(num_parameters) 
-  cdef {{f['c_value_type']}}* x
-  for i in range(num_parameters):
-    x = &out(0,i)
-    x[0] = filtration[i]
+cdef inline {{f['python']}} python_2_{{f['python']}}({{f["c_value_type"]}}[::1] filtration) noexcept nogil:
+  cdef vector[{{f['c_value_type']}}] values = _py2p_{{f['short_value_type']}}(filtration)
+  cdef {{f["python"]}} out = {{f['python']}}(values)
   return out
 {{endif}}
 
-cdef inline vector[{{f['python']}}] python_2_vect_{{f['python']}}({{f["c_value_type"]}}[:,:] filtrations) noexcept nogil:
-    # cdef {{CTYPE}}[:,:] filtrations = np.asarray(filtrations_, dtype={{PYTYPE}})
+cdef inline vector[{{f['python']}}] python_2_vect_{{f['python']}}({{f["c_value_type"]}}[:,::1] filtrations) noexcept nogil:
     cdef vector[{{f['python']}}] out
-    cdef vector[{{f["c_value_type"]}}] f = vector[{{f["c_value_type"]}}](filtrations.shape[1])
+    cdef vector[{{f["c_value_type"]}}] f
+    cdef Py_ssize_t i
     out.reserve(filtrations.shape[0])
     for i in range(filtrations.shape[0]):
-        for j in range(filtrations.shape[1]):
-          f[j] = filtrations[i,j]
+        f = _py2p_{{f['short_value_type']}}(filtrations[i])
         out.emplace_back(f)
     return out
 

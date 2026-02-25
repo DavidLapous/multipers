@@ -53,11 +53,16 @@ def threshold_slice(a, m,M):
     return a
 
 
+def _exact_grid(x, api, _mean):
+    return tuple(api.unique(api.astensor(f), _mean=_mean) for f in x)
+
+
 def get_exact_grid(
         x,
         threshold_min=None,
         threshold_max=None,
         bool return_api=False,
+        bool _mean = False,
     ):
     """
     Computes an initial exact grid 
@@ -71,27 +76,27 @@ def get_exact_grid(
     if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
         initial_grid = x.filtration_grid
         api = api_from_tensors(*initial_grid)
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
+        initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_slicer(x):
         initial_grid = x.get_filtrations_values().T
         api = npapi
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
+        initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_simplextree_multi(x):
         initial_grid = x.get_filtration_grid()
         api = npapi
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
+        initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_mma(x):
         initial_grid = x.get_filtration_values()
         api = npapi
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in initial_grid)
+        initial_grid = _exact_grid(initial_grid, api, _mean)
     elif isinstance(x, np.ndarray):
         api = npapi
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in x)
+        initial_grid = _exact_grid(x, api, _mean)
     else:
         if len(x) == 0:
             return [], npapi
         api = api_from_tensors(*x)
-        initial_grid = tuple(api.unique(api.astensor(f)) for f in x)
+        initial_grid = _exact_grid(x, api, _mean)
 
     cdef int num_parameters = len(initial_grid)
 
@@ -122,6 +127,7 @@ def compute_grid(
         bool dense = False,
         threshold_min = None,
         threshold_max = None,
+        bool _mean = False,
         ):
     """
     Computes a grid from filtration values, using some strategy.

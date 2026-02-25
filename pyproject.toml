@@ -32,8 +32,27 @@ dependencies = [
   "pot"
 ]
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "GPL-3.0-or-later"
+license-files = [
+  "LICENSE",
+  "ext/AIDA/LICENSE",
+  "ext/Persistence-Algebra/LICENSE",
+  "ext/function_delaunay/COPYING",
+  "ext/function_delaunay/phat/COPYING",
+  "ext/function_delaunay/phat/COPYING.LESSER",
+  "ext/mpfree/COPYING",
+  "ext/mpfree/COPYING.LESSER",
+  "ext/mpfree/phat_mod/COPYING",
+  "ext/mpfree/phat_mod/COPYING.LESSER",
+  "ext/multi_chunk/COPYING",
+  "ext/multi_chunk/COPYING.LESSER",
+  "ext/multi_critical/COPYING",
+  "ext/multi_critical/COPYING.LESSER",
+  "ext/multi_critical/phat_mod/COPYING",
+  "ext/multi_critical/phat_mod/COPYING.LESSER",
+  "licenses/LGPL-3.0-or-later.txt",
+  "THIRD_PARTY_NOTICES.md",
+]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python :: 3.10",
@@ -58,4 +77,3 @@ tracker = "https://github.com/DavidLapous/multipers/issues"
 # # automatic search for packages
 [tool.setuptools.packages.find]
 include = ["multipers*"]
-

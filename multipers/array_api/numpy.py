@@ -19,7 +19,6 @@ max = _np.max
 repeat_interleave = _np.repeat
 cdist = cdist  # type: ignore[no-redef]
 pdist = pdist  # type: ignore[no-redef]
-unique = _np.unique
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -30,6 +29,10 @@ sin = _np.sin
 cos = _np.cos
 matmul = _np.matmul
 einsum = _np.einsum
+
+
+def unique(x, assume_sorted=False, _mean=False):
+    return _np.unique(x)
 
 
 def argsort(x, axis=-1):

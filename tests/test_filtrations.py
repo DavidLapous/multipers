@@ -63,7 +63,11 @@ def test_delaunaylowerstar(npts, dim):
     distance_matrix = cdist(points, points)
     s = mpf.DelaunayLowerstar(points=points, function=f)
 
-    st = mp.slicer.to_simplextree(s)
+    st = (
+        s
+        if mp.simplex_tree_multi.is_simplextree_multi(s)
+        else mp.slicer.to_simplextree(s)
+    )
 
     assert st.num_parameters == 2, "Bad number of parameters"
     F1 = np.asarray([g[1] for s, g in st.get_skeleton(0)])

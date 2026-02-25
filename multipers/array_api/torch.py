@@ -1,4 +1,3 @@
-import numpy as _np
 import torch as _t
 import multipers.array_api as _mpapi
 import sys
@@ -104,19 +103,23 @@ def sort(x, axis=-1):
 
 
 # in our context, this allows to get a correct gradient.
-def unique(x, assume_sorted=False, _mean=True):
+def unique(x, assume_sorted=False, _mean=False):
     if not x.requires_grad:
         return x.unique(sorted=assume_sorted)
     if x.ndim != 1:
         raise ValueError(f"Got ndim!=1. {x=}")
+    if x.numel() == 0:
+        return x
     if not assume_sorted:
         x = x.sort().values
-    _, c = _t.unique(x, sorted=True, return_counts=True)
+    _, c = _t.unique_consecutive(x, return_counts=True)
+    c = c.to(x.device)
     if _mean:
         x = _t.segment_reduce(data=x, reduce="mean", lengths=c, unsafe=True, axis=0)
     else:
-        c = _np.concatenate([[0], _np.cumsum(c[:-1])])
-        x = x[c]
+        starts = _t.cumsum(c, dim=0)
+        starts.sub_(c)
+        x = x[starts]
     return x
 
 

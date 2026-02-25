@@ -314,9 +314,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         # filtration = np.asarray(filtration, dtype={{PYTYPE}})[None,:]
         # self.get_ptr().assign_simplex_filtration(simplex, _py2kc_{{SHORT_VALUE_TYPE}}(filtration))
         {{if IS_KCRITICAL}}
-        filtration = np.asarray(filtration, dtype={{PYTYPE}})[None,:]
+        filtration = np.ascontiguousarray(filtration, dtype={{PYTYPE}})[None,:]
         {{else}}
-        filtration = np.asarray(filtration, dtype={{PYTYPE}})
+        filtration = np.ascontiguousarray(filtration, dtype={{PYTYPE}})
         {{endif}}
         self.get_ptr().assign_simplex_filtration(simplex, {{P2C_Fil}}(filtration))
         return self
@@ -392,7 +392,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         """
         Turns this simplicial complex into a flag
         complex by resetting filtration values of
-        simplices of dimension > `dim` by 
+        simplices of dimension >= `dim` by 
         lower-star values.
         """
         cdef Simplex_tree_multi_simplices_iterator[{{PyFil}}] it = self.get_ptr().get_simplices_iterator_begin()
@@ -474,7 +474,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         if filtration is None:
             filtration = np.array([-np.inf]*num_parameters, dtype = float)
 
-        filtration = np.asarray(filtration, dtype = {{PYTYPE}})
+        filtration = np.ascontiguousarray(filtration, dtype = {{PYTYPE}})
 
         {{if IS_KCRITICAL}}
         from itertools import chain, combinations
@@ -519,7 +519,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         cdef Py_ssize_t n = vertex_array_.shape[1]
         cdef int num_parameters = self.get_ptr().num_parameters()    
         cdef bool empty_filtration = (filtrations.size == 0)
-        cdef {{CTYPE}}[:,:] F_view = np.asarray(filtrations, dtype = {{PYTYPE}})
+        cdef {{CTYPE}}[:,::1] F_view = np.ascontiguousarray(filtrations, dtype = {{PYTYPE}})
 
         if not empty_filtration :
             assert filtrations.shape[0] == n, f"inconsistent sizes for vertex_array and filtrations\
@@ -715,8 +715,8 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         # TODO : multi-critical
         # cdef vector[int] vertices = np.unique(vertex_array)
 
-        cdef int[:,:] vertex_array_ = np.asarray(vertex_array, dtype=np.int32) 
-        cdef {{CTYPE}}[:,:,:] filtrations_ = np.asarray(filtrations, dtype={{PYTYPE}}) 
+        cdef int32_t[:,::1] vertex_array_ = np.ascontiguousarray(vertex_array, dtype=np.int32) 
+        cdef {{CTYPE}}[:,:,::1] filtrations_ = np.ascontiguousarray(filtrations, dtype={{PYTYPE}}) 
         cdef Py_ssize_t k = vertex_array_.shape[0]
         cdef Py_ssize_t n = vertex_array_.shape[1]
         cdef Py_ssize_t max_crit_deg = filtrations_.shape[1]
@@ -999,9 +999,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         :type min_dim: int.
         """
         {{if IS_KCRITICAL}}
-        cdef {{PyFil}} cfiltration = _py2kc_{{SHORT_VALUE_TYPE}}(np.asarray(filtration, dtype = {{PYTYPE}})[None,:])
+        cdef {{PyFil}} cfiltration = _py2kc_{{SHORT_VALUE_TYPE}}(np.ascontiguousarray(filtration, dtype = {{PYTYPE}})[None,:])
         {{else}}
-        cdef {{PyFil}} cfiltration = _py21c_{{SHORT_VALUE_TYPE}}(np.asarray(filtration, dtype = {{PYTYPE}}))
+        cdef {{PyFil}} cfiltration = _py21c_{{SHORT_VALUE_TYPE}}(np.ascontiguousarray(filtration, dtype = {{PYTYPE}}))
         {{endif}}
         self.get_ptr().reset_filtration(cfiltration, min_dim)
         return self
@@ -1529,7 +1529,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         
         self:SimplexTreeMulti
         """
-        cdef vector[{{CTYPE}}] c_F = _py2p_{{SHORT_VALUE_TYPE}}(np.asarray(F,dtype={{PYTYPE}}))
+        cdef vector[{{CTYPE}}] c_F = _py2p_{{SHORT_VALUE_TYPE}}(np.ascontiguousarray(F,dtype={{PYTYPE}}))
         with nogil:
             self.get_ptr().fill_lowerstar(c_F, parameter)
         return self
@@ -2107,4 +2107,3 @@ def _rank_signed_measure(simplextree, vector[indices_type] degrees, mass_default
     #      from multipers.plots import plot_signed_measures
     #      plot_signed_measures(out)
     return out
-

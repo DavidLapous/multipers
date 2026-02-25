@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from time import perf_counter
 from typing import Optional
 from warnings import warn
 
@@ -9,7 +10,7 @@ from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.filtrations.density import DTM, available_kernels
-from multipers.grids import compute_grid
+from multipers.grids import compute_grid, get_exact_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 import multipers as _mp
 
@@ -134,44 +135,76 @@ def DelaunayLowerstar(
     """
     from multipers.slicer import from_function_delaunay
 
-    if flagify and reduce_degree >= 0:
-        raise ValueError(
-            "Got {reduce_degree=} and {flagify=}. Cannot flagify with reduce degree."
-        )
+    t0 = perf_counter()
+    t_prev = t0
+
+    def _log_step(label: str):
+        nonlocal t_prev
+        if verbose:
+            now = perf_counter()
+            print(f"[DelaunayLowerstar] {label}: {now - t_prev:.3f}s")
+            t_prev = now
+
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
     api = api_from_tensors(points, function)
+    _log_step("resolved backend")
     if not flagify and (api.has_grad(points) or api.has_grad(function)):
         warn("Cannot keep points gradient unless using `flagify=True`.")
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
+    _log_step("converted inputs")
     assert function.ndim == 1, (
         "Delaunay Lowerstar is only compatible with 1 additional parameter."
     )
     slicer = from_function_delaunay(
         api.asnumpy(points),
         api.asnumpy(function),
-        degree=reduce_degree,
+        degree=-1 if flagify else reduce_degree,
         vineyard=vineyard,
         dtype=dtype,
         verbose=verbose,
         clear=clear,
     )
+    _log_step("built function-delaunay")
+    if flagify:
+        from multipers.simplex_tree_multi import is_simplextree_multi
+        from multipers.slicer import to_simplextree
+
+        max_dim = -1 if reduce_degree == -1 else reduce_degree + 1
+        if is_simplextree_multi(slicer):
+            slicer = slicer.copy()
+            if max_dim >= 0:
+                slicer.prune_above_dimension(max_dim)
+            _log_step("copied/pruned simplextree")
+        else:
+            slicer = to_simplextree(slicer, max_dim=max_dim)
+            _log_step("converted slicer to simplextree")
+        slicer.flagify(2)
+        _log_step("flagified")
+
+        if api.has_grad(points) or api.has_grad(function):
+            distances = api.pdist(points) / 2
+            zero = api.zeros(1, dtype=distances.dtype)
+            zero = api.to_device(zero, api.device(distances))
+            distance_values = api.cat([distances, zero])
+            grid = get_exact_grid([distance_values, function])
+            _log_step("computed exact grid")
+            slicer = slicer.grid_squeeze(grid)
+            slicer = slicer._clean_filtration_grid()
+            _log_step("grid-squeezed and cleaned")
+        if reduce_degree >= 0:
+            slicer = _mp.Slicer(slicer)
+            _log_step("converted back to slicer")
+
     if reduce_degree >= 0:
         # Force resolution to avoid confusion with hilbert.
         slicer = slicer.minpres(degree=reduce_degree, force=True)
-    if flagify:
-        from multipers.slicer import to_simplextree
+        _log_step("computed minpres")
 
-        slicer = to_simplextree(slicer)
-        slicer.flagify(2)
-
-        if api.has_grad(points) or api.has_grad(function):
-            distances = api.cdist(points, points) / 2
-            grid = compute_grid([distances.ravel(), function])
-            slicer = slicer.grid_squeeze(grid)
-            slicer = slicer._clean_filtration_grid()
+    if verbose:
+        print(f"[DelaunayLowerstar] total: {perf_counter() - t0:.3f}s")
 
     return slicer
 

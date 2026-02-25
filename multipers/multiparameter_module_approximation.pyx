@@ -73,7 +73,7 @@ def module_approximation_from_slicer(
     # if slicer.is_squeezed and unsqueeze_grid not None:
     #     raise ValueError("Got a squeezed slicer. Should have been unsqueezed before !")
 
-    direction_ = np.asarray(direction, dtype=slicer.dtype)
+    direction_ = np.ascontiguousarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
         if box is None:
@@ -238,9 +238,17 @@ def module_approximation(
         if verbose:
             print(f"Using {box=}.",flush=True)
 
-    box = np.asarray(box)
+    box = np.asarray(box, dtype=np.float64)
     if box.ndim !=2:
         raise ValueError(f"Invalid box dimension. Got {box.ndim=} != 2")
+    scales = box[1] - box[0]
+    scales /= scales.max()
+    if np.any(scales<.1):
+        warn(
+            f"Squewed filtration detected. Found {scales=}. "
+            "Consider rescaling the filtration for interpretable results."
+        )
+
     # empty coords
     zero_idx = box[1] == box[0]
     if np.any(zero_idx):
@@ -286,4 +294,3 @@ Returning the trivial module.
             unsqueeze_grid=unsqueeze_grid,
             n_jobs=n_jobs,
             )
-
