@@ -270,7 +270,8 @@ def build_aida_static_library():
 
 
 AIDA_STATIC_LIBRARY = None
-if arch_module_blacklist("ext_interface._aida_interface"):
+is_sdist = "sdist" in sys.argv[1:]
+if arch_module_blacklist("ext_interface._aida_interface") and not is_sdist:
     AIDA_STATIC_LIBRARY = build_aida_static_library()
     print("AIDA static library:")
     print(AIDA_STATIC_LIBRARY)
