@@ -30,13 +30,24 @@ Pre-releases are available via
 ```sh
 pip install --pre multipers
 ```
-These release usually contain small bugfixes or unstable new features.
+These releases typically include minor bug fixes or unstable new features.
 
 Windows support is experimental, and some core dependencies are not available on Windows.
 We hence recommend Windows user to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/).
 <br>
-A documentation and building instructions are available
+Documentation and build instructions are available
 [here](https://davidlapous.github.io/multipers/compilation.html).
+
+## Licensing
+
+`multipers` distributions that include the compiled external interfaces are provided under
+**GPL-3.0-or-later**.
+
+This is due to linked GPL/LGPL third-party components used by the build, notably
+`AIDA`, `Persistence-Algebra`, `function_delaunay`, `mpfree`, `multi_critical`, and
+`multi_chunk`.
+
+See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.
 
 
 ## Features, and linked projects

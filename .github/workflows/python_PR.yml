@@ -81,7 +81,7 @@ jobs:
         micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
-        micromamba install c-compiler cxx-compiler  -c conda-forge 
+        micromamba install c-compiler cxx-compiler clang clangxx  -c conda-forge 
 
     - name: tree
       if: ${{ matrix.os != 'windows-latest' }}
@@ -112,6 +112,19 @@ jobs:
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
+        fi
+
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+
+          export CC=clang-cl
+          export CXX=clang-cl
+          export LDSHARED="clang-cl -shared"
+
+          export CFLAGS="${CFLAGS} -fopenmp"
+          export CXXFLAGS="${CXXFLAGS} -fopenmp"
+          export LDFLAGS="${LDFLAGS} -fopenmp"
+
+          which clang-cl
         fi
         python setup.py build_ext -j4 --inplace
         python -m build . --no-isolation --wheel
