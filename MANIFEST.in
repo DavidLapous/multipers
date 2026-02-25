@@ -1,20 +1,9 @@
 recursive-include multipers *.py *.tp *.pxd *.h *.pyx
-graft ext/AIDA
-graft ext/Persistence-Algebra
-graft ext/function_delaunay
-graft ext/mpfree
-graft ext/multi_chunk
-graft ext/multi_critical
-prune ext/Persistence-Algebra/test_presentations
-prune ext/Persistence-Algebra/tests
-prune ext/mpfree/sample_files
-prune ext/multi_chunk/sample_files
-prune ext/multi_critical/sample_files
-prune ext/AIDA/lists_of_decompositions
+prune ext
+include ext/AIDA/CMakeLists.txt
+recursive-include ext *.h *.hpp *.cpp LICENSE COPYING COPYING.LESSER
 include _tempita_grid_gen.py
 include LICENSE
-include ext/AIDA/LICENSE
-include ext/Persistence-Algebra/LICENSE
 include THIRD_PARTY_NOTICES.md
 recursive-include licenses *
 recursive-exclude multipers *.cpp
