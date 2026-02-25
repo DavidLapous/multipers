@@ -77,11 +77,18 @@ cython_modules = [
     "grids",
     "slicer",
     "ops",
+    "ext_interface._mpfree_interface",
+    "ext_interface._aida_interface",
+    "ext_interface._function_delaunay_interface",
+    "ext_interface._multi_critical_interface",
 ]
 
 
 def arch_module_blacklist(module: str):
-    if platform.system() == "Windows" and module == "ops":
+    if platform.system() == "Windows" and module in [
+        "ops",
+        "ext_interface._aida_interface",
+    ]:
         # Persistence-Algebra doesn't compile yet here
         return False
     return True
@@ -133,22 +140,67 @@ cython_compiler_directives = {
 # removes lib / python3.x / site-packages
 PYTHON_ENV_PATH = Path(sys.prefix)
 
-cpp_dirs = [
+base_cpp_dirs = [
     "multipers/gudhi",
     "multipers",
-    # "multipers/multiparameter_module_approximation",
-    # "multipers/multi_parameter_rank_invariant",
-    # "multipers/tensor",
     np.get_include(),
     PYTHON_ENV_PATH / "include",  # Unix
+    PYTHON_ENV_PATH / "include" / "eigen3",  # Eigen
     PYTHON_ENV_PATH / "Library" / "include",  # Windows
-    "/usr/include/",
-    "/usr/local/include",
-    "AIDA/src",
-    "AIDA/include",
-    "Persistence-Algebra/include",
+    # "/usr/include/",
+    # "/usr/local/include",
 ]
-cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in cpp_dirs]
+base_cpp_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in base_cpp_dirs]
+
+# Include directories follow each backend's own CMake include layout.
+ext_cpp_dirs = {
+    "aida": [
+        "ext/AIDA/src",
+        "ext/AIDA/include",
+        "ext/Persistence-Algebra/include",
+    ],
+    "mpfree": [
+        "ext/mpfree/include",
+        "ext/mpfree/phat_mod/include",
+        "ext/mpfree/mpp_utils_mod/include",
+        "ext/mpfree/scc_mod/include",
+    ],
+    "multi_critical": [
+        # Keep SCC include first for this backend.
+        "ext/multi_critical/scc_mod/include",
+        "ext/multi_critical/include",
+        "ext/multi_critical/phat_mod/include",
+        "ext/multi_critical/mpp_utils_mod/include",
+        "ext/multi_critical/mpfree_mod/include",
+        "ext/multi_critical/multi_chunk_mod/include",
+    ],
+    "function_delaunay": [
+        "ext/function_delaunay/include",
+        "ext/function_delaunay/phat/include",
+        "ext/function_delaunay/mpp_utils_mod/include",
+        "ext/function_delaunay/scc_mod/include",
+        "ext/function_delaunay/mpfree_mod/include",
+        "ext/function_delaunay/multi_chunk_mod/include",
+    ],
+}
+ext_cpp_dirs = {
+    key: [str(Path(stuff).expanduser().resolve()) for stuff in values]
+    for key, values in ext_cpp_dirs.items()
+}
+
+
+def module_cpp_dirs(module: str):
+    dirs = list(base_cpp_dirs)
+    if module == "ext_interface._aida_interface":
+        dirs.extend(ext_cpp_dirs["aida"])
+    elif module == "ext_interface._mpfree_interface":
+        dirs.extend(ext_cpp_dirs["mpfree"])
+    elif module == "ext_interface._multi_critical_interface":
+        dirs.extend(ext_cpp_dirs["multi_critical"])
+    elif module == "ext_interface._function_delaunay_interface":
+        dirs.extend(ext_cpp_dirs["function_delaunay"])
+    return dirs
+
 
 library_dirs = [
     PYTHON_ENV_PATH / "lib",  # Unix
@@ -160,30 +212,81 @@ library_dirs = [str(Path(stuff).expanduser().resolve()) for stuff in library_dir
 
 ## AIDA stuff
 
-AIDA_PATHS = [
-    Path("AIDA/src"),
-    Path("AIDA/include"),
-]
 
-# Recursively collect all .cpp files from the AIDA directories
-AIDA_CPP_SOURCES = []
-for p in AIDA_PATHS:
-    # Use Path.rglob('*.cpp') to recursively find all .cpp files
-    AIDA_CPP_SOURCES.extend([str(file) for file in p.rglob("*.cpp")])
+def build_aida_static_library():
+    source_dir = Path("ext/AIDA").resolve()
+    build_dir = Path("build") / "aida"
+    cache_file = build_dir / "CMakeCache.txt"
+    if cache_file.exists():
+        cache_text = cache_file.read_text(encoding="utf-8", errors="ignore")
+        if str(source_dir) not in cache_text:
+            shutil.rmtree(build_dir)
+    build_dir.mkdir(parents=True, exist_ok=True)
 
-print("AIDA files:")
-print(AIDA_CPP_SOURCES)
+    configure_cmd = [
+        "cmake",
+        "-S",
+        str(source_dir),
+        "-B",
+        str(build_dir),
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+    ]
+    build_cmd = [
+        "cmake",
+        "--build",
+        str(build_dir),
+        "--target",
+        "aida_static",
+        "--config",
+        "Release",
+        "-j4",
+    ]
 
-print("Include dirs:")
-print(cpp_dirs)
+    print("Configuring AIDA static library")
+    subprocess.run(configure_cmd, check=True)
+
+    print("Building AIDA static library")
+    subprocess.run(build_cmd, check=True)
+
+    candidates = [
+        build_dir / "libaida.a",
+        build_dir / "aida.lib",
+        build_dir / "Release" / "aida.lib",
+        build_dir / "Release" / "libaida.a",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+
+    # Fallback for generators that place the artifact in nested directories
+    fallback_candidates = list(build_dir.rglob("libaida.a")) + list(
+        build_dir.rglob("aida.lib")
+    )
+    if fallback_candidates:
+        return str(fallback_candidates[0].resolve())
+
+    raise RuntimeError("Could not locate built AIDA static library in build/aida.")
+
+
+AIDA_STATIC_LIBRARY = None
+if arch_module_blacklist("ext_interface._aida_interface"):
+    AIDA_STATIC_LIBRARY = build_aida_static_library()
+    print("AIDA static library:")
+    print(AIDA_STATIC_LIBRARY)
+
+print("Base include dirs:")
+print(base_cpp_dirs)
 
 print("Library dirs:")
 print(library_dirs)
 
 
 def cpp_lib_deps(module):
-    if module == "ops":
-        return ["boost_system", "boost_timer", "omp", ]
+    if module.startswith("ext_interface._"):
+        return ["boost_system", "boost_timer", "boost_chrono", "omp", "gmp"]
+    elif module in ["ops", "io"]:
+        return []
     else:
         return ["tbb"]
 
@@ -193,9 +296,8 @@ extensions = [
         f"multipers.{module}",
         sources=(
             [
-                f"multipers/{module}.pyx",
+                f"multipers/{module.replace('.', '/')}.pyx",
             ]
-            + (AIDA_CPP_SOURCES if module == "ops" else [])
         ),
         language="c++",
         extra_compile_args=[
@@ -216,7 +318,10 @@ extensions = [
             # "-Werror" if platform.system() != "Windows" else "",
         ],
         extra_link_args=[],
-        include_dirs=cpp_dirs,
+        extra_objects=[AIDA_STATIC_LIBRARY]
+        if module == "ext_interface._aida_interface" and AIDA_STATIC_LIBRARY
+        else [],
+        include_dirs=module_cpp_dirs(module),
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         libraries=cpp_lib_deps(module),
         library_dirs=library_dirs,
