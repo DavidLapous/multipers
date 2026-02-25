@@ -104,8 +104,8 @@ jobs:
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
           export MACOSX_DEPLOYMENT_TARGET=11.0  
-          export cxxflags="-fno-aligned-new" # macos workaround
-          export cflags="-fno-aligned-new" # macos workaround
+          # export cxxflags="-fno-aligned-new" # macos workaround
+          # export cflags="-fno-aligned-new" # macos workaround
           # export macosx_deployment_target="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
