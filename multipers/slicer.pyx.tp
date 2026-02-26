@@ -25,6 +25,7 @@ import threading
 import os 
 from joblib import Parallel, delayed
 from warnings import warn
+import multipers.logs as _mp_logs
 
 from multipers.slicer cimport *
 from multipers.filtrations cimport *
@@ -388,8 +389,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         basepoint = api.asnumpy(basepoint)
         direction = None if direction is None else api.asnumpy(direction)
         if api.has_grad(basepoint) or (direction is not None and api.has_grad(direction)):
-            from warnings import warn
-            warn("Ignored gradient from input. Use a squeezed slicer for autodiff.")
+            _mp_logs.warn_autodiff("Ignored gradient from input. Use a squeezed slicer for autodiff.")
 
         self.push_to_line(basepoint,direction)
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
@@ -443,8 +443,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         basepoints = api.asnumpy(basepoints)
         directions = None if directions is None else api.asnumpy(directions)
         if api.has_grad(basepoints) or (directions is not None and api.has_grad(directions)):
-            from warnings import warn
-            warn("Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines).")
+            _mp_logs.warn_autodiff("Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines).")
 
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_basepoints = basepoints
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_directions
@@ -806,7 +805,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             strategy=grid_strategy
 
         if self.is_squeezed:
-            warn("(copy warning) Squeezing an already squeezed slicer.")
+            _mp_logs.warn_copy("Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(self.filtration_grid, strategy=strategy,
                                    resolution=resolution,

@@ -11,6 +11,7 @@ from typing import Optional, Literal
 from collections import defaultdict
 import itertools
 import threading
+import multipers.logs as _mp_logs
 import cython
 cimport cython
 cimport numpy as cnp
@@ -103,8 +104,7 @@ def _path_init(soft:str|os.PathLike):
         verbose_arg = "> /dev/null 2>&1"
         test = os.system(pathes[soft] + " --help " + verbose_arg)
         if test % 256!=0:
-            from warnings import warn
-            warn(f"""
+            _mp_logs.warn_fallback(f"""
             Found external software {soft} at {pathes[soft]}
             but may not behave well.
             """)

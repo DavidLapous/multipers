@@ -2,6 +2,7 @@ from contextlib import nullcontext
 
 import numpy as _np
 from scipy.spatial.distance import cdist, pdist
+import multipers.logs as _mp_logs
 
 backend = _np
 cat = _np.concatenate
@@ -80,9 +81,7 @@ def check_keops():
         _is_keops_available = _np.allclose(my_conv(x, y).flatten(), expected_res)
         LazyTensor = LT
     except:
-        from warnings import warn
-
-        warn("Could not initialize keops (numpy). using workarounds")
+        _mp_logs.warn_fallback("Could not initialize keops (numpy). using workarounds")
         _is_keops_available = False
 
     return _is_keops_available

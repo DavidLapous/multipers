@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from time import perf_counter
 from typing import Optional
-from warnings import warn
 
 import gudhi as gd
 import numpy as np
@@ -9,6 +8,7 @@ from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors
+import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid, get_exact_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
@@ -21,7 +21,7 @@ try:
 except ImportError:
     from sklearn.neighbors import KernelDensity
 
-    warn("pykeops not found. Falling back to sklearn.")
+    _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
 
     def KDE(bandwidth, kernel, return_log):
         assert return_log, "Sklearn returns log-density."
@@ -151,7 +151,9 @@ def DelaunayLowerstar(
     api = api_from_tensors(points, function)
     _log_step("resolved backend")
     if not flagify and (api.has_grad(points) or api.has_grad(function)):
-        warn("Cannot keep points gradient unless using `flagify=True`.")
+        _mp_logs.warn_autodiff(
+            "Cannot keep points gradient unless using `flagify=True`."
+        )
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
     _log_step("converted inputs")
@@ -323,10 +325,8 @@ def DegreeRips(
         rips_filtration = None
 
     if ks is None or rips_filtration is None:
-        from warnings import warn
-
-        warn(
-            "(copy warning) Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
+        _mp_logs.warn_copy(
+            "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
         )
         _temp_st = _mp.SimplexTreeMulti(
             st, num_parameters=1
@@ -494,9 +494,7 @@ def RhomboidBifiltration(
 
     api = api_from_tensor(x)
     if api.has_grad(x):
-        from warnings import warn
-
-        warn(
+        _mp_logs.warn_autodiff(
             "Found a gradient in input, which cannot be processed by RhomboidBifiltration."
         )
     x = api.asnumpy(x)

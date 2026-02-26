@@ -1,6 +1,7 @@
 import torch as _t
 import multipers.array_api as _mpapi
 import sys
+import multipers.logs as _mp_logs
 
 _mpapi.available_api.append(sys.modules[__name__])
 
@@ -74,9 +75,7 @@ def check_keops():
         LazyTensor = LT
 
     except:
-        from warnings import warn
-
-        warn("Could not initialize keops (torch). using workarounds")
+        _mp_logs.warn_fallback("Could not initialize keops (torch). using workarounds")
 
         _is_keops_available = False
 

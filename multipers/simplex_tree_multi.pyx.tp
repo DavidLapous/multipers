@@ -71,6 +71,7 @@ from tqdm import tqdm
 from multipers.grids import Lstrategies, compute_grid, sanitize_grid
 from multipers.array_api import api_from_tensor
 from multipers.point_measure import signed_betti, rank_decomposition_by_rectangles, sparsify
+import multipers.logs as _mp_logs
 
 from warnings import warn
 
@@ -1243,8 +1244,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
                            bool reverse_block=True,
                            ):
         from multipers.io import scc2disk
-        from warnings import warn
-        warn("This function is not tested yet.")
+        _mp_logs.warn_experimental("This function is not tested yet.")
         from os.path import exists
         from os import remove
         if exists(path):
@@ -1441,7 +1441,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
             strategy=grid_strategy
 
         if self.is_squeezed:
-            warn("(copy warning) Squeezing an already squeezed slicer.")
+            _mp_logs.warn_copy("Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(
                     self.filtration_grid, strategy=strategy, resolution=resolution,

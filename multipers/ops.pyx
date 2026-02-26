@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Iterable, Literal, Optional
+import multipers.logs as _mp_logs
 
 
 def aida(s, bool sort=True, bool verbose=False, bool progress=False):
@@ -92,10 +93,8 @@ def minimal_presentation(
     from multipers.slicer import is_slicer
 
     if is_slicer(slicer) and slicer.is_minpres and not force:
-        from warnings import warn
-
-        warn(
-            f"(unnecessary computation) The slicer seems to be already reduced, "
+        _mp_logs.warn_superfluous_computation(
+            f"The slicer seems to be already reduced, "
             f"from homology of degree {slicer.minpres_degree}."
         )
         return slicer

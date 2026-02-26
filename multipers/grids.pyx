@@ -12,6 +12,7 @@ from itertools import product
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
 from multipers.array_api import check_keops
+import multipers.logs as _mp_logs
 
 available_strategies = ["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -309,8 +310,7 @@ def _compute_grid_numpy(
 
 def _todo_regular(f, int r, api):
     if api.has_grad(f):
-        from warnings import warn
-        warn("`strategy=regular` is not differentiable. Removing grad.")
+        _mp_logs.warn_autodiff("`strategy=regular` is not differentiable. Removing grad.")
     with api.no_grad():
         return api.linspace(api.min(f), api.max(f), r)
 
@@ -360,8 +360,7 @@ def _todo_regular_left_old(some_float[:] f, int r, bool unique):
 
 def _todo_partition(x, int resolution, bool unique, api):
     if api.has_grad(x):
-        from warnings import warn
-        warn("`strategy=partition` is not differentiable. Removing grad.")
+        _mp_logs.warn_autodiff("`strategy=partition` is not differentiable. Removing grad.")
     out = _todo_partition_(api.asnumpy(x), resolution, unique)
     return api.from_numpy(out)
 
@@ -615,5 +614,3 @@ def evaluate_mod_in_grid(mod, grid, box=None):
         )
     )
     return diff_mod
-
-
