@@ -1,4 +1,5 @@
 import warnings
+import sys
 
 import multipers as mp
 import numpy as np
@@ -8,6 +9,12 @@ from multipers.filtrations import CoreDelaunay
 from multipers.tests import assert_sm
 
 from multipers.io import _multi_critical_from_slicer
+
+
+pytestmark = pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="multi_critical/ops is unavailable on Windows",
+)
 
 
 def _tiny_slicer():
