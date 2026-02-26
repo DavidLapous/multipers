@@ -221,11 +221,11 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
     throw std::invalid_argument("Invalid multipers input: sizes of filtrations, boundaries and dimensions differ.");
   }
 
-  for (const auto& grade : input.filtration_values) {
-    if (!std::isfinite(grade.first) || !std::isfinite(grade.second)) {
-      throw std::invalid_argument("mpfree interface expects finite bifiltration values.");
-    }
-  }
+  // for (const auto& grade : input.filtration_values) {
+  //   if (!std::isfinite(grade.first) || !std::isfinite(grade.second)) {
+  //     throw std::invalid_argument("mpfree interface expects finite bifiltration values.");
+  //   }
+  // }
 
   if (!std::is_sorted(input.dimensions.begin(), input.dimensions.end())) {
     throw std::invalid_argument("Dimensions are expected to be sorted in non-decreasing order.");

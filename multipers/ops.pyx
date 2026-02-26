@@ -23,7 +23,7 @@ def aida(s, bool sort=True, bool verbose=False, bool progress=False):
 
 def one_criticalify(
     slicer,
-    bool reduce=False,
+    reduce:Optional[bool] = None,
     degree: Optional[int] = None,
     bool clear=True,
     swedish: Optional[bool] = None,
@@ -53,6 +53,8 @@ def one_criticalify(
         F = slicer.filtration_grid
     else:
         F = None
+    if reduce is None and degree is not None:
+        reduce = True
     out = _multi_critical_from_slicer(
         slicer,
         reduce=reduce,
@@ -66,6 +68,8 @@ def one_criticalify(
     )
     if is_slicer(out, allow_minpres=False):
         out.filtration_grid = F
+        if degree is not None:
+            out = minimal_presentation(out, degree=degree, force=True)
     else:
         for stuff in out:
             stuff.filtration_grid = F

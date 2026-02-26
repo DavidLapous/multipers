@@ -218,9 +218,9 @@ class multi_critical_input_parser {
         }
         col.raw_grades.reserve(grades.size() * 2);
         for (const auto& grade : grades) {
-          if (!std::isfinite(grade.first) || !std::isfinite(grade.second)) {
-            throw std::invalid_argument("multi_critical interface expects finite bifiltration values.");
-          }
+          // if (!std::isfinite(grade.first) || !std::isfinite(grade.second)) {
+          //   throw std::invalid_argument("multi_critical interface expects finite bifiltration values.");
+          // }
           col.raw_grades.push_back(grade.first);
           col.raw_grades.push_back(grade.second);
         }
