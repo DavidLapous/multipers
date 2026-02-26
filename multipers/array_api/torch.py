@@ -93,6 +93,10 @@ def ascontiguous(x):
     return _t.as_tensor(x).contiguous()
 
 
+def copy(x):
+    return x.clone()
+
+
 def device(x):
     return x.device
 

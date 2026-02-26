@@ -95,6 +95,10 @@ def ascontiguous(x):
     return _np.ascontiguousarray(x)
 
 
+def copy(x):
+    return _np.copy(x)
+
+
 def sort(x, axis=-1):
     return _np.sort(x, axis=axis)
 
