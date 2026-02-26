@@ -81,8 +81,7 @@ exclude = [
   "tests*",
   "docs*",
   "ext*",
-  "multipers.tests",
-  "multipers.tests.*",
+  "benchmarks",
   "multipers.docs",
   "multipers.docs.*",
 ]
