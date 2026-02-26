@@ -1,7 +1,7 @@
 name: Build, test
 
 on: 
-  [pull_request,workflow_dispatch,push]
+  [pull_request,workflow_dispatch,push,workflow_call]
 
 jobs:
   create_sources:
