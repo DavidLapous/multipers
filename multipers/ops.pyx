@@ -72,7 +72,6 @@ def one_criticalify(
     def _todo(x,i):
         x.filtration_grid = F
         x.minpres_degree=i
-        print(np.unique(x.get_dimensions()), x.minpres_degree)
         if reduce and force_resolution:
             x = minimal_presentation(x, degree=i, force=True)
         return x
