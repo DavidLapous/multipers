@@ -67,7 +67,7 @@ def _emit(kind: str, message: str, stacklevel: int = 2) -> None:
     if not _TOGGLE_HINT_SHOWN[kind]:
         message = (
             f"{message} "
-            f"Set `multipers.logs.{warning_cls.__name__}.enabled = False` to disable this warning."
+            f"\nSet `multipers.logs.{warning_cls.__name__}.enabled = False` to disable this warning."
         )
         _TOGGLE_HINT_SHOWN[kind] = True
     warn(message, category=warning_cls, stacklevel=stacklevel)

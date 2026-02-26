@@ -64,7 +64,9 @@ cdef object _slicer_from_multi_critical_output(
     int degree=-1,
 ):
     out_boundaries = vect_vect_boundary_to_numpy_slices(interface_output.boundaries)
-    out_dimensions = np.asarray(interface_output.dimensions, dtype=np.int32)
+    out_dimensions = np.array(interface_output.dimensions, dtype=np.int32) 
+    if mark_minpres:
+        out_dimensions -= 1 # cause presentation
     out_filtrations = vect_pair_double_to_array(interface_output.filtration_values)
     out = slicer_type(out_boundaries, out_dimensions, out_filtrations)
     if mark_minpres:
@@ -252,21 +254,21 @@ def one_criticalify(
                 use_swedish,
             )
         return tuple(
-            _slicer_from_multi_critical_output(newSlicer, all_outputs[i], True, i)
-            for i in range(all_outputs.size())
+            _slicer_from_multi_critical_output(newSlicer, all_outputs[i+1], True, i)
+            for i in range(all_outputs.size()-1)
         )
     elif reduce:
-        target_degree = degree
+        _degree =<int>(degree+1) # cause presentation
         with nogil:
             one_output = multi_critical_minpres_interface(
                 interface_input,
-                target_degree,
+                _degree, 
                 use_logpath,
                 True,
                 verbose,
                 use_swedish,
             )
-        return _slicer_from_multi_critical_output(newSlicer, one_output, True, target_degree)
+        return _slicer_from_multi_critical_output(newSlicer, one_output, True,degree)
     else:
         with nogil:
             one_output = multi_critical_resolution_interface(

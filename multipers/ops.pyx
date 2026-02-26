@@ -31,6 +31,7 @@ def one_criticalify(
     bool kcritical=False,
     str algo: Literal["path", "tree"] = "path",
     str filtration_container="contiguous",
+    bool force_resolution = True,
 ):
     """
     Computes a free implicit representation of a given multi-critical
@@ -66,14 +67,18 @@ def one_criticalify(
         kcritical=kcritical,
         filtration_container=filtration_container,
     )
-    if is_slicer(out, allow_minpres=False):
-        out.filtration_grid = F
-        if degree is not None:
-            out = minimal_presentation(out, degree=degree, force=True)
-    else:
-        for stuff in out:
-            stuff.filtration_grid = F
-    return out
+    if not reduce:
+        return out
+    def _todo(x,i):
+        x.filtration_grid = F
+        x.minpres_degree=i
+        print(np.unique(x.get_dimensions()), x.minpres_degree)
+        if reduce and force_resolution:
+            x = minimal_presentation(x, degree=i, force=True)
+        return x
+    if isinstance(out,tuple):
+        return tuple(_todo(out[i], i) for i in range(len(out)))
+    return _todo(out, degree)
 
 
 def minimal_presentation(
