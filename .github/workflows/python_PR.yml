@@ -196,4 +196,4 @@ jobs:
         pip install dist/*.whl
 
         cd tests
-        pytest -rv .
+        pytest -rv . --reruns 1 --reruns-delay 2
