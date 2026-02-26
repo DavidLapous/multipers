@@ -36,6 +36,9 @@ multipers/filtrations.pxd
 ## Hidden files
 .*
 !.clang-format
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 
 ## Notebook-generated
 *.png
