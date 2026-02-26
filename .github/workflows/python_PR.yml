@@ -21,7 +21,7 @@ jobs:
     - name: Build source distribution
       shell: bash -el {0}
       run: |
-        micromamba create -n sources python=3.11 pip setuptools cython numpy python-build
+        micromamba create -n sources python=3.13 pip setuptools cython numpy python-build
         micromamba activate sources
         python -m build --sdist --no-isolation
     - name: Upload sources
