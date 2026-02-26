@@ -8,6 +8,7 @@ from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors
+import multipers.array_api.numpy as npapi
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid, get_exact_grid
@@ -321,7 +322,12 @@ def DegreeRips(
         )
         rips_filtration = api.unique(D.ravel())
     else:
+        if not isinstance(simplex_tree, gd.SimplexTree):
+            raise ValueError(
+                f"`simplex_tree` has to be a gudhi SimplexTree. Got {simplex_tree=}."
+            )
         st = simplex_tree
+        api = npapi
         rips_filtration = None
 
     if ks is None or rips_filtration is None:
@@ -340,6 +346,7 @@ def DegreeRips(
                 if num is None
                 else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
             )
+            ks = api.copy(api.from_numpy(ks))
         if rips_filtration is None:
             rips_filtration = _mp.grids.compute_grid(_temp_st)[0]
 
