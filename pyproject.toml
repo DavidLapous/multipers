@@ -12,6 +12,9 @@ cmake.build-type = "Release"
 build-dir = "build/{wheel_tag}"
 build.tool-args = ["-j4"]
 
+[tool.scikit-build.cmake.define]
+CMAKE_COLOR_DIAGNOSTICS = "ON"
+
 [tool.scikit-build.wheel]
 packages = []
 exclude = [
@@ -21,7 +24,6 @@ exclude = [
   "**/*.cpp",
   "**/*.h",
   "**/*.hpp",
-  "**/tests/**",
   "**/docs/**",
   "**/benchmarks/**",
   "**/ext/**",
