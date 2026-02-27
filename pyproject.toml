@@ -12,6 +12,76 @@ cmake.build-type = "Release"
 build-dir = "build/{wheel_tag}"
 build.tool-args = ["-j4"]
 
+[tool.scikit-build.wheel]
+packages = []
+exclude = [
+  "**/*.pyx",
+  "**/*.pxd",
+  "**/*.tp",
+  "**/*.cpp",
+  "**/*.h",
+  "**/*.hpp",
+  "**/tests/**",
+  "**/docs/**",
+  "**/benchmarks/**",
+  "**/ext/**",
+]
+
+[tool.scikit-build.sdist]
+exclude = [
+  "docs/**",
+  "tests/**",
+  "benchmarks/**",
+  ".github/**",
+  "build/**",
+  "dist/**",
+  "**/__pycache__/**",
+  "**/*.ipynb",
+  "**/*.so",
+  "**/*.dylib",
+  "**/*.dll",
+  "**/*.pyd",
+  "multipers/**/*.cpp",
+  "ext/**/docs/**",
+  "ext/**/tests/**",
+  "ext/**/benchmarks/**",
+  "ext/**/misc/**",
+  "ext/**/lists_of_decompositions/**",
+  "ext/**/*.py",
+  "ext/**/*.sh",
+  "ext/**/*.txt",
+  "ext/**/*.md",
+  "ext/**/*.cff",
+  "ext/**/*.bin",
+  "ext/**/*.sky",
+  "ext/**/*.sccsum",
+  "ext/**/*.firep",
+  "ext/**/*.pdf",
+  "ext/**/*.js",
+  "ext/**/*.css",
+  "ext/**/*.map",
+  "ext/**/*.md5",
+  "ext/**/*.tex",
+  "ext/**/Makefile",
+]
+include = [
+  "ext/**/CMakeLists.txt",
+  "ext/**/*.cmake",
+  "ext/**/*.h",
+  "ext/**/*.hpp",
+  "ext/**/*.cpp",
+  "ext/**/LICENSE",
+  "ext/**/COPYING",
+  "ext/**/COPYING.LESSER",
+  "tools/process_tempita.py",
+  "_tempita_grid_gen.py",
+  "multipers/**/*.tp",
+  "multipers/**/*.pyx",
+  "multipers/**/*.pxd",
+  "multipers/**/*.hpp",
+  "multipers/**/*.h",
+]
+
 [project]
 name = "multipers"
 version = "2.5.0b1"
@@ -40,21 +110,6 @@ requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 license-files = [
   "LICENSE",
-  "ext/AIDA/LICENSE",
-  "ext/Persistence-Algebra/LICENSE",
-  "ext/function_delaunay/COPYING",
-  "ext/function_delaunay/phat/COPYING",
-  "ext/function_delaunay/phat/COPYING.LESSER",
-  "ext/mpfree/COPYING",
-  "ext/mpfree/COPYING.LESSER",
-  "ext/mpfree/phat_mod/COPYING",
-  "ext/mpfree/phat_mod/COPYING.LESSER",
-  "ext/multi_chunk/COPYING",
-  "ext/multi_chunk/COPYING.LESSER",
-  "ext/multi_critical/COPYING",
-  "ext/multi_critical/COPYING.LESSER",
-  "ext/multi_critical/phat_mod/COPYING",
-  "ext/multi_critical/phat_mod/COPYING.LESSER",
   "licenses/LGPL-3.0-or-later.txt",
   "THIRD_PARTY_NOTICES.md",
 ]

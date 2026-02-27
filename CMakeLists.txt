@@ -190,8 +190,9 @@ endfunction()
 function(multipers_add_extension module_name)
   string(REPLACE "." "/" module_path "${module_name}")
   set(pyx_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx")
-  if(NOT EXISTS "${pyx_file}")
-    message(FATAL_ERROR "Missing Cython source: ${pyx_file}")
+  set(pyx_template "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx.tp")
+  if(NOT EXISTS "${pyx_file}" AND NOT EXISTS "${pyx_template}")
+    message(FATAL_ERROR "Missing Cython source/template: ${pyx_file}")
   endif()
 
   set(cpp_file "${CMAKE_BINARY_DIR}/cython/${module_path}.cpp")
@@ -310,4 +311,5 @@ install(
   PATTERN "*.tp" EXCLUDE
   PATTERN "*.cpp" EXCLUDE
   PATTERN "*.h" EXCLUDE
+  PATTERN "*.hpp" EXCLUDE
 )
