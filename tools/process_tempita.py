@@ -12,7 +12,9 @@ def process_template(path: Path) -> None:
     content = path.read_text(encoding="utf-8")
     rendered = Tempita.Template(content).substitute()
     output = path.with_suffix("")
-    output.write_text(rendered, encoding="utf-8")
+    previous = output.read_text(encoding="utf-8") if output.exists() else None
+    if previous != rendered:
+        output.write_text(rendered, encoding="utf-8")
 
 
 def main(argv: list[str]) -> int:

@@ -78,17 +78,6 @@ add_custom_command(
 
 add_custom_target(multipers_tempita DEPENDS ${MULTIPERS_GENERATED_FILES})
 
-file(
-  GLOB_RECURSE MULTIPERS_CYTHON_DEPENDS
-  CONFIGURE_DEPENDS
-  "${CMAKE_SOURCE_DIR}/multipers/*.pyx"
-  "${CMAKE_SOURCE_DIR}/multipers/*.pxd"
-  "${CMAKE_SOURCE_DIR}/multipers/*.pyx.tp"
-  "${CMAKE_SOURCE_DIR}/multipers/*.pxd.tp"
-  "${CMAKE_SOURCE_DIR}/multipers/**/*.pyx"
-  "${CMAKE_SOURCE_DIR}/multipers/**/*.pxd"
-)
-
 set(MULTIPERS_CYTHON_COMMON_ARGS
   --cplus
   --fast-fail
@@ -204,20 +193,21 @@ function(multipers_add_extension module_name)
   endif()
 
   set(cpp_file "${CMAKE_BINARY_DIR}/cython/${module_path}.cpp")
+  set(dep_file "${cpp_file}.dep")
   get_filename_component(cpp_dir "${cpp_file}" DIRECTORY)
 
   add_custom_command(
     OUTPUT "${cpp_file}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${cpp_dir}"
-    COMMAND "${Python3_EXECUTABLE}" -m cython ${MULTIPERS_CYTHON_COMMON_ARGS} "${pyx_file}" -o "${cpp_file}"
-    DEPENDS multipers_tempita "${pyx_file}" ${MULTIPERS_CYTHON_DEPENDS}
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" -m cython ${MULTIPERS_CYTHON_COMMON_ARGS} -M "${pyx_file}" -o "${cpp_file}"
+    DEPENDS "${pyx_file}" ${MULTIPERS_GENERATED_FILES}
+    DEPFILE "${dep_file}"
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     VERBATIM
   )
 
   string(REPLACE "." "_" target_name "multipers_${module_name}")
   Python3_add_library(${target_name} MODULE WITH_SOABI "${cpp_file}")
-  add_dependencies(${target_name} multipers_tempita)
   set_target_properties(${target_name} PROPERTIES PREFIX "")
 
   target_include_directories(${target_name} PRIVATE ${MULTIPERS_BASE_INCLUDE_DIRS})

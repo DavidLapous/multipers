@@ -28,6 +28,21 @@ Then clone the repository and pip install it.
   cmake --build build -j4 # this may take some time
   cp build/compile_commands.json ./compile_commands.json
   pip install --no-build-isolation .
+
+For incremental development after the first build, a fast loop is:
+
+.. code-block:: bash
+
+  python -m build -n --wheel --no-isolation
+  pip install --force-reinstall dist/*.whl
+
+You can also use the direct path below (it remains incremental with the persistent
+``build/{wheel_tag}`` directory configured in ``pyproject.toml``):
+
+.. code-block:: bash
+
+  pip install --no-build-isolation .
+
   # tests
   for f in tests/test_*.py; do pytest "$f" || break; done
 
