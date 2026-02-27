@@ -1,5 +1,6 @@
 import pickle as pkl
 
+import gudhi as gd
 import numpy as np
 import pytest
 from numpy import array
@@ -515,6 +516,26 @@ def test_clean_filtration_grid():
     (sm1,) = mp.signed_measure(s, degree=1)
     (sm2,) = mp.signed_measure(s2, degree=1)
     assert_sm(sm1, sm2)
+
+
+@pytest.mark.skipif(
+    not np.any(
+        [a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees]
+    ),
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+def test_slicer_grid_squeeze_roundtrip_on_gudhi_and_multipers_simplextree():
+    pts = np.random.uniform(size=(100, 2))
+    st_gudhi = gd.AlphaComplex(points=pts).create_simplex_tree()
+    st1 = mp.SimplexTreeMulti(st_gudhi)
+    st2 = mp.filtrations.CoreDelaunay(points=pts, ks=np.arange(1, 50))
+
+    for st_ in [st1, st2]:
+        grid = mp.grids.compute_grid(st_)
+        st_sq = st_.grid_squeeze(grid)
+
+        assert mp.Slicer(st_sq) == mp.Slicer(st_).grid_squeeze()
+        assert mp.Slicer(st_) == mp.Slicer(st_sq).unsqueeze()
 
 
 def test_astypes():
