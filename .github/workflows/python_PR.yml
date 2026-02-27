@@ -176,6 +176,11 @@ jobs:
       with:
         name: sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
+    - name: Checkout tests
+      uses: actions/checkout@v6
+      with:
+        path: repo
+        submodules: recursive
     - name: tests
       shell: bash -el {0}
       run: |
@@ -191,5 +196,5 @@ jobs:
 
         pip install dist/*.whl
 
-        cd tests
+        cd repo/tests
         pytest -rv . --reruns 1 --reruns-delay 2
