@@ -45,6 +45,12 @@ def one_criticalify(
     """
     from multipers.io import _multi_critical_from_slicer
     from multipers.slicer import is_slicer
+    from multipers.simpex_tree_multi import is_simplextree_multi
+    
+    if is_simplextree_multi(slicer):
+        from multipers import Slicer
+        _mp_logs.warn_copy(f"[One criticalify] Had a simplextree as an input. Copy needed for slicer conversion.")
+        slicer = Slicer(slicer)
 
     if not is_slicer(slicer):
         raise ValueError(f"Invalid input. Expected `SlicerType` got {type(slicer)=}.")
