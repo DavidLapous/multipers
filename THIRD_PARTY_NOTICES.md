@@ -44,5 +44,5 @@ As a result, distributed `multipers` artifacts built with these components are l
 
 ## Notes
 
-- Build-time include paths for these dependencies are configured in `setup.py`.
+- Build-time include paths for these dependencies are configured in `CMakeLists.txt`.
 - If dependency revisions are updated, update the commit hashes listed here.

@@ -21,7 +21,7 @@ jobs:
     - name: Build source distribution
       shell: bash -el {0}
       run: |
-        micromamba create -n sources python=3.13 pip setuptools cython numpy python-build wheel
+        micromamba create -n sources python=3.13 pip cython numpy python-build wheel scikit-build-core
         micromamba activate sources
         python -m build --sdist --no-isolation
     - name: Upload sources
@@ -78,7 +78,7 @@ jobs:
         micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build wheel llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake -c conda-forge
+        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build wheel scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake -c conda-forge
         pip install pykeops filtration-domination --upgrade
 
         micromamba install c-compiler cxx-compiler clang clangxx  -c conda-forge
@@ -114,7 +114,6 @@ jobs:
           export cppflags="-isystem $conda_prefix/include"
         fi
 
-        python setup.py build_ext -j4 --inplace
         python -m build . --no-isolation --wheel
 
     - name: Check wheel payload

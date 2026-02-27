@@ -1,11 +1,16 @@
 [build-system]
 requires = [
+  "scikit-build-core",
   "numpy",
   "Cython",
-  "setuptools",
-  "wheel",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.version = ">=3.24"
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+build.tool-args = ["-j4"]
 
 [project]
 name = "multipers"
@@ -75,27 +80,3 @@ tracker = "https://github.com/DavidLapous/multipers/issues"
 "release notes" = "https://github.com/DavidLapous/multipers/releases"
 
 # # automatic search for packages
-[tool.setuptools.packages.find]
-include = ["multipers*"]
-exclude = [
-  "tests*",
-  "docs*",
-  "ext*",
-  "benchmarks",
-  "multipers.docs",
-  "multipers.docs.*",
-]
-
-[tool.setuptools.exclude-package-data]
-"*" = [
-  "*.pyx",
-  "*.pxd",
-  "*.tp",
-  "*.cpp",
-  "*.hpp",
-  "*.h",
-  "*.md",
-  "*.txt",
-  "ext/*",
-  "ext/**/*",
-]

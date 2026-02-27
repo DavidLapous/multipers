@@ -187,7 +187,7 @@ def test_scc():
 
     import multipers as mp
     from multipers.distances import sm_distance
-    import multipers.ext_interface._mpfree_interface as _mpfree_interface
+    import multipers._mpfree_interface as _mpfree_interface
     from multipers.io import _check_available
     from multipers.tests import random_st
 

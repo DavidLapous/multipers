@@ -15,8 +15,8 @@ import multipers.logs as _mp_logs
 import cython
 cimport cython
 cimport numpy as cnp
-from multipers.ext_interface import _function_delaunay_interface
-from multipers.ext_interface import _multi_critical_interface
+from multipers import _function_delaunay_interface
+from multipers import _multi_critical_interface
 
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
@@ -248,7 +248,7 @@ def _minimal_presentation_from_slicer(
     available and falling back to SCC file I/O otherwise.
     """
     if backend == "mpfree":
-        from multipers.ext_interface import _mpfree_interface
+        from multipers import _mpfree_interface
 
         if _mpfree_interface._is_available():
             new_slicer = _mpfree_interface.minimal_presentation(

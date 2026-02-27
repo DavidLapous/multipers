@@ -24,20 +24,23 @@ Then clone the repository and pip install it.
 
   git clone https://github.com/DavidLapous/multipers
   cd multipers
-  python setup.py build_ext -j4 --inplace # this may take some time
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+  cmake --build build -j4 # this may take some time
+  cp build/compile_commands.json ./compile_commands.json
   pip install --no-build-isolation .
   # tests
   for f in tests/test_*.py; do pytest "$f" || break; done
 
 
-**Note:** You can also tune the compilation flags in the `setup.py` file. 
+**Note:** You can tune compilation flags with CMake variables or environment flags (`CXXFLAGS`, `CFLAGS`).
 
-**In particular,** if you use macOS, the clang compiler may fail to compile multipers if 
-the `aligned-new` compiler optimization is enabled; in that case, please disable it in the `setup.py` file by uncommenting the following line.
+**In particular,** if you use macOS, the clang compiler may fail to compile multipers if
+the `aligned-new` compiler optimization is enabled; in that case, pass the following flags during configure/build.
 
-.. code-block:: python
+.. code-block:: bash
 
-  # "-fno-aligned-new", # Uncomment this if you have trouble compiling on macos.
+  CXXFLAGS="-fno-aligned-new" CFLAGS="-fno-aligned-new" cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build -j4
 
 External libraries
 ******************

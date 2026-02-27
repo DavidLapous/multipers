@@ -6,12 +6,12 @@ import multipers.logs as _mp_logs
 def aida(s, bool sort=True, bool verbose=False, bool progress=False):
     import importlib.util
 
-    if importlib.util.find_spec("multipers.ext_interface._aida_interface") is None:
+    if importlib.util.find_spec("multipers._aida_interface") is None:
         raise RuntimeError(
             "AIDA in-memory interface is not available in this build. "
             "Rebuild multipers with AIDA support to enable this backend."
         )
-    from multipers.ext_interface import _aida_interface
+    from multipers import _aida_interface
 
     if not _aida_interface._is_available():
         raise RuntimeError(
@@ -45,7 +45,7 @@ def one_criticalify(
     """
     from multipers.io import _multi_critical_from_slicer
     from multipers.slicer import is_slicer
-    from multipers.simpex_tree_multi import is_simplextree_multi
+    from multipers.simplex_tree_multi import is_simplextree_multi
     
     if is_simplextree_multi(slicer):
         from multipers import Slicer

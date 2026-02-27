@@ -6,7 +6,7 @@ from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
-from multipers.ext_interface._helper cimport vect_vect_boundary_to_numpy_slices, vect_pair_double_to_array
+from multipers._helper cimport vect_vect_boundary_to_numpy_slices, vect_pair_double_to_array
 
 
 
