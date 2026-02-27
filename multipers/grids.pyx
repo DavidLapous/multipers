@@ -83,7 +83,7 @@ def get_exact_grid(
         api = npapi
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_simplextree_multi(x):
-        initial_grid = x.get_filtration_grid()
+        initial_grid = x._get_filtration_values()[0]
         api = npapi
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_mma(x):

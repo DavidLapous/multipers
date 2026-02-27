@@ -450,6 +450,7 @@ class Simplex_tree_multi_interface
 
   std::vector<std::vector<std::vector<value_type>>>  // dim, pts, param
   get_filtration_values(const std::vector<int> &degrees) {
+    // TODO : use contiguous containers, this is slow
     using multi_filtration_grid = std::vector<std::vector<value_type>>;
     int num_parameters = Base::num_parameters();
     std::vector<multi_filtration_grid> out(degrees.size(), multi_filtration_grid(num_parameters));
@@ -459,17 +460,20 @@ class Simplex_tree_multi_interface
       degree_index[degree] = count++;
       out[degree_index[degree]].reserve(Base::num_simplices());
     }
+    bool all_degrees = false;
+    if (degrees.size() == 1 && degrees[0] == -1)
+      all_degrees = true;
 
     for (const auto &simplex_handle : Base::complex_simplex_range()) {
       const auto &filtration = Base::filtration(simplex_handle);
       const auto degree = Base::dimension(simplex_handle);
-      if (std::find(degrees.begin(), degrees.end(), degree) == degrees.end()) continue;
+      if (!all_degrees  && std::find(degrees.begin(), degrees.end(), degree) == degrees.end()) continue;
       // for (int parameter = 0; parameter < num_parameters; parameter++) {
       //   out[degree_index[degree]][parameter].push_back(filtration[parameter]);
       // }
       for (std::size_t i = 0; i < filtration.num_generators(); i++)
           for (int parameter = 0; parameter < num_parameters; parameter++)
-            out[degree_index[degree]][parameter].push_back(filtration(i, parameter));
+            out[(all_degrees ? 0 : degree_index[degree])][parameter].push_back(filtration(i, parameter));
     }
     return out;
   }

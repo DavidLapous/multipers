@@ -342,9 +342,9 @@ def DegreeRips(
                 np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
             )
             ks = (
-                np.arange(max_degree)
+                np.arange(1, max_degree + 1)
                 if num is None
-                else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
+                else np.unique(np.linspace(1, max_degree, num, dtype=np.int32))
             )
             ks = api.copy(api.from_numpy(ks))
         if rips_filtration is None:
@@ -354,7 +354,7 @@ def DegreeRips(
 
     st_multi = get_degree_rips(st, degrees=ks)
     if squeeze:
-        F = [rips_filtration, ks.astype(np.float64)]
+        F = [rips_filtration, api.astype(ks, rips_filtration.dtype)]
         F = _mp.grids.compute_grid(
             F, strategy=squeeze_strategy, resolution=squeeze_resolution
         )

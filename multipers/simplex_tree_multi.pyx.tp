@@ -1341,7 +1341,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
 
 
 
-    def _get_filtration_values(self, vector[int] degrees, bool inf_to_nan:bool=False, bool return_raw = False)->Iterable[np.ndarray]:
+    def _get_filtration_values(self, vector[int] degrees = (-1,), bool inf_to_nan:bool=False, bool return_raw = False)->Iterable[np.ndarray]:
         # cdef vector[int] c_degrees = degrees
         # out = get_filtration_values_from_ptr[{{PyFil}}](ptr, degrees)
         cdef intptr_t ptr = self.thisptr
@@ -1397,7 +1397,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
             List of filtration values, for each parameter, defining the grid.
         """
         if degrees is None:
-            degrees = range(self.dimension+1)
+            degrees = (-1,)
 
 
         ## preprocesses the filtration values:
