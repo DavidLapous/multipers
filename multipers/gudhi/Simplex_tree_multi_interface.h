@@ -454,20 +454,28 @@ class Simplex_tree_multi_interface
     using multi_filtration_grid = std::vector<std::vector<value_type>>;
     int num_parameters = Base::num_parameters();
     std::vector<multi_filtration_grid> out(degrees.size(), multi_filtration_grid(num_parameters));
-    std::vector<int> degree_index(Base::dimension() + 1);
-    int count = 0;
-    for (auto degree : degrees) {
-      degree_index[degree] = count++;
-      out[degree_index[degree]].reserve(Base::num_simplices());
+    const bool all_degrees = (degrees.size() == 1 && degrees[0] == -1);
+    std::vector<int> degree_index(Base::dimension() + 1, -1);
+
+    if (all_degrees) {
+      for (int parameter = 0; parameter < num_parameters; parameter++) {
+        out[0][parameter].reserve(Base::num_simplices());
+      }
+    } else {
+      for (std::size_t i = 0; i < degrees.size(); i++) {
+        const int degree = degrees[i];
+        if (degree < 0 || degree > Base::dimension()) continue;
+        degree_index[degree] = static_cast<int>(i);
+        for (int parameter = 0; parameter < num_parameters; parameter++) {
+          out[i][parameter].reserve(Base::num_simplices());
+        }
+      }
     }
-    bool all_degrees = false;
-    if (degrees.size() == 1 && degrees[0] == -1)
-      all_degrees = true;
 
     for (const auto &simplex_handle : Base::complex_simplex_range()) {
       const auto &filtration = Base::filtration(simplex_handle);
       const auto degree = Base::dimension(simplex_handle);
-      if (!all_degrees  && std::find(degrees.begin(), degrees.end(), degree) == degrees.end()) continue;
+      if (!all_degrees && std::find(degrees.begin(), degrees.end(), degree) == degrees.end()) continue;
       // for (int parameter = 0; parameter < num_parameters; parameter++) {
       //   out[degree_index[degree]][parameter].push_back(filtration[parameter]);
       // }

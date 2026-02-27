@@ -37,7 +37,7 @@ import multipers.grids as mpg
 def get_degree_rips(st, vector[int] degrees):
 	assert isinstance(st,SimplexTree), "Input has to be a Gudhi simplextree for now."
 	assert st.dimension() == 1, "Simplextree has to be of dimension 1. You can use the `prune_above_dimension` method."
-	degree_rips_st = _SimplexTreeMulti_Flat_Kf64(num_parameters=degrees.size())
+	degree_rips_st = _SimplexTreeMulti_Flat_Kf64(num_parameters=2)
 	cdef intptr_t simplextree_ptr = st.thisptr
 	cdef intptr_t st_multi_ptr = degree_rips_st.thisptr
 	with nogil:
