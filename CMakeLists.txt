@@ -153,6 +153,16 @@ function(multipers_apply_common_build_flags target_name)
       WITH_TBB=ON
   )
 
+  if(WIN32)
+    target_compile_definitions(
+      ${target_name}
+      PRIVATE
+        MULTIPERS_DISABLE_MPFREE_INTERFACE=1
+        MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
+        MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
+    )
+  endif()
+
   if(MSVC)
     target_compile_options(${target_name} PRIVATE /O2 /DNDEBUG /W1 /WX- /openmp)
   else()
@@ -291,7 +301,12 @@ set(MULTIPERS_MODULES
 )
 
 if(WIN32)
-  list(REMOVE_ITEM MULTIPERS_MODULES _aida_interface)
+  list(REMOVE_ITEM MULTIPERS_MODULES
+    _aida_interface
+    # _mpfree_interface
+    # _function_delaunay_interface
+    # _multi_critical_interface
+  )
 endif()
 
 foreach(module_name IN LISTS MULTIPERS_MODULES)
