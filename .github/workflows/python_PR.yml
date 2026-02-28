@@ -187,12 +187,6 @@ jobs:
         micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout llvm cxx-compiler llvm-openmp pytest-rerunfailures gudhi -c conda-forge
         micromamba activate test
 
-        if [ "$RUNNER_OS" == "macOS" ]; then
-            # pykeops workaround
-            brew install llvm libomp
-            # export CXX=$(brew --prefix llvm)/bin/clang++
-        fi
-
         pip install dist/*.whl
 
     - name: Run pytest
