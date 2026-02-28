@@ -290,27 +290,28 @@ function(multipers_add_extension module_name)
   )
 
     install(CODE "
-    file(GET_RUNTIME_DEPENDENCIES
-      RESOLVED_DEPENDENCIES_VAR deps
-      UNRESOLVED_DEPENDENCIES_VAR unresolved
-      EXECUTABLES \"\$<TARGET_FILE:${target_name}>\"
-      DIRECTORIES
-        \"\$ENV{CONDA_PREFIX}/Library/bin\"
-        \"\$ENV{CONDA_PREFIX}/bin\"
-    )
-
-    foreach(dep IN LISTS deps)
-      file(INSTALL
-        DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${package_dir}\"
-        TYPE SHARED_LIBRARY
-        FILES \"\${dep}\"
+      message(STATUS \"Bundling runtime deps for: $<TARGET_FILE:${target_name}>\")
+      file(GET_RUNTIME_DEPENDENCIES
+        RESOLVED_DEPENDENCIES_VAR deps
+        UNRESOLVED_DEPENDENCIES_VAR unresolved
+        MODULES \"$<TARGET_FILE:${target_name}>\"
+        DIRECTORIES
+          \"$ENV{CONDA_PREFIX}/Library/bin\"
+          \"$ENV{CONDA_PREFIX}/bin\"
       )
-    endforeach()
 
-    foreach(dep IN LISTS unresolved)
-      message(WARNING \"Unresolved dependency: \${dep}\")
-    endforeach()
-  ")
+      foreach(dep IN LISTS deps)
+        file(INSTALL
+          DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${package_dir}\"
+          TYPE SHARED_LIBRARY
+          FILES \"\${dep}\"
+        )
+      endforeach()
+
+      foreach(dep IN LISTS unresolved)
+        message(WARNING \"Unresolved dependency: \${dep}\")
+      endforeach()
+    ")
   else()
     install(TARGETS ${target_name}
     LIBRARY DESTINATION "${package_dir}"
