@@ -106,12 +106,12 @@ jobs:
           # export macosx_deployment_target="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
-          export cxxflags="-march=x86-64-v3" # post haswell, for avx
-          export cflags="-march=x86-64-v3"
-          export cppflags="-isystem $conda_prefix/include"
+          export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
+          export CFLAGS="-march=x86-64-v3"
+          export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
 
-        python -m build . --no-isolation --wheel
+        python -m build . --no-isolation --wheel -v
 
     - name: Check wheel payload
       shell: bash -el {0}

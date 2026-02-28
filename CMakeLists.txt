@@ -26,7 +26,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
 find_package(Boost REQUIRED COMPONENTS system timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 
-find_package(TBB REQUIRED)
+find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
@@ -273,6 +273,7 @@ function(multipers_add_extension module_name)
         "${MULTIPERS_GMP_LIBRARY}"
     )
     multipers_link_openmp(${target_name})
+    multipers_link_tbb(${target_name})
   elseif(module_name STREQUAL "io" OR module_name STREQUAL "ops")
     # No extra native libs
   else()
