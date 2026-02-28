@@ -298,8 +298,8 @@ function(multipers_add_extension module_name)
         UNRESOLVED_DEPENDENCIES_VAR unresolved
         MODULES \"$<TARGET_FILE:${target_name}>\"
         DIRECTORIES
-          \"$ENV{CONDA_PREFIX}/Library/bin\"
-          \"$ENV{CONDA_PREFIX}/bin\"
+          \"\$ENV{CONDA_PREFIX}/Library/bin\"
+          \"\$ENV{CONDA_PREFIX}/bin\"
       )
 
       foreach(dep IN LISTS deps)
