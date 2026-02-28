@@ -75,7 +75,7 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba create -n build python=${{matrix.python-version}} pip wheel 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip wheel 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx ninja -c conda-forge
         micromamba activate build
 
         pip install pykeops filtration-domination --upgrade
