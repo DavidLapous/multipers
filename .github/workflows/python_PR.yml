@@ -181,20 +181,24 @@ jobs:
       with:
         path: repo
         submodules: recursive
-    - name: tests
+    - name: clean install
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp pytest-rerunfailures -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm cxx-compiler llvm-openmp pytest-rerunfailures gudhi -c conda-forge
         micromamba activate test
-        micromamba install gudhi -c conda-forge ## Little workaround for lagging pip versions
 
         if [ "$RUNNER_OS" == "macOS" ]; then
             # pykeops workaround
             brew install llvm libomp
-            export CXX=$(brew --prefix llvm)/bin/clang++
+            # export CXX=$(brew --prefix llvm)/bin/clang++
         fi
 
         pip install dist/*.whl
+
+    - name: Run pytest
+      shell: bash -el {0}
+      run: |
+        micromamba activate test
 
         cd repo/tests
         pytest -rv . --reruns 1 --reruns-delay 2
