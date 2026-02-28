@@ -85,7 +85,7 @@ include = [
 
 [project]
 name = "multipers"
-version = "2.5.0b1"
+version = "2.5.0b2"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
