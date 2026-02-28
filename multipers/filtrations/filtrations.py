@@ -288,7 +288,6 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
 def DegreeRips(
     *,
     simplex_tree=None,
-    degrees=None,
     points=None,
     distance_matrix=None,
     ks=None,
@@ -296,7 +295,7 @@ def DegreeRips(
     num=None,
     squeeze_strategy="exact",
     squeeze_resolution=None,
-    squeeze=False,
+    squeeze:bool=True,
 ):
     """
     The DegreeRips filtration.
