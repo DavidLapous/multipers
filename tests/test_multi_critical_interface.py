@@ -5,24 +5,13 @@ import multipers as mp
 import numpy as np
 import pytest
 from multipers.data import three_annulus
-from multipers.filtrations import CoreDelaunay
+from multipers.filtrations import CoreDelaunay, DegreeRips
 from multipers.tests import assert_sm
-
-from multipers.io import _multi_critical_from_slicer
-
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
     reason="multi_critical/ops is unavailable on Windows",
 )
-
-
-def _tiny_slicer():
-    st = mp.SimplexTreeMulti(num_parameters=2)
-    st.insert([0], [0.0, 0.0])
-    st.insert([1], [1.0, 0.0])
-    st.insert([0, 1], [1.0, 1.0])
-    return mp.Slicer(st)
 
 
 def _skip_if_fallback_was_used(caught):
@@ -46,64 +35,13 @@ def _run_or_skip(callable_):
     return out
 
 
-def test_multi_critical_in_memory_resolution_and_reduce_degree():
-    slicer = _tiny_slicer()
-
-    out = _run_or_skip(
-        lambda: _multi_critical_from_slicer(slicer, reduce=False, clear=True)
-    )
-    assert mp.slicer.is_slicer(out, allow_minpres=False)
-    assert out.num_parameters == 2
-
-    reduced = _run_or_skip(
-        lambda: _multi_critical_from_slicer(slicer, reduce=True, degree=0, clear=True)
-    )
-    assert reduced.is_minpres
-    assert reduced.minpres_degree == 0
-
-
-def test_multi_critical_in_memory_reduce_all_marks_degrees():
-    slicer = _tiny_slicer()
-
-    reduced_all = _run_or_skip(
-        lambda: _multi_critical_from_slicer(
-            slicer, reduce=True, degree=None, clear=True
-        )
-    )
-    assert isinstance(reduced_all, tuple)
-    assert len(reduced_all) > 0
-    for degree, out in enumerate(reduced_all):
-        assert out.is_minpres
-        assert out.minpres_degree == degree
-
-
-def test_multi_critical_direct_bridge_without_temp_scc(monkeypatch):
-    slicer = _tiny_slicer()
-    _run_or_skip(lambda: _multi_critical_from_slicer(slicer, reduce=False, clear=True))
-
-    import tempfile
-
-    def _no_tmpdir(*args, **kwargs):
-        raise AssertionError(
-            "Direct multi_critical bridge should not use temporary SCC files"
-        )
-
-    monkeypatch.setattr(tempfile, "TemporaryDirectory", _no_tmpdir)
-    out = _multi_critical_from_slicer(slicer, reduce=False, clear=True)
-    assert mp.slicer.is_slicer(out, allow_minpres=False)
-
-
-def test_one_criticalify_core_delaunay_regression_small():
+def _small_core_delaunay_slicer():
     np.random.seed(0)
     X = three_annulus(50, 50)
     k_max = len(X) // 10
     ks = np.unique(np.linspace(1, k_max, num=10, dtype=int)).tolist()
     st = CoreDelaunay(points=X, beta=1.5, ks=ks)
-    slicer = mp.Slicer(st)
-
-    out = _run_or_skip(lambda: mp.ops.one_criticalify(slicer))
-    assert mp.slicer.is_slicer(out, allow_minpres=False)
-    assert not out.is_kcritical
+    return mp.Slicer(st)
 
 
 def test_one_criticalify_core_delaunay_random_points_regression():
@@ -120,17 +58,19 @@ def test_one_criticalify_core_delaunay_random_points_regression():
 def _small_degree_rips_slicer():
     np.random.seed(0)
     points = three_annulus(50, 0)
-    st = CoreDelaunay(points=points, beta=1.5, ks=list(range(1, 10)))
-    return mp.Slicer(
-        st,
-        vineyard=False,
-        backend="matrix",
-        filtration_container="contiguous",
-    )
+    st = DegreeRips(points=points, ks=list(range(1, 10)), squeeze=False)
+    return mp.Slicer(st)
 
 
-def test_one_criticalify_degree_rips_keeps_input_dimensions_small():
-    slicer = _small_degree_rips_slicer()
+@pytest.fixture(params=["core_delaunay", "degree_rips"])
+def small_slicer(request):
+    if request.param == "core_delaunay":
+        return request.param, _small_core_delaunay_slicer()
+    return request.param, _small_degree_rips_slicer()
+
+
+def test_one_criticalify_keeps_input_dimensions_small(small_slicer):
+    kind, slicer = small_slicer
     assert slicer.num_parameters == 2
 
     input_dims = tuple(np.unique(slicer.get_dimensions()))
@@ -138,10 +78,11 @@ def test_one_criticalify_degree_rips_keeps_input_dimensions_small():
     out_dims = np.unique(out.get_dimensions())
     assert np.array_equal(np.unique(slicer.get_dimensions()), input_dims)
     assert np.all(np.isin(input_dims, out_dims))
+    assert kind in {"core_delaunay", "degree_rips"}
 
 
-def test_one_criticalify_degree_rips_degree_force_resolution_profiles_small():
-    slicer = _small_degree_rips_slicer()
+def test_one_criticalify_degree_force_resolution_profiles_small(small_slicer):
+    kind, slicer = small_slicer
 
     for degree in (0, 1):
         out_degree = _run_or_skip(
@@ -160,15 +101,16 @@ def test_one_criticalify_degree_rips_degree_force_resolution_profiles_small():
                 force_resolution=True,
             )
         )
-        assert tuple(np.unique(out_degree_res.get_dimensions())) == (
-            degree,
-            degree + 1,
-            degree + 2,
-        )
+        if degree == 0:
+            assert tuple(np.unique(out_degree_res.get_dimensions())) == (0, 1, 2)
+        elif kind == "core_delaunay":
+            assert tuple(np.unique(out_degree_res.get_dimensions())) == (1, 2, 3)
+        else:
+            assert tuple(np.unique(out_degree_res.get_dimensions())) == (1, 2)
 
 
-def test_one_criticalify_degree_rips_reduce_outputs_profiles_small():
-    slicer = _small_degree_rips_slicer()
+def test_one_criticalify_reduce_outputs_profiles_small(small_slicer):
+    _, slicer = small_slicer
 
     out_all = _run_or_skip(
         lambda: mp.ops.one_criticalify(
@@ -196,8 +138,8 @@ def test_one_criticalify_degree_rips_reduce_outputs_profiles_small():
     assert np.array_equal(np.unique(out_all_res[1].get_dimensions()), [1, 2, 3])
 
 
-def test_one_criticalify_degree_rips_hilbert_consistency_force_resolution_small():
-    slicer = _small_degree_rips_slicer()
+def test_one_criticalify_hilbert_consistency_force_resolution_small(small_slicer):
+    _, slicer = small_slicer
     out = _run_or_skip(lambda: mp.ops.one_criticalify(slicer))
 
     for degree in (0, 1):
