@@ -184,7 +184,7 @@ jobs:
     - name: clean install
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout llvm cxx-compiler llvm-openmp pytest-rerunfailures gudhi -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout gudhi -c conda-forge
         micromamba activate test
 
         pip install dist/*.whl
