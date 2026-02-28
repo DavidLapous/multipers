@@ -181,7 +181,6 @@ jobs:
       uses: actions/checkout@v6
       with:
         path: repo
-        submodules: recursive
     - name: clean install
       shell: bash -el {0}
       run: |
