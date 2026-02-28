@@ -251,6 +251,11 @@ def _minimal_presentation_from_slicer(
         from multipers import _mpfree_interface
 
         if _mpfree_interface._is_available():
+            if verbose:
+                print(
+                    f"[multipers.io] backend=mpfree mode=cpp_inteface degree={degree}",
+                    flush=True,
+                )
             new_slicer = _mpfree_interface.minimal_presentation(
                 slicer,
                 degree=degree,
@@ -266,6 +271,11 @@ def _minimal_presentation_from_slicer(
             return new_slicer
 
     _init_external_softwares(requires=[backend])
+    if verbose:
+        print(
+            f"[multipers.io] backend={backend} mode=disk_interface degree={degree}",
+            flush=True,
+        )
     dimension = slicer.dimension - degree
     with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
         tmp_path = os.path.join(tmpdir, "multipers.scc")
@@ -329,6 +339,11 @@ def function_delaunay_presentation_to_slicer(
         )
 
     if _function_delaunay_interface._is_available():
+        if verbose:
+            print(
+                f"[multipers.io] backend=function_delaunay mode=cpp_inteface degree={degree} multi_chunk={multi_chunk}",
+                flush=True,
+            )
         return _function_delaunay_interface.function_delaunay_to_slicer(
             slicer,
             point_cloud,
@@ -338,6 +353,11 @@ def function_delaunay_presentation_to_slicer(
             verbose,
         )
     # fallbacks to doing scc file io
+    if verbose:
+        print(
+            f"[multipers.io] backend=function_delaunay mode=disk_interface degree={degree} multi_chunk={multi_chunk}",
+            flush=True,
+        )
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "multipers_input.scc")
         output_path = os.path.join(tmpdir, "multipers_output.scc")
@@ -459,6 +479,11 @@ def _multi_critical_from_slicer(
     swedish = degree is not None if swedish is None else swedish
 
     if _multi_critical_interface._is_available():
+        if verbose:
+            print(
+                f"[multipers.io] backend=multi_critical mode=cpp_inteface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
+                flush=True,
+            )
         return _multi_critical_interface.one_criticalify(
             slicer,
             reduce=reduce,
@@ -479,6 +504,11 @@ def _multi_critical_from_slicer(
             filtration_container=filtration_container,
             **slicer_kwargs
     )
+    if verbose:
+        print(
+            f"[multipers.io] backend=multi_critical mode=disk_interface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
+            flush=True,
+        )
 
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "multipers_input.scc")
