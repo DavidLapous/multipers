@@ -111,6 +111,7 @@ jobs:
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
 
+        export CMAKE_BUILD_PARALLEL_LEVEL="$(python -c 'import os; print(os.cpu_count() or 1)')"
         python -m build . --no-isolation --wheel -v
 
     - name: Check wheel payload

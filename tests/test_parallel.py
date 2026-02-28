@@ -25,12 +25,13 @@ def io_fd_mpfree2(x):
     reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
 )
 @pytest.mark.parametrize("backend", ["loky", "threading"])
-def test_io_parallel(backend):
+@pytest.mark.parametrize("n_jobs", [1, 2, -1])
+def test_io_parallel(backend, n_jobs):
     x = mp.data.three_annulus(100, 50)
     X = [x] * 15
     ground_truth = io_fd_mpfree(x)
     ground_truth = io_fd_mpfree2(x)
-    dgms = Parallel(n_jobs=-1, backend=backend)(delayed(io_fd_mpfree)(x) for x in X)
+    dgms = Parallel(n_jobs=n_jobs, backend=backend)(delayed(io_fd_mpfree)(x) for x in X)
 
     for dgm in dgms:
         assert_sm_pair(ground_truth, dgm, exact=False, reg=0, max_error=1e-12)
@@ -53,12 +54,13 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
-def test_st_sm_parallel(backend, slicer, invariant):
+@pytest.mark.parametrize("n_jobs", [1, 2, -1])
+def test_st_sm_parallel(backend, slicer, invariant, n_jobs):
     ground_truth = get_sm_st(n_jobs=1, to_slicer=slicer, invariant=invariant)
     ground_truth2 = get_sm_st(n_jobs=1, to_slicer=not slicer, invariant=invariant)
     assert_sm_pair(ground_truth, ground_truth2, reg=0, exact=False, max_error=1e-12)
-    sms = Parallel(n_jobs=-1, backend=backend)(
-        delayed(get_sm_st)(-1, slicer, invariant) for _ in range(15)
+    sms = Parallel(n_jobs=n_jobs, backend=backend)(
+        delayed(get_sm_st)(n_jobs, slicer, invariant) for _ in range(15)
     )
     for sm in sms:
         assert_sm_pair(ground_truth, sm, exact=False, reg=0, max_error=1e-12)
