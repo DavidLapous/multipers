@@ -14,6 +14,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   )
 endif()
 
+if(MSVC)
+  add_compile_options(/bigobj)
+endif()
+
 if(DEFINED ENV{CONDA_PREFIX})
   list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
 endif()
@@ -22,10 +26,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
 find_package(Boost REQUIRED COMPONENTS system timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 
-find_package(TBB CONFIG QUIET)
-if(NOT TBB_FOUND)
-  find_package(TBB REQUIRED)
-endif()
+find_package(TBB REQUIRED)
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 

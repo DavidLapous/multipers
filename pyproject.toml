@@ -10,11 +10,6 @@ build-backend = "scikit_build_core.build"
 cmake.version = ">=3.24"
 cmake.build-type = "Release"
 build-dir = "build/{wheel_tag}"
-build.tool-args = ["-j4"]
-
-[[tool.scikit-build.overrides]]
-if.platform-system = "^win32"
-build.tool-args = ["/m:4"]
 
 [tool.scikit-build.cmake.define]
 CMAKE_COLOR_DIAGNOSTICS = "ON"
