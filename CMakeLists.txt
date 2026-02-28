@@ -296,10 +296,15 @@ function(multipers_add_extension module_name)
       file(GET_RUNTIME_DEPENDENCIES
         RESOLVED_DEPENDENCIES_VAR deps
         UNRESOLVED_DEPENDENCIES_VAR unresolved
+        CONFLICTING_DEPENDENCIES_PREFIX conflict
         MODULES \"$<TARGET_FILE:${target_name}>\"
         DIRECTORIES
           \"\$ENV{CONDA_PREFIX}/Library/bin\"
           \"\$ENV{CONDA_PREFIX}/bin\"
+        POST_EXCLUDE_REGEXES
+          \".*[Ww]indows[/\\\\][Ss]ystem32[/\\\\].*\"
+          \"api-ms-win-.*\"
+          \"ext-ms-.*\"
       )
 
       foreach(dep IN LISTS deps)
