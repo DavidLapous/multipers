@@ -184,7 +184,7 @@ jobs:
     - name: clean install
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm cxx-compiler llvm-openmp pytest-rerunfailures gudhi -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout llvm cxx-compiler llvm-openmp pytest-rerunfailures gudhi -c conda-forge
         micromamba activate test
 
         if [ "$RUNNER_OS" == "macOS" ]; then
@@ -201,4 +201,4 @@ jobs:
         micromamba activate test
 
         cd repo/tests
-        pytest -rv . --reruns 1 --reruns-delay 2
+        pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
