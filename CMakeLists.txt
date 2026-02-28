@@ -282,7 +282,11 @@ function(multipers_add_extension module_name)
   set(package_dir "multipers")
 
   set_target_properties(${target_name} PROPERTIES OUTPUT_NAME "${output_name}")
-  install(TARGETS ${target_name} LIBRARY DESTINATION "${package_dir}")
+  install(TARGETS ${target_name}
+    LIBRARY DESTINATION "${package_dir}"
+    RUNTIME DESTINATION "${package_dir}"
+    ARCHIVE DESTINATION "${package_dir}"
+  )
 endfunction()
 
 set(MULTIPERS_MODULES
