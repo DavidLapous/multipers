@@ -207,7 +207,13 @@ def module_approximation(
         _mp_logs.warn_geometry("Got a degenerate direction. This function may fail if the first line is not generic.")
 
     if from_coordinates and not input.is_squeezed:
+        if verbose:
+            print("Preparing filtration (squeeze)... ",end="", flush=True)
+        if not ignore_warnings:
+            _mp_logs.warn_copy("Got a non-squeezed input with `from_coordinates=True`.")
         input = input.grid_squeeze()
+        if verbose:
+            print("Done.", flush=True)
     unsqueeze_grid = None
     if input.is_squeezed:
         if verbose:
