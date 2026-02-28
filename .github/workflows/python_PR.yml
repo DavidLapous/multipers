@@ -190,10 +190,9 @@ jobs:
         if ! pip install --dry-run --only-binary=:all: gudhi >/dev/null 2>&1; then
           echo "SKIP_PYTEST=1" >> "$GITHUB_ENV"
           echo "Skipping tests: no pip wheel available for gudhi on Python ${{ matrix.python-version }}"
-          exit 0
+        else
+          pip install dist/*.whl
         fi
-
-        pip install dist/*.whl
 
     - name: Run pytest
       shell: bash -el {0}
