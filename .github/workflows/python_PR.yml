@@ -80,6 +80,18 @@ jobs:
 
         pip install pykeops filtration-domination --upgrade
 
+    - name: Patch multi_critical?
+      if: ${{ matrix.os != 'windows-latest' }}
+      shell: bash -el {0}
+      run: |
+        TARGET="ext/multi_critical/include/multi_critical/free_resolution.h"
+        if [ -f "$TARGET" ] && ! grep -q 'if(queue.empty())' "$TARGET"; then
+          sed -i.bak 's/queue.pop();/queue.pop();\
+        if(queue.empty()) {\
+            continue;\
+        }/' "$TARGET"
+        fi
+
     - name: tree
       if: ${{ matrix.os != 'windows-latest' }}
       shell: bash -el {0}
