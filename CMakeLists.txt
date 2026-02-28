@@ -282,11 +282,40 @@ function(multipers_add_extension module_name)
   set(package_dir "multipers")
 
   set_target_properties(${target_name} PROPERTIES OUTPUT_NAME "${output_name}")
-  install(TARGETS ${target_name}
+  if(WIN32)
+    install(TARGETS ${target_name}
     LIBRARY DESTINATION "${package_dir}"
     RUNTIME DESTINATION "${package_dir}"
     ARCHIVE DESTINATION "${package_dir}"
   )
+
+    install(CODE "
+    file(GET_RUNTIME_DEPENDENCIES
+      RESOLVED_DEPENDENCIES_VAR deps
+      UNRESOLVED_DEPENDENCIES_VAR unresolved
+      EXECUTABLES \"\$<TARGET_FILE:${target_name}>\"
+      DIRECTORIES
+        \"\$ENV{CONDA_PREFIX}/Library/bin\"
+        \"\$ENV{CONDA_PREFIX}/bin\"
+    )
+
+    foreach(dep IN LISTS deps)
+      file(INSTALL
+        DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${package_dir}\"
+        TYPE SHARED_LIBRARY
+        FILES \"\${dep}\"
+      )
+    endforeach()
+
+    foreach(dep IN LISTS unresolved)
+      message(WARNING \"Unresolved dependency: \${dep}\")
+    endforeach()
+  ")
+  else()
+    install(TARGETS ${target_name}
+    LIBRARY DESTINATION "${package_dir}"
+  )
+  endif()
 endfunction()
 
 set(MULTIPERS_MODULES
