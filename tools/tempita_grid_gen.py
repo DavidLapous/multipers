@@ -24,6 +24,13 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 VERBOSE = _env_flag("MULTIPERS_TEMPITA_GRID_VERBOSE", default=False)
 
+OUTPUT_ROOT = Path(
+    os.environ.get("MULTIPERS_TEMPITA_GRID_OUTPUT_ROOT", str(REPO_ROOT))
+).resolve()
+TEMPITA_CACHE_DIR = Path(
+    os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", str(REPO_ROOT / "build" / "tmp"))
+).resolve()
+
 
 def _print_section_header(title: str) -> None:
     if not VERBOSE:
@@ -434,13 +441,13 @@ slicers = [
 ]
 
 
-os.makedirs("build/tmp", exist_ok=True)
+TEMPITA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 _print_section_header("Value_types")
 if VERBOSE:
     print(*value_types, sep="\n")
-with open("build/tmp/_value_types.pkl", "wb") as f:
+with (TEMPITA_CACHE_DIR / "_value_types.pkl").open("wb") as f:
     pickle.dump(value_types, f)
 
 _print_section_header("Filtrations")
@@ -458,7 +465,7 @@ Filtrations = [
 ]
 if VERBOSE:
     print(*Filtrations, sep="\n")
-with open("build/tmp/_filtration_names.pkl", "wb") as f:
+with (TEMPITA_CACHE_DIR / "_filtration_names.pkl").open("wb") as f:
     pickle.dump(Filtrations, f)
 
 _print_section_header("Slicers")
@@ -466,7 +473,7 @@ if VERBOSE:
     print(*[s["PYTHON_TYPE"] for s in slicers], sep="\n")
     print("----------------------")
     print(*slicers, sep="\n")
-with open("build/tmp/_slicer_names.pkl", "wb") as f:
+with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("wb") as f:
     pickle.dump(slicers, f)
 
 _print_section_header("SimplexTrees")
@@ -533,7 +540,7 @@ st_list = [
 if VERBOSE:
     print(*st_list, sep="\n")
 
-with open("build/tmp/_simplextrees_.pkl", "wb") as f:
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("wb") as f:
     pickle.dump(st_list, f)
 
 
@@ -581,27 +588,27 @@ slicer_instantiation_types = _unique(
 )
 
 _write_text_if_changed(
-    REPO_ROOT / "multipers/gudhi/filtrations_extern_templates.h",
+    OUTPUT_ROOT / "multipers/gudhi/filtrations_extern_templates.h",
     _render_extern_templates_header(filtration_instantiation_types),
 )
 _write_text_if_changed(
-    REPO_ROOT / "multipers/gudhi/simplextree_multi_extern_templates.h",
+    OUTPUT_ROOT / "multipers/gudhi/simplextree_multi_extern_templates.h",
     _render_extern_templates_header(simplextree_instantiation_types),
 )
 _write_text_if_changed(
-    REPO_ROOT / "multipers/gudhi/slicer_extern_templates.h",
+    OUTPUT_ROOT / "multipers/gudhi/slicer_extern_templates.h",
     _render_extern_templates_header(slicer_instantiation_types),
 )
 _write_text_if_changed(
-    REPO_ROOT / "tools/core/filtrations_instantiations.inc",
+    OUTPUT_ROOT / "tools/core/filtrations_instantiations.inc",
     _render_instantiations_include(filtration_instantiation_types),
 )
 _write_text_if_changed(
-    REPO_ROOT / "tools/core/simplextree_instantiations.inc",
+    OUTPUT_ROOT / "tools/core/simplextree_instantiations.inc",
     _render_instantiations_include(simplextree_instantiation_types),
 )
 _write_text_if_changed(
-    REPO_ROOT / "tools/core/slicer_instantiations.inc",
+    OUTPUT_ROOT / "tools/core/slicer_instantiations.inc",
     _render_instantiations_include(slicer_instantiation_types),
 )
 
