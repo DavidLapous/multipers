@@ -8,8 +8,8 @@ Verbose C++/Python metadata is resolved from tools/codegen/_registry.py.
 VALUE_TYPES = [
     "int32",  # required
     "float64",  # required for MMA
-    # "int64",
-    # "float32",
+    "int64",
+    "float32",
 ]
 
 # Persistence matrix column IDs
@@ -18,7 +18,7 @@ COLUMNS = [
     # "SET",
     # "HEAP",
     # "UNORDERED_SET",
-    # "NAIVE_VECTOR",
+    "NAIVE_VECTOR",
     # "VECTOR",
     # "INTRUSIVE_LIST",
     # "LIST",
@@ -29,7 +29,7 @@ BACKENDS = [
     "Matrix",  # default
     # "Graph",
     # "Clement",
-    # "GudhiCohomology",
+    "GudhiCohomology",
 ]
 
 # Vineyard support options
