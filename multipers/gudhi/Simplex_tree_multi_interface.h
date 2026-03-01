@@ -658,3 +658,7 @@ using Simplex_tree_multi_boundary_iterator =
 }  // namespace python_interface
 }  // namespace multiparameter
 }  // namespace Gudhi
+
+#if !defined(MULTIPERS_BUILD_CORE_TEMPLATES) && __has_include("simplextree_multi_extern_templates.h")
+#include "simplextree_multi_extern_templates.h"
+#endif

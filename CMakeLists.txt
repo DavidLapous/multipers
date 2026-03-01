@@ -65,19 +65,47 @@ set(MULTIPERS_GENERATED_FILES
   "${CMAKE_SOURCE_DIR}/multipers/slicer.pyx"
 )
 
+set(MULTIPERS_CORE_GENERATED_FILES
+  "${CMAKE_SOURCE_DIR}/tools/core/filtrations_instantiations.inc"
+  "${CMAKE_SOURCE_DIR}/tools/core/simplextree_instantiations.inc"
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_instantiations.inc"
+  "${CMAKE_SOURCE_DIR}/multipers/gudhi/filtrations_extern_templates.h"
+  "${CMAKE_SOURCE_DIR}/multipers/gudhi/simplextree_multi_extern_templates.h"
+  "${CMAKE_SOURCE_DIR}/multipers/gudhi/slicer_extern_templates.h"
+)
+
+set(MULTIPERS_TEMPITA_GRID_GEN "${CMAKE_SOURCE_DIR}/tools/tempita_grid_gen.py")
+
+option(
+  MULTIPERS_TEMPITA_GRID_VERBOSE
+  "Enable verbose Tempita grid generation logs"
+  OFF
+)
+
+if(MULTIPERS_TEMPITA_GRID_VERBOSE)
+  set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "1")
+else()
+  set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "0")
+endif()
+
 add_custom_command(
-  OUTPUT ${MULTIPERS_GENERATED_FILES}
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/_tempita_grid_gen.py"
+  OUTPUT ${MULTIPERS_GENERATED_FILES} ${MULTIPERS_CORE_GENERATED_FILES}
+  COMMAND
+    "${CMAKE_COMMAND}" -E env
+    "MULTIPERS_TEMPITA_GRID_VERBOSE=${MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE}"
+    "${Python3_EXECUTABLE}" "${MULTIPERS_TEMPITA_GRID_GEN}"
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/process_tempita.py" ${MULTIPERS_TEMPLATE_FILES}
   DEPENDS
-    "${CMAKE_SOURCE_DIR}/_tempita_grid_gen.py"
+    "${MULTIPERS_TEMPITA_GRID_GEN}"
+    "${CMAKE_SOURCE_DIR}/options.py"
+    "${CMAKE_SOURCE_DIR}/tools/codegen/_registry.py"
     "${CMAKE_SOURCE_DIR}/tools/process_tempita.py"
     ${MULTIPERS_TEMPLATE_FILES}
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
   VERBATIM
 )
 
-add_custom_target(multipers_tempita DEPENDS ${MULTIPERS_GENERATED_FILES})
+add_custom_target(multipers_tempita DEPENDS ${MULTIPERS_GENERATED_FILES} ${MULTIPERS_CORE_GENERATED_FILES})
 
 set(MULTIPERS_CYTHON_COMMON_ARGS
   --cplus
@@ -195,6 +223,87 @@ function(multipers_link_tbb target_name)
   endif()
 endfunction()
 
+set(MULTIPERS_SHARED_CORE_MODULES
+  simplex_tree_multi
+  slicer
+  function_rips
+  _function_delaunay_interface
+  multiparameter_module_approximation
+)
+
+add_library(
+  multipers_core_filtrations_obj
+  OBJECT
+  "${CMAKE_SOURCE_DIR}/tools/core/filtrations_core.cc"
+)
+add_dependencies(multipers_core_filtrations_obj multipers_tempita)
+target_include_directories(multipers_core_filtrations_obj PRIVATE ${MULTIPERS_BASE_INCLUDE_DIRS})
+multipers_apply_common_build_flags(multipers_core_filtrations_obj)
+
+add_library(
+  multipers_core_simplextree_obj
+  OBJECT
+  "${CMAKE_SOURCE_DIR}/tools/core/simplextree_core.cc"
+)
+add_dependencies(
+  multipers_core_simplextree_obj
+  multipers_tempita
+  multipers_core_filtrations_obj
+)
+target_include_directories(multipers_core_simplextree_obj PRIVATE ${MULTIPERS_BASE_INCLUDE_DIRS})
+multipers_apply_common_build_flags(multipers_core_simplextree_obj)
+
+add_library(
+  multipers_core_slicer_obj
+  OBJECT
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core.cc"
+)
+add_dependencies(
+  multipers_core_slicer_obj
+  multipers_tempita
+  multipers_core_filtrations_obj
+)
+target_include_directories(multipers_core_slicer_obj PRIVATE ${MULTIPERS_BASE_INCLUDE_DIRS})
+multipers_apply_common_build_flags(multipers_core_slicer_obj)
+
+add_library(
+  multipers_core_shared
+  SHARED
+  $<TARGET_OBJECTS:multipers_core_filtrations_obj>
+  $<TARGET_OBJECTS:multipers_core_simplextree_obj>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj>
+)
+add_dependencies(multipers_core_shared multipers_tempita)
+multipers_link_tbb(multipers_core_shared)
+
+set(MULTIPERS_LOCAL_RPATH "")
+if(APPLE)
+  set(MULTIPERS_LOCAL_RPATH "@loader_path")
+elseif(UNIX)
+  set(MULTIPERS_LOCAL_RPATH "$ORIGIN")
+endif()
+
+set_target_properties(multipers_core_shared PROPERTIES OUTPUT_NAME "multipers_core")
+if(WIN32)
+  set_target_properties(multipers_core_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+if(MULTIPERS_LOCAL_RPATH)
+  set_target_properties(
+    multipers_core_shared
+    PROPERTIES
+      BUILD_RPATH "${MULTIPERS_LOCAL_RPATH}"
+      INSTALL_RPATH "${MULTIPERS_LOCAL_RPATH}"
+  )
+endif()
+if(APPLE)
+  set_target_properties(
+    multipers_core_shared
+    PROPERTIES
+      INSTALL_NAME_DIR "@rpath"
+      SUFFIX ".so"
+  )
+endif()
+
 function(multipers_add_extension module_name)
   string(REPLACE "." "/" module_path "${module_name}")
   set(pyx_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx")
@@ -224,6 +333,15 @@ function(multipers_add_extension module_name)
 
   target_include_directories(${target_name} PRIVATE ${MULTIPERS_BASE_INCLUDE_DIRS})
   multipers_apply_common_build_flags(${target_name})
+
+  list(FIND MULTIPERS_SHARED_CORE_MODULES "${module_name}" uses_shared_core)
+  if(NOT uses_shared_core EQUAL -1)
+    target_link_libraries(${target_name} PRIVATE multipers_core_shared)
+    if(MULTIPERS_LOCAL_RPATH)
+      set_property(TARGET ${target_name} APPEND PROPERTY BUILD_RPATH "${MULTIPERS_LOCAL_RPATH}")
+      set_property(TARGET ${target_name} APPEND PROPERTY INSTALL_RPATH "${MULTIPERS_LOCAL_RPATH}")
+    endif()
+  endif()
 
   if(module_name STREQUAL "_aida_interface")
     if(WIN32)
@@ -354,6 +472,17 @@ endif()
 foreach(module_name IN LISTS MULTIPERS_MODULES)
   multipers_add_extension(${module_name})
 endforeach()
+
+if(WIN32)
+  install(
+    TARGETS multipers_core_shared
+    LIBRARY DESTINATION multipers
+    RUNTIME DESTINATION multipers
+    ARCHIVE DESTINATION multipers
+  )
+else()
+  install(TARGETS multipers_core_shared LIBRARY DESTINATION multipers)
+endif()
 
 install(
   DIRECTORY "${CMAKE_SOURCE_DIR}/multipers/"

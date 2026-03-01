@@ -33,6 +33,10 @@ multipers/mma_structures.pyx
 multipers/filtration_conversions.pxd
 multipers/filtrations.pxd
 
+## generated explicit template files
+tools/core/*_instantiations.inc
+multipers/gudhi/*_extern_templates.h
+
 ## Hidden files
 .*
 !.clang-format
