@@ -199,15 +199,15 @@ jobs:
       run: |
         if [ "${SKIP_PYTEST:-0}" = "1" ]; then
           echo "Skipping pytest because gudhi pip wheel is unavailable for this Python version."
-          exit 0
+        else
+          micromamba activate test
+          if [ "$RUNNER_OS" == "macOS" ]; then
+              # pykeops workaround
+              brew install llvm libomp
+              export CXX=$(brew --prefix llvm)/bin/clang++
+          fi
+
+          cd repo/tests
+          pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
         fi
 
-        micromamba activate test
-        if [ "$RUNNER_OS" == "macOS" ]; then
-            # pykeops workaround
-            brew install llvm libomp
-            export CXX=$(brew --prefix llvm)/bin/clang++
-        fi
-
-        cd repo/tests
-        pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
