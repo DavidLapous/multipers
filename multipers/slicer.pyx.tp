@@ -7,13 +7,17 @@ both type have the same interface, defined the slicer.pyx file
 
 
 import pickle
+import os
+from pathlib import Path
 
-with open("build/tmp/_slicer_names.pkl", "rb") as f:
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("rb") as f:
   slicers=pickle.load(f)
 
 dtypes = set([(D['PY_VALUE_TYPE'], D['C_VALUE_TYPE'], D['SHORT_VALUE_TYPE']) for D in slicers])
 
-with open("build/tmp/_simplextrees_.pkl", "rb") as f:
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
     simplex_trees = pickle.load(f)
 
 }}

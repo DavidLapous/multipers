@@ -14,7 +14,12 @@ value_types = [
 ]
 
 import pickle
-with open("build/tmp/_filtration_names.pkl", "rb") as f:
+import os
+from pathlib import Path
+
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_filtration_names.pkl").open("rb") as f:
   Filtrations=pickle.load(f)
 
 }}

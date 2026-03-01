@@ -1,7 +1,11 @@
 {{py:
+import os
 import pickle
+from pathlib import Path
 
-with open("build/tmp/_filtration_names.pkl", "rb") as f:
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_filtration_names.pkl").open("rb") as f:
   Filtrations=pickle.load(f)
 }}
 from libcpp.utility cimport pair

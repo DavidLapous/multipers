@@ -13,9 +13,14 @@ MMA core structures.
 # ]
 
 import pickle as pkl
+import os
 import numpy as np
+from pathlib import Path
 
-D = pkl.load(open("build/tmp/_slicer_names.pkl", "rb"))
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("rb") as f:
+    D = pkl.load(f)
 value_types = np.unique([tuple((x['C_VALUE_TYPE'],x['PY_VALUE_TYPE'], x['SHORT_VALUE_TYPE'])) for x in D], axis=0)
 
 }}
