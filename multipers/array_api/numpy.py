@@ -143,7 +143,7 @@ def has_grad(_):
 
 
 def to_device(x, device):
-    if device is None or str(device) in {"None", "cpu"}:
+    if device is None or str(device) in ("None", "cpu"):
         return x
     raise ValueError(
         f"NumPy backend only supports CPU tensors, requested device {device!r}."

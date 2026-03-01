@@ -479,7 +479,7 @@ def evaluate_in_grid(pts, grid, mass_default=None, input_inf_value=None, output_
     if mass_default is not None:
         grid = tuple(api.cat([g, api.astensor(m)[None]]) for g,m in zip(grid, mass_default))
     def empty_like(x):
-        return api.empty(x.shape, dtype=dtype)
+        return api.to_device(api.empty(x.shape, dtype=dtype), api.device(pts))
 
     coords=empty_like(pts)
     cdef int dim = coords.shape[1]
