@@ -55,6 +55,8 @@ add_custom_command(
     "MULTIPERS_TEMPITA_CACHE_DIR=${MULTIPERS_TEMPITA_CACHE_DIR}"
     "${Python3_EXECUTABLE}" "${MULTIPERS_TEMPITA_GRID_GEN}"
   COMMAND
+    "${CMAKE_COMMAND}" -E env
+    "MULTIPERS_TEMPITA_CACHE_DIR=${MULTIPERS_TEMPITA_CACHE_DIR}"
     "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/process_tempita.py"
     --source-root "${CMAKE_SOURCE_DIR}"
     --output-root "${MULTIPERS_GENERATED_ROOT}"
