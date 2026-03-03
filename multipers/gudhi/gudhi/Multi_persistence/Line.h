@@ -178,13 +178,16 @@ class Line
 
     return t;
   }
-
+  
   /**
    * @brief Computes the "time" parameter \f$ t \f$ of the starting point \f$ p = base\_point + t \times direction \f$
-   * of the intersection between the line and the closed positive cone originating at point `x`.
-   *
+   * of the intersection between the line and the closed positive cone originating at the given point.
+   * 
    * @tparam U Type of the time parameter.
-   * @param x Origin of the closed positive cone.
+   * @tparam Iterator Forward iterator, iterating over the point coordinates. The dereferenced values should be
+   * convertible into `U`.
+   * @param it_begin Begin iterator of the coordinate range.
+   * @param it_end End iterator of the coordinate range.
    */
   template <typename U = T, class Iterator>
   U compute_forward_intersection(Iterator it_begin, Iterator it_end) const
@@ -264,6 +267,36 @@ class Line
         }
       }
       t = std::max(t, tmp);
+    }
+
+    return t;
+  }
+  
+  /**
+   * @brief Computes the "time" parameter \f$ t \f$ of the starting point \f$ p = base\_point + t \times direction \f$
+   * of the intersection between the line and the open negative cone originating at the given point.
+   * 
+   * @tparam U Type of the time parameter.
+   * @tparam Iterator Forward iterator, iterating over the point coordinates. The dereferenced values should be
+   * convertible into `U`.
+   * @param it_begin Begin iterator of the coordinate range.
+   * @param it_end End iterator of the coordinate range.
+   */
+  template <typename U = T, class Iterator>
+  U compute_backward_intersection(Iterator it_begin, Iterator it_end) const
+  {
+    constexpr const U m_inf = Point<U>::T_m_inf;
+
+    U t = Point<U>::T_inf;
+    for (unsigned int p = 0; it_begin != it_end && p < direction_.size(); ++p, ++it_begin) {
+      auto val = *it_begin;
+      if (Gudhi::multi_filtration::_is_nan(val)) return m_inf;
+      auto div = direction_.size() == 0 ? 1 : direction_[p];
+      if (div == 0) {
+        if (val <= basePoint_[p]) return m_inf;
+      } else {
+        t = std::min(t, (static_cast<U>(val) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
+      }
     }
 
     return t;

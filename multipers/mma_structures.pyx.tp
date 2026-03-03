@@ -90,11 +90,11 @@ cdef class PySummand_{{SHORT}}:
     cdef Summand[{{CTYPE}}] sum
 
     def get_birth_list(self): 
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_birth_list()
         return _vff21cview_{{SHORT}}(v, copy = True)
 
     def get_death_list(self):
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_death_list()
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_death_list()
         return _vff21cview_{{SHORT}}(v, copy = True)
     @property
     def degree(self)->int:
@@ -106,7 +106,7 @@ cdef class PySummand_{{SHORT}}:
     def get_bounds(self):
         cdef pair[vector[{{CTYPE}}],vector[{{CTYPE}}]] cbounds
         with nogil:
-            cbounds = self.sum.get_bounds().get_bounding_corners()
+            cbounds = self.sum.compute_bounds().get_bounding_corners()
         # return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
         return np.asarray(cbounds.first), np.asarray(cbounds.second)
     @property
@@ -114,10 +114,10 @@ cdef class PySummand_{{SHORT}}:
       return {{PYTYPE}}
 
     def num_parameters(self):
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.get_birth_list()
+        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_birth_list()
         if v[0].is_finite():
             return v[0].num_parameters()
-        v = self.sum.get_death_list()
+        v = self.sum.compute_death_list()
         return v[0].num_parameters()
     def __eq__(self, PySummand_{{SHORT}} other):
         return self.sum == other.sum 
@@ -129,8 +129,8 @@ cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     r"""
     Returns a list (over parameter) of the filtrations values of this parameter.
     """
-    cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.get_birth_list()
-    cdef vector[One_critical_filtration[{{CTYPE}}]] vd = summand.get_death_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.compute_birth_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] vd = summand.compute_death_list()
 
     if vb[0].is_finite():
         if vd[0].is_finite():
@@ -209,7 +209,7 @@ cdef class PyModule_{{SHORT}}:
     def permute_summands(self, permutation):
         cdef int[:] c_perm = np.asarray(permutation, dtype=np.int32) 
         other = PyModule_{{SHORT}}()
-        other.cmod = self.cmod.permute_summands(permutation)
+        other.cmod = build_permuted_module(self.cmod, permutation)
         return other
 
     def _set_from_ptr(self, intptr_t module_ptr):
@@ -275,7 +275,7 @@ cdef class PyModule_{{SHORT}}:
         r"""
         Returns the maximum degree of the module.
         """
-        return self.cmod.get_dimension()
+        return self.cmod.get_max_dimension()
     @property
     def num_parameters(self)->int:
         cdef size_t dim = self.cmod.get_box().get_lower_corner().size()
@@ -307,13 +307,13 @@ cdef class PyModule_{{SHORT}}:
         if i == slice(None):
             return self
         summand = PySummand_{{SHORT}}()
-        summand.set(self.cmod.at(i % self.cmod.size()))
+        summand.set(self.cmod.get_summand(i % self.cmod.size()))
         return summand
     def __iter__(self):
         cdef int num_summands = self.cmod.size()
         for i in range(num_summands):
             summand = PySummand_{{SHORT}}()
-            summand.set(self.cmod.at(i)) ## hmm copy. maybe do summand from ptr
+            summand.set(self.cmod.get_summand(i)) ## hmm copy. maybe do summand from ptr
             yield summand
 
     def get_bounds(self):
@@ -323,7 +323,7 @@ cdef class PyModule_{{SHORT}}:
         """
         cdef pair[vector[{{CTYPE}}],vector[{{CTYPE}}]] cbounds
         with nogil:
-            cbounds = self.cmod.get_bounds().get_bounding_corners()
+            cbounds = self.cmod.compute_bounds().get_bounding_corners()
         # return _ff21cview_{{SHORT}}(&cbounds.first).copy(), _ff21cview_{{SHORT}}(&cbounds.second).copy()
         return np.asarray(cbounds.first), np.asarray(cbounds.second)
     def rescale(self,rescale_factors, int degree=-1):
@@ -419,8 +419,8 @@ cdef class PyModule_{{SHORT}}:
         interleavings = self.get_module_of_degree(degree).get_interleavings(box)
         plot2d_PyModule(corners, box=box, dimension=degree, interleavings = interleavings, **kwargs)
         return
-    def degree_splits(self):
-        return np.asarray(self.cmod.get_degree_splits(), dtype=np.int64)
+    # def degree_splits(self):
+    #     return np.asarray(self.cmod.get_degree_splits(), dtype=np.int64)
 {{if SHORT[0] == 'f'}}
     def evaluate_in_grid(self, grid):
         grid = mpg.sanitize_grid(grid, numpyfy=True)
@@ -448,37 +448,37 @@ cdef class PyModule_{{SHORT}}:
         cdef vector[vector[{{CTYPE}}]] ccoords = coordinates
         cdef vector[vector[{{CTYPE}}]] out 
         with nogil:
-            out = self.cmod.compute_pixels(ccoords, cdegrees, cbox, delta, p, normalize, n_jobs)
+            out = compute_module_pixels(self.cmod, ccoords, cdegrees, cbox, delta, p, normalize, n_jobs)
         return np.asarray(out)
-    def barcode(self, basepoint, int degree = -1,*, bool threshold = False): # TODO direction vector interface
-        r"""Computes the barcode of module along a lines.
+    # def barcode(self, basepoint, int degree = -1,*, bool threshold = False): # TODO direction vector interface
+    #     r"""Computes the barcode of module along a lines.
 
-        Parameters
-        ----------
+    #     Parameters
+    #     ----------
         
-        basepoint  : vector
-            basepoint of the lines on which to compute the barcodes, i.e. a point on the line
-        degree = -1 : integer
-            Homology degree on which to compute the bars. If negative, every dimension is computed
-        box (default) :
-            box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
-        threshold = False : 
-            Thre
+    #     basepoint  : vector
+    #         basepoint of the lines on which to compute the barcodes, i.e. a point on the line
+    #     degree = -1 : integer
+    #         Homology degree on which to compute the bars. If negative, every dimension is computed
+    #     box (default) :
+    #         box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
+    #     threshold = False : 
+    #         Thre
 
-        Warning
-        -------
+    #     Warning
+    #     -------
         
-        If the barcodes are not thresholded, essential barcodes will not be plot-able.
+    #     If the barcodes are not thresholded, essential barcodes will not be plot-able.
 
-        Returns
-        -------
+    #     Returns
+    #     -------
         
-        PyMultiDiagrams
-            Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
-        """
-        out = PyMultiDiagram_{{SHORT}}()
-        out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py2p_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
-        return out
+    #     PyMultiDiagrams
+    #         Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
+    #     """
+    #     out = PyMultiDiagram_{{SHORT}}()
+    #     out.set(self.cmod.get_barcode(Line[{{CTYPE}}](_py2p_{{SHORT}}(np.asarray(basepoint, dtype={{PYTYPE}}))), degree, threshold))
+    #     return out
     @staticmethod
     cdef _threshold_bc(bc): 
         return tuple(np.fromiter((a for a in stuff if a[0] < np.inf),  dtype=np.dtype(({{PYTYPE}},2)) ) for stuff in bc)
@@ -509,10 +509,10 @@ cdef class PyModule_{{SHORT}}:
         """
         basepoint = np.asarray(basepoint, dtype={{PYTYPE}})
         if direction is None:
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
         else:
             direction = np.asarray(direction, dtype = {{PYTYPE}})
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode2(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
+            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
         if full:
@@ -525,53 +525,53 @@ cdef class PyModule_{{SHORT}}:
         out = np.empty(shape=num_summands, dtype=np.int32)
         cdef int32_t[:] c_out = out
         for i in range(num_summands):
-            c_out[i] = self.cmod.at(i).get_dimension()
+            c_out[i] = self.cmod.get_summand(i).get_dimension()
         return out
 
-    def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
-        r"""Computes barcodes of module along a set of lines.
+    # def barcodes(self, int degree, basepoints = None, num=100, box = None,threshold = False):
+    #     r"""Computes barcodes of module along a set of lines.
 
-        Parameters
-        ----------
+    #     Parameters
+    #     ----------
         
-        basepoints = None : list of vectors
-            basepoints of the lines on which to compute the barcodes.
-        degree = -1 : integer
-            Homology degree on which to compute the bars. If negative, every dimension is computed
-        box (default) :
-            box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
-        num:int=100
-            if basepoints is not specified, defines the number of lines to consider.
-        threshold = False : threshold t
-            Resolution of the image(s).
+    #     basepoints = None : list of vectors
+    #         basepoints of the lines on which to compute the barcodes.
+    #     degree = -1 : integer
+    #         Homology degree on which to compute the bars. If negative, every dimension is computed
+    #     box (default) :
+    #         box on which to compute the barcodes if basepoints is not specified. Default is a linspace of lines crossing that box.
+    #     num:int=100
+    #         if basepoints is not specified, defines the number of lines to consider.
+    #     threshold = False : threshold t
+    #         Resolution of the image(s).
 
-        Warning
-        -------
+    #     Warning
+    #     -------
         
-        If the barcodes are not thresholded, essential barcodes will not be plot-able.
+    #     If the barcodes are not thresholded, essential barcodes will not be plot-able.
 
-        Returns
-        -------
+    #     Returns
+    #     -------
         
-        PyMultiDiagrams
-            Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
-        """
-        out = PyMultiDiagrams_{{SHORT}}()
-        if box is None:
-            box = [self.get_bottom(), self.get_top()]
-        if (len(box[0]) != 2) and (basepoints is None):
-            raise ValueError("Basepoints has to be specified for filtration dimension >= 3 !")
-        elif basepoints is None:
-            h = box[1][1] - box[0][1]
-            basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
-        else :
-            num=len(basepoints)
+    #     PyMultiDiagrams
+    #         Structure that holds the barcodes. Barcodes can be retrieved with a .get_points() or a .to_multipers() or a .plot().
+    #     """
+    #     out = PyMultiDiagrams_{{SHORT}}()
+    #     if box is None:
+    #         box = [self.get_bottom(), self.get_top()]
+    #     if (len(box[0]) != 2) and (basepoints is None):
+    #         raise ValueError("Basepoints has to be specified for filtration dimension >= 3 !")
+    #     elif basepoints is None:
+    #         h = box[1][1] - box[0][1]
+    #         basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
+    #     else :
+    #         num=len(basepoints)
 
-        cdef {{CTYPE}}[:,:] basepoints_view = np.asarray(basepoints, dtype = {{PYTYPE}})
-        cdef vector[Point[{{CTYPE}}]] cbasepoints = _py2vp_{{SHORT}}(basepoints_view)
+    #     cdef {{CTYPE}}[:,:] basepoints_view = np.asarray(basepoints, dtype = {{PYTYPE}})
+    #     cdef vector[Point[{{CTYPE}}]] cbasepoints = _py2vp_{{SHORT}}(basepoints_view)
 
-        out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
-        return out
+    #     out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
+    #     return out
 
     def barcodes2(self, int degree = -1, basepoints = None, int num=100, box = None, bool threshold = False):
         r"""Computes barcodes of module along a set of lines.
@@ -614,7 +614,7 @@ cdef class PyModule_{{SHORT}}:
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
             cbasepoints.push_back(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoints[i])))
-        return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes2(cbasepoints, degree))   
+        return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes_from_set_of_lines(cbasepoints, degree))   
 
     def landscape(self, degree:int, k:int=0,box:Sequence|np.ndarray|None=None, resolution:Sequence=[100,100], bool plot=False):
         r"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.
@@ -642,7 +642,7 @@ cdef class PyModule_{{SHORT}}:
         if box is None:
             box = self.get_box()
         cdef Box[{{CTYPE}}] c_box = Box[{{CTYPE}}](box)
-        out = np.array(self.cmod.get_landscape(degree, k, c_box, resolution))
+        out = np.array(compute_module_landscape(self.cmod, degree, k, c_box, resolution))
         if plot:
             aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
             extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
@@ -677,11 +677,11 @@ cdef class PyModule_{{SHORT}}:
         """
         import matplotlib.pyplot as plt
         if grid is not None:
-            out = np.array(self.cmod.get_landscapes(degree, ks, grid, n_jobs))
+            out = np.array(compute_set_of_module_landscapes(self.cmod, degree, ks, grid, n_jobs))
             return out
         if box is None:
             box = self.get_box()
-        out = np.array(self.cmod.get_landscapes(degree, ks, Box[{{CTYPE}}](box), resolution, n_jobs))
+        out = np.array(compute_set_of_module_landscapes(self.cmod, degree, ks, Box[{{CTYPE}}](box), resolution, n_jobs))
         if plot:
             to_plot = np.sum(out, axis=0)
             aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
@@ -853,15 +853,15 @@ cdef class PyModule_{{SHORT}}:
         #     c_points.push_back(temp)
         cdef Module[{{CTYPE}}] c_mod = self.cmod
         with nogil:
-            c_euler = c_mod.euler_curve(c_points)
+            c_euler = compute_module_euler_curve(c_mod, c_points)
         euler = c_euler
         return np.asarray(euler, dtype=int)
-    def to_idx(self,grid):
-        cdef vector[vector[{{CTYPE}}]] cgrid = grid
-        cdef vector[vector[pair[vector[vector[int]],vector[vector[int]]]]] out
-        with nogil:
-            out = self.cmod.to_idx(cgrid)
-        return tuple(tuple((np.asarray(I.first,dtype=np.int64), np.asarray(I.second, dtype=np.int64)) for I in Is_of_degree) for Is_of_degree in out)
+    # def to_idx(self,grid):
+    #     cdef vector[vector[{{CTYPE}}]] cgrid = grid
+    #     cdef vector[vector[pair[vector[vector[int]],vector[vector[int]]]]] out
+    #     with nogil:
+    #         out = self.cmod.to_idx(cgrid)
+    #     return tuple(tuple((np.asarray(I.first,dtype=np.int64), np.asarray(I.second, dtype=np.int64)) for I in Is_of_degree) for Is_of_degree in out)
     
     @cython.wraparound(False)
     @cython.boundscheck(False)
@@ -873,7 +873,7 @@ cdef class PyModule_{{SHORT}}:
         cdef int num_summands, num_births, num_deaths
         cdef int num_parameters = self.num_parameters
         with nogil:
-            out = self.cmod.to_flat_idx(cgrid)
+            out = project_module_into_grid(self.cmod, cgrid)
             num_summands = out[0][0].size()
             num_births = out[1].size()
             num_deaths = out[2].size()
@@ -903,9 +903,9 @@ cdef class PyModule_{{SHORT}}:
         if pts.ndim == 1:
             pts = pts[None]
         cdef vector[vector[{{CTYPE}}]] cpts = pts
-        cdef vector[vector[vector[int]]] out
+        cdef vector[vector[vector[size_t]]] out
         with nogil:
-            out = self.cmod.compute_distances_idx_to(cpts,full, n_jobs)
+            out = compute_module_lower_and_upper_generators_of(self.cmod, cpts,full, n_jobs)
         return np.asarray(out, dtype=np.int32)
 
     def distance_to(self, pts, bool signed=False, int n_jobs = 0)->np.ndarray:
@@ -928,108 +928,108 @@ cdef class PyModule_{{SHORT}}:
         cdef {{CTYPE}}[:,:] c_to_fill = to_fill
         cdef {{CTYPE}}* data_ptr = &c_to_fill[0,0]
         with nogil:
-            self.cmod.compute_distances_to(data_ptr, cpts,signed, n_jobs)
+            compute_module_distances_to(self.cmod, data_ptr, cpts,signed, n_jobs)
         return to_fill
 
     def get_interleavings(self,box=None):
         if box is None:
             box = self.get_box()
         cdef Box[{{CTYPE}}] cbox = Box[{{CTYPE}}](box)
-        return np.asarray(self.cmod.get_interleavings(cbox))
+        return np.asarray(compute_module_interleavings(self.cmod, cbox))
 
-cdef class PyMultiDiagramPoint_{{SHORT}}:
-    cdef MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] point
-    cdef set(self, MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] pt):
-        self.point = pt
-        return self
+# cdef class PyMultiDiagramPoint_{{SHORT}}:
+#     cdef MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] point
+#     cdef set(self, MultiDiagram_point[One_critical_filtration[{{CTYPE}}]] pt):
+#         self.point = pt
+#         return self
 
-    def get_degree(self):
-        return self.point.get_dimension()
-    def get_birth(self):
-        cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_birth()
-        return _ff21cview_{{SHORT}}(&v, copy=True)
-    def get_death(self):
-        cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_death()
-        return _ff21cview_{{SHORT}}(&v, copy=True)
+#     def get_degree(self):
+#         return self.point.get_dimension()
+#     def get_birth(self):
+#         cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_birth()
+#         return _ff21cview_{{SHORT}}(&v, copy=True)
+#     def get_death(self):
+#         cdef One_critical_filtration[{{CTYPE}}] v = self.point.get_death()
+#         return _ff21cview_{{SHORT}}(&v, copy=True)
 
 
-cdef class PyMultiDiagram_{{SHORT}}:
-    r"""
-    Stores the diagram of a PyModule on a line
-    """
-    cdef MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagram
-    cdef set(self, MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
-        self.multiDiagram = m
-        return self
-    def get_points(self, degree:int=-1) -> np.ndarray:
-        cdef vector[pair[vector[{{CTYPE}}],vector[{{CTYPE}}]]] out = self.multiDiagram.get_points(degree)
-        if len(out) == 0 and len(self) == 0:
-            return np.empty() # TODO Retrieve good number of parameters if there is no points in diagram
-        if len(out) == 0:
-            return np.empty((0,2,self.multiDiagram.at(0).get_dimension())) # gets the number of parameters
-        return np.array(out)
-    def to_multipers(self, dimension:int):
-        return self.multiDiagram.to_multipers(dimension)
-    def __len__(self) -> int:
-        return self.multiDiagram.size()
-    def __getitem__(self,i:int) -> PyMultiDiagramPoint_{{SHORT}}:
-        return PyMultiDiagramPoint_{{SHORT}}().set(self.multiDiagram.at(i % self.multiDiagram.size()))
-cdef class PyMultiDiagrams_{{SHORT}}:
-    """
-    Stores the barcodes of a PyModule on multiple lines
-    """
-    cdef MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagrams
-    cdef set(self,MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
-        self.multiDiagrams = m
-        return self
-    def to_multipers(self):
-        out = self.multiDiagrams.to_multipers()
-        return [np.asarray(summand) for summand in out]
-    def __getitem__(self,i:int):
-        if i >=0 :
-            return PyMultiDiagram_{{SHORT}}().set(self.multiDiagrams.at(i))
-        else:
-            return PyMultiDiagram_{{SHORT}}().set(self.multiDiagrams.at( self.multiDiagrams.size() - i))
-    def __len__(self):
-        return self.multiDiagrams.size()
-    def get_points(self, degree:int=-1):
-        return self.multiDiagrams.get_points()
-    cdef _get_plot_bars(self, dimension:int=-1, min_persistence:float=0):
-        return self.multiDiagrams._for_python_plot(dimension, min_persistence);
-    def plot(self, degree:int=-1, min_persistence:float=0):
-        """
-        Plots the barcodes.
+# cdef class PyMultiDiagram_{{SHORT}}:
+#     r"""
+#     Stores the diagram of a PyModule on a line
+#     """
+#     cdef MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagram
+#     cdef set(self, MultiDiagram[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
+#         self.multiDiagram = m
+#         return self
+#     def get_points(self, degree:int=-1) -> np.ndarray:
+#         cdef vector[pair[vector[{{CTYPE}}],vector[{{CTYPE}}]]] out = self.multiDiagram.get_points(degree)
+#         if len(out) == 0 and len(self) == 0:
+#             return np.empty() # TODO Retrieve good number of parameters if there is no points in diagram
+#         if len(out) == 0:
+#             return np.empty((0,2,self.multiDiagram.at(0).get_dimension())) # gets the number of parameters
+#         return np.array(out)
+#     def to_multipers(self, dimension:int):
+#         return self.multiDiagram.to_multipers(dimension)
+#     def __len__(self) -> int:
+#         return self.multiDiagram.size()
+#     def __getitem__(self,i:int) -> PyMultiDiagramPoint_{{SHORT}}:
+#         return PyMultiDiagramPoint_{{SHORT}}().set(self.multiDiagram.at(i % self.multiDiagram.size()))
+# cdef class PyMultiDiagrams_{{SHORT}}:
+#     """
+#     Stores the barcodes of a PyModule on multiple lines
+#     """
+#     cdef MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] multiDiagrams
+#     cdef set(self,MultiDiagrams[One_critical_filtration[{{CTYPE}}], {{CTYPE}}] m):
+#         self.multiDiagrams = m
+#         return self
+#     def to_multipers(self):
+#         out = self.multiDiagrams.to_multipers()
+#         return [np.asarray(summand) for summand in out]
+#     def __getitem__(self,i:int):
+#         if i >=0 :
+#             return PyMultiDiagram_{{SHORT}}().set(self.multiDiagrams.at(i))
+#         else:
+#             return PyMultiDiagram_{{SHORT}}().set(self.multiDiagrams.at( self.multiDiagrams.size() - i))
+#     def __len__(self):
+#         return self.multiDiagrams.size()
+#     def get_points(self, degree:int=-1):
+#         return self.multiDiagrams.get_points()
+#     cdef _get_plot_bars(self, dimension:int=-1, min_persistence:float=0):
+#         return self.multiDiagrams._for_python_plot(dimension, min_persistence);
+#     def plot(self, degree:int=-1, min_persistence:float=0):
+#         """
+#         Plots the barcodes.
 
-        Parameters
-        ----------
+#         Parameters
+#         ----------
         
-         - degree:int=-1
-            Only plots the bars of specified homology degree. Useful when the multidiagrams contains multiple dimenions
-         - min_persistence:float=0
-            Only plot bars of length greater than this value. Useful to reduce the time to plot.
+#          - degree:int=-1
+#             Only plots the bars of specified homology degree. Useful when the multidiagrams contains multiple dimenions
+#          - min_persistence:float=0
+#             Only plot bars of length greater than this value. Useful to reduce the time to plot.
 
-        Warning
-        -------
+#         Warning
+#         -------
         
-        If the barcodes are not thresholded, essential barcodes will not be displayed !
+#         If the barcodes are not thresholded, essential barcodes will not be displayed !
 
-        """
-        from cycler import cycler
-        import matplotlib
-        import matplotlib.pyplot as plt
-        if len(self) == 0: return
-        _cmap = matplotlib.colormaps["Spectral"]
-        multibarcodes_, colors = self._get_plot_bars(degree, min_persistence)
-        n_summands = np.max(colors)+1 if len(colors)>0 else 1
+#         """
+#         from cycler import cycler
+#         import matplotlib
+#         import matplotlib.pyplot as plt
+#         if len(self) == 0: return
+#         _cmap = matplotlib.colormaps["Spectral"]
+#         multibarcodes_, colors = self._get_plot_bars(degree, min_persistence)
+#         n_summands = np.max(colors)+1 if len(colors)>0 else 1
 
-        plt.rc('axes', prop_cycle = cycler('color', [_cmap(i/n_summands) for i in colors]))
-        return plt.plot(*multibarcodes_)
+#         plt.rc('axes', prop_cycle = cycler('color', [_cmap(i/n_summands) for i in colors]))
+#         return plt.plot(*multibarcodes_)
 {{endif}}
 
 
 cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
-    cdef vector[One_critical_filtration[{{CTYPE}}]] births = summand.get_birth_list()
-    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = summand.get_death_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] births = summand.compute_birth_list()
+    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = summand.compute_death_list()
     return (
             np.array(_vff21cview_{{SHORT}}(births)),
             np.array(_vff21cview_{{SHORT}}(deaths)),
@@ -1044,7 +1044,7 @@ cdef inline Summand[{{CTYPE}}] summand_from_dump_{{SHORT}}(summand_dump):
 
 cdef dump_cmod_{{SHORT}}(Module[{{CTYPE}}]& mod):
     cdef Box[{{CTYPE}}] cbox = mod.get_box()
-    cdef int dim = mod.get_dimension()
+    # cdef int dim = mod.get_dimension()
     # cannot cast const vector[{{CTYPE}}]& to vector[{{CTYPE}}] without the explicit cast
     cdef vector[{{CTYPE}}] bottom_corner = <vector[{{CTYPE}}]>cbox.get_lower_corner()
     cdef vector[{{CTYPE}}] top_corner = <vector[{{CTYPE}}]>cbox.get_upper_corner()
@@ -1108,22 +1108,22 @@ PyBox_type = Union[
 ]
 
 
-PyMultiDiagram_type = Union[
-{{for CTYPE, PYTYPE, SHORT in value_types}}
-{{if SHORT[0] == 'f'}}
-    PyMultiDiagram_{{SHORT}},
-{{endif}}
-{{endfor}}
-]
+# PyMultiDiagram_type = Union[
+# {{for CTYPE, PYTYPE, SHORT in value_types}}
+# {{if SHORT[0] == 'f'}}
+#     PyMultiDiagram_{{SHORT}},
+# {{endif}}
+# {{endfor}}
+# ]
 
 
-PyMultiDiagrams_type = Union[
-{{for CTYPE, PYTYPE, SHORT in value_types}}
-{{if SHORT[0] == 'f'}}
-    PyMultiDiagrams_{{SHORT}},
-{{endif}}
-{{endfor}}
-]
+# PyMultiDiagrams_type = Union[
+# {{for CTYPE, PYTYPE, SHORT in value_types}}
+# {{if SHORT[0] == 'f'}}
+#     PyMultiDiagrams_{{SHORT}},
+# {{endif}}
+# {{endfor}}
+# ]
 
 def is_mma(stuff):
     return (False 

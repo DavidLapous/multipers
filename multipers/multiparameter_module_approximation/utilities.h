@@ -87,234 +87,234 @@ struct Diagram_point {
 
 using diagram_type = std::vector<Diagram_point>;
 
-template <typename filtration_type = filtration_type>
-struct MultiDiagram_point {
- public:
-  MultiDiagram_point() : dim(-1), birth({}), death({}) {}
+// template <typename filtration_type = filtration_type>
+// struct MultiDiagram_point {
+//  public:
+//   MultiDiagram_point() : dim(-1), birth({}), death({}) {}
 
-  MultiDiagram_point(dimension_type dim, filtration_type birth, filtration_type death)
-      : dim(dim), birth(birth), death(death) {}
+//   MultiDiagram_point(dimension_type dim, filtration_type birth, filtration_type death)
+//       : dim(dim), birth(birth), death(death) {}
 
-  dimension_type get_dimension() const { return dim; }
+//   dimension_type get_dimension() const { return dim; }
 
-  const filtration_type &get_birth() const { return birth; }
+//   const filtration_type &get_birth() const { return birth; }
 
-  const filtration_type &get_death() const { return death; }
+//   const filtration_type &get_death() const { return death; }
 
- private:
-  dimension_type dim;
-  filtration_type birth;
-  filtration_type death;
-};
+//  private:
+//   dimension_type dim;
+//   filtration_type birth;
+//   filtration_type death;
+// };
 
-template <typename filtration_type, typename value_type>
-struct MultiDiagram {  // for python interface
-  static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
-                "filtration_type and value_type must be the same");
+// template <typename filtration_type, typename value_type>
+// struct MultiDiagram {  // for python interface
+//   static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
+//                 "filtration_type and value_type must be the same");
 
- public:
-  using iterator = typename std::vector<MultiDiagram_point<filtration_type>>::const_iterator;
+//  public:
+//   using iterator = typename std::vector<MultiDiagram_point<filtration_type>>::const_iterator;
 
-  MultiDiagram() {}
+//   MultiDiagram() {}
 
-  MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m) : multiDiagram(m) {}
+//   MultiDiagram(std::vector<MultiDiagram_point<filtration_type>> &m) : multiDiagram(m) {}
 
-  using python_fil = std::vector<typename filtration_type::value_type>;
-  using python_bar = std::pair<python_fil, python_fil>;  // This type is for python
+//   using python_fil = std::vector<typename filtration_type::value_type>;
+//   using python_bar = std::pair<python_fil, python_fil>;  // This type is for python
 
-  std::vector<python_bar> get_points(const dimension_type dimension = -1) const {  // dump for python interface
-    std::vector<python_bar> out;
-    out.reserve(multiDiagram.size());
-    for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
-      if (dimension == -1 || pt.get_dimension() == dimension) {
-        if (pt.get_birth().num_generators() > 0 && pt.get_death().num_generators() > 0 &&
-            !pt.get_birth().is_plus_inf() && !pt.get_death().is_minus_inf()) {
-          const auto &b = pt.get_birth();
-          const auto &d = pt.get_death();
-          assert(b.num_parameters() == d.num_parameters());
-          python_fil first(b.num_parameters());
-          python_fil second(b.num_parameters());
-          for (unsigned int i = 0; i < b.num_parameters(); ++i) {
-            first[i] = b(0, i);
-            second[i] = d(0, i);
-          }
-          out.push_back(std::make_pair(std::move(first), std::move(second)));
-        }
-      }
-    }
-    /* out.shrink_to_fit(); */
-    return out;
-  }
+//   std::vector<python_bar> get_points(const dimension_type dimension = -1) const {  // dump for python interface
+//     std::vector<python_bar> out;
+//     out.reserve(multiDiagram.size());
+//     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
+//       if (dimension == -1 || pt.get_dimension() == dimension) {
+//         if (pt.get_birth().num_generators() > 0 && pt.get_death().num_generators() > 0 &&
+//             !pt.get_birth().is_plus_inf() && !pt.get_death().is_minus_inf()) {
+//           const auto &b = pt.get_birth();
+//           const auto &d = pt.get_death();
+//           assert(b.num_parameters() == d.num_parameters());
+//           python_fil first(b.num_parameters());
+//           python_fil second(b.num_parameters());
+//           for (unsigned int i = 0; i < b.num_parameters(); ++i) {
+//             first[i] = b(0, i);
+//             second[i] = d(0, i);
+//           }
+//           out.push_back(std::make_pair(std::move(first), std::move(second)));
+//         }
+//       }
+//     }
+//     /* out.shrink_to_fit(); */
+//     return out;
+//   }
 
-  std::vector<std::vector<double>> to_multipers(
-      const dimension_type dimension = -1) const {  // dump for python interface
-    std::vector<std::vector<double>> out;
-    out.reserve(multiDiagram.size());
-    for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
-      if (dimension == -1 || pt.get_dimension() == dimension) {
-        const auto &b = pt.get_birth();
-        const auto &d = pt.get_death();
-        assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
-        out.emplace_back(std::initializer_list<double>{b(0, 0), d(0, 0), b(0, 1), d(0, 1)});
-      }
-    }
-    out.shrink_to_fit();
-    return out;
-  }
+//   std::vector<std::vector<double>> to_multipers(
+//       const dimension_type dimension = -1) const {  // dump for python interface
+//     std::vector<std::vector<double>> out;
+//     out.reserve(multiDiagram.size());
+//     for (const MultiDiagram_point<filtration_type> &pt : multiDiagram) {
+//       if (dimension == -1 || pt.get_dimension() == dimension) {
+//         const auto &b = pt.get_birth();
+//         const auto &d = pt.get_death();
+//         assert(!(b.is_plus_inf() || b.is_minus_inf() || d.is_plus_inf() || d.is_minus_inf()));
+//         out.emplace_back(std::initializer_list<double>{b(0, 0), d(0, 0), b(0, 1), d(0, 1)});
+//       }
+//     }
+//     out.shrink_to_fit();
+//     return out;
+//   }
 
-  iterator begin() const { return this->multiDiagram.begin(); }
+//   iterator begin() const { return this->multiDiagram.begin(); }
 
-  iterator end() const { return this->multiDiagram.end(); }
+//   iterator end() const { return this->multiDiagram.end(); }
 
-  unsigned int size() { return this->multiDiagram.size(); }
+//   unsigned int size() { return this->multiDiagram.size(); }
 
-  void set(std::vector<MultiDiagram_point<filtration_type>> &m) { this->multiDiagram.swap(m); }
+//   void set(std::vector<MultiDiagram_point<filtration_type>> &m) { this->multiDiagram.swap(m); }
 
-  std::vector<MultiDiagram_point<filtration_type>> &getref() { return this->multiDiagram; }
+//   std::vector<MultiDiagram_point<filtration_type>> &getref() { return this->multiDiagram; }
 
-  MultiDiagram_point<filtration_type> &operator[](unsigned int i) { return this->multiDiagram[i]; }
+//   MultiDiagram_point<filtration_type> &operator[](unsigned int i) { return this->multiDiagram[i]; }
 
-  MultiDiagram_point<filtration_type> &at(const unsigned int i) { return multiDiagram[i]; }
+//   MultiDiagram_point<filtration_type> &at(const unsigned int i) { return multiDiagram[i]; }
 
- private:
-  std::vector<MultiDiagram_point<filtration_type>> multiDiagram;
-};
+//  private:
+//   std::vector<MultiDiagram_point<filtration_type>> multiDiagram;
+// };
 
-template <typename filtration_type, typename value_type>
-struct MultiDiagrams {
-  static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
-                "filtration_type and value_type must be the same");
+// template <typename filtration_type, typename value_type>
+// struct MultiDiagrams {
+//   static_assert(std::is_same_v<typename filtration_type::value_type, value_type>,
+//                 "filtration_type and value_type must be the same");
 
- public:
-  using iterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::const_iterator;
-  using nciterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::iterator;
+//  public:
+//   using iterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::const_iterator;
+//   using nciterator = typename std::vector<MultiDiagram<filtration_type, value_type>>::iterator;
 
-  MultiDiagrams() {}
+//   MultiDiagrams() {}
 
-  MultiDiagrams(unsigned int size) : multiDiagrams(size) {}
+//   MultiDiagrams(unsigned int size) : multiDiagrams(size) {}
 
-  std::vector<std::vector<std::vector<double>>> to_multipers() {
-    unsigned int nsummands = this->multiDiagrams.front().size();
-    unsigned int nlines = this->multiDiagrams.size();
-    // std::vector<std::vector<std::vector<double>>> out(nsummands,
-    // std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
-    std::vector<std::vector<std::vector<double>>> out(nsummands);
-    for (unsigned int i = 0; i < nsummands; i++) {
-      out[i].reserve(nlines);
-      for (unsigned int j = 0; j < nlines; j++) {
-        const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[j][i];
-        /* if(pt.get_birth().is_plus_inf() || pt.get_death().is_minus_inf()) */
-        /*     out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)}); */
-        /* else */
-        double a, b, c, d;
-        double inf = std::numeric_limits<double>::infinity();
-        if (pt.get_birth().is_plus_inf()) {
-          a = 0;
-          b = 0;
-        } else if (pt.get_birth().is_minus_inf()) {
-          a = -inf;
-          b = -inf;
-        } else {
-          a = pt.get_birth()(0, 0);
-          b = pt.get_birth()(0, 1);
-        }
-        if (pt.get_death().is_plus_inf()) {
-          c = inf;
-          d = inf;
-        }
-        if (pt.get_death().is_minus_inf()) {
-          c = 0;
-          d = 0;
-        } else {
-          c = pt.get_death()(0, 0);
-          d = pt.get_death()(0, 1);
-        }
-        /* out[i].push_back({pt.get_birth()[0], pt.get_death()[0],
-         * pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)}); */
-        out[i].push_back({a, c, b, d, static_cast<double>(j)});
-      }
-    }
-    return out;
-  }
+//   std::vector<std::vector<std::vector<double>>> to_multipers() {
+//     unsigned int nsummands = this->multiDiagrams.front().size();
+//     unsigned int nlines = this->multiDiagrams.size();
+//     // std::vector<std::vector<std::vector<double>>> out(nsummands,
+//     // std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
+//     std::vector<std::vector<std::vector<double>>> out(nsummands);
+//     for (unsigned int i = 0; i < nsummands; i++) {
+//       out[i].reserve(nlines);
+//       for (unsigned int j = 0; j < nlines; j++) {
+//         const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[j][i];
+//         /* if(pt.get_birth().is_plus_inf() || pt.get_death().is_minus_inf()) */
+//         /*     out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)}); */
+//         /* else */
+//         double a, b, c, d;
+//         double inf = std::numeric_limits<double>::infinity();
+//         if (pt.get_birth().is_plus_inf()) {
+//           a = 0;
+//           b = 0;
+//         } else if (pt.get_birth().is_minus_inf()) {
+//           a = -inf;
+//           b = -inf;
+//         } else {
+//           a = pt.get_birth()(0, 0);
+//           b = pt.get_birth()(0, 1);
+//         }
+//         if (pt.get_death().is_plus_inf()) {
+//           c = inf;
+//           d = inf;
+//         }
+//         if (pt.get_death().is_minus_inf()) {
+//           c = 0;
+//           d = 0;
+//         } else {
+//           c = pt.get_death()(0, 0);
+//           d = pt.get_death()(0, 1);
+//         }
+//         /* out[i].push_back({pt.get_birth()[0], pt.get_death()[0],
+//          * pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)}); */
+//         out[i].push_back({a, c, b, d, static_cast<double>(j)});
+//       }
+//     }
+//     return out;
+//   }
 
-  using _for_python_plot_type = std::pair<std::vector<std::pair<double, double>>, std::vector<unsigned int>>;
+//   using _for_python_plot_type = std::pair<std::vector<std::pair<double, double>>, std::vector<unsigned int>>;
 
-  _for_python_plot_type _for_python_plot(dimension_type dimension = -1, value_type min_persistence = 0) {
-    _for_python_plot_type out;
-    auto &bars = out.first;
-    auto &summand_idx = out.second;
-    bars.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size() * 2);
-    summand_idx.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size());
-    for (const MultiDiagram<filtration_type, value_type> &multiDiagram : this->multiDiagrams) {
-      unsigned int count = 0;
-      for (const MultiDiagram_point<filtration_type> &bar : multiDiagram) {
-        const auto &birth = bar.get_birth();
-        const auto &death = bar.get_death();
-        if ((dimension == -1 || bar.get_dimension() == dimension) && birth.is_finite() && death.is_finite() &&
-            (death(0, 0) > birth(0, 0) + min_persistence)) {
-          // Checking is_finite ensures that filtration is not inf or -inf or nan.
-          bars.push_back(std::pair<double, double>(birth(0, 0), death(0, 0)));
-          bars.push_back(std::pair<double, double>(birth(0, 1), death(0, 1)));
-          summand_idx.push_back(count);
-        }
-        count++;
-      }
-    }
-    return out;
-  }
+//   _for_python_plot_type _for_python_plot(dimension_type dimension = -1, value_type min_persistence = 0) {
+//     _for_python_plot_type out;
+//     auto &bars = out.first;
+//     auto &summand_idx = out.second;
+//     bars.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size() * 2);
+//     summand_idx.reserve(this->multiDiagrams.size() * this->multiDiagrams[0].size());
+//     for (const MultiDiagram<filtration_type, value_type> &multiDiagram : this->multiDiagrams) {
+//       unsigned int count = 0;
+//       for (const MultiDiagram_point<filtration_type> &bar : multiDiagram) {
+//         const auto &birth = bar.get_birth();
+//         const auto &death = bar.get_death();
+//         if ((dimension == -1 || bar.get_dimension() == dimension) && birth.is_finite() && death.is_finite() &&
+//             (death(0, 0) > birth(0, 0) + min_persistence)) {
+//           // Checking is_finite ensures that filtration is not inf or -inf or nan.
+//           bars.push_back(std::pair<double, double>(birth(0, 0), death(0, 0)));
+//           bars.push_back(std::pair<double, double>(birth(0, 1), death(0, 1)));
+//           summand_idx.push_back(count);
+//         }
+//         count++;
+//       }
+//     }
+//     return out;
+//   }
 
-  MultiDiagram<filtration_type, value_type> &operator[](const unsigned int i) { return multiDiagrams[i]; }
+//   MultiDiagram<filtration_type, value_type> &operator[](const unsigned int i) { return multiDiagrams[i]; }
 
-  MultiDiagram<filtration_type, value_type> &at(const unsigned int i) { return multiDiagrams[i]; }
+//   MultiDiagram<filtration_type, value_type> &at(const unsigned int i) { return multiDiagrams[i]; }
 
-  iterator begin() const { return this->multiDiagrams.begin(); }  // cython bug : iterators like bc in bcs crash)
+//   iterator begin() const { return this->multiDiagrams.begin(); }  // cython bug : iterators like bc in bcs crash)
 
-  iterator end() const { return this->multiDiagrams.end(); }
+//   iterator end() const { return this->multiDiagrams.end(); }
 
-  using python_fil = std::vector<value_type>;
-  using python_bar = std::pair<std::vector<value_type>,
-                               std::vector<value_type>>;  // This type is for python
-  using barcodes = std::vector<std::vector<python_bar>>;
+//   using python_fil = std::vector<value_type>;
+//   using python_bar = std::pair<std::vector<value_type>,
+//                                std::vector<value_type>>;  // This type is for python
+//   using barcodes = std::vector<std::vector<python_bar>>;
 
-  barcodes get_points() {
-    unsigned int nsummands = this->multiDiagrams.front().size();
-    unsigned int nlines = this->multiDiagrams.size();
-    // std::vector<std::vector<std::vector<double>>> out(nsummands,
-    // std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
-    barcodes out(nlines, std::vector<python_bar>(nsummands));
-    for (unsigned int i = 0; i < nlines; i++) {
-      for (unsigned int j = 0; j < nsummands; j++) {
-        const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
-        const auto &b = pt.get_birth();
-        const auto &d = pt.get_death();
-        assert(b.num_parameters() == d.num_parameters());
-        python_fil first(b.num_parameters());
-        python_fil second(b.num_parameters());
-        for (unsigned int i = 0; i < b.num_parameters(); ++i) {
-          first[i] = b(0, i);
-          second[i] = d(0, i);
-        }
-        out[i][j] = std::make_pair(std::move(first), std::move(second));
-      }
-    }
-    return out;
-  }
+//   barcodes get_points() {
+//     unsigned int nsummands = this->multiDiagrams.front().size();
+//     unsigned int nlines = this->multiDiagrams.size();
+//     // std::vector<std::vector<std::vector<double>>> out(nsummands,
+//     // std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
+//     barcodes out(nlines, std::vector<python_bar>(nsummands));
+//     for (unsigned int i = 0; i < nlines; i++) {
+//       for (unsigned int j = 0; j < nsummands; j++) {
+//         const MultiDiagram_point<filtration_type> &pt = this->multiDiagrams[i][j];
+//         const auto &b = pt.get_birth();
+//         const auto &d = pt.get_death();
+//         assert(b.num_parameters() == d.num_parameters());
+//         python_fil first(b.num_parameters());
+//         python_fil second(b.num_parameters());
+//         for (unsigned int i = 0; i < b.num_parameters(); ++i) {
+//           first[i] = b(0, i);
+//           second[i] = d(0, i);
+//         }
+//         out[i][j] = std::make_pair(std::move(first), std::move(second));
+//       }
+//     }
+//     return out;
+//   }
 
-  unsigned int size() const { return this->multiDiagrams.size(); }
+//   unsigned int size() const { return this->multiDiagrams.size(); }
 
- private:
-  std::vector<MultiDiagram<filtration_type, value_type>> multiDiagrams;
-  /* inline bool _is_inf(const std::vector<value_type> &truc) const{ */
-  /*     for (const auto coord : truc) */
-  /*         if (coord != inf)   return false; */
-  /*     return true; */
-  /* } */
-  /* inline bool _is_negInf(const std::vector<value_type> &truc) const{ */
-  /*     for (const auto coord : truc) */
-  /*         if (coord != negInf)   return false; */
-  /*     return true; */
-  /* } */
-};
+//  private:
+//   std::vector<MultiDiagram<filtration_type, value_type>> multiDiagrams;
+//   /* inline bool _is_inf(const std::vector<value_type> &truc) const{ */
+//   /*     for (const auto coord : truc) */
+//   /*         if (coord != inf)   return false; */
+//   /*     return true; */
+//   /* } */
+//   /* inline bool _is_negInf(const std::vector<value_type> &truc) const{ */
+//   /*     for (const auto coord : truc) */
+//   /*         if (coord != negInf)   return false; */
+//   /*     return true; */
+//   /* } */
+// };
 
 void inline threshold_up(point_type &point,
                          const Gudhi::multi_persistence::Box<value_type> &box,

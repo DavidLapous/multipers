@@ -221,6 +221,11 @@ class Point
   size_type size() const noexcept { return coordinates_.size(); }
 
   /**
+   * @brief Resizes the number of coordinates.
+   */
+  void resize(size_type count) { coordinates_.resize(count); }
+
+  /**
    * @brief Swap operator.
    */
   void swap(Point &other) noexcept(std::allocator_traits<allocator_type>::propagate_on_container_swap::value ||

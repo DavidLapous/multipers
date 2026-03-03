@@ -61,13 +61,11 @@ class Summand {
   Summand(int numberOfParameters = 1)
       : birthCorners_(numberOfParameters, T_inf),
         deathCorners_(numberOfParameters, T_m_inf),
-        interleaving_(get_null_value<value_type>()),
         dimension_(get_null_value<Dimension>()) {}
 
   Summand(const Births &birthCorners, const Deaths &deathCorners, Dimension dimension)
       : birthCorners_(birthCorners),
         deathCorners_(deathCorners),
-        interleaving_(get_null_value<value_type>()),
         dimension_(dimension) {}
 
   // Builds filtration value with given number of parameters and values from the given range. Lets \f$ p \f$
@@ -78,7 +76,6 @@ class Summand {
   Summand(const ValueRange &birthCorners, const ValueRange &deathCorners, int numberOfParameters, Dimension dimension)
       : birthCorners_(birthCorners.begin(), birthCorners.end(), numberOfParameters),
         deathCorners_(deathCorners.begin(), deathCorners.end(), numberOfParameters),
-        interleaving_(get_null_value<value_type>()),
         dimension_(dimension) {}
 
   Dimension get_dimension() const { return dimension_; }
@@ -91,7 +88,7 @@ class Summand {
   bool contains(const MultiFiltrationValue &x) const {
     auto xPos = Gudhi::multi_filtration::as_type<Births>(x);
     auto xNeg = Gudhi::multi_filtration::as_type<Deaths>(x);
-    return birthCorners_ <= x && deathCorners_ <= x;
+    return birthCorners_ <= xPos && deathCorners_ <= xNeg;
   }
 
   Box<value_type> compute_bounds() const {
@@ -120,14 +117,14 @@ class Summand {
 
   const Deaths &get_downset() const { return deathCorners_; }
 
-  template <class MultiFiltrationValue>
+  template <class MultiFiltrationValue = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, true> >
   std::vector<MultiFiltrationValue> compute_birth_list() const {
-    return _compute_list(birthCorners_);
+    return _compute_list<MultiFiltrationValue>(birthCorners_);
   }
 
-  template <class MultiFiltrationValue>
+  template <class MultiFiltrationValue = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, true> >
   std::vector<MultiFiltrationValue> compute_death_list() const {
-    return _compute_list(deathCorners_);
+    return _compute_list<MultiFiltrationValue>(deathCorners_);
   }
 
   void complete_birth(value_type precision) {
@@ -191,13 +188,6 @@ class Summand {
     deathCorners_.add_generator(death);
   }
 
-  value_type update_and_get_interleaving(const Box<value_type> &box) {
-    interleaving_ = _compute_interleaving(box);
-    return interleaving_;
-  }
-
-  value_type get_interleaving() const { return interleaving_; }
-
   template <class RandomAccessValueRange>
   void rescale(const RandomAccessValueRange &rescaleFactors) {
     _transform(rescaleFactors, [](value_type &cornerVal, value_type fact) -> value_type { return cornerVal *= fact; });
@@ -218,7 +208,7 @@ class Summand {
       return b;
     };
     auto evaluate_generator = [&](auto &corners) {
-      return [&](std::size_t g) {
+      return [&corners, &grid, &snap](std::size_t g) {
         for (Index p = 0; p < corners.num_parameters(); ++p) {
           GUDHI_CHECK(corners(g, p) >= 0, std::runtime_error("Values in the corners have to be positive."));
           if (corners(g, p) != T_inf) {
@@ -269,25 +259,13 @@ class Summand {
   friend void swap(Summand &sum1, Summand &sum2) noexcept {
     std::swap(sum1.birthCorners_, sum2.birthCorners_);
     std::swap(sum1.deathCorners_, sum2.deathCorners_);
-    std::swap(sum1.interleaving_, sum2.interleaving_);
     std::swap(sum1.dimension_, sum2.dimension_);
   }
 
  private:
   Births birthCorners_;
   Deaths deathCorners_;
-  value_type interleaving_;
   Dimension dimension_;
-
-  value_type _compute_interleaving(const Box<value_type> &box) {
-    value_type interleaving = 0;
-    for (const auto &birth : birthCorners_) {
-      for (const auto &death : deathCorners_) {
-        interleaving = std::max(interleaving, _get_max_diagonal(birth, death, box));
-      }
-    }
-    return interleaving;
-  }
 
   template <class RandomAccessValueRange, class F>
   void _transform(const RandomAccessValueRange &factors, F &&operate) {
@@ -343,44 +321,6 @@ class Summand {
   template <class Generator>
   static void _factorize_max(Generator &a, const Generator &b) {
     for (Index i = 0; i < std::min(b.size(), a.size()); i++) a[i] = std::max(a[i], b[i]);
-  }
-
-  template <class RandomAccessValueRange>
-  static value_type _get_max_diagonal(const RandomAccessValueRange &birth,
-                                      const RandomAccessValueRange &death,
-                                      const Box<value_type> &box) {
-    // assumes birth and death to be never NaN
-    GUDHI_CHECK(birth.size() == 1 || death.size() == 1 || birth.size() == death.size(),
-                std::invalid_argument("Inputs must be of the same size !"));
-
-    bool useThreshold = !box.is_trivial();
-
-    GUDHI_CHECK((birth.size() == 1 && death.size() == 1) || !useThreshold || birth.size() == box.get_dimension() ||
-                    death.size() == box.get_dimension(),
-                std::invalid_argument("Inputs must be of the same size !"));
-
-    auto get_val = [](const RandomAccessValueRange &r, Index i) -> value_type {
-      if (i < r.size()) return r[i];
-      // never used if r.size() == 0
-      return r[0];
-    };
-
-    value_type diag = T_inf;
-    if (useThreshold) {
-      for (Index i = 0; i < birth.size(); ++i) {
-        value_type max_i = box.get_upper_corner()[i];
-        value_type min_i = box.get_lower_corner()[i];
-        value_type t_death = std::min(get_val(death, i), max_i);
-        value_type t_birth = std::max(get_val(birth, i), min_i);
-        diag = std::min(diag, t_death - t_birth);
-      }
-    } else {
-      for (Index i = 0; i < birth.size(); i++) {
-        diag = std::min(diag, get_val(death, i) - get_val(birth, i));
-      }
-    }
-
-    return diag;
   }
 };
 

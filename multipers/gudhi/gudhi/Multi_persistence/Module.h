@@ -62,7 +62,7 @@ class Module {
 
   Module() : module_(), box_(), maxDim_(Summand_t::template get_null_value<Dimension>()) {}
 
-  Module(Box<value_type> &box) : module_(), box_(box), maxDim_(Summand_t::template get_null_value<Dimension>()) {}
+  Module(const Box<value_type> &box) : module_(), box_(box), maxDim_(Summand_t::template get_null_value<Dimension>()) {}
 
   iterator begin() { return module_.begin(); }
 
@@ -107,12 +107,12 @@ class Module {
         corner.second.resize(deathList.size());
         Index i = 0;
         for (const auto &b : birthList) {
-          corner.first[i] = std::vector<value_type>(b[0].begin(), b[0].end());
+          corner.first[i] = std::vector<value_type>(b.begin(), b.end());
           ++i;
         }
         i = 0;
         for (const auto &d : deathList) {
-          corner.second[i] = std::vector<value_type>(d[0].begin(), d[0].end());
+          corner.second[i] = std::vector<value_type>(d.begin(), d.end());
           ++i;
         }
         corners.push_back(std::move(corner));
@@ -122,6 +122,8 @@ class Module {
   }
 
   [[nodiscard]] Dimension get_max_dimension() const { return maxDim_; }
+
+  void set_max_dimension(Dimension maxDim) { maxDim_ = maxDim; }
 
   [[nodiscard]] Index size() const { return module_.size(); }
 
@@ -209,6 +211,8 @@ class Module {
     module_.erase(
         std::remove_if(module_.begin(), module_.end(), [](const Summand_t &s) { return s.get_upset().is_plus_inf(); }),
         module_.end());
+    maxDim_ = Summand_t::template get_null_value<Dimension>();
+    for (const auto& sum : module_) maxDim_ = std::max(maxDim_, sum.get_dimension());
   }
 
   void fill(value_type precision) {
@@ -235,15 +239,6 @@ class Module {
     }
   }
 
-  std::vector<value_type> update_and_get_interleavings(const Box<value_type> &box) {
-    // TODO: parallelize
-    std::vector<value_type> interleavings(module_.size());
-    for (std::size_t i = 0; i < interleavings.size(); ++i) {
-      interleavings[i] = module_[i].get_interleaving(box);
-    }
-    return interleavings;
-  }
-
   void evaluate_in_grid(const std::vector<std::vector<value_type>> &grid) {
 #ifdef GUDHI_USE_TBB
     tbb::parallel_for(std::size_t(0), module_.size(), [&](std::size_t i) { module_[i].evaluate_in_grid(grid); });
@@ -259,7 +254,7 @@ class Module {
     if (a.box_ != b.box_) return false;
     if (a.size() != b.size()) return false;
     for (std::size_t i = 0; i < a.size(); ++i) {
-      if (a[i] != b[i]) return false;
+      if (a.get_summand(i) != b.get_summand(i)) return false;
     }
     return true;
   }
@@ -268,7 +263,7 @@ class Module {
    * @brief Outstream operator.
    */
   friend std::ostream &operator<<(std::ostream &stream, const Module &m) {
-    stream << "Module:\n";
+    stream << "Module of max dim " << m.maxDim_ << ":\n";
     for (const auto &s : m) {
       stream << s << "\n";
     }
@@ -279,16 +274,6 @@ class Module {
     mod1.module_.swap(mod2.module_);
     swap(mod1.box_, mod2.box_);
     std::swap(mod1.maxDim_, mod2.maxDim_);
-  }
-
-  friend Module build_permuted_module(const Module &module, const std::vector<int> &permutation) {
-    Module out(module.get_box());
-    out.module_.resize(module.size());
-    for (std::size_t i = 0; i < permutation.size(); ++i) {
-      out.module_[i] = module.module_[permutation[i]];
-    }
-    out.maxDim_ = module.maxDim_;
-    return out;
   }
 
  private:
@@ -327,6 +312,7 @@ class Module {
     typename Summand_t::Births::Generator births(std::move(birthContainer.retrieve_underlying_container()));
     typename Summand_t::Deaths::Generator deaths(std::move(deathContainer.retrieve_underlying_container()));
     summand.add_bar(births, deaths);
+    // summand.add_bar(birthContainer, deathContainer);
   }
 };
 
