@@ -20,6 +20,11 @@ dtypes = set([(D['PY_VALUE_TYPE'], D['C_VALUE_TYPE'], D['SHORT_VALUE_TYPE']) for
 with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
     simplex_trees = pickle.load(f)
 
+with (TEMPITA_CACHE_DIR / "_codegen_defaults.pkl").open("rb") as f:
+    _codegen_defaults = pickle.load(f)
+
+DEFAULT_COLUMN_TYPE = _codegen_defaults["default_column_type"]
+
 }}
 
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
@@ -69,6 +74,9 @@ available_columns = set((
   "{{D['COLUMN_TYPE']}}",
 {{endfor}}
 ))
+
+global default_column_type
+default_column_type = "{{DEFAULT_COLUMN_TYPE}}"
 
 global available_dtype
 available_dtype = set([
@@ -196,7 +204,9 @@ cdef class {{D['PYTHON_TYPE']}}:
 
         # copy constructors / astypes
         cdef intptr_t other_ptr
+        # cdef object source_slicer = None
         {{for D2 in slicers}} 
+        # {if D2['PERS_BACKEND_TYPE'] == D['PERS_BACKEND_TYPE'] and D2['COLUMN_TYPE'] == D['COLUMN_TYPE']}
         if isinstance(generator_maps,{{D2['PYTHON_TYPE']}}):
           other_ptr = <intptr_t>(generator_maps.get_ptr())
           with nogil:
@@ -204,7 +214,14 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.filtration_grid = generator_maps.filtration_grid
           self.minpres_degree=generator_maps.minpres_degree
           return
+        # {endif}
         {{endfor}}
+
+        # if _is_slicer(generator_maps): #Backup
+        #   source_slicer = generator_maps
+        #   generator_maps = source_slicer.get_boundaries()
+        #   generator_dimensions = source_slicer.get_dimensions()
+        #   filtration_values = source_slicer.get_filtrations()
 
         if len(generator_maps)>0 and len(generator_dimensions) == 0 and len(filtration_values) == 0:
           from multipers._slicer_meta import _blocks2boundary_dimension_grades
@@ -222,8 +239,9 @@ cdef class {{D['PYTHON_TYPE']}}:
             sort(c_generator_maps.back().begin(), c_generator_maps.back().end())
         cdef {{D['FILTRATION_TYPE']}} cf = {{D['FILTRATION_TYPE']}}(num_param)
         cdef {{D['FILTRATION_TYPE']}} inf = {{D['FILTRATION_TYPE']}}.inf(num_param)
-        cdef {{D['C_VALUE_TYPE']}}[:,::1] F_view 
+        cdef {{D['C_VALUE_TYPE']}}[:,::1] F_view
         for F in filtration_values:
+            cf = {{D['FILTRATION_TYPE']}}(num_param)
             cf.push_to_least_common_upper_bound(inf, False)
             F_view = np.ascontiguousarray(F, dtype = {{D['PY_VALUE_TYPE']}} )
             for i in range(F_view.shape[0]):
@@ -233,6 +251,10 @@ cdef class {{D['PYTHON_TYPE']}}:
         assert num_generators == c_generator_maps.size() == c_filtration_values.size(), "Invalid input, shape do not coincide."
         cdef Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}] cpx = Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}](c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.truc = {{D['C_TEMPLATE_TYPE']}}(cpx)
+        # if source_slicer is not None:
+        #   self.filtration_grid = source_slicer.filtration_grid
+        #   self.minpres_degree = source_slicer.minpres_degree
+        # else:
         self.minpres_degree = -1
     {{else}}
     def __init__(self, generator_maps=[], generator_dimensions=[], filtration_values=[]):        
@@ -249,9 +271,11 @@ cdef class {{D['PYTHON_TYPE']}}:
         """
         Cython constructor
         """
+        # cdef object source_slicer = None
 
 
         {{for D2 in slicers}} 
+        # if D2['PERS_BACKEND_TYPE'] == D['PERS_BACKEND_TYPE'] and D2['COLUMN_TYPE'] == D['COLUMN_TYPE']
         if isinstance(generator_maps,{{D2['PYTHON_TYPE']}}):
           other_ptr = <intptr_t>(generator_maps.get_ptr())
           with nogil:
@@ -259,7 +283,14 @@ cdef class {{D['PYTHON_TYPE']}}:
           self.filtration_grid = generator_maps.filtration_grid
           self.minpres_degree=generator_maps.minpres_degree
           return
+        # endif
         {{endfor}}
+
+        # if _is_slicer(generator_maps): # Backup
+        #   source_slicer = generator_maps
+        #   generator_maps = source_slicer.get_boundaries()
+        #   generator_dimensions = source_slicer.get_dimensions()
+        #   filtration_values = source_slicer.get_filtrations()
 
         cdef uint32_t num_generators = len(generator_maps)
         filtration_values = np.ascontiguousarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
@@ -278,6 +309,10 @@ cdef class {{D['PYTHON_TYPE']}}:
         assert num_generators == c_generator_maps.size() == c_filtration_values.size() == c_generator_dimensions.size(), "Invalid input, shape do not coincide."
         cdef Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}] cpx = Multi_parameter_filtered_complex[{{D['FILTRATION_TYPE']}}](c_generator_maps,c_generator_dimensions, c_filtration_values)
         self.truc = {{D['C_TEMPLATE_TYPE']}}(cpx)
+        # if source_slicer is not None:
+        #   self.filtration_grid = source_slicer.filtration_grid
+        #   self.minpres_degree = source_slicer.minpres_degree
+        # else:
         self.minpres_degree = -1
     {{endif}}
     

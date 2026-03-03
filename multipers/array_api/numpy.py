@@ -35,6 +35,9 @@ einsum = _np.einsum
 def unique(x, assume_sorted=False, _mean=False):
     return _np.unique(x)
 
+def empty(*args,device=None,**kwargs):
+    return _np.empty(*args, **kwargs)
+
 
 def argsort(x, axis=-1):
     return _np.argsort(x, axis=axis)

@@ -171,7 +171,7 @@ def Slicer(
         backend = st.pers_backend if backend is None else backend
     else:
         vineyard = False if vineyard is None else vineyard
-        column_type = "INTRUSIVE_SET" if column_type is None else column_type
+        column_type = mps.default_column_type if column_type is None else column_type
         backend = "matrix" if backend is None else backend
 
     _Slicer = mps.get_matrix_slicer(

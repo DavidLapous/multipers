@@ -479,7 +479,7 @@ def evaluate_in_grid(pts, grid, mass_default=None, input_inf_value=None, output_
     if mass_default is not None:
         grid = tuple(api.cat([g, api.astensor(m)[None]]) for g,m in zip(grid, mass_default))
     def empty_like(x):
-        return api.to_device(api.empty(x.shape, dtype=dtype), api.device(pts))
+        return api.empty(x.shape, dtype=dtype, device = api.device(first_filtration))
 
     coords=empty_like(pts)
     cdef int dim = coords.shape[1]
@@ -522,7 +522,7 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
         if mass_default is not None:
             _mass_default = api.cat([_mass_default,mass_default])
     grid = tuple(_grid)
-    mass_default = _mass_default
+    mass_default = None if _mass_default is None else api.to_device(_mass_default, api.device(pts))
 
     coords = evaluate_in_grid(np.asarray(pts, dtype=int), grid, mass_default)
     return (coords, weights)
