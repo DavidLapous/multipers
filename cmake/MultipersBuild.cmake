@@ -119,7 +119,7 @@ function(multipers_add_core_object_library target_name source_file)
     PRIVATE
       ${MULTIPERS_GENERATED_INCLUDE_DIRS}
       ${MULTIPERS_BASE_INCLUDE_DIRS}
-      # ${MULTIPERS_PHAT_INCLUDE_DIRS}
+      ${MULTIPERS_PHAT_INCLUDE_DIRS}
   )
   multipers_apply_common_build_flags(${target_name})
 endfunction()
@@ -202,10 +202,10 @@ function(multipers_configure_extension_include_dirs module_name target_name)
     endforeach()
   endif()
 
-  # list(FIND MULTIPERS_FORKED_PHAT_MODULES "${module_name}" uses_forked_phat)
-  # if(uses_forked_phat EQUAL -1)
-  #   target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
-  # endif()
+  list(FIND MULTIPERS_FORKED_PHAT_MODULES "${module_name}" uses_forked_phat)
+  if(uses_forked_phat EQUAL -1)
+    target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
+  endif()
 endfunction()
 
 function(multipers_configure_extension_backend module_name target_name)

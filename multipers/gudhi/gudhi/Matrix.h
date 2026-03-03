@@ -67,6 +67,9 @@
 #include <gudhi/Persistence_matrix/columns/naive_vector_column.h>
 #include <gudhi/Persistence_matrix/columns/heap_column.h>
 
+#include <gudhi/Persistence_matrix/columns/phat_bit_tree_column.h>
+#include <gudhi/Persistence_matrix/columns/phat_vector_column.h>
+
 /// Gudhi namespace.
 namespace Gudhi {
 /// Persistence matrix namespace.
