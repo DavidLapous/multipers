@@ -70,6 +70,7 @@ include = [
   "ext/**/*.cmake",
   "ext/**/*.h",
   "ext/**/*.hpp",
+  "ext/phat/include/**/*.h",
   "ext/**/*.cpp",
   "ext/**/LICENSE",
   "ext/**/COPYING",
