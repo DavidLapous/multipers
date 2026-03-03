@@ -14,8 +14,13 @@ COLUMN_REGISTRY = {
     "SET": "multipers::tmp_interface::Available_columns::SET",
     "HEAP": "multipers::tmp_interface::Available_columns::HEAP",
     "UNORDERED_SET": "multipers::tmp_interface::Available_columns::UNORDERED_SET",
+    "CHATTY_COLUMN": "multipers::tmp_interface::Available_columns::CHATTY_COLUMN",
+    "CHATTY_COLUMN_FLIP": "multipers::tmp_interface::Available_columns::CHATTY_COLUMN_FLIP",
+    "CHATTY_COLUMN_ADAPTIVE": "multipers::tmp_interface::Available_columns::CHATTY_COLUMN_ADAPTIVE",
     "NAIVE_VECTOR": "multipers::tmp_interface::Available_columns::NAIVE_VECTOR",
     "VECTOR": "multipers::tmp_interface::Available_columns::VECTOR",
+    "PHAT_VECTOR": "multipers::tmp_interface::Available_columns::PHAT_VECTOR",
+    "PHAT_BIT_TREE": "multipers::tmp_interface::Available_columns::PHAT_BIT_TREE",
     "INTRUSIVE_LIST": "multipers::tmp_interface::Available_columns::INTRUSIVE_LIST",
     "LIST": "multipers::tmp_interface::Available_columns::LIST",
 }

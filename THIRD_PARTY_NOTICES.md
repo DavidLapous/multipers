@@ -42,6 +42,12 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Commit used in this workspace: `d686f7efe623169f00951c376949b8bb30448eaf`
   - License: LGPL-3.0-or-later (see upstream `COPYING.LESSER`)
 
+- `PHAT`
+  - Upstream: https://github.com/xoltar/phat
+  - Header source path used at build time: `ext/phat/include`
+  - Commit used in this workspace: `872ca92b33ebe92dff2542cbdee6768e575e80aa`
+  - License: LGPL-3.0-or-later (see `ext/phat/COPYING.LESSER`)
+
 ## Notes
 
 - Build-time include paths for these dependencies are configured in `CMakeLists.txt`.

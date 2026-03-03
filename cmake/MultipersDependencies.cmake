@@ -41,6 +41,10 @@ set(MULTIPERS_MPFREE_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/mpfree/scc_mod/include"
 )
 
+set(MULTIPERS_PHAT_INCLUDE_DIRS
+  "${CMAKE_SOURCE_DIR}/ext/phat/include"
+)
+
 set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/include"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include"

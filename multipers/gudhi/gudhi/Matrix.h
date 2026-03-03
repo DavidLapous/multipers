@@ -345,6 +345,8 @@ class Matrix
   using Matrix_vector_column = Vector_column<Matrix<PersistenceMatrixOptions> >;
   using Matrix_naive_vector_column = Naive_std_vector_column<Matrix<PersistenceMatrixOptions> >;
   using Matrix_small_vector_column = Naive_small_vector_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_phat_vector_column = Phat_vector_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_phat_bit_tree_column = Phat_bit_tree_column<Matrix<PersistenceMatrixOptions> >;
   using Matrix_set_column = Set_column<Matrix<PersistenceMatrixOptions> >;
   using Matrix_unordered_set_column = Unordered_set_column<Matrix<PersistenceMatrixOptions> >;
   using Matrix_intrusive_list_column = Intrusive_list_column<Matrix<PersistenceMatrixOptions> >;
@@ -376,18 +378,29 @@ class Matrix
                           std::conditional_t<
                               PersistenceMatrixOptions::column_type == Column_types::NAIVE_VECTOR,
                               Matrix_naive_vector_column,
-                              std::conditional_t<PersistenceMatrixOptions::column_type == Column_types::SMALL_VECTOR,
-                                                 Matrix_small_vector_column,
-                                                 Matrix_intrusive_set_column>
-                              > > > > > > >;
+                              std::conditional_t<
+                                  PersistenceMatrixOptions::column_type == Column_types::SMALL_VECTOR,
+                                  Matrix_small_vector_column,
+                                  std::conditional_t<PersistenceMatrixOptions::column_type == Column_types::PHAT_VECTOR,
+                                                     Matrix_phat_vector_column,
+                                                     std::conditional_t<PersistenceMatrixOptions::column_type ==
+                                                                            Column_types::PHAT_BIT_TREE,
+                                                                        Matrix_phat_bit_tree_column,
+                                                                        Matrix_intrusive_set_column> > > > > > > > > >;
 
   struct Column_z2_settings {
     Column_z2_settings() : entryConstructor() {}
+
     Column_z2_settings([[maybe_unused]] Characteristic characteristic) : entryConstructor() {}
+
     Column_z2_settings([[maybe_unused]] const Column_z2_settings& toCopy) : entryConstructor() {}
+
     Column_z2_settings([[maybe_unused]] Column_z2_settings&& toMove) noexcept : entryConstructor() {}
+
     ~Column_z2_settings() = default;
+
     Column_z2_settings& operator=([[maybe_unused]] const Column_z2_settings& other) { return *this; }
+
     Column_z2_settings& operator=([[maybe_unused]] Column_z2_settings&& other) noexcept { return *this; }
 
     Entry_constructor entryConstructor;  // will be replaced by more specific allocators depending on the column type.

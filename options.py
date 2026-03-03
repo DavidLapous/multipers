@@ -14,13 +14,18 @@ VALUE_TYPES = [
 
 # Persistence matrix column IDs
 COLUMNS = [
-    "INTRUSIVE_SET",  # default and recommended
+    "UNORDERED_SET",
+    # "CHATTY_COLUMN",
+    # "CHATTY_COLUMN_FLIP",
+    # "CHATTY_COLUMN_ADAPTIVE",
+    # "PHAT_VECTOR",
+    # "PHAT_BIT_TREE",
+    # "INTRUSIVE_LIST",
+    # "INTRUSIVE_SET",
     # "SET",
     # "HEAP",
-    # "UNORDERED_SET",
-    "NAIVE_VECTOR",
+    # "NAIVE_VECTOR",
     # "VECTOR",
-    # "INTRUSIVE_LIST",
     # "LIST",
 ]
 

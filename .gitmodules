@@ -22,3 +22,6 @@
 	path = ext/function_delaunay
 	url = https://bitbucket.org/mkerber/function_delaunay/
 	branch = master
+[submodule "ext/phat"]
+	path = ext/phat
+	url = https://github.com/xoltar/phat

@@ -57,12 +57,21 @@ set(MULTIPERS_SHARED_CORE_MODULES
   _function_delaunay_interface
 )
 
-set(MULTIPERS_BACKEND_COMMON_MODULES
+set(MULTIPERS_BOOST_MODULES
   _aida_interface
   _mpfree_interface
   _multi_critical_interface
   _function_delaunay_interface
 )
+
+set(MULTIPERS_GMP_MODULE
+  _aida_interface
+  _mpfree_interface
+  _multi_critical_interface
+  _function_delaunay_interface
+)
+
+set(MULTIPERS_GMP_MODULES ${MULTIPERS_GMP_MODULE})
 
 set(MULTIPERS_OPENMP_MODULES
   _aida_interface
@@ -71,19 +80,29 @@ set(MULTIPERS_OPENMP_MODULES
   _function_delaunay_interface
 )
 
-set(MULTIPERS_NO_TBB_MODULES
-  io
-  ops
+set(MULTIPERS_TBB_MODULES
+  simplex_tree_multi
+  function_rips
+  mma_structures
+  multiparameter_module_approximation
+  point_measure
+  grids
+  slicer
+  _function_delaunay_interface
+)
+
+set(MULTIPERS_MODULE_INCLUDE_DIR_MAP
+  _aida_interface MULTIPERS_AIDA_INCLUDE_DIRS
+  _mpfree_interface MULTIPERS_MPFREE_INCLUDE_DIRS
+  _multi_critical_interface MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
+  _function_delaunay_interface MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
+)
+
+set(MULTIPERS_FORKED_PHAT_MODULES
   _aida_interface
   _mpfree_interface
   _multi_critical_interface
-)
-
-set(MULTIPERS_BACKEND_COMMON_LIBS
-  Boost::system
-  Boost::timer
-  Boost::chrono
-  "${MULTIPERS_GMP_LIBRARY}"
+  _function_delaunay_interface
 )
 
 set(MULTIPERS_GENERATED_INCLUDE_DIRS
@@ -100,6 +119,7 @@ function(multipers_add_core_object_library target_name source_file)
     PRIVATE
       ${MULTIPERS_GENERATED_INCLUDE_DIRS}
       ${MULTIPERS_BASE_INCLUDE_DIRS}
+      # ${MULTIPERS_PHAT_INCLUDE_DIRS}
   )
   multipers_apply_common_build_flags(${target_name})
 endfunction()
@@ -168,15 +188,24 @@ function(multipers_link_shared_core target_name)
 endfunction()
 
 function(multipers_configure_extension_include_dirs module_name target_name)
-  if(module_name STREQUAL "_aida_interface")
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
-  elseif(module_name STREQUAL "_mpfree_interface")
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
-  elseif(module_name STREQUAL "_multi_critical_interface")
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS})
-  elseif(module_name STREQUAL "_function_delaunay_interface")
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
+  list(LENGTH MULTIPERS_MODULE_INCLUDE_DIR_MAP include_dir_map_length)
+  if(include_dir_map_length GREATER 1)
+    math(EXPR include_dir_map_last "${include_dir_map_length} - 2")
+    foreach(i RANGE 0 ${include_dir_map_last} 2)
+      math(EXPR j "${i} + 1")
+      list(GET MULTIPERS_MODULE_INCLUDE_DIR_MAP ${i} include_module)
+      list(GET MULTIPERS_MODULE_INCLUDE_DIR_MAP ${j} include_var)
+      if("${module_name}" STREQUAL "${include_module}")
+        target_include_directories(${target_name} PRIVATE ${${include_var}})
+        break()
+      endif()
+    endforeach()
   endif()
+
+  # list(FIND MULTIPERS_FORKED_PHAT_MODULES "${module_name}" uses_forked_phat)
+  # if(uses_forked_phat EQUAL -1)
+  #   target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
+  # endif()
 endfunction()
 
 function(multipers_configure_extension_backend module_name target_name)
@@ -184,9 +213,14 @@ function(multipers_configure_extension_backend module_name target_name)
     message(FATAL_ERROR "AIDA backend is not supported on Windows")
   endif()
 
-  list(FIND MULTIPERS_BACKEND_COMMON_MODULES "${module_name}" uses_backend_common)
-  if(NOT uses_backend_common EQUAL -1)
-    target_link_libraries(${target_name} PRIVATE ${MULTIPERS_BACKEND_COMMON_LIBS})
+  list(FIND MULTIPERS_BOOST_MODULES "${module_name}" uses_boost)
+  if(NOT uses_boost EQUAL -1)
+    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+  endif()
+
+  list(FIND MULTIPERS_GMP_MODULE "${module_name}" uses_gmp)
+  if(NOT uses_gmp EQUAL -1)
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
   endif()
 
   if(module_name STREQUAL "_aida_interface")
@@ -198,8 +232,8 @@ function(multipers_configure_extension_backend module_name target_name)
     multipers_link_openmp(${target_name})
   endif()
 
-  list(FIND MULTIPERS_NO_TBB_MODULES "${module_name}" skips_tbb)
-  if(skips_tbb EQUAL -1)
+  list(FIND MULTIPERS_TBB_MODULES "${module_name}" uses_tbb)
+  if(NOT uses_tbb EQUAL -1)
     multipers_link_tbb(${target_name})
   endif()
 endfunction()
