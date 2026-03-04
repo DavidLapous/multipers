@@ -28,3 +28,4 @@
 [submodule "ext/rhomboidtiling_newer_cgal_version"]
 	path = ext/rhomboidtiling_newer_cgal_version
 	url = https://github.com/DavidLapous/rhomboidtiling_newer_cgal_version
+	branch = master
