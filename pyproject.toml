@@ -49,8 +49,8 @@ exclude = [
   "multipers.egg-info",
   "tmp",
   "*.sh",
-  "*.txt",
-  "*.md",
+  "ext/**/*.txt",
+  "ext/**/*.md",
   "*.cff",
   "*.bin",
   "*.sky",
@@ -64,6 +64,9 @@ exclude = [
   "*.tex",
   "*.scc",
   "*.firep",
+  "CMakeCache.txt"
+  "compile_commands.json",
+  "Makefile",
   "*.png",
   ".*",
   "*.yml",
@@ -87,6 +90,9 @@ include = [
   "multipers/**/*.hpp",
   "multipers/**/*.h",
   "LICENSE",
+  "README.md",
+  "licences/LGPL-3.0-or-later.txt",
+  "THIRD_PARTY_NOTICES.md",
 ]
 
 [project]
