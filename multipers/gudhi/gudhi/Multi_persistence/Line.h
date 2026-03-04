@@ -220,21 +220,7 @@ class Line
   U compute_backward_intersection(const Point_t &x) const
   {
     GUDHI_CHECK(basePoint_.size() == x.size(), "x has not as many parameters as the line.");
-
-    constexpr const U m_inf = Point<U>::T_m_inf;
-
-    U t = Point<U>::T_inf;
-    for (unsigned int p = 0; p < x.size(); ++p) {
-      if (Gudhi::multi_filtration::_is_nan(x[p])) return m_inf;
-      auto div = direction_.size() == 0 ? 1 : direction_[p];
-      if (div == 0) {
-        if (x[p] <= basePoint_[p]) return m_inf;
-      } else {
-        t = std::min(t, (static_cast<U>(x[p]) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
-      }
-    }
-
-    return t;
+    return compute_backward_intersection(x.begin(), x.end());
   }
 
   /**
