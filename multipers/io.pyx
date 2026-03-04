@@ -251,24 +251,15 @@ def _minimal_presentation_from_slicer(
     """
     if backend == "mpfree":
         from multipers import _mpfree_interface
-        from multipers import Slicer
 
         if _mpfree_interface._is_available():
-            slicer_f64_contiguous = Slicer(
-                slicer,
-                backend="matrix",
-                vineyard=False,
-                dtype=np.float64,
-                kcritical=False,
-                filtration_container="contiguous",
-            )
             if verbose:
                 print(
                     f"[multipers.io] backend=mpfree mode=cpp_interface degree={degree}",
                     flush=True,
                 )
             new_slicer = _mpfree_interface.minimal_presentation(
-                slicer_f64_contiguous,
+                slicer,
                 degree=degree,
                 verbose=verbose,
                 use_chunk=True,
@@ -541,21 +532,10 @@ def _multi_critical_from_slicer(
     swedish = degree is not None if swedish is None else swedish
 
     if _multi_critical_interface._is_available():
-        from multipers import Slicer
-
         if reduce:
-            slicer_f64_contiguous = slicer
             out_kcritical = kcritical
             out_filtration_container = filtration_container
         else:
-            slicer_f64_contiguous = Slicer(
-                slicer,
-                backend="matrix",
-                vineyard=False,
-                dtype=np.float64,
-                kcritical=True,
-                filtration_container="contiguous",
-            )
             out_kcritical = False
             out_filtration_container = "contiguous"
         if verbose:
@@ -564,7 +544,7 @@ def _multi_critical_from_slicer(
                 flush=True,
             )
         return _multi_critical_interface.one_criticalify(
-            slicer_f64_contiguous,
+            slicer,
             reduce=reduce,
             algo=algo,
             degree=degree,
@@ -602,7 +582,7 @@ def _multi_critical_from_slicer(
                 need_split = True
                 reduce_arg += r" --minpres-all"
             else:
-                reduce_arg += fr" --minpres {degree}"
+                reduce_arg += fr" --minpres {degree + 1}"
         verbose_arg = "> /dev/null 2>&1" if not verbose else "--verbose"
 
         _init_external_softwares(requires=["multi_critical"])

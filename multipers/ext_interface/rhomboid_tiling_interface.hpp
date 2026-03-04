@@ -34,7 +34,7 @@ rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface
     bool verbose_output = false);
 
 template <typename index_type>
-contiguous_f64_slicer rhomboid_tiling_to_contiguous_slicer_interface(
+contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     const rhomboid_tiling_interface_input<index_type>& input,
     int k_max,
     int degree,
@@ -301,7 +301,7 @@ rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface
 }
 
 template <typename index_type>
-contiguous_f64_slicer rhomboid_tiling_to_contiguous_slicer_interface(
+contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     const rhomboid_tiling_interface_input<index_type>& input,
     int k_max,
     int degree,
@@ -323,7 +323,7 @@ rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface
 }
 
 template <typename index_type>
-contiguous_f64_slicer rhomboid_tiling_to_contiguous_slicer_interface(
+contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     const rhomboid_tiling_interface_input<index_type>&,
     int,
     int,

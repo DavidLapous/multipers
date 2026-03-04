@@ -39,7 +39,7 @@ using kcontiguous_f64_slicer = multipers::tmp_interface::TrucPythonInterface<
 using contiguous_f64_complex = Gudhi::multi_persistence::Multi_parameter_filtered_complex<contiguous_f64_filtration>;
 
 template <typename index_type>
-inline contiguous_f64_slicer build_contiguous_f64_slicer_from_output(
+inline contiguous_f64_complex build_contiguous_f64_slicer_from_output(
     const std::vector<std::pair<double, double> >& filtration_values,
     const std::vector<std::vector<index_type> >& boundaries,
     const std::vector<int>& dimensions) {
@@ -71,8 +71,13 @@ inline contiguous_f64_slicer build_contiguous_f64_slicer_from_output(
   }
 
   std::vector<int> c_dimensions = dimensions;
-  contiguous_f64_complex complex(c_boundaries, c_dimensions, c_filtrations);
-  return contiguous_f64_slicer(complex);
+  return contiguous_f64_complex(c_boundaries, c_dimensions, c_filtrations);
+}
+
+template <typename slicer_type>
+inline void assign_slicer_from_contiguous_f64_complex(slicer_type& target,
+                                                       contiguous_f64_complex& complex) {
+  target = slicer_type(complex);
 }
 
 }  // namespace multipers

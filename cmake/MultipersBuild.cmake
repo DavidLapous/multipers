@@ -20,6 +20,14 @@ function(multipers_apply_common_build_flags target_name)
     )
   endif()
 
+  if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER)
+    target_compile_definitions(
+      ${target_name}
+      PRIVATE
+        MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
+    )
+  endif()
+
   if(NOT CGAL_FOUND)
     target_compile_definitions(
       ${target_name}

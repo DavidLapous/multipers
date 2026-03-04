@@ -71,7 +71,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
     bool verbose_output = false);
 
 template <typename index_type>
-contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
+contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
     const function_delaunay_interface_input<index_type>& input,
     int degree = -1,
     bool use_multi_chunk = false,
@@ -354,7 +354,7 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
 }
 
 template <typename index_type>
-contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
+contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
     const function_delaunay_interface_input<index_type>& input,
     int degree,
     bool use_multi_chunk,
@@ -373,7 +373,7 @@ function_delaunay_interface(const function_delaunay_interface_input<index_type>&
 }
 
 template <typename index_type>
-contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
+contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
     const function_delaunay_interface_input<index_type>&,
     int,
     bool,

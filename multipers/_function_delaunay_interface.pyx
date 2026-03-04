@@ -12,6 +12,16 @@ from multipers.simplex_tree_multi import SimplexTreeMulti
 import multipers.slicer as mps
 from multipers.slicer cimport C_ContiguousSlicer_Matrix0_f64
 
+cdef extern from "ext_interface/contiguous_slicer_bridge.hpp" namespace "multipers":
+  cdef cppclass contiguous_f64_complex_cpp "multipers::contiguous_f64_complex":
+    contiguous_f64_complex_cpp() except + nogil
+    contiguous_f64_complex_cpp(const contiguous_f64_complex_cpp&) except + nogil
+
+  void assign_slicer_from_contiguous_f64_complex_cpp "multipers::assign_slicer_from_contiguous_f64_complex"(
+      C_ContiguousSlicer_Matrix0_f64&,
+      contiguous_f64_complex_cpp&
+  ) except + nogil
+
 cdef extern from "ext_interface/function_delaunay_interface.hpp" namespace "multipers":
 
   cdef cppclass function_delaunay_interface_input_data "multipers::function_delaunay_interface_input<int>":
@@ -38,7 +48,7 @@ cdef extern from "ext_interface/function_delaunay_interface.hpp" namespace "mult
       bool
   ) except + nogil
 
-  C_ContiguousSlicer_Matrix0_f64 function_delaunay_interface_contiguous_cpp "multipers::function_delaunay_interface_contiguous_slicer<int>"(
+  contiguous_f64_complex_cpp function_delaunay_interface_contiguous_cpp "multipers::function_delaunay_interface_contiguous_slicer<int>"(
       const function_delaunay_interface_input_data&,
       int,
       bool,
@@ -112,6 +122,7 @@ def function_delaunay_to_slicer(
     cdef object target
     cdef intptr_t target_ptr
     cdef C_ContiguousSlicer_Matrix0_f64* target_cpp
+    cdef contiguous_f64_complex_cpp interface_output_complex
     cdef Py_ssize_t num_pts, dim
     cdef Py_ssize_t i
 
@@ -140,12 +151,13 @@ def function_delaunay_to_slicer(
     target_cpp = <C_ContiguousSlicer_Matrix0_f64*>target_ptr
 
     with nogil:
-        target_cpp[0] = function_delaunay_interface_contiguous_cpp(
+        interface_output_complex = function_delaunay_interface_contiguous_cpp(
             interface_input,
             degree,
             multi_chunk,
             verbose,
         )
+        assign_slicer_from_contiguous_f64_complex_cpp(target_cpp[0], interface_output_complex)
 
     if target is not slicer:
         slicer._from_ptr(type(slicer)(target).get_ptr())

@@ -11,6 +11,16 @@ from multipers._helper cimport vect_vect_boundary_to_numpy_slices, vect_pair_dou
 import multipers.slicer as mps
 from multipers.slicer cimport C_ContiguousSlicer_Matrix0_f64, C_KContiguousSlicer_Matrix0_f64
 
+cdef extern from "ext_interface/contiguous_slicer_bridge.hpp" namespace "multipers":
+  cdef cppclass contiguous_f64_complex_cpp "multipers::contiguous_f64_complex":
+    contiguous_f64_complex_cpp() except + nogil
+    contiguous_f64_complex_cpp(const contiguous_f64_complex_cpp&) except + nogil
+
+  void assign_slicer_from_contiguous_f64_complex_cpp "multipers::assign_slicer_from_contiguous_f64_complex"(
+      C_ContiguousSlicer_Matrix0_f64&,
+      contiguous_f64_complex_cpp&
+  ) except + nogil
+
 
 cdef extern from "ext_interface/multi_critical_interface.hpp" namespace "multipers":
 
@@ -36,7 +46,7 @@ cdef extern from "ext_interface/multi_critical_interface.hpp" namespace "multipe
       bool
   ) except + nogil
 
-  C_ContiguousSlicer_Matrix0_f64 multi_critical_resolution_contiguous_interface_cpp "multipers::multi_critical_resolution_contiguous_interface"(
+  contiguous_f64_complex_cpp multi_critical_resolution_contiguous_interface_cpp "multipers::multi_critical_resolution_contiguous_interface"(
       C_KContiguousSlicer_Matrix0_f64&,
       bool,
       bool,
@@ -242,6 +252,7 @@ def one_criticalify(
     cdef intptr_t out_ptr
     cdef C_KContiguousSlicer_Matrix0_f64* input_cpp
     cdef C_ContiguousSlicer_Matrix0_f64* out_cpp
+    cdef contiguous_f64_complex_cpp out_complex
 
     swedish = degree is not None if swedish is None else swedish
     from multipers import Slicer
@@ -263,12 +274,13 @@ def one_criticalify(
         input_cpp = <C_KContiguousSlicer_Matrix0_f64*>input_ptr
         out_cpp = <C_ContiguousSlicer_Matrix0_f64*>out_ptr
         with nogil:
-            out_cpp[0] = multi_critical_resolution_contiguous_interface_cpp(
+            out_complex = multi_critical_resolution_contiguous_interface_cpp(
                 dereference(input_cpp),
                 use_logpath,
                 True,
                 verbose,
             )
+            assign_slicer_from_contiguous_f64_complex_cpp(out_cpp[0], out_complex)
         if newSlicer is type(out):
             return out
         return newSlicer(out)

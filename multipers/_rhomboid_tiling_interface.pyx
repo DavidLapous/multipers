@@ -9,6 +9,16 @@ from cython.operator cimport dereference
 import multipers.slicer as mps
 from multipers.slicer cimport C_ContiguousSlicer_Matrix0_f64
 
+cdef extern from "ext_interface/contiguous_slicer_bridge.hpp" namespace "multipers":
+  cdef cppclass contiguous_f64_complex_cpp "multipers::contiguous_f64_complex":
+    contiguous_f64_complex_cpp() except + nogil
+    contiguous_f64_complex_cpp(const contiguous_f64_complex_cpp&) except + nogil
+
+  void assign_slicer_from_contiguous_f64_complex_cpp "multipers::assign_slicer_from_contiguous_f64_complex"(
+      C_ContiguousSlicer_Matrix0_f64&,
+      contiguous_f64_complex_cpp&
+  ) except + nogil
+
 
 cdef extern from "ext_interface/rhomboid_tiling_interface.hpp" namespace "multipers":
 
@@ -18,7 +28,7 @@ cdef extern from "ext_interface/rhomboid_tiling_interface.hpp" namespace "multip
 
   bool rhomboid_tiling_interface_available "multipers::rhomboid_tiling_interface_available"() except + nogil
 
-  C_ContiguousSlicer_Matrix0_f64 rhomboid_tiling_to_contiguous_slicer_interface_cpp "multipers::rhomboid_tiling_to_contiguous_slicer_interface<int>"(
+  contiguous_f64_complex_cpp rhomboid_tiling_to_contiguous_slicer_interface_cpp "multipers::rhomboid_tiling_to_contiguous_slicer_interface<int>"(
       const rhomboid_tiling_interface_input_data&,
       int,
       int,
@@ -42,6 +52,7 @@ def rhomboid_tiling_to_slicer(
     cdef object target
     cdef intptr_t target_ptr
     cdef C_ContiguousSlicer_Matrix0_f64* target_cpp
+    cdef contiguous_f64_complex_cpp interface_output_complex
 
     cdef object point_cloud_array = np.ascontiguousarray(point_cloud, dtype=np.double)
     if point_cloud_array.ndim != 2:
@@ -70,12 +81,13 @@ def rhomboid_tiling_to_slicer(
     target_cpp = <C_ContiguousSlicer_Matrix0_f64*>target_ptr
 
     with nogil:
-        target_cpp[0] = rhomboid_tiling_to_contiguous_slicer_interface_cpp(
+        interface_output_complex = rhomboid_tiling_to_contiguous_slicer_interface_cpp(
             interface_input,
             k_max,
             degree,
             verbose,
         )
+        assign_slicer_from_contiguous_f64_complex_cpp(target_cpp[0], interface_output_complex)
 
     if target is not slicer:
         slicer._from_ptr(type(slicer)(target).get_ptr())
