@@ -1,95 +1,6 @@
-[build-system]
-requires = [
-  "scikit-build-core",
-  "numpy",
-  "Cython",
-]
-build-backend = "scikit_build_core.build"
-
-[tool.scikit-build]
-cmake.version = ">=3.24"
-cmake.build-type = "Release"
-build-dir = "build/{wheel_tag}"
-
-[tool.scikit-build.cmake.define]
-CMAKE_COLOR_DIAGNOSTICS = "ON"
-
-[tool.scikit-build.wheel]
-packages = []
-exclude = [
-  "**/*.pyx",
-  "**/*.pxd",
-  "**/*.tp",
-  "**/*.cpp",
-  "**/*.h",
-  "**/*.hpp",
-  "**/docs/**",
-  "**/benchmarks/**",
-  "**/ext/**",
-]
-
-[tool.scikit-build.sdist]
-exclude = [
-  "docs/**",
-  "tests/**",
-  "benchmarks/**",
-  ".github/**",
-  "build/**",
-  "dist/**",
-  "**/__pycache__/**",
-  "**/*.ipynb",
-  "**/*.so",
-  "**/*.dylib",
-  "**/*.dll",
-  "**/*.pyd",
-  "multipers/**/*.cpp",
-  "ext/**/docs/**",
-  "ext/**/tests/**",
-  "ext/**/benchmarks/**",
-  "ext/**/misc/**",
-  "ext/**/lists_of_decompositions/**",
-  "ext/**/*.py",
-  "ext/**/*.sh",
-  "ext/**/*.txt",
-  "ext/**/*.md",
-  "ext/**/*.cff",
-  "ext/**/*.bin",
-  "ext/**/*.sky",
-  "ext/**/*.sccsum",
-  "ext/**/*.firep",
-  "ext/**/*.pdf",
-  "ext/**/*.js",
-  "ext/**/*.css",
-  "ext/**/*.map",
-  "ext/**/*.md5",
-  "ext/**/*.tex",
-  "ext/**/Makefile",
-]
-include = [
-  "ext/**/CMakeLists.txt",
-  "ext/**/*.cmake",
-  "ext/**/*.h",
-  "ext/**/*.hpp",
-  "ext/**/*.cpp",
-  "ext/**/LICENSE",
-  "ext/**/COPYING",
-  "ext/**/COPYING.LESSER",
-  "tools/process_tempita.py",
-  "tools/tempita_grid_gen.py",
-  "tools/codegen/*.py",
-  "tools/core/*.cc",
-  "options.py",
-  "_tempita_grid_gen.py",
-  "multipers/**/*.tp",
-  "multipers/**/*.pyx",
-  "multipers/**/*.pxd",
-  "multipers/**/*.hpp",
-  "multipers/**/*.h",
-]
-
 [project]
 name = "multipers"
-version = "2.5.0b2"
+version = "2.5.0b3"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
@@ -132,6 +43,108 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
+
+
+
+[build-system]
+requires = [
+  "scikit-build-core",
+  "numpy",
+  "Cython",
+]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.version = ">=3.24"
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+CMAKE_COLOR_DIAGNOSTICS = "ON"
+
+[tool.scikit-build.wheel]
+packages = []
+exclude = [
+  "**/*.pyx",
+  "**/*.pxd",
+  "**/*.tp",
+  "**/*.cpp",
+  "**/*.h",
+  "**/*.hpp",
+  "**/docs/**",
+  "**/benchmarks/**",
+  "**/ext/**",
+]
+
+[tool.scikit-build.sdist]
+inclusion-mode = "manual"
+exclude = [
+  "docs",
+  "tests",
+  "benchmarks/**",
+  "build",
+  "dist",
+  "**/__pycache__/**",
+  "**/*.ipynb",
+  "**/*.so",
+  "**/*.dylib",
+  "**/*.dll",
+  "**/*.pyd",
+  "multipers/**/*.cpp",
+  "generated",
+  "cython",
+  "CMakeFiles",
+  "multipers.egg-info",
+  "tmp",
+  "*.sh",
+  "ext/**/*.txt",
+  "ext/**/*.md",
+  "*.cff",
+  "*.bin",
+  "*.sky",
+  "*.sccsum",
+  "*.firep",
+  "*.pdf",
+  "*.js",
+  "*.css",
+  "*.map",
+  "*.md5",
+  "*.tex",
+  "*.scc",
+  "*.pyc",
+  "*.firep",
+  "CMakeCache.txt",
+  "compile_commands.json",
+  "Makefile",
+  "*.png",
+  ".*",
+  "*.yml",
+  "cmake_install.cmake",
+  ".DS_Store",
+]
+include = [
+  "multipers/",
+  "multipers/tests",
+  "tools",
+  "ext/**/*.h",
+  "ext/**/*.hpp",
+  "ext/**/*.cpp",
+  "ext/**/LICENSE",
+  "ext/**/COPYING",
+  "ext/**/COPYING.LESSER",
+  "options.py",
+  "_tempita_grid_gen.py",
+  "multipers/**/*.tp",
+  "multipers/**/*.pyx",
+  "multipers/**/*.pxd",
+  "multipers/**/*.hpp",
+  "multipers/**/*.h",
+  "CITATION.cff",
+  "LICENSE",
+  "README.md",
+  "licences/LGPL-3.0-or-later.txt",
+  "THIRD_PARTY_NOTICES.md",
+]
 
 [project.urls]
 source = "https://github.com/DavidLapous/multipers"

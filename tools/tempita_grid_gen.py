@@ -476,6 +476,14 @@ if VERBOSE:
 with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("wb") as f:
     pickle.dump(slicers, f)
 
+with (TEMPITA_CACHE_DIR / "_codegen_defaults.pkl").open("wb") as f:
+    pickle.dump(
+        {
+            "default_column_type": column_ids[0],
+        },
+        f,
+    )
+
 _print_section_header("SimplexTrees")
 
 

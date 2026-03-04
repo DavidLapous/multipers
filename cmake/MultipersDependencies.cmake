@@ -41,6 +41,14 @@ set(MULTIPERS_MPFREE_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/mpfree/scc_mod/include"
 )
 
+set(MULTIPERS_PHAT_INCLUDE_DIRS
+  "${CMAKE_SOURCE_DIR}/ext/phat/include"
+)
+
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/phat/include/phat/representations/bit_tree_pivot_column.h")
+  message(FATAL_ERROR "Missing vanilla PHAT headers under ext/phat/include")
+endif()
+
 set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/include"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include"

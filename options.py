@@ -8,19 +8,24 @@ Verbose C++/Python metadata is resolved from tools/codegen/_registry.py.
 VALUE_TYPES = [
     "int32",  # required
     "float64",  # required for MMA
-    # "int64",
-    # "float32",
+    "int64",
+    "float32",
 ]
 
 # Persistence matrix column IDs
 COLUMNS = [
-    "INTRUSIVE_SET",  # default and recommended
+    "UNORDERED_SET",
+    # "CHATTY_COLUMN",
+    # "CHATTY_COLUMN_FLIP",
+    # "CHATTY_COLUMN_ADAPTIVE",
+    # "PHAT_VECTOR",
+    # "PHAT_BIT_TREE",
+    # "INTRUSIVE_LIST",
+    # "INTRUSIVE_SET",
     # "SET",
     # "HEAP",
-    # "UNORDERED_SET",
     # "NAIVE_VECTOR",
     # "VECTOR",
-    # "INTRUSIVE_LIST",
     # "LIST",
 ]
 
