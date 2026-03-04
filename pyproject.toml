@@ -65,7 +65,7 @@ exclude = [
   "*.scc",
   "*.pyc",
   "*.firep",
-  "CMakeCache.txt"
+  "CMakeCache.txt",
   "compile_commands.json",
   "Makefile",
   "*.png",
