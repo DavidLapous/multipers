@@ -1,12 +1,15 @@
 import cython
 import numpy as np
 cimport numpy as cnp
-from libc.stdint cimport int64_t
+from libc.stdint cimport intptr_t, int64_t
 from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from libcpp cimport bool
+from cython.operator cimport dereference
 
 from multipers._helper cimport vect_vect_boundary_to_numpy_slices, vect_pair_double_to_array
+import multipers.slicer as mps
+from multipers.slicer cimport C_ContiguousSlicer_Matrix0_f64, C_KContiguousSlicer_Matrix0_f64
 
 
 cdef extern from "ext_interface/multi_critical_interface.hpp" namespace "multipers":
@@ -28,6 +31,13 @@ cdef extern from "ext_interface/multi_critical_interface.hpp" namespace "multipe
 
   multi_critical_interface_output_data multi_critical_resolution_interface "multipers::multi_critical_resolution_interface<int>"(
       const multi_critical_interface_input_data&,
+      bool,
+      bool,
+      bool
+  ) except + nogil
+
+  C_ContiguousSlicer_Matrix0_f64 multi_critical_resolution_contiguous_interface_cpp "multipers::multi_critical_resolution_contiguous_interface"(
+      C_KContiguousSlicer_Matrix0_f64&,
       bool,
       bool,
       bool
@@ -65,8 +75,6 @@ cdef object _slicer_from_multi_critical_output(
 ):
     out_boundaries = vect_vect_boundary_to_numpy_slices(interface_output.boundaries)
     out_dimensions = np.array(interface_output.dimensions, dtype=np.int32) 
-    if mark_minpres:
-        out_dimensions -= 1 # cause presentation
     out_filtrations = vect_pair_double_to_array(interface_output.filtration_values)
     out = slicer_type(out_boundaries, out_dimensions, out_filtrations)
     if mark_minpres:
@@ -229,6 +237,11 @@ def one_criticalify(
     cdef vector[multi_critical_interface_output_data] all_outputs
     cdef int target_degree
     cdef Py_ssize_t i
+    cdef object out
+    cdef intptr_t input_ptr
+    cdef intptr_t out_ptr
+    cdef C_KContiguousSlicer_Matrix0_f64* input_cpp
+    cdef C_ContiguousSlicer_Matrix0_f64* out_cpp
 
     swedish = degree is not None if swedish is None else swedish
     from multipers import Slicer
@@ -243,6 +256,23 @@ def one_criticalify(
     use_logpath = algo != "path"
     use_swedish = swedish is True
 
+    if (not reduce) and isinstance(slicer, mps._KContiguousSlicer_Matrix0_f64):
+        out = mps._ContiguousSlicer_Matrix0_f64()
+        input_ptr = <intptr_t>(slicer.get_ptr())
+        out_ptr = <intptr_t>(out.get_ptr())
+        input_cpp = <C_KContiguousSlicer_Matrix0_f64*>input_ptr
+        out_cpp = <C_ContiguousSlicer_Matrix0_f64*>out_ptr
+        with nogil:
+            out_cpp[0] = multi_critical_resolution_contiguous_interface_cpp(
+                dereference(input_cpp),
+                use_logpath,
+                True,
+                verbose,
+            )
+        if newSlicer is type(out):
+            return out
+        return newSlicer(out)
+
     interface_input = _multi_critical_input_from_slicer(slicer)
     if reduce and degree is None:
         with nogil:
@@ -254,11 +284,11 @@ def one_criticalify(
                 use_swedish,
             )
         return tuple(
-            _slicer_from_multi_critical_output(newSlicer, all_outputs[i+1], True, i)
-            for i in range(all_outputs.size()-1)
+            _slicer_from_multi_critical_output(newSlicer, all_outputs[i], True, i)
+            for i in range(all_outputs.size())
         )
     elif reduce:
-        _degree =<int>(degree+1) # cause presentation
+        _degree = <int>degree
         with nogil:
             one_output = multi_critical_minpres_interface(
                 interface_input,

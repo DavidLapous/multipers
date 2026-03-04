@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "contiguous_slicer_bridge.hpp"
+
 namespace multipers {
 
 template <typename index_type>
@@ -33,6 +35,13 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
                                                              bool use_chunk = true,
                                                              bool use_clearing = false,
                                                              bool verbose_output = false);
+
+contiguous_f64_slicer mpfree_minpres_contiguous_interface(contiguous_f64_slicer& input,
+                                                          int degree,
+                                                          bool full_resolution = true,
+                                                          bool use_chunk = true,
+                                                          bool use_clearing = false,
+                                                          bool verbose_output = false);
 
 }  // namespace multipers
 
@@ -201,6 +210,39 @@ inline mpfree_interface_output<index_type> convert_minpres_to_output(Graded_matr
   return out;
 }
 
+template <typename index_type>
+inline mpfree_interface_input<index_type> convert_contiguous_slicer_to_input(contiguous_f64_slicer& slicer) {
+  mpfree_interface_input<index_type> input;
+
+  const auto dimensions = slicer.get_dimensions();
+  const auto& boundaries = slicer.get_boundaries();
+  auto& filtrations = slicer.get_filtration_values();
+  const std::size_t num_generators = dimensions.size();
+
+  if (boundaries.size() != num_generators || filtrations.size() != num_generators) {
+    throw std::invalid_argument("Invalid slicer content: sizes of filtrations, boundaries and dimensions differ.");
+  }
+
+  input.dimensions = dimensions;
+  input.boundaries.resize(num_generators);
+  input.filtration_values.resize(num_generators);
+
+  for (std::size_t i = 0; i < num_generators; ++i) {
+    input.boundaries[i].reserve(boundaries[i].size());
+    for (const auto idx : boundaries[i]) {
+      input.boundaries[i].push_back(static_cast<index_type>(idx));
+    }
+
+    if (filtrations[i].num_parameters() != 2 || filtrations[i].num_generators() != 1) {
+      throw std::invalid_argument(
+          "mpfree contiguous bridge expects 1-critical contiguous slicers with exactly 2 filtration parameters.");
+    }
+    input.filtration_values[i] = std::make_pair(filtrations[i](0, 0), filtrations[i](0, 1));
+  }
+
+  return input;
+}
+
 }  // namespace detail
 
 template <typename index_type>
@@ -277,6 +319,18 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
   return detail::convert_minpres_to_output<index_type>(min_rep, degree, full_resolution);
 }
 
+inline contiguous_f64_slicer mpfree_minpres_contiguous_interface(contiguous_f64_slicer& input,
+                                                                 int degree,
+                                                                 bool full_resolution,
+                                                                 bool use_chunk,
+                                                                 bool use_clearing,
+                                                                 bool verbose_output) {
+  auto converted_input = detail::convert_contiguous_slicer_to_input<int>(input);
+  auto out = mpfree_minpres_interface<int>(
+      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+  return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
+}
+
 #else
 
 template <typename index_type>
@@ -286,6 +340,16 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
                                                              bool,
                                                              bool,
                                                              bool) {
+  throw std::runtime_error(
+      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+}
+
+inline contiguous_f64_slicer mpfree_minpres_contiguous_interface(contiguous_f64_slicer&,
+                                                                 int,
+                                                                 bool,
+                                                                 bool,
+                                                                 bool,
+                                                                 bool) {
   throw std::runtime_error(
       "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }

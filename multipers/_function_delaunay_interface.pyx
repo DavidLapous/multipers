@@ -4,10 +4,13 @@ cimport numpy as cnp
 from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from libcpp cimport bool
+from cython.operator cimport dereference
 
 from libc.stdint cimport intptr_t, int32_t, int64_t
 from libc.string cimport memcpy
 from multipers.simplex_tree_multi import SimplexTreeMulti
+import multipers.slicer as mps
+from multipers.slicer cimport C_ContiguousSlicer_Matrix0_f64
 
 cdef extern from "ext_interface/function_delaunay_interface.hpp" namespace "multipers":
 
@@ -29,6 +32,13 @@ cdef extern from "ext_interface/function_delaunay_interface.hpp" namespace "mult
   bool function_delaunay_interface_available "multipers::function_delaunay_interface_available"() except + nogil
 
   function_delaunay_interface_output_data function_delaunay_interface "multipers::function_delaunay_interface<int>"(
+      const function_delaunay_interface_input_data&,
+      int,
+      bool,
+      bool
+  ) except + nogil
+
+  C_ContiguousSlicer_Matrix0_f64 function_delaunay_interface_contiguous_cpp "multipers::function_delaunay_interface_contiguous_slicer<int>"(
       const function_delaunay_interface_input_data&,
       int,
       bool,
@@ -99,13 +109,17 @@ def function_delaunay_to_slicer(
 ):
     cdef double[:, ::1] point_cloud_view = np.ascontiguousarray(point_cloud, dtype=np.double)
     cdef double[::1] function_values_view = np.ascontiguousarray(function_values, dtype=np.double)
+    cdef object target
+    cdef intptr_t target_ptr
+    cdef C_ContiguousSlicer_Matrix0_f64* target_cpp
+    cdef Py_ssize_t num_pts, dim
+    cdef Py_ssize_t i
 
     num_pts, dim = point_cloud_view.shape[0], point_cloud_view.shape[1]
     if function_values_view.shape[0] != num_pts:
         raise ValueError(f"Got {point_cloud.shape=} and {function_values.shape=}.")
 
     cdef function_delaunay_interface_input_data interface_input
-    cdef function_delaunay_interface_output_data interface_output
 
     interface_input.points.resize(num_pts)
     for i in range(num_pts):
@@ -118,27 +132,23 @@ def function_delaunay_to_slicer(
     if num_pts > 0:
         memcpy(&interface_input.function_values[0], &function_values_view[0], num_pts * sizeof(double))
 
+    target = slicer
+    if not isinstance(slicer, mps._ContiguousSlicer_Matrix0_f64):
+        target = mps._ContiguousSlicer_Matrix0_f64()
+
+    target_ptr = <intptr_t>(target.get_ptr())
+    target_cpp = <C_ContiguousSlicer_Matrix0_f64*>target_ptr
+
     with nogil:
-        interface_output = function_delaunay_interface(
+        target_cpp[0] = function_delaunay_interface_contiguous_cpp(
             interface_input,
             degree,
             multi_chunk,
             verbose,
         )
-    num_generators = interface_output.dimensions.size()
 
-    out_boundaries = vect_vect_boundary_to_numpy_slices(interface_output.boundaries)
-    if num_generators == 0:
-        out_dimensions = np.empty(0, dtype=np.intc)
-    else:
-        out_dimensions = np.asarray(
-            <int[:num_generators]>(<int*>&interface_output.dimensions[0]),
-            dtype=np.intc,
-        )
-    out_filtrations = vect_pair_double_to_array(interface_output.filtration_values)
-    out_filtrations = np.asarray(out_filtrations, dtype=slicer.dtype)
-    new_slicer = type(slicer)(out_boundaries, out_dimensions, out_filtrations)
-    slicer._from_ptr(new_slicer.get_ptr())
+    if target is not slicer:
+        slicer._from_ptr(type(slicer)(target).get_ptr())
     return slicer
 
 

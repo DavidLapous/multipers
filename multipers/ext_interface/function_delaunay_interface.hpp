@@ -13,6 +13,8 @@
 #define FUNCTION_DELAUNAY_TIMERS 0
 #endif
 
+#include "contiguous_slicer_bridge.hpp"
+
 #ifndef MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 #define MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE 0
 #endif
@@ -57,12 +59,19 @@ using function_delaunay_simplextree_filtration =
     Gudhi::multi_filtration::Multi_parameter_filtration<double, false, !false>;
 using function_delaunay_simplextree_interface_output =
     Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<function_delaunay_simplextree_filtration,
-                                                                          double>;
+                                                                           double>;
 
 inline bool function_delaunay_interface_available();
 
 template <typename index_type>
 function_delaunay_interface_output<index_type> function_delaunay_interface(
+    const function_delaunay_interface_input<index_type>& input,
+    int degree = -1,
+    bool use_multi_chunk = false,
+    bool verbose_output = false);
+
+template <typename index_type>
+contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
     const function_delaunay_interface_input<index_type>& input,
     int degree = -1,
     bool use_multi_chunk = false,
@@ -344,11 +353,31 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
   return detail::convert_simplex_tree(simplex_tree, points);
 }
 
+template <typename index_type>
+contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
+    const function_delaunay_interface_input<index_type>& input,
+    int degree,
+    bool use_multi_chunk,
+    bool verbose_output) {
+  auto out = function_delaunay_interface<index_type>(input, degree, use_multi_chunk, verbose_output);
+  return build_contiguous_f64_slicer_from_output<index_type>(out.filtration_values, out.boundaries, out.dimensions);
+}
+
 #else
 
 template <typename index_type>
 function_delaunay_interface_output<index_type>
 function_delaunay_interface(const function_delaunay_interface_input<index_type>&, int, bool, bool) {
+  throw std::runtime_error(
+      "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+}
+
+template <typename index_type>
+contiguous_f64_slicer function_delaunay_interface_contiguous_slicer(
+    const function_delaunay_interface_input<index_type>&,
+    int,
+    bool,
+    bool) {
   throw std::runtime_error(
       "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }

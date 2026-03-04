@@ -16,6 +16,15 @@ function(multipers_apply_common_build_flags target_name)
         MULTIPERS_DISABLE_MPFREE_INTERFACE=1
         MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
         MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
+        MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
+    )
+  endif()
+
+  if(NOT CGAL_FOUND)
+    target_compile_definitions(
+      ${target_name}
+      PRIVATE
+        MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
     )
   endif()
 
@@ -54,7 +63,10 @@ set(MULTIPERS_SHARED_CORE_MODULES
   simplex_tree_multi
   slicer
   multiparameter_module_approximation
+  _mpfree_interface
   _function_delaunay_interface
+  _multi_critical_interface
+  _rhomboid_tiling_interface
 )
 
 set(MULTIPERS_BOOST_MODULES
@@ -69,6 +81,7 @@ set(MULTIPERS_GMP_MODULE
   _mpfree_interface
   _multi_critical_interface
   _function_delaunay_interface
+  _rhomboid_tiling_interface
 )
 
 set(MULTIPERS_GMP_MODULES ${MULTIPERS_GMP_MODULE})
@@ -96,6 +109,7 @@ set(MULTIPERS_MODULE_INCLUDE_DIR_MAP
   _mpfree_interface MULTIPERS_MPFREE_INCLUDE_DIRS
   _multi_critical_interface MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
   _function_delaunay_interface MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
+  _rhomboid_tiling_interface MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
 )
 
 set(MULTIPERS_FORKED_PHAT_MODULES
@@ -227,6 +241,26 @@ function(multipers_configure_extension_backend module_name target_name)
     target_link_libraries(${target_name} PRIVATE multipers_aida_static)
   endif()
 
+  if(module_name STREQUAL "_rhomboid_tiling_interface")
+    if(NOT MSVC)
+      target_compile_options(
+        ${target_name}
+        PRIVATE
+          -fno-associative-math
+          -fno-unsafe-math-optimizations
+      )
+    endif()
+    if(TARGET multipers_rhomboid_tiling_static)
+      target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
+    endif()
+    if(TARGET CGAL::CGAL)
+      target_link_libraries(${target_name} PRIVATE CGAL::CGAL)
+    endif()
+    if(TARGET CGAL::CGAL_Core)
+      target_link_libraries(${target_name} PRIVATE CGAL::CGAL_Core)
+    endif()
+  endif()
+
   list(FIND MULTIPERS_OPENMP_MODULES "${module_name}" uses_openmp)
   if(NOT uses_openmp EQUAL -1)
     multipers_link_openmp(${target_name})
@@ -346,6 +380,7 @@ set(MULTIPERS_MODULES
   _aida_interface
   _function_delaunay_interface
   _multi_critical_interface
+  _rhomboid_tiling_interface
 )
 
 if(WIN32)

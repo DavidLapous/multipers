@@ -225,7 +225,7 @@ def todense(grid, api=None):
 
 
 def _compute_grid_numpy(
-        tuple filtrations_values,
+        filtrations_values,
         resolution=None, 
         strategy:Lstrategies="exact", 
         bool unique=True, 

@@ -8,6 +8,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
 find_package(Boost REQUIRED COMPONENTS system timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+find_package(CGAL QUIET COMPONENTS Core)
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
@@ -66,6 +67,28 @@ set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/phat/include"
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
 )
+
+set(MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
+  "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src"
+)
+
+if(CGAL_FOUND)
+  list(APPEND MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS ${CGAL_INCLUDE_DIRS})
+endif()
+
+if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
+  add_library(
+    multipers_rhomboid_tiling_static
+    STATIC
+    "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp"
+    "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp"
+  )
+  target_include_directories(multipers_rhomboid_tiling_static PUBLIC ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS})
+  target_link_libraries(multipers_rhomboid_tiling_static PUBLIC CGAL::CGAL)
+  if(TARGET CGAL::CGAL_Core)
+    target_link_libraries(multipers_rhomboid_tiling_static PUBLIC CGAL::CGAL_Core)
+  endif()
+endif()
 
 if(NOT WIN32)
   add_library(

@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#include "contiguous_slicer_bridge.hpp"
+
 namespace multipers {
 
 template <typename index_type>
@@ -28,6 +30,12 @@ inline bool multi_critical_interface_available();
 template <typename index_type>
 multi_critical_interface_output<index_type> multi_critical_resolution_interface(
     const multi_critical_interface_input<index_type>& input,
+    bool use_logpath = true,
+    bool use_multi_chunk = true,
+    bool verbose_output = false);
+
+contiguous_f64_slicer multi_critical_resolution_contiguous_interface(
+    kcontiguous_f64_slicer& input,
     bool use_logpath = true,
     bool use_multi_chunk = true,
     bool verbose_output = false);
@@ -351,6 +359,43 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
   return matrices;
 }
 
+inline multi_critical_interface_input<int> multi_critical_input_from_kcontiguous_slicer(kcontiguous_f64_slicer& slicer) {
+  multi_critical_interface_input<int> input;
+
+  const auto dimensions = slicer.get_dimensions();
+  const auto& boundaries = slicer.get_boundaries();
+  auto& filtrations = slicer.get_filtration_values();
+  const std::size_t num_generators = dimensions.size();
+  if (boundaries.size() != num_generators || filtrations.size() != num_generators) {
+    throw std::invalid_argument("Invalid slicer content: sizes of filtrations, boundaries and dimensions differ.");
+  }
+
+  input.dimensions = dimensions;
+  input.boundaries.resize(num_generators);
+  input.filtration_values.resize(num_generators);
+
+  for (std::size_t i = 0; i < num_generators; ++i) {
+    input.boundaries[i].reserve(boundaries[i].size());
+    for (const auto idx : boundaries[i]) {
+      input.boundaries[i].push_back(static_cast<int>(idx));
+    }
+
+    if (filtrations[i].num_parameters() != 2) {
+      throw std::invalid_argument("multi_critical contiguous bridge expects bifiltration values with 2 parameters.");
+    }
+    const std::size_t num_grades = filtrations[i].num_generators();
+    if (num_grades == 0) {
+      throw std::invalid_argument("multi_critical contiguous bridge expects at least one grade per generator.");
+    }
+    input.filtration_values[i].reserve(num_grades);
+    for (std::size_t g = 0; g < num_grades; ++g) {
+      input.filtration_values[i].emplace_back(filtrations[i](g, 0), filtrations[i](g, 1));
+    }
+  }
+
+  return input;
+}
+
 }  // namespace multi_critical_detail
 
 template <typename index_type>
@@ -370,6 +415,17 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
   // Mirrors the historical shift_dimension=-2 behavior from the SCC file pipeline.
   std::vector<multi_critical_detail::Graded_matrix> shifted_matrices(matrices.begin(), matrices.end() - 1);
   return multi_critical_detail::convert_chain_complex<index_type>(shifted_matrices);
+}
+
+inline contiguous_f64_slicer multi_critical_resolution_contiguous_interface(
+    kcontiguous_f64_slicer& input,
+    bool use_logpath,
+    bool use_multi_chunk,
+    bool verbose_output) {
+  auto converted_input = multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input);
+  auto out = multi_critical_resolution_interface<int>(
+      converted_input, use_logpath, use_multi_chunk, verbose_output);
+  return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
 }
 
 template <typename index_type>
@@ -448,6 +504,11 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
 template <typename index_type>
 multi_critical_interface_output<index_type>
 multi_critical_resolution_interface(const multi_critical_interface_input<index_type>&, bool, bool, bool) {
+  throw std::runtime_error(
+      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+}
+
+inline contiguous_f64_slicer multi_critical_resolution_contiguous_interface(kcontiguous_f64_slicer&, bool, bool, bool) {
   throw std::runtime_error(
       "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }

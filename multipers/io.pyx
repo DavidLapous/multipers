@@ -1,6 +1,7 @@
 import re
 import tempfile
 import subprocess
+import time
 from gudhi import SimplexTree
 import gudhi as gd
 import numpy as np
@@ -17,6 +18,7 @@ cimport cython
 cimport numpy as cnp
 from multipers import _function_delaunay_interface
 from multipers import _multi_critical_interface
+from multipers import _rhomboid_tiling_interface
 
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
@@ -24,7 +26,7 @@ doc_soft_urls = {
         "multi_chunk":"https://bitbucket.org/mkerber/multi_chunk/",
         "function_delaunay":"https://bitbucket.org/mkerber/function_delaunay/",
         "2pac":"https://gitlab.com/flenzen/2pac",
-        "rhomboid_tiling":"https://github.com/odinhg/rhomboidtiling_newer_cgal_version",
+        "rhomboid_tiling":"https://github.com/DavidLapous/rhomboidtiling_newer_cgal_version",
         "multi_critical":"https://bitbucket.org/mkerber/multi_critical",
         }
 doc_soft_easy_install = {
@@ -249,15 +251,24 @@ def _minimal_presentation_from_slicer(
     """
     if backend == "mpfree":
         from multipers import _mpfree_interface
+        from multipers import Slicer
 
         if _mpfree_interface._is_available():
+            slicer_f64_contiguous = Slicer(
+                slicer,
+                backend="matrix",
+                vineyard=False,
+                dtype=np.float64,
+                kcritical=False,
+                filtration_container="contiguous",
+            )
             if verbose:
                 print(
-                    f"[multipers.io] backend=mpfree mode=cpp_inteface degree={degree}",
+                    f"[multipers.io] backend=mpfree mode=cpp_interface degree={degree}",
                     flush=True,
                 )
             new_slicer = _mpfree_interface.minimal_presentation(
-                slicer,
+                slicer_f64_contiguous,
                 degree=degree,
                 verbose=verbose,
                 use_chunk=True,
@@ -341,7 +352,7 @@ def function_delaunay_presentation_to_slicer(
     if _function_delaunay_interface._is_available():
         if verbose:
             print(
-                f"[multipers.io] backend=function_delaunay mode=cpp_inteface degree={degree} multi_chunk={multi_chunk}",
+                f"[multipers.io] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk}",
                 flush=True,
             )
         return _function_delaunay_interface.function_delaunay_to_slicer(
@@ -447,20 +458,71 @@ def _rhomboid_tiling_to_slicer(
     """TODO"""
     global pathes
     backend = "rhomboid_tiling"
-    _init_external_softwares(requires=[backend])
+    t_total_start = time.perf_counter()
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
     if point_cloud.ndim != 2 or not point_cloud.shape[1] in [2,3]:
-        raise ValueError("point_cloud should be a 2d array of shape (-,2) or (-,3). Got {point_cloud.shape=}")
+        raise ValueError(f"point_cloud should be a 2d array of shape (-,2) or (-,3). Got {point_cloud.shape=}")
+
+    if _rhomboid_tiling_interface._is_available():
+        t_cpp_start = time.perf_counter()
+        if verbose:
+            print(
+                f"[multipers.io] backend=rhomboid_tiling mode=cpp_interface degree={degree} k_max={k_max}",
+                flush=True,
+            )
+        out = _rhomboid_tiling_interface.rhomboid_tiling_to_slicer(
+            slicer,
+            point_cloud,
+            k_max,
+            degree,
+            verbose,
+        )
+        if verbose:
+            t_cpp = time.perf_counter() - t_cpp_start
+            t_total = time.perf_counter() - t_total_start
+            print(
+                "[multipers.io][timing] "
+                f"backend=rhomboid_tiling mode=cpp_interface total={t_total:.3f}s "
+                f"cpp_call={t_cpp:.3f}s overhead={max(t_total - t_cpp, 0.0):.3f}s",
+                flush=True,
+            )
+        return out
+
+    _init_external_softwares(requires=[backend])
+    if verbose:
+        print(
+            f"[multipers.io] backend=rhomboid_tiling mode=disk_interface degree={degree} k_max={k_max}",
+            flush=True,
+        )
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "point_cloud.txt")
         output_path = os.path.join(tmpdir, "multipers_output.scc")
+        t_write_start = time.perf_counter()
         np.savetxt(input_path,point_cloud,delimiter=' ')
+        t_write = time.perf_counter() - t_write_start
 
         verbose_arg = "> /dev/null 2>&1" if not verbose else ""
         command = f"{pathes[backend]} {input_path} {output_path} {point_cloud.shape[1]} {k_max} scc {degree} {verbose_arg}"
         if verbose:
             print(command)
+        t_backend_start = time.perf_counter()
         os.system(command)
+        t_backend = time.perf_counter() - t_backend_start
+        t_read_start = time.perf_counter()
         slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
+        t_read = time.perf_counter() - t_read_start
+        if verbose:
+            t_total = time.perf_counter() - t_total_start
+            t_io = t_write + t_read
+            io_fraction = (t_io / t_total) if t_total > 0 else 0.0
+            print(
+                "[multipers.io][timing] "
+                f"backend=rhomboid_tiling mode=disk_interface total={t_total:.3f}s "
+                f"write_input={t_write:.3f}s external_binary={t_backend:.3f}s "
+                f"read_scc={t_read:.3f}s io_fraction={io_fraction:.1%}",
+                flush=True,
+            )
+        return slicer
 
 
 def _multi_critical_from_slicer(
@@ -479,20 +541,37 @@ def _multi_critical_from_slicer(
     swedish = degree is not None if swedish is None else swedish
 
     if _multi_critical_interface._is_available():
+        from multipers import Slicer
+
+        if reduce:
+            slicer_f64_contiguous = slicer
+            out_kcritical = kcritical
+            out_filtration_container = filtration_container
+        else:
+            slicer_f64_contiguous = Slicer(
+                slicer,
+                backend="matrix",
+                vineyard=False,
+                dtype=np.float64,
+                kcritical=True,
+                filtration_container="contiguous",
+            )
+            out_kcritical = False
+            out_filtration_container = "contiguous"
         if verbose:
             print(
-                f"[multipers.io] backend=multi_critical mode=cpp_inteface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
+                f"[multipers.io] backend=multi_critical mode=cpp_interface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
                 flush=True,
             )
         return _multi_critical_interface.one_criticalify(
-            slicer,
+            slicer_f64_contiguous,
             reduce=reduce,
             algo=algo,
             degree=degree,
             swedish=swedish,
             verbose=verbose,
-            kcritical=kcritical,
-            filtration_container=filtration_container,
+            kcritical=out_kcritical,
+            filtration_container=out_filtration_container,
             **slicer_kwargs,
         )
 

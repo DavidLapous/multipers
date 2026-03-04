@@ -24,6 +24,12 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Commit used in this workspace: `a481f8d90af7a97795c467d81fb3db2cf952a58e`
   - License: GPL-3.0-or-later (see upstream `COPYING`)
 
+- `rhomboidtiling_newer_cgal_version`
+  - Upstream: https://github.com/DavidLapous/rhomboidtiling_newer_cgal_version
+  - Header/source path used at build time: `ext/rhomboidtiling_newer_cgal_version`
+  - Commit used in this workspace: `c414cdc60f30196ffd3ce5cda1817368655905f0`
+  - License: MIT (see `ext/rhomboidtiling_newer_cgal_version/LICENSE.md`)
+
 - `mpfree`
   - Upstream: https://bitbucket.org/mkerber/mpfree/
   - Header source path used at build time: `ext/mpfree`
