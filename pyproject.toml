@@ -1,3 +1,51 @@
+[project]
+name = "multipers"
+version = "2.5.0b3"
+description = "Multiparameter Topological Persistence for Machine Learning"
+readme = "README.md"
+authors = [
+  { name = "David Loiseaux", email = "david.lapous@proton.me" },
+  { name = "Hannah Schreiber", email = "hannah.schreiber@inria.fr"},
+]
+maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
+dependencies = [
+  #`import multipers`
+  "numpy",
+  "gudhi>=3.8", ## Needs simplextree serialize
+  "tqdm",
+  "scipy",
+  "joblib",
+  "matplotlib",
+  #`pytest multipers`
+  "scikit-learn",
+  "filtration-domination",
+  "pykeops",
+  "pot"
+]
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = [
+  "LICENSE",
+  "licenses/LGPL-3.0-or-later.txt",
+  "THIRD_PARTY_NOTICES.md",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Visualization",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
+
+
+
 [build-system]
 requires = [
   "scikit-build-core",
@@ -97,52 +145,6 @@ include = [
   "licences/LGPL-3.0-or-later.txt",
   "THIRD_PARTY_NOTICES.md",
 ]
-
-[project]
-name = "multipers"
-version = "2.5.0b2"
-description = "Multiparameter Topological Persistence for Machine Learning"
-readme = "README.md"
-authors = [
-  { name = "David Loiseaux", email = "david.lapous@proton.me" },
-  { name = "Hannah Schreiber", email = "hannah.schreiber@inria.fr"},
-]
-maintainers = [{ name = "David Loiseaux", email = "david.lapous@proton.me" }]
-dependencies = [
-  #`import multipers`
-  "numpy",
-  "gudhi>=3.8", ## Needs simplextree serialize
-  "tqdm",
-  "scipy",
-  "joblib",
-  "matplotlib",
-  #`pytest multipers`
-  "scikit-learn",
-  "filtration-domination",
-  "pykeops",
-  "pot"
-]
-requires-python = ">=3.10"
-license = "GPL-3.0-or-later"
-license-files = [
-  "LICENSE",
-  "licenses/LGPL-3.0-or-later.txt",
-  "THIRD_PARTY_NOTICES.md",
-]
-classifiers = [
-  "Development Status :: 5 - Production/Stable",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Topic :: Scientific/Engineering :: Mathematics",
-  "Topic :: Scientific/Engineering :: Visualization",
-  "Topic :: Software Development :: Libraries :: Python Modules",
-]
-keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 
 [project.urls]
 source = "https://github.com/DavidLapous/multipers"
