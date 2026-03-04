@@ -1,15 +1,95 @@
 [build-system]
 requires = [
+  "scikit-build-core",
   "numpy",
   "Cython",
-  "setuptools",
-  "wheel",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.version = ">=3.24"
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+CMAKE_COLOR_DIAGNOSTICS = "ON"
+
+[tool.scikit-build.wheel]
+packages = []
+exclude = [
+  "**/*.pyx",
+  "**/*.pxd",
+  "**/*.tp",
+  "**/*.cpp",
+  "**/*.h",
+  "**/*.hpp",
+  "**/docs/**",
+  "**/benchmarks/**",
+  "**/ext/**",
+]
+
+[tool.scikit-build.sdist]
+exclude = [
+  "docs/**",
+  "tests/**",
+  "benchmarks/**",
+  ".github/**",
+  "build/**",
+  "dist/**",
+  "**/__pycache__/**",
+  "**/*.ipynb",
+  "**/*.so",
+  "**/*.dylib",
+  "**/*.dll",
+  "**/*.pyd",
+  "multipers/**/*.cpp",
+  "ext/**/docs/**",
+  "ext/**/tests/**",
+  "ext/**/benchmarks/**",
+  "ext/**/misc/**",
+  "ext/**/lists_of_decompositions/**",
+  "ext/**/*.py",
+  "ext/**/*.sh",
+  "ext/**/*.txt",
+  "ext/**/*.md",
+  "ext/**/*.cff",
+  "ext/**/*.bin",
+  "ext/**/*.sky",
+  "ext/**/*.sccsum",
+  "ext/**/*.firep",
+  "ext/**/*.pdf",
+  "ext/**/*.js",
+  "ext/**/*.css",
+  "ext/**/*.map",
+  "ext/**/*.md5",
+  "ext/**/*.tex",
+  "ext/**/Makefile",
+]
+include = [
+  "ext/**/CMakeLists.txt",
+  "ext/**/*.cmake",
+  "ext/**/*.h",
+  "ext/**/*.hpp",
+  "ext/**/*.cpp",
+  "ext/**/LICENSE",
+  "ext/**/COPYING",
+  "ext/**/COPYING.LESSER",
+  "tools/process_tempita.py",
+  "tools/tempita_grid_gen.py",
+  "tools/codegen/*.py",
+  "tools/core/*.cc",
+  "options.py",
+  "_tempita_grid_gen.py",
+  "multipers/**/*.tp",
+  "multipers/**/*.pyx",
+  "multipers/**/*.pxd",
+  "multipers/**/*.hpp",
+  "multipers/**/*.h",
+]
 
 [project]
 name = "multipers"
-version = "2.4.2b1"
+version = "2.5.0b2"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
@@ -32,8 +112,12 @@ dependencies = [
   "pot"
 ]
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "GPL-3.0-or-later"
+license-files = [
+  "LICENSE",
+  "licenses/LGPL-3.0-or-later.txt",
+  "THIRD_PARTY_NOTICES.md",
+]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python :: 3.10",
@@ -54,8 +138,3 @@ source = "https://github.com/DavidLapous/multipers"
 download = "https://pypi.org/project/multipers/#files"
 tracker = "https://github.com/DavidLapous/multipers/issues"
 "release notes" = "https://github.com/DavidLapous/multipers/releases"
-
-# # automatic search for packages
-[tool.setuptools.packages.find]
-include = ["multipers*"]
-

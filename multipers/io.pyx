@@ -1,5 +1,6 @@
 import re
 import tempfile
+import subprocess
 from gudhi import SimplexTree
 import gudhi as gd
 import numpy as np
@@ -10,8 +11,12 @@ from typing import Optional, Literal
 from collections import defaultdict
 import itertools
 import threading
+import multipers.logs as _mp_logs
 import cython
 cimport cython
+cimport numpy as cnp
+from multipers import _function_delaunay_interface
+from multipers import _multi_critical_interface
 
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
@@ -99,8 +104,7 @@ def _path_init(soft:str|os.PathLike):
         verbose_arg = "> /dev/null 2>&1"
         test = os.system(pathes[soft] + " --help " + verbose_arg)
         if test % 256!=0:
-            from warnings import warn
-            warn(f"""
+            _mp_logs.warn_fallback(f"""
             Found external software {soft} at {pathes[soft]}
             but may not behave well.
             """)
@@ -232,6 +236,71 @@ def scc_reduce_from_str_to_slicer(
         slicer._build_from_scc_file(path=output_path, shift_dimension=shift_dimension)
 
 
+def _minimal_presentation_from_slicer(
+        slicer,
+        int degree,
+        str backend="mpfree",
+        bool auto_clean=True,
+        bool verbose=False,
+    ):
+    """
+    Computes a minimal presentation from a slicer, using the in-memory bridge when
+    available and falling back to SCC file I/O otherwise.
+    """
+    if backend == "mpfree":
+        from multipers import _mpfree_interface
+
+        if _mpfree_interface._is_available():
+            if verbose:
+                print(
+                    f"[multipers.io] backend=mpfree mode=cpp_inteface degree={degree}",
+                    flush=True,
+                )
+            new_slicer = _mpfree_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                use_chunk=True,
+                use_clearing=True,
+                full_resolution=True,
+            )
+            new_slicer.minpres_degree = degree
+            new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+            if new_slicer.is_squeezed and auto_clean:
+                new_slicer = new_slicer._clean_filtration_grid()
+            return new_slicer
+
+    _init_external_softwares(requires=[backend])
+    if verbose:
+        print(
+            f"[multipers.io] backend={backend} mode=disk_interface degree={degree}",
+            flush=True,
+        )
+    dimension = slicer.dimension - degree
+    with tempfile.TemporaryDirectory(prefix="multipers") as tmpdir:
+        tmp_path = os.path.join(tmpdir, "multipers.scc")
+        slicer.to_scc(path=tmp_path, strip_comments=True, degree=degree - 1, unsqueeze=False)
+        new_slicer = type(slicer)()
+        if backend == "mpfree":
+            shift_dimension = degree - 1
+        else:
+            shift_dimension = degree
+        scc_reduce_from_str_to_slicer(
+            path=tmp_path,
+            slicer=new_slicer,
+            dimension=dimension,
+            backend=backend,
+            shift_dimension=shift_dimension,
+            verbose=verbose,
+        )
+
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
+
 
 
 
@@ -257,6 +326,38 @@ def function_delaunay_presentation_to_slicer(
     """
     global pathes
 
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
+    if point_cloud.ndim != 2:
+        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
+    if function_values.ndim != 1:
+        raise ValueError(f"function_values should be a 1d array. Got {function_values.shape=}")
+    if point_cloud.shape[0] != function_values.shape[0]:
+        raise ValueError(
+            f"point_cloud and function_values should have same number of points. "
+            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
+        )
+
+    if _function_delaunay_interface._is_available():
+        if verbose:
+            print(
+                f"[multipers.io] backend=function_delaunay mode=cpp_inteface degree={degree} multi_chunk={multi_chunk}",
+                flush=True,
+            )
+        return _function_delaunay_interface.function_delaunay_to_slicer(
+            slicer,
+            point_cloud,
+            function_values,
+            degree,
+            multi_chunk,
+            verbose,
+        )
+    # fallbacks to doing scc file io
+    if verbose:
+        print(
+            f"[multipers.io] backend=function_delaunay mode=disk_interface degree={degree} multi_chunk={multi_chunk}",
+            flush=True,
+        )
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "multipers_input.scc")
         output_path = os.path.join(tmpdir, "multipers_output.scc")
@@ -266,15 +367,74 @@ def function_delaunay_presentation_to_slicer(
 
         to_write = np.concatenate([point_cloud, function_values.reshape(-1,1)], axis=1)
         np.savetxt(input_path,to_write,delimiter=' ')
-        verbose_arg = "> /dev/null 2>&1" if not verbose else ""
-        degree_arg = f"--minpres {degree}" if degree >= 0 else ""
-        multi_chunk_arg = "--multi-chunk" if multi_chunk else ""
-        command = f"{pathes[backend]} {degree_arg} {multi_chunk_arg} {input_path} {output_path} {verbose_arg} --no-delaunay-compare"
+        command = [pathes[backend]]
+        if degree >= 0:
+            command.extend(["--minpres", str(degree)])
+        if multi_chunk:
+            command.append("--multi-chunk")
+        command.extend([input_path, output_path, "--no-delaunay-compare"])
         if verbose:
-            print(command)
-        os.system(command)
+            print(" ".join(command))
+        subprocess.run(
+            command,
+            check=True,
+            stdout=None if verbose else subprocess.DEVNULL,
+            stderr=None if verbose else subprocess.DEVNULL,
+        )
 
         slicer._build_from_scc_file(path=output_path, shift_dimension=-1 if degree <= 0 else degree-1 )
+        return slicer
+
+
+def function_delaunay_presentation_to_simplextree(
+        point_cloud:np.ndarray,
+        function_values:np.ndarray,
+        bool clear:bool = True,
+        bool verbose:bool=False,
+        dtype=np.float64,
+        ):
+    """
+    Computes a function delaunay complex and returns it as a SimplexTreeMulti.
+
+    This path is intended for non-reduced outputs (degree < 0).
+    """
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+    from multipers.slicer import to_simplextree
+    import multipers
+
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
+    if point_cloud.ndim != 2:
+        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
+    if function_values.ndim != 1:
+        raise ValueError(f"function_values should be a 1d array. Got {function_values.shape=}")
+    if point_cloud.shape[0] != function_values.shape[0]:
+        raise ValueError(
+            f"point_cloud and function_values should have same number of points. "
+            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
+        )
+
+    if _function_delaunay_interface._is_available():
+        st = SimplexTreeMulti(num_parameters=2, dtype=dtype)
+        return _function_delaunay_interface.function_delaunay_to_simplextree(
+            st,
+            point_cloud,
+            function_values,
+            verbose,
+        )
+
+    # external fallback: build slicer from SCC, then convert
+    s = multipers.Slicer(None, dtype=dtype)
+    function_delaunay_presentation_to_slicer(
+        s,
+        point_cloud,
+        function_values,
+        clear=clear,
+        verbose=verbose,
+        degree=-1,
+        multi_chunk=False,
+    )
+    return to_simplextree(s)
 
 def _rhomboid_tiling_to_slicer(
         slicer,
@@ -315,32 +475,58 @@ def _multi_critical_from_slicer(
         str filtration_container = "contiguous",
         **slicer_kwargs,
     ):
-    _init_external_softwares(requires=["multi_critical"])
     cdef bool need_split = False
     swedish = degree is not None if swedish is None else swedish
+
+    if _multi_critical_interface._is_available():
+        if verbose:
+            print(
+                f"[multipers.io] backend=multi_critical mode=cpp_inteface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
+                flush=True,
+            )
+        return _multi_critical_interface.one_criticalify(
+            slicer,
+            reduce=reduce,
+            algo=algo,
+            degree=degree,
+            swedish=swedish,
+            verbose=verbose,
+            kcritical=kcritical,
+            filtration_container=filtration_container,
+            **slicer_kwargs,
+        )
+
     from multipers import Slicer
     newSlicer = Slicer(
             slicer,
-            return_type_only=True, 
-            kcritical=kcritical, 
+            return_type_only=True,
+            kcritical=kcritical,
             filtration_container=filtration_container,
             **slicer_kwargs
     )
+    if verbose:
+        print(
+            f"[multipers.io] backend=multi_critical mode=disk_interface algo={algo} reduce={reduce} degree={degree} swedish={swedish}",
+            flush=True,
+        )
+
     with tempfile.TemporaryDirectory(prefix="multipers", delete=clear) as tmpdir:
         input_path = os.path.join(tmpdir, "multipers_input.scc")
         output_path = os.path.join(tmpdir, "multipers_output.scc")
         slicer.to_scc(input_path, degree=0, strip_comments=True)
+
         reduce_arg = ""
         if reduce:
-            if swedish:
-                reduce_arg += r" --swedish"
+            # External multi_critical binaries are not guaranteed to support --swedish.
+            # Keep this flag in the in-memory path only.
             if degree is None:
                 need_split = True
                 reduce_arg += r" --minpres-all"
             else:
-                reduce_arg += fr" --minpres {slicer.dimension - degree+2}"
+                reduce_arg += fr" --minpres {degree}"
         verbose_arg = "> /dev/null 2>&1" if not verbose else "--verbose"
 
+        _init_external_softwares(requires=["multi_critical"])
         command = f"{pathes['multi_critical']} --{algo} {reduce_arg} {input_path} {output_path} {verbose_arg}"
         if verbose:
             print(command)
@@ -356,7 +542,7 @@ def _multi_critical_from_slicer(
             return ss
         out = newSlicer()._build_from_scc_file(str(output_path), shift_dimension=degree-1 if reduce else -2)
         if reduce:
-                out = out.minpres(degree)
+                out.minpres_degree = degree
         return out
 
 

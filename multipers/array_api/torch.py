@@ -1,7 +1,7 @@
-import numpy as _np
 import torch as _t
 import multipers.array_api as _mpapi
 import sys
+import multipers.logs as _mp_logs
 
 _mpapi.available_api.append(sys.modules[__name__])
 
@@ -15,6 +15,7 @@ empty = _t.empty
 where = _t.where
 no_grad = _t.no_grad
 cdist = _t.cdist
+pdist = _t.pdist
 zeros = _t.zeros
 min = _t.min
 max = _t.max
@@ -74,9 +75,7 @@ def check_keops():
         LazyTensor = LT
 
     except:
-        from warnings import warn
-
-        warn("Could not initialize keops (torch). using workarounds")
+        _mp_logs.warn_fallback("Could not initialize keops (torch). using workarounds")
 
         _is_keops_available = False
 
@@ -94,6 +93,10 @@ def ascontiguous(x):
     return _t.as_tensor(x).contiguous()
 
 
+def copy(x):
+    return x.clone()
+
+
 def device(x):
     return x.device
 
@@ -103,19 +106,22 @@ def sort(x, axis=-1):
 
 
 # in our context, this allows to get a correct gradient.
-def unique(x, assume_sorted=False, _mean=True):
+def unique(x, assume_sorted=False, _mean=False):
     if not x.requires_grad:
         return x.unique(sorted=assume_sorted)
     if x.ndim != 1:
         raise ValueError(f"Got ndim!=1. {x=}")
+    if x.numel() == 0:
+        return x
     if not assume_sorted:
         x = x.sort().values
-    _, c = _t.unique(x, sorted=True, return_counts=True)
+    _, c = _t.unique_consecutive(x, return_counts=True)
     if _mean:
         x = _t.segment_reduce(data=x, reduce="mean", lengths=c, unsafe=True, axis=0)
     else:
-        c = _np.concatenate([[0], _np.cumsum(c[:-1])])
-        x = x[c]
+        starts = _t.cumsum(c, dim=0)
+        starts.sub_(c)
+        x = x[starts]
     return x
 
 

@@ -14,7 +14,7 @@ import numpy as np
 from typing import List
 from joblib import Parallel, delayed
 import sys
-from warnings import warn
+import multipers.logs as _mp_logs
 
 ###########################################################################
 ## CPP CLASSES
@@ -67,13 +67,13 @@ def module_approximation_from_slicer(
     cdef intptr_t ptr
     if not slicer.is_vine:
         if warnings:
-            warn(r"(copy warning) Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
+            _mp_logs.warn_copy(r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy.")
         from multipers._slicer_meta import Slicer
         slicer = Slicer(slicer, vineyard=True, backend="matrix")
     # if slicer.is_squeezed and unsqueeze_grid not None:
     #     raise ValueError("Got a squeezed slicer. Should have been unsqueezed before !")
 
-    direction_ = np.asarray(direction, dtype=slicer.dtype)
+    direction_ = np.ascontiguousarray(direction, dtype=slicer.dtype)
     if slicer.dtype == np.float32:
         approx_mod = PyModule_f32()
         if box is None:
@@ -204,10 +204,16 @@ def module_approximation(
         if direction[i] == 0:
             is_degenerate=True
     if is_degenerate and not ignore_warnings:
-        warn("Got a degenerate direction. This function may fail if the first line is not generic.")
+        _mp_logs.warn_geometry("Got a degenerate direction. This function may fail if the first line is not generic.")
 
     if from_coordinates and not input.is_squeezed:
+        if verbose:
+            print("Preparing filtration (squeeze)... ",end="", flush=True)
+        if not ignore_warnings:
+            _mp_logs.warn_copy("Got a non-squeezed input with `from_coordinates=True`.")
         input = input.grid_squeeze()
+        if verbose:
+            print("Done.", flush=True)
     unsqueeze_grid = None
     if input.is_squeezed:
         if verbose:
@@ -224,7 +230,7 @@ def module_approximation(
                 print(f"Updated  `{direction=}`, and `{max_error=}` ",end="")
         else:
             if not ignore_warnings:
-                warn("(copy warning) Got a squeezed input. ")
+                _mp_logs.warn_copy("Got a squeezed input.")
             input = input.unsqueeze()
         if verbose:
             print("Done.", flush=True)
@@ -238,14 +244,22 @@ def module_approximation(
         if verbose:
             print(f"Using {box=}.",flush=True)
 
-    box = np.asarray(box)
+    box = np.asarray(box, dtype=np.float64)
     if box.ndim !=2:
         raise ValueError(f"Invalid box dimension. Got {box.ndim=} != 2")
+    scales = box[1] - box[0]
+    scales /= scales.max()
+    if np.any(scales<.1):
+        _mp_logs.warn_geometry(
+            f"Squewed filtration detected. Found {scales=}. "
+            "Consider rescaling the filtration for interpretable results."
+        )
+
     # empty coords
     zero_idx = box[1] == box[0]
     if np.any(zero_idx):
         if not ignore_warnings:
-            warn(f"Got {(box[1] == box[0])=} trivial box coordinates.")
+            _mp_logs.warn_geometry(f"Got {(box[1] == box[0])=} trivial box coordinates.")
         box[1] += zero_idx
 
     for i in swap_box_coords:
@@ -286,4 +300,3 @@ Returning the trivial module.
             unsqueeze_grid=unsqueeze_grid,
             n_jobs=n_jobs,
             )
-

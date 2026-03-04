@@ -72,10 +72,14 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
     unsigned int node_degree = filtrations.size();
     filtrations.resize(std::max(num_degrees, node_degree));
     for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
-      if (degrees[degree_index] < static_cast<int>(node_degree))
-        filtrations[degree_index] = filtrations[degrees[degree_index]];
-      else
+      const int requested_degree = degrees[degree_index];
+      // `degrees` is interpreted as 1-based neighbor degree: degree=1 means
+      // first incident edge, degree=2 means second incident edge, etc.
+      if (requested_degree > 0 && requested_degree <= static_cast<int>(node_degree)) {
+        filtrations[degree_index] = filtrations[requested_degree - 1];
+      } else {
         filtrations[degree_index] = std::numeric_limits<value_type>::infinity();
+      }
       if constexpr (verbose) std::cout << filtrations[degree_index] << " ";
     }
     filtrations.resize(num_degrees);
@@ -123,10 +127,10 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
       throw std::overflow_error("edge_degree_rips of invalid size");
     to_update.set_num_generators(edge_degree_rips_filtration.size());
     for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++) {
-      if (edge_degree_rips_filtration[k] == std::numeric_limits<value_type>::infinity()) {
-        to_update.set_num_generators(k);
-        break;
-      }
+      // if (edge_degree_rips_filtration[k] == std::numeric_limits<value_type>::infinity()) {
+      //   to_update.set_num_generators(k);
+      //   break;
+      // }
 
       to_update(k, 0) = edge_degree_rips_filtration[k];
     }

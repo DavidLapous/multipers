@@ -7,13 +7,17 @@ both type have the same interface, defined the slicer.pyx file
 
 
 import pickle
+import os
+from pathlib import Path
 
-with open("build/tmp/_slicer_names.pkl", "rb") as f:
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("rb") as f:
   slicers=pickle.load(f)
 
 dtypes = set([(D['PY_VALUE_TYPE'], D['C_VALUE_TYPE'], D['SHORT_VALUE_TYPE']) for D in slicers])
 
-with open("build/tmp/_simplextrees_.pkl", "rb") as f:
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
     simplex_trees = pickle.load(f)
 
 }}
@@ -25,6 +29,7 @@ import threading
 import os 
 from joblib import Parallel, delayed
 from warnings import warn
+import multipers.logs as _mp_logs
 
 from multipers.slicer cimport *
 from multipers.filtrations cimport *
@@ -43,6 +48,9 @@ from cython.operator cimport dereference
 import time
 
 from libcpp.algorithm cimport sort
+from libcpp.set cimport set as cpp_set
+
+from libc.string cimport memcpy
 
 ## WARNING : This is repeated in the pxd file ...
 python_indices_type=np.int32
@@ -214,10 +222,10 @@ cdef class {{D['PYTHON_TYPE']}}:
             sort(c_generator_maps.back().begin(), c_generator_maps.back().end())
         cdef {{D['FILTRATION_TYPE']}} cf = {{D['FILTRATION_TYPE']}}(num_param)
         cdef {{D['FILTRATION_TYPE']}} inf = {{D['FILTRATION_TYPE']}}.inf(num_param)
-        cdef {{D['C_VALUE_TYPE']}}[:,:] F_view 
+        cdef {{D['C_VALUE_TYPE']}}[:,::1] F_view 
         for F in filtration_values:
             cf.push_to_least_common_upper_bound(inf, False)
-            F_view = np.asarray(F, dtype = {{D['PY_VALUE_TYPE']}} )
+            F_view = np.ascontiguousarray(F, dtype = {{D['PY_VALUE_TYPE']}} )
             for i in range(F_view.shape[0]):
                 cf.add_generator(_py2p_{{D['SHORT_VALUE_TYPE']}}(F_view[i]))
             c_filtration_values.push_back(cf)
@@ -254,7 +262,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         {{endfor}}
 
         cdef uint32_t num_generators = len(generator_maps)
-        filtration_values = np.asarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
+        filtration_values = np.ascontiguousarray(filtration_values, dtype = {{D['PY_VALUE_TYPE']}} )
         assert len(filtration_values) == num_generators, f"Invalid input, shape do not coicide. Got sizes {num_generators,len(generator_dimensions),len(filtration_values)}."
         cdef vector[vector[uint32_t]] c_generator_maps
         cdef vector[{{D['FILTRATION_TYPE']}}] c_filtration_values
@@ -345,12 +353,12 @@ cdef class {{D['PYTHON_TYPE']}}:
         If the direction is not provided, it is assumed to be diagonal.
         """
         {{if D['IS_FLOAT']}}
-        basepoint = np.asarray(basepoint, dtype = {{D['PY_VALUE_TYPE']}})
+        basepoint = np.ascontiguousarray(basepoint, dtype = {{D['PY_VALUE_TYPE']}})
         cdef Line[{{D['C_VALUE_TYPE']}}] line
         if direction is None:
             line = Line[{{D['C_VALUE_TYPE']}}](_py2p_{{D['SHORT_VALUE_TYPE']}}(basepoint))
         else:
-            direction = np.asarray(direction, dtype = {{D['PY_VALUE_TYPE']}})
+            direction = np.ascontiguousarray(direction, dtype = {{D['PY_VALUE_TYPE']}})
             line = Line[{{D['C_VALUE_TYPE']}}](_py2p_{{D['SHORT_VALUE_TYPE']}}(basepoint),_py2p_{{D['SHORT_VALUE_TYPE']}}(direction))
         self.truc.push_to(line)
         return self
@@ -385,8 +393,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         basepoint = api.asnumpy(basepoint)
         direction = None if direction is None else api.asnumpy(direction)
         if api.has_grad(basepoint) or (direction is not None and api.has_grad(direction)):
-            from warnings import warn
-            warn("Ignored gradient from input. Use a squeezed slicer for autodiff.")
+            _mp_logs.warn_autodiff("Ignored gradient from input. Use a squeezed slicer for autodiff.")
 
         self.push_to_line(basepoint,direction)
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values)
@@ -440,8 +447,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         basepoints = api.asnumpy(basepoints)
         directions = None if directions is None else api.asnumpy(directions)
         if api.has_grad(basepoints) or (directions is not None and api.has_grad(directions)):
-            from warnings import warn
-            warn("Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines).")
+            _mp_logs.warn_autodiff("Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines).")
 
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_basepoints = basepoints
         cdef vector[vector[{{D['C_VALUE_TYPE']}}]] c_directions
@@ -490,10 +496,14 @@ cdef class {{D['PYTHON_TYPE']}}:
             return self == other.unsqueeze()
         if self.is_squeezed:
             return self.unsqueeze() == other
+        self_boundaries = self.get_boundaries(packed=True)
+        other_boundaries = other.get_boundaries(packed=True)
         return (
                 np.array_equal(self.get_dimensions(), other.get_dimensions())
                 and
-                self.get_boundaries() == other.get_boundaries() 
+                np.array_equal(self_boundaries[0], other_boundaries[0])
+                and
+                np.array_equal(self_boundaries[1], other_boundaries[1])
                 and 
                 ## Kcritical are sorted + filtrationvalues is a dump. 
                 # for non kcritical there is an unnecessary copy though
@@ -622,28 +632,77 @@ cdef class {{D['PYTHON_TYPE']}}:
                 strategy=grid_strategy,
                 **infer_grid_kwargs,
             )
-    def get_filtrations(self, bool unsqueeze = False, bool raw=False):
+    def get_filtration(self, int idx, bool raw=False):
         """
-        Returns a view of the filtration values, as a list of numpy arrays.
+        Returns the filtration value of a single generator as a view.
         """
-        {{if D['IS_KCRITICAL']}}
+        cdef Py_ssize_t n = len(self)
+        cdef Py_ssize_t i = idx
+        if i < 0:
+            i += n
+        if i < 0 or i >= n:
+            raise IndexError(f"Generator index out of range. Got idx={idx}, len={n}.")
+        return {{D['FILTRATION_TYPE']}}_2_python(&(self.truc.get_filtrations()[i]), copy=False, raw=raw)
+
+    def get_filtrations(self, bool unsqueeze = False, bool raw=False, bool view=False, bool packed=False, copy=None):
+        """
+        Returns filtration values.
+
+        - ``view=True`` keeps numpy views into C++ memory.
+        - ``view=False`` returns detached data. For one-critical contiguous slicers,
+          this uses a fast bulk-copy path and returns a dense ``(n, p)`` ndarray.
+        - ``packed=True`` (k-critical only) returns a tuple ``(indptr, grades)``
+          where simplex ``i`` has grades in ``grades[indptr[i]:indptr[i+1]]``.
+
+        ``copy`` is accepted as a backward-compatible alias:
+          - ``copy=True``  <=> ``view=False``
+          - ``copy=False`` <=> ``view=True``
+        """
+        if copy is not None:
+            if view:
+                raise ValueError("Got both copy and view arguments. Please provide only one.")
+            view = not (<bint>copy)
         if unsqueeze:
-            raise NotImplementedError("Unsqueezed version not implemented for multicritical filtrations.")
-        return vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False, raw=raw)
-        {{else}}
-        out =  vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False, raw=raw)
-        if not unsqueeze:
-            return out
-        if not self.is_squeezed:
+            # evaluate_in_grid materializes a dense array anyway; force detached path first.
+            view = False
+        if packed and unsqueeze:
+            raise NotImplementedError("packed=True is incompatible with unsqueeze=True.")
+        if packed and view:
+            raise ValueError("packed=True does not support view=True.")
+        if unsqueeze and not self.is_squeezed:
             raise ValueError(f"Already unsqueezed. Got {unsqueeze=}")
-        return evaluate_in_grid(np.asarray(out), self.filtration_grid)
-        {{endif}}
+        if packed:
+            if not self.is_kcritical:
+                raise ValueError(
+                    "packed=True is only available for k-critical filtrations. "
+                    "Use view=False for one-critical detached output."
+                )
+            return vect_{{D['FILTRATION_TYPE']}}_2_packed(
+                self.truc.get_filtrations(),
+                raw=raw,
+                num_parameters=self.num_parameters,
+            )
+        if view:
+            return vect_{{D['FILTRATION_TYPE']}}_2_python(self.truc.get_filtrations(), copy=False, raw=raw)
+        return vect_{{D['FILTRATION_TYPE']}}_2_python_copy(
+            self.truc.get_filtrations(),
+            raw=raw,
+            num_parameters=self.num_parameters,
+            grid=self.filtration_grid if unsqueeze else None,
+        )
 
     def get_dimensions(self)-> np.ndarray:
         """
         Returns the ordered dimensions of the generators.
         """
-        return np.asarray(self.truc.get_dimensions())
+        cdef vector[int] dimensions = self.truc.get_dimensions()
+        cdef Py_ssize_t num_dimensions = dimensions.size()
+        if num_dimensions == 0:
+            return np.empty(0, dtype=np.int32)
+        return np.asarray(
+            <int[:num_dimensions]>(<int*>dimensions.data()),
+            dtype=np.int32,
+        ).copy()
     @property 
     def dimension(self)-> int:
         """
@@ -685,11 +744,45 @@ cdef class {{D['PYTHON_TYPE']}}:
 
     {{endif}}
 
-    def get_boundaries(self)->tuple[tuple]:
+    def get_boundaries(self, bool packed=False)->tuple:
         """
         Returns the boundaries of the generators.
+
+        - ``packed=False`` returns a tuple of copied ``np.ndarray`` rows.
+        - ``packed=True`` returns ``(indptr, indices)`` so simplex ``i`` has
+          boundary indices in ``indices[indptr[i]:indptr[i+1]]``.
         """
-        return tuple(tuple(b) for b in self.truc.get_boundaries())
+        cdef vector[vector[uint32_t]] boundaries_cpp = self.truc.get_boundaries()
+        cdef Py_ssize_t n = boundaries_cpp.size()
+        cdef Py_ssize_t total_size = 0
+        cdef list out
+        cdef uint64_t[:] indptr_view
+        cdef uint32_t[:] indices_view
+
+        indptr = np.empty(n + 1, dtype=np.uint64)
+        indptr_view = indptr
+        indptr_view[0] = 0
+        for i in range(n):
+            row_size = boundaries_cpp[i].size()
+            total_size += row_size
+            indptr_view[i + 1] = total_size
+
+        indices = np.empty(total_size, dtype=np.uint32)
+        indices_view = indices
+        for i in range(n):
+            offset = indptr_view[i]
+            row_size = boundaries_cpp[i].size()
+
+            if row_size != 0:
+                memcpy(&indices_view[offset],
+                       &boundaries_cpp[i][0],
+                       row_size * sizeof(uint32_t))
+            # for j in range(row_size):
+            #     indices_view[offset + j] = <int32_t>boundaries_cpp[i][j]
+        if packed:
+            return indptr, indices
+
+        return tuple(indices[indptr_view[i] : indptr_view[i + 1]] for i in range(n))
     def grid_squeeze(
             self, 
             filtration_grid=None,
@@ -716,7 +809,7 @@ cdef class {{D['PYTHON_TYPE']}}:
             strategy=grid_strategy
 
         if self.is_squeezed:
-            warn("(copy warning) Squeezing an already squeezed slicer.")
+            _mp_logs.warn_copy("Squeezing an already squeezed slicer.")
             temp = self.unsqueeze()
             subgrid = compute_grid(self.filtration_grid, strategy=strategy,
                                    resolution=resolution,
@@ -960,9 +1053,9 @@ def _from_bitmap{{D['SHORT_VALUE_TYPE']}}(image, **slicer_kwargs):
     cdef unsigned int num_parameters = image.shape[-1]
     cdef vector[unsigned int] img_shape = image.shape[:-1]
     {{if D['IS_KCRITICAL']}}
-    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(image.reshape(-1,num_parameters))
+    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(np.ascontiguousarray(image.reshape(-1,num_parameters)))
     {{else}}
-    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(image.reshape(-1,num_parameters))
+    cdef vector[{{D['FILTRATION_TYPE']}}] vertices = python_2_vect_{{D['FILTRATION_TYPE']}}(np.ascontiguousarray(image.reshape(-1,num_parameters)))
     {{endif}}
     cdef {{D['C_TEMPLATE_TYPE']}} cslicer = build_slicer_from_bitmap_{{D['C_TEMPLATE_TYPE']}}(vertices, img_shape)
 
@@ -991,7 +1084,10 @@ def from_function_delaunay(
 ):
     """
     Given points in $\mathbb R^n$ and function grades, compute the function-delaunay
-    bifiltration as a in an scc format, and converts it into a slicer.
+    bifiltration.
+
+    - If ``degree < 0`` (default), returns a ``SimplexTreeMulti``.
+    - If ``degree >= 0``, returns a reduced ``Slicer`` at this degree.
 
     points : (num_pts, n) float array
     grades : (num_pts,) float array
@@ -999,9 +1095,19 @@ def from_function_delaunay(
     backend : slicer backend, e.g. "matrix", "clement"
     vineyard : bool, use a vineyard-compatible backend
     """
-    from multipers.io import function_delaunay_presentation_to_slicer, _init_external_softwares
+    from multipers.io import (
+        function_delaunay_presentation_to_slicer,
+        function_delaunay_presentation_to_simplextree,
+    )
+    if degree < 0:
+        return function_delaunay_presentation_to_simplextree(
+            points,
+            grades,
+            verbose=verbose,
+            clear=clear,
+            dtype=dtype,
+        )
     s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    _init_external_softwares(requires=["function_delaunay"])
     function_delaunay_presentation_to_slicer(s, points, grades, degree=degree, verbose=verbose,clear=clear)
     if degree >= 0:
         s.minpres_degree = degree
@@ -1029,7 +1135,6 @@ def slicer2blocks(slicer, int degree = -1, bool reverse=True):
     return blocks
 
 
-
 def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
     """
     Turns a --simplicial-- slicer into a simplextree.
@@ -1040,35 +1145,99 @@ def to_simplextree(s:Slicer_type, max_dim:int=-1) -> SimplexTreeMulti_type:
     """
     dims = s.get_dimensions()
     assert np.all(dims[:-1] <= dims[1:]), "Dims is not sorted."
-    idx = np.searchsorted(dims, np.unique(dims))
-    idx = np.concatenate([idx, [dims.shape[0]]])
+    cdef cnp.ndarray[cnp.int32_t, ndim=1] idx = np.searchsorted(dims, np.unique(dims)).astype(np.int32)
+    idx = np.concatenate([idx, np.asarray([dims.shape[0]], dtype=np.int32)])
     if max_dim>=0:
         idx = idx[:max_dim+2]
+    cdef cnp.int32_t[:] idx_view = idx
+    cdef int idx_size = <int>idx_view.shape[0]
 
-    cdef vector[vector[int]] boundaries_ = s.get_boundaries()
-    cdef int a
-    cdef int b
-    if len(idx)>2:
-        a = idx[2]
-        b = idx[-1]
-        for i in range(a, b):
-            boundaries_[i] = np.unique(np.concatenate([boundaries_[k] for k in boundaries_[i]]))
-    cdef int num_dims = len(idx)-1
-    boundaries = [np.asarray(boundaries_[idx[i]:idx[i+1]], dtype=np.int32).T for i in range(num_dims)]
-    boundaries[0] = np.arange(boundaries[0].shape[1])[None,:]
+    boundaries_indptr, boundaries_indices = s.get_boundaries(packed=True)
+    boundaries_indptr = np.asarray(boundaries_indptr, dtype=np.int64)
+    boundaries_indices = np.asarray(boundaries_indices, dtype=np.int32)
+    cdef cnp.int64_t[:] boundaries_indptr_view = boundaries_indptr
+    cdef cnp.int32_t[:] boundaries_indices_view = boundaries_indices
+    cdef int i,a,b,c,face_idx,vertex
+    cdef int num_dims
+    cdef Py_ssize_t j
+    cdef Py_ssize_t pos
+    cdef Py_ssize_t start_face
+    cdef Py_ssize_t end_face
+    cdef Py_ssize_t start_dim
+    cdef Py_ssize_t end_dim
+    cdef Py_ssize_t local_idx
+    cdef cnp.ndarray[cnp.int32_t, ndim=2] boundaries_dim
+    cdef cnp.int32_t[:, :] boundaries_dim_view
+    cdef vector[cpp_set[int]] simplex_vertices_sets
+    cdef list boundaries
+    simplex_vertices_sets.resize(len(dims))
+
+    with nogil:
+        if idx_size > 1:
+            a = idx_view[1]
+            b = idx_view[idx_size - 1]
+            c = idx_view[2] if idx_size > 2 else b
+            for i in range(a, b):
+                start_face = <Py_ssize_t>boundaries_indptr_view[i]
+                end_face = <Py_ssize_t>boundaries_indptr_view[i + 1]
+                if i < c:
+                    for j in range(start_face, end_face):
+                        simplex_vertices_sets[i].insert(<int>boundaries_indices_view[j])
+                else:
+                    for j in range(start_face, end_face):
+                        face_idx = <int>boundaries_indices_view[j]
+                        for vertex in simplex_vertices_sets[face_idx]:
+                            simplex_vertices_sets[i].insert(vertex)
+
+    num_dims = idx_size - 1
+    boundaries = [None] * num_dims
+    boundaries[0] = np.arange(idx_view[1] - idx_view[0], dtype=np.int32)[None, :]
+    for dim in range(1, num_dims):
+        start_dim = <Py_ssize_t>idx_view[dim]
+        end_dim = <Py_ssize_t>idx_view[dim + 1]
+        boundaries_dim = np.empty((dim + 1, end_dim - start_dim), dtype=np.int32)
+        boundaries_dim_view = boundaries_dim
+        for local_idx in range(end_dim - start_dim):
+            i = <int>(start_dim + local_idx)
+            pos = 0
+            for vertex in simplex_vertices_sets[i]:
+                if pos >= dim + 1:
+                    raise ValueError("Input slicer is not simplicial.")
+                boundaries_dim_view[pos, local_idx] = <cnp.int32_t>vertex
+                pos += 1
+            if pos != dim + 1:
+                raise ValueError("Input slicer is not simplicial.")
+        boundaries[dim] = boundaries_dim
+
     filtrations = s.get_filtrations()
     num_parameters  = s.num_parameters
-    filtrations=tuple(filtrations[idx[i]:idx[i+1]] for i in range(num_dims)) # TODO : optimize ?
+    filtrations=tuple(filtrations[idx_view[i]:idx_view[i+1]] for i in range(num_dims)) # TODO : optimize ?
     st = SimplexTreeMulti(num_parameters = num_parameters, dtype = s.dtype, kcritical=s.is_kcritical)
     for dim in range(num_dims):
-        if s.is_kcritical: ## TODO : this may be very slow
-          # for b,f in zip(boundaries[i].T,filtrations[i]):
-          #   for g in np.asarray(f):
-          #       st.insert(np.asarray(b, dtype = np.int32),np.asarray(g, dtype=s.dtype))
-          for j in range(boundaries[i].shape[1]):
-              splx = boundaries[i][:,j]
-              for k in range(filtrations[i][j]):
-                st.insert(splx, np.asarray(filtrations[i][j][k], dtype = s.dtype))
+        if s.is_kcritical:
+          if boundaries[dim].shape[1] == 0:
+              continue
+          min_crit_deg = None
+          max_crit_deg = 0
+          for j in range(boundaries[dim].shape[1]):
+              crit_deg = len(filtrations[dim][j])
+              if crit_deg == 0:
+                  raise ValueError("Input slicer contains an empty k-critical filtration.")
+              max_crit_deg = max(max_crit_deg, crit_deg)
+              min_crit_deg = crit_deg if min_crit_deg is None else min(min_crit_deg, crit_deg)
+
+          if min_crit_deg == max_crit_deg:
+              filtrations_dim = np.asarray(filtrations[dim], dtype=s.dtype)
+          else:
+              filtrations_dim = np.empty((boundaries[dim].shape[1], max_crit_deg, num_parameters), dtype=s.dtype)
+              for j in range(boundaries[dim].shape[1]):
+                  current_f = np.asarray(filtrations[dim][j], dtype=s.dtype)
+                  filtrations_dim[j, : current_f.shape[0], :] = current_f
+                  if current_f.shape[0] < max_crit_deg:
+                      filtrations_dim[j, current_f.shape[0] :, :] = current_f[current_f.shape[0] - 1]
+          if filtrations_dim.ndim == 2:
+              filtrations_dim = filtrations_dim[:, None, :]
+          st.insert_batch(np.asarray(boundaries[dim], dtype=np.int32), filtrations_dim)
         else:
           st.insert_batch(np.asarray(boundaries[dim], dtype= np.int32),np.asarray(filtrations[dim], dtype=s.dtype))
     return st
@@ -1273,4 +1442,3 @@ def _rank_from_slicer(
         print(f" Done. ({time.time()-t0:.3f}s).")
     return out
 # %%
-

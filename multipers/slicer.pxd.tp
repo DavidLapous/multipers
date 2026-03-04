@@ -5,8 +5,13 @@ both type have the same interface, defined the slicer.pyx file
 """
 
 ## generation with another file as Tempita is slightly bugged for python <3.12
+import os
 import pickle
-with open("build/tmp/_slicer_names.pkl", "rb") as f:
+from pathlib import Path
+
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("rb") as f:
   slicers = pickle.load(f)
 
 # TODO: FIXME. This is not possible as the import is hardcoded as f32 and f64.
@@ -14,7 +19,7 @@ with open("build/tmp/_slicer_names.pkl", "rb") as f:
 
 float_value_types = set((("float",   "np.float32", "f32"), ("double",  "np.float64", "f64")) )
 
-with open("build/tmp/_simplextrees_.pkl", "rb") as f:
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
     simplex_trees = pickle.load(f)
 
 }}

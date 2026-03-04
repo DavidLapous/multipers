@@ -1,6 +1,6 @@
 from collections.abc import Sequence
+from time import perf_counter
 from typing import Optional
-from warnings import warn
 
 import gudhi as gd
 import numpy as np
@@ -8,8 +8,10 @@ from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors
+import multipers.array_api.numpy as npapi
+import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
-from multipers.grids import compute_grid
+from multipers.grids import compute_grid, get_exact_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 import multipers as _mp
 
@@ -20,7 +22,7 @@ try:
 except ImportError:
     from sklearn.neighbors import KernelDensity
 
-    warn("pykeops not found. Falling back to sklearn.")
+    _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
 
     def KDE(bandwidth, kernel, return_log):
         assert return_log, "Sklearn returns log-density."
@@ -134,44 +136,79 @@ def DelaunayLowerstar(
     """
     from multipers.slicer import from_function_delaunay
 
-    if flagify and reduce_degree >= 0:
-        raise ValueError(
-            "Got {reduce_degree=} and {flagify=}. Cannot flagify with reduce degree."
-        )
+    t0 = perf_counter()
+    t_prev = t0
+
+    def _log_step(label: str):
+        nonlocal t_prev
+        if verbose:
+            now = perf_counter()
+            print(f"[DelaunayLowerstar] {label}: {now - t_prev:.3f}s")
+            t_prev = now
+
     assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
     api = api_from_tensors(points, function)
+    _log_step("resolved backend")
     if not flagify and (api.has_grad(points) or api.has_grad(function)):
-        warn("Cannot keep points gradient unless using `flagify=True`.")
+        _mp_logs.warn_autodiff(
+            "Cannot keep points gradient unless using `flagify=True`."
+        )
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
+    _log_step("converted inputs")
     assert function.ndim == 1, (
         "Delaunay Lowerstar is only compatible with 1 additional parameter."
     )
     slicer = from_function_delaunay(
         api.asnumpy(points),
         api.asnumpy(function),
-        degree=reduce_degree,
+        degree=-1 if flagify else reduce_degree,
         vineyard=vineyard,
         dtype=dtype,
         verbose=verbose,
         clear=clear,
     )
+    _log_step("built function-delaunay")
+    if flagify:
+        from multipers.simplex_tree_multi import is_simplextree_multi
+        from multipers.slicer import to_simplextree
+
+        max_dim = -1 if reduce_degree == -1 else reduce_degree + 1
+        if is_simplextree_multi(slicer):
+            slicer = slicer.copy()
+            if max_dim >= 0:
+                slicer.prune_above_dimension(max_dim)
+            _log_step("copied/pruned simplextree")
+        else:
+            slicer = to_simplextree(slicer, max_dim=max_dim)
+            _log_step("converted slicer to simplextree")
+        slicer.flagify(2)
+        _log_step("flagified")
+
+        if api.has_grad(points) or api.has_grad(function):
+            distances = api.pdist(points) / 2
+            zero = api.zeros(1, dtype=distances.dtype)
+            zero = api.to_device(zero, api.device(distances))
+            distance_values = api.cat([distances, zero])
+            grid = get_exact_grid([distance_values, function])
+            _log_step("computed exact grid")
+            slicer = slicer.grid_squeeze(grid)
+            _log_step("grid-squeezed")
+            slicer = slicer._clean_filtration_grid()
+            _log_step("cleaned grid")
+        if reduce_degree >= 0:
+            slicer = _mp.Slicer(slicer)
+            _log_step("converted back to slicer")
+
     if reduce_degree >= 0:
         # Force resolution to avoid confusion with hilbert.
         slicer = slicer.minpres(degree=reduce_degree, force=True)
-    if flagify:
-        from multipers.slicer import to_simplextree
+        _log_step("computed minpres")
 
-        slicer = to_simplextree(slicer)
-        slicer.flagify(2)
-
-        if api.has_grad(points) or api.has_grad(function):
-            distances = api.cdist(points, points) / 2
-            grid = compute_grid([distances.ravel(), function])
-            slicer = slicer.grid_squeeze(grid)
-            slicer = slicer._clean_filtration_grid()
+    if verbose:
+        print(f"[DelaunayLowerstar] total: {perf_counter() - t0:.3f}s")
 
     return slicer
 
@@ -251,7 +288,6 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
 def DegreeRips(
     *,
     simplex_tree=None,
-    degrees=None,
     points=None,
     distance_matrix=None,
     ks=None,
@@ -259,7 +295,7 @@ def DegreeRips(
     num=None,
     squeeze_strategy="exact",
     squeeze_resolution=None,
-    squeeze=False,
+    squeeze:bool=True,
 ):
     """
     The DegreeRips filtration.
@@ -285,14 +321,17 @@ def DegreeRips(
         )
         rips_filtration = api.unique(D.ravel())
     else:
+        if not isinstance(simplex_tree, gd.SimplexTree):
+            raise ValueError(
+                f"`simplex_tree` has to be a gudhi SimplexTree. Got {simplex_tree=}."
+            )
         st = simplex_tree
+        api = npapi
         rips_filtration = None
 
     if ks is None or rips_filtration is None:
-        from warnings import warn
-
-        warn(
-            "(copy warning) Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
+        _mp_logs.warn_copy(
+            "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
         )
         _temp_st = _mp.SimplexTreeMulti(
             st, num_parameters=1
@@ -302,10 +341,11 @@ def DegreeRips(
                 np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
             )
             ks = (
-                np.arange(max_degree)
+                np.arange(1, max_degree + 1)
                 if num is None
-                else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
+                else np.unique(np.linspace(1, max_degree, num, dtype=np.int32))
             )
+            ks = api.copy(api.from_numpy(ks))
         if rips_filtration is None:
             rips_filtration = _mp.grids.compute_grid(_temp_st)[0]
 
@@ -313,7 +353,7 @@ def DegreeRips(
 
     st_multi = get_degree_rips(st, degrees=ks)
     if squeeze:
-        F = [rips_filtration, ks.astype(np.float64)]
+        F = [rips_filtration, api.astype(ks, rips_filtration.dtype)]
         F = _mp.grids.compute_grid(
             F, strategy=squeeze_strategy, resolution=squeeze_resolution
         )
@@ -460,9 +500,7 @@ def RhomboidBifiltration(
 
     api = api_from_tensor(x)
     if api.has_grad(x):
-        from warnings import warn
-
-        warn(
+        _mp_logs.warn_autodiff(
             "Found a gradient in input, which cannot be processed by RhomboidBifiltration."
         )
     x = api.asnumpy(x)

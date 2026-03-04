@@ -1,7 +1,7 @@
 name: Build, test
 
 on: 
-  [pull_request,workflow_dispatch,push]
+  [pull_request,workflow_dispatch,push,workflow_call]
 
 jobs:
   create_sources:
@@ -13,7 +13,7 @@ jobs:
         submodules: recursive
     - uses: mamba-org/setup-micromamba@v2
       with:
-        micromamba-version: 'latest'
+        micromamba-version: "latest"
         init-shell: bash
         condarc: |
           channels:
@@ -21,10 +21,10 @@ jobs:
     - name: Build source distribution
       shell: bash -el {0}
       run: |
-        micromamba create -n sources python=3.11 pip setuptools cython numpy python-build
+        micromamba create -n sources python=3.13 pip cython numpy python-build wheel scikit-build-core
         micromamba activate sources
         python -m build --sdist --no-isolation
-    - name: Upload sources 
+    - name: Upload sources
       uses: actions/upload-artifact@v6
       with:
         name: sources-sdist
@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        os: ["ubuntu-latest", "macos-15-intel", "macos-latest","windows-latest"]
+        os: ["ubuntu-latest", "macos-15-intel", "macos-latest", "windows-latest"]
         # https://docs.github.com/en/actions/reference/github-hosted-runners-reference
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -56,7 +56,7 @@ jobs:
         7z x multipers-*.tar
         Move-Item -Path multipers-*/* -Destination .
         dir
-    - name: (unix) extract sources 
+    - name: (unix) extract sources
       if: ${{ matrix.os != 'windows-latest' }}
       run: |
         tar -xvf multipers-*.tar.gz
@@ -64,7 +64,7 @@ jobs:
         ls
     - uses: mamba-org/setup-micromamba@v2
       with:
-        micromamba-version: 'latest' 
+        micromamba-version: "latest"
         init-shell: >-
           bash
           powershell
@@ -75,13 +75,10 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba create -n build python=${{matrix.python-version}} pip wheel -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip wheel 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx ninja -c conda-forge
         micromamba activate build
 
-        micromamba install 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib  joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build llvm-openmp -c conda-forge
         pip install pykeops filtration-domination --upgrade
-
-        micromamba install c-compiler cxx-compiler  -c conda-forge 
 
     - name: tree
       if: ${{ matrix.os != 'windows-latest' }}
@@ -103,18 +100,40 @@ jobs:
         ls
         micromamba activate build
         if [[ ${{ matrix.os }} =~ "macos-".* ]]; then
-          export MACOSX_DEPLOYMENT_TARGET=11.0  
-          export CXXFLAGS="-fno-aligned-new" # Macos workaround
-          export CFLAGS="-fno-aligned-new" # Macos workaround
-          # export MACOSX_DEPLOYMENT_TARGET="13.0"
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          # export cxxflags="-fno-aligned-new" # macos workaround
+          # export cflags="-fno-aligned-new" # macos workaround
+          # export macosx_deployment_target="13.0"
         fi
         if [[ ${{ matrix.os }} =~ "ubuntu-".* ]]; then
           export CXXFLAGS="-march=x86-64-v3" # post haswell, for avx
           export CFLAGS="-march=x86-64-v3"
           export CPPFLAGS="-isystem $CONDA_PREFIX/include"
         fi
-        python setup.py build_ext -j4 --inplace
-        python -m build . --no-isolation --wheel
+
+        export CMAKE_BUILD_PARALLEL_LEVEL="$(python -c 'import os; print(os.cpu_count() or 1)')"
+        python -m build . --no-isolation --wheel -v
+
+    - name: Check wheel payload
+      shell: bash -el {0}
+      run: |
+        micromamba activate build
+        python - <<'PY'
+        import zipfile
+        from pathlib import Path
+
+        bad_suffixes = {".pyx", ".pxd", ".tp", ".cpp", ".hpp", ".h"}
+        for wheel in Path("dist").glob("*.whl"):
+            with zipfile.ZipFile(wheel) as zf:
+                bad = [
+                    name
+                    for name in zf.namelist()
+                    if name.startswith("multipers/") and Path(name).suffix in bad_suffixes
+                ]
+            if bad:
+                raise RuntimeError(f"Found forbidden source files in {wheel}: {bad[:10]}")
+            print(f"{wheel.name}: OK")
+        PY
 
     - name: Fix wheels on Linux and Macos
       shell: bash -el {0}
@@ -158,21 +177,37 @@ jobs:
       with:
         name: sources-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist
-    - name: tests
+    - name: Checkout tests
+      uses: actions/checkout@v6
+      with:
+        path: repo
+    - name: clean install
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest llvm-openmp pytest-rerunfailures -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout pytest-rerunfailures -c conda-forge
         micromamba activate test
-        micromamba install gudhi -c conda-forge ## Little workaround for lagging pip versions
 
-        if [ "$RUNNER_OS" == "macOS" ]; then
-            # pykeops workaround
-            brew install llvm libomp
-            export CXX=$(brew --prefix llvm)/bin/clang++
+        if ! pip install --dry-run --only-binary=:all: gudhi >/dev/null 2>&1; then
+          echo "SKIP_PYTEST=1" >> "$GITHUB_ENV"
+          echo "Skipping tests: no pip wheel available for gudhi on Python ${{ matrix.python-version }}"
+        else
+          pip install dist/*.whl
         fi
 
-        pip install dist/*.whl
+    - name: Run pytest
+      shell: bash -el {0}
+      run: |
+        if [ "${SKIP_PYTEST:-0}" = "1" ]; then
+          echo "Skipping pytest because gudhi pip wheel is unavailable for this Python version."
+        else
+          micromamba activate test
+          if [ "$RUNNER_OS" == "macOS" ]; then
+              # pykeops workaround
+              brew install llvm libomp
+              export CXX=$(brew --prefix llvm)/bin/clang++
+          fi
 
-        cd tests
-        pytest -rv .
+          cd repo/tests
+          pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
+        fi
 

@@ -1,7 +1,8 @@
 from contextlib import nullcontext
 
 import numpy as _np
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist
+import multipers.logs as _mp_logs
 
 backend = _np
 cat = _np.concatenate
@@ -18,7 +19,7 @@ min = _np.min
 max = _np.max
 repeat_interleave = _np.repeat
 cdist = cdist  # type: ignore[no-redef]
-unique = _np.unique
+pdist = pdist  # type: ignore[no-redef]
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -29,6 +30,10 @@ sin = _np.sin
 cos = _np.cos
 matmul = _np.matmul
 einsum = _np.einsum
+
+
+def unique(x, assume_sorted=False, _mean=False):
+    return _np.unique(x)
 
 
 def argsort(x, axis=-1):
@@ -76,9 +81,7 @@ def check_keops():
         _is_keops_available = _np.allclose(my_conv(x, y).flatten(), expected_res)
         LazyTensor = LT
     except:
-        from warnings import warn
-
-        warn("Could not initialize keops (numpy). using workarounds")
+        _mp_logs.warn_fallback("Could not initialize keops (numpy). using workarounds")
         _is_keops_available = False
 
     return _is_keops_available
@@ -90,6 +93,10 @@ def from_numpy(x):
 
 def ascontiguous(x):
     return _np.ascontiguousarray(x)
+
+
+def copy(x):
+    return _np.copy(x)
 
 
 def sort(x, axis=-1):
@@ -136,7 +143,7 @@ def has_grad(_):
 
 
 def to_device(x, device):
-    if device is None or str(device) in {"None", "cpu"}:
+    if device is None or str(device) in ("None", "cpu"):
         return x
     raise ValueError(
         f"NumPy backend only supports CPU tensors, requested device {device!r}."

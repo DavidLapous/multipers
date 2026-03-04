@@ -8,34 +8,39 @@ _*.pkl
 .ipynb_checkpoints
 .pytest_cache
 .virtual_documents
+.ruff_cache
 
 # bear
 compile_commands.json
+compile_flags.txt
 
 ## build files
 build
+build*/
+build_*/
 dist
 *.egg-info
 *.cpp
 *.so
 *.o
 *.whl
+*.dep
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+cython/
 
 ## docs folders
 docs/_build/
 docs/source/
 
-## templated files
-multipers/slicer.pyx
-multipers/slicer.pxd
-multipers/simplex_tree_multi.pyx
-multipers/mma_structures.pyx
-multipers/filtration_conversions.pxd
-multipers/filtrations.pxd
-
 ## Hidden files
 .*
 !.clang-format
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 
 ## Notebook-generated
 *.png

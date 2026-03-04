@@ -222,3 +222,11 @@ std::string slicer_to_str(Slicer& s)
 }
 
 }  // namespace multipers::tmp_interface
+
+#if !defined(MULTIPERS_BUILD_CORE_TEMPLATES) && __has_include("filtrations_extern_templates.h")
+#include "filtrations_extern_templates.h"
+#endif
+
+#if !defined(MULTIPERS_BUILD_CORE_TEMPLATES) && __has_include("slicer_extern_templates.h")
+#include "slicer_extern_templates.h"
+#endif
