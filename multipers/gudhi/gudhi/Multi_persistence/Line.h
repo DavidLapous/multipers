@@ -20,6 +20,7 @@
 #define MP_LINE_FILTRATION_H_INCLUDED
 
 #include <cstddef>
+#include <iterator>
 #include <stdexcept>
 
 #include <gudhi/Debug_utils.h>
@@ -139,21 +140,7 @@ class Line
   U compute_forward_intersection(const Point_t &x) const
   {
     GUDHI_CHECK(basePoint_.size() == x.size(), "x has not as many parameters as the line.");
-
-    constexpr const U inf = Point<U>::T_inf;
-
-    U t = Point<U>::T_m_inf;
-    for (unsigned int p = 0; p < x.size(); ++p) {
-      if (Gudhi::multi_filtration::_is_nan(x[p])) return inf;
-      auto div = direction_.size() == 0 ? 1 : direction_[p];
-      if (div == 0) {
-        if (x[p] > basePoint_[p]) return inf;
-      } else {
-        t = std::max(t, (static_cast<U>(x[p]) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
-      }
-    }
-
-    return t;
+    return compute_forward_intersection(x.begin(), x.end());
   }
 
   /**
@@ -191,6 +178,36 @@ class Line
 
     return t;
   }
+  
+  /**
+   * @brief Computes the "time" parameter \f$ t \f$ of the starting point \f$ p = base\_point + t \times direction \f$
+   * of the intersection between the line and the closed positive cone originating at the given point.
+   * 
+   * @tparam U Type of the time parameter.
+   * @tparam Iterator Forward iterator, iterating over the point coordinates. The dereferenced values should be
+   * convertible into `U`.
+   * @param it_begin Begin iterator of the coordinate range.
+   * @param it_end End iterator of the coordinate range.
+   */
+  template <typename U = T, class Iterator>
+  U compute_forward_intersection(Iterator it_begin, Iterator it_end) const
+  {
+    constexpr const U inf = Point<U>::T_inf;
+
+    U t = Point<U>::T_m_inf;
+    for (unsigned int p = 0; it_begin != it_end && p < direction_.size(); ++p, ++it_begin) {
+      auto val = *it_begin;
+      if (Gudhi::multi_filtration::_is_nan(val)) return inf;
+      auto div = direction_.size() == 0 ? 1 : direction_[p];
+      if (div == 0) {
+        if (val > basePoint_[p]) return inf;
+      } else {
+        t = std::max(t, (static_cast<U>(val) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
+      }
+    }
+
+    return t;
+  }
 
   /**
    * @brief Computes the "time" parameter \f$ t \f$ of the starting point \f$ p = base\_point + t \times direction \f$
@@ -203,21 +220,7 @@ class Line
   U compute_backward_intersection(const Point_t &x) const
   {
     GUDHI_CHECK(basePoint_.size() == x.size(), "x has not as many parameters as the line.");
-
-    constexpr const U m_inf = Point<U>::T_m_inf;
-
-    U t = Point<U>::T_inf;
-    for (unsigned int p = 0; p < x.size(); ++p) {
-      if (Gudhi::multi_filtration::_is_nan(x[p])) return m_inf;
-      auto div = direction_.size() == 0 ? 1 : direction_[p];
-      if (div == 0) {
-        if (x[p] <= basePoint_[p]) return m_inf;
-      } else {
-        t = std::min(t, (static_cast<U>(x[p]) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
-      }
-    }
-
-    return t;
+    return compute_backward_intersection(x.begin(), x.end());
   }
 
   /**
@@ -250,6 +253,36 @@ class Line
         }
       }
       t = std::max(t, tmp);
+    }
+
+    return t;
+  }
+  
+  /**
+   * @brief Computes the "time" parameter \f$ t \f$ of the starting point \f$ p = base\_point + t \times direction \f$
+   * of the intersection between the line and the open negative cone originating at the given point.
+   * 
+   * @tparam U Type of the time parameter.
+   * @tparam Iterator Forward iterator, iterating over the point coordinates. The dereferenced values should be
+   * convertible into `U`.
+   * @param it_begin Begin iterator of the coordinate range.
+   * @param it_end End iterator of the coordinate range.
+   */
+  template <typename U = T, class Iterator>
+  U compute_backward_intersection(Iterator it_begin, Iterator it_end) const
+  {
+    constexpr const U m_inf = Point<U>::T_m_inf;
+
+    U t = Point<U>::T_inf;
+    for (unsigned int p = 0; it_begin != it_end && p < direction_.size(); ++p, ++it_begin) {
+      auto val = *it_begin;
+      if (Gudhi::multi_filtration::_is_nan(val)) return m_inf;
+      auto div = direction_.size() == 0 ? 1 : direction_[p];
+      if (div == 0) {
+        if (val <= basePoint_[p]) return m_inf;
+      } else {
+        t = std::min(t, (static_cast<U>(val) - static_cast<U>(basePoint_[p])) / static_cast<U>(div));
+      }
     }
 
     return t;

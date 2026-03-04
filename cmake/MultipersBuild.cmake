@@ -220,6 +220,7 @@ function(multipers_configure_extension_include_dirs module_name target_name)
   if(uses_forked_phat EQUAL -1)
     target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
   endif()
+  set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
 endfunction()
 
 function(multipers_configure_extension_backend module_name target_name)

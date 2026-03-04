@@ -457,6 +457,8 @@ class Slicer
    *
    * @tparam byDim If true, the barcode is returned as @ref Multi_dimensional_barcode, otherwise as @ref Barcode.
    * @tparam Value Type of the birth and death values.
+   * @tparam idx If false, the usual barcode is returned. Otherwise, replaces the filtration values of the bars with
+   * the IDs of the cells generating the birth or death.
    * @param maxDim Maximal dimension to be included in the barcode. If negative, all dimensions are included.
    * Default value: -1.
    */
@@ -479,6 +481,8 @@ class Slicer
    * @tparam byDim If true, the barcode is returned as @ref Multi_dimensional_flat_barcode, otherwise as
    * @ref Flat_barcode.
    * @tparam Value Type of the birth and death values.
+   * @tparam idx If false, the usual barcode is returned. Otherwise, replaces the filtration values of the bars with
+   * the IDs of the cells generating the birth or death.
    * @param maxDim Maximal dimension to be included in the barcode. If negative, all dimensions are included.
    * Default value: -1.
    */
