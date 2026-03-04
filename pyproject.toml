@@ -63,6 +63,7 @@ exclude = [
   "*.md5",
   "*.tex",
   "*.scc",
+  "*.pyc",
   "*.firep",
   "CMakeCache.txt"
   "compile_commands.json",
@@ -70,6 +71,7 @@ exclude = [
   "*.png",
   ".*",
   "*.yml",
+  "cmake_install.cmake",
   ".DS_Store",
 ]
 include = [
@@ -89,6 +91,7 @@ include = [
   "multipers/**/*.pxd",
   "multipers/**/*.hpp",
   "multipers/**/*.h",
+  "CITATION.cff",
   "LICENSE",
   "README.md",
   "licences/LGPL-3.0-or-later.txt",
