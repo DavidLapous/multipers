@@ -157,7 +157,7 @@ Out_multi_filtration as_type(const Multi_parameter_generator<T>& f, std::size_t 
     }
     return Out_multi_filtration(std::move(values), numberOfParameters);
   } else if constexpr (std::is_same_v<Out_multi_filtration, Dynamic_multi_parameter_filtration<U, co, one_crit> >) {
-    std::vector<typename Out_multi_filtration::Underlying_container> values(1, f.template as_type<U>());
+    typename Out_multi_filtration::Underlying_container values(1, f.template as_type<U>());
     return Out_multi_filtration(std::move(values), numberOfParameters);
   } else if constexpr (std::is_same_v<Out_multi_filtration, Degree_rips_bifiltration<U, co, one_crit> >) {
     if (f.size() != 2 || numberOfParameters != 2)
