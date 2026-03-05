@@ -334,7 +334,8 @@ HAS_SHAPELY = None
 
 
 def plot2d_PyModule(
-    corners,
+    birth_corners,
+    death_corners,
     box,
     *,
     dimension=-1,
@@ -383,13 +384,13 @@ def plot2d_PyModule(
         ax = plt.gca()
         ax.set(xlim=[box[0][0], box[1][0]], ylim=[box[0][1], box[1][1]])
 
-    n_summands = len(corners)
+    n_summands = len(birth_corners)
 
     for i in range(n_summands):
         summand_interleaving = 0 if interleavings is None else interleavings[i]
 
-        births = np.asarray(corners[i][0])
-        deaths = np.asarray(corners[i][1])
+        births = np.asarray(birth_corners[i])
+        deaths = np.asarray(death_corners[i])
 
         if births.size == 0 or deaths.size == 0:
             continue

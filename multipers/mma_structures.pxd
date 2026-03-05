@@ -14,13 +14,17 @@ cdef extern from "gudhi/Multi_persistence/Summand.h" namespace "Gudhi::multi_per
     cdef cppclass Summand[T=*]:
         ctypedef vector[T] corner_type
         ctypedef T value_type
-
         ctypedef pair[vector[T],vector[T]] interval
+        T T_inf
+        T T_m_inf
         Summand() except +
         Summand(int) except +
         Summand(vector[T]&, vector[T]&, int, int)  except + nogil
-        vector[One_critical_filtration[T]] compute_birth_list() nogil
-        vector[One_critical_filtration[T]] compute_death_list() nogil
+        int get_number_of_parameters() nogil const
+        int get_number_of_birth_corners() nogil const
+        int get_number_of_death_corners() nogil const
+        vector[T] compute_birth_list() nogil
+        vector[T] compute_death_list() nogil
         int get_dimension()  nogil const 
         Box[T] compute_bounds() nogil const
         bool operator==(const Summand&) nogil
@@ -73,11 +77,20 @@ cdef extern from "gudhi/Multi_persistence/Summand.h" namespace "Gudhi::multi_per
 
 cdef extern from "gudhi/Multi_persistence/Module.h" namespace "Gudhi::multi_persistence":
     cdef cppclass Module[T=*]:
+        cppclass Summand_of_dimension_range:
+            cppclass const_it "const_iterator":
+                const Summand[T]& operator*()
+                const_it operator++()
+                bool operator!=(const_it)
+            const_it begin()
+            const_it end()
+
         Module()  except + nogil
         Module(const vector[intptr_t]&)
         Summand[T]& get_summand(unsigned int)  nogil
         vector[Summand[T]].iterator begin()
         vector[Summand[T]].iterator end() 
+        Summand_of_dimension_range get_summand_of_dimension_range(int) nogil const
         bool operator==(const Module[T]&) nogil
         void clean(const bool)  nogil
         void add_summand(Summand[T])  nogil
@@ -87,7 +100,6 @@ cdef extern from "gudhi/Multi_persistence/Module.h" namespace "Gudhi::multi_pers
         Box[T] compute_bounds() nogil const
         void set_box(Box[T])  nogil
         int get_max_dimension() const 
-        vector[pair[vector[vector[T]], vector[vector[T]]]] get_corners_of_dimension(unsigned int)  nogil
         vector[vector[pair[T,T]]] get_barcode_from_line(Line[T]&, const int)  nogil
         vector[vector[vector[pair[T,T]]]] get_barcodes_from_set_of_lines(const vector[Line[T]]& , const int, )  nogil
         void rescale(vector[T]&, int) nogil

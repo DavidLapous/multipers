@@ -59,7 +59,7 @@ from libcpp.utility cimport pair
 #from libcpp.list cimport list as clist
 from libcpp cimport bool
 from libcpp cimport int
-from cython.operator cimport dereference
+from cython.operator cimport dereference, preincrement
 from libcpp.utility cimport move
 cimport cython
 #########################################################################
@@ -95,12 +95,16 @@ cdef class PySummand_{{SHORT}}:
     cdef Summand[{{CTYPE}}] sum
 
     def get_birth_list(self): 
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_birth_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        cdef vector[{{CTYPE}}] v = self.sum.compute_birth_list()
+        res = np.array(v)
+        res = res.reshape((self.sum.get_number_of_birth_corners(), self.sum.get_number_of_parameters()))
+        return res
 
     def get_death_list(self):
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_death_list()
-        return _vff21cview_{{SHORT}}(v, copy = True)
+        cdef vector[{{CTYPE}}] v = self.sum.compute_death_list()
+        res = np.array(v)
+        res = res.reshape((self.sum.get_number_of_death_corners(), self.sum.get_number_of_parameters()))
+        return res
     @property
     def degree(self)->int:
         return self.sum.get_dimension()
@@ -119,11 +123,7 @@ cdef class PySummand_{{SHORT}}:
       return {{PYTYPE}}
 
     def num_parameters(self):
-        cdef vector[One_critical_filtration[{{CTYPE}}]] v = self.sum.compute_birth_list()
-        if v[0].is_finite():
-            return v[0].num_parameters()
-        v = self.sum.compute_death_list()
-        return v[0].num_parameters()
+        return self.sum.get_number_of_parameters()
     def __eq__(self, PySummand_{{SHORT}} other):
         return self.sum == other.sum 
 
@@ -134,22 +134,28 @@ cdef inline get_summand_filtration_values_{{SHORT}}(Summand[{{CTYPE}}] summand):
     r"""
     Returns a list (over parameter) of the filtrations values of this parameter.
     """
-    cdef vector[One_critical_filtration[{{CTYPE}}]] vb = summand.compute_birth_list()
-    cdef vector[One_critical_filtration[{{CTYPE}}]] vd = summand.compute_death_list()
+    cdef vector[{{CTYPE}}] vb = summand.compute_birth_list()
+    cdef vector[{{CTYPE}}] vd = summand.compute_death_list()
 
-    if vb[0].is_finite():
-        if vd[0].is_finite():
-            pts = np.concatenate([_vff21cview_{{SHORT}}(vb, copy=True),
-                                  _vff21cview_{{SHORT}}(vd, copy=True)],axis=0)
+    num_parameters = summand.get_number_of_parameters()
+
+    # should not copy anything, no ownership needs to be transferred either
+    cdef {{CTYPE}}[:,:] vb_view = <{{CTYPE}}[:summand.get_number_of_birth_corners(), :num_parameters]>(vb.data())
+    cdef {{CTYPE}}[:,:] vd_view = <{{CTYPE}}[:summand.get_number_of_death_corners(), :num_parameters]>(vd.data())
+    np_vb = np.asarray(vb_view)
+    np_vd = np.asarray(vd_view)
+
+    if not (np_vb == sum.T_inf).all() and not (np_vb == sum.T_m_inf).all():
+        if not (np_vd == sum.T_inf).all() and not (np_vd == sum.T_m_inf).all():
+            pts = np.concatenate([np_vb, np_vd],axis=0)
         else:
-            pts = np.array(_vff21cview_{{SHORT}}(vb, copy=True))
+            pts = np.array(np_vb)
     else:
-        if vd[0].is_finite():
-            pts = np.array(_vff21cview_{{SHORT}}(vd, copy=True))
+        if not (np_vd == sum.T_inf).all() and not (np_vd == sum.T_m_inf).all():
+            pts = np.array(np_vd)
         else:
             return []
     
-    num_parameters = pts.shape[1]
     out = [np.unique(pts[:,parameter]) for parameter in range(num_parameters)]
     out = [f[:-1] if len(f)>0 and f[-1] == np.inf else f for f in out]
     out = [f[1:]  if len(f)>0 and f[0] == -np.inf else f for f in out]
@@ -179,7 +185,7 @@ cdef class PyBox_{{SHORT}}:
     def dtype(self):
       return {{PYTYPE}}
 
-
+ctypedef Module[{{CTYPE}}] {{SHORT}}_Module_t
 
 cdef class PyModule_{{SHORT}}:
     r"""
@@ -420,9 +426,37 @@ cdef class PyModule_{{SHORT}}:
                     plt.sca(axes[dim_idx])
                 self.plot(dims[dim_idx],box=box, separated = separated, **kwargs)
             return
-        corners = self.cmod.get_corners_of_dimension(degree)
+
+        cdef list birth_corners = [None] * self.cmod.size()
+        cdef list death_corners = [None] * self.cmod.size()
+        cdef size_t count = 0
+        cdef size_t nber_corners = 0
+        cdef size_t nber_param = 0
+        cdef Module[{{CTYPE}}].Summand_of_dimension_range r = self.cmod.get_summand_of_dimension_range(degree)
+        # need to use {{SHORT}}_Module_t here otherwise cython struggles to untangle const_it namespace
+        cdef {{SHORT}}_Module_t.Summand_of_dimension_range.const_it it = r.begin()
+        cdef {{SHORT}}_Module_t.Summand_of_dimension_range.const_it end = r.end()
+        cdef vector[{{CTYPE}}] births
+        cdef vector[{{CTYPE}}] deaths
+        cdef {{CTYPE}}[:,:] vb_view
+        cdef {{CTYPE}}[:,:] vd_view
+
+        while it != end:
+            births = dereference(it).compute_birth_list()
+            deaths = dereference(it).compute_death_list()
+            nber_param = dereference(it).get_number_of_parameters()
+            nber_corners = dereference(it).get_number_of_birth_corners()
+            vb_view = <{{CTYPE}}[:nber_corners, :nber_param]>(births.data())
+            nber_corners = dereference(it).get_number_of_death_corners()
+            vd_view = <{{CTYPE}}[:nber_corners, :nber_param]>(deaths.data())
+            # to avoid copy, a transfer of ownership would be possible here in case it is worth it?
+            birth_corners[count] = np.array(vb_view)
+            death_corners[count] = np.array(vd_view)
+            preincrement(it)
+            count += 1
+
         interleavings = self.get_module_of_degree(degree).get_interleavings(box)
-        plot2d_PyModule(corners, box=box, dimension=degree, interleavings = interleavings, **kwargs)
+        plot2d_PyModule(birth_corners[:count], death_corners[:count], box=box, dimension=degree, interleavings = interleavings, **kwargs)
         return
     # def degree_splits(self):
     #     return np.asarray(self.cmod.get_degree_splits(), dtype=np.int64)
@@ -1033,11 +1067,17 @@ cdef class PyModule_{{SHORT}}:
 
 
 cdef dump_summand_{{SHORT}}(Summand[{{CTYPE}}]& summand):
-    cdef vector[One_critical_filtration[{{CTYPE}}]] births = summand.compute_birth_list()
-    cdef vector[One_critical_filtration[{{CTYPE}}]] deaths = summand.compute_death_list()
+    cdef vector[{{CTYPE}}] births = summand.compute_birth_list()
+    cdef vector[{{CTYPE}}] deaths = summand.compute_death_list()
+
+    num_parameters = summand.get_number_of_parameters()
+
+    cdef {{CTYPE}}[:,:] vb_view = <{{CTYPE}}[:summand.get_number_of_birth_corners(), :num_parameters]>(births.data())
+    cdef {{CTYPE}}[:,:] vd_view = <{{CTYPE}}[:summand.get_number_of_death_corners(), :num_parameters]>(deaths.data())
+
     return (
-            np.array(_vff21cview_{{SHORT}}(births)),
-            np.array(_vff21cview_{{SHORT}}(deaths)),
+            np.array(vb_view),
+            np.array(vd_view),
             summand.get_dimension(),
             )
 

@@ -27,6 +27,9 @@
 #ifdef GUDHI_USE_TBB
 #include <oneapi/tbb/parallel_for.h>
 #endif
+#include <boost/range/any_range.hpp>
+#include <boost/range/adaptor/type_erased.hpp>
+#include <boost/range/adaptor/filtered.hpp>
 
 #include <gudhi/Multi_persistence/Box.h>
 #include <gudhi/Multi_persistence/Summand.h>
@@ -56,6 +59,8 @@ class Module {
   using iterator = typename Module_t::iterator;             /**< Iterator type. */
   using const_iterator = typename Module_t::const_iterator; /**< Const iterator type. */
   using Index = typename Module_t::size_type;
+  using Summand_of_dimension_range =
+      boost::any_range<Summand_t, boost::forward_traversal_tag, const Summand_t &, std::ptrdiff_t>;
 
   static constexpr T T_inf = Summand_t::T_inf;
   static constexpr T T_m_inf = Summand_t::T_m_inf;
@@ -71,6 +76,13 @@ class Module {
   const_iterator begin() const { return module_.cbegin(); }
 
   const_iterator end() const { return module_.cend(); }
+
+  Summand_of_dimension_range get_summand_of_dimension_range(Dimension dimension) const {
+    auto has_dimension = [&](const Summand_t &sum) { return sum.get_dimension() == dimension; };
+    // cython does not handle the adaptor properly without explicitly using boost::adaptors::type_erased
+    return module_ | boost::adaptors::filtered(has_dimension) |
+           boost::adaptors::type_erased<Summand_t, boost::forward_traversal_tag, const Summand_t &, std::ptrdiff_t>();
+  }
 
   const Box<value_type> &get_box() const { return box_; }
 
@@ -92,33 +104,6 @@ class Module {
 
   void add_summand(const Summand_t &summand, Dimension dimension = Summand_t::template get_null_value<Dimension>()) {
     add_summand(module_.size(), summand, dimension);
-  }
-
-  std::vector<std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>>>
-  get_corners_of_dimension(Dimension dimension) const {
-    // TODO: parallelize
-    std::vector<std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>>> corners;
-    for (const auto &summand : module_) {
-      if (summand.get_dimension() == dimension) {
-        const auto &birthList = summand.get_upset();
-        const auto &deathList = summand.get_downset();
-        std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>> corner;
-        corner.first.resize(birthList.size());
-        corner.second.resize(deathList.size());
-        Index i = 0;
-        for (const auto &b : birthList) {
-          corner.first[i] = std::vector<value_type>(b.begin(), b.end());
-          ++i;
-        }
-        i = 0;
-        for (const auto &d : deathList) {
-          corner.second[i] = std::vector<value_type>(d.begin(), d.end());
-          ++i;
-        }
-        corners.push_back(std::move(corner));
-      }
-    }
-    return corners;
   }
 
   [[nodiscard]] Dimension get_max_dimension() const { return maxDim_; }
