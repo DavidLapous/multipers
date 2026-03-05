@@ -1570,7 +1570,7 @@ class Dynamic_multi_parameter_filtration
    * constructed. If there were more generators before, the exceed of generators is destroyed (any generator with index
    * higher or equal to @p g to be more precise). If @p g is zero, the methods does nothing.
    *
-   * Fails to compile if `Ensure1Criticality` is true.
+   * Throws `std::invalid_argument` if `Ensure1Criticality` is true.
    *
    * @warning All new generators will be set to infinity (`Co` is true) or -infinity (`Co` is false). That is, the new
    * filtration value is not minimal anymore. Make sure to fill them with real generators or to remove them before
@@ -1583,11 +1583,12 @@ class Dynamic_multi_parameter_filtration
    */
   void set_num_generators(size_type g)
   {
-    static_assert(!Ensure1Criticality, "Number of generators cannot be set for a 1-critical only filtration value.");
-
-    if (g == 0) return;
-
-    generators_.resize(g);
+    if constexpr (Ensure1Criticality) {
+      throw std::invalid_argument("Number of generators cannot be set for a 1-critical only filtration value.");
+    } else {
+      if (g == 0) return;
+      generators_.resize(g);
+    }
   }
 
   /**
