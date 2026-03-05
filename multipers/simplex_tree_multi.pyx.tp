@@ -405,8 +405,10 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         cdef Simplex_tree_multi_simplices_iterator[{{PyFil}}] end = self.get_ptr().get_simplices_iterator_end()
 
         # TODO: there is probably a better way to get the inf value...
-        cdef {{OneCriticalFil}} tmp = {{OneCriticalFil}}(self.get_ptr().num_parameters())
-        cdef vector[{{CTYPE}}] minf = vector[{{CTYPE}}](self.get_ptr().num_parameters(), tmp(0,0))
+        cdef vector[{{CTYPE}}] minf = vector[{{CTYPE}}](
+            self.get_ptr().num_parameters(),
+            {{PY_CLASS_NAME}}.T_minus_inf(),
+        )
         cdef int simplex_dimension
         with nogil:
             while it != end:
@@ -737,7 +739,6 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         cdef Py_ssize_t i
         cdef Py_ssize_t j
         cdef vector[int] v
-        cdef {{OneCriticalFil}} w_temp
         cdef {{PyFil}} w
         if empty_filtration:
             w = {{PyFil}}(num_parameters) # at -inf by default

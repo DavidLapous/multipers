@@ -1,9 +1,9 @@
 #define MULTIPERS_BUILD_CORE_TEMPLATES 1
 
-#include "Persistence_slices_interface.h"
-#include "filtrations_extern_templates.h"
+#include <Persistence_slices_interface.h>
+#include <filtrations_extern_templates.h>
 
-#include "slicer_instantiations.inc"
+#include <slicer_instantiations.inc>
 
 namespace multipers::core {
 

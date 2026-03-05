@@ -72,7 +72,13 @@ cdef extern from "ext_interface/multi_critical_interface.hpp" namespace "multipe
 
 
 def _is_available():
-    return multi_critical_interface_available()
+    if not multi_critical_interface_available():
+        return False
+    containers = getattr(mps, "available_filtration_container", ())
+    return any(
+        isinstance(container, str) and container.lower() == "flat"
+        for container in containers
+    )
 
 
 @cython.boundscheck(False)
@@ -85,6 +91,8 @@ cdef object _slicer_from_multi_critical_output(
 ):
     out_boundaries = vect_vect_boundary_to_numpy_slices(interface_output.boundaries)
     out_dimensions = np.array(interface_output.dimensions, dtype=np.int32) 
+    if mark_minpres:
+        out_dimensions -= 1
     out_filtrations = vect_pair_double_to_array(interface_output.filtration_values)
     out = slicer_type(out_boundaries, out_dimensions, out_filtrations)
     if mark_minpres:
@@ -237,8 +245,11 @@ def one_criticalify(
     str filtration_container="contiguous",
     **slicer_kwargs,
 ):
-    if not multi_critical_interface_available():
-        raise RuntimeError("multi_critical in-memory interface is not available.")
+    if not _is_available():
+        raise RuntimeError(
+            "multi_critical in-memory interface is not available in this build "
+            "(requires Flat filtration container support)."
+        )
 
     cdef bint use_logpath
     cdef bint use_swedish
@@ -248,6 +259,7 @@ def one_criticalify(
     cdef int target_degree
     cdef Py_ssize_t i
     cdef object out
+    cdef object input_slicer
     cdef intptr_t input_ptr
     cdef intptr_t out_ptr
     cdef C_KContiguousSlicer_Matrix0_f64* input_cpp
@@ -267,9 +279,20 @@ def one_criticalify(
     use_logpath = algo != "path"
     use_swedish = swedish is True
 
-    if (not reduce) and isinstance(slicer, mps._KContiguousSlicer_Matrix0_f64):
+    input_slicer = slicer
+    if not isinstance(slicer, mps._KContiguousSlicer_Matrix0_f64):
+        input_slicer = slicer.astype(
+            vineyard=False,
+            kcritical=True,
+            dtype=np.float64,
+            col=slicer.col_type,
+            pers_backend="matrix",
+            filtration_container="contiguous",
+        )
+
+    if not reduce:
         out = mps._ContiguousSlicer_Matrix0_f64()
-        input_ptr = <intptr_t>(slicer.get_ptr())
+        input_ptr = <intptr_t>(input_slicer.get_ptr())
         out_ptr = <intptr_t>(out.get_ptr())
         input_cpp = <C_KContiguousSlicer_Matrix0_f64*>input_ptr
         out_cpp = <C_ContiguousSlicer_Matrix0_f64*>out_ptr
@@ -283,9 +306,16 @@ def one_criticalify(
             assign_slicer_from_contiguous_f64_complex_cpp(out_cpp[0], out_complex)
         if newSlicer is type(out):
             return out
-        return newSlicer(out)
+        return out.astype(
+            vineyard=slicer_kwargs.get("vineyard", slicer.is_vine),
+            kcritical=kcritical,
+            dtype=slicer_kwargs.get("dtype", slicer.dtype),
+            col=slicer_kwargs.get("column_type", slicer.col_type),
+            pers_backend=slicer_kwargs.get("backend", slicer.pers_backend),
+            filtration_container=filtration_container,
+        )
 
-    interface_input = _multi_critical_input_from_slicer(slicer)
+    interface_input = _multi_critical_input_from_slicer(input_slicer)
     if reduce and degree is None:
         with nogil:
             all_outputs = multi_critical_minpres_all_interface(
@@ -296,11 +326,11 @@ def one_criticalify(
                 use_swedish,
             )
         return tuple(
-            _slicer_from_multi_critical_output(newSlicer, all_outputs[i], True, i)
-            for i in range(all_outputs.size())
+            _slicer_from_multi_critical_output(newSlicer, all_outputs[i + 1], True, i)
+            for i in range(all_outputs.size() - 1)
         )
     elif reduce:
-        _degree = <int>degree
+        _degree = <int>(degree + 1)
         with nogil:
             one_output = multi_critical_minpres_interface(
                 interface_input,

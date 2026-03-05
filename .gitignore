@@ -31,6 +31,12 @@ cmake_install.cmake
 Makefile
 cython/
 
+## Tempita generated codegen outputs
+multipers/gudhi/filtrations_extern_templates.h
+multipers/gudhi/simplextree_multi_extern_templates.h
+multipers/gudhi/slicer_extern_templates.h
+tools/core/*.inc
+
 ## docs folders
 docs/_build/
 docs/source/
@@ -41,6 +47,7 @@ docs/source/
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml
+!.gitignore
 
 ## Notebook-generated
 *.png

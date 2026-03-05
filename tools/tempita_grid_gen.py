@@ -220,6 +220,16 @@ def _parse_rule(rule_text: str) -> dict[str, Any]:
     }
 
 
+def _parse_constraint(constraint_text: str) -> dict[str, set[Any]]:
+    constraints: dict[str, set[Any]] = {}
+    for segment in _split_non_empty(constraint_text, ","):
+        axis, values = _parse_assignment(segment, allow_short_lhs=False)
+        constraints.setdefault(axis, set()).update(values)
+    if not constraints:
+        raise ValueError(f"Invalid constraint '{constraint_text}': empty expression")
+    return constraints
+
+
 def _matches(candidate: dict[str, Any], constraints: dict[str, set[Any]]) -> bool:
     return all(candidate[key] in allowed for key, allowed in constraints.items())
 
@@ -325,7 +335,19 @@ value_type_id_by_tuple = {
 column_id_by_cpp = {
     registry.COLUMN_REGISTRY[column_id]: column_id for column_id in column_ids
 }
-parsed_rules = [_parse_rule(rule_text) for rule_text in list(user_options.RULES)]
+parsed_rules = [
+    _parse_rule(rule_text) for rule_text in _unique(list(user_options.RULES))
+]
+
+required_slicer_combination_specs = [
+    {
+        "raw": constraint_text,
+        "constraints": _parse_constraint(constraint_text),
+    }
+    for constraint_text in _unique(
+        list(getattr(user_options, "REQUIRED_SLICER_COMBINATIONS", []))
+    )
+]
 
 
 def get_cfiltration_type(container, dtype, is_kcritical, co=False):
@@ -336,10 +358,10 @@ def get_python_filtration_type(container, dtype, is_kcritical, co=False):
     return f"{'K' if is_kcritical else ''}{short_filtration_container[container]}_{dtype[2]}"
 
 
-def check_combination(
+def _build_combination_candidate(
     backend_type, is_vine, is_kcritical, value_type, column_type, filtration_container
-):
-    candidate = {
+) -> dict[str, Any]:
+    return {
         "backend": backend_type,
         "vine": is_vine,
         "kcritical": is_kcritical,
@@ -347,6 +369,19 @@ def check_combination(
         "column": column_id_by_cpp[column_type[1]],
         "filtration_container": filtration_container,
     }
+
+
+def check_combination(
+    backend_type, is_vine, is_kcritical, value_type, column_type, filtration_container
+):
+    candidate = _build_combination_candidate(
+        backend_type,
+        is_vine,
+        is_kcritical,
+        value_type,
+        column_type,
+        filtration_container,
+    )
     for rule in parsed_rules:
         if _matches(candidate, rule["when"]) and not _matches(
             candidate, rule["require"]
@@ -416,8 +451,8 @@ def get_slicer(
     }
 
 
-slicers = [
-    get_slicer(**kwargs)
+enabled_combinations = [
+    kwargs
     for backend_type, is_vine, is_kcritical, value_type, column_type, filtration_container in product(
         matrix_types,
         vineyards_values,
@@ -439,6 +474,31 @@ slicers = [
         )
     )
 ]
+
+slicers = [get_slicer(**kwargs) for kwargs in enabled_combinations]
+
+enabled_candidates = [
+    _build_combination_candidate(**kwargs) for kwargs in enabled_combinations
+]
+
+enabled_filtration_combinations = {
+    (
+        value_type_id_by_tuple[kwargs["value_type"]],
+        kwargs["filtration_container"],
+        kwargs["is_kcritical"],
+    )
+    for kwargs in enabled_combinations
+}
+
+
+def _is_filtration_combo_enabled(
+    value_type, filtration_container, is_kcritical
+) -> bool:
+    return (
+        value_type_id_by_tuple[value_type],
+        filtration_container,
+        is_kcritical,
+    ) in enabled_filtration_combinations
 
 
 TEMPITA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -462,6 +522,11 @@ Filtrations = [
         "multicritical": K,
     }
     for F, T, K in product(filtration_containers, value_types, kcritical_options)
+    if _is_filtration_combo_enabled(
+        value_type=T,
+        filtration_container=F,
+        is_kcritical=K,
+    )
 ]
 if VERBOSE:
     print(*Filtrations, sep="\n")
@@ -544,9 +609,54 @@ def get_simplextree(is_kcritical, value_type, filtration_container):
 st_list = [
     get_simplextree(*args)
     for args in product(kcritical_options, value_types, filtration_containers)
+    if _is_filtration_combo_enabled(
+        value_type=args[1],
+        filtration_container=args[2],
+        is_kcritical=args[0],
+    )
 ]
 if VERBOSE:
     print(*st_list, sep="\n")
+
+
+filtration_python_types = {f["python"] for f in Filtrations}
+if not filtration_python_types:
+    raise ValueError(
+        "No filtration types remain after applying options/rules. "
+        "Please relax VALUE_TYPES/FILTRATION_CONTAINERS/KCRITICAL or RULES."
+    )
+
+slicer_python_types = {s["PYTHON_TYPE"] for s in slicers}
+if not slicer_python_types:
+    raise ValueError(
+        "No slicer types remain after applying options/rules. "
+        "Please relax BACKENDS/COLUMNS/VINE/KCRITICAL/FILTRATION_CONTAINERS or RULES."
+    )
+
+missing_required_slicer_combinations = [
+    spec["raw"]
+    for spec in required_slicer_combination_specs
+    if not any(
+        _matches(candidate, spec["constraints"]) for candidate in enabled_candidates
+    )
+]
+if missing_required_slicer_combinations:
+    raise ValueError(
+        "Options/rules violate REQUIRED_SLICER_COMBINATIONS from options.py. "
+        f"Missing combinations: {missing_required_slicer_combinations}."
+    )
+
+missing_coarsened_aliases = []
+for slicer in slicers:
+    coarsenned = slicer["COARSENNED_PY_CLASS_NAME"]
+    if coarsenned not in slicer_python_types:
+        missing_coarsened_aliases.append((slicer["PYTHON_TYPE"], coarsenned))
+if missing_coarsened_aliases:
+    examples = ", ".join(f"{src}->{dst}" for src, dst in missing_coarsened_aliases[:6])
+    raise ValueError(
+        "Options/rules break coarsening API requirements (missing coarsened slicer aliases). "
+        f"Examples: {examples}"
+    )
 
 with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("wb") as f:
     pickle.dump(st_list, f)
@@ -564,7 +674,7 @@ simplextree_instantiation_types = _unique(
 )
 
 filtration_instantiation_types = _unique(
-    [filtration["c"] for filtration in Filtrations if filtration["multicritical"]]
+    [filtration["c"] for filtration in Filtrations]
 )
 
 
@@ -592,7 +702,7 @@ def _slicer_type_for_instantiation(slicer: dict[str, Any]) -> str:
 
 
 slicer_instantiation_types = _unique(
-    [_slicer_type_for_instantiation(slicer) for slicer in slicers if slicer["IS_VINE"]]
+    [_slicer_type_for_instantiation(slicer) for slicer in slicers]
 )
 
 _write_text_if_changed(

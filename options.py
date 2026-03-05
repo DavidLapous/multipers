@@ -14,18 +14,15 @@ VALUE_TYPES = [
 
 # Persistence matrix column IDs
 COLUMNS = [
-    "UNORDERED_SET",
-    # "CHATTY_COLUMN",
-    # "CHATTY_COLUMN_FLIP",
-    # "CHATTY_COLUMN_ADAPTIVE",
-    # "PHAT_VECTOR",
-    # "PHAT_BIT_TREE",
-    # "INTRUSIVE_LIST",
+    "INTRUSIVE_LIST",
+    # "UNORDERED_SET",
     # "INTRUSIVE_SET",
     # "SET",
     # "HEAP",
     # "NAIVE_VECTOR",
     # "VECTOR",
+    # "PHAT_VECTOR",
+    # "PHAT_BIT_TREE",
     # "LIST",
 ]
 
@@ -69,5 +66,16 @@ RULES = [
     "Degree_rips_bifiltration => kcritical=True",
     "Graph|Clement => vine=True",
     "GudhiCohomology => vine=False",
-    "Graph|GudhiCohomology => column=INTRUSIVE_SET",
+    "Graph|GudhiCohomology => column=INTRUSIVE_LIST",
+]
+
+# Hard requirements validated after RULES are applied.
+# Each entry means: at least one generated slicer must satisfy all key=value pairs.
+# This keeps bridge/coarsening assumptions explicit and editable from this file.
+DEFAULT_BRIDGE_COLUMN = COLUMNS[0] if COLUMNS else "INTRUSIVE_LIST"
+REQUIRED_SLICER_COMBINATIONS = [
+    f"backend=Matrix, vine=False, kcritical=False, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=True, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=True, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
 ]
