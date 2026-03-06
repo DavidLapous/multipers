@@ -110,6 +110,7 @@ set(MULTIPERS_TBB_MODULES
   point_measure
   grids
   slicer
+  _mpfree_interface
   _function_delaunay_interface
 )
 

@@ -12,7 +12,7 @@ cdef extern from "ext_interface/contiguous_slicer_bridge.hpp" namespace "multipe
     contiguous_f64_complex_cpp() except + nogil
     contiguous_f64_complex_cpp(const contiguous_f64_complex_cpp&) except + nogil
 
-  void assign_slicer_from_contiguous_f64_complex_cpp "multipers::assign_slicer_from_contiguous_f64_complex"(
+  void build_slicer_from_complex_cpp "multipers::build_slicer_from_complex"(
       C_ContiguousSlicer_Matrix0_f64&,
       contiguous_f64_complex_cpp&
   ) except + nogil
@@ -82,7 +82,7 @@ def minimal_presentation(slicer, int degree, bint
             use_clearing,
             verbose,
         )
-        assign_slicer_from_contiguous_f64_complex_cpp(out_cpp[0], out_complex)
+        build_slicer_from_complex_cpp(out_cpp[0], out_complex)
 
     if isinstance(slicer, mps._ContiguousSlicer_Matrix0_f64):
         return out
