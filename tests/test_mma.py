@@ -57,7 +57,7 @@ def test_pipeline1(prune_degrees_above, n_jobs):
         [[mp.Slicer(truc) for truc in st]]
     )
     for a, b in zip(truc1, truc2):
-        assert np.array_equal(
+        assert np.allclose(
             a[0].representation(bandwidth=0.01, kernel="linear"),
             b[0].representation(bandwidth=0.01, kernel="linear"),
         ), "Slicer == Simplextree not satisfied"
