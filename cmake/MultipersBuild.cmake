@@ -112,6 +112,8 @@ set(MULTIPERS_TBB_MODULES
   slicer
   _mpfree_interface
   _function_delaunay_interface
+  _multi_critical_interface
+  _rhomboid_tiling_interface
 )
 
 set(MULTIPERS_MODULE_INCLUDE_DIR_MAP
