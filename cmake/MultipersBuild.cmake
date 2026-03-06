@@ -70,6 +70,7 @@ endfunction()
 set(MULTIPERS_SHARED_CORE_MODULES
   simplex_tree_multi
   slicer
+  mma_structures
   multiparameter_module_approximation
   _mpfree_interface
   _function_delaunay_interface
