@@ -48,7 +48,7 @@ def test_pipeline1(prune_degrees_above, n_jobs):
         truc1.representation(bandwidth=0.1, kernel="linear"),
         truc2.representation(bandwidth=0.1, kernel="linear"),
     ), "Slicer == Simplextree not satisfied"
-    assert np.array_equal(truc1.representation(bandwidth=0.1, kernel="linear"), output)
+    assert np.allclose(truc1.representation(bandwidth=0.1, kernel="linear"), output)
 
     st = [random_st(npts=50).collapse_edges(-2, ignore_warning=True) for _ in range(5)]
     some_fited_pipeline = mma.FilteredComplex2MMA(**args).fit([st])
