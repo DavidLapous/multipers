@@ -1313,6 +1313,64 @@ def to_blocks(input):
     raise ValueError("Input cannot be converted to blocks.")
 
 
+{{for D in slicers}}
+cdef inline tuple _signed_measure_from_slicer_{{D['PYTHON_TYPE']}}({{D['PYTHON_TYPE']}} slicer, int shift=0):
+    cdef vector[int] dims = slicer.truc.get_dimensions()
+    cdef int32_t[::1] weights_view
+    cdef int parity_shift = shift & 1
+
+    weights = np.empty(len(slicer), dtype=np.int32)
+    weights_view = weights
+    with nogil:
+        for i in range(n):
+            weights_view[i] = 1 - 2 * (((dims[i] & 1) ^ parity_shift) & 1)
+
+    return slicer.get_filtrations(view=False), weights
+{{endfor}}
+
+
+def _signed_measure_from_slicer(slicer: Slicer_type, int shift = 0):
+    if slicer.is_kcritical:
+        raise NotImplementedError("Not implemented for k-critical filtrations yet.")
+
+    if False:
+        pass
+{{for D in slicers}}
+    elif isinstance(slicer, {{D['PYTHON_TYPE']}}):
+        return [_signed_measure_from_slicer_{{D['PYTHON_TYPE']}}(slicer, shift=shift)]
+{{endfor}}
+    else:
+        raise ValueError(f"Unsupported slicer type {type(slicer)}")
+
+
+def _signed_measure_from_scc(minimal_presentation):
+    cdef Py_ssize_t i
+    cdef Py_ssize_t n = len(minimal_presentation)
+    cdef Py_ssize_t total_size = 0
+    cdef Py_ssize_t block_size
+    cdef Py_ssize_t offset = 0
+    cdef double[::1] weights_view
+
+    if n == 0:
+        return [(np.empty((0, 0)), np.empty((0,), dtype=np.float64))]
+
+    pts_per_block = [block[0] for block in minimal_presentation]
+    block_sizes = [len(block_pts) for block_pts in pts_per_block]
+    for block_size in block_sizes:
+        total_size += block_size
+
+    pts = np.concatenate(pts_per_block)
+    weights = np.empty(total_size, dtype=np.float64)
+    weights_view = weights
+
+    for i in range(n):
+        block_size = block_sizes[i]
+        weights_view[offset:offset + block_size] = 1.0 if (i & 1) == 0 else -1.0
+        offset += block_size
+
+    return [(pts, weights)]
+
+
 def get_matrix_slicer(bool is_vineyard, bool is_k_critical, dtype:type|_valid_dtypes, str col, str pers_backend, str filtration_container:_filtration_container_type):
   """
   Given various parameters, returns the specific slicer type associated with them.
