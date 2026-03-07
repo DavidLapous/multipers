@@ -1,6 +1,6 @@
 [project]
 name = "multipers"
-version = "2.5.0b3"
+version = "2.5.0b4"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
