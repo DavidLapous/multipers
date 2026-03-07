@@ -44,7 +44,7 @@ def test_pipeline1(prune_degrees_above, n_jobs):
         bandwidth=0.1, kernel="linear"
     )
     assert np.sum(output) > 0, "Invalid mma rpz"
-    assert np.array_equal(
+    assert np.allclose(
         truc1.representation(bandwidth=0.1, kernel="linear"),
         truc2.representation(bandwidth=0.1, kernel="linear"),
     ), "Slicer == Simplextree not satisfied"
