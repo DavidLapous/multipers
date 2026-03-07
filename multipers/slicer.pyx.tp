@@ -1318,8 +1318,9 @@ cdef inline tuple _signed_measure_from_slicer_{{D['PYTHON_TYPE']}}({{D['PYTHON_T
     cdef vector[int] dims = slicer.truc.get_dimensions()
     cdef int32_t[::1] weights_view
     cdef int parity_shift = shift & 1
+    cdef int n = len(slicer)
 
-    weights = np.empty(len(slicer), dtype=np.int32)
+    weights = np.empty(n, dtype=np.int32)
     weights_view = weights
     with nogil:
         for i in range(n):
