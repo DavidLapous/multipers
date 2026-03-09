@@ -14,10 +14,14 @@ TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tm
 with (TEMPITA_CACHE_DIR / "_slicer_names.pkl").open("rb") as f:
   slicers = pickle.load(f)
 
-# TODO: FIXME. This is not possible as the import is hardcoded as f32 and f64.
-# float_value_types = set([(D['C_VALUE_TYPE'],D['PY_VALUE_TYPE'],D['SHORT_VALUE_TYPE']) for D in slicers if D['IS_FLOAT']])
-
-float_value_types = set((("float",   "np.float32", "f32"), ("double",  "np.float64", "f64")) )
+float_value_types = sorted(
+    {
+        (D["C_VALUE_TYPE"], D["PY_VALUE_TYPE"], D["SHORT_VALUE_TYPE"])
+        for D in slicers
+        if D["IS_FLOAT"]
+    },
+    key=lambda value_type: value_type[2],
+)
 
 with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
     simplex_trees = pickle.load(f)

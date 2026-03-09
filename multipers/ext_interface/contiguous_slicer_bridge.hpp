@@ -75,8 +75,8 @@ inline contiguous_f64_complex build_contiguous_f64_slicer_from_output(
 }
 
 template <typename slicer_type>
-inline void assign_slicer_from_contiguous_f64_complex(slicer_type& target,
-                                                       contiguous_f64_complex& complex) {
+inline void build_slicer_from_complex(slicer_type& target,
+                                      contiguous_f64_complex& complex) {
   target = slicer_type(complex);
 }
 

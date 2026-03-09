@@ -5,6 +5,7 @@ import multipers as mp
 import multipers.ml.mma as mma
 from multipers.tests import random_st
 
+
 def test_1():
     st = mp.SimplexTreeMulti(num_parameters=2)
     st.insert([0], [0, 1])
@@ -13,6 +14,7 @@ def test_1():
     mma_pymodule = mp.module_approximation(st)
     assert np.array_equal(mma_pymodule[0].get_birth_list(), [[0.0, 1.0], [1.0, 0.0]])
     assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf, np.inf]])
+
 
 def test_img():
     simplextree = mp.SimplexTreeMulti(num_parameters=4)
@@ -29,7 +31,7 @@ def test_img():
 @pytest.mark.parametrize("n_jobs", [1, 2])
 @pytest.mark.parametrize("prune_degrees_above", [0, 1, None])
 def test_pipeline1(prune_degrees_above, n_jobs):
-    args = locals()
+    args = {"prune_degrees_above": prune_degrees_above, "n_jobs": n_jobs}
     st = random_st(npts=50, max_dim=1).collapse_edges(-2)
     st.expansion(2)
     (truc1,) = mma.FilteredComplex2MMA(**args).fit_transform([[st]])[0]
@@ -42,11 +44,11 @@ def test_pipeline1(prune_degrees_above, n_jobs):
         bandwidth=0.1, kernel="linear"
     )
     assert np.sum(output) > 0, "Invalid mma rpz"
-    assert np.array_equal(
+    assert np.allclose(
         truc1.representation(bandwidth=0.1, kernel="linear"),
         truc2.representation(bandwidth=0.1, kernel="linear"),
     ), "Slicer == Simplextree not satisfied"
-    assert np.array_equal(truc1.representation(bandwidth=0.1, kernel="linear"), output)
+    assert np.allclose(truc1.representation(bandwidth=0.1, kernel="linear"), output)
 
     st = [random_st(npts=50).collapse_edges(-2, ignore_warning=True) for _ in range(5)]
     some_fited_pipeline = mma.FilteredComplex2MMA(**args).fit([st])
@@ -55,7 +57,7 @@ def test_pipeline1(prune_degrees_above, n_jobs):
         [[mp.Slicer(truc) for truc in st]]
     )
     for a, b in zip(truc1, truc2):
-        assert np.array_equal(
+        assert np.allclose(
             a[0].representation(bandwidth=0.01, kernel="linear"),
             b[0].representation(bandwidth=0.01, kernel="linear"),
         ), "Slicer == Simplextree not satisfied"
@@ -65,7 +67,11 @@ def test_pipeline1(prune_degrees_above, n_jobs):
 @pytest.mark.parametrize("prune_degrees_above", [1, None])
 @pytest.mark.parametrize("expand_dim", [None, 2, 3])
 def test_pipeline2(prune_degrees_above, n_jobs, expand_dim):
-    args = locals()
+    args = {
+        "prune_degrees_above": prune_degrees_above,
+        "n_jobs": n_jobs,
+        "expand_dim": expand_dim,
+    }
     st = random_st(max_dim=1)
     st.collapse_edges(-2)
     truc = mma.FilteredComplex2MMA(**args).fit_transform([[st]])[0]

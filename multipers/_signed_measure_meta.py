@@ -16,6 +16,8 @@ from multipers.slicer import (
     Slicer_type,
     _hilbert_signed_measure,
     _rank_from_slicer,
+    _signed_measure_from_scc,
+    _signed_measure_from_slicer,
     is_slicer,
 )
 
@@ -397,31 +399,3 @@ def signed_measure(
     if plot:
         plot_signed_measures(sms, alpha=1 if invariant == "hook" else None)
     return sms
-
-
-def _signed_measure_from_scc(
-    minimal_presentation,
-) -> list[tuple[np.ndarray, np.ndarray]]:
-    pts = np.concatenate([b[0] for b in minimal_presentation])
-    weights = np.concatenate(
-        [
-            (1 - 2 * (i & 1)) * np.ones(len(b[0]))
-            for i, b in enumerate(minimal_presentation)
-        ]
-    )
-    sm = [(pts, weights)]
-    return sm
-
-
-def _signed_measure_from_slicer(
-    slicer: Slicer_type,
-    shift: int = 0,
-) -> list[tuple[np.ndarray, np.ndarray]]:
-    assert not slicer.is_kcritical, "Not implemented for k-critical filtrations yet."
-    pts = np.array(slicer.get_filtrations())
-    dims = slicer.get_dimensions()
-    if shift:
-        dims += shift
-    weights = 1 - 2 * (dims % 2)
-    sm = [(pts, weights)]
-    return sm

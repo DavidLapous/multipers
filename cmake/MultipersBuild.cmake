@@ -70,6 +70,7 @@ endfunction()
 set(MULTIPERS_SHARED_CORE_MODULES
   simplex_tree_multi
   slicer
+  mma_structures
   multiparameter_module_approximation
   _mpfree_interface
   _function_delaunay_interface
@@ -109,7 +110,10 @@ set(MULTIPERS_TBB_MODULES
   point_measure
   grids
   slicer
+  _mpfree_interface
   _function_delaunay_interface
+  _multi_critical_interface
+  _rhomboid_tiling_interface
 )
 
 set(MULTIPERS_MODULE_INCLUDE_DIR_MAP
