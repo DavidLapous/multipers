@@ -164,7 +164,7 @@ class Summand {
     deathCorners_.simplify();
   }
 
-  std::pair<value_type, value_type> get_bar(const Line<value_type> &l) const {
+  std::array<value_type, 2> get_bar(const Line<value_type> &l) const {
     value_type pushedBirth = T_inf;
     value_type pushedDeath = T_m_inf;
 

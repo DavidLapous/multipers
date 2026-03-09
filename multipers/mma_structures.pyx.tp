@@ -68,12 +68,14 @@ from multipers.mma_structures cimport *
 from multipers.filtration_conversions cimport *
 cimport numpy as cnp
 
-
 #########################################################################
 ## Small hack for typing
 from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
 from joblib import Parallel, delayed
+
+# needed for get_numpy_from_vector_*
+cnp.import_array()
 
 available_pymodules = [
     {{for CTYPE, PYTYPE, SHORT in value_types}}
@@ -446,12 +448,10 @@ cdef class PyModule_{{SHORT}}:
             deaths = dereference(it).compute_death_list()
             nber_param = dereference(it).get_number_of_parameters()
             nber_corners = dereference(it).get_number_of_birth_corners()
-            vb_view = <{{CTYPE}}[:nber_corners, :nber_param]>(births.data())
+            # as we are in a possibly extensive loop, disabled `bound_check` to avoid overhead
+            birth_corners[count] = get_numpy_from_vector_{{SHORT}}(&births, (nber_corners, nber_param), bound_check=False)
             nber_corners = dereference(it).get_number_of_death_corners()
-            vd_view = <{{CTYPE}}[:nber_corners, :nber_param]>(deaths.data())
-            # to avoid copy, a transfer of ownership would be possible here in case it is worth it?
-            birth_corners[count] = np.array(vb_view)
-            death_corners[count] = np.array(vd_view)
+            death_corners[count] = get_numpy_from_vector_{{SHORT}}(&deaths, (nber_corners, nber_param), bound_check=False)
             preincrement(it)
             count += 1
 
@@ -548,10 +548,10 @@ cdef class PyModule_{{SHORT}}:
         """
         basepoint = np.ascontiguousarray(basepoint, dtype={{PYTYPE}})
         if direction is None:
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
+            bc = tuple(np.asarray(<{{CTYPE}}[:x.size(), :2]>(&x[0][0]) if not x.empty() else np.empty((0, 2))) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint)), degree))
         else:
             direction = np.ascontiguousarray(direction, dtype = {{PYTYPE}})
-            bc = tuple(np.asarray(x).reshape(-1,2) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
+            bc = tuple(np.asarray(<{{CTYPE}}[:x.size(), :2]>(&x[0][0]) if not x.empty() else np.empty((0, 2))) for x in self.cmod.get_barcode_from_line(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoint), _py2p_{{SHORT}}(direction)), degree))
         if not keep_inf:
             bc = PyModule_{{SHORT}}._threshold_bc(bc)
         if full:
@@ -653,7 +653,8 @@ cdef class PyModule_{{SHORT}}:
         cdef vector[Line[{{CTYPE}}]] cbasepoints
         for i in range(num):
             cbasepoints.push_back(Line[{{CTYPE}}](_py2p_{{SHORT}}(basepoints[i])))
-        return tuple(np.asarray(bc) for bc in self.cmod.get_barcodes_from_set_of_lines(cbasepoints, degree))   
+
+        return tuple(np.asarray(<{{CTYPE}}[:num, :bc.size()/num, :2]>(&bc[0][0]) if not bc.empty() else np.empty((num, 0, 2))) for bc in self.cmod.get_barcodes_from_set_of_lines(cbasepoints, degree))
 
     def landscape(self, degree:int, k:int=0,box:Sequence|np.ndarray|None=None, resolution:Sequence=[100,100], bool plot=False):
         r"""Computes the multiparameter landscape from a PyModule. Python interface only bifiltrations.

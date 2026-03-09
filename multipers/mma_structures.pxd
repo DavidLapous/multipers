@@ -85,6 +85,9 @@ cdef extern from "gudhi/Multi_persistence/Module.h" namespace "Gudhi::multi_pers
             const_it begin()
             const_it end()
 
+        cppclass Bar:
+            T operator[](size_t) nogil const
+
         Module()  except + nogil
         Module(const vector[intptr_t]&)
         Summand[T]& get_summand(unsigned int)  nogil
@@ -100,8 +103,8 @@ cdef extern from "gudhi/Multi_persistence/Module.h" namespace "Gudhi::multi_pers
         Box[T] compute_bounds() nogil const
         void set_box(Box[T])  nogil
         int get_max_dimension() const 
-        vector[vector[pair[T,T]]] get_barcode_from_line(Line[T]&, const int)  nogil
-        vector[vector[vector[pair[T,T]]]] get_barcodes_from_set_of_lines(const vector[Line[T]]& , const int, )  nogil
+        vector[vector[Bar]] get_barcode_from_line(Line[T]&, const int)  nogil
+        vector[vector[Bar]] get_barcodes_from_set_of_lines(const vector[Line[T]]& , const int, )  nogil
         void rescale(vector[T]&, int) nogil
         void translate(vector[T]&, int) nogil
         void evaluate_in_grid(const vector[vector[T]]&) except + nogil

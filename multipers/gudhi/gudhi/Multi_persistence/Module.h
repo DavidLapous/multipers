@@ -19,6 +19,7 @@
 #define MP_MODULE_H_INCLUDED
 
 #include <algorithm>  // std::max
+#include <array>
 #include <cstddef>
 #include <ostream>  //std::ostream
 #include <utility>
@@ -31,6 +32,7 @@
 #include <boost/range/adaptor/type_erased.hpp>
 #include <boost/range/adaptor/filtered.hpp>
 
+#include <gudhi/simple_mdspan.h>
 #include <gudhi/Multi_persistence/Box.h>
 #include <gudhi/Multi_persistence/Summand.h>
 
@@ -61,6 +63,7 @@ class Module {
   using Index = typename Module_t::size_type;
   using Summand_of_dimension_range =
       boost::any_range<Summand_t, boost::forward_traversal_tag, const Summand_t &, std::ptrdiff_t>;
+  using Bar = std::array<value_type, 2>;
 
   static constexpr T T_inf = Summand_t::T_inf;
   static constexpr T T_m_inf = Summand_t::T_m_inf;
@@ -129,12 +132,15 @@ class Module {
     return Box(lower_bound, upper_bound);
   }
 
-  std::vector<std::vector<std::pair<value_type, value_type>>> get_barcode_from_line(
+  // dim x bar number
+  std::vector<std::vector<Bar>> get_barcode_from_line(
       const Line<value_type> &l,
       Dimension dimension = Summand_t::template get_null_value<Dimension>()) const {
-    std::vector<std::vector<std::pair<value_type, value_type>>> barcode(get_max_dimension() + 1);
+    std::vector<std::vector<Bar>> barcode(get_max_dimension() + 1);
     for (Dimension i = 0; i < get_max_dimension(); ++i) {
-      barcode[i].reserve(size());
+      if (dimension == Summand_t::template get_null_value<Dimension>() || i == dimension) {
+        barcode[i].reserve(size());
+      }
     }
     for (const auto &summand : module_) {
       if (dimension == Summand_t::template get_null_value<Dimension>() || summand.get_dimension() == dimension) {
@@ -144,27 +150,35 @@ class Module {
     return barcode;
   }
 
-  std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> get_barcodes_from_set_of_lines(
+  // dim x line number x bar number
+  std::vector<std::vector<Bar>> get_barcodes_from_set_of_lines(
       const std::vector<Line<value_type>> &lines,
       Dimension dimension = Summand_t::template get_null_value<Dimension>()) const {
     std::size_t nlines = lines.size();
-    std::vector<std::vector<std::vector<std::pair<value_type, value_type>>>> barcodes(
-        get_max_dimension() + 1, std::vector<std::vector<std::pair<value_type, value_type>>>(nlines));
-
-    auto get_barcode_of_line = [&](std::size_t i) {
-      const Line<value_type> &l = lines[i];
-      for (const auto &summand : module_) {
-        if (dimension == Summand_t::template get_null_value<Dimension>() || summand.get_dimension() == dimension) {
-          barcodes[summand.get_dimension()][i].push_back(summand.get_bar(l));
-        }
-      };
-    };
+    if (nlines == 0) return std::vector<std::vector<Bar>>(get_max_dimension() + 1);
 
 #ifdef GUDHI_USE_TBB
-    tbb::parallel_for(std::size_t(0), nlines, get_barcode_of_line);
+    std::vector<std::vector<std::vector<Bar>>> tmp(nlines);
+    tbb::parallel_for(
+        std::size_t(0), nlines, [&](std::size_t i) { tmp[i] = get_barcode_from_line(lines[i], dimension); });
+    std::vector<std::vector<Bar>> barcodes(get_max_dimension() + 1);
+    tbb::parallel_for(Dimension(0), get_max_dimension() + 1, [&](Dimension d) {
+      barcodes[d].resize(nlines * tmp[0][d].size());
+      Simple_mdspan view(barcodes[d].data(), nlines, tmp[0][d].size());
+      for (Index i = 0; i < nlines; ++i) {
+        for (Index j = 0; j < tmp[0][d].size(); ++j) {
+          view(i, j) = tmp[i][d][j];
+        }
+      }
+    });
 #else
-    for (std::size_t i = 0; i < nlines; ++i) {
-      get_barcode_of_line(i);
+    std::vector<std::vector<Bar>> barcodes(get_max_dimension() + 1);
+    for (Index i = 0; i < nlines; ++i) {
+      for (const auto &summand : module_) {
+        if (dimension == Summand_t::template get_null_value<Dimension>() || summand.get_dimension() == dimension) {
+          barcodes[summand.get_dimension()].push_back(summand.get_bar(lines[i]));
+        }
+      }
     }
 #endif
 
