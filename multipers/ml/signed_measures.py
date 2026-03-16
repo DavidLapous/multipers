@@ -150,14 +150,14 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         # homological degrees + None for euler
-        degrees: list[int | None] = [],
-        rank_degrees: list[int] = [],  # same for rank invariant
+        degrees: Optional[list[int | None]] = None,
+        rank_degrees: Optional[list[int]] = None,
         filtration_grid: (
             Sequence[Sequence[np.ndarray]]
             # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
             | None
         ) = None,
-        progress=False,  # tqdm
+        progress: bool = False,  # tqdm
         num_collapses: int | str = 0,  # edge collapses before computing
         n_jobs=None,
         resolution: (
@@ -183,8 +183,8 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         backend: Optional[str] = None,
     ):
         super().__init__()
-        self.degrees = degrees
-        self.rank_degrees = rank_degrees
+        self.degrees = degrees if degrees is not None else []
+        self.rank_degrees = rank_degrees if rank_degrees is not None else []
         self.filtration_grid = filtration_grid
         self.progress = progress
         self.num_collapses = num_collapses
@@ -471,46 +471,47 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
 class SimplexTree2SignedMeasure(FilteredComplex2SignedMeasure):
     def __init__(
         self,
-        # homological degrees + None for euler
-        degrees: list[int | None] = [],
-        rank_degrees: list[int] = [],  # same for rank invariant
-        filtration_grid: (
-            Sequence[Sequence[np.ndarray]]
-            # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
-            | None
-        ) = None,
-        progress=False,  # tqdm
-        num_collapses: int | str = 0,  # edge collapses before computing
+        degrees: Optional[list[int | None]] = None,
+        rank_degrees: Optional[list[int]] = None,
+        filtration_grid: (Sequence[Sequence[np.ndarray]] | None) = None,
+        progress: bool = False,
+        num_collapses: int | str = 0,
         n_jobs=None,
-        resolution: (
-            Iterable[int] | int | None
-        ) = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
-        # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
+        resolution: (Iterable[int] | int | None) = None,
         plot: bool = False,
-        filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
-        # wether or not to do the möbius inversion (not recommended to touch)
-        # _möbius_inversion: bool = True,
-        expand=False,  # expand the simplextree befoe computing the homology
+        filtration_quantile: float = 0.0,
+        expand: bool = False,
         normalize_filtrations: bool = False,
-        # exact_computation:bool=False, # compute the exact signed measure.
         grid_strategy: str = "exact",
-        seed: int = 0,  # if fit_fraction is not 1, the seed sampling
-        fit_fraction=1,  # the fraction of the data on which to fit
+        seed: int = 0,
+        fit_fraction=1,
         out_resolution: Iterable[int] | int | None = None,
-        individual_grid: Optional[
-            bool
-        ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
+        individual_grid: Optional[bool] = None,
         enforce_null_mass: bool = False,
-        flatten=True,
+        flatten: bool = True,
         backend: Optional[str] = None,
     ):
-        stuff = locals()
-        stuff.pop("self")
-        keys = list(stuff.keys())
-        for key in keys:
-            if key.startswith("__"):
-                stuff.pop(key)
-        super().__init__(**stuff)
+        super().__init__(
+            degrees=degrees,
+            rank_degrees=rank_degrees,
+            filtration_grid=filtration_grid,
+            progress=progress,
+            num_collapses=num_collapses,
+            n_jobs=n_jobs,
+            resolution=resolution,
+            plot=plot,
+            filtration_quantile=filtration_quantile,
+            expand=expand,
+            normalize_filtrations=normalize_filtrations,
+            grid_strategy=grid_strategy,
+            seed=seed,
+            fit_fraction=fit_fraction,
+            out_resolution=out_resolution,
+            individual_grid=individual_grid,
+            enforce_null_mass=enforce_null_mass,
+            flatten=flatten,
+            backend=backend,
+        )
         from warnings import warn
 
         warn("This class is deprecated, use FilteredComplex2SignedMeasure instead.")
@@ -1099,24 +1100,21 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        filtration_grid: Iterable[np.ndarray] = None,
+        filtration_grid: Optional[Iterable[np.ndarray]] = None,
         kernel: available_kernels = "gaussian",
         bandwidth: float | Iterable[float] = 1.0,
         flatten: bool = False,
         n_jobs: int = 1,
-        resolution: int | None = None,
+        resolution: Optional[int] = None,
         grid_strategy: str = "regular",
         progress: bool = False,
         backend: str = "pykeops",
         plot: bool = False,
         log_density: bool = False,
-        **kde_kwargs,
-        #   **kwargs ## DANGEROUS
     ):
         super().__init__()
         self.kernel: available_kernels = kernel
         self.bandwidth = bandwidth
-        # self.more_kde_kwargs=kwargs
         self.filtration_grid = filtration_grid
         self.flatten = flatten
         self.progress = progress
@@ -1131,7 +1129,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         self.backend = backend
         self.plot = plot
         self.log_density = log_density
-        self.kde_kwargs = kde_kwargs
         self._api = None
         return
 
@@ -1221,7 +1218,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             n_jobs=self.n_jobs,
             kernel=self.kernel,
             backend=self.backend,
-            **self.kde_kwargs,
         )
 
     def _plot_imgs(self, imgs: Iterable[np.ndarray], size=4):
@@ -1390,10 +1386,21 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
         progress=False,
         n_jobs: int = 1,
         scales: Iterable[Iterable[float]] | None = None,
-        **kwargs,
+        num_directions: int = 10,
+        _sliced: bool = True,
+        epsilon: float = -1,
+        ground_norm: float = 1,
+        grid_reconversion=None,
     ):  # same init
         self._init_child = SignedMeasure2SlicedWassersteinDistance(
-            progress=False, scales=None, n_jobs=-1, **kwargs
+            progress=False,
+            scales=None,
+            n_jobs=-1,
+            num_directions=num_directions,
+            _sliced=_sliced,
+            epsilon=epsilon,
+            ground_norm=ground_norm,
+            grid_reconversion=grid_reconversion,
         )
         self._axe_iterator = None
         self._childs_to_fit = None

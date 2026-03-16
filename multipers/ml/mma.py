@@ -27,14 +27,28 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
         n_jobs: int = -1,
         expand_dim: Optional[int] = None,
         prune_degrees_above: Optional[int] = None,
-        progress=False,
+        progress: bool = False,
         minpres_degrees: Optional[Iterable[int]] = None,
         plot: bool = False,
-        **persistence_kwargs,
+        max_error: float = -1,
+        nlines: int = 557,
+        from_coordinates: bool = False,
+        complete: bool = True,
+        threshold: bool = False,
+        ignore_warnings: bool = False,
+        direction: Optional[Iterable[float]] = None,
+        swap_box_coords: Optional[Iterable[int]] = None,
     ) -> None:
         super().__init__()
-        self.persistence_args = persistence_kwargs
         self.n_jobs = n_jobs
+        self.max_error = max_error
+        self.nlines = nlines
+        self.from_coordinates = from_coordinates
+        self.complete = complete
+        self.threshold = threshold
+        self.ignore_warnings = ignore_warnings
+        self.direction = direction
+        self.swap_box_coords = swap_box_coords
         self._num_axis = None
         self.prune_degrees_above = prune_degrees_above
         self.progress = progress
@@ -53,20 +67,20 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
 
     def _input_checks(self, X):
         assert len(X) > 0, "No filtered complex found. Cannot fit."
-        assert self._is_filtered_complex(
-            X[0][0]
-        ), f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        assert self._is_filtered_complex(X[0][0]), (
+            f"X[0] is not a known filtered complex, {X[0]=}, nor X[0][0]."
+        )
         self._num_axis = len(X[0])
         first = X[0][0]
-        assert (
-            not mp.slicer.is_slicer(first) or self.expand_dim is None
-        ), "Cannot expand slicers."
+        assert not mp.slicer.is_slicer(first) or self.expand_dim is None, (
+            "Cannot expand slicers."
+        )
         self._is_minpres = mp.slicer.is_slicer(first) and isinstance(
             first, Union[tuple, list]
         )
-        assert not (
-            self._is_minpres and self.minpres_degrees is not None
-        ), "Input is already a minpres. Cannot reduce again."
+        assert not (self._is_minpres and self.minpres_degrees is not None), (
+            "Input is already a minpres. Cannot reduce again."
+        )
 
     def _infer_bounding_box(self, X):
         assert self._num_axis is not None, "Fit first"
@@ -140,7 +154,19 @@ class FilteredComplex2MMA(BaseEstimator, TransformerMixin):
                     mp.Slicer(x), degrees=self.minpres_degrees, vineyard=True
                 )
             mod = mp.module_approximation(
-                x, box=box, verbose=False, **self.persistence_args
+                x,
+                box=box,
+                max_error=self.max_error,
+                nlines=self.nlines,
+                from_coordinates=self.from_coordinates,
+                complete=self.complete,
+                threshold=self.threshold,
+                ignore_warnings=self.ignore_warnings,
+                direction=self.direction if self.direction is not None else [],
+                swap_box_coords=self.swap_box_coords
+                if self.swap_box_coords is not None
+                else [],
+                verbose=False,
             )
             if self.plot:
                 mod.plot()
@@ -161,26 +187,34 @@ class SimplexTree2MMA(FilteredComplex2MMA):
         n_jobs: int = -1,
         expand_dim: Optional[int] = None,
         prune_degrees_above: Optional[int] = None,
-        progress=False,
+        progress: bool = False,
         minpres_degrees: Optional[Iterable[int]] = None,
-        **persistence_kwargs,
+        plot: bool = False,
+        max_error: float = -1,
+        nlines: int = 557,
+        from_coordinates: bool = False,
+        complete: bool = True,
+        threshold: bool = False,
+        ignore_warnings: bool = False,
+        direction: Optional[Iterable[float]] = None,
+        swap_box_coords: Optional[Iterable[int]] = None,
     ):
-        stuff = locals()
-        stuff.pop("self")
-        keys = list(stuff.keys())
-        for key in keys:
-            if key.startswith("__"):
-                stuff.pop(key)
-        # Expand nested persistence_kwargs if present (avoid passing a single
-        # dict under the key 'persistence_kwargs' which later gets forwarded
-        # to mp.module_approximation and triggers unexpected keyword errors).
-        if "persistence_kwargs" in stuff and isinstance(stuff["persistence_kwargs"], dict):
-            nested = stuff.pop("persistence_kwargs")
-            # avoid overwriting explicit keys
-            for k, v in nested.items():
-                if k not in stuff:
-                    stuff[k] = v
-        super().__init__(**stuff)
+        super().__init__(
+            n_jobs=n_jobs,
+            expand_dim=expand_dim,
+            prune_degrees_above=prune_degrees_above,
+            progress=progress,
+            minpres_degrees=minpres_degrees,
+            plot=plot,
+            max_error=max_error,
+            nlines=nlines,
+            from_coordinates=from_coordinates,
+            complete=complete,
+            threshold=threshold,
+            ignore_warnings=ignore_warnings,
+            direction=direction,
+            swap_box_coords=swap_box_coords,
+        )
         from warnings import warn
 
         warn("This class is deprecated, use FilteredComplex2MMA instead.")
@@ -399,9 +433,11 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         self._has_axis = self._infer_axis(X)
         # assert not self._has_axis or isinstance(X[0][0], mp.PyModule)
         if self.axis is None and self._has_axis:
-            self.axis = -1
-        if self.axis is not None and not (self._has_axis):
-            raise Exception(f"SMF didn't find an axis, but requested axis {self.axis}")
+            self.axis_ = -1
+        else:
+            self.axis_ = self.axis
+        if self.axis_ is not None and not (self._has_axis):
+            raise Exception(f"SMF didn't find an axis, but requested axis {self.axis_}")
         if self._has_axis:
             self._num_axis = len(X[0])
         if self.verbose:
@@ -411,8 +447,10 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             print(f"Number of parameters : {self._num_parameters}")
         self._axis = (
             [slice(None)]
-            if self.axis is None
-            else range(self._num_axis) if self.axis == -1 else [self.axis]
+            if self.axis_ is None
+            else range(self._num_axis)
+            if self.axis_ == -1
+            else [self.axis_]
         )
         self._infer_degrees(X)
 
@@ -505,8 +543,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             if self.verbose:
                 print("Done.")
             return X_copy
-        if self.axis != -1:
-            X = [x[self.axis] for x in X]
+        if self.axis_ != -1:
+            X = [x[self.axis_] for x in X]
         if self.dump:
             import pickle
 
@@ -646,20 +684,20 @@ class MMA2Landscape(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        resolution=[100, 100],
-        degrees: list[int] | None = [0, 1],
+        resolution: Iterable[int] = (100, 100),
+        degrees: Iterable[int] = (0, 1),
         ks: Iterable[int] = range(5),
         phi: Callable = np.sum,
         box=None,
         plot: bool = False,
         n_jobs=-1,
-        filtration_quantile: float = 0.01,
+        filtration_quantile: float = 0.,
     ) -> None:
         super().__init__()
-        self.resolution: list[int] = resolution
+        self.resolution = resolution
         self.degrees = degrees
         self.ks = ks
-        self.phi = phi  # Has to have a axis=0 !
+        self.phi = phi
         self.box = box
         self.plot = plot
         self.n_jobs = n_jobs
@@ -668,11 +706,11 @@ class MMA2Landscape(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         if len(X) <= 0:
-            return
-        assert (
-            X[0].num_parameters == 2
-        ), f"Number of parameters {X[0].num_parameters} has to be 2."
-        if self.box is None:
+            return self
+        if X[0].num_parameters != 2:
+            raise ValueError(f"Number of parameters {X[0].num_parameters} has to be 2.")
+        self.box_ = self.box
+        if self.box_ is None:
 
             def _bottom(mod):
                 return mod.get_bottom()
@@ -694,7 +732,7 @@ class MMA2Landscape(BaseEstimator, TransformerMixin):
                 q=1 - self.filtration_quantile,
                 axis=0,
             )
-            self.box = [m, M]
+            self.box_ = [m, M]
         return self
 
     def transform(self, X) -> list[np.ndarray]:

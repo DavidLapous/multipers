@@ -15,8 +15,10 @@ class DistanceMatrix2DistanceList(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = np.asarray(X)
-        assert X.ndim == 2  # Its a matrix
-        return np.asarray([[i, *distance_to_pt] for i, distance_to_pt in enumerate(X)])
+        if X.ndim != 2:
+            raise ValueError("X must be a matrix (ndim == 2).")
+        indices = np.arange(len(X))[:, None]
+        return np.hstack([indices, X])
 
 
 class DistanceList2DistanceMatrix(BaseEstimator, TransformerMixin):
@@ -46,17 +48,17 @@ class DistanceMatrices2DistancesList(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         X = np.asarray(X)
         self._axes = X.ndim == 4
-        assert (
-            self._axes or X.ndim == 3
-        ), " Bad input shape. Input is either (degree) x (distance matrix) or (axis) x (degree) x (distance matrix) "
+        if not self._axes and X.ndim != 3:
+            raise ValueError(
+                " Bad input shape. Input is either (degree) x (distance matrix) or (axis) x (degree) x (distance matrix) "
+            )
 
         return self
 
     def transform(self, X):
         X = np.asarray(X)
-        assert (X.ndim == 3 and not self._axes) or (
-            X.ndim == 4 and self._axes
-        ), f"X shape ({X.shape}) is not valid"
+        if not ((X.ndim == 3 and not self._axes) or (X.ndim == 4 and self._axes)):
+            raise ValueError(f"X shape ({X.shape}) is not valid")
         if self._axes:
             out = np.asarray(
                 [
@@ -92,7 +94,8 @@ class DistancesLists2DistanceMatrices(BaseEstimator, TransformerMixin):
 
     def fit(self, X: np.ndarray, y=None):
         X = np.asarray(X)
-        assert X.ndim in [3, 4]
+        if X.ndim not in [3, 4]:
+            raise ValueError("X must have 3 or 4 dimensions")
         self._axes = X.ndim == 4
         if self._axes:
             self.train_indices = np.asarray(X[:, 0, 0, 0], dtype=int)
@@ -102,7 +105,8 @@ class DistancesLists2DistanceMatrices(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = np.asarray(X)
-        assert X.ndim in [3, 4]
+        if X.ndim not in [3, 4]:
+            raise ValueError("X must have 3 or 4 dimensions")
         # test_indices = np.asarray(X[:,0,0], dtype=int)
         # print(X.shape, self.train_indices, test_indices, flush=1)
         # First coord of X is test indices by design, train indices have to be selected in the second coord, last one is the degree
@@ -143,32 +147,41 @@ class DistanceMatrix2Kernel(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         if len(X) == 0:
             return self
-        assert X.ndim in [3, 4], "Bad input."
+        X_arr = np.asarray(X)
+        if X_arr.ndim not in [3, 4]:
+            raise ValueError("Bad input. Expected ndim 3 or 4.")
         if self.axis is None:
-            assert X.ndim == 3 or X.shape[0] == 1, "Set an axis for data with axis !"
-            if X.shape[0] == 1 and X.ndim == 4:
-                self.axis = 0
-                self._num_degrees = len(X[0])
+            if X_arr.ndim != 3 and X_arr.shape[0] != 1:
+                raise ValueError("Set an axis for data with axis !")
+            if X_arr.shape[0] == 1 and X_arr.ndim == 4:
+                self.axis_ = 0
+                self._num_degrees = len(X_arr[0])
             else:
-                self._num_degrees = len(X)
+                self.axis_ = None
+                self._num_degrees = len(X_arr)
         else:
-            assert X.ndim == 4, "Cannot choose axis from data with no axis !"
-            self._num_degrees = len(X[self.axis])
+            if X_arr.ndim != 4:
+                raise ValueError("Cannot choose axis from data with no axis !")
+            self.axis_ = self.axis
+            self._num_degrees = len(X_arr[self.axis_])
         if isinstance(self.weights, float) or isinstance(self.weights, int):
-            self.weights = [self.weights] * self._num_degrees
-        assert (
-            len(self.weights) == self._num_degrees
-        ), f"Number of weights ({len(self.weights)}) has to be the same as the number of degrees ({self._num_degrees})"
+            self.weights_ = [self.weights] * self._num_degrees
+        else:
+            self.weights_ = list(self.weights)
+        if len(self.weights_) != self._num_degrees:
+            raise ValueError(
+                f"Number of weights ({len(self.weights_)}) has to be the same as the number of degrees ({self._num_degrees})"
+            )
         return self
 
     def transform(self, X) -> np.ndarray:
-        if self.axis is not None:
-            X = X[self.axis]
+        if getattr(self, "axis_", None) is not None:
+            X = X[self.axis_]
         # TODO : pykeops, and full pipeline w/ pykeops
         kernels = np.asarray(
             [
                 np.exp(-distance_matrix / (2 * self.sigma**2)) * weight
-                for distance_matrix, weight in zip(X, self.weights)
+                for distance_matrix, weight in zip(X, self.weights_)
             ]
         )
         out = np.mean(kernels, axis=0)
