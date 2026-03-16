@@ -17,8 +17,11 @@ def assert_st_simplices(st, dump):
 
 
 def sort_sm(sms):
-    idx = np.argsort([sm[0][:, 0] for sm in sms])
-    return tuple((sm[0][idx], sm[1][idx]) for sm in sms)
+    result = []
+    for sm in sms:
+        idx = np.argsort(sm[0][:, 0])
+        result.append((sm[0][idx], sm[1][idx]))
+    return tuple(result)
 
 
 def assert_sm_pair(sm1, sm2, exact=True, max_error=1e-3, reg=0.1, threshold=None):
