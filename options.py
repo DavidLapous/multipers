@@ -54,7 +54,7 @@ FILTRATION_CONTAINERS = [
 ]
 
 # Aliases used by generated Python wrappers
-COARSENNED_VALUE_TYPE = "int32"
+COARSENED_VALUE_TYPE = "int32"
 REAL_VALUE_TYPE = "float64"
 
 # Rule format (short style):

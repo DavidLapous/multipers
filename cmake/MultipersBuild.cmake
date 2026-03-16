@@ -137,6 +137,8 @@ set(MULTIPERS_GENERATED_INCLUDE_DIRS
   "${MULTIPERS_GENERATED_ROOT}/tools/core"
 )
 
+set(MULTIPERS_COMPILED_MODULES_DIR "${CMAKE_BINARY_DIR}/compiled_modules/multipers")
+
 function(multipers_add_core_object_library target_name source_file)
   add_library(${target_name} OBJECT "${source_file}")
   add_dependencies(${target_name} multipers_tempita ${ARGN})
@@ -185,6 +187,12 @@ elseif(UNIX)
 endif()
 
 set_target_properties(multipers_core_shared PROPERTIES OUTPUT_NAME "multipers_core")
+set_target_properties(
+  multipers_core_shared
+  PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+)
 if(WIN32)
   set_target_properties(multipers_core_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
@@ -336,7 +344,13 @@ function(multipers_add_extension module_name)
   set(output_name "${module_name}")
   set(package_dir "multipers")
 
-  set_target_properties(${target_name} PROPERTIES OUTPUT_NAME "${output_name}")
+  set_target_properties(
+    ${target_name}
+    PROPERTIES
+      OUTPUT_NAME "${output_name}"
+      LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+  )
   if(WIN32)
     install(TARGETS ${target_name}
     LIBRARY DESTINATION "${package_dir}"
@@ -407,4 +421,24 @@ endif()
 
 foreach(module_name IN LISTS MULTIPERS_MODULES)
   multipers_add_extension(${module_name})
+  string(REPLACE "." "_" module_target_name "multipers_${module_name}")
+  list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
 endforeach()
+
+if(NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
+  add_custom_target(
+    multipers_wheel
+    ALL
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_SOURCE_DIR}/build/wheel"
+    COMMAND
+      "${CMAKE_COMMAND}" -E env
+      MULTIPERS_INTERNAL_WHEEL_BUILD=1
+      "CMAKE_GENERATOR=${CMAKE_GENERATOR}"
+      "${Python3_EXECUTABLE}" -m build --wheel -n -Cbuild-dir=build/wheel .
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    DEPENDS
+      multipers_core_shared
+      ${MULTIPERS_EXTENSION_TARGETS}
+    VERBATIM
+  )
+endif()

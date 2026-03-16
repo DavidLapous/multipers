@@ -29,3 +29,8 @@ install(
   PATTERN "*.h" EXCLUDE
   PATTERN "*.hpp" EXCLUDE
 )
+
+set(MULTIPERS_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+set(MULTIPERS_CMAKE_GENERATOR "${CMAKE_GENERATOR}")
+configure_file("${CMAKE_SOURCE_DIR}/cmake/InstallWheel.cmake" "${CMAKE_BINARY_DIR}/InstallWheel.cmake" @ONLY)
+install(SCRIPT "${CMAKE_BINARY_DIR}/InstallWheel.cmake")
