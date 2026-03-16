@@ -55,7 +55,7 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
-cmake.version = ">=3.24"
+cmake.version = ">=3.27"
 cmake.build-type = "Release"
 build-dir = "build"
 

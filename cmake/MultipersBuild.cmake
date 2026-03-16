@@ -149,7 +149,8 @@ set(MULTIPERS_GENERATED_INCLUDE_DIRS
 
 set(MULTIPERS_COMPILED_MODULES_DIR "${CMAKE_BINARY_DIR}/compiled_modules/multipers")
 
-if(WIN32 AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
+if(WIN32 AND NOT SKBUILD AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
+  # Only collect runtime deps for local installs, not wheel builds
   set(MULTIPERS_WINDOWS_RUNTIME_DEP_SET multipers_windows_runtime_deps)
   set(MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES "")
   if(DEFINED ENV{CONDA_PREFIX} AND NOT "$ENV{CONDA_PREFIX}" STREQUAL "")
@@ -420,6 +421,10 @@ if(WIN32 AND DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
     DESTINATION "multipers"
     PRE_EXCLUDE_REGEXES
       [=[python[0-9]+\.dll]=]
+      [=[vcruntime.*\.dll]=]
+      [=[msvcp.*\.dll]=]
+      [=[ucrtbase\.dll]=]
+      [=[concrt.*\.dll]=]
     POST_EXCLUDE_REGEXES
       [=[.*[Ww]indows[/\\][Ss]ystem32[/\\]]=]
       [=[api-ms-win-.*]=]

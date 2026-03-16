@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.27)
 project(multipers LANGUAGES C CXX)
 
 if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
@@ -6,10 +6,6 @@ if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
   if(MULTIPERS_MAKE_PROGRAM)
     set(CMAKE_MAKE_PROGRAM "${MULTIPERS_MAKE_PROGRAM}" CACHE FILEPATH "Make program for Unix Makefiles" FORCE)
   endif()
-endif()
-
-if(POLICY CMP0167)
-  cmake_policy(SET CMP0167 NEW)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
