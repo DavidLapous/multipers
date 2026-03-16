@@ -57,7 +57,7 @@ build-backend = "scikit_build_core.build"
 [tool.scikit-build]
 cmake.version = ">=3.24"
 cmake.build-type = "Release"
-build-dir = "build/{wheel_tag}"
+build-dir = "build"
 
 [tool.scikit-build.cmake.define]
 CMAKE_COLOR_DIAGNOSTICS = "ON"
