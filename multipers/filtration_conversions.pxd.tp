@@ -6,11 +6,11 @@ Filtrations conversions between python and C++
 
 ## Value types : CTYPE, PYTHON_TYPE, short
 value_types = [
-  ("int", "np.intc", "int"),
-  ("int32_t", "np.int32", "i32"),
-  ("int64_t", "np.int64", "i64"),
-  ("float", "np.float32", "f32"),
-  ("double", "np.float64", "f64"),
+  ("int", "np.intc", "int", "NPY_INT"),
+  ("int32_t", "np.int32", "i32", "NPY_INT32"),
+  ("int64_t", "np.int64", "i64", "NPY_INT64"),
+  ("float", "np.float32", "f32", "NPY_FLOAT"),
+  ("double", "np.float64", "f64", "NPY_DOUBLE"),
 ]
 
 import pickle
@@ -27,7 +27,7 @@ with (TEMPITA_CACHE_DIR / "_filtration_names.pkl").open("rb") as f:
 # Python to C++ conversions
 from multipers.filtrations cimport *
 from libcpp.vector cimport vector
-from libcpp.utility cimport pair
+from libcpp.utility cimport pair, move
 from libcpp cimport bool
 cimport numpy as cnp
 import numpy as np
@@ -35,6 +35,8 @@ from multipers.grids import evaluate_in_grid
 from libc.string cimport memcpy
 from libc.stdint cimport int32_t, int64_t
 from cython.operator cimport dereference
+from cpython.pycapsule cimport PyCapsule_New, PyCapsule_GetPointer
+from cpython.tuple cimport PyTuple_GET_SIZE, PyTuple_GET_ITEM
 
 
 cdef inline _apply_grid_if_any(object out, object grid):
@@ -44,10 +46,63 @@ cdef inline _apply_grid_if_any(object out, object grid):
     return evaluate_in_grid(out, grid)
   return evaluate_in_grid(np.asarray(out), grid)
 
+# supposed to be faster than math.prod
+cdef inline int _product(tuple t):
+    cdef size_t i
+    cdef size_t n = PyTuple_GET_SIZE(t)
+    cdef int result = 1
 
-{{for CTYPE, PYTYPE, SHORT in value_types}}
+    if n == 0:
+        return 0
+
+    # should be a cython loop because i and n are cdef
+    for i in range(n):
+        # no bounds checking for PyTuple_GET_ITEM
+        result *= <object>PyTuple_GET_ITEM(t, i)
+        
+    return result
+
+
+{{for CTYPE, PYTYPE, SHORT, CNP in value_types}}
 ###### ------------------- PY TO CPP
 #### ---------- 
+
+cdef inline void vector_capsule_destructor_{{SHORT}}(object cap) noexcept:
+    cdef vector[{{CTYPE}}]* vec_ptr = <vector[{{CTYPE}}]*>PyCapsule_GetPointer(cap, "vector_ptr")
+    if vec_ptr != NULL:
+        del vec_ptr
+
+# cnp.import_array() has to be called in the pyx file calling this method
+# if used in a pxd file, cnp.import_array() has to be called in the same method or in the pyx file using this method
+cdef inline cnp.ndarray get_numpy_from_vector_{{SHORT}}(vector[{{CTYPE}}]* temp_vec, tuple shape, bool bound_check=True):
+    if bound_check:
+      # if the shape is not valid PyArray_SimpleNewFromData will segfault without any proper message
+      if _product(shape) != dereference(temp_vec).size():
+          raise ValueError("Shape is not valid for given vector.")
+
+    # transfers ownership and invalidates `temp_vec` to avoiding the user to modify `temp_vec` and compromise the data
+    cdef vector[{{CTYPE}}]* vec_ptr = new vector[{{CTYPE}}](move(dereference(temp_vec)))
+    # action for garbage collector
+    cdef object cap = PyCapsule_New(vec_ptr, "vector_ptr", vector_capsule_destructor_{{SHORT}})
+
+    # right shape types for PyArray_SimpleNewFromData
+    cdef int ndim = len(shape)
+    # hard coded to 32 for now as it should be faster than malloc. Could also be reduced as it is a "private" method
+    # and we should know what our max shape sizes are.
+    cdef cnp.npy_intp dims[32]
+    for i in range(ndim):
+        dims[i] = shape[i]
+
+    # creating the actual numpy array from the pointer without copy
+    view = cnp.PyArray_SimpleNewFromData(ndim, dims, cnp.{{CNP}}, dereference(vec_ptr).data())
+
+    # PyArray_SetBaseObject steals a reference
+    cnp.Py_INCREF(cap)
+    # tie lifetime of cap to the lifetime of view
+    if cnp.PyArray_SetBaseObject(view, cap) != 0:
+        raise RuntimeError("Cython vector could not be bind properly to numpy array.")
+
+    return view
 
 cdef inline vector[{{CTYPE}}] _py2p_{{SHORT}}({{CTYPE}}[::1] filtration) noexcept nogil:
     cdef Py_ssize_t n = filtration.shape[0]
