@@ -149,6 +149,18 @@ set(MULTIPERS_GENERATED_INCLUDE_DIRS
 
 set(MULTIPERS_COMPILED_MODULES_DIR "${CMAKE_BINARY_DIR}/compiled_modules/multipers")
 
+if(WIN32 AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
+  set(MULTIPERS_WINDOWS_RUNTIME_DEP_SET multipers_windows_runtime_deps)
+  set(MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES "")
+  if(DEFINED ENV{CONDA_PREFIX} AND NOT "$ENV{CONDA_PREFIX}" STREQUAL "")
+    file(TO_CMAKE_PATH "$ENV{CONDA_PREFIX}" _multipers_conda_prefix)
+    list(APPEND MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES
+      "${_multipers_conda_prefix}/Library/bin"
+      "${_multipers_conda_prefix}/bin"
+    )
+  endif()
+endif()
+
 function(multipers_add_core_object_library target_name source_file)
   add_library(${target_name} OBJECT "${source_file}")
   add_dependencies(${target_name} multipers_tempita ${ARGN})
@@ -349,11 +361,20 @@ function(multipers_add_extension module_name)
       RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
   )
   if(WIN32)
-    install(TARGETS ${target_name}
-      LIBRARY DESTINATION "${package_dir}"
-      RUNTIME DESTINATION "${package_dir}"
-      ARCHIVE DESTINATION "${package_dir}"
-    )
+    if(DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
+      install(TARGETS ${target_name}
+        RUNTIME_DEPENDENCY_SET ${MULTIPERS_WINDOWS_RUNTIME_DEP_SET}
+        LIBRARY DESTINATION "${package_dir}"
+        RUNTIME DESTINATION "${package_dir}"
+        ARCHIVE DESTINATION "${package_dir}"
+      )
+    else()
+      install(TARGETS ${target_name}
+        LIBRARY DESTINATION "${package_dir}"
+        RUNTIME DESTINATION "${package_dir}"
+        ARCHIVE DESTINATION "${package_dir}"
+      )
+    endif()
   else()
 
     install(TARGETS ${target_name}
@@ -394,36 +415,22 @@ foreach(module_name IN LISTS MULTIPERS_MODULES)
   list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
 endforeach()
 
-if(WIN32 AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
-  set(_all_extension_files "$<TARGET_FILE:multipers_core_shared>")
-  foreach(_ext IN LISTS MULTIPERS_EXTENSION_TARGETS)
-    set(_all_extension_files "${_all_extension_files};$<TARGET_FILE:${_ext}>")
-  endforeach()
-
-  install(CODE "
-    file(GET_RUNTIME_DEPENDENCIES
-      RESOLVED_DEPENDENCIES_VAR deps
-      UNRESOLVED_DEPENDENCIES_VAR unresolved
-      CONFLICTING_DEPENDENCIES_PREFIX conflict
-      MODULES ${_all_extension_files}
-      DIRECTORIES \"$ENV{CONDA_PREFIX}/Library/bin\" \"$ENV{CONDA_PREFIX}/bin\"
-      POST_EXCLUDE_REGEXES
-        [=[.*[Ww]indows[/\\][Ss]ystem32[/\\]]=]
-        [=[api-ms-win-.*]=]
-        [=[ext-ms-.*]=]
+if(WIN32 AND DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
+  set(_multipers_runtime_dependency_install_args
+    DESTINATION "multipers"
+    POST_EXCLUDE_REGEXES
+      [=[.*[Ww]indows[/\\][Ss]ystem32[/\\]]=]
+      [=[api-ms-win-.*]=]
+      [=[ext-ms-.*]=]
+  )
+  if(MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES)
+    list(APPEND _multipers_runtime_dependency_install_args
+      DIRECTORIES ${MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES}
     )
+  endif()
 
-    foreach(dep IN LISTS deps)
-      file(INSTALL
-        DESTINATION \"\${CMAKE_INSTALL_PREFIX}/multipers\"
-        TYPE SHARED_LIBRARY
-        FILES \"\${dep}\"
-      )
-    endforeach()
-
-    foreach(unres IN LISTS unresolved)
-      message(WARNING \"Unresolved dependency: \${unres}\")
-    endforeach()
-  ")
+  install(
+    RUNTIME_DEPENDENCY_SET ${MULTIPERS_WINDOWS_RUNTIME_DEP_SET}
+    ${_multipers_runtime_dependency_install_args}
+  )
 endif()
-

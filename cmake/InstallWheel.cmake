@@ -1,7 +1,11 @@
-set(_multipers_source_dir "@CMAKE_SOURCE_DIR@")
-set(_multipers_python "@MULTIPERS_PYTHON_EXECUTABLE@")
-set(_multipers_cmake "@CMAKE_COMMAND@")
-set(_multipers_generator "@MULTIPERS_CMAKE_GENERATOR@")
+set(_multipers_source_dir [=[@CMAKE_SOURCE_DIR@]=])
+set(_multipers_python [=[@MULTIPERS_PYTHON_EXECUTABLE@]=])
+set(_multipers_cmake [=[@CMAKE_COMMAND@]=])
+set(_multipers_generator [=[@MULTIPERS_CMAKE_GENERATOR@]=])
+
+file(TO_CMAKE_PATH "${_multipers_source_dir}" _multipers_source_dir)
+file(TO_CMAKE_PATH "${_multipers_python}" _multipers_python)
+file(TO_CMAKE_PATH "${_multipers_cmake}" _multipers_cmake)
 
 message(STATUS "Building wheel before install.")
 execute_process(

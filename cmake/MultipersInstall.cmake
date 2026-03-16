@@ -1,12 +1,22 @@
 include_guard(GLOBAL)
 
 if(WIN32)
-  install(
-    TARGETS multipers_core_shared
-    LIBRARY DESTINATION multipers
-    RUNTIME DESTINATION multipers
-    ARCHIVE DESTINATION multipers
-  )
+  if(DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
+    install(
+      TARGETS multipers_core_shared
+      RUNTIME_DEPENDENCY_SET ${MULTIPERS_WINDOWS_RUNTIME_DEP_SET}
+      LIBRARY DESTINATION multipers
+      RUNTIME DESTINATION multipers
+      ARCHIVE DESTINATION multipers
+    )
+  else()
+    install(
+      TARGETS multipers_core_shared
+      LIBRARY DESTINATION multipers
+      RUNTIME DESTINATION multipers
+      ARCHIVE DESTINATION multipers
+    )
+  endif()
 else()
   install(
     TARGETS multipers_core_shared
