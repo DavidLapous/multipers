@@ -418,6 +418,8 @@ endforeach()
 if(WIN32 AND DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
   set(_multipers_runtime_dependency_install_args
     DESTINATION "multipers"
+    PRE_EXCLUDE_REGEXES
+      [=[python[0-9]+\.dll]=]
     POST_EXCLUDE_REGEXES
       [=[.*[Ww]indows[/\\][Ss]ystem32[/\\]]=]
       [=[api-ms-win-.*]=]
