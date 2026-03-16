@@ -7,7 +7,6 @@ import multipers.logs as _mp_logs
 backend = _np
 cat = _np.concatenate
 norm = _np.linalg.norm
-astensor = _np.asarray
 asnumpy = _np.asarray
 tensor = _np.array
 stack = _np.stack
@@ -32,10 +31,17 @@ matmul = _np.matmul
 einsum = _np.einsum
 
 
+def astensor(x, contiguous=False):
+    if contiguous:
+        return _np.ascontiguousarray(x)
+    return _np.asarray(x)
+
+
 def unique(x, assume_sorted=False, _mean=False):
     return _np.unique(x)
 
-def empty(*args,device=None,**kwargs):
+
+def empty(*args, device=None, **kwargs):
     return _np.empty(*args, **kwargs)
 
 

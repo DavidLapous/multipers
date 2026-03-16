@@ -8,7 +8,6 @@ _mpapi.available_api.append(sys.modules[__name__])
 backend = _t
 cat = _t.cat
 norm = _t.norm
-astensor = _t.as_tensor
 tensor = _t.tensor
 stack = _t.stack
 empty = _t.empty
@@ -41,6 +40,12 @@ def argsort(x, axis=-1):
 
 def astype(x, dtype):
     return astensor(x).type(dtype)
+
+def astensor(x, contiguous=False):
+    x = _t.as_tensor(x)
+    if contiguous:
+        x = x.contiguous()
+    return x
 
 
 _is_keops_available = None

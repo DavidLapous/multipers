@@ -34,7 +34,7 @@ def sanitize_grid(grid, bool numpyfy=False, bool add_inf=False):
         grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = tuple(api.astensor(grid[i]) for i in range(num_parameters))
+        grid = tuple(api.astensor(grid[i], contiguous=True) for i in range(num_parameters))
     if add_inf:
         api = api_from_tensors(grid[0])
         inf = api.astensor(_inf_value(grid[0]))
@@ -129,6 +129,7 @@ def compute_grid(
         threshold_min = None,
         threshold_max = None,
         bool _mean = False,
+        bool force_contiguous = True,
         ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -174,6 +175,10 @@ def compute_grid(
         drop_quantiles=drop_quantiles,
         api = api,
     )
+    if force_contiguous:
+        grid = tuple(
+            api.astensor(x, contiguous=True) for x in grid
+        )
     if dense:
         grid = todense(grid)
     return grid
@@ -335,7 +340,7 @@ def _todo_regular_closest_keops(f, int r, bool unique, api):
         f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f),dtype=f.dtype)
     return _project_on_1d_grid(f,f_regular,unique,api)
 
-def _todo_regular_closest_old(some_float[:] f, int r, bool unique, api=None):
+def _todo_regular_closest_old(some_float[::1] f, int r, bool unique, api=None):
     f_array = np.asarray(f)
     f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
     f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)], dtype=f_array.dtype)
@@ -351,7 +356,7 @@ def _todo_regular_left(f, int r, bool unique,api):
     if unique: f_regular_closest = api.unique(f_regular_closest)
     return f_regular_closest
 
-def _todo_regular_left_old(some_float[:] f, int r, bool unique):
+def _todo_regular_left_old(some_float[::1] f, int r, bool unique):
     sorted_f = np.sort(f)
     f_regular = np.linspace(sorted_f[0],sorted_f[-1],num=r, dtype=sorted_f.dtype)
     f_regular_closest = sorted_f[np.searchsorted(sorted_f,f_regular)]
@@ -364,7 +369,7 @@ def _todo_partition(x, int resolution, bool unique, api):
     out = _todo_partition_(api.asnumpy(x), resolution, unique)
     return api.from_numpy(out)
 
-def _todo_partition_(some_float[:] data,int resolution, bool unique):
+def _todo_partition_(some_float[::1] data,int resolution, bool unique):
     if data.shape[0] < resolution: resolution=data.shape[0]
     k = data.shape[0] // resolution
     partitions = np.partition(data, k)
