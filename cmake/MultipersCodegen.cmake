@@ -114,7 +114,7 @@ set(MULTIPERS_CYTHON_COMMON_ARGS
   --directive wraparound=True
   --directive iterable_coroutine=True
   --directive annotation_typing=True
-  --directive emit_code_comments=True
+  # --directive emit_code_comments=True
   --directive initializedcheck=False
   --directive cdivision=True
   --directive profile=False
