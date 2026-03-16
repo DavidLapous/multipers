@@ -43,12 +43,13 @@ function(multipers_apply_common_build_flags target_name)
       ${target_name}
       PRIVATE
         -O3
-        -fassociative-math
-        -funsafe-math-optimizations
+        -fno-associative-math
+        -fno-unsafe-math-optimizations
         -DNDEBUG
         -Wall
         -Wextra
         -Wno-assume
+        -Wno-deprecated-declarations
     )
   endif()
 endfunction()
@@ -64,6 +65,15 @@ function(multipers_link_tbb target_name)
     target_link_libraries(${target_name} PRIVATE TBB::tbb_static)
   else()
     message(FATAL_ERROR "TBB target not found")
+  endif()
+endfunction()
+
+function(multipers_link_cgal target_name)
+  if(TARGET CGAL::CGAL)
+    target_link_libraries(${target_name} PRIVATE CGAL::CGAL)
+  endif()
+  if(TARGET CGAL::CGAL_Core)
+    target_link_libraries(${target_name} PRIVATE CGAL::CGAL_Core)
   endif()
 endfunction()
 
@@ -263,23 +273,10 @@ function(multipers_configure_extension_backend module_name target_name)
   endif()
 
   if(module_name STREQUAL "_rhomboid_tiling_interface")
-    if(NOT MSVC)
-      target_compile_options(
-        ${target_name}
-        PRIVATE
-          -fno-associative-math
-          -fno-unsafe-math-optimizations
-      )
-    endif()
     if(TARGET multipers_rhomboid_tiling_static)
       target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
     endif()
-    if(TARGET CGAL::CGAL)
-      target_link_libraries(${target_name} PRIVATE CGAL::CGAL)
-    endif()
-    if(TARGET CGAL::CGAL_Core)
-      target_link_libraries(${target_name} PRIVATE CGAL::CGAL_Core)
-    endif()
+    multipers_link_cgal(${target_name})
   endif()
 
   list(FIND MULTIPERS_OPENMP_MODULES "${module_name}" uses_openmp)
@@ -353,40 +350,12 @@ function(multipers_add_extension module_name)
   )
   if(WIN32)
     install(TARGETS ${target_name}
-    LIBRARY DESTINATION "${package_dir}"
-    RUNTIME DESTINATION "${package_dir}"
-    ARCHIVE DESTINATION "${package_dir}"
-  )
-
-    install(CODE "
-      message(STATUS \"Bundling runtime deps for: $<TARGET_FILE:${target_name}>\")
-      file(GET_RUNTIME_DEPENDENCIES
-        RESOLVED_DEPENDENCIES_VAR deps
-        UNRESOLVED_DEPENDENCIES_VAR unresolved
-        CONFLICTING_DEPENDENCIES_PREFIX conflict
-        MODULES \"$<TARGET_FILE:${target_name}>\"
-        DIRECTORIES
-          \"\$ENV{CONDA_PREFIX}/Library/bin\"
-          \"\$ENV{CONDA_PREFIX}/bin\"
-        POST_EXCLUDE_REGEXES
-          \".*[Ww]indows[/\\\\][Ss]ystem32[/\\\\].*\"
-          \"api-ms-win-.*\"
-          \"ext-ms-.*\"
-      )
-
-      foreach(dep IN LISTS deps)
-        file(INSTALL
-          DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${package_dir}\"
-          TYPE SHARED_LIBRARY
-          FILES \"\${dep}\"
-        )
-      endforeach()
-
-      foreach(dep IN LISTS unresolved)
-        message(WARNING \"Unresolved dependency: \${dep}\")
-      endforeach()
-    ")
+      LIBRARY DESTINATION "${package_dir}"
+      RUNTIME DESTINATION "${package_dir}"
+      ARCHIVE DESTINATION "${package_dir}"
+    )
   else()
+
     install(TARGETS ${target_name}
     LIBRARY DESTINATION "${package_dir}"
   )
@@ -425,20 +394,36 @@ foreach(module_name IN LISTS MULTIPERS_MODULES)
   list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
 endforeach()
 
-if(NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
-  add_custom_target(
-    multipers_wheel
-    ALL
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_SOURCE_DIR}/build/wheel"
-    COMMAND
-      "${CMAKE_COMMAND}" -E env
-      MULTIPERS_INTERNAL_WHEEL_BUILD=1
-      "CMAKE_GENERATOR=${CMAKE_GENERATOR}"
-      "${Python3_EXECUTABLE}" -m build --wheel -n -Cbuild-dir=build/wheel .
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    DEPENDS
-      multipers_core_shared
-      ${MULTIPERS_EXTENSION_TARGETS}
-    VERBATIM
-  )
+if(WIN32 AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
+  set(_all_extension_files "$<TARGET_FILE:multipers_core_shared>")
+  foreach(_ext IN LISTS MULTIPERS_EXTENSION_TARGETS)
+    set(_all_extension_files "${_all_extension_files};$<TARGET_FILE:${_ext}>")
+  endforeach()
+
+  install(CODE "
+    file(GET_RUNTIME_DEPENDENCIES
+      RESOLVED_DEPENDENCIES_VAR deps
+      UNRESOLVED_DEPENDENCIES_VAR unresolved
+      CONFLICTING_DEPENDENCIES_PREFIX conflict
+      MODULES ${_all_extension_files}
+      DIRECTORIES \"$ENV{CONDA_PREFIX}/Library/bin\" \"$ENV{CONDA_PREFIX}/bin\"
+      POST_EXCLUDE_REGEXES
+        [=[.*[Ww]indows[/\\][Ss]ystem32[/\\]]=]
+        [=[api-ms-win-.*]=]
+        [=[ext-ms-.*]=]
+    )
+
+    foreach(dep IN LISTS deps)
+      file(INSTALL
+        DESTINATION \"\${CMAKE_INSTALL_PREFIX}/multipers\"
+        TYPE SHARED_LIBRARY
+        FILES \"\${dep}\"
+      )
+    endforeach()
+
+    foreach(unres IN LISTS unresolved)
+      message(WARNING \"Unresolved dependency: \${unres}\")
+    endforeach()
+  ")
 endif()
+
