@@ -59,87 +59,16 @@ function(multipers_link_openmp target_name)
 endfunction()
 
 function(multipers_link_tbb target_name)
-  if(TARGET TBB::tbb)
-    target_link_libraries(${target_name} PRIVATE TBB::tbb)
-  elseif(TARGET TBB::tbb_static)
-    target_link_libraries(${target_name} PRIVATE TBB::tbb_static)
-  else()
-    message(FATAL_ERROR "TBB target not found")
-  endif()
+  target_link_libraries(${target_name} PRIVATE TBB::tbb)
 endfunction()
 
 function(multipers_link_cgal target_name)
-  if(TARGET CGAL::CGAL)
-    target_link_libraries(${target_name} PRIVATE CGAL::CGAL)
-  endif()
+  target_link_libraries(${target_name} PRIVATE CGAL::CGAL)
+  # CGAL_Core is optional (provides exact arithmetic via GMP/MPFR)
   if(TARGET CGAL::CGAL_Core)
     target_link_libraries(${target_name} PRIVATE CGAL::CGAL_Core)
   endif()
 endfunction()
-
-set(MULTIPERS_SHARED_CORE_MODULES
-  simplex_tree_multi
-  slicer
-  mma_structures
-  multiparameter_module_approximation
-  _mpfree_interface
-  _function_delaunay_interface
-  _multi_critical_interface
-  _rhomboid_tiling_interface
-)
-
-set(MULTIPERS_BOOST_MODULES
-  _aida_interface
-  _mpfree_interface
-  _multi_critical_interface
-  _function_delaunay_interface
-)
-
-set(MULTIPERS_GMP_MODULE
-  _aida_interface
-  _mpfree_interface
-  _multi_critical_interface
-  _function_delaunay_interface
-  _rhomboid_tiling_interface
-)
-
-set(MULTIPERS_GMP_MODULES ${MULTIPERS_GMP_MODULE})
-
-set(MULTIPERS_OPENMP_MODULES
-  _aida_interface
-  _mpfree_interface
-  _multi_critical_interface
-  _function_delaunay_interface
-)
-
-set(MULTIPERS_TBB_MODULES
-  simplex_tree_multi
-  function_rips
-  mma_structures
-  multiparameter_module_approximation
-  point_measure
-  grids
-  slicer
-  _mpfree_interface
-  _function_delaunay_interface
-  _multi_critical_interface
-  _rhomboid_tiling_interface
-)
-
-set(MULTIPERS_MODULE_INCLUDE_DIR_MAP
-  _aida_interface MULTIPERS_AIDA_INCLUDE_DIRS
-  _mpfree_interface MULTIPERS_MPFREE_INCLUDE_DIRS
-  _multi_critical_interface MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
-  _function_delaunay_interface MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
-  _rhomboid_tiling_interface MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
-)
-
-set(MULTIPERS_FORKED_PHAT_MODULES
-  _aida_interface
-  _mpfree_interface
-  _multi_critical_interface
-  _function_delaunay_interface
-)
 
 set(MULTIPERS_GENERATED_INCLUDE_DIRS
   "${MULTIPERS_GENERATED_ROOT}/multipers"
@@ -244,63 +173,99 @@ function(multipers_link_shared_core target_name)
   endif()
 endfunction()
 
-function(multipers_configure_extension_include_dirs module_name target_name)
-  list(LENGTH MULTIPERS_MODULE_INCLUDE_DIR_MAP include_dir_map_length)
-  if(include_dir_map_length GREATER 1)
-    math(EXPR include_dir_map_last "${include_dir_map_length} - 2")
-    foreach(i RANGE 0 ${include_dir_map_last} 2)
-      math(EXPR j "${i} + 1")
-      list(GET MULTIPERS_MODULE_INCLUDE_DIR_MAP ${i} include_module)
-      list(GET MULTIPERS_MODULE_INCLUDE_DIR_MAP ${j} include_var)
-      if("${module_name}" STREQUAL "${include_module}")
-        target_include_directories(${target_name} PRIVATE ${${include_var}})
-        break()
-      endif()
-    endforeach()
+# =============================================================================
+# Per-module configuration
+# =============================================================================
+# Each module explicitly declares its dependencies. No conditional checks -
+# if a dependency is missing, CMake will fail with a clear error.
+# To disable a module, remove it from MULTIPERS_MODULES below.
+
+function(multipers_configure_module module_name target_name)
+  # Default: add standard phat includes
+  set(_use_phat_includes TRUE)
+
+  if(module_name STREQUAL "simplex_tree_multi")
+    multipers_link_shared_core(${target_name})
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "slicer")
+    multipers_link_shared_core(${target_name})
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "mma_structures")
+    multipers_link_shared_core(${target_name})
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "multiparameter_module_approximation")
+    multipers_link_shared_core(${target_name})
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "function_rips")
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "point_measure")
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "grids")
+    multipers_link_tbb(${target_name})
+
+  elseif(module_name STREQUAL "io")
+    # No special dependencies
+
+  elseif(module_name STREQUAL "ops")
+    # No special dependencies
+
+  elseif(module_name STREQUAL "_mpfree_interface")
+    multipers_link_shared_core(${target_name})
+    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+    multipers_link_openmp(${target_name})
+    multipers_link_tbb(${target_name})
+    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
+    set(_use_phat_includes FALSE)
+
+  elseif(module_name STREQUAL "_function_delaunay_interface")
+    multipers_link_shared_core(${target_name})
+    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+    multipers_link_openmp(${target_name})
+    multipers_link_tbb(${target_name})
+    target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
+    set(_use_phat_includes FALSE)
+
+  elseif(module_name STREQUAL "_multi_critical_interface")
+    multipers_link_shared_core(${target_name})
+    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+    multipers_link_openmp(${target_name})
+    multipers_link_tbb(${target_name})
+    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS})
+    set(_use_phat_includes FALSE)
+
+  elseif(module_name STREQUAL "_rhomboid_tiling_interface")
+    multipers_link_shared_core(${target_name})
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+    multipers_link_tbb(${target_name})
+    multipers_link_cgal(${target_name})
+    target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
+    target_include_directories(${target_name} PRIVATE ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS})
+
+  elseif(module_name STREQUAL "_aida_interface")
+    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+    multipers_link_openmp(${target_name})
+    target_link_libraries(${target_name} PRIVATE multipers_aida_static)
+    target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
+    set(_use_phat_includes FALSE)
+
   endif()
 
-  list(FIND MULTIPERS_FORKED_PHAT_MODULES "${module_name}" uses_forked_phat)
-  if(uses_forked_phat EQUAL -1)
+  # Add standard phat includes unless module uses its own forked version
+  if(_use_phat_includes)
     target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
   endif()
+
   set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
-endfunction()
-
-function(multipers_configure_extension_backend module_name target_name)
-  if(module_name STREQUAL "_aida_interface" AND WIN32)
-    message(FATAL_ERROR "AIDA backend is not supported on Windows")
-  endif()
-
-  list(FIND MULTIPERS_BOOST_MODULES "${module_name}" uses_boost)
-  if(NOT uses_boost EQUAL -1)
-    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
-  endif()
-
-  list(FIND MULTIPERS_GMP_MODULE "${module_name}" uses_gmp)
-  if(NOT uses_gmp EQUAL -1)
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-  endif()
-
-  if(module_name STREQUAL "_aida_interface")
-    target_link_libraries(${target_name} PRIVATE multipers_aida_static)
-  endif()
-
-  if(module_name STREQUAL "_rhomboid_tiling_interface")
-    if(TARGET multipers_rhomboid_tiling_static)
-      target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
-    endif()
-    multipers_link_cgal(${target_name})
-  endif()
-
-  list(FIND MULTIPERS_OPENMP_MODULES "${module_name}" uses_openmp)
-  if(NOT uses_openmp EQUAL -1)
-    multipers_link_openmp(${target_name})
-  endif()
-
-  list(FIND MULTIPERS_TBB_MODULES "${module_name}" uses_tbb)
-  if(NOT uses_tbb EQUAL -1)
-    multipers_link_tbb(${target_name})
-  endif()
 endfunction()
 
 function(multipers_add_extension module_name)
@@ -342,14 +307,7 @@ function(multipers_add_extension module_name)
       ${MULTIPERS_BASE_INCLUDE_DIRS}
   )
   multipers_apply_common_build_flags(${target_name})
-
-  list(FIND MULTIPERS_SHARED_CORE_MODULES "${module_name}" uses_shared_core)
-  if(NOT uses_shared_core EQUAL -1)
-    multipers_link_shared_core(${target_name})
-  endif()
-
-  multipers_configure_extension_include_dirs("${module_name}" ${target_name})
-  multipers_configure_extension_backend("${module_name}" ${target_name})
+  multipers_configure_module("${module_name}" ${target_name})
 
   set(output_name "${module_name}")
   set(package_dir "multipers")
