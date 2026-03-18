@@ -259,7 +259,7 @@ class Dgms2SignedMeasureDistance(BaseEstimator, TransformerMixin):
 	def fit(self, X:list[np.ndarray], y=None):
 		if len(X) <= 0:
 			warn("Fit a nontrivial vector")
-			return
+			return self
 		self.X = X
 		self.degrees = list(range(len(X[0]))) # Assumes that all x \in X have the same number of diagrams
 		return self
