@@ -1,4 +1,6 @@
 from .filtrations import (
+    _AlphaCodensity,
+    _AlphaLowerstar,
     CoreDelaunay,
     Cubical,
     DegreeRips,

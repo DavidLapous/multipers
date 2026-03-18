@@ -13,6 +13,7 @@ reshape = _t.reshape
 arange = _t.arange
 cat = _t.cat
 norm = _t.norm
+det = _t.linalg.det
 tensor = _t.tensor
 stack = _t.stack
 empty = _t.empty
@@ -35,6 +36,7 @@ exp = _t.exp
 log = _t.log
 sin = _t.sin
 cos = _t.cos
+sqrt = _t.sqrt
 matmul = _t.matmul
 einsum = _t.einsum
 
@@ -46,8 +48,9 @@ def argsort(x, axis=-1):
 def astype(x, dtype):
     return astensor(x).type(dtype)
 
-def astensor(x, contiguous=False):
-    x = _t.as_tensor(x)
+
+def astensor(x, contiguous=False, dtype=None):
+    x = _t.as_tensor(x, dtype=dtype)
     if contiguous:
         x = x.contiguous()
     return x
@@ -113,6 +116,36 @@ def device(x):
 
 def sort(x, axis=-1):
     return _t.sort(x, dim=axis).values
+
+
+def set_at(x, idx, y):
+    x[idx] = y
+    return x
+
+
+def add_at(x, idx, y):
+    x[idx] += y
+    return x
+
+
+def mul_at(x, idx, y):
+    x[idx] *= y
+    return x
+
+
+def div_at(x, idx, y):
+    x[idx] /= y
+    return x
+
+
+def min_at(x, idx, y):
+    x[idx] = _t.min(x[idx], y)
+    return x
+
+
+def max_at(x, idx, y):
+    x[idx] = _t.max(x[idx], y)
+    return x
 
 
 # in our context, this allows to get a correct gradient.

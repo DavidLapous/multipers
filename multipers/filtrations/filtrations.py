@@ -35,6 +35,7 @@ def RipsLowerstar(
     distance_matrix: Optional[ArrayLike] = None,
     function: Optional[ArrayLike] = None,
     threshold_radius: Optional[float] = None,
+    sparse:float=None
 ):
     """
     Computes the Rips complex, with the usual rips filtration as a first parameter,
@@ -48,19 +49,28 @@ def RipsLowerstar(
     assert points is not None or distance_matrix is not None, (
         "`points` or `distance_matrix` has to be given."
     )
-    if distance_matrix is None:
+    
+    if distance_matrix is not None:
+        api = api_from_tensor(distance_matrix)
+        D = api.astensor(distance_matrix)
+    else:
         api = api_from_tensor(points)
         points = api.astensor(points)
         D = api.cdist(points, points)  # this may be slow...
-    else:
-        api = api_from_tensor(distance_matrix)
-        D = api.astensor(distance_matrix)
 
     if threshold_radius is None:
         threshold_radius = api.min(api.maxvalues(D, axis=1))
-    st = gd.SimplexTree.create_from_array(
-        api.asnumpy(D), max_filtration=threshold_radius
-    )
+    if sparse:
+        _mp_logs.ExperimentalWarning("Sparse-RipsLowerstar has no known good property.")
+        st = gd.RipsComplex(
+                distance_matrix = api.asnumpy(D),
+                max_edge_length=threshold_radius,
+                sparse=sparse
+        ).create_simplex_tree() 
+    else:
+        st = gd.SimplexTree.create_from_array(
+            api.asnumpy(D), max_filtration=threshold_radius
+        )
     if function is None:
         return SimplexTreeMulti(st, num_parameters=1)
 
@@ -95,6 +105,7 @@ def RipsCodensity(
     dtm_mass: Optional[float] = None,
     kernel: available_kernels = "gaussian",
     threshold_radius: Optional[float] = None,
+    sparse: Optional[float] = None,
 ):
     """
     Computes the Rips density filtration.
@@ -109,7 +120,7 @@ def RipsCodensity(
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:
         raise ValueError("Bandwidth or DTM mass has to be given.")
-    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius)
+    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius, sparse=sparse)
 
 
 def DelaunayLowerstar(
@@ -212,6 +223,71 @@ def DelaunayLowerstar(
 
     return slicer
 
+def _AlphaLowerstar(
+    points: ArrayLike,
+    function: ArrayLike,
+    *,
+    threshold_radius: Optional[float] = None,
+):
+    """
+    Computes the Alpha complex, with the usual alpha filtration as a first parameter,
+    and the lower star multi filtration as other parameter.
+    """
+
+    _mp_logs.ExperimentalWarning("Alpha-Lowerstar has no known good property.")
+    api = api_from_tensor(points)
+    points = api.astensor(points)
+    function = api.astensor(function)
+    if function.ndim == 1:
+        function = function[:, None]
+
+    if threshold_radius is None:
+        threshold_radius = np.inf
+
+    st = gd.AlphaComplex(points=api.asnumpy(points)).create_simplex_tree(
+        max_alpha_square=threshold_radius
+    )
+
+    st = SimplexTreeMulti(st, num_parameters=function.shape[1] + 1)
+    for i in range(function.shape[1]):
+        st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
+
+    if api.has_grad(points) or api.has_grad(function):
+        D = api.cdist(points, points)**2
+
+        grid = compute_grid([D.ravel(), *filtrations.T])
+        st = st.grid_squeeze(grid)
+        st._clean_filtration_grid()
+    return st
+
+
+def _AlphaCodensity(
+    points: ArrayLike,
+    bandwidth: Optional[float] = None,
+    *,
+    return_log: bool = True,
+    dtm_mass: Optional[float] = None,
+    kernel: available_kernels = "gaussian",
+    threshold_radius: Optional[float] = None,
+):
+    """
+    Computes the Alpha density filtration:
+        - complex is given by the delaunay, 
+        - first parameter is alpha
+        - the second is given by a density estimation
+    """
+    assert bandwidth is None or dtm_mass is None, (
+        "Density estimation is either via kernels or dtm."
+    )
+    if bandwidth is not None:
+        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+        f = -kde.fit(points).score_samples(points)
+    elif dtm_mass is not None:
+        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
+    else:
+        raise ValueError("Bandwidth or DTM mass has to be given.")
+    return _AlphaLowerstar(points=points, function=f, threshold_radius=threshold_radius)
+
 
 def DelaunayCodensity(
     points: ArrayLike,
@@ -295,7 +371,7 @@ def DegreeRips(
     num=None,
     squeeze_strategy="exact",
     squeeze_resolution=None,
-    squeeze:bool=True,
+    squeeze: bool = True,
 ):
     """
     The DegreeRips filtration.

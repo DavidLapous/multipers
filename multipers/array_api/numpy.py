@@ -7,6 +7,7 @@ import multipers.logs as _mp_logs
 backend = _np
 cat = _np.concatenate
 norm = _np.linalg.norm
+det = _np.linalg.det
 asnumpy = _np.asarray
 tensor = _np.array
 stack = _np.stack
@@ -33,14 +34,15 @@ exp = _np.exp
 log = _np.log
 sin = _np.sin
 cos = _np.cos
+sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum
 
 
-def astensor(x, contiguous=False):
+def astensor(x, contiguous=False, dtype=None):
     if contiguous:
-        return _np.ascontiguousarray(x)
-    return _np.asarray(x)
+        return _np.ascontiguousarray(x, dtype=dtype)
+    return _np.asarray(x, dtype=dtype)
 
 
 def unique(x, assume_sorted=False, _mean=False):
@@ -118,8 +120,35 @@ def sort(x, axis=-1):
     return _np.sort(x, axis=axis)
 
 
-def device(x):  # type: ignore[no-unused-arg]
-    return None
+def set_at(x, idx, y):
+    x[idx] = y
+    return x
+
+
+def add_at(x, idx, y):
+    x[idx] += y
+    return x
+
+
+def mul_at(x, idx, y):
+    x[idx] *= y
+    return x
+
+
+def div_at(x, idx, y):
+    x[idx] /= y
+    return x
+
+
+def min_at(x, idx, y):
+    x[idx] = _np.minimum(x[idx], y)
+    return x
+
+
+def max_at(x, idx, y):
+    x[idx] = _np.maximum(x[idx], y)
+    return x
+
 
 def device(x):
     return x.device

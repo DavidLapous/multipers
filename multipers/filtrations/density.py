@@ -189,14 +189,6 @@ def _pts_convolution_pykeops(
     """
     if api is None:
         api = api_from_tensor(pts)
-    # if isinstance(pts, np.ndarray):
-    #     _asarray_weights = lambda x: np.asarray(x, dtype=pts.dtype)
-    #     _asarray_grid = _asarray_weights
-    # else:
-    #     import torch
-    #
-    #     _asarray_weights = lambda x: torch.from_numpy(x).type(pts.dtype)
-    #     _asarray_grid = lambda x: x.type(pts.dtype)
     pts = api.astensor(pts)
     dtype = pts.dtype
     kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
@@ -205,15 +197,16 @@ def _pts_convolution_pykeops(
     ).score_samples(api.astype(grid_iterator, dtype))
 
 
-def gaussian_kernel(x_i, y_j, bandwidth, **kwargs):
+def gaussian_kernel(x_i, y_j, bandwidth, api=_npapi, **kwargs):
     D = x_i.shape[-1]
+    bandwidth = api.astensor(bandwidth).reshape(1)
     exponent = -(((x_i - y_j) / bandwidth) ** 2).sum(dim=-1) / 2
     # float is necessary for some reason (pykeops fails)
-    kernel = (exponent).exp() / float((bandwidth * np.sqrt(2 * np.pi)) ** D)
+    kernel = (exponent).exp() / api.astensor((bandwidth * (2 * np.pi) ** 0.5) ** D)
     return kernel
 
 
-def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
+def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse, api=_npapi):
     # 1 / \sqrt(2 \pi^dim * \Sigma.det()) * exp( -(x-y).T @ \Sigma ^{-1} @ (x-y))
     # CF https://www.kernel-operations.io/keops/_auto_examples/pytorch/plot_anisotropic_kernels.html#sphx-glr-auto-examples-pytorch-plot-anisotropic-kernels-py
     #    and https://www.kernel-operations.io/keops/api/math-operations.html
@@ -221,21 +214,23 @@ def multivariate_gaussian_kernel(x_i, y_j, covariance_matrix_inverse):
     z = x_i - y_j
     exponent = -(z.weightedsqnorm(covariance_matrix_inverse.flatten()) / 2)
     return (
-        float((2 * np.pi) ** (-dim / 2))
-        * (np.sqrt(np.linalg.det(covariance_matrix_inverse)))
+        api.astensor((2 * np.pi) ** (-dim / 2), dtype=x_i.dtype).reshape(1)
+        * (api.sqrt(api.det(covariance_matrix_inverse)))
         * exponent.exp()
     )
 
 
-def exponential_kernel(x_i, y_j, bandwidth, **kwargs):
+def exponential_kernel(x_i, y_j, bandwidth, api=_npapi, **kwargs):
     # 1 / \sigma * exp( norm(x-y, dim=-1))
-    exponent = -((((x_i - y_j) ** 2).sum(dim=-1) ** 0.5) / bandwidth)
+    bandwidth = api.astensor(bandwidth).reshape(1)
+    exponent = -((((x_i - y_j) ** 2).sum(dim=-1).sqrt()) / bandwidth)
     kernel = exponent.exp() / bandwidth
     return kernel
 
 
-def sinc_kernel(x_i, y_j, bandwidth):
-    norm = (((x_i - y_j) ** 2).sum(dim=-1) ** 1 / 2) / bandwidth
+def sinc_kernel(x_i, y_j, bandwidth, api=_npapi):
+    bandwidth = api.astensor(bandwidth).reshape(1)
+    norm = (((x_i - y_j) ** 2).sum(dim=-1).sqrt()) / bandwidth
     sinc = type(x_i).sinc
     kernel = 2 * sinc(2 * norm) - sinc(norm)
     return kernel
@@ -294,9 +289,9 @@ class KDE:
         self.kwargs = kwargs
 
     def fit(self, X, sample_weights=None, y=None, api=None):
-        self.X = X
-        self._sample_weights = sample_weights
         self.api = api_from_tensor(X) if api is None else api
+        self.X = self.api.astensor(X)
+        self._sample_weights = sample_weights
         self._kernel = _kernel(self.kernel)
         return self
 
@@ -352,10 +347,16 @@ class KDE:
         assert self.api is not None and self._kernel is not None, "Fit first."
         X = self.X if X is None else X
         if X.shape[0] == 0:
-            return self.api.zeros((Y.shape[0]))
+            return self.api.zeros((Y.shape[0]), dtype = X.dtype)
         assert Y.shape[1] == X.shape[1] and X.ndim == Y.ndim == 2
         lazy_x, lazy_y, w = self.to_lazy(X, Y, x_weights=self._sample_weights)
-        kernel = self._kernel(lazy_x, lazy_y, self.bandwidth, **self.kwargs)
+        kernel = self._kernel(
+            lazy_x,
+            lazy_y,
+            self.api.astensor(self.bandwidth, dtype=X.dtype),
+            api=self.api,
+            **self.kwargs,
+        )
         if w is not None:
             kernel *= w
         if return_kernel:
