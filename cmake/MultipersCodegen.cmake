@@ -7,6 +7,7 @@ set(MULTIPERS_TEMPLATE_FILES
   "${CMAKE_SOURCE_DIR}/multipers/filtrations.pxd.tp"
   "${CMAKE_SOURCE_DIR}/multipers/filtration_conversions.pxd.tp"
   "${CMAKE_SOURCE_DIR}/multipers/slicer.pxd.tp"
+  "${CMAKE_SOURCE_DIR}/multipers/simplex_tree_multi.pxd.tp"
   "${CMAKE_SOURCE_DIR}/multipers/mma_structures.pyx.tp"
   "${CMAKE_SOURCE_DIR}/multipers/multiparameter_module_approximation.pyx.tp"
   "${CMAKE_SOURCE_DIR}/multipers/simplex_tree_multi.pyx.tp"
@@ -17,11 +18,13 @@ set(MULTIPERS_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/multipers/filtrations.pxd"
   "${MULTIPERS_GENERATED_ROOT}/multipers/filtration_conversions.pxd"
   "${MULTIPERS_GENERATED_ROOT}/multipers/slicer.pxd"
+  "${MULTIPERS_GENERATED_ROOT}/multipers/simplex_tree_multi.pxd"
   "${MULTIPERS_GENERATED_ROOT}/multipers/mma_structures.pyx"
   "${MULTIPERS_GENERATED_ROOT}/multipers/multiparameter_module_approximation.pyx"
   "${MULTIPERS_GENERATED_ROOT}/multipers/simplex_tree_multi.pyx"
   "${MULTIPERS_GENERATED_ROOT}/multipers/slicer.pyx"
 )
+
 
 set(MULTIPERS_CORE_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/tools/core/filtrations_instantiations.inc"

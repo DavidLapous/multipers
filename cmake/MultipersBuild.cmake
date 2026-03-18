@@ -4,7 +4,7 @@ function(multipers_apply_common_build_flags target_name)
   target_compile_definitions(
     ${target_name}
     PRIVATE
-      NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
+      NPY_NO_DEPRECATED_API=NPY_2_0_API_VERSION
       GUDHI_USE_TBB
       WITH_TBB=ON
   )
