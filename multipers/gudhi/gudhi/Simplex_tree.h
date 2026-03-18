@@ -549,7 +549,7 @@ class Simplex_tree {
   }
   /** @} */  // end constructor/destructor
 
- private:
+ public:
   // Copy from complex_source to "this"
   void copy_from(const Simplex_tree& complex_source) {
     null_vertex_ = complex_source.null_vertex_;
@@ -598,16 +598,17 @@ class Simplex_tree {
     if constexpr (!Options::stable_simplex_handles) root_.members().reserve(root_source.size());
     for (auto& p : root_source.members()){
       if constexpr (Options::store_key && OtherSimplexTreeOptions::store_key) {
-        auto it = root_.members().try_emplace(
+        root_.members().try_emplace(
             root_.members().end(), p.first, &root_, translate_filtration_value(p.second.filtration()), p.second.key());
       } else {
-        auto it = root_.members().try_emplace(
+        root_.members().try_emplace(
             root_.members().end(), p.first, &root_, translate_filtration_value(p.second.filtration()));
       }
     }
 
     rec_copy<OtherSimplexTreeOptions::store_key, false>(&root_, &root_source, translate_filtration_value);
   }
+ private:
 
   /** \brief depth first search, inserts simplices when reaching a leaf. */
   template<bool store_key, bool copy_simplex_data, typename OtherSiblings, typename F>
