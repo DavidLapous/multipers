@@ -3,9 +3,14 @@ import multipers.array_api as _mpapi
 import sys
 import multipers.logs as _mp_logs
 
-_mpapi.available_api.append(sys.modules[__name__])
+_mpapi.add_interface("torch")
 
 backend = _t
+sum = _t.sum
+mean = _t.mean
+ones = _t.ones
+reshape = _t.reshape
+arange = _t.arange
 cat = _t.cat
 norm = _t.norm
 tensor = _t.tensor
@@ -174,3 +179,11 @@ def dtype_is_float(dtype):
 
 def dtype_default():
     return _t.get_default_dtype()
+
+
+def cdist(x, y, p=2):
+    return _t.cdist(x, y, p=p)
+
+
+def moveaxis(x, source, destination):
+    return _t.moveaxis(x, source, destination)

@@ -1,3 +1,13 @@
+{{py:
+import os
+import pickle
+from pathlib import Path
+
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
+    simplex_trees = pickle.load(f)
+}}
 # This file is part of the Gudhi Library - https://gudhi.inria.fr/ - which is released under MIT.
 # See file LICENSE or go to https://gudhi.inria.fr/licensing/ for full license details.
 # Author(s):       Vincent Rouvreau
@@ -5,7 +15,7 @@
 # Copyright (C) 2016 Inria
 #
 # Modification(s):
-#  - 2022 David Loiseaux, Hannah Schreiber: adapt for multipersistence. 
+#  - 2022 David Loiseaux, Hannah Schmitt: adapt for multipersistence. 
 #   - YYYY/MM Author: Description of the modification
 
 from cython cimport numeric
@@ -121,6 +131,9 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     void squeeze_filtration_inplace(vector[vector[double]] &, bool) nogil
     void squeeze_filtration(intptr_t, vector[vector[double]] &) except + nogil
     void unsqueeze_filtration(intptr_t, vector[vector[double]] &) except + nogil
+    {{for ST2 in simplex_trees}}
+    void copy_from_interface_{{ST2["PyFil"]}} "copy_from_interface<{{ST2['CFil']}}>"(intptr_t) except + nogil
+    {{endfor}}
     vector[vector[vector[value_type]]] get_filtration_values(const vector[int]&) nogil
 
 
@@ -133,4 +146,3 @@ cdef extern from "Simplex_tree_multi_interface.h" namespace "Gudhi::multiparamet
     # vector[map[value_type,int32_t]] build_idx_map(const vector[int]&) nogil
     # pair[vector[vector[int32_t]],vector[vector[int32_t]]] get_pts_indices(const vector[map[value_type,int32_t]]&, const vector[vector[value_type]]&) nogil
     pair[vector[vector[int32_t]],vector[vector[int32_t]]] pts_to_indices(vector[vector[value_type]]&, vector[int]&) nogil
-

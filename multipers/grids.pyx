@@ -13,6 +13,7 @@ from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
 from multipers.array_api import check_keops
 import multipers.logs as _mp_logs
+cimport cython
 
 available_strategies = ["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -55,7 +56,7 @@ def threshold_slice(a, m,M):
 
 
 def _exact_grid(x, api, _mean):
-    return tuple(api.unique(api.astensor(f), _mean=_mean) for f in x)
+    return [api.unique(api.astensor(f), _mean=_mean) for f in x]
 
 
 def get_exact_grid(
@@ -111,6 +112,8 @@ def get_exact_grid(
             threshold_slice(xx,a,b) 
             for xx,a,b in zip(initial_grid, threshold_min, threshold_max)
         ]
+    for i in range(num_parameters):
+        initial_grid[i] = api.ascontiguous(initial_grid[i])
     if return_api:
         return initial_grid, api
     return initial_grid
@@ -589,8 +592,10 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
         directions = api.astensor(directions)
 
     out = api.empty((num_lines, num_pts), dtype=pts.dtype)
-    for i in range(num_lines):
-        out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
+    cdef int i
+    with cython.boundscheck(False), cython.wraparound(False):
+        for i in range(num_lines):
+            out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
     return out
 
 

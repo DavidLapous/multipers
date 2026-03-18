@@ -16,6 +16,12 @@ no_grad = nullcontext
 zeros = _np.zeros
 min = _np.min
 max = _np.max
+sum = _np.sum
+mean = _np.mean
+reshape = _np.reshape
+arange = _np.arange
+moveaxis = _np.moveaxis
+ones = _np.ones
 repeat_interleave = _np.repeat
 cdist = cdist  # type: ignore[no-redef]
 pdist = pdist  # type: ignore[no-redef]
@@ -115,6 +121,9 @@ def sort(x, axis=-1):
 def device(x):  # type: ignore[no-unused-arg]
     return None
 
+def device(x):
+    return x.device
+
 
 # type: ignore[no-unused-arg]
 def linspace(low, high, r, device=None, dtype=None):
@@ -152,11 +161,7 @@ def has_grad(_):
 
 
 def to_device(x, device):
-    if device is None or str(device) in ("None", "cpu"):
-        return x
-    raise ValueError(
-        f"NumPy backend only supports CPU tensors, requested device {device!r}."
-    )
+    return x.to_device(device)
 
 
 def size(x):

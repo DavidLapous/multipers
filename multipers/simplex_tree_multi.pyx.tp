@@ -271,6 +271,30 @@ cdef class {{D["PY_CLASS_NAME"]}}:
             self.get_ptr().set_num_parameters(0)
 
 
+    def astype(self, dtype, bool kcritical=False, ftype="Contiguous")->SimplexTreeMulti_type:
+        """
+        Converts the simplex tree to a different filtration type.
+        """
+        if dtype == self.dtype and kcritical == self.is_kcritical and ftype == self.filtration_container:
+            return self
+        
+        cdef int num_parameters = self.num_parameters
+        new_st = SimplexTreeMulti(num_parameters=num_parameters, dtype=dtype, kcritical=kcritical, ftype=ftype)
+
+        cdef intptr_t other_ptr = self.thisptr
+        cdef intptr_t new_st_ptr
+        if False:
+            pass
+        {{for ST2 in to_iter}}
+        elif isinstance(new_st, {{ST2['PY_CLASS_NAME']}}):
+            new_st_ptr = new_st.get_ptr()
+            with nogil:
+                (<{{ST2["ST_INTERFACE"]}}*>new_st_ptr).copy_from_interface_{{PyFil}}(other_ptr)
+        {{endfor}}
+
+        new_st.filtration_grid = self.filtration_grid
+        return new_st
+
     def copy(self)->{{PY_CLASS_NAME}}:
         """
         :returns: A simplex tree that is a deep copy of itself.
@@ -1361,19 +1385,21 @@ cdef class {{D["PY_CLASS_NAME"]}}:
                 filtrations_values[i][f == np.inf] = np.nan
                 filtrations_values[i][f == - np.inf] = np.nan
         return filtrations_values
-    def _clean_filtration_grid(self):
+    def _clean_filtration_grid(self, api = None):
         """
         Removes the values in filtration_grid that are not linked to any splx.
         """
         if not self.is_squeezed:
             raise ValueError("No grid to clean.")
         F = self.filtration_grid
+        if api is None:
+            api = api_from_tensor(F[0])
         self.filtration_grid=None
         cleaned_coordinates = compute_grid(self)
         new_st = self.grid_squeeze(cleaned_coordinates)
 
         self.thisptr, new_st.thisptr = new_st.thisptr, self.thisptr
-        self.filtration_grid = tuple(f[g] for f,g in zip(F,cleaned_coordinates))
+        self.filtration_grid = tuple(api.ascontiguous(f[g]) for f,g in zip(F,cleaned_coordinates))
         return self
 
 

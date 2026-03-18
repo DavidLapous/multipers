@@ -198,11 +198,11 @@ def _pts_convolution_pykeops(
     #     _asarray_weights = lambda x: torch.from_numpy(x).type(pts.dtype)
     #     _asarray_grid = lambda x: x.type(pts.dtype)
     pts = api.astensor(pts)
-    dtype=pts.dtype
+    dtype = pts.dtype
     kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
-    return kde.fit(pts, sample_weights=api.astype(pts_weights, dtype),api=api).score_samples(
-        api.astype(grid_iterator, dtype)
-    )
+    return kde.fit(
+        pts, sample_weights=api.astype(pts_weights, dtype), api=api
+    ).score_samples(api.astype(grid_iterator, dtype))
 
 
 def gaussian_kernel(x_i, y_j, bandwidth, **kwargs):
@@ -320,12 +320,12 @@ class KDE:
         if isinstance(X, torch.Tensor):
             from pykeops.torch import LazyTensor
 
-            lazy_x = LazyTensor(X.view(X.shape[0], 1, X.shape[1]))
-            lazy_y = LazyTensor(Y.type(X.dtype).view(1, Y.shape[0], Y.shape[1]))
+            lazy_x = LazyTensor(X.reshape(X.shape[0], 1, X.shape[1]))
+            lazy_y = LazyTensor(Y.type(X.dtype).reshape(1, Y.shape[0], Y.shape[1]))
             if x_weights is not None:
                 if isinstance(x_weights, np.ndarray):
                     x_weights = torch.from_numpy(x_weights)
-                w = LazyTensor(x_weights[:, None].type(X.dtype), axis=0)
+                w = LazyTensor(x_weights.reshape(-1, 1).type(X.dtype), axis=0)
                 return lazy_x, lazy_y, w
             return lazy_x, lazy_y, None
         raise Exception("Bad tensor type.")
