@@ -6,13 +6,10 @@ import multipers.logs as _mp_logs
 _mpapi.add_interface("torch")
 
 backend = _t
-sum = _t.sum
-mean = _t.mean
 ones = _t.ones
 reshape = _t.reshape
 arange = _t.arange
 cat = _t.cat
-norm = _t.norm
 det = _t.linalg.det
 tensor = _t.tensor
 stack = _t.stack
@@ -43,6 +40,24 @@ einsum = _t.einsum
 
 def argsort(x, axis=-1):
     return _t.argsort(x, dim=axis)
+
+
+def sum(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.sum(x, dim=dim, **kwargs)
+
+
+def mean(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.mean(x, dim=dim, **kwargs)
+
+
+def norm(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.norm(x, dim=dim, **kwargs)
 
 
 def astype(x, dtype):

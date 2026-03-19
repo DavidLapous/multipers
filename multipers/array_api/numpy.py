@@ -6,7 +6,6 @@ import multipers.logs as _mp_logs
 
 backend = _np
 cat = _np.concatenate
-norm = _np.linalg.norm
 det = _np.linalg.det
 asnumpy = _np.asarray
 tensor = _np.array
@@ -17,8 +16,6 @@ no_grad = nullcontext
 zeros = _np.zeros
 min = _np.min
 max = _np.max
-sum = _np.sum
-mean = _np.mean
 reshape = _np.reshape
 arange = _np.arange
 moveaxis = _np.moveaxis
@@ -47,6 +44,24 @@ def astensor(x, contiguous=False, dtype=None):
 
 def unique(x, assume_sorted=False, _mean=False):
     return _np.unique(x)
+
+
+def sum(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.sum(x, axis=axis, **kwargs)
+
+
+def mean(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.mean(x, axis=axis, **kwargs)
+
+
+def norm(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.linalg.norm(x, axis=axis, **kwargs)
 
 
 def empty(*args, device=None, **kwargs):
