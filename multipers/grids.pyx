@@ -11,7 +11,6 @@ from typing import Iterable,Literal,Optional
 from itertools import product
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
-from multipers.array_api import check_keops
 import multipers.logs as _mp_logs
 cimport cython
 
@@ -322,32 +321,31 @@ def _todo_regular(f, int r, api):
     with api.no_grad():
         return api.linspace(api.min(f), api.max(f), r)
 
-def _project_on_1d_grid(f,grid, bool unique, api):
-    # api=api_from_tensors(f,grid)
+def _todo_regular_closest(f, int r, bool unique, api=None):
+    if api is None:
+        api = api_from_tensor(f)
+    f = api.astensor(f)
     if f.ndim != 1:
         raise ValueError(f"Got ndim!=1. {f=}")
-    f = api.unique(f)
+    sorted_f = api.sort(f)
     with api.no_grad():
-        _f = api.LazyTensor(f[:, None, None])
-        _f_reg = api.LazyTensor(grid[None, :, None])
-        indices = (_f - _f_reg).abs().argmin(0).ravel()
-    f = api.cat([f, api.tensor([api.inf], dtype=f.dtype)])
-    f_proj = f[indices]
+        f_regular = api.linspace(
+            sorted_f[0],
+            sorted_f[-1],
+            r,
+            dtype=sorted_f.dtype,
+            device=api.device(sorted_f),
+        )
+        right_idx = api.searchsorted(sorted_f, f_regular)
+    max_idx = sorted_f.shape[0] - 1
+    right_idx = api.clip(right_idx, min=0, max=max_idx)
+    left_idx = api.clip(right_idx - 1, min=0, max=max_idx)
+    right_vals = sorted_f[right_idx]
+    left_vals = sorted_f[left_idx]
+    choose_left = api.abs(f_regular - left_vals) <= api.abs(right_vals - f_regular)
+    f_regular_closest = api.where(choose_left, left_vals, right_vals)
     if unique:
-        f_proj = api.unique(f_proj)
-    return f_proj
-
-def _todo_regular_closest_keops(f, int r, bool unique, api):
-    f = api.astensor(f)
-    with api.no_grad():
-        f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f),dtype=f.dtype)
-    return _project_on_1d_grid(f,f_regular,unique,api)
-
-def _todo_regular_closest_old(some_float[::1] f, int r, bool unique, api=None):
-    f_array = np.asarray(f)
-    f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
-    f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)], dtype=f_array.dtype)
-    if unique: f_regular_closest = np.unique(f_regular_closest)
+        f_regular_closest = api.unique(f_regular_closest)
     return f_regular_closest
 
 def _todo_regular_left(f, int r, bool unique,api):
@@ -379,14 +377,6 @@ def _todo_partition_(some_float[::1] data,int resolution, bool unique):
     f = partitions[[i*k for i in range(resolution)]]
     if unique: f= np.unique(f)
     return f
-
-
-if check_keops():
-    _todo_regular_closest = _todo_regular_closest_keops
-else:
-    _todo_regular_closest = _todo_regular_closest_old
-
-
 def compute_bounding_box(stuff, inflate = 0.):
     r"""
     Returns a array of shape (2, num_parameters)
