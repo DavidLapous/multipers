@@ -200,13 +200,20 @@ def clean_signed_measure(pts, w, dtype=np.int32):
     idx = w!=0
     return pts[idx],w[idx]
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def clean_sms(sms):
     """
     Sum the diracs at the same locations. i.e.,
     returns the minimal sized measure to represent the input.
     Mostly useful for, e.g., euler_characteristic from simplical complexes.
     """
-    return tuple(clean_signed_measure(pts,weights) for pts,weights in sms)
+    cdef int num_sms = len(sms)
+    out = [None]*num_sms
+    for i in range(num_sms):
+        pts, weights = sms[i]
+        out[i] = clean_signed_measure(pts, weights)
+    return tuple(out)
 
 def zero_out_sm(pts,weights, mass_default):
     """
@@ -406,4 +413,3 @@ def rectangle_to_hook_minimal_signed_barcode(pts,w,):
     # pts,w = clean_signed_measure(pts,w)  
 
     return pts,w
-

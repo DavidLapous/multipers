@@ -897,7 +897,7 @@ cdef class {{D['PYTHON_TYPE']}}:
         str backend:Literal["mpfree", "2pac"]="mpfree",
         bool vineyard={{D['IS_VINE']}},
         dtype = {{D['PY_VALUE_TYPE']}},
-        bool force = False,
+        bool force = True,
         bool auto_clean = True,
         )->Slicer_type:
         """

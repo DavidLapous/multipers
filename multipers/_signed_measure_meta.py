@@ -273,12 +273,12 @@ def signed_measure(
                 sms = _hilbert_signed_measure(
                     filtered_complex_,
                     degrees=degrees,
-                    zero_pad=fix_mass_default,
+                    zero_pad=False,
                     n_jobs=n_jobs,
                     verbose=verbose,
                     ignore_inf=ignore_infinite_filtration_values,
                 )
-                fix_mass_default = False
+                fix_mass_default = mass_default is not None
                 if verbose:
                     print(f"Done. ({time.time() - t0:.3f}s)")
 
@@ -343,24 +343,17 @@ def signed_measure(
             sms = hilbert_signed_measure(
                 filtered_complex_,
                 degrees=degrees,
-                mass_default=mass_default,
+                mass_default=None,
                 verbose=verbose,
                 n_jobs=n_jobs,
                 expand_collapse=expand_collapse,
             )
-            fix_mass_default = False
+            fix_mass_default = mass_default is not None
             if verbose:
                 print(f"Done. ({time.time() - t0:.3f}s)")
     else:
         raise ValueError("Filtered complex has to be a SimplexTree or a Slicer.")
 
-    if clean:
-        if verbose:
-            print("Cleaning measure...", end="", flush=True)
-            t0 = time.time()
-        sms = clean_sms(sms)
-        if verbose:
-            print(f"Done. ({time.time() - t0:.3f}s)")
     if grid is not None and not coordinate_measure:
         if verbose:
             print("Pushing back the measure to the grid...", end="", flush=True)
@@ -380,6 +373,14 @@ def signed_measure(
             print("Seems that fixing mass default is necessary...", end="", flush=True)
             t0 = time.time()
         sms = zero_out_sms(sms, mass_default=mass_default)
+        if verbose:
+            print(f"Done. ({time.time() - t0:.3f}s)")
+
+    if clean:
+        if verbose:
+            print("Cleaning measure...", end="", flush=True)
+            t0 = time.time()
+        sms = clean_sms(sms)
         if verbose:
             print(f"Done. ({time.time() - t0:.3f}s)")
 
