@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from functools import wraps
 
 import numpy as _np
 from scipy.spatial.distance import cdist as _sp_cdist, pdist as _sp_pdist
@@ -34,6 +35,19 @@ cos = _np.cos
 sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum
+
+
+def jit(fn=None, **kwargs):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **inner_kwargs):
+            return func(*args, **inner_kwargs)
+
+        return wrapped
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
 
 
 def astensor(x, contiguous=False, dtype=None):

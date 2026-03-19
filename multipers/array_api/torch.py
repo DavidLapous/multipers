@@ -1,4 +1,5 @@
 import torch as _t
+from functools import wraps
 import multipers.array_api as _mpapi
 import sys
 import multipers.logs as _mp_logs
@@ -37,6 +38,19 @@ cos = _t.cos
 sqrt = _t.sqrt
 matmul = _t.matmul
 einsum = _t.einsum
+
+
+def jit(fn=None, **kwargs):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **inner_kwargs):
+            return func(*args, **inner_kwargs)
+
+        return wrapped
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
 
 
 def argsort(x, axis=-1):

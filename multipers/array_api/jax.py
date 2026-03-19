@@ -20,6 +20,7 @@ stack = _jnp.stack
 empty = _jnp.empty
 where = _jnp.where
 no_grad = nullcontext
+jit = _jax.jit
 zeros = _jnp.zeros
 min = _jnp.min
 max = _jnp.max
@@ -145,7 +146,7 @@ def maxvalues(x, **kwargs):
     return _jnp.max(x, **kwargs)
 
 
-@_jax.jit(static_argnames=("p",))
+@jit(static_argnames=("p",))
 def cdist(x, y, p=2):
     diff = _jnp.abs(x[:, None, :] - y[None, :, :])
     if p == 1:
