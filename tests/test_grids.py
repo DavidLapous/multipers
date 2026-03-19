@@ -50,6 +50,27 @@ def test_regular_closest():
         pytest.skip("Skipping test as torch is not available.")
 
 
+@pytest.mark.skipif(torch is None, reason="Torch not installed.")
+def test_regular_closest_torch_backend():
+    x = torch.tensor(
+        [0.0, 0.08, 0.15, 0.3, 0.39, 0.5, 0.55, 0.7, 0.8, 0.899999, 0.9, 0.900001, 1.0],
+        dtype=torch.float32,
+        requires_grad=True,
+    )
+    (y,) = mpg.compute_grid([x], strategy="regular_closest", resolution=11)
+    assert isinstance(y, torch.Tensor)
+    assert y.dtype == x.dtype
+    assert y.requires_grad
+    assert torch.allclose(
+        y,
+        torch.tensor(
+            [0.0, 0.08, 0.15, 0.3, 0.39, 0.5, 0.55, 0.7, 0.8, 0.9, 1.0],
+            dtype=torch.float32,
+        ),
+    )
+
+
+
 def test_regular_left():
     x = np.asarray([0.0, 0.08, 0.1, 0.19, 0.21, 1.0]).astype(np.float32)
     (y,) = mpg.compute_grid([x], strategy="regular_left", resolution=11)
