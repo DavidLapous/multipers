@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from importlib.util import find_spec
 from time import perf_counter
 from typing import Optional
 
@@ -15,18 +16,18 @@ from multipers.grids import compute_grid, get_exact_grid
 from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
 import multipers as _mp
 
-try:
-    import pykeops
 
-    from multipers.filtrations.density import KDE
-except ImportError:
+def KDE(bandwidth, kernel, return_log):
+    if find_spec("pykeops") is not None:
+        from multipers.filtrations.density import KDE as _KDE
+
+        return _KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+
     from sklearn.neighbors import KernelDensity
 
     _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
-
-    def KDE(bandwidth, kernel, return_log):
-        assert return_log, "Sklearn returns log-density."
-        return KernelDensity(bandwidth=bandwidth, kernel=kernel)
+    assert return_log, "Sklearn returns log-density."
+    return KernelDensity(bandwidth=bandwidth, kernel=kernel)
 
 
 def RipsLowerstar(
@@ -35,7 +36,7 @@ def RipsLowerstar(
     distance_matrix: Optional[ArrayLike] = None,
     function: Optional[ArrayLike] = None,
     threshold_radius: Optional[float] = None,
-    sparse:float=None
+    sparse: float = None,
 ):
     """
     Computes the Rips complex, with the usual rips filtration as a first parameter,
@@ -49,7 +50,7 @@ def RipsLowerstar(
     assert points is not None or distance_matrix is not None, (
         "`points` or `distance_matrix` has to be given."
     )
-    
+
     if distance_matrix is not None:
         api = api_from_tensor(distance_matrix)
         D = api.astensor(distance_matrix)
@@ -63,10 +64,10 @@ def RipsLowerstar(
     if sparse:
         _mp_logs.ExperimentalWarning("Sparse-RipsLowerstar has no known good property.")
         st = gd.RipsComplex(
-                distance_matrix = api.asnumpy(D),
-                max_edge_length=threshold_radius,
-                sparse=sparse
-        ).create_simplex_tree() 
+            distance_matrix=api.asnumpy(D),
+            max_edge_length=threshold_radius,
+            sparse=sparse,
+        ).create_simplex_tree()
     else:
         st = gd.SimplexTree.create_from_array(
             api.asnumpy(D), max_filtration=threshold_radius
@@ -120,7 +121,9 @@ def RipsCodensity(
         f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
     else:
         raise ValueError("Bandwidth or DTM mass has to be given.")
-    return RipsLowerstar(points=points, function=f, threshold_radius=threshold_radius, sparse=sparse)
+    return RipsLowerstar(
+        points=points, function=f, threshold_radius=threshold_radius, sparse=sparse
+    )
 
 
 def DelaunayLowerstar(
@@ -223,6 +226,7 @@ def DelaunayLowerstar(
 
     return slicer
 
+
 def _AlphaLowerstar(
     points: ArrayLike,
     function: ArrayLike,
@@ -253,7 +257,7 @@ def _AlphaLowerstar(
         st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
 
     if api.has_grad(points) or api.has_grad(function):
-        D = api.cdist(points, points)**2
+        D = api.cdist(points, points) ** 2
 
         grid = compute_grid([D.ravel(), *filtrations.T])
         st = st.grid_squeeze(grid)
@@ -272,7 +276,7 @@ def _AlphaCodensity(
 ):
     """
     Computes the Alpha density filtration:
-        - complex is given by the delaunay, 
+        - complex is given by the delaunay,
         - first parameter is alpha
         - the second is given by a density estimation
     """
