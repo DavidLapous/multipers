@@ -156,7 +156,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
                   ): #TODO doc
         cdef vector[{{CTYPE}}] c_default_values
         cdef intptr_t other_ptr
-        cdef char[:] buffer
+        cdef char[::1] buffer
         cdef size_t buffer_size
         cdef char* buffer_start
         if other is not None:
