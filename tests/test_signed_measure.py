@@ -13,7 +13,7 @@ st = random_st(npts=50).collapse_edges(-2, ignore_warning=True)
 
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
-mass_defaults = [None, "auto"]
+mass_defaults = [None, "auto", "inf"]
 strats = [("regular_closest", 20), ("quantile", 20), ("regular", 17)]
 
 mpfree_flag = mio._check_available("mpfree")
