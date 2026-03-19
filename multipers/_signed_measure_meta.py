@@ -128,19 +128,19 @@ def signed_measure(
     if degree is not None or len(degrees) == 0:
         degrees = list(degrees) + [degree]
     if None in degrees:
-        assert len(degrees) == 1, (
-            f"Can only compute one invariant at the time. Got {degrees=}, {invariant=}."
-        )
-        assert invariant is None or not (
-            "hilbert" in invariant or "rank" in invariant
-        ), (
-            f"Hilbert and Rank cannot compute `None` degree. got {degrees=}, {invariant=}."
-        )
+        if len(degrees) != 1:
+            raise ValueError(
+                f"Can only compute one invariant at the time. Got {degrees=}, {invariant=}."
+            )
+        if invariant is not None and ("hilbert" in invariant or "rank" in invariant):
+            raise ValueError(
+                f"Hilbert and Rank cannot compute `None` degree. got {degrees=}, {invariant=}."
+            )
         invariant = "euler"
     if clean is None:
         clean = True if None in degrees else False
 
-    assert invariant is None or invariant in [
+    valid_invariants = {
         "hilbert",
         "rank_invariant",
         "euler",
@@ -149,11 +149,16 @@ def signed_measure(
         "hilbert_function",
         "rectangle",
         "hook",
-    ]
+    }
+    if invariant is not None and invariant not in valid_invariants:
+        raise ValueError(
+            f"Invalid invariant {invariant!r}. Expected one of {sorted(valid_invariants)}."
+        )
 
-    assert not plot or filtered_complex.num_parameters == 2, (
-        f"Can only plot 2d measures. Got {filtered_complex.num_parameters=}."
-    )
+    if plot and filtered_complex.num_parameters != 2:
+        raise ValueError(
+            f"Can only plot 2d measures. Got {filtered_complex.num_parameters=}."
+        )
 
     if grid is None:
         if not filtered_complex.is_squeezed:
@@ -162,6 +167,15 @@ def signed_measure(
             )
         else:
             grid = filtered_complex.filtration_grid
+    else:
+        grid = tuple(grid)
+
+    num_parameters = filtered_complex.num_parameters
+    if num_parameters != len(grid):
+        raise ValueError(
+            "Number of parameter do not coincide. "
+            f"Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
+        )
 
     if mass_default is None:
         pass
@@ -174,10 +188,14 @@ def signed_measure(
             raise NotImplementedError
     else:
         mass_default = np.asarray(mass_default)
-        assert (
-            mass_default.ndim == 1
-            and mass_default.shape[0] == filtered_complex.num_parameters
-        )
+        if (
+            mass_default.ndim != 1
+            or mass_default.shape[0] != filtered_complex.num_parameters
+        ):
+            raise ValueError(
+                "`mass_default` must be a 1D array with one value per parameter. "
+                f"Got shape {mass_default.shape} for {filtered_complex.num_parameters} parameters."
+            )
 
     if not filtered_complex.is_squeezed:
         if verbose:
@@ -203,11 +221,6 @@ def signed_measure(
                 filtered_complex_.prune_above_dimension(max_degree)
             if verbose:
                 print(f"Done. ({time.time() - t0:.3f}s)")
-
-    num_parameters = filtered_complex.num_parameters
-    assert num_parameters == len(grid), (
-        f"Number of parameter do not coincide. Got (grid) {len(grid)} and (filtered complex) {num_parameters}."
-    )
 
     fix_mass_default = mass_default is not None
     if is_slicer(filtered_complex_):
@@ -291,10 +304,12 @@ def signed_measure(
                 print("Computing rank invariant...", end="", flush=True)
                 t0 = time.time()
 
-            assert num_parameters == 2, (
-                "Rank invariant only implemented for 2-parameter modules."
-            )
-            assert not coordinate_measure, "Not implemented"
+            if num_parameters != 2:
+                raise NotImplementedError(
+                    "Rank invariant only implemented for 2-parameter modules."
+                )
+            if coordinate_measure:
+                raise NotImplementedError("coordinate_measure is not implemented")
             from multipers.simplex_tree_multi import _rank_signed_measure as smri
 
             sms = smri(
@@ -311,10 +326,11 @@ def signed_measure(
             if verbose:
                 print("Computing Euler Characteristic...", end="", flush=True)
                 t0 = time.time()
-            assert invariant is None or invariant in [
+            if invariant is not None and invariant not in [
                 "euler",
                 "euler_characteristic",
-            ], "Provide a degree to compute hilbert function."
+            ]:
+                raise ValueError("Provide a degree to compute hilbert function.")
             # assert not coordinate_measure, "Not implemented"
             from multipers.simplex_tree_multi import _euler_signed_measure
 
@@ -332,10 +348,11 @@ def signed_measure(
             if verbose:
                 print("Computing Hilbert Function...", end="", flush=True)
                 t0 = time.time()
-            assert invariant is None or invariant in [
+            if invariant is not None and invariant not in [
                 "hilbert",
                 "hilbert_function",
-            ], "Found homological degrees for euler computation."
+            ]:
+                raise ValueError("Found homological degrees for euler computation.")
             from multipers.simplex_tree_multi import (
                 _hilbert_signed_measure as hilbert_signed_measure,
             )

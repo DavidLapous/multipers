@@ -71,7 +71,8 @@ def api_from_tensor(x, *, verbose: bool = False, strict=False):
 
 
 def api_from_tensors(*args):
-    assert len(args) > 0, "no tensor given"
+    if len(args) == 0:
+        raise ValueError("no tensor given")
     import multipers.array_api.numpy as npapi
 
     is_numpy = True

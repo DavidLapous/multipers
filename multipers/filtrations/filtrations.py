@@ -26,7 +26,8 @@ def KDE(bandwidth, kernel, return_log):
     from sklearn.neighbors import KernelDensity
 
     _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
-    assert return_log, "Sklearn returns log-density."
+    if not return_log:
+        raise ValueError("Sklearn returns log-density.")
     return KernelDensity(bandwidth=bandwidth, kernel=kernel)
 
 
@@ -47,9 +48,8 @@ def RipsLowerstar(
      - function : ArrayLike of shape (num_data, num_parameters -1)
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    assert points is not None or distance_matrix is not None, (
-        "`points` or `distance_matrix` has to be given."
-    )
+    if points is None and distance_matrix is None:
+        raise ValueError("`points` or `distance_matrix` has to be given.")
 
     if distance_matrix is not None:
         api = api_from_tensor(distance_matrix)
@@ -111,9 +111,8 @@ def RipsCodensity(
     """
     Computes the Rips density filtration.
     """
-    assert bandwidth is None or dtm_mass is None, (
-        "Density estimation is either via kernels or dtm."
-    )
+    if bandwidth is not None and dtm_mass is not None:
+        raise ValueError("Density estimation is either via kernels or dtm.")
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -160,7 +159,8 @@ def DelaunayLowerstar(
             print(f"[DelaunayLowerstar] {label}: {now - t_prev:.3f}s")
             t_prev = now
 
-    assert distance_matrix is None, "Delaunay cannot be built from distance matrices"
+    if distance_matrix is not None:
+        raise ValueError("Delaunay cannot be built from distance matrices")
     if threshold_radius is not None:
         raise NotImplementedError("Delaunay with threshold not implemented yet.")
     api = api_from_tensors(points, function)
@@ -172,9 +172,10 @@ def DelaunayLowerstar(
     points = api.astensor(points)
     function = api.astensor(function).squeeze()
     _log_step("converted inputs")
-    assert function.ndim == 1, (
-        "Delaunay Lowerstar is only compatible with 1 additional parameter."
-    )
+    if function.ndim != 1:
+        raise ValueError(
+            "Delaunay Lowerstar is only compatible with 1 additional parameter."
+        )
     slicer = from_function_delaunay(
         api.asnumpy(points),
         api.asnumpy(function),
@@ -280,9 +281,8 @@ def _AlphaCodensity(
         - first parameter is alpha
         - the second is given by a density estimation
     """
-    assert bandwidth is None or dtm_mass is None, (
-        "Density estimation is either via kernels or dtm."
-    )
+    if bandwidth is not None and dtm_mass is not None:
+        raise ValueError("Density estimation is either via kernels or dtm.")
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -311,9 +311,8 @@ def DelaunayCodensity(
     """
     TODO
     """
-    assert bandwidth is None or dtm_mass is None, (
-        "Density estimation is either via kernels or dtm."
-    )
+    if bandwidth is not None and dtm_mass is not None:
+        raise ValueError("Density estimation is either via kernels or dtm.")
     if bandwidth is not None:
         kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
         f = -kde.fit(points).score_samples(points)
@@ -470,22 +469,25 @@ def CoreDelaunay(
         ks = np.asarray(ks, dtype=int)
     ks: np.ndarray
 
-    assert len(ks) > 0, "The parameter ks must contain at least one value."
-    assert np.all(ks > 0), "All values in ks must be positive."
-    assert np.all(ks <= len(points)), (
-        "All values in ks must be less than or equal to the number of points in the point cloud."
-    )
-    assert len(points) > 0, "The point cloud must contain at least one point."
-    assert points.ndim == 2, f"The point cloud must be a 2D array, got {points.ndim}D."
-    assert beta >= 0, f"The parameter beta must be positive, got {beta}."
-    assert precision in [
-        "safe",
-        "exact",
-        "fast",
-    ], f"""
-    The parameter precision must be one of ['safe', 'exact', 'fast'],
-    got {precision}.
-    """
+    if len(ks) == 0:
+        raise ValueError("The parameter ks must contain at least one value.")
+    if not np.all(ks > 0):
+        raise ValueError("All values in ks must be positive.")
+    if not np.all(ks <= len(points)):
+        raise ValueError(
+            "All values in ks must be less than or equal to the number of points in the point cloud."
+        )
+    if len(points) == 0:
+        raise ValueError("The point cloud must contain at least one point.")
+    if points.ndim != 2:
+        raise ValueError(f"The point cloud must be a 2D array, got {points.ndim}D.")
+    if beta < 0:
+        raise ValueError(f"The parameter beta must be positive, got {beta}.")
+    if precision not in ["safe", "exact", "fast"]:
+        raise ValueError(
+            "The parameter precision must be one of ['safe', 'exact', 'fast'], "
+            f"got {precision}."
+        )
 
     if verbose:
         print(
