@@ -6,6 +6,7 @@ import multipers.logs as _mp_logs
 _mpapi.add_interface("torch")
 
 backend = _t
+int64 = _t.int64
 ones = _t.ones
 reshape = _t.reshape
 arange = _t.arange

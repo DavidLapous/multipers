@@ -5,6 +5,7 @@ from scipy.spatial.distance import cdist, pdist
 import multipers.logs as _mp_logs
 
 backend = _np
+int64 = _np.int64
 cat = _np.concatenate
 det = _np.linalg.det
 asnumpy = _np.asarray
