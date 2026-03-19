@@ -40,6 +40,8 @@ def batch_signed_measure_convolutions(
 
     if api is None:
         api = api_from_tensors(signed_measures, x)
+    if not api.check_keops():
+        raise NotImplementedError(f"This function needs keops, which failed to init for {api=}".)
     if signed_measures.ndim == 2:
         signed_measures = signed_measures[None, :, :]
     sms = signed_measures[..., :-1]
