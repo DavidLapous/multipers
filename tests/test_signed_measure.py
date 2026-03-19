@@ -9,7 +9,7 @@ from multipers.tests import assert_sm, random_st
 
 np.random.seed(0)
 
-st = random_st(npts=50).collapse_edges(-2, ignore_warning=True)
+st = random_st(npts=100).collapse_edges(-2, ignore_warning=True)
 
 invariants = ["euler", "hilbert", "rank"]
 degrees = [0, 1]
