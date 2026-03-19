@@ -1,67 +1,225 @@
 import numpy as np
 import ot
+from joblib import Parallel, delayed
 
-# from multipers.mma_structures import PyMultiDiagrams_type
-from multipers.multiparameter_module_approximation import PyModule_type
-from multipers.simplex_tree_multi import SimplexTreeMulti_type
+from multipers.array_api import api_from_tensor
 
 
-def sm2diff(sm1, sm2, threshold=None):
-    pts = sm1[0]
-    dtype = pts.dtype
-    if isinstance(pts, np.ndarray):
+def _iter_arrays(obj):
+    if isinstance(obj, (list, tuple)):
+        for item in obj:
+            yield from _iter_arrays(item)
+    elif hasattr(obj, "shape") or hasattr(obj, "dtype"):
+        yield obj
 
-        def backend_concatenate(a, b):
-            return np.concatenate([a, b], axis=0, dtype=dtype)
 
-        def backend_tensor(x):
-            return np.asarray(x, dtype=int)
+def _infer_api(X, Y=None, api=None):
+    if api is not None:
+        return api
+    for data in (X, [] if Y is None else Y):
+        for entry in data:
+            for arr in _iter_arrays(entry):
+                return api_from_tensor(arr)
+    return api_from_tensor(np.asarray(0.0))
 
+
+def _extract_measure(entry, api):
+    arrays = [api.astensor(arr) for arr in _iter_arrays(entry)]
+    if len(arrays) == 2 and getattr(arrays[0], "ndim", 0) == 2:
+        return arrays[0], arrays[1]
+    for arr in arrays:
+        if getattr(arr, "ndim", 0) == 2 and arr.shape[1] >= 2:
+            return arr[:, :-1], arr[:, -1]
+    raise TypeError(
+        "Unsupported signed-measure shape passed to sliced-wasserstein projection."
+    )
+
+
+def _normalize_signed_measures(X, api=None):
+    api = _infer_api(X, api=api)
+    if len(X) == 0:
+        return [], api, None, api.dtype_default(), None
+
+    measures = []
+    dimension = None
+    coord_dtype = None
+    device = None
+    for entry in X:
+        C, M = _extract_measure(entry, api)
+        if device is None:
+            device = api.device(C)
+        C = api.to_device(api.astensor(C), device)
+        M = api.to_device(api.astensor(M).reshape(-1), device)
+        if C.ndim != 2:
+            raise TypeError("Signed-measure coordinates must be 2D arrays.")
+        if M.ndim != 1:
+            raise TypeError("Signed-measure weights must be 1D arrays.")
+        if C.shape[0] != M.shape[0]:
+            raise ValueError(
+                "Coordinate and weight arrays must have identical lengths."
+            )
+        if dimension is None:
+            dimension = C.shape[1]
+        elif C.shape[1] != dimension:
+            raise ValueError(
+                "All signed measures must share the same ambient dimension."
+            )
+        if coord_dtype is None:
+            coord_dtype = (
+                C.dtype if api.dtype_is_float(C.dtype) else api.dtype_default()
+            )
+        weight_dtype = M.dtype if api.dtype_is_float(M.dtype) else api.dtype_default()
+        measures.append((api.astype(C, coord_dtype), api.astype(M, weight_dtype)))
+    return measures, api, dimension, coord_dtype, device
+
+
+def _repeat_signed_points(pts, weights, sign, api):
+    idx = api.where(sign * weights > 0)[0]
+    if api.size(idx) == 0:
+        return pts[idx]
+    repeats = api.astype(api.abs(weights[idx]).round(), api.int64)
+    return api.repeat_interleave(pts[idx], repeats, 0)
+
+
+def _compute_signed_measure_projections(
+    X, num_directions, scales=None, api=None, seed: int = 42
+):
+    if len(X) == 0:
+        return []
+
+    measures, api, dimension, coord_dtype, device = _normalize_signed_measures(
+        X, api=api
+    )
+
+    def _to_backend(value, dtype=None):
+        tensor = api.astensor(value)
+        if dtype is not None:
+            tensor = api.astype(tensor, dtype)
+        return api.to_device(tensor, device)
+
+    lines = ot.sliced.get_random_projections(
+        dimension,
+        num_directions,
+        seed=seed,
+        type_as=measures[0][0],
+    )
+    lines = _to_backend(lines, dtype=coord_dtype)
+
+    if scales is not None:
+        scales_tensor = _to_backend(scales, dtype=coord_dtype).reshape(-1)
+        if scales_tensor.shape[0] != dimension:
+            raise ValueError("Scales must match the ambient dimension.")
+        weights = api.norm(scales_tensor[:, None] * lines, axis=0)
     else:
-        import torch
+        weights = _to_backend(np.ones(num_directions), dtype=coord_dtype)
 
-        assert isinstance(pts, torch.Tensor), "Invalid backend. Numpy or torch."
+    projections = []
+    for C, M in measures:
+        pos_pts = _repeat_signed_points(C, M, 1, api)
+        neg_pts = _repeat_signed_points(C, M, -1, api)
+        projections.append(
+            [api.matmul(pos_pts, lines), api.matmul(neg_pts, lines), weights]
+        )
+    return projections
 
-        def backend_concatenate(a, b):
-            return torch.concatenate([a, b], dim=0)
 
-        def backend_tensor(x):
-            return torch.tensor(x).type(torch.int)
+def _sliced_wasserstein_distance_on_projections(meas1, meas2):
+    api = api_from_tensor(meas1[0])
+    weights = meas1[2]
+    meas1_plus, meas1_minus = meas1[0], meas1[1]
+    meas2_plus, meas2_minus = meas2[0], meas2[1]
+    A = api.sort(api.cat([meas1_plus, meas2_minus], 0), axis=0)
+    B = api.sort(api.cat([meas2_plus, meas1_minus], 0), axis=0)
+    L1 = api.sum(api.abs(A - B), axis=0)
+    return api.mean(L1 * weights)
 
+
+def pairwise_distances(items_X, items_Y=None, metric=None, n_jobs=None, api=None):
+    if metric is None:
+        raise ValueError("A metric callable is required.")
+    if items_Y is not None:
+        num_x = len(items_X)
+        num_y = len(items_Y)
+        if api is None:
+            api = _infer_api(items_X, items_Y)
+        if num_x == 0:
+            return api.empty((0, num_y))
+        if num_y == 0:
+            return api.empty((num_x, 0))
+        par = Parallel(n_jobs=n_jobs, prefer="threads")
+        pairs = [(i, j) for i in range(num_x) for j in range(num_y)]
+        dists = par(delayed(metric)(items_X[i], items_Y[j]) for i, j in pairs)
+        if len(dists) == 0:
+            return api.empty((num_x, num_y))
+        return api.reshape(api.stack(dists), (num_x, num_y))
+
+    num_items = len(items_X)
+    if api is None:
+        api = _infer_api(items_X)
+    if num_items == 0:
+        return api.empty((0, 0))
+    if num_items == 1:
+        zero = api.astensor(0.0, dtype=api.dtype_default())
+        return api.reshape(api.stack([zero]), (1, 1))
+
+    triu = np.triu_indices(num_items, k=1)
+    par = Parallel(n_jobs=n_jobs, prefer="threads")
+    dists = par(
+        delayed(metric)(items_X[i], items_X[j]) for i, j in zip(triu[0], triu[1])
+    )
+    dists = api.stack(dists)
+    matrix = api.zeros((num_items, num_items), dtype=dists.dtype)
+    matrix = api.set_at(matrix, triu, dists)
+    return api.set_at(matrix, (triu[1], triu[0]), dists)
+
+
+def sm2diff(sm1, sm2, threshold=None, api=None):
     pts1, w1 = sm1
     pts2, w2 = sm2
-    ## TODO: optimize this
-    pos_indices1 = backend_tensor(
-        [i for i, w in enumerate(w1) for _ in range(w) if w > 0]
+    if api is None:
+        api = api_from_tensor(pts1)
+    pts1 = api.astensor(pts1)
+    device = api.device(pts1)
+    pts2 = api.to_device(api.astensor(pts2), device)
+    w1 = api.to_device(api.astensor(w1).reshape(-1), device)
+    w2 = api.to_device(api.astensor(w2).reshape(-1), device)
+
+    x = api.cat(
+        [
+            _repeat_signed_points(pts1, w1, 1, api),
+            _repeat_signed_points(pts2, w2, -1, api),
+        ],
+        0,
     )
-    pos_indices2 = backend_tensor(
-        [i for i, w in enumerate(w2) for _ in range(w) if w > 0]
+    y = api.cat(
+        [
+            _repeat_signed_points(pts1, w1, -1, api),
+            _repeat_signed_points(pts2, w2, 1, api),
+        ],
+        0,
     )
-    neg_indices1 = backend_tensor(
-        [i for i, w in enumerate(w1) for _ in range(-w) if w < 0]
-    )
-    neg_indices2 = backend_tensor(
-        [i for i, w in enumerate(w2) for _ in range(-w) if w < 0]
-    )
-    x = backend_concatenate(pts1[pos_indices1], pts2[neg_indices2])
-    y = backend_concatenate(pts1[neg_indices1], pts2[pos_indices2])
     if threshold is not None:
-        x[x > threshold] = threshold
-        y[y > threshold] = threshold
+        threshold = api.to_device(api.astensor(threshold, dtype=pts1.dtype), device)
+        x = api.where(x > threshold, threshold, x)
+        y = api.where(y > threshold, threshold, y)
     return x, y
 
 
 def sm_distance(
     sm1: tuple,
     sm2: tuple,
+    sliced: bool = False,
+    api=None,
     reg: float = 0,
     reg_m: float = 0,
     numItermax: int = 10000,
     p: float = 1,
     threshold=None,
+    num_directions: int = 10,
+    seed: int = 42,
 ):
     """
-    Computes the wasserstein distances between two signed measures,
+    Computes a distance between two signed measures,
     of the form
      - (pts,weights)
     with
@@ -69,20 +227,27 @@ def sm_distance(
      - weights : (num_pts,) int array
 
     Regularisation:
-     - sinkhorn if reg != 0
-     - sinkhorn unbalanced if reg_m != 0
-    """
-    x, y = sm2diff(sm1, sm2, threshold=threshold)
-    loss = ot.dist(
-        x, y, metric="sqeuclidean", p=p
-    )  # only euc + sqeuclidian are implemented in pot for the moment with torch backend # TODO : check later
-    if isinstance(x, np.ndarray):
-        empty_tensor = np.array([])  # uniform weights
-    else:
-        import torch
+      - sinkhorn if reg != 0
+      - sinkhorn unbalanced if reg_m != 0
 
-        assert isinstance(x, torch.Tensor), "Unimplemented backend."
-        empty_tensor = torch.tensor([])  # uniform weights
+    """
+    if api is None:
+        api = api_from_tensor(sm1[0])
+    x, y = sm2diff(sm1, sm2, threshold=threshold, api=api)
+    if sliced:
+        dist = ot.sliced.sliced_wasserstein_distance(
+            x,
+            y,
+            n_projections=num_directions,
+            p=1,
+            seed=seed,
+        )
+        return dist * len(x)
+
+    if p < 1:
+        raise ValueError("Only lp metrics with p >= 1 are supported.")
+    loss = api.cdist(x, y, p=p)
+    empty_tensor = api.to_device(api.astensor([]), api.device(x))
 
     if reg == 0:
         return ot.lp.emd2(empty_tensor, empty_tensor, M=loss) * len(x)

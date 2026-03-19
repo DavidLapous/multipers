@@ -1289,6 +1289,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         progress=False,
         grid_reconversion=None,
         scales=None,
+        seed: int = 42,
     ):
         super().__init__()
         self.n_jobs = n_jobs
@@ -1300,6 +1301,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         self.progress = progress
         self.grid_reconversion = grid_reconversion
         self.scales = scales
+        self.seed = seed
         self._api = None
         return
 
@@ -1327,6 +1329,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
                     num_directions=self.num_directions,
                     n_jobs=self.n_jobs,
                     scales=self.scales,
+                    seed=self.seed,
                 )
                 if self._sliced
                 else WassersteinDistance(

@@ -8,7 +8,7 @@ available_interfaces = Literal["numpy"]
 def add_interface(interface: str):
     global available_interfaces
     available_api.append(cast(Any, interface))
-    available_interfaces = Literal[*available_api]
+    available_interfaces = Literal.__getitem__(tuple(available_api))
 
 
 def _module_name(x):

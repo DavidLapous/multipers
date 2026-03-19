@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 
 import numpy as _np
-from scipy.spatial.distance import cdist, pdist
+from scipy.spatial.distance import cdist as _sp_cdist, pdist as _sp_pdist
 import multipers.logs as _mp_logs
 
 backend = _np
@@ -22,8 +22,7 @@ arange = _np.arange
 moveaxis = _np.moveaxis
 ones = _np.ones
 repeat_interleave = _np.repeat
-cdist = cdist  # type: ignore[no-redef]
-pdist = pdist  # type: ignore[no-redef]
+pdist = _sp_pdist  # type: ignore[no-redef]
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -45,6 +44,14 @@ def astensor(x, contiguous=False, dtype=None):
 
 def unique(x, assume_sorted=False, _mean=False):
     return _np.unique(x)
+
+
+def cdist(x, y, p=2):
+    if p == 1:
+        return _sp_cdist(x, y, metric="cityblock")
+    if p == 2:
+        return _sp_cdist(x, y, metric="euclidean")
+    return _sp_cdist(x, y, metric="minkowski", p=p)
 
 
 def sum(x, axis=None, dim=None, **kwargs):
