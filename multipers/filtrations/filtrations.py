@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.spatial import KDTree
 
-from multipers.array_api import api_from_tensor, api_from_tensors
+from multipers.array_api import api_from_tensor, api_from_tensors, check_keops
 import multipers.array_api.numpy as npapi
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
@@ -18,7 +18,7 @@ import multipers as _mp
 
 
 def KDE(bandwidth, kernel, return_log):
-    if find_spec("pykeops") is not None:
+    if find_spec("pykeops") is not None and check_keops():
         from multipers.filtrations.density import KDE as _KDE
 
         return _KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
