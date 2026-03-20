@@ -41,6 +41,8 @@ __copyright__ = "Copyright (C) 2016 Inria"
 __license__ = "MIT"
 
 from libc.stdint cimport intptr_t, int32_t, int64_t
+from libc.stddef cimport size_t
+from libc.string cimport memcpy
 from cython.operator import dereference, preincrement
 from libc.stdint cimport intptr_t
 from libc.stdint cimport uintptr_t, intptr_t
@@ -1649,11 +1651,11 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         """
         # FIXME : deal with multicritical filtrations
         import gudhi as gd
-        new_simplextree = gd.SimplexTree()
+        cdef vector[char] serialized
+        cdef size_t buffer_size
+        cdef char[::1] buffer
         assert parameter < self.get_ptr().num_parameters()
         cdef int c_parameter = parameter
-        cdef intptr_t old_ptr = self.thisptr
-        cdef intptr_t new_ptr = new_simplextree.thisptr
         if basepoint is None:
           basepoint = np.array([np.inf]*self.get_ptr().num_parameters())
           basepoint[parameter] = 0
@@ -1666,8 +1668,14 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         cdef vector[double] c_basepoint = _py2p_f64(basepoint)
         cdef vector[double] c_direction = _py2p_f64(direction)
         cdef Line[double] c_line = Line[double](c_basepoint, c_direction)
-        with nogil:
-            self.get_ptr().to_std(new_ptr, c_line, c_parameter)
+        serialized = self.get_ptr().get_to_std_state(c_line, c_parameter)
+        buffer_size = serialized.size()
+        np_buffer = np.empty(buffer_size, dtype="B")
+        buffer = np_buffer
+        if buffer_size > 0:
+            memcpy(&buffer[0], &serialized[0], buffer_size)
+        new_simplextree = gd.SimplexTree()
+        new_simplextree.__setstate__(np_buffer)
         return new_simplextree
 
     def linear_projections(self, linear_forms:np.ndarray)->Iterable[SimplexTree]:
@@ -1686,26 +1694,25 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         """
         cdef Py_ssize_t num_projections = linear_forms.shape[0]
         cdef Py_ssize_t num_parameters = linear_forms.shape[1]
+        cdef vector[char] serialized
+        cdef size_t buffer_size
+        cdef char[::1] buffer
         if num_projections == 0:  return []
         cdef vector[vector[double]] c_linear_forms = linear_forms
         assert num_parameters==self.num_parameters, f"The linear forms has to have the same number of parameter as the simplextree ({self.num_parameters})."
 
-        # Gudhi copies are faster than inserting simplices one by one
         import gudhi as gd
-        # flattened_simplextree = gd.SimplexTree()
-        # cdef intptr_t multi_prt = self.thisptr
-        # cdef intptr_t flattened_ptr = flattened_simplextree.thisptr
-        # with nogil:
-        #     # flatten_from_ptr(multi_prt, flattened_ptr, num_parameters)
-        #     self.get_ptr().to_std(flattened_ptr, num_parameters)
-        flattened_simplextree = self.project_on_line()
-        out = [flattened_simplextree] + [gd.SimplexTree(flattened_simplextree) for _ in range(num_projections-1)]
-
-        # Fills the 1-parameter simplextrees.
-        cdef vector[intptr_t] out_ptrs = [st.thisptr for st in out]
-        with nogil:
-            for i in range(num_projections):
-                self.get_ptr().to_std_linear_projection(out_ptrs[i], c_linear_forms[i])
+        out = []
+        for i in range(num_projections):
+            serialized = self.get_ptr().get_to_std_linear_projection_state(c_linear_forms[i])
+            buffer_size = serialized.size()
+            np_buffer = np.empty(buffer_size, dtype="B")
+            buffer = np_buffer
+            if buffer_size > 0:
+                memcpy(&buffer[0], &serialized[0], buffer_size)
+            st = gd.SimplexTree()
+            st.__setstate__(np_buffer)
+            out.append(st)
         return out
 
 

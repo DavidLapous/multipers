@@ -372,9 +372,26 @@ class Simplex_tree_multi_interface
     }
   }
 
+  template <typename Line_like>
+  std::vector<char> get_to_std_state(const Line_like &line, int dimension) {
+    interface_std st;
+    to_std(reinterpret_cast<intptr_t>(&st), line, dimension);
+    std::vector<char> buffer(st.get_serialization_size());
+    st.serialize(buffer.data(), buffer.size());
+    return buffer;
+  }
+
   void to_std_linear_projection(intptr_t ptr, std::vector<double> linear_form) {
     auto &st = get_simplextree_from_pointer<interface_std>(ptr);
     linear_projection(st, *this, linear_form);
+  }
+
+  std::vector<char> get_to_std_linear_projection_state(const std::vector<double> &linear_form) {
+    interface_std st;
+    linear_projection(st, *this, linear_form);
+    std::vector<char> buffer(st.get_serialization_size());
+    st.serialize(buffer.data(), buffer.size());
+    return buffer;
   }
 
   void squeeze_filtration_inplace(const std::vector<std::vector<double>> &grid, const bool coordinate_values = true) {
