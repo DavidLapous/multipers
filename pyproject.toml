@@ -48,14 +48,16 @@ keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 
 [build-system]
 requires = [
-  "scikit-build-core",
+  "scikit-build-core>=0.12",
   "numpy",
   "Cython",
 ]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
+minimum-version = "build-system.requires"
 cmake.version = ">=3.27"
+ninja.version = ">=1.11"
 cmake.build-type = "Release"
 build-dir = "build"
 
