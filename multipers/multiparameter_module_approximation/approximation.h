@@ -211,8 +211,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                                                 dim_to_iterate - 1,
                                                 std::move(current_persistence),
                                                 precision,
-                                                threshold,
-                                                line_step);
+                                                threshold);
     } else {
       _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(
           module,
@@ -223,8 +222,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
           dim_to_iterate - 1,
           current_persistence.weak_copy(),
           precision,
-          threshold,
-          line_step);
+          threshold);
       basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
     }
     // current_persistence.push_to(Line(basepoint));
