@@ -14,8 +14,8 @@ VALUE_TYPES = [
 
 # Persistence matrix column IDs
 COLUMNS = [
-    "INTRUSIVE_LIST",
-    # "UNORDERED_SET",
+    "UNORDERED_SET",
+    # "INTRUSIVE_LIST",
     # "INTRUSIVE_SET",
     # "SET",
     # "HEAP",
