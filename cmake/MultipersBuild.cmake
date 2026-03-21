@@ -258,6 +258,17 @@ function(multipers_configure_module module_name target_name)
     target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
     set(_use_phat_includes FALSE)
 
+  elseif(module_name STREQUAL "_hera_interface")
+    multipers_link_openmp(${target_name})
+    target_include_directories(
+      ${target_name}
+      BEFORE
+      PRIVATE
+        ${MULTIPERS_HERA_PHAT_INCLUDE_DIRS}
+        ${MULTIPERS_HERA_INCLUDE_DIRS}
+    )
+    set(_use_phat_includes FALSE)
+
   endif()
 
   # Add standard phat includes unless module uses its own forked version
@@ -354,6 +365,7 @@ set(MULTIPERS_MODULES
   ops
   _mpfree_interface
   _aida_interface
+  _hera_interface
   _function_delaunay_interface
   _multi_critical_interface
   _rhomboid_tiling_interface
