@@ -120,12 +120,6 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
   constexpr const bool verbose2 = false;
   while (!line_iterator.is_finished()) {
     const Line<value_type> &new_line = (axis_ >= 0) ? *(++line_iterator) : *line_iterator.next(axis);
-    // if constexpr (axis_ >= 0) {
-    //   new_line = *(++line_iterator); // first line is always a persistence
-    // } else {
-    //   new_line = *line_iterator.next(axis);
-    // }
-    // copy, no need to add it
     if constexpr (verbose) std::cout << "----------------------------------------------" << std::endl;
     if constexpr (verbose) std::cout << "Line basepoint " << new_line.base_point() << std::endl;
     slicer.push_to(new_line);
@@ -207,17 +201,32 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
   for (int i = 0; i < grid_size[dim_to_iterate]; ++i) {
     // TODO : multithread, but needs matrix to be thread safe + put mutex on
     // module
-    _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(
-        module,
-        typename Line<typename Filtration_value::value_type>::Point_t(basepoint),
-        direction,
-        grid_size,
-        signs,
-        dim_to_iterate - 1,
-        current_persistence.weak_copy(),
-        precision,
-        threshold);
-    basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
+    const bool is_last = i + 1 == grid_size[dim_to_iterate];
+    if (is_last) {
+      _rec_mma2<axis, Filtration_value, Slicer>(module,
+                                                std::move(basepoint),
+                                                direction,
+                                                grid_size,
+                                                signs,
+                                                dim_to_iterate - 1,
+                                                std::move(current_persistence),
+                                                precision,
+                                                threshold,
+                                                line_step);
+    } else {
+      _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(
+          module,
+          typename Line<typename Filtration_value::value_type>::Point_t(basepoint),
+          direction,
+          grid_size,
+          signs,
+          dim_to_iterate - 1,
+          current_persistence.weak_copy(),
+          precision,
+          threshold,
+          line_step);
+      basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
+    }
     // current_persistence.push_to(Line(basepoint));
     // current_persistence.update_persistence_computation();
   }

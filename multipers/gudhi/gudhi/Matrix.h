@@ -67,6 +67,8 @@
 #include <gudhi/Persistence_matrix/columns/naive_vector_column.h>
 #include <gudhi/Persistence_matrix/columns/heap_column.h>
 
+// #include <gudhi/Persistence_matrix/columns/chatty_column.h>
+// #include <gudhi/Persistence_matrix/columns/hybrid_small_unordered_column.h>
 #include <gudhi/Persistence_matrix/columns/phat_bit_tree_column.h>
 #include <gudhi/Persistence_matrix/columns/phat_vector_column.h>
 
@@ -100,6 +102,21 @@ struct Matrix_column_type_map<Column_types::UNORDERED_SET, MatrixType> {
   using type = Unordered_set_column<MatrixType>;
 };
 
+// template <class MatrixType>
+// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN, MatrixType> {
+//   using type = Chatty_column<MatrixType>;
+// };
+//
+// template <class MatrixType>
+// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN_FLIP, MatrixType> {
+//   using type = Chatty_column<MatrixType>;
+// };
+//
+// template <class MatrixType>
+// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN_ADAPTIVE, MatrixType> {
+//   using type = Chatty_column<MatrixType>;
+// };
+
 template <class MatrixType>
 struct Matrix_column_type_map<Column_types::VECTOR, MatrixType> {
   using type = Vector_column<MatrixType>;
@@ -119,6 +136,11 @@ template <class MatrixType>
 struct Matrix_column_type_map<Column_types::SMALL_VECTOR, MatrixType> {
   using type = Naive_small_vector_column<MatrixType>;
 };
+
+// template <class MatrixType>
+// struct Matrix_column_type_map<Column_types::HYBRID_SMALL_UNORDERED, MatrixType> {
+//   using type = Hybrid_small_unordered_column<MatrixType>;
+// };
 
 template <class MatrixType>
 struct Matrix_column_type_map<Column_types::PHAT_VECTOR, MatrixType> {

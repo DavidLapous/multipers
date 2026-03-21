@@ -66,7 +66,7 @@ RULES = [
     "Degree_rips_bifiltration => kcritical=True",
     "Graph|Clement => vine=True",
     "GudhiCohomology => vine=False",
-    "Graph|GudhiCohomology => column=INTRUSIVE_LIST",
+    f"Graph|GudhiCohomology => column={COLUMNS[0]}",
 ]
 
 # Hard requirements validated after RULES are applied.
