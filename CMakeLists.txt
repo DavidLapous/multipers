@@ -1,12 +1,6 @@
 cmake_minimum_required(VERSION 3.27)
 project(multipers LANGUAGES C CXX)
 
-if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
-  find_program(MULTIPERS_MAKE_PROGRAM NAMES make gmake)
-  if(MULTIPERS_MAKE_PROGRAM)
-    set(CMAKE_MAKE_PROGRAM "${MULTIPERS_MAKE_PROGRAM}" CACHE FILEPATH "Make program for Unix Makefiles" FORCE)
-  endif()
-endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

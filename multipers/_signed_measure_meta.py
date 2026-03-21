@@ -5,7 +5,6 @@ import numpy as np
 import time
 
 from multipers.grids import compute_grid, sms_in_grid
-from multipers.plots import plot_signed_measures
 from multipers.point_measure import clean_sms, zero_out_sms
 from multipers.simplex_tree_multi import (
     SimplexTreeMulti_type,
@@ -415,5 +414,7 @@ def signed_measure(
         if verbose:
             print(f"Done. ({time.time() - t0:.3f}s)")
     if plot:
+        from multipers.plots import plot_signed_measures
+
         plot_signed_measures(sms, alpha=1 if invariant == "hook" else None)
     return sms
