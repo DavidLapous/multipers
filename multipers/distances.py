@@ -311,6 +311,21 @@ def _require_hera_backend():
     return _hera_interface
 
 
+
+def hera_bottleneck_distances(left_diagrams, right_diagrams, *, delta: float = 0.01):
+    """
+    Compute Hera bottleneck distances for aligned batches of persistence diagrams.
+
+    The batch is evaluated in parallel inside the compiled Hera bridge with
+    `cython.prange`, so it is the preferred backend for many line slices.
+    """
+    _hera_interface = _require_hera_backend()
+    return _hera_interface.bottleneck_distances(
+        left_diagrams,
+        right_diagrams,
+        delta=delta,
+    )
+
 def _reduce_monte_carlo_line_distances(weighted_distances, *, line_reduction: str, api):
     if line_reduction == "max":
         return api.max(weighted_distances)
@@ -654,8 +669,8 @@ def matching_distance(
         delta=float(hera_delta),
         max_depth=int(hera_max_depth),
         initialization_depth=int(hera_initialization_depth),
-        bound_strategy=hera_bound_strategy,
-        traverse_strategy=hera_traverse_strategy,
+        bound_strategy=_MATCHING_DISTANCE_BOUND_STRATEGIES[hera_bound_strategy],
+        traverse_strategy=_MATCHING_DISTANCE_TRAVERSE_STRATEGIES[hera_traverse_strategy],
         tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
         stop_asap=bool(hera_stop_asap),
         return_stats=bool(return_stats),

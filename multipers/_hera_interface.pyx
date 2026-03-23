@@ -348,7 +348,7 @@ def bottleneck_distances(object left_diagrams, object right_diagrams, double del
     out = out_np
 
     with nogil:
-        for i in prange(num_diagrams, schedule="guided"):
+        for i in prange(num_diagrams, schedule="static"):
             out[i] = _bottleneck_distance_from_flat(
                 left_points,
                 left_indptr,
