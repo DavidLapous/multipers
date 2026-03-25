@@ -285,7 +285,7 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
           self.tree.set_num_parameters(num_parameters);
           return self;
         }, nb::rv_policy::reference_internal)
-        .def("_serialize_state", [](Wrapper& self) { return mpst::serialized_state(self); })
+        .def("_serialize_state", [](Wrapper& self) -> nb::object { return mpst::serialized_state(self); })
         .def("_deserialize_state", [](Wrapper& self, nb::handle state) -> Wrapper& { mpst::load_state(self, state); return self; }, nb::rv_policy::reference_internal)
         .def("_insert_simplex", [](Wrapper& self, nb::handle simplex_handle, nb::handle filtration_handle, bool force) {
           auto simplex = mpst::vector_from_handle<int>(simplex_handle);
@@ -302,7 +302,7 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
           auto simplex = mpst::vector_from_handle<int>(simplex_handle);
           return mpst::filtration_to_python<Filtration, {{D['CTYPE']}}, k_is_kcritical>(*self.tree.simplex_filtration(simplex), nb::find(self));
         })
-        .def("_iter_simplices", [](Wrapper& self) { return mpst::simplices_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self); })
+        .def("_iter_simplices", [](Wrapper& self) -> nb::list { return mpst::simplices_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self); })
         .def("_get_skeleton", [](Wrapper& self, int dimension) { return mpst::skeleton_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self, dimension); })
         .def("_get_boundaries", [](Wrapper& self, nb::handle simplex_handle) { return mpst::boundaries_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self, mpst::vector_from_handle<int>(simplex_handle)); })
         .def("_to_scc_blocks", [](Wrapper& self, bool flattened) {
@@ -341,16 +341,16 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
         .def("_unsqueeze_to", [](Wrapper& self, Wrapper& out, nb::handle grid_handle) {
           out.tree.unsqueeze_filtration(reinterpret_cast<intptr_t>(&self.tree), mpst::matrix_from_handle<double>(grid_handle));
         })
-        .def("num_vertices", [](Wrapper& self) { return self.tree.num_vertices(); })
-        .def("num_simplices", [](Wrapper& self) { return self.tree.num_simplices(); })
-        .def("dimension", [](Wrapper& self) { return self.tree.dimension(); })
-        .def("upper_bound_dimension", [](Wrapper& self) { return self.tree.upper_bound_dimension(); })
+        .def("num_vertices", [](Wrapper& self) -> int { return self.tree.num_vertices(); })
+        .def("num_simplices", [](Wrapper& self) -> int { return self.tree.num_simplices(); })
+        .def("dimension", [](Wrapper& self) -> int { return self.tree.dimension(); })
+        .def("upper_bound_dimension", [](Wrapper& self) -> int { return self.tree.upper_bound_dimension(); })
         .def("simplex_dimension", [](Wrapper& self, nb::handle simplex_handle) { return self.tree.simplex_dimension(mpst::vector_from_handle<int>(simplex_handle)); })
         .def("find_simplex", [](Wrapper& self, nb::handle simplex_handle) { auto simplex = mpst::vector_from_handle<int>(simplex_handle); return self.tree.find_simplex(simplex); })
         .def("remove_maximal_simplex", [](Wrapper& self, nb::handle simplex_handle) -> Wrapper& { self.tree.remove_maximal_simplex(mpst::vector_from_handle<int>(simplex_handle)); return self; }, nb::rv_policy::reference_internal)
         .def("prune_above_dimension", [](Wrapper& self, int dimension) { return self.tree.prune_above_dimension(dimension); })
         .def("expansion", [](Wrapper& self, int max_dim) -> Wrapper& { self.tree.expansion(max_dim); self.tree.make_filtration_non_decreasing(); return self; }, nb::rv_policy::reference_internal)
-        .def("make_filtration_non_decreasing", [](Wrapper& self) { return self.tree.make_filtration_non_decreasing(); })
+        .def("make_filtration_non_decreasing", [](Wrapper& self) -> bool { return self.tree.make_filtration_non_decreasing(); })
         .def("reset_filtration", [](Wrapper& self, nb::handle filtration_handle, int min_dim) -> Wrapper& {
           auto filtration = mpst::filtration_from_handle<Filtration, {{D['CTYPE']}}, k_is_kcritical>(filtration_handle, self.tree.num_parameters());
           self.tree.reset_filtration(filtration, min_dim);
@@ -365,7 +365,7 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
           std::vector<int32_t> values(out.begin(), out.end());
           return nb::cast(mpst::owned_array<int32_t>(std::move(values), {out.size() / (dim + 1), size_t(dim + 1)}));
         })
-        .def("get_edge_list", [](Wrapper& self) { return mpst::edge_list_to_python<{{D['CTYPE']}}>(self.tree.get_edge_list()); })
+        .def("get_edge_list", [](Wrapper& self) -> nb::object { return mpst::edge_list_to_python<{{D['CTYPE']}}>(self.tree.get_edge_list()); })
         .def("pts_to_indices", [](Wrapper& self, nb::handle pts_handle, nb::handle dims_handle) {
           auto result = self.tree.pts_to_indices(
               mpst::matrix_from_handle<{{D['CTYPE']}}>(pts_handle),

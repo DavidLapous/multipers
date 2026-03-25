@@ -235,16 +235,16 @@ NB_MODULE(_mma_nanobind, m) {
 
     nb::class_<WrapperSum>(m, "PySummand_{{SHORT}}")
         .def(nb::init<>())
-        .def("get_birth_list", [](WrapperSum& self) { return mpmma::filtration_list_to_python<T>(self.sum.compute_birth_list()); })
-        .def("get_death_list", [](WrapperSum& self) { return mpmma::filtration_list_to_python<T>(self.sum.compute_death_list()); })
+        .def("get_birth_list", [](WrapperSum& self) -> nb::list { return mpmma::filtration_list_to_python<T>(self.sum.compute_birth_list()); })
+        .def("get_death_list", [](WrapperSum& self) -> nb::list { return mpmma::filtration_list_to_python<T>(self.sum.compute_death_list()); })
         .def_prop_ro("degree", [](const WrapperSum& self) -> int { return self.sum.get_dimension(); })
-        .def("get_bounds", [](WrapperSum& self) {
+        .def("get_bounds", [](WrapperSum& self) -> nb::tuple {
           auto cbounds = self.sum.compute_bounds().get_bounding_corners();
           return nb::make_tuple(
               nb::cast(mpmma::owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()), {cbounds.first.size()})),
               nb::cast(mpmma::owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()), {cbounds.second.size()})));
         })
-        .def("num_parameters", [](WrapperSum& self) {
+        .def("num_parameters", [](WrapperSum& self) -> int {
           auto births = self.sum.compute_birth_list();
           if (!births.empty() && births[0].is_finite()) return births[0].num_parameters();
           auto deaths = self.sum.compute_death_list();
@@ -266,14 +266,14 @@ NB_MODULE(_mma_nanobind, m) {
           auto values = mpmma::vector_from_handle<T>(x);
           return self.box.contains(values);
         })
-        .def("get", [](WrapperBox& self) {
+        .def("get", [](WrapperBox& self) -> nb::tuple {
           auto lower = std::vector<T>(self.box.get_lower_corner().begin(), self.box.get_lower_corner().end());
           auto upper = std::vector<T>(self.box.get_upper_corner().begin(), self.box.get_upper_corner().end());
           return nb::make_tuple(
               nb::cast(mpmma::owned_array<T>(std::move(lower), {self.box.get_lower_corner().size()})),
               nb::cast(mpmma::owned_array<T>(std::move(upper), {self.box.get_upper_corner().size()})));
         })
-        .def("to_multipers", [](WrapperBox& self) {
+        .def("to_multipers", [](WrapperBox& self) -> nb::object {
           auto lower = std::vector<T>(self.box.get_lower_corner().begin(), self.box.get_lower_corner().end());
           auto upper = std::vector<T>(self.box.get_upper_corner().begin(), self.box.get_upper_corner().end());
           std::vector<T> flat;
@@ -294,7 +294,7 @@ NB_MODULE(_mma_nanobind, m) {
           delete other;
           return self;
         }, nb::rv_policy::reference_internal)
-        .def("__len__", [](WrapperMod& self) { return self.mod.size(); })
+        .def("__len__", [](WrapperMod& self) -> int { return self.mod.size(); })
         .def("__eq__", [](WrapperMod& self, WrapperMod& other) { return self.mod == other.mod; })
         .def("merge", [](WrapperMod& self, WrapperMod& other, int dim) -> WrapperMod& {
           Module c_other = other.mod;
@@ -331,7 +331,7 @@ NB_MODULE(_mma_nanobind, m) {
           }
           return out;
         })
-        .def("_get_dump", [](WrapperMod& self) { return mpmma::dump_module<T>(self.mod); })
+        .def("_get_dump", [](WrapperMod& self) -> nb::tuple { return mpmma::dump_module<T>(self.mod); })
         .def("_load_dump", [](WrapperMod& self, nb::handle dump) -> WrapperMod& {
           self.mod = mpmma::module_from_dump<T>(dump);
           return self;
@@ -342,13 +342,13 @@ NB_MODULE(_mma_nanobind, m) {
           out.sum = self.mod.get_summand((unsigned int) (index % (int) size));
           return out;
         })
-        .def("get_bottom", [](WrapperMod& self) {
+        .def("get_bottom", [](WrapperMod& self) -> nb::object {
           return nb::cast(mpmma::owned_array<T>(std::vector<T>(self.mod.get_box().get_lower_corner().begin(), self.mod.get_box().get_lower_corner().end()), {self.mod.get_box().get_lower_corner().size()}));
         })
-        .def("get_top", [](WrapperMod& self) {
+        .def("get_top", [](WrapperMod& self) -> nb::object {
           return nb::cast(mpmma::owned_array<T>(std::vector<T>(self.mod.get_box().get_upper_corner().begin(), self.mod.get_box().get_upper_corner().end()), {self.mod.get_box().get_upper_corner().size()}));
         })
-        .def("get_box", [](WrapperMod& self) {
+        .def("get_box", [](WrapperMod& self) -> nb::object {
           auto lower = std::vector<T>(self.mod.get_box().get_lower_corner().begin(), self.mod.get_box().get_lower_corner().end());
           auto upper = std::vector<T>(self.mod.get_box().get_upper_corner().begin(), self.mod.get_box().get_upper_corner().end());
           return nb::module_::import_("numpy").attr("array")(nb::make_tuple(
@@ -357,7 +357,7 @@ NB_MODULE(_mma_nanobind, m) {
         })
         .def_prop_ro("max_degree", [](const WrapperMod& self) -> int { return self.mod.get_max_dimension(); })
         .def_prop_ro("num_parameters", [](const WrapperMod& self) -> int { return self.mod.get_box().get_lower_corner().size(); })
-        .def("get_bounds", [](WrapperMod& self) {
+        .def("get_bounds", [](WrapperMod& self) -> nb::tuple {
           auto cbounds = self.mod.compute_bounds().get_bounding_corners();
           return nb::make_tuple(
               nb::cast(mpmma::owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()), {cbounds.first.size()})),
@@ -371,17 +371,17 @@ NB_MODULE(_mma_nanobind, m) {
           self.mod.translate(mpmma::vector_from_handle<T>(factors), degree);
           return self;
         }, "translation"_a, "degree"_a = -1, nb::rv_policy::reference_internal)
-        .def("get_filtration_values", [](WrapperMod& self, bool unique) {
+        .def("get_filtration_values", [](WrapperMod& self, bool unique) -> std::vector<std::vector<T>> {
           return mpmma::filtration_values_from_module<T>(self.mod, unique);
         }, "unique"_a = true)
-        .def("get_dimensions", [](WrapperMod& self) {
+        .def("get_dimensions", [](WrapperMod& self) -> nb::object {
           std::vector<int32_t> dims;
           dims.reserve(self.mod.size());
           for (size_t i = 0; i < self.mod.size(); ++i) dims.push_back((int32_t) self.mod.get_summand((unsigned int) i).get_dimension());
           return nb::cast(mpmma::owned_array<int32_t>(std::move(dims), {self.mod.size()}));
         })
 {{if SHORT[0] == 'f'}}
-        .def("_get_barcode_from_line", [](WrapperMod& self, nb::handle basepoint_handle, nb::handle direction_handle, int degree) {
+        .def("_get_barcode_from_line", [](WrapperMod& self, nb::handle basepoint_handle, nb::handle direction_handle, int degree) -> nb::tuple {
           auto basepoint = mpmma::vector_from_handle<T>(basepoint_handle);
           Gudhi::multi_persistence::Line<T> line = direction_handle.is_none()
               ? Gudhi::multi_persistence::Line<T>(basepoint)

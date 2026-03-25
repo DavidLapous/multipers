@@ -579,12 +579,12 @@ NB_MODULE(_slicer_nanobind, m)
             },
             nb::arg("value").none())
         .def_rw("minpres_degree", &Wrapper::minpres_degree)
-        .def("get_ptr", [](Wrapper& self) { return reinterpret_cast<intptr_t>(&self.truc); })
+        .def("get_ptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.truc); })
         .def("_from_ptr", [](Wrapper& self, intptr_t slicer_ptr) -> Wrapper& {
           self.truc = *reinterpret_cast<Concrete*>(slicer_ptr);
           return self;
         }, nb::rv_policy::reference_internal)
-        .def("__len__", [](Wrapper& self) { return self.truc.get_number_of_cycle_generators(); })
+        .def("__len__", [](Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
         .def_prop_ro("num_generators", [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
         .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
         .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PY_VALUE_TYPE'].split('.')[-1]}}" )).attr("type"); })
@@ -600,8 +600,8 @@ NB_MODULE(_slicer_nanobind, m)
           }
           return nb::cast(std::numeric_limits<Value>::max());
         })
-        .def("get_dimensions", [](Wrapper& self) { return mpnb::dimensions_array(self); })
-        .def("get_boundaries", [](Wrapper& self, bool packed) { return mpnb::boundaries_object(self, packed); }, "packed"_a = false)
+        .def("get_dimensions", [](Wrapper& self) -> nb::object { return mpnb::dimensions_array(self); })
+        .def("get_boundaries", [](Wrapper& self, bool packed) -> nb::object { return mpnb::boundaries_object(self, packed); }, "packed"_a = false)
         .def("get_filtration", [](Wrapper& self, int idx, bool raw) {
           ssize_t n = static_cast<ssize_t>(self.truc.get_number_of_cycle_generators());
           ssize_t i = idx;
@@ -613,7 +613,7 @@ NB_MODULE(_slicer_nanobind, m)
           }
           return mpnb::filtration_value_to_python<Wrapper, Value, k_is_kcritical, k_is_degree_rips>(self, static_cast<size_t>(i), false, raw);
         }, "idx"_a, "raw"_a = false)
-        .def("_get_filtrations_impl", [](Wrapper& self, bool raw, bool view, bool packed) {
+        .def("_get_filtrations_impl", [](Wrapper& self, bool raw, bool view, bool packed) -> nb::object {
           if (packed) {
             return mpnb::pack_filtrations<Wrapper, Value, k_is_kcritical, k_is_degree_rips>(self, raw);
           }
@@ -627,7 +627,7 @@ NB_MODULE(_slicer_nanobind, m)
           }
           return mpnb::copy_filtrations<Wrapper, Value, k_is_kcritical, k_is_degree_rips>(self, raw);
         }, "raw"_a = false, "view"_a = false, "packed"_a = false)
-        .def("get_filtrations_values", [](Wrapper& self) {
+        .def("get_filtrations_values", [](Wrapper& self) -> nb::object {
           return mpnb::filtration_values_array<Wrapper, Value, k_is_kcritical, k_is_degree_rips>(self);
         })
         .def("build_from_simplex_tree", [](Wrapper& self, nb::object st) -> Wrapper& {
@@ -648,7 +648,7 @@ NB_MODULE(_slicer_nanobind, m)
           self.truc = Gudhi::multi_persistence::build_slicer_from_scc_file<Concrete>(path, rivet_compatible, reverse, shift_dimension);
           return self;
         }, "path"_a, "rivet_compatible"_a = false, "reverse"_a = false, "shift_dimension"_a = 0, nb::rv_policy::reference_internal)
-        .def("_to_scc_raw", [](Wrapper& self, std::string path, int degree, bool rivet_compatible, bool ignore_last_generators, bool strip_comments, bool reverse) {
+        .def("_to_scc_raw", [](Wrapper& self, std::string path, int degree, bool rivet_compatible, bool ignore_last_generators, bool strip_comments, bool reverse) -> void {
           write_slicer_to_scc_file(path, self.truc, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse);
         }, "path"_a, "degree"_a = -1, "rivet_compatible"_a = false, "ignore_last_generators"_a = false, "strip_comments"_a = false, "reverse"_a = false)
         .def("push_to_line", [](Wrapper& self, nb::object basepoint, nb::object direction) -> Wrapper& {
@@ -672,11 +672,11 @@ NB_MODULE(_slicer_nanobind, m)
           self.truc.update_persistence_computation(ignore_infinite_filtration_values);
           return self;
         }, "ignore_infinite_filtration_values"_a = false, nb::rv_policy::reference_internal)
-        .def("get_barcode", [](Wrapper& self) { return mpnb::dim_barcode_to_tuple<decltype(self.truc.template get_flat_barcode<true, Value, false>()), Value>(self.truc.template get_flat_barcode<true, Value, false>()); })
-        .def("get_barcode_idx", [](Wrapper& self) { return mpnb::dim_barcode_to_tuple<decltype(self.truc.template get_flat_barcode<true, int, true>()), int>(self.truc.template get_flat_barcode<true, int, true>()); })
-        .def("get_current_filtration", [](Wrapper& self) {
+        .def("get_barcode", [](Wrapper& self) -> nb::tuple { return mpnb::dim_barcode_to_tuple<decltype(self.truc.template get_flat_barcode<true, Value, false>()), Value>(self.truc.template get_flat_barcode<true, Value, false>()); })
+        .def("get_barcode_idx", [](Wrapper& self) -> nb::tuple { return mpnb::dim_barcode_to_tuple<decltype(self.truc.template get_flat_barcode<true, int, true>()), int>(self.truc.template get_flat_barcode<true, int, true>()); })
+        .def("get_current_filtration", [](Wrapper& self) -> nb::object {
           auto current = self.truc.get_slice();
-          return mpnb::owned_array<Value>(std::move(current), {current.size()});
+          return nb::cast(mpnb::owned_array<Value>(std::move(current), {current.size()}));
         })
         .def("prune_above_dimension", [](Wrapper& self, int max_dimension) -> Wrapper& {
           self.truc.prune_above_dimension(max_dimension);
@@ -728,8 +728,8 @@ NB_MODULE(_slicer_nanobind, m)
           out.minpres_degree = self.minpres_degree;
           return out;
         })
-        .def("copy", [](Wrapper& self) { return Wrapper(self); })
-        .def("_info_string", [](Wrapper& self) { return slicer_to_str(self.truc); });
+        .def("copy", [](Wrapper& self) -> Wrapper { return Wrapper(self); })
+        .def("_info_string", [](Wrapper& self) -> std::string { return slicer_to_str(self.truc); });
 
 {{if D['IS_VINE']}}
     cls
@@ -784,9 +784,9 @@ NB_MODULE(_slicer_nanobind, m)
           }
           return nb::object(out);
         }, "dim"_a = 1, "update"_a = true, "idx"_a = false)
-        .def("get_permutation", [](Wrapper& self) {
+        .def("get_permutation", [](Wrapper& self) -> nb::object {
           auto order = self.truc.get_current_order();
-          return mpnb::owned_array<uint32_t>(std::move(order), {order.size()});
+          return nb::cast(mpnb::owned_array<uint32_t>(std::move(order), {order.size()}));
         });
 {{endif}}
 
