@@ -210,8 +210,7 @@ jobs:
         import multipers
 
 
-        def parse_nm(path: Path):
-          out = subprocess.check_output(["nm", "-g", str(path)], text=True)
+        def parse_nm_output(out: str):
           rows = []
           for line in out.splitlines():
             m = re.match(r"^\s*([0-9A-Fa-f]+)?\s*([A-Za-z])\s+(.+)$", line)
@@ -220,15 +219,57 @@ jobs:
           return rows
 
 
-        if shutil.which("nm") is None:
-          raise RuntimeError("nm is required for symbol ownership checks")
+        def parse_readelf_output(out: str):
+          rows = []
+          for line in out.splitlines():
+            parts = line.split()
+            if len(parts) < 8 or not parts[0].rstrip(":").isdigit():
+              continue
+            ndx = parts[6]
+            name = parts[7]
+            rows.append(("U" if ndx == "UND" else "T", name))
+          return rows
+
+
+        def parse_symbols(path: Path):
+          commands = []
+          if sys.platform.startswith("linux"):
+            commands = [
+              (["nm", "-D", str(path)], parse_nm_output),
+              (["readelf", "-Ws", str(path)], parse_readelf_output),
+            ]
+          else:
+            commands = [(["nm", "-g", str(path)], parse_nm_output)]
+
+          errors = []
+          for command, parser in commands:
+            if shutil.which(command[0]) is None:
+              errors.append(f"{command[0]} not available")
+              continue
+            proc = subprocess.run(command, text=True, capture_output=True)
+            parsed = parser(proc.stdout)
+            if parsed:
+              return parsed
+            stderr = proc.stderr.strip()
+            if stderr:
+              errors.append(f"{' '.join(command)} -> {stderr}")
+            else:
+              errors.append(f"{' '.join(command)} -> no parseable symbols")
+
+          raise RuntimeError(
+            f"Unable to inspect symbols in {path}: " + " ; ".join(errors)
+          )
+
+
+        if not any(shutil.which(tool) is not None for tool in ("nm", "readelf")):
+          raise RuntimeError("nm or readelf is required for symbol ownership checks")
 
         pkg = Path(multipers.__file__).resolve().parent
         core_candidates = sorted(pkg.glob("libmultipers_core*.so"))
         if not core_candidates:
           raise RuntimeError(f"Missing libmultipers_core shared library in {pkg}")
         core = core_candidates[0]
-        core_defs = {sym for typ, sym in parse_nm(core) if typ != "U"}
+        core_defs = {sym for typ, sym in parse_symbols(core) if typ != "U"}
         if not core_defs:
           raise RuntimeError("libmultipers_core exports no global symbols")
 
@@ -262,7 +303,7 @@ jobs:
             raise RuntimeError(f"Missing compiled module for {module_name}")
           module_path = matches[0]
 
-          module_rows = parse_nm(module_path)
+          module_rows = parse_symbols(module_path)
           undef = {
             sym
             for typ, sym in module_rows
