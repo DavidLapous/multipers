@@ -197,21 +197,7 @@ def Slicer(
     elif isinstance(st, str):
         slicer = _Slicer()._build_from_scc_file(st, shift_dimension=_shift_dimension)
     elif is_simplextree_multi(st):
-        boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
-            st._to_scc(),
-            inplace=False,
-            is_kcritical=is_kcritical,
-        )
-        boundary = tuple(np.asarray(row, dtype=np.uint32).tolist() for row in boundary)
-        dimensions = np.asarray(dimensions, dtype=int).tolist()
-        if is_kcritical:
-            multifiltrations = [
-                np.asarray(filtration, dtype=dtype).tolist()
-                for filtration in multifiltrations
-            ]
-        else:
-            multifiltrations = np.asarray(multifiltrations, dtype=dtype).tolist()
-        slicer = _Slicer(boundary, dimensions, multifiltrations)
+        slicer = _Slicer().build_from_simplex_tree(st)
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
     elif backend == "Graph":
