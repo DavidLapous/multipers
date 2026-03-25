@@ -21,7 +21,7 @@ jobs:
     - name: Build source distribution
       shell: bash -el {0}
       run: |
-        micromamba create -n sources python=3.13 pip cython numpy python-build wheel scikit-build-core
+        micromamba create -n sources python=3.13 pip cython numpy python-build wheel scikit-build-core nanobind
         micromamba activate sources
         python -m build --sdist --no-isolation
     - name: Upload sources
@@ -75,7 +75,7 @@ jobs:
       shell: bash -el {0}
       run: |
         # conda install mamba -c conda-forge
-        micromamba create -n build python=${{matrix.python-version}} pip wheel 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx ninja -c conda-forge
+        micromamba create -n build python=${{matrix.python-version}} pip wheel 'gudhi>=3.11' 'numpy>=2' pot 'cython>=3' pytest scikit-learn matplotlib joblib tqdm scipy tbb tbb-devel libboost libboost-devel python-build scikit-build-core llvm-openmp llvm cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx ninja nanobind -c conda-forge
         micromamba activate build
 
         pip install pykeops filtration-domination --upgrade
