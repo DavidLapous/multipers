@@ -199,6 +199,7 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba activate test
+        cd "$(mktemp -d)"
         python - <<'PY'
         import re
         import shutil
@@ -290,6 +291,7 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba activate test
+        cd "$(mktemp -d)"
         python - <<'PY'
         from importlib import import_module
         from pathlib import Path

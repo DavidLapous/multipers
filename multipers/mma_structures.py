@@ -72,6 +72,12 @@ def _module_reduce(self):
     return (_module_reconstruct, (type(self), self.__getstate__()))
 
 
+def _module_add_mmas(self, mmas):
+    for mma in mmas:
+        self.merge(mma)
+    return self
+
+
 def _module_bc_to_full(bcs, basepoint, direction=None):
     basepoint = np.asarray(basepoint)[None, None, :]
     direction = 1 if direction is None else np.asarray(direction)[None, None, :]
@@ -338,6 +344,7 @@ def _install_python_api():
         cls.__getstate__ = _module_getstate
         cls.__setstate__ = _module_setstate
         cls.__reduce__ = _module_reduce
+        cls._add_mmas = _module_add_mmas
         cls._bc_to_full = staticmethod(_module_bc_to_full)
         cls._threshold_bc = staticmethod(_module_threshold_bc)
         if np.issubdtype(np.dtype(cls().dtype), np.floating):

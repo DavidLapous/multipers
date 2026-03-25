@@ -41,7 +41,9 @@ def batch_signed_measure_convolutions(
     if api is None:
         api = api_from_tensors(signed_measures, x)
     if not api.check_keops():
-        raise NotImplementedError(f"This function needs keops, which failed to init for {api=}.")
+        raise NotImplementedError(
+            f"This function needs keops, which failed to init for {api=}."
+        )
     if signed_measures.ndim == 2:
         signed_measures = signed_measures[None, :, :]
     sms = signed_measures[..., :-1]
@@ -1048,7 +1050,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 ), f"Bad axis/degree count. Got {num_axis_degree} (Internal error)"
                 num_parameters = X[0][0].shape[1]
                 dtype = X[0][0].dtype
-                unragged_tensor = self._backend.zeros(
+                unragged_tensor = self._api.zeros(
                     (
                         num_axis_degree,
                         num_data,

@@ -10,6 +10,7 @@ from multipers import (
     io,
     logs,
     multiparameter_module_approximation,
+    plots,
     simplex_tree_multi,
     slicer,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "io",
     "logs",
     "multiparameter_module_approximation",
+    "plots",
     "simplex_tree_multi",
     "slicer",
     "signed_measure",
