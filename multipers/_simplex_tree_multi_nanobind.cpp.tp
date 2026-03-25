@@ -250,16 +250,16 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
         }), "num_parameters"_a = -1)
         .def_prop_rw(
             "filtration_grid",
-            [](Wrapper& self) { return self.filtration_grid; },
+            [](Wrapper& self) -> nb::object { return self.filtration_grid; },
             [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::list() : value; },
             nb::arg("value").none())
         .def_prop_rw(
             "_is_function_simplextree",
-            [](Wrapper& self) { return self.is_function_simplextree; },
+            [](const Wrapper& self) -> bool { return self.is_function_simplextree; },
             [](Wrapper& self, bool value) { self.is_function_simplextree = value; })
         .def_prop_rw(
             "thisptr",
-            [](Wrapper& self) { return reinterpret_cast<intptr_t>(&self.tree); },
+            [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
             [](Wrapper& self, intptr_t ptr) {
               Interface* other = reinterpret_cast<Interface*>(ptr);
               self.tree = *other;
@@ -378,11 +378,11 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
         .def("set_keys_to_enumerate", [](Wrapper& self) -> Wrapper& { self.tree.set_keys_to_enumerate(); return self; }, nb::rv_policy::reference_internal)
         .def("set_num_parameter", [](Wrapper& self, int num) -> Wrapper& { self.tree.resize_all_filtrations(num); self.tree.set_num_parameters(num); return self; }, nb::rv_policy::reference_internal)
         .def("__eq__", [](Wrapper& self, Wrapper& other) { return self.tree == other.tree; })
-        .def_prop_ro("num_parameters", [](Wrapper& self) { return self.tree.num_parameters(); })
-        .def_prop_ro("is_kcritical", [](Wrapper&) { return k_is_kcritical; })
-        .def_prop_ro("dtype", [](Wrapper&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PYTYPE'].split('.')[-1]}}" )).attr("type"); })
-        .def_prop_ro("ftype", [](Wrapper&) { return std::string("{{D['PyFil']}}"); })
-        .def_prop_ro("filtration_container", [](Wrapper&) { return std::string("{{D['SHORT_FILTRATION_TYPE']}}"); });
+        .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.tree.num_parameters(); })
+        .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return k_is_kcritical; })
+        .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PYTYPE'].split('.')[-1]}}" )).attr("type"); })
+        .def_prop_ro("ftype", [](const Wrapper&) -> std::string { return std::string("{{D['PyFil']}}"); })
+        .def_prop_ro("filtration_container", [](const Wrapper&) -> std::string { return std::string("{{D['SHORT_FILTRATION_TYPE']}}"); });
 
     available_simplextrees.append(cls);
   }

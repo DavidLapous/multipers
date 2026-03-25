@@ -573,7 +573,7 @@ NB_MODULE(_slicer_nanobind, m)
             "filtration_values"_a)
         .def_prop_rw(
             "filtration_grid",
-            [](Wrapper& self) { return self.filtration_grid; },
+            [](Wrapper& self) -> nb::object { return self.filtration_grid; },
             [](Wrapper& self, nb::object value) {
               self.filtration_grid = value.is_none() ? nb::none() : value;
             },
@@ -585,15 +585,15 @@ NB_MODULE(_slicer_nanobind, m)
           return self;
         }, nb::rv_policy::reference_internal)
         .def("__len__", [](Wrapper& self) { return self.truc.get_number_of_cycle_generators(); })
-        .def_prop_ro("num_generators", [](Wrapper& self) { return self.truc.get_number_of_cycle_generators(); })
-        .def_prop_ro("num_parameters", [](Wrapper& self) { return self.truc.get_number_of_parameters(); })
-        .def_prop_ro("dtype", [](Wrapper&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PY_VALUE_TYPE'].split('.')[-1]}}" )).attr("type"); })
-        .def_prop_ro("col_type", [](Wrapper&) { return std::string("{{D['COLUMN_TYPE']}}"); })
-        .def_prop_ro("filtration_container", [](Wrapper&) { return std::string("{{D['SHORT_FILTRATION_TYPE']}}"); })
-        .def_prop_ro("is_vine", [](Wrapper&) { return {{'true' if D['IS_VINE'] else 'false'}}; })
-        .def_prop_ro("is_kcritical", [](Wrapper&) { return {{'true' if D['IS_KCRITICAL'] else 'false'}}; })
-        .def_prop_ro("pers_backend", [](Wrapper&) { return std::string("{{D['PERS_BACKEND_TYPE']}}"); })
-        .def_prop_ro("ftype", [](Wrapper&) { return std::string("{{D['FILTRATION_TYPE']}}"); })
+        .def_prop_ro("num_generators", [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
+        .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
+        .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PY_VALUE_TYPE'].split('.')[-1]}}" )).attr("type"); })
+        .def_prop_ro("col_type", [](const Wrapper&) -> std::string { return std::string("{{D['COLUMN_TYPE']}}"); })
+        .def_prop_ro("filtration_container", [](const Wrapper&) -> std::string { return std::string("{{D['SHORT_FILTRATION_TYPE']}}"); })
+        .def_prop_ro("is_vine", [](const Wrapper&) -> bool { return {{'true' if D['IS_VINE'] else 'false'}}; })
+        .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return {{'true' if D['IS_KCRITICAL'] else 'false'}}; })
+        .def_prop_ro("pers_backend", [](const Wrapper&) -> std::string { return std::string("{{D['PERS_BACKEND_TYPE']}}"); })
+        .def_prop_ro("ftype", [](const Wrapper&) -> std::string { return std::string("{{D['FILTRATION_TYPE']}}"); })
         .def_static("_inf_value", []() {
           if constexpr (std::is_floating_point_v<Value>) {
             return nb::cast(std::numeric_limits<Value>::infinity());

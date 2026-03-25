@@ -232,14 +232,20 @@ jobs:
           raise RuntimeError("libmultipers_core exports no global symbols")
 
         module_prefixes = {
-          "slicer": (
-            "_ZN5Gudhi17multi_persistence6Slicer",
-            "__ZN5Gudhi17multi_persistence6Slicer",
-          ),
-          "simplex_tree_multi": (
-            "_ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
-            "__ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
-          ),
+          "slicer": {
+            "pattern": "_slicer_nanobind*.so",
+            "prefixes": (
+              "_ZN5Gudhi17multi_persistence6Slicer",
+              "__ZN5Gudhi17multi_persistence6Slicer",
+            ),
+          },
+          "simplex_tree_multi": {
+            "pattern": "_simplex_tree_multi_nanobind*.so",
+            "prefixes": (
+              "_ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
+              "__ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
+            ),
+          },
         }
 
         dep_command = None
@@ -248,8 +254,9 @@ jobs:
         elif sys.platform.startswith("linux"):
           dep_command = ["ldd"]
 
-        for module_name, prefixes in module_prefixes.items():
-          matches = sorted(pkg.glob(f"{module_name}*.so"))
+        for module_name, module_info in module_prefixes.items():
+          prefixes = module_info["prefixes"]
+          matches = sorted(pkg.glob(module_info["pattern"]))
           if not matches:
             raise RuntimeError(f"Missing compiled module for {module_name}")
           module_path = matches[0]

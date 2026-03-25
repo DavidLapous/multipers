@@ -93,7 +93,6 @@ exclude = [
   "**/*.dylib",
   "**/*.dll",
   "**/*.pyd",
-  "multipers/**/*.cpp",
   "generated",
   "cython",
   "CMakeFiles",

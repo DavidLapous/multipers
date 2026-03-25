@@ -237,7 +237,7 @@ NB_MODULE(_mma_nanobind, m) {
         .def(nb::init<>())
         .def("get_birth_list", [](WrapperSum& self) { return mpmma::filtration_list_to_python<T>(self.sum.compute_birth_list()); })
         .def("get_death_list", [](WrapperSum& self) { return mpmma::filtration_list_to_python<T>(self.sum.compute_death_list()); })
-        .def_prop_ro("degree", [](WrapperSum& self) { return self.sum.get_dimension(); })
+        .def_prop_ro("degree", [](const WrapperSum& self) -> int { return self.sum.get_dimension(); })
         .def("get_bounds", [](WrapperSum& self) {
           auto cbounds = self.sum.compute_bounds().get_bounding_corners();
           return nb::make_tuple(
@@ -250,7 +250,7 @@ NB_MODULE(_mma_nanobind, m) {
           auto deaths = self.sum.compute_death_list();
           return deaths.empty() ? 0 : deaths[0].num_parameters();
         })
-        .def_prop_ro("dtype", [](WrapperSum&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); })
+        .def_prop_ro("dtype", [](const WrapperSum&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); })
         .def("__eq__", [](WrapperSum& self, WrapperSum& other) { return self.sum == other.sum; });
 
     nb::class_<WrapperBox>(m, "PyBox_{{SHORT}}")
@@ -261,7 +261,7 @@ NB_MODULE(_mma_nanobind, m) {
           out.box = Box(lower, upper);
           return out;
         }), "bottomCorner"_a, "topCorner"_a)
-        .def_prop_ro("num_parameters", [](WrapperBox& self) { return self.box.get_lower_corner().size(); })
+        .def_prop_ro("num_parameters", [](const WrapperBox& self) -> int { return self.box.get_lower_corner().size(); })
         .def("contains", [](WrapperBox& self, nb::handle x) {
           auto values = mpmma::vector_from_handle<T>(x);
           return self.box.contains(values);
@@ -284,7 +284,7 @@ NB_MODULE(_mma_nanobind, m) {
           }
           return nb::cast(mpmma::owned_array<T>(std::move(flat), {size_t(2), lower.size()}));
         })
-        .def_prop_ro("dtype", [](WrapperBox&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); });
+        .def_prop_ro("dtype", [](const WrapperBox&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); });
 
     nb::class_<WrapperMod>(m, "PyModule_{{SHORT}}")
         .def(nb::init<>())
@@ -355,8 +355,8 @@ NB_MODULE(_mma_nanobind, m) {
               nb::cast(mpmma::owned_array<T>(std::move(lower), {self.mod.get_box().get_lower_corner().size()})),
               nb::cast(mpmma::owned_array<T>(std::move(upper), {self.mod.get_box().get_upper_corner().size()}))));
         })
-        .def_prop_ro("max_degree", [](WrapperMod& self) { return self.mod.get_max_dimension(); })
-        .def_prop_ro("num_parameters", [](WrapperMod& self) { return self.mod.get_box().get_lower_corner().size(); })
+        .def_prop_ro("max_degree", [](const WrapperMod& self) -> int { return self.mod.get_max_dimension(); })
+        .def_prop_ro("num_parameters", [](const WrapperMod& self) -> int { return self.mod.get_box().get_lower_corner().size(); })
         .def("get_bounds", [](WrapperMod& self) {
           auto cbounds = self.mod.compute_bounds().get_bounding_corners();
           return nb::make_tuple(
@@ -437,7 +437,7 @@ NB_MODULE(_mma_nanobind, m) {
           return nb::cast(mpmma::owned_array<T>(std::move(interleavings), {interleavings.size()}));
         }, "box"_a = nb::none())
 {{endif}}
-        .def_prop_ro("dtype", [](WrapperMod&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); });
+        .def_prop_ro("dtype", [](const WrapperMod&) -> nb::object { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{PYTYPE.split('.')[-1]}}" )).attr("type"); });
 
     m.def("from_dump_{{SHORT}}", [](nb::handle dump) {
       WrapperMod out;

@@ -17,7 +17,7 @@ function(multipers_apply_common_build_flags target_name)
         MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
         MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
         MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
-        MULTIPERS_DISABLE_HERA_INTERFACE=1,
+        MULTIPERS_DISABLE_HERA_INTERFACE=1
     )
   endif()
 
@@ -420,12 +420,7 @@ set(MULTIPERS_MODULES
 )
 
 if(WIN32)
-  list(REMOVE_ITEM MULTIPERS_MODULES
-    _aida_interface
-    # _mpfree_interface
-    # _function_delaunay_interface
-    # _multi_critical_interface
-  )
+  list(REMOVE_ITEM MULTIPERS_MODULES ops)
 endif()
 
 foreach(module_name IN LISTS MULTIPERS_MODULES)
@@ -434,32 +429,34 @@ foreach(module_name IN LISTS MULTIPERS_MODULES)
   list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
 endforeach()
 
-multipers_add_nanobind_module(_slicer_nanobind)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__slicer_nanobind)
+set(MULTIPERS_NANOBIND_MODULES
+  _slicer_nanobind
+  _mma_nanobind
+  _simplex_tree_multi_nanobind
+)
 
-multipers_add_nanobind_module(_mma_nanobind)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__mma_nanobind)
+if(NOT WIN32)
+  list(APPEND MULTIPERS_NANOBIND_MODULES
+    _mpfree_interface
+    _function_delaunay_interface
+    _hera_interface
+    _multi_critical_interface
+  )
+endif()
 
-multipers_add_nanobind_module(_simplex_tree_multi_nanobind)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__simplex_tree_multi_nanobind)
+if(TARGET multipers_rhomboid_tiling_static)
+  list(APPEND MULTIPERS_NANOBIND_MODULES _rhomboid_tiling_interface)
+endif()
 
-multipers_add_nanobind_module(_mpfree_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__mpfree_interface)
+if(TARGET multipers_aida_static)
+  list(APPEND MULTIPERS_NANOBIND_MODULES _aida_interface)
+endif()
 
-multipers_add_nanobind_module(_function_delaunay_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__function_delaunay_interface)
-
-multipers_add_nanobind_module(_rhomboid_tiling_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__rhomboid_tiling_interface)
-
-multipers_add_nanobind_module(_aida_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__aida_interface)
-
-multipers_add_nanobind_module(_hera_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__hera_interface)
-
-multipers_add_nanobind_module(_multi_critical_interface)
-list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__multi_critical_interface)
+foreach(module_name IN LISTS MULTIPERS_NANOBIND_MODULES)
+  multipers_add_nanobind_module(${module_name})
+  string(REPLACE "." "_" module_target_name "multipers_${module_name}")
+  list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
+endforeach()
 
 if(WIN32 AND DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
   set(_multipers_runtime_dependency_install_args
