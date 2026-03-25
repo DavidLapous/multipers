@@ -56,14 +56,16 @@ def one_criticalify(
         raise ValueError(f"Invalid input. Expected `SlicerType` got {type(slicer)=}.")
     if not slicer.is_kcritical:
         return slicer
-    if slicer.is_squeezed:
-        F = slicer.filtration_grid
+    working_slicer = slicer.astype(dtype=np.float64)
+
+    if working_slicer.is_squeezed:
+        F = working_slicer.filtration_grid
     else:
         F = None
     if reduce is None and degree is not None:
         reduce = True
     out = _multi_critical_from_slicer(
-        slicer,
+        working_slicer,
         reduce=reduce,
         algo=algo,
         degree=degree,
@@ -73,6 +75,15 @@ def one_criticalify(
         kcritical=kcritical,
         filtration_container=filtration_container,
     )
+    if not reduce and is_slicer(out):
+        out = out.astype(
+            vineyard=slicer.is_vine,
+            kcritical=False,
+            dtype=slicer.dtype,
+            col=slicer.col_type,
+            pers_backend=slicer.pers_backend,
+            filtration_container=filtration_container,
+        )
     if not reduce:
         return out
     def _todo(x,i):
