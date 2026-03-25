@@ -729,7 +729,7 @@ NB_MODULE(_slicer_nanobind, m)
           return out;
         })
         .def("copy", [](Wrapper& self) -> Wrapper { return Wrapper(self); })
-        .def("_info_string", [](Wrapper& self) -> std::string { return slicer_to_str(self.truc); });
+        .def("_info_string", [](Wrapper& self) -> std::string { return multipers::tmp_interface::slicer_to_str(self.truc); });
 
 {{if D['IS_VINE']}}
     cls
