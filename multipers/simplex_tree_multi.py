@@ -311,22 +311,26 @@ def _reduce(self):
     return (_reconstruct_from_pickle, (type(self), self.__getstate__()))
 
 
-def _astype(self, dtype, kcritical=False, ftype="Contiguous"):
-    if (
-        np.dtype(dtype) == np.dtype(self.dtype)
-        and kcritical == self.is_kcritical
-        and ftype == self.filtration_container
-    ):
+def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=None):
+    dtype = self.dtype if dtype is None else dtype
+    kcritical = self.is_kcritical if kcritical is None else kcritical
+    if filtration_container is not None and ftype is not None:
+        if str(filtration_container).lower() != str(ftype).lower():
+            raise ValueError(
+                "Got conflicting `ftype` and `filtration_container` arguments."
+            )
+    if filtration_container is not None:
+        ftype = filtration_container
+    ftype = self.filtration_container if ftype is None else ftype
+
+    cls = _get_class(dtype, kcritical, ftype)
+    if cls is type(self):
         return self
-    out = SimplexTreeMulti(
-        None,
-        num_parameters=self.num_parameters,
-        dtype=dtype,
-        kcritical=kcritical,
-        ftype=ftype,
-    )
+
+    out = cls()
     out._copy_from_any(self)
     out.filtration_grid = self.filtration_grid
+    out._is_function_simplextree = self._is_function_simplextree
     return out
 
 

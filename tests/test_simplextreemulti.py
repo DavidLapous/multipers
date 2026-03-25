@@ -7,7 +7,7 @@ from numpy import array
 
 import multipers as mp
 from multipers.tests import assert_st_simplices, random_st
-from multipers.simplex_tree_multi import available_dtype
+from multipers.simplex_tree_multi import available_dtype, available_simplextrees
 
 
 def test_1():
@@ -181,6 +181,93 @@ def test_serialize():
     assert st1 == stm.project_on_line(parameter=0), (
         "Gudhi<->Multipers conversion failed"
     )
+
+
+def test_project_on_line_does_not_require_gudhi_thisptr(monkeypatch):
+    stm = random_st(num_parameters=3)
+    reference = stm.project_on_line(parameter=0)
+    original_cls = gd.SimplexTree
+
+    class NoThisPtrSimplexTree:
+        def __init__(self, other=None):
+            assert other is None
+            self._tree = original_cls()
+
+        def __getattr__(self, name):
+            if name == "thisptr":
+                raise AssertionError(
+                    "project_on_line accessed gudhi.SimplexTree.thisptr"
+                )
+            return getattr(self._tree, name)
+
+        def __eq__(self, other):
+            return self._tree == getattr(other, "_tree", other)
+
+    monkeypatch.setattr(gd, "SimplexTree", NoThisPtrSimplexTree)
+    projected = stm.project_on_line(parameter=0)
+
+    assert projected == reference
+
+
+def test_linear_projections_does_not_require_gudhi_thisptr(monkeypatch):
+    stm = random_st(num_parameters=3)
+    linear_forms = np.asarray([[1.0, 0.0, 0.0], [0.5, 1.0, 0.25]])
+    reference = stm.linear_projections(linear_forms)
+    original_cls = gd.SimplexTree
+
+    class NoThisPtrSimplexTree:
+        def __init__(self, other=None):
+            assert other is None
+            self._tree = original_cls()
+
+        def __getattr__(self, name):
+            if name == "thisptr":
+                raise AssertionError(
+                    "linear_projections accessed gudhi.SimplexTree.thisptr"
+                )
+            return getattr(self._tree, name)
+
+        def __eq__(self, other):
+            return self._tree == getattr(other, "_tree", other)
+
+    monkeypatch.setattr(gd, "SimplexTree", NoThisPtrSimplexTree)
+    projected = stm.linear_projections(linear_forms)
+
+    assert len(projected) == len(reference)
+    for out, ref in zip(projected, reference):
+        assert out == ref
+
+
+def test_astypes():
+    for cls in available_simplextrees:
+        sample = cls()
+        st = mp.SimplexTreeMulti(
+            num_parameters=2,
+            dtype=sample.dtype,
+            kcritical=sample.is_kcritical,
+            ftype=sample.filtration_container,
+        )
+        st.insert([0], [0, 0])
+
+        assert st.thisptr == st.astype().thisptr
+        assert st.thisptr == st.astype(dtype=st.dtype).thisptr
+        assert st.thisptr == st.astype(kcritical=st.is_kcritical).thisptr
+        assert (
+            st.thisptr
+            == st.astype(filtration_container=st.filtration_container.lower()).thisptr
+        )
+
+    st = random_st()
+    for cls in available_simplextrees:
+        sample = cls()
+        out = st.astype(
+            dtype=sample.dtype,
+            kcritical=sample.is_kcritical,
+            filtration_container=sample.filtration_container,
+        )
+        assert np.dtype(out.dtype) == np.dtype(sample.dtype)
+        assert out.is_kcritical == sample.is_kcritical
+        assert out.filtration_container == sample.filtration_container
 
 
 @pytest.mark.skipif(
