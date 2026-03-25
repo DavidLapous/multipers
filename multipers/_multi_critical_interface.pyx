@@ -277,6 +277,8 @@ def one_criticalify(
     )
 
     use_logpath = algo != "path"
+    if use_logpath and algo != "tree":
+        raise ValueError(f"Algo should be path or tree. Got {algo}")
     use_swedish = swedish is True
 
     input_slicer = slicer

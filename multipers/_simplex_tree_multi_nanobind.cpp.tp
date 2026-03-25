@@ -1,0 +1,463 @@
+{{py:
+"""
+Nanobind bindings for SimplexTreeMulti classes.
+"""
+
+import os
+import pickle
+from pathlib import Path
+
+TEMPITA_CACHE_DIR = Path(os.environ.get("MULTIPERS_TEMPITA_CACHE_DIR", "build/tmp"))
+
+with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
+    to_iter = pickle.load(f)
+}}
+
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <utility>
+#include <vector>
+
+#include "gudhi/Simplex_tree_multi_interface.h"
+#include "multi_parameter_rank_invariant/euler_characteristic.h"
+#include "multi_parameter_rank_invariant/hilbert_function.h"
+#include "multi_parameter_rank_invariant/rank_invariant.h"
+
+namespace nb = nanobind;
+using namespace nb::literals;
+
+namespace mpst {
+
+using tensor_dtype = int32_t;
+using indices_type = int32_t;
+using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>;
+
+template <typename T>
+void delete_vector_capsule(void* ptr) noexcept { delete static_cast<std::vector<T>*>(ptr); }
+
+template <typename T>
+nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
+  auto* storage = new std::vector<T>(std::move(values));
+  nb::capsule owner(storage, &delete_vector_capsule<T>);
+  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
+}
+
+template <typename T>
+nb::ndarray<nb::numpy, T> view_array(T* ptr, std::initializer_list<size_t> shape, nb::handle owner) {
+  return nb::ndarray<nb::numpy, T>(ptr, shape, owner);
+}
+
+template <typename T>
+nb::object vector_to_array(std::vector<T>&& values) {
+  return nb::cast(owned_array<T>(std::move(values), {values.size()}));
+}
+
+inline nb::tuple signed_measure_to_python(const signed_measure_type& sm, size_t width) {
+  std::vector<indices_type> flat_pts;
+  flat_pts.reserve(sm.first.size() * width);
+  for (const auto& row : sm.first) {
+    flat_pts.insert(flat_pts.end(), row.begin(), row.end());
+  }
+  std::vector<tensor_dtype> weights(sm.second.begin(), sm.second.end());
+  return nb::make_tuple(
+      nb::cast(owned_array<indices_type>(std::move(flat_pts), {sm.first.size(), width})),
+      nb::cast(owned_array<tensor_dtype>(std::move(weights), {sm.second.size()})));
+}
+
+template <typename T>
+std::vector<T> vector_from_handle(nb::handle h) {
+  nb::object obj = nb::borrow(h);
+  if (nb::hasattr(obj, "tolist")) obj = obj.attr("tolist")();
+  return nb::cast<std::vector<T>>(obj);
+}
+
+template <typename T>
+std::vector<std::vector<T>> matrix_from_handle(nb::handle h) {
+  nb::object obj = nb::borrow(h);
+  if (nb::hasattr(obj, "tolist")) obj = obj.attr("tolist")();
+  return nb::cast<std::vector<std::vector<T>>>(obj);
+}
+
+template <typename Filtration, typename T, bool IsKCritical>
+Filtration filtration_from_handle(nb::handle filtration_handle, int num_parameters) {
+  if (filtration_handle.is_none()) {
+    return Filtration::minus_inf(num_parameters);
+  }
+  if constexpr (IsKCritical) {
+    auto rows = matrix_from_handle<T>(filtration_handle);
+    int p = rows.empty() ? num_parameters : (int) rows[0].size();
+    std::vector<T> flat;
+    for (const auto& row : rows) flat.insert(flat.end(), row.begin(), row.end());
+    return Filtration(flat.begin(), flat.end(), p);
+  } else {
+    auto values = vector_from_handle<T>(filtration_handle);
+    return Filtration(values.begin(), values.end());
+  }
+}
+
+template <typename Filtration, typename T>
+Filtration default_filtration_from_handle(nb::handle filtration_handle, int num_parameters) {
+  auto values = vector_from_handle<T>(filtration_handle);
+  return Filtration(values.begin(), values.end(), num_parameters);
+}
+
+template <typename Filtration, typename T, bool IsKCritical>
+nb::object filtration_to_python(const Filtration& filtration, nb::handle owner = nb::handle()) {
+  if constexpr (IsKCritical) {
+    nb::list out;
+    const int k = (int) filtration.num_generators();
+    const int p = (int) filtration.num_parameters();
+    for (int i = 0; i < k; ++i) {
+      std::vector<T> row(p);
+      for (int j = 0; j < p; ++j) row[j] = filtration(i, j);
+      out.append(nb::cast(owned_array<T>(std::move(row), {size_t(p)})));
+    }
+    return out;
+  } else {
+    const int p = (int) filtration.num_parameters();
+    return nb::cast(view_array(const_cast<T*>(&filtration(0, 0)), {size_t(p)}, owner));
+  }
+}
+
+template <typename Interface, typename T>
+struct PySimplexTree {
+  Interface tree;
+  nb::object filtration_grid;
+  bool is_function_simplextree;
+  PySimplexTree() : filtration_grid(nb::list()), is_function_simplextree(false) {}
+};
+
+template <typename TargetWrapper, typename TargetInterface>
+bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
+  if (false) return false;
+{{for ST2 in to_iter}}
+  else if (nb::isinstance<PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{ST2['CFil']}}, {{ST2['CTYPE']}}>, {{ST2['CTYPE']}}>>(source)) {
+    const auto& other = nb::cast<const PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{ST2['CFil']}}, {{ST2['CTYPE']}}>, {{ST2['CTYPE']}}>&>(source);
+    self.tree.template copy_from_interface<{{ST2['CFil']}}>(reinterpret_cast<intptr_t>(&other.tree));
+    self.filtration_grid = other.filtration_grid;
+    self.is_function_simplextree = other.is_function_simplextree;
+    return true;
+  }
+{{endfor}}
+  return false;
+}
+
+template <typename Wrapper, typename Filtration, typename T, bool IsKCritical>
+nb::list simplices_to_python(Wrapper& self) {
+  nb::list out;
+  for (auto sh : self.tree.complex_simplex_range()) {
+    auto pair = self.tree.get_simplex_and_filtration(sh);
+    std::vector<int32_t> simplex(pair.first.begin(), pair.first.end());
+    out.append(nb::make_tuple(
+        nb::cast(owned_array<int32_t>(std::move(simplex), {pair.first.size()})),
+        filtration_to_python<Filtration, T, IsKCritical>(*pair.second, nb::find(self))));
+  }
+  return out;
+}
+
+template <typename Wrapper, typename Filtration, typename T, bool IsKCritical>
+nb::list skeleton_to_python(Wrapper& self, int dimension) {
+  nb::list out;
+  for (auto sh : self.tree.skeleton_simplex_range(dimension)) {
+    auto pair = self.tree.get_simplex_and_filtration(sh);
+    std::vector<int32_t> simplex(pair.first.begin(), pair.first.end());
+    out.append(nb::make_tuple(
+        nb::cast(owned_array<int32_t>(std::move(simplex), {pair.first.size()})),
+        filtration_to_python<Filtration, T, IsKCritical>(*pair.second, nb::find(self))));
+  }
+  return out;
+}
+
+template <typename Wrapper, typename Filtration, typename T, bool IsKCritical>
+nb::list boundaries_to_python(Wrapper& self, const std::vector<int>& simplex) {
+  nb::list out;
+  auto it_pair = self.tree.get_boundary_iterators(simplex);
+  while (it_pair.first != it_pair.second) {
+    auto pair = self.tree.get_simplex_and_filtration(*it_pair.first);
+    std::vector<int32_t> current(pair.first.begin(), pair.first.end());
+    out.append(nb::make_tuple(
+        nb::cast(owned_array<int32_t>(std::move(current), {pair.first.size()})),
+        filtration_to_python<Filtration, T, IsKCritical>(*pair.second, nb::find(self))));
+    ++it_pair.first;
+  }
+  return out;
+}
+
+template <typename Wrapper>
+nb::object serialized_state(Wrapper& self) {
+  size_t buffer_size = self.tree.get_serialization_size();
+  std::vector<uint8_t> buffer(buffer_size);
+  if (buffer_size > 0) self.tree.serialize(reinterpret_cast<char*>(buffer.data()), buffer_size);
+  return nb::cast(owned_array<uint8_t>(std::move(buffer), {buffer_size}));
+}
+
+template <typename Wrapper>
+void load_state(Wrapper& self, nb::handle state) {
+  auto buffer = vector_from_handle<uint8_t>(state);
+  self.tree.clear();
+  if (!buffer.empty()) {
+    self.tree.deserialize(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    auto it = self.tree.complex_simplex_range().begin();
+    auto end = self.tree.complex_simplex_range().end();
+    if (it != end) {
+      auto pair = self.tree.get_simplex_and_filtration(*it);
+      self.tree.set_num_parameters(pair.second->num_parameters());
+    } else {
+      self.tree.set_num_parameters(0);
+    }
+  }
+}
+
+template <typename T>
+nb::object edge_list_to_python(const std::vector<std::pair<std::pair<int,int>, std::pair<double,double>>>& edges) {
+  nb::list out;
+  for (const auto& edge : edges) {
+    out.append(nb::make_tuple(
+        nb::make_tuple(edge.first.first, edge.first.second),
+        nb::make_tuple(edge.second.first, edge.second.second)));
+  }
+  return out;
+}
+
+}  // namespace mpst
+
+NB_MODULE(_simplex_tree_multi_nanobind, m) {
+  m.doc() = "nanobind SimplexTreeMulti bindings";
+  nb::list available_simplextrees;
+
+{{for D in to_iter}}
+  {
+    using Filtration = {{D['CFil']}};
+    using Interface = Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<Filtration, {{D['CTYPE']}}>;
+    using Wrapper = mpst::PySimplexTree<Interface, {{D['CTYPE']}}>;
+    constexpr bool k_is_kcritical = {{'true' if D['IS_KCRITICAL'] else 'false'}};
+
+    auto cls = nb::class_<Wrapper>(m, "{{D['PY_CLASS_NAME']}}")
+        .def(nb::init<>())
+        .def(nb::new_([](int num_parameters) {
+          Wrapper out;
+          int n = num_parameters <= 0 ? 2 : num_parameters;
+          out.tree.resize_all_filtrations(n);
+          out.tree.set_num_parameters(n);
+          return out;
+        }), "num_parameters"_a = -1)
+        .def_prop_rw(
+            "filtration_grid",
+            [](Wrapper& self) { return self.filtration_grid; },
+            [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::list() : value; },
+            nb::arg("value").none())
+        .def_prop_rw(
+            "_is_function_simplextree",
+            [](Wrapper& self) { return self.is_function_simplextree; },
+            [](Wrapper& self, bool value) { self.is_function_simplextree = value; })
+        .def_prop_rw(
+            "thisptr",
+            [](Wrapper& self) { return reinterpret_cast<intptr_t>(&self.tree); },
+            [](Wrapper& self, intptr_t ptr) {
+              Interface* other = reinterpret_cast<Interface*>(ptr);
+              self.tree = *other;
+              delete other;
+            })
+        .def("_from_ptr", [](Wrapper& self, intptr_t ptr) -> Wrapper& {
+          Interface* other = reinterpret_cast<Interface*>(ptr);
+          self.tree = *other;
+          delete other;
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("_copy_from_any", [](Wrapper& self, nb::handle other) -> Wrapper& {
+          if (!mpst::try_copy_from_any<Wrapper, Interface>(self, other)) {
+            throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
+          }
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("_from_gudhi_state", [](Wrapper& self, nb::handle state, int num_parameters, nb::handle default_values) -> Wrapper& {
+          auto buffer = mpst::vector_from_handle<uint8_t>(state);
+          auto default_filtration = mpst::default_filtration_from_handle<Filtration, {{D['CTYPE']}}>(default_values, num_parameters);
+          if (!buffer.empty()) self.tree.from_std(reinterpret_cast<char*>(buffer.data()), buffer.size(), 0, default_filtration);
+          self.tree.resize_all_filtrations(num_parameters);
+          self.tree.set_num_parameters(num_parameters);
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("_serialize_state", [](Wrapper& self) { return mpst::serialized_state(self); })
+        .def("_deserialize_state", [](Wrapper& self, nb::handle state) -> Wrapper& { mpst::load_state(self, state); return self; }, nb::rv_policy::reference_internal)
+        .def("_insert_simplex", [](Wrapper& self, nb::handle simplex_handle, nb::handle filtration_handle, bool force) {
+          auto simplex = mpst::vector_from_handle<int>(simplex_handle);
+          auto filtration = mpst::filtration_from_handle<Filtration, {{D['CTYPE']}}, k_is_kcritical>(filtration_handle, self.tree.num_parameters());
+          return force ? self.tree.insert_force(simplex, filtration) : self.tree.insert(simplex, filtration);
+        }, "simplex"_a, "filtration"_a = nb::none(), "force"_a = false)
+        .def("_assign_filtration", [](Wrapper& self, nb::handle simplex_handle, nb::handle filtration_handle) -> Wrapper& {
+          auto simplex = mpst::vector_from_handle<int>(simplex_handle);
+          auto filtration = mpst::filtration_from_handle<Filtration, {{D['CTYPE']}}, k_is_kcritical>(filtration_handle, self.tree.num_parameters());
+          self.tree.assign_simplex_filtration(simplex, filtration);
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("_get_filtration", [](Wrapper& self, nb::handle simplex_handle) {
+          auto simplex = mpst::vector_from_handle<int>(simplex_handle);
+          return mpst::filtration_to_python<Filtration, {{D['CTYPE']}}, k_is_kcritical>(*self.tree.simplex_filtration(simplex), nb::find(self));
+        })
+        .def("_iter_simplices", [](Wrapper& self) { return mpst::simplices_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self); })
+        .def("_get_skeleton", [](Wrapper& self, int dimension) { return mpst::skeleton_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self, dimension); })
+        .def("_get_boundaries", [](Wrapper& self, nb::handle simplex_handle) { return mpst::boundaries_to_python<Wrapper, Filtration, {{D['CTYPE']}}, k_is_kcritical>(self, mpst::vector_from_handle<int>(simplex_handle)); })
+        .def("_to_scc_blocks", [](Wrapper& self, bool flattened) {
+          if (flattened) {
+            return nb::cast(self.tree.simplextree_to_ordered_bf());
+          }
+          if (self.is_function_simplextree) {
+            return nb::cast(self.tree.function_simplextree_to_scc());
+          }
+{{if D['IS_KCRITICAL']}}
+          return nb::cast(self.tree.kcritical_simplextree_to_scc());
+{{else}}
+          return nb::cast(self.tree.simplextree_to_scc());
+{{endif}}
+        }, "flattened"_a = false)
+        .def("_get_filtration_values", [](Wrapper& self, nb::handle degrees_handle) { return nb::cast(self.tree.get_filtration_values(mpst::vector_from_handle<int>(degrees_handle))); })
+        .def("_get_to_std_state", [](Wrapper& self, nb::handle basepoint_handle, nb::handle direction_handle, int parameter) {
+          auto basepoint = mpst::vector_from_handle<double>(basepoint_handle);
+          auto direction = mpst::vector_from_handle<double>(direction_handle);
+          Gudhi::multi_persistence::Line<double> line(basepoint, direction);
+          auto serialized = self.tree.get_to_std_state(line, parameter);
+          return nb::cast(mpst::owned_array<char>(std::move(serialized), {serialized.size()}));
+        })
+        .def("_get_to_std_linear_projection_state", [](Wrapper& self, nb::handle linear_form_handle) {
+          auto linear_form = mpst::vector_from_handle<double>(linear_form_handle);
+          auto serialized = self.tree.get_to_std_linear_projection_state(linear_form);
+          return nb::cast(mpst::owned_array<char>(std::move(serialized), {serialized.size()}));
+        })
+        .def("_squeeze_inplace", [](Wrapper& self, nb::handle grid_handle, bool coordinate_values) -> Wrapper& {
+          self.tree.squeeze_filtration_inplace(mpst::matrix_from_handle<double>(grid_handle), coordinate_values);
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("_squeeze_to", [](Wrapper& self, Wrapper& out, nb::handle grid_handle) {
+          self.tree.squeeze_filtration(reinterpret_cast<intptr_t>(&out.tree), mpst::matrix_from_handle<double>(grid_handle));
+        })
+        .def("_unsqueeze_to", [](Wrapper& self, Wrapper& out, nb::handle grid_handle) {
+          out.tree.unsqueeze_filtration(reinterpret_cast<intptr_t>(&self.tree), mpst::matrix_from_handle<double>(grid_handle));
+        })
+        .def("num_vertices", [](Wrapper& self) { return self.tree.num_vertices(); })
+        .def("num_simplices", [](Wrapper& self) { return self.tree.num_simplices(); })
+        .def("dimension", [](Wrapper& self) { return self.tree.dimension(); })
+        .def("upper_bound_dimension", [](Wrapper& self) { return self.tree.upper_bound_dimension(); })
+        .def("simplex_dimension", [](Wrapper& self, nb::handle simplex_handle) { return self.tree.simplex_dimension(mpst::vector_from_handle<int>(simplex_handle)); })
+        .def("find_simplex", [](Wrapper& self, nb::handle simplex_handle) { auto simplex = mpst::vector_from_handle<int>(simplex_handle); return self.tree.find_simplex(simplex); })
+        .def("remove_maximal_simplex", [](Wrapper& self, nb::handle simplex_handle) -> Wrapper& { self.tree.remove_maximal_simplex(mpst::vector_from_handle<int>(simplex_handle)); return self; }, nb::rv_policy::reference_internal)
+        .def("prune_above_dimension", [](Wrapper& self, int dimension) { return self.tree.prune_above_dimension(dimension); })
+        .def("expansion", [](Wrapper& self, int max_dim) -> Wrapper& { self.tree.expansion(max_dim); self.tree.make_filtration_non_decreasing(); return self; }, nb::rv_policy::reference_internal)
+        .def("make_filtration_non_decreasing", [](Wrapper& self) { return self.tree.make_filtration_non_decreasing(); })
+        .def("reset_filtration", [](Wrapper& self, nb::handle filtration_handle, int min_dim) -> Wrapper& {
+          auto filtration = mpst::filtration_from_handle<Filtration, {{D['CTYPE']}}, k_is_kcritical>(filtration_handle, self.tree.num_parameters());
+          self.tree.reset_filtration(filtration, min_dim);
+          return self;
+        }, "filtration"_a, "min_dim"_a = 0, nb::rv_policy::reference_internal)
+        .def("fill_lowerstar", [](Wrapper& self, nb::handle values_handle, int axis) -> Wrapper& {
+          self.tree.fill_lowerstar(mpst::vector_from_handle<{{D['CTYPE']}}>(values_handle), axis);
+          return self;
+        }, nb::rv_policy::reference_internal)
+        .def("get_simplices_of_dimension", [](Wrapper& self, int dim) {
+          auto out = self.tree.get_simplices_of_dimension(dim);
+          std::vector<int32_t> values(out.begin(), out.end());
+          return nb::cast(mpst::owned_array<int32_t>(std::move(values), {out.size() / (dim + 1), size_t(dim + 1)}));
+        })
+        .def("get_edge_list", [](Wrapper& self) { return mpst::edge_list_to_python<{{D['CTYPE']}}>(self.tree.get_edge_list()); })
+        .def("pts_to_indices", [](Wrapper& self, nb::handle pts_handle, nb::handle dims_handle) {
+          auto result = self.tree.pts_to_indices(
+              mpst::matrix_from_handle<{{D['CTYPE']}}>(pts_handle),
+              mpst::vector_from_handle<int>(dims_handle));
+          return nb::make_tuple(nb::cast(result.first), nb::cast(result.second));
+        })
+        .def("set_dimension", [](Wrapper& self, int value) -> Wrapper& { self.tree.set_dimension(value); return self; }, nb::rv_policy::reference_internal)
+        .def("set_key", [](Wrapper& self, nb::handle simplex_handle, int key) -> Wrapper& { self.tree.set_key(mpst::vector_from_handle<int>(simplex_handle), key); return self; }, nb::rv_policy::reference_internal)
+        .def("get_key", [](Wrapper& self, nb::handle simplex_handle) { return self.tree.get_key(mpst::vector_from_handle<int>(simplex_handle)); })
+        .def("set_keys_to_enumerate", [](Wrapper& self) -> Wrapper& { self.tree.set_keys_to_enumerate(); return self; }, nb::rv_policy::reference_internal)
+        .def("set_num_parameter", [](Wrapper& self, int num) -> Wrapper& { self.tree.resize_all_filtrations(num); self.tree.set_num_parameters(num); return self; }, nb::rv_policy::reference_internal)
+        .def("__eq__", [](Wrapper& self, Wrapper& other) { return self.tree == other.tree; })
+        .def_prop_ro("num_parameters", [](Wrapper& self) { return self.tree.num_parameters(); })
+        .def_prop_ro("is_kcritical", [](Wrapper&) { return k_is_kcritical; })
+        .def_prop_ro("dtype", [](Wrapper&) { return nb::module_::import_("numpy").attr("dtype")(nb::module_::import_("numpy").attr("{{D['PYTYPE'].split('.')[-1]}}" )).attr("type"); })
+        .def_prop_ro("ftype", [](Wrapper&) { return std::string("{{D['PyFil']}}"); })
+        .def_prop_ro("filtration_container", [](Wrapper&) { return std::string("{{D['SHORT_FILTRATION_TYPE']}}"); });
+
+    available_simplextrees.append(cls);
+  }
+{{endfor}}
+
+  m.def("_compute_hilbert_signed_measure", [](nb::handle simplextree, nb::handle grid_shape_handle, nb::handle degrees_handle, bool zero_pad, mpst::indices_type n_jobs, bool verbose, bool expand_collapse) {
+    auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
+    auto degrees = mpst::vector_from_handle<mpst::indices_type>(degrees_handle);
+    std::vector<mpst::indices_type> full_shape;
+    full_shape.reserve(grid_shape.size() + 1);
+    full_shape.push_back((mpst::indices_type) degrees.size());
+    full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
+    size_t width = grid_shape.size() + 1;
+    size_t total = 1;
+    for (mpst::indices_type value : full_shape) total *= (size_t) value;
+    std::vector<mpst::tensor_dtype> container(total, 0);
+    if (false) {
+      throw std::runtime_error("unreachable");
+    }
+{{for D in to_iter}}
+    else if (nb::isinstance<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>>(simplextree)) {
+      auto& st = nb::cast<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>&>(simplextree).tree;
+      auto sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(st, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse);
+      return mpst::signed_measure_to_python(sm, width);
+    }
+{{endfor}}
+    throw std::runtime_error("Unsupported SimplexTreeMulti type.");
+  }, "simplextree"_a, "grid_shape"_a, "degrees"_a, "zero_pad"_a = false, "n_jobs"_a = 0, "verbose"_a = false, "expand_collapse"_a = false);
+
+  m.def("_compute_euler_signed_measure", [](nb::handle simplextree, nb::handle grid_shape_handle, bool zero_pad, bool verbose) {
+    auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
+    size_t width = grid_shape.size();
+    size_t total = 1;
+    for (mpst::indices_type value : grid_shape) total *= (size_t) value;
+    std::vector<mpst::tensor_dtype> container(total, 0);
+    if (false) {
+      throw std::runtime_error("unreachable");
+    }
+{{for D in to_iter}}
+{{if not D['IS_KCRITICAL']}}
+    else if (nb::isinstance<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>>(simplextree)) {
+      auto& st = nb::cast<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>&>(simplextree).tree;
+      auto sm = Gudhi::multiparameter::euler_characteristic::get_euler_signed_measure(st, container.data(), grid_shape, zero_pad, verbose);
+      return mpst::signed_measure_to_python(sm, width);
+    }
+{{endif}}
+{{endfor}}
+    throw std::runtime_error("Unsupported SimplexTreeMulti type.");
+  }, "simplextree"_a, "grid_shape"_a, "zero_pad"_a = false, "verbose"_a = false);
+
+  m.def("_compute_rank_tensor", [](nb::handle simplextree, nb::handle grid_shape_handle, nb::handle degrees_handle, mpst::indices_type n_jobs, bool expand_collapse) {
+    auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
+    auto degrees = mpst::vector_from_handle<mpst::indices_type>(degrees_handle);
+    std::vector<mpst::indices_type> full_shape;
+    full_shape.reserve(1 + 2 * grid_shape.size());
+    full_shape.push_back((mpst::indices_type) degrees.size());
+    full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
+    full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
+    size_t total = 1;
+    for (mpst::indices_type value : full_shape) total *= (size_t) value;
+    std::vector<mpst::tensor_dtype> container(total, 0);
+    if (false) {
+      throw std::runtime_error("unreachable");
+    }
+{{for D in to_iter}}
+    else if (nb::isinstance<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>>(simplextree)) {
+      auto& st = nb::cast<mpst::PySimplexTree<Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<{{D['CFil']}}, {{D['CTYPE']}}>, {{D['CTYPE']}}>&>(simplextree).tree;
+      Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(st, container.data(), full_shape, degrees, n_jobs, expand_collapse);
+      return nb::make_tuple(
+          nb::cast(mpst::owned_array<mpst::tensor_dtype>(std::move(container), {total})),
+          nb::cast(full_shape));
+    }
+{{endfor}}
+    throw std::runtime_error("Unsupported SimplexTreeMulti type.");
+  }, "simplextree"_a, "grid_shape"_a, "degrees"_a, "n_jobs"_a = 0, "expand_collapse"_a = false);
+
+  m.attr("available_simplextrees") = available_simplextrees;
+}

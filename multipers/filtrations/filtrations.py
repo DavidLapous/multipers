@@ -1,20 +1,19 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from importlib.util import find_spec
 from time import perf_counter
 from typing import Optional
 
-import gudhi as gd
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors, check_keops
-import multipers.array_api.numpy as npapi
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid, get_exact_grid
-from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
-import multipers as _mp
+
+from multipers.simplex_tree_multi import SimplexTreeMulti_type
 
 
 def KDE(bandwidth, kernel, return_log):
@@ -50,6 +49,9 @@ def RipsLowerstar(
     """
     if points is None and distance_matrix is None:
         raise ValueError("`points` or `distance_matrix` has to be given.")
+
+    import gudhi as gd
+    from multipers.simplex_tree_multi import SimplexTreeMulti
 
     if distance_matrix is not None:
         api = api_from_tensor(distance_matrix)
@@ -214,7 +216,9 @@ def DelaunayLowerstar(
             slicer = slicer._clean_filtration_grid()
             _log_step("cleaned grid")
         if reduce_degree >= 0:
-            slicer = _mp.Slicer(slicer)
+            from multipers import Slicer
+
+            slicer = Slicer(slicer)
             _log_step("converted back to slicer")
 
     if reduce_degree >= 0:
@@ -240,6 +244,9 @@ def _AlphaLowerstar(
     """
 
     _mp_logs.ExperimentalWarning("Alpha-Lowerstar has no known good property.")
+    import gudhi as gd
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
     api = api_from_tensor(points)
     points = api.astensor(points)
     function = api.astensor(function)
@@ -380,6 +387,8 @@ def DegreeRips(
     The DegreeRips filtration.
     """
 
+    import gudhi as gd
+
     if simplex_tree is None:
         if distance_matrix is None:
             if points is None:
@@ -400,6 +409,9 @@ def DegreeRips(
         )
         rips_filtration = api.unique(D.ravel())
     else:
+        import multipers.array_api.numpy as npapi
+        from multipers.simplex_tree_multi import SimplexTreeMulti
+
         if not isinstance(simplex_tree, gd.SimplexTree):
             raise ValueError(
                 f"`simplex_tree` has to be a gudhi SimplexTree. Got {simplex_tree=}."
@@ -412,7 +424,7 @@ def DegreeRips(
         _mp_logs.warn_copy(
             "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
         )
-        _temp_st = _mp.SimplexTreeMulti(
+        _temp_st = SimplexTreeMulti(
             st, num_parameters=1
         )  # Gudhi is missing some functionality
         if ks is None:
@@ -426,16 +438,30 @@ def DegreeRips(
             )
             ks = api.copy(api.from_numpy(ks))
         if rips_filtration is None:
-            rips_filtration = _mp.grids.compute_grid(_temp_st)[0]
+            rips_filtration = compute_grid(_temp_st)[0]
+
+    ks_np = np.asarray(ks, dtype=np.int32)
+    if ks_np.ndim != 1:
+        raise ValueError(
+            f"`ks` must be a 1D sequence of positive sorted integers. Got shape {ks_np.shape}."
+        )
+    if ks_np.size == 0:
+        raise ValueError("`ks` must contain at least one value.")
+    if np.any(ks_np <= 0):
+        raise ValueError(
+            "`ks` must contain strictly positive degree indices. "
+            "DegreeRips uses 1-based degree indexing."
+        )
+    if np.any(ks_np[1:] < ks_np[:-1]):
+        raise ValueError("`ks` must be sorted in nondecreasing order.")
 
     from multipers.function_rips import get_degree_rips
 
-    st_multi = get_degree_rips(st, degrees=ks)
+    st_multi = get_degree_rips(st, degrees=ks_np)
     if squeeze:
-        F = [rips_filtration, api.astype(ks, rips_filtration.dtype)]
-        F = _mp.grids.compute_grid(
-            F, strategy=squeeze_strategy, resolution=squeeze_resolution
-        )
+        ks_grid = api.copy(api.from_numpy(ks_np))
+        F = [rips_filtration, api.astype(ks_grid, rips_filtration.dtype)]
+        F = compute_grid(F, strategy=squeeze_strategy, resolution=squeeze_resolution)
         st_multi = st_multi.grid_squeeze(F)
         st_multi.filtration_grid = (F[0], F[1] - F[1][-1])  # degrees are negative
     return st_multi
@@ -462,6 +488,10 @@ def CoreDelaunay(
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
+    import gudhi as gd
+    from scipy.spatial import KDTree
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
     points = np.asarray(points)
     if ks is None:
         ks = np.arange(1, len(points) + 1)

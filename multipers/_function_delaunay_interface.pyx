@@ -202,10 +202,7 @@ def function_delaunay_to_simplextree(
         )
 
     out_f64 = SimplexTreeMulti(num_parameters=2, dtype=np.float64, kcritical=False, ftype="Contiguous")
-    old_ptr = <intptr_t>out_f64.thisptr
-    out_f64.thisptr = <intptr_t>(new function_delaunay_simplextree_interface_output_data(interface_output))
-    old_cpp_ptr = <function_delaunay_simplextree_interface_output_data*>old_ptr
-    del old_cpp_ptr
+    out_f64._from_ptr(<intptr_t>(new function_delaunay_simplextree_interface_output_data(interface_output)))
 
     if type(simplextree) is type(out_f64):
         return out_f64

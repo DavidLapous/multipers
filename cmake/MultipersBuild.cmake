@@ -185,7 +185,7 @@ function(multipers_configure_module module_name target_name)
   # Default: add standard phat includes
   set(_use_phat_includes TRUE)
 
-  if(module_name STREQUAL "simplex_tree_multi")
+  if(module_name STREQUAL "_simplex_tree_multi_nanobind")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
@@ -193,11 +193,11 @@ function(multipers_configure_module module_name target_name)
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
-  elseif(module_name STREQUAL "mma_structures")
+  elseif(module_name STREQUAL "_slicer_nanobind")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
-  elseif(module_name STREQUAL "multiparameter_module_approximation")
+  elseif(module_name STREQUAL "_mma_nanobind")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
@@ -280,6 +280,63 @@ function(multipers_configure_module module_name target_name)
   set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
 endfunction()
 
+function(multipers_add_nanobind_module module_name)
+  string(REPLACE "." "/" module_path "${module_name}")
+  set(source_cpp_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.cpp")
+  set(generated_cpp_file "${MULTIPERS_GENERATED_ROOT}/multipers/${module_path}.cpp")
+  set(cpp_template "${CMAKE_SOURCE_DIR}/multipers/${module_path}.cpp.tp")
+  if(EXISTS "${cpp_template}")
+    set(cpp_file "${generated_cpp_file}")
+  elseif(EXISTS "${source_cpp_file}")
+    set(cpp_file "${source_cpp_file}")
+  else()
+    message(FATAL_ERROR "Missing C++ source/template: ${source_cpp_file}")
+  endif()
+
+  string(REPLACE "." "_" target_name "multipers_${module_name}")
+  nanobind_add_module(${target_name} NB_STATIC "${cpp_file}")
+  add_dependencies(${target_name} multipers_tempita)
+  set_target_properties(${target_name} PROPERTIES PREFIX "")
+
+  target_include_directories(
+    ${target_name}
+    PRIVATE
+      ${MULTIPERS_GENERATED_INCLUDE_DIRS}
+      ${MULTIPERS_BASE_INCLUDE_DIRS}
+  )
+  multipers_apply_common_build_flags(${target_name})
+  multipers_configure_module("${module_name}" ${target_name})
+
+  set_target_properties(
+    ${target_name}
+    PROPERTIES
+      OUTPUT_NAME "${module_name}"
+      LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
+  )
+
+  if(WIN32)
+    if(DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
+      install(TARGETS ${target_name}
+        RUNTIME_DEPENDENCY_SET ${MULTIPERS_WINDOWS_RUNTIME_DEP_SET}
+        LIBRARY DESTINATION "multipers"
+        RUNTIME DESTINATION "multipers"
+        ARCHIVE DESTINATION "multipers"
+      )
+    else()
+      install(TARGETS ${target_name}
+        LIBRARY DESTINATION "multipers"
+        RUNTIME DESTINATION "multipers"
+        ARCHIVE DESTINATION "multipers"
+      )
+    endif()
+  else()
+    install(TARGETS ${target_name}
+      LIBRARY DESTINATION "multipers"
+    )
+  endif()
+endfunction()
+
 function(multipers_add_extension module_name)
   string(REPLACE "." "/" module_path "${module_name}")
   set(source_pyx_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx")
@@ -355,21 +412,11 @@ function(multipers_add_extension module_name)
 endfunction()
 
 set(MULTIPERS_MODULES
-  simplex_tree_multi
   io
   function_rips
-  mma_structures
-  multiparameter_module_approximation
   point_measure
   grids
-  slicer
   ops
-  _mpfree_interface
-  _aida_interface
-  _hera_interface
-  _function_delaunay_interface
-  _multi_critical_interface
-  _rhomboid_tiling_interface
 )
 
 if(WIN32)
@@ -386,6 +433,33 @@ foreach(module_name IN LISTS MULTIPERS_MODULES)
   string(REPLACE "." "_" module_target_name "multipers_${module_name}")
   list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
 endforeach()
+
+multipers_add_nanobind_module(_slicer_nanobind)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__slicer_nanobind)
+
+multipers_add_nanobind_module(_mma_nanobind)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__mma_nanobind)
+
+multipers_add_nanobind_module(_simplex_tree_multi_nanobind)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__simplex_tree_multi_nanobind)
+
+multipers_add_nanobind_module(_mpfree_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__mpfree_interface)
+
+multipers_add_nanobind_module(_function_delaunay_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__function_delaunay_interface)
+
+multipers_add_nanobind_module(_rhomboid_tiling_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__rhomboid_tiling_interface)
+
+multipers_add_nanobind_module(_aida_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__aida_interface)
+
+multipers_add_nanobind_module(_hera_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__hera_interface)
+
+multipers_add_nanobind_module(_multi_critical_interface)
+list(APPEND MULTIPERS_EXTENSION_TARGETS multipers__multi_critical_interface)
 
 if(WIN32 AND DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
   set(_multipers_runtime_dependency_install_args
