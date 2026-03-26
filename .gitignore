@@ -21,6 +21,8 @@ build_*/
 dist
 *.egg-info
 *.cpp
+!multipers/_mma_nanobind.cpp
+!multipers/_slicer_nanobind.cpp
 *.so
 *.o
 *.whl
