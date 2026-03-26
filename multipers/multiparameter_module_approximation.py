@@ -301,8 +301,7 @@ def _module_plot(self, degree: int = -1, **kwargs):
     return None
 
 
-def is_mma(stuff):
-    return any(isinstance(stuff, cls) for cls in available_pymodules)
+is_mma = _mma.is_mma
 
 
 def _install_python_api():
