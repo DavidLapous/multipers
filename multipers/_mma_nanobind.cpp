@@ -206,6 +206,17 @@ struct PyModule {
   Gudhi::multi_persistence::Module<T> mod;
 };
 
+template <typename T>
+struct PyModuleIterator {
+  PyModule<T>* module = nullptr;
+  size_t index = 0;
+};
+
+template <typename Wrapper>
+nb::object self_handle(Wrapper& self) {
+  return nb::find(self);
+}
+
 inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
   return np.attr("dtype")(std::string(name)).attr("type");
@@ -371,6 +382,7 @@ void bind_mma_type(nb::module_& m) {
   using WrapperSum = PySummand<T>;
   using WrapperBox = PyBox<T>;
   using WrapperMod = PyModule<T>;
+  using WrapperIter = PyModuleIterator<T>;
 
   nb::class_<WrapperSum>(m, Desc::summand_name.data())
       .def(nb::init<>())
@@ -454,6 +466,19 @@ void bind_mma_type(nb::module_& m) {
            })
       .def_prop_ro("dtype", [](const WrapperBox&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
 
+  std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
+  nb::class_<WrapperIter>(m, iterator_name.c_str())
+      .def(
+          "__iter__", [](WrapperIter& self) -> WrapperIter& { return self; }, nb::rv_policy::reference_internal)
+      .def("__next__", [](WrapperIter& self) {
+        if (self.module == nullptr || self.index >= self.module->mod.size()) {
+          throw nb::stop_iteration();
+        }
+        WrapperSum out;
+        out.sum = self.module->mod.get_summand((unsigned int)self.index++);
+        return out;
+      });
+
   auto module_cls =
       nb::class_<WrapperMod>(m, Desc::module_name.data())
           .def(nb::init<>())
@@ -468,6 +493,38 @@ void bind_mma_type(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def("__len__", [](WrapperMod& self) -> int { return self.mod.size(); })
           .def("__eq__", [](WrapperMod& self, WrapperMod& other) { return self.mod == other.mod; })
+          .def("__getitem__",
+               [](WrapperMod& self, nb::object key) -> nb::object {
+                 if (PySlice_Check(key.ptr())) {
+                   if (key.attr("start").is_none() && key.attr("stop").is_none() && key.attr("step").is_none()) {
+                     return self_handle(self);
+                   }
+                   throw nb::index_error("Only [:] slices are supported.");
+                 }
+                 int index = nb::cast<int>(key);
+                 size_t size = self.mod.size();
+                 if (size == 0) {
+                   throw nb::index_error("Module is empty.");
+                 }
+                 if (index < 0) {
+                   index += (int)size;
+                 }
+                 if (index < 0 || index >= (int)size) {
+                   throw nb::index_error("Summand index out of range.");
+                 }
+                 WrapperSum out;
+                 out.sum = self.mod.get_summand((unsigned int)index);
+                 return nb::cast(out);
+               })
+          .def(
+              "__iter__",
+              [](WrapperMod& self) {
+                WrapperIter out;
+                out.module = &self;
+                out.index = 0;
+                return out;
+              },
+              nb::keep_alive<0, 1>())
           .def(
               "merge",
               [](WrapperMod& self, WrapperMod& other, int dim) -> WrapperMod& {
@@ -533,9 +590,53 @@ void bind_mma_type(nb::module_& m) {
                })
           .def("_get_dump", [](WrapperMod& self) -> nb::tuple { return dump_module<T>(self.mod); })
           .def(
+              "dump",
+              [](WrapperMod& self, nb::object path) -> nb::tuple {
+                nb::tuple dump = dump_module<T>(self.mod);
+                if (!path.is_none()) {
+                  nb::object builtins = nb::module_::import_("builtins");
+                  nb::object pickle = nb::module_::import_("pickle");
+                  nb::object handle = builtins.attr("open")(path, "wb");
+                  try {
+                    pickle.attr("dump")(dump, handle);
+                  } catch (...) {
+                    handle.attr("close")();
+                    throw;
+                  }
+                  handle.attr("close")();
+                }
+                return dump;
+              },
+              "path"_a = nb::none())
+          .def(
               "_load_dump",
               [](WrapperMod& self, nb::handle dump) -> WrapperMod& {
                 self.mod = module_from_dump<T>(dump);
+                return self;
+              },
+              nb::rv_policy::reference_internal)
+          .def("__reduce__",
+               [](WrapperMod& self) -> nb::tuple {
+                 return nb::make_tuple(
+                     nb::module_::import_("multipers.multiparameter_module_approximation").attr("_reconstruct_module"),
+                     nb::make_tuple(nb::str(Desc::from_dump_name.data()), dump_module<T>(self.mod)));
+               })
+          .def("__reduce_ex__",
+               [](WrapperMod& self, int) -> nb::tuple {
+                 return nb::make_tuple(
+                     nb::module_::import_("multipers.multiparameter_module_approximation").attr("_reconstruct_module"),
+                     nb::make_tuple(nb::str(Desc::from_dump_name.data()), dump_module<T>(self.mod)));
+               })
+          .def(
+              "_add_mmas",
+              [](WrapperMod& self, nb::iterable mmas) -> WrapperMod& {
+                for (nb::handle item : mmas) {
+                  Module c_other = nb::cast<WrapperMod&>(item).mod;
+                  {
+                    nb::gil_scoped_release release;
+                    for (auto summand : c_other) self.mod.add_summand(summand);
+                  }
+                }
                 return self;
               },
               nb::rv_policy::reference_internal)
