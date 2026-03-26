@@ -23,6 +23,8 @@ _MMA_FROM_DUMP = {
     if name.startswith("from_dump_")
 }
 
+_MMA_EMPTY = {np.dtype(cls().dtype): cls for cls in _mma.available_pymodules}
+
 AVAILABLE_MMA_FLOAT_DTYPES = tuple(
     dtype for dtype in _MMA_FROM_DUMP if np.issubdtype(dtype, np.floating)
 )
@@ -101,17 +103,22 @@ def module_approximation(
     n_jobs: int = -1,
 ) -> PyModule_type:
     if isinstance(input, tuple) or isinstance(input, list):
-        assert all(is_slicer(s) and (s.is_minpres or len(s) == 0) for s in input), (
-            "Modules cannot be merged unless they are minimal presentations."
-        )
-        assert (
+        if not all(is_slicer(s) and (s.is_minpres or len(s) == 0) for s in input):
+            raise ValueError(
+                "Modules cannot be merged unless they are minimal presentations."
+            )
+        if not (
             np.unique([s.minpres_degree for s in input if len(s)], return_counts=True)[
                 1
             ]
             <= 1
-        ).all(), "Multiple modules are at the same degree, cannot merge modules"
+        ).all():
+            raise ValueError(
+                "Multiple modules are at the same degree, cannot merge modules"
+            )
+        dtype = np.dtype(s[0].dtype)
         if len(input) == 0:
-            return available_pymodules[0]()
+            return _MMA_EMPTY[dtype]
         modules = tuple(
             Parallel(n_jobs=n_jobs, prefer="threads")(
                 delayed(module_approximation)(
@@ -133,12 +140,11 @@ def module_approximation(
         )
         box = np.array(
             [
-                np.min([m.get_box()[0] for m in modules if len(m)], axis=0),
-                np.max([m.get_box()[1] for m in modules if len(m)], axis=0),
+                np.min([m.get_box()[0] for m in non_empty_modules], axis=0),
+                np.max([m.get_box()[1] for m in non_empty_modules], axis=0),
             ]
         )
-        module_dtype = np.dtype(modules[0].dtype)
-        constructor = _MMA_FROM_DUMP.get(module_dtype)
+        constructor = _MMA_FROM_DUMP.get(dtype)
         if constructor is None:
             raise ValueError(
                 f"Unsupported module dtype {module_dtype} for module merge."
@@ -149,9 +155,7 @@ def module_approximation(
         return mod
 
     if len(input) == 0:
-        if verbose:
-            print("Empty input, returning the trivial module.")
-        return available_pymodules[0]()
+        return _MMA_EMPTY[dtype]
 
     if is_simplextree_multi(input):
         from multipers._slicer_meta import Slicer
@@ -272,4 +276,4 @@ Returning the trivial module.
     )
 
 
-__all__ = ["module_approximation", "module_approximation_from_slicer", "TRACE_MMA_OPS"]
+__all__ = ["module_approximation", "module_approximation_from_slicer"]
