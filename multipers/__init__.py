@@ -3,7 +3,7 @@ import sys
 
 __version__ = _version("multipers")
 # Doc
-from multipers import (
+from . import (
     data,
     filtrations,
     grids,
@@ -16,14 +16,14 @@ from multipers import (
 )
 
 if sys.platform != "win32":
-    from multipers import ops
+    from . import ops
 
 
 # Shortcuts
-from multipers._slicer_meta import Slicer
-from multipers.multiparameter_module_approximation import module_approximation
-from multipers.simplex_tree_multi import SimplexTreeMulti
-from multipers._signed_measure_meta import signed_measure
+from ._slicer_meta import Slicer
+from .multiparameter_module_approximation import module_approximation
+from .simplex_tree_multi import SimplexTreeMulti
+from ._signed_measure_meta import signed_measure
 
 __all__ = [
     "data",
