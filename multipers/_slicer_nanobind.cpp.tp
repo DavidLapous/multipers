@@ -151,10 +151,16 @@ nb::object self_handle(Wrapper& self)
   return nb::find(self);
 }
 
-template <typename Wrapper, typename Concrete>
-bool try_build_from_simplextree(Wrapper& self, const nb::handle& source)
+inline bool is_simplextree_multi(const nb::handle& source)
 {
-  if (!nb::hasattr(source, "thisptr") || !nb::hasattr(source, "is_kcritical") || !nb::hasattr(source, "filtration_container") || !nb::hasattr(source, "dtype")) {
+  auto checker = nb::module_::import_("multipers.simplex_tree_multi").attr("is_simplextree_multi");
+  return nb::cast<bool>(checker(source));
+}
+
+template <typename Wrapper, typename Concrete>
+bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& source)
+{
+  if (!is_simplextree_multi(source)) {
     return false;
   }
 
@@ -594,10 +600,13 @@ NB_MODULE(_slicer_nanobind, m)
               if (mpnb::try_copy_from_existing<Wrapper, Concrete>(out, source)) {
                 return out;
               }
-              if (mpnb::try_build_from_simplextree<Wrapper, Concrete>(out, source)) {
-                return out;
+              if (mpnb::is_simplextree_multi(source)) {
+                if (mpnb::try_build_from_multipers_simplextree<Wrapper, Concrete>(out, source)) {
+                  return out;
+                }
+                throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
               }
-              if (nb::hasattr(source, "thisptr")) {
+              if (nb::hasattr(source, "_to_scc")) {
                 auto helper = nb::module_::import_("multipers._slicer_meta").attr("_blocks2boundary_dimension_grades");
                 nb::tuple converted = nb::cast<nb::tuple>(helper(
                     source.attr("_to_scc")(),
@@ -683,7 +692,7 @@ NB_MODULE(_slicer_nanobind, m)
           return mpnb::filtration_values_array<Wrapper, Value, k_is_kcritical, k_is_degree_rips>(self);
         })
         .def("build_from_simplex_tree", [](Wrapper& self, nb::object st) -> Wrapper& {
-          if (mpnb::try_build_from_simplextree<Wrapper, Concrete>(self, st)) {
+          if (mpnb::try_build_from_multipers_simplextree<Wrapper, Concrete>(self, st)) {
             return self;
           }
           throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
