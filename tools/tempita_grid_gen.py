@@ -344,12 +344,18 @@ def _render_slicer_nanobind_registry(
         lines.extend(
             [
                 f"struct SimplexTreeDesc_{index} {{",
+                f"  using filtration_type = {simplextree['CFil']};",
+                f"  using value_type = {simplextree['CTYPE']};",
                 "  using interface_type = Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<",
-                f"      {simplextree['CFil']},",
-                f"      {simplextree['CTYPE']}>;",
+                "      filtration_type,",
+                "      value_type>;",
                 f"  static constexpr bool is_kcritical = {_bool_cpp(simplextree['IS_KCRITICAL'])};",
+                f"  static constexpr bool is_float = {_bool_cpp(simplextree['IS_FLOAT'])};",
+                f'  static constexpr std::string_view python_name = "{simplextree["PY_CLASS_NAME"]}";',
+                f'  static constexpr std::string_view ftype_name = "{simplextree["PyFil"]}";',
+                f'  static constexpr std::string_view filtration_container_name = "{simplextree["SHORT_FILTRATION_TYPE"]}";',
                 f'  static constexpr std::string_view filtration_container = "{simplextree["SHORT_FILTRATION_TYPE"].lower()}";',
-                f'  static constexpr std::string_view dtype_name = "{"float64" if simplextree["IS_FLOAT"] else "int32"}";',
+                f'  static constexpr std::string_view dtype_name = "{simplextree["PYTYPE"].split(".")[-1]}";',
                 "};",
                 "",
             ]

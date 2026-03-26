@@ -190,6 +190,7 @@ def SimplexTreeMulti(
     ftype="Contiguous",
     default_values=None,
     safe_conversion: bool = False,
+    max_dim: int = -1,
     return_type_only: bool = False,
     **kwargs,
 ) -> SimplexTreeMulti_type:
@@ -205,6 +206,15 @@ def SimplexTreeMulti(
     if is_simplextree_multi(input):
         out = cls()
         out._copy_from_any(input)
+        if num_parameters > 0 and num_parameters != input.num_parameters:
+            out.set_num_parameter(num_parameters)
+        return out
+
+    from multipers.slicer import is_slicer
+
+    if is_slicer(input, allow_minpres=False):
+        out = cls()
+        out._from_slicer(input, max_dim=max_dim)
         if num_parameters > 0 and num_parameters != input.num_parameters:
             out.set_num_parameter(num_parameters)
         return out
@@ -251,7 +261,7 @@ def SimplexTreeMulti(
             )
 
     raise TypeError(
-        "`input` requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`."
+        "`input` requires to be of type `SimplexTree`, `SimplexTreeMulti`, `Slicer`, or `None`."
     )
 
 
