@@ -747,9 +747,21 @@ void bind_all_mma(type_list<Desc...>, nb::module_& m) {
   (bind_mma_type<Desc>(m), ...);
 }
 
+template <typename Desc>
+bool is_mma_desc(nb::handle stuff) {
+  using WrapperMod = PyModule<typename Desc::value_type>;
+  return nb::isinstance<WrapperMod>(stuff);
+}
+
+template <typename... Desc>
+bool is_mma(type_list<Desc...>, nb::handle stuff) {
+  return (is_mma_desc<Desc>(stuff) || ...);
+}
+
 }  // namespace mpmma
 
 NB_MODULE(_mma_nanobind, m) {
   m.doc() = "nanobind MMA bindings";
   mpmma::bind_all_mma(mpmma::MMADescriptorList{}, m);
+  m.def("is_mma", [](nb::handle stuff) { return mpmma::is_mma(mpmma::MMADescriptorList{}, stuff); });
 }
