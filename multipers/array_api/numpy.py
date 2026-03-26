@@ -2,7 +2,6 @@ from contextlib import nullcontext
 from functools import wraps
 
 import numpy as _np
-from scipy.spatial.distance import cdist as _sp_cdist, pdist as _sp_pdist
 import multipers.logs as _mp_logs
 
 backend = _np
@@ -23,7 +22,6 @@ arange = _np.arange
 moveaxis = _np.moveaxis
 ones = _np.ones
 repeat_interleave = _np.repeat
-pdist = _sp_pdist  # type: ignore[no-redef]
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -61,11 +59,23 @@ def unique(x, assume_sorted=False, _mean=False):
 
 
 def cdist(x, y, p=2):
+    from scipy.spatial.distance import cdist as _sp_cdist
+
     if p == 1:
         return _sp_cdist(x, y, metric="cityblock")
     if p == 2:
         return _sp_cdist(x, y, metric="euclidean")
     return _sp_cdist(x, y, metric="minkowski", p=p)
+
+
+def pdist(x, p=2):
+    from scipy.spatial.distance import pdist as _sp_pdist
+
+    if p == 1:
+        return _sp_pdist(x, metric="cityblock")
+    if p == 2:
+        return _sp_pdist(x, metric="euclidean")
+    return _sp_pdist(x, metric="minkowski", p=p)
 
 
 def sum(x, axis=None, dim=None, **kwargs):

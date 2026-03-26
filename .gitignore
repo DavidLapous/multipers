@@ -23,6 +23,7 @@ dist
 *.cpp
 !multipers/_mma_nanobind.cpp
 !multipers/_slicer_nanobind.cpp
+!multipers/_simplex_tree_multi_nanobind.cpp
 *.so
 *.o
 *.whl

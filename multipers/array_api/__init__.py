@@ -118,9 +118,9 @@ def api_from_tensors(*args):
     raise ValueError(f"Incompatible types got {[type(x) for x in args]=}.")
 
 
-def to_numpy(x):
+def to_numpy(x, dtype=None):
     api = api_from_tensor(x)
-    return api.asnumpy(x)
+    return api.asnumpy(x, dtype=dtype)
 
 
 def check_keops():

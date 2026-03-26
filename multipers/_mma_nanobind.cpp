@@ -6,7 +6,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -227,7 +226,12 @@ void bind_float_module_methods(Class& cls) {
                  direction_handle.is_none()
                      ? Gudhi::multi_persistence::Line<T>(basepoint)
                      : Gudhi::multi_persistence::Line<T>(basepoint, vector_from_handle<T>(direction_handle));
-             return barcode_to_python<T>(self.mod.get_barcode_from_line(line, degree));
+             decltype(self.mod.get_barcode_from_line(line, degree)) barcode;
+             {
+               nb::gil_scoped_release release;
+               barcode = self.mod.get_barcode_from_line(line, degree);
+             }
+             return barcode_to_python<T>(barcode);
            },
            "basepoint"_a,
            "direction"_a = nb::none(),
@@ -235,7 +239,11 @@ void bind_float_module_methods(Class& cls) {
         .def(
             "evaluate_in_grid",
             [](WrapperMod& self, nb::handle grid_handle) -> WrapperMod& {
-              self.mod.evaluate_in_grid(matrix_from_handle<T>(grid_handle));
+              auto grid = matrix_from_handle<T>(grid_handle);
+              {
+                nb::gil_scoped_release release;
+                self.mod.evaluate_in_grid(grid);
+              }
               return self;
             },
             nb::rv_policy::reference_internal)
@@ -256,8 +264,14 @@ void bind_float_module_methods(Class& cls) {
               std::vector<unsigned int> resolution;
               resolution.reserve(resolution_in.size());
               for (int r : resolution_in) resolution.push_back((unsigned int)r);
-              return nb::cast(Gudhi::multi_persistence::compute_set_of_module_landscapes(
-                  self.mod, degree, ks, Box(box_values[0], box_values[1]), resolution, n_jobs));
+              decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
+                  self.mod, degree, ks, Box(box_values[0], box_values[1]), resolution, n_jobs)) out;
+              {
+                nb::gil_scoped_release release;
+                out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
+                    self.mod, degree, ks, Box(box_values[0], box_values[1]), resolution, n_jobs);
+              }
+              return nb::cast(out);
             },
             "degree"_a,
             "ks"_a,
@@ -272,8 +286,13 @@ void bind_float_module_methods(Class& cls) {
               ks.reserve(ks_in.size());
               for (int k : ks_in) ks.push_back((unsigned int)k);
               auto grid = matrix_from_handle<T>(grid_handle);
-              return nb::cast(
-                  Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs));
+              decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
+                  self.mod, degree, ks, grid, n_jobs)) out;
+              {
+                nb::gil_scoped_release release;
+                out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs);
+              }
+              return nb::cast(out);
             },
             "degree"_a,
             "ks"_a,
@@ -292,8 +311,12 @@ void bind_float_module_methods(Class& cls) {
               auto coordinates = matrix_from_handle<T>(coordinates_handle);
               auto degrees = vector_from_handle<int>(degrees_handle);
               auto box_values = matrix_from_handle<T>(box_handle);
-              auto out = Gudhi::multi_persistence::compute_module_pixels(
-                  self.mod, coordinates, degrees, Box(box_values[0], box_values[1]), delta, p, normalize, n_jobs);
+              std::vector<std::vector<T>> out;
+              {
+                nb::gil_scoped_release release;
+                out = Gudhi::multi_persistence::compute_module_pixels(
+                    self.mod, coordinates, degrees, Box(box_values[0], box_values[1]), delta, p, normalize, n_jobs);
+              }
               return nb::cast(out);
             },
             "coordinates"_a,
@@ -308,7 +331,11 @@ void bind_float_module_methods(Class& cls) {
             [](WrapperMod& self, nb::handle pts_handle, bool signed_distance, int n_jobs) {
               auto pts = matrix_from_handle<T>(pts_handle);
               std::vector<T> out(pts.size() * self.mod.size());
-              Gudhi::multi_persistence::compute_module_distances_to(self.mod, out.data(), pts, signed_distance, n_jobs);
+              {
+                nb::gil_scoped_release release;
+                Gudhi::multi_persistence::compute_module_distances_to(
+                    self.mod, out.data(), pts, signed_distance, n_jobs);
+              }
               return nb::cast(owned_array<T>(std::move(out), {pts.size(), self.mod.size()}));
             },
             "pts"_a,
@@ -324,7 +351,11 @@ void bind_float_module_methods(Class& cls) {
                 auto box_values = matrix_from_handle<T>(box_handle);
                 box = Box(box_values[0], box_values[1]);
               }
-              auto interleavings = Gudhi::multi_persistence::compute_module_interleavings(self.mod, box);
+              std::vector<T> interleavings;
+              {
+                nb::gil_scoped_release release;
+                interleavings = Gudhi::multi_persistence::compute_module_interleavings(self.mod, box);
+              }
               return nb::cast(owned_array<T>(std::move(interleavings), {interleavings.size()}));
             },
             "box"_a = nb::none());
@@ -344,13 +375,33 @@ void bind_mma_type(nb::module_& m) {
   nb::class_<WrapperSum>(m, Desc::summand_name.data())
       .def(nb::init<>())
       .def("get_birth_list",
-           [](WrapperSum& self) -> nb::list { return filtration_list_to_python<T>(self.sum.compute_birth_list()); })
+           [](WrapperSum& self) -> nb::list {
+             decltype(self.sum.compute_birth_list()) births;
+             {
+               nb::gil_scoped_release release;
+               births = self.sum.compute_birth_list();
+             }
+             return filtration_list_to_python<T>(births);
+           })
       .def("get_death_list",
-           [](WrapperSum& self) -> nb::list { return filtration_list_to_python<T>(self.sum.compute_death_list()); })
+           [](WrapperSum& self) -> nb::list {
+             decltype(self.sum.compute_death_list()) deaths;
+             {
+               nb::gil_scoped_release release;
+               deaths = self.sum.compute_death_list();
+             }
+             return filtration_list_to_python<T>(deaths);
+           })
       .def_prop_ro("degree", [](const WrapperSum& self) -> int { return self.sum.get_dimension(); })
       .def("get_bounds",
            [](WrapperSum& self) -> nb::tuple {
-             auto cbounds = self.sum.compute_bounds().get_bounding_corners();
+             std::pair<std::vector<T>, std::vector<T>> cbounds;
+             {
+               nb::gil_scoped_release release;
+               auto cpp_bounds = self.sum.compute_bounds().get_bounding_corners();
+               cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
+               cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
+             }
              return nb::make_tuple(nb::cast(owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()),
                                                            {cbounds.first.size()})),
                                    nb::cast(owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()),
@@ -421,7 +472,10 @@ void bind_mma_type(nb::module_& m) {
               "merge",
               [](WrapperMod& self, WrapperMod& other, int dim) -> WrapperMod& {
                 Module c_other = other.mod;
-                for (auto summand : c_other) self.mod.add_summand(summand, dim);
+                {
+                  nb::gil_scoped_release release;
+                  for (auto summand : c_other) self.mod.add_summand(summand, dim);
+                }
                 return self;
               },
               "other"_a,
@@ -430,36 +484,48 @@ void bind_mma_type(nb::module_& m) {
           .def("permute_summands",
                [](WrapperMod& self, nb::handle permutation) {
                  WrapperMod out;
-                 out.mod =
-                     Gudhi::multi_persistence::build_permuted_module(self.mod, vector_from_handle<int>(permutation));
+                 auto c_permutation = vector_from_handle<int>(permutation);
+                 {
+                   nb::gil_scoped_release release;
+                   out.mod = Gudhi::multi_persistence::build_permuted_module(self.mod, c_permutation);
+                 }
                  return out;
                })
           .def(
               "set_box",
               [](WrapperMod& self, nb::handle box_handle) -> WrapperMod& {
                 auto box = matrix_from_handle<T>(box_handle);
-                self.mod.set_box(Box(box[0], box[1]));
+                {
+                  nb::gil_scoped_release release;
+                  self.mod.set_box(Box(box[0], box[1]));
+                }
                 return self;
               },
               nb::rv_policy::reference_internal)
           .def("get_module_of_degree",
                [](WrapperMod& self, int degree) {
                  WrapperMod out;
-                 out.mod.set_box(self.mod.get_box());
-                 for (auto summand : self.mod)
-                   if (summand.get_dimension() == degree) out.mod.add_summand(summand);
+                 {
+                   nb::gil_scoped_release release;
+                   out.mod.set_box(self.mod.get_box());
+                   for (auto summand : self.mod)
+                     if (summand.get_dimension() == degree) out.mod.add_summand(summand);
+                 }
                  return out;
                })
           .def("get_module_of_degrees",
                [](WrapperMod& self, nb::handle degrees_handle) {
                  auto degrees = vector_from_handle<int>(degrees_handle);
                  WrapperMod out;
-                 out.mod.set_box(self.mod.get_box());
-                 for (auto summand : self.mod) {
-                   for (int degree : degrees) {
-                     if (degree == summand.get_dimension()) {
-                       out.mod.add_summand(summand);
-                       break;
+                 {
+                   nb::gil_scoped_release release;
+                   out.mod.set_box(self.mod.get_box());
+                   for (auto summand : self.mod) {
+                     for (int degree : degrees) {
+                       if (degree == summand.get_dimension()) {
+                         out.mod.add_summand(summand);
+                         break;
+                       }
                      }
                    }
                  }
@@ -507,7 +573,13 @@ void bind_mma_type(nb::module_& m) {
                        [](const WrapperMod& self) -> int { return self.mod.get_box().get_lower_corner().size(); })
           .def("get_bounds",
                [](WrapperMod& self) -> nb::tuple {
-                 auto cbounds = self.mod.compute_bounds().get_bounding_corners();
+                 std::pair<std::vector<T>, std::vector<T>> cbounds;
+                 {
+                   nb::gil_scoped_release release;
+                   auto cpp_bounds = self.mod.compute_bounds().get_bounding_corners();
+                   cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
+                   cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
+                 }
                  return nb::make_tuple(
                      nb::cast(owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()),
                                              {cbounds.first.size()})),
@@ -517,7 +589,11 @@ void bind_mma_type(nb::module_& m) {
           .def(
               "rescale",
               [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
-                self.mod.rescale(vector_from_handle<T>(factors), degree);
+                auto c_factors = vector_from_handle<T>(factors);
+                {
+                  nb::gil_scoped_release release;
+                  self.mod.rescale(c_factors, degree);
+                }
                 return self;
               },
               "rescale_factors"_a,
@@ -526,7 +602,11 @@ void bind_mma_type(nb::module_& m) {
           .def(
               "translate",
               [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
-                self.mod.translate(vector_from_handle<T>(factors), degree);
+                auto c_factors = vector_from_handle<T>(factors);
+                {
+                  nb::gil_scoped_release release;
+                  self.mod.translate(c_factors, degree);
+                }
                 return self;
               },
               "translation"_a,

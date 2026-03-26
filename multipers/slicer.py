@@ -34,6 +34,8 @@ available_filtration_container = {
     cls().filtration_container for cls in available_slicers
 }
 
+_eq_raw = {}
+
 Slicer_type = reduce(or_, available_slicers) if available_slicers else Any
 _valid_dtype = Any
 _valid_pers_backend = str
@@ -351,14 +353,39 @@ def _eq(self, other):
         return self.unsqueeze() == other
     self_boundaries = self.get_boundaries(packed=True)
     other_boundaries = other.get_boundaries(packed=True)
-    return (
+    if not (
         np.array_equal(self.get_dimensions(), other.get_dimensions())
         and np.array_equal(self_boundaries[0], other_boundaries[0])
         and np.array_equal(self_boundaries[1], other_boundaries[1])
-        and np.array_equal(
+    ):
+        return False
+    if not self.is_kcritical:
+        return np.array_equal(
             self.get_filtrations_values(), other.get_filtrations_values()
         )
-    )
+
+    self_filtrations = self.get_filtrations()
+    other_filtrations = other.get_filtrations()
+    if len(self_filtrations) != len(other_filtrations):
+        return False
+    for current, reference in zip(self_filtrations, other_filtrations):
+        current_rows = sorted(
+            map(
+                tuple,
+                np.asarray(current, dtype=self.dtype).reshape(-1, self.num_parameters),
+            )
+        )
+        reference_rows = sorted(
+            map(
+                tuple,
+                np.asarray(reference, dtype=other.dtype).reshape(
+                    -1, other.num_parameters
+                ),
+            )
+        )
+        if current_rows != reference_rows:
+            return False
+    return True
 
 
 def _bc_to_full(bcs, basepoint, direction=None):
@@ -410,13 +437,13 @@ def _grid_squeeze(
         c_grid = grid
     else:
         grid = tuple(api.ascontiguous(g) for g in filtration_grid)
-        c_grid = tuple(np.asarray(api.asnumpy(g), dtype=self.dtype) for g in grid)
+        c_grid = tuple(api.asnumpy(g, dtype=self.dtype) for g in grid)
     if inplace or not coordinates:
-        self.coarsen_on_grid_inplace([g.tolist() for g in c_grid], coordinates)
+        self.coarsen_on_grid_inplace(c_grid, coordinates)
         if coordinates:
             self.filtration_grid = sanitize_grid(grid)
         return self
-    out = self.coarsen_on_grid_copy([g.tolist() for g in c_grid])
+    out = self.coarsen_on_grid_copy(c_grid)
     if coordinates:
         out.filtration_grid = sanitize_grid(grid)
     out.minpres_degree = self.minpres_degree
@@ -505,19 +532,21 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         raise NotImplementedError("There is no reasonable implementation (yet).")
     grid = self.filtration_grid if grid is None else grid
     grid = sanitize_grid(grid, numpyfy=True, add_inf=inf_overflow)
+
+    num_generators = len(self)
     grid_size = np.array([len(g) for g in grid], dtype=np.int32)
 
     if self.is_kcritical:
         current_filtration = self.get_filtrations()
-        new_filtrations = [
+        new_filtrations = tuple(
             evaluate_in_grid(
                 np.asarray(current_filtration[i], dtype=np.int32).clip(
                     None, grid_size - 1
                 ),
                 grid,
             )
-            for i in range(len(self))
-        ]
+            for i in range(num_generators)
+        )
     else:
         filtrations = np.asarray(self.get_filtrations(), dtype=np.int32).clip(
             None, grid_size - 1
@@ -531,6 +560,7 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         and np.dtype(np.float64) in {np.dtype(dtype) for dtype in available_dtype}
     ):
         real_dtype = np.float64
+
     new_slicer = get_matrix_slicer(
         self.is_vine,
         self.is_kcritical,
@@ -575,86 +605,14 @@ def slicer2blocks(slicer, degree=-1, reverse=True):
 def to_simplextree(s: Slicer_type, max_dim: int = -1):
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
-    dims = np.asarray(s.get_dimensions(), dtype=np.int32)
-    assert np.all(dims[:-1] <= dims[1:]), "Dims is not sorted."
-    idx = np.searchsorted(dims, np.unique(dims)).astype(np.int32)
-    idx = np.concatenate([idx, np.asarray([dims.shape[0]], dtype=np.int32)])
-    if max_dim >= 0:
-        idx = idx[: max_dim + 2]
-
-    boundaries_indptr, boundaries_indices = s.get_boundaries(packed=True)
-    boundaries_indptr = np.asarray(boundaries_indptr, dtype=np.int64)
-    boundaries_indices = np.asarray(boundaries_indices, dtype=np.int32)
-    simplex_vertices_sets = [set() for _ in range(len(dims))]
-
-    if len(idx) > 1:
-        a = idx[1]
-        b = idx[-1]
-        c = idx[2] if len(idx) > 2 else b
-        for i in range(a, b):
-            row = boundaries_indices[boundaries_indptr[i] : boundaries_indptr[i + 1]]
-            if i < c:
-                simplex_vertices_sets[i].update(int(x) for x in row)
-            else:
-                for face_idx in row:
-                    simplex_vertices_sets[i].update(
-                        simplex_vertices_sets[int(face_idx)]
-                    )
-
-    num_dims = len(idx) - 1
-    boundaries = [None] * num_dims
-    if num_dims > 0:
-        boundaries[0] = np.arange(idx[1] - idx[0], dtype=np.int32)[None, :]
-    for dim in range(1, num_dims):
-        start_dim = idx[dim]
-        end_dim = idx[dim + 1]
-        boundaries_dim = np.empty((dim + 1, end_dim - start_dim), dtype=np.int32)
-        for local_idx in range(end_dim - start_dim):
-            simplex_idx = start_dim + local_idx
-            vertices = sorted(simplex_vertices_sets[simplex_idx])
-            if len(vertices) != dim + 1:
-                raise ValueError("Input slicer is not simplicial.")
-            boundaries_dim[:, local_idx] = vertices
-        boundaries[dim] = boundaries_dim
-
-    filtrations = s.get_filtrations()
-    filtrations = [filtrations[idx[i] : idx[i + 1]] for i in range(num_dims)]
-    st = SimplexTreeMulti(
-        num_parameters=s.num_parameters, dtype=s.dtype, kcritical=s.is_kcritical
+    return SimplexTreeMulti(
+        s,
+        num_parameters=s.num_parameters,
+        dtype=s.dtype,
+        kcritical=s.is_kcritical,
+        ftype=s.filtration_container,
+        max_dim=max_dim,
     )
-    for dim in range(num_dims):
-        if boundaries[dim].shape[1] == 0:
-            continue
-        if s.is_kcritical:
-            max_crit_deg = max(
-                len(filtrations[dim][j]) for j in range(boundaries[dim].shape[1])
-            )
-            filtrations_dim = np.empty(
-                (boundaries[dim].shape[1], max_crit_deg, s.num_parameters),
-                dtype=s.dtype,
-            )
-            for j in range(boundaries[dim].shape[1]):
-                current_f = np.asarray(filtrations[dim][j], dtype=s.dtype).reshape(
-                    -1, s.num_parameters
-                )
-                if current_f.shape[0] == 0:
-                    raise ValueError(
-                        "Input slicer contains an empty k-critical filtration."
-                    )
-                filtrations_dim[j, : current_f.shape[0], :] = current_f
-                if current_f.shape[0] < max_crit_deg:
-                    filtrations_dim[j, current_f.shape[0] :, :] = current_f[
-                        current_f.shape[0] - 1
-                    ]
-            st.insert_batch(
-                np.asarray(boundaries[dim], dtype=np.int32), filtrations_dim
-            )
-        else:
-            st.insert_batch(
-                np.asarray(boundaries[dim], dtype=np.int32),
-                np.asarray(filtrations[dim], dtype=s.dtype),
-            )
-    return st
 
 
 def _is_slicer(input) -> bool:
@@ -773,10 +731,11 @@ def from_function_delaunay(
 
 def _install_python_api():
     for cls in available_slicers:
+        _eq_raw.setdefault(cls, cls.__eq__)
         cls.__repr__ = _repr
         cls.__getstate__ = _getstate
         cls.__setstate__ = _setstate
-        cls.__eq__ = _eq
+        cls.__eq__ = _eq_raw[cls]
         cls.astype = _astype
         cls.get_filtrations = _get_filtrations
         cls.compute_persistence = _compute_persistence

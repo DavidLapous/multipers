@@ -156,8 +156,8 @@ def cdist(x, y, p=2):
     return _jnp.sum(diff**p, axis=-1) ** (1.0 / p)
 
 
-def asnumpy(x):
-    return _np.asarray(x)
+def asnumpy(x, dtype=None):
+    return _np.asarray(x, dtype=dtype)
 
 
 def is_tensor(x):
