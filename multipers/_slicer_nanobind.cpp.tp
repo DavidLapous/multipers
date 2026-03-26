@@ -655,8 +655,8 @@ NB_MODULE(_slicer_nanobind, m)
         .def("get_dimensions", [](Wrapper& self) -> nb::object { return mpnb::dimensions_array(self); })
         .def("get_boundaries", [](Wrapper& self, bool packed) -> nb::object { return mpnb::boundaries_object(self, packed); }, "packed"_a = false)
         .def("get_filtration", [](Wrapper& self, int idx, bool raw) {
-          ssize_t n = static_cast<ssize_t>(self.truc.get_number_of_cycle_generators());
-          ssize_t i = idx;
+          Py_ssize_t n = static_cast<Py_ssize_t>(self.truc.get_number_of_cycle_generators());
+          Py_ssize_t i = idx;
           if (i < 0) {
             i += n;
           }

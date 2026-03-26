@@ -241,7 +241,6 @@ def one_criticalify(
     degree=None,
     swedish=None,
     bint verbose=False,
-    bint kcritical=False,
     str filtration_container="contiguous",
     **slicer_kwargs,
 ):
@@ -260,6 +259,7 @@ def one_criticalify(
     cdef Py_ssize_t i
     cdef object out
     cdef object input_slicer
+    cdef object newSlicer
     cdef intptr_t input_ptr
     cdef intptr_t out_ptr
     cdef C_KContiguousSlicer_Matrix0_f64* input_cpp
@@ -268,29 +268,20 @@ def one_criticalify(
 
     swedish = degree is not None if swedish is None else swedish
     from multipers import Slicer
-    newSlicer = Slicer(
-        slicer,
-        return_type_only=True,
-        kcritical=kcritical,
-        filtration_container=filtration_container,
-        **slicer_kwargs,
-    )
 
     use_logpath = algo != "path"
     if use_logpath and algo != "tree":
         raise ValueError(f"Algo should be path or tree. Got {algo}")
     use_swedish = swedish is True
 
-    input_slicer = slicer
-    if not isinstance(slicer, mps._KContiguousSlicer_Matrix0_f64):
-        input_slicer = slicer.astype(
-            vineyard=False,
-            kcritical=True,
-            dtype=np.float64,
-            col=slicer.col_type,
-            pers_backend="matrix",
-            filtration_container="contiguous",
-        )
+    input_slicer = slicer.astype(
+        vineyard=False,
+        kcritical=True,
+        dtype=np.float64,
+        col=slicer.col_type,
+        pers_backend="matrix",
+        filtration_container="contiguous",
+    )
 
     if not reduce:
         out = mps._ContiguousSlicer_Matrix0_f64()
@@ -306,16 +297,14 @@ def one_criticalify(
                 verbose,
             )
             build_slicer_from_complex_cpp(out_cpp[0], out_complex)
-        if newSlicer is type(out):
-            return out
-        return out.astype(
-            vineyard=slicer_kwargs.get("vineyard", slicer.is_vine),
-            kcritical=kcritical,
-            dtype=slicer_kwargs.get("dtype", slicer.dtype),
-            col=slicer_kwargs.get("column_type", slicer.col_type),
-            pers_backend=slicer_kwargs.get("backend", slicer.pers_backend),
-            filtration_container=filtration_container,
-        )
+        return out
+
+    newSlicer = Slicer(
+        slicer,
+        return_type_only=True,
+        filtration_container=filtration_container,
+        **slicer_kwargs,
+    )
 
     interface_input = _multi_critical_input_from_slicer(input_slicer)
     if reduce and degree is None:

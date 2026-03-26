@@ -547,7 +547,7 @@ def _set_key(self, simplex, key):
     return None
 
 
-def _to_scc(self, filtration_dtype=None, flattened=False):
+def _to_scc_python_fallback(self, filtration_dtype=None, flattened=False):
     filtration_dtype = self.dtype if filtration_dtype is None else filtration_dtype
     if flattened:
         simplices = list(self.get_simplices())
@@ -616,6 +616,41 @@ def _to_scc(self, filtration_dtype=None, flattened=False):
                 )
             )
     return blocks[::-1]
+
+
+def _to_scc(self, filtration_dtype=None, flattened=False):
+    filtration_dtype = self.dtype if filtration_dtype is None else filtration_dtype
+    try:
+        blocks = _to_scc_blocks_raw[type(self)](self, flattened)
+    except Exception:
+        return _to_scc_python_fallback(
+            self,
+            filtration_dtype=filtration_dtype,
+            flattened=flattened,
+        )
+
+    if flattened:
+        filtrations, boundaries = blocks
+        return np.asarray(filtrations, dtype=filtration_dtype), tuple(
+            tuple(boundary) for boundary in boundaries
+        )
+
+    if self.is_kcritical:
+        return [
+            (
+                tuple(np.asarray(f, dtype=filtration_dtype) for f in filtrations),
+                tuple(tuple(boundary) for boundary in boundaries),
+            )
+            for filtrations, boundaries in blocks[::-1]
+        ]
+
+    return [
+        (
+            np.asarray(filtrations, dtype=filtration_dtype),
+            tuple(tuple(boundary) for boundary in boundaries),
+        )
+        for filtrations, boundaries in blocks[::-1]
+    ]
 
 
 def _get_filtration_values(self, degrees=(-1,), inf_to_nan=False, return_raw=False):

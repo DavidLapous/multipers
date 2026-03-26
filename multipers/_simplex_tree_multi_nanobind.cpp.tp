@@ -15,6 +15,7 @@ with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("rb") as f:
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
