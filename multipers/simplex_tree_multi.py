@@ -371,18 +371,14 @@ def _insert(self, simplex, filtration=None):
                 )
             return True
         filtration = filtration[None, :]
-    return self._insert_simplex(
-        np.asarray(simplex, dtype=np.int32).tolist(), filtration.tolist(), False
-    )
+    return self._insert_simplex(np.asarray(simplex, dtype=np.int32), filtration, False)
 
 
 def _assign_filtration(self, simplex, filtration):
     filtration = np.asarray(filtration, dtype=self.dtype)
     if self.is_kcritical and filtration.ndim == 1:
         filtration = filtration[None, :]
-    self._assign_filtration(
-        np.asarray(simplex, dtype=np.int32).tolist(), filtration.tolist()
-    )
+    self._assign_filtration(np.asarray(simplex, dtype=np.int32), filtration)
     return self
 
 
@@ -401,8 +397,8 @@ def _insert_batch(self, vertex_array, filtrations=np.empty((0, 0))):
         for i in range(n):
             filtration = None if empty_filtration else filtrations[i]
             self._insert_simplex(
-                vertex_array[:, i].tolist(),
-                None if filtration is None else filtration.tolist(),
+                vertex_array[:, i],
+                None if filtration is None else filtration,
                 False,
             )
         if empty_filtration:
@@ -417,8 +413,8 @@ def _insert_batch(self, vertex_array, filtrations=np.empty((0, 0))):
     for i in range(n):
         filtration = None if empty_filtration else filtrations[i]
         self._insert_simplex(
-            vertex_array[:, i].tolist(),
-            None if filtration is None else filtration.tolist(),
+            vertex_array[:, i],
+            None if filtration is None else filtration,
             True,
         )
     if empty_filtration:
@@ -452,9 +448,7 @@ def _get_skeleton(self, dimension):
 
 def _get_boundaries(self, simplex):
     boundaries = []
-    for face, filtration in self._get_boundaries(
-        np.asarray(simplex, dtype=np.int32).tolist()
-    ):
+    for face, filtration in self._get_boundaries(np.asarray(simplex, dtype=np.int32)):
         boundaries.append(
             (
                 np.asarray(face, dtype=np.int32),
@@ -470,7 +464,7 @@ def _flagify(self, dim=2):
     )
     for simplex, filtration in list(self.get_simplices()):
         if len(simplex) - 1 >= dim:
-            self._assign_filtration(simplex.tolist(), minus_inf.tolist())
+            self._assign_filtration(simplex, minus_inf)
     self.make_filtration_non_decreasing()
     return self
 
@@ -492,9 +486,7 @@ def _upper_bound_dimension(self):
 
 
 def _simplex_dimension(self, simplex):
-    return _simplex_dimension_raw[type(self)](
-        self, np.asarray(simplex, dtype=np.int32).tolist()
-    )
+    return _simplex_dimension_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
 
 
 def _contains(self, simplex):
@@ -502,20 +494,14 @@ def _contains(self, simplex):
         return False
     if isinstance(simplex[0], Iterable):
         s, f = simplex
-        if not _find_simplex_raw[type(self)](
-            self, np.asarray(s, dtype=np.int32).tolist()
-        ):
+        if not _find_simplex_raw[type(self)](self, np.asarray(s, dtype=np.int32)):
             return False
         return np.all(np.asarray(f) >= np.asarray(self[s]))
-    return _find_simplex_raw[type(self)](
-        self, np.asarray(simplex, dtype=np.int32).tolist()
-    )
+    return _find_simplex_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
 
 
 def _remove_maximal_simplex(self, simplex):
-    _remove_maximal_simplex_raw[type(self)](
-        self, np.asarray(simplex, dtype=np.int32).tolist()
-    )
+    _remove_maximal_simplex_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
     return self
 
 
@@ -534,7 +520,7 @@ def _make_filtration_non_decreasing(self):
 
 def _reset_filtration(self, filtration, min_dim=0):
     _reset_filtration_raw[type(self)](
-        self, np.asarray(filtration, dtype=self.dtype).tolist(), min_dim
+        self, np.asarray(filtration, dtype=self.dtype), min_dim
     )
     return self
 
@@ -544,7 +530,7 @@ def _get_simplices_of_dimension(self, dim):
 
 
 def _key(self, simplex):
-    return _get_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32).tolist())
+    return _get_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
 
 
 def _set_keys_to_enumerate(self):
@@ -553,7 +539,7 @@ def _set_keys_to_enumerate(self):
 
 
 def _set_key(self, simplex, key):
-    _set_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32).tolist(), key)
+    _set_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32), key)
     return None
 
 
@@ -831,9 +817,7 @@ def _filtration_bounds(self, degrees=None, q=0, split_dimension=False):
 
 
 def _fill_lowerstar(self, F, parameter):
-    _fill_lowerstar_raw[type(self)](
-        self, np.asarray(F, dtype=self.dtype).tolist(), parameter
-    )
+    _fill_lowerstar_raw[type(self)](self, np.asarray(F, dtype=self.dtype), parameter)
     return self
 
 
@@ -846,7 +830,7 @@ def _fill_distance_matrix(self, distance_matrix, parameter, node_value=0):
         if len(simplex) == 2:
             filtration = np.asarray(filtration, dtype=self.dtype)
             filtration[..., parameter] = c_distance_matrix[simplex[0], simplex[1]]
-            self._assign_filtration(simplex.tolist(), filtration.tolist())
+            self._assign_filtration(simplex, filtration)
     self.make_filtration_non_decreasing()
     return self
 
@@ -861,8 +845,8 @@ def _project_on_line(self, parameter=0, basepoint=None, direction=None):
         direction[parameter] = 1
     serialized = _to_std_state_raw[type(self)](
         self,
-        np.asarray(basepoint, dtype=np.float64).tolist(),
-        np.asarray(direction, dtype=np.float64).tolist(),
+        np.asarray(basepoint, dtype=np.float64),
+        np.asarray(direction, dtype=np.float64),
         int(parameter),
     )
     return _reconstruct_gudhi_simplextree(serialized)
@@ -875,9 +859,7 @@ def _linear_projections(self, linear_forms: np.ndarray):
     assert linear_forms.shape[1] == self.num_parameters
     out = []
     for linear_form in linear_forms:
-        serialized = _to_std_linear_projection_state_raw[type(self)](
-            self, linear_form.tolist()
-        )
+        serialized = _to_std_linear_projection_state_raw[type(self)](self, linear_form)
         out.append(_reconstruct_gudhi_simplextree(serialized))
     return out
 
@@ -909,7 +891,7 @@ def _set_num_parameter(self, num):
 def _pts_to_indices(self, pts, simplices_dimensions):
     pts = np.asarray(pts, dtype=self.dtype)
     found_indices, not_found_indices = _pts_to_indices_raw[type(self)](
-        self, pts.tolist(), list(simplices_dimensions)
+        self, pts, np.asarray(simplices_dimensions, dtype=np.int32)
     )
     found_indices = np.asarray(found_indices, dtype=np.int32)
     not_found_indices = np.asarray(not_found_indices, dtype=np.int32)
