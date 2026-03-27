@@ -13,10 +13,13 @@
 #define FUNCTION_DELAUNAY_TIMERS 0
 #endif
 
-#include "contiguous_slicer_bridge.hpp"
-
 #ifndef MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 #define MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+#include "contiguous_slicer_bridge.hpp"
+#include "Simplex_tree_multi_interface.h"
 #endif
 
 #if FUNCTION_DELAUNAY_TIMERS
@@ -38,8 +41,6 @@ static multipers_function_delaunay_timer_stub test_timer_3;
 static multipers_function_delaunay_timer_stub test_timer_4;
 #endif
 
-#include "Simplex_tree_multi_interface.h"
-
 namespace multipers {
 
 template <typename index_type>
@@ -55,12 +56,6 @@ struct function_delaunay_interface_output {
   std::vector<int> dimensions;
 };
 
-using function_delaunay_simplextree_filtration =
-    Gudhi::multi_filtration::Multi_parameter_filtration<double, false, !false>;
-using function_delaunay_simplextree_interface_output =
-    Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<function_delaunay_simplextree_filtration,
-                                                                           double>;
-
 inline bool function_delaunay_interface_available();
 
 template <typename index_type>
@@ -69,6 +64,17 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
     int degree = -1,
     bool use_multi_chunk = false,
     bool verbose_output = false);
+
+}  // namespace multipers
+
+#if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+namespace multipers {
+
+using function_delaunay_simplextree_filtration =
+    Gudhi::multi_filtration::Multi_parameter_filtration<double, false, !false>;
+using function_delaunay_simplextree_interface_output =
+    Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<function_delaunay_simplextree_filtration,
+                                                                          double>;
 
 template <typename index_type>
 contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
@@ -83,6 +89,7 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
     bool verbose_output = false);
 
 }  // namespace multipers
+#endif
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE && __has_include(<function_delaunay/function_delaunay_with_meb.h>) && \
     __has_include(<function_delaunay/Point_with_densities.h>)
@@ -315,6 +322,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
   return out;
 }
 
+#if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>& input,
@@ -362,6 +370,7 @@ contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
   auto out = function_delaunay_interface<index_type>(input, degree, use_multi_chunk, verbose_output);
   return build_contiguous_f64_slicer_from_output<index_type>(out.filtration_values, out.boundaries, out.dimensions);
 }
+#endif
 
 #else
 
@@ -372,12 +381,10 @@ function_delaunay_interface(const function_delaunay_interface_input<index_type>&
       "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
+#if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 template <typename index_type>
-contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
-    const function_delaunay_interface_input<index_type>&,
-    int,
-    bool,
-    bool) {
+contiguous_f64_complex
+function_delaunay_interface_contiguous_slicer(const function_delaunay_interface_input<index_type>&, int, bool, bool) {
   throw std::runtime_error(
       "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }
@@ -389,6 +396,7 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
   throw std::runtime_error(
       "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }
+#endif
 
 #endif
 

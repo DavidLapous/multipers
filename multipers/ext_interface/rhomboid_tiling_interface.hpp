@@ -8,8 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "contiguous_slicer_bridge.hpp"
-
 namespace multipers {
 
 template <typename index_type>
@@ -33,6 +31,17 @@ rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface
     int degree,
     bool verbose_output = false);
 
+}  // namespace multipers
+
+#ifndef MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
+#define MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
+#include "contiguous_slicer_bridge.hpp"
+
+namespace multipers {
+
 template <typename index_type>
 contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     const rhomboid_tiling_interface_input<index_type>& input,
@@ -41,9 +50,6 @@ contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     bool verbose_output = false);
 
 }  // namespace multipers
-
-#ifndef MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
-#define MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE 0
 #endif
 
 #if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE && __has_include(<CGAL/Exact_predicates_exact_constructions_kernel.h>) && \
@@ -104,11 +110,8 @@ inline rhomboid_tiling_interface_output<index_type> bifiltration_to_slicer_outpu
 
   const index_type invalid_index = std::numeric_limits<index_type>::max();
   std::vector<index_type> new_id_d_minus_1(
-      max_id_dim_minus_1 >= 0 ? static_cast<std::size_t>(max_id_dim_minus_1 + 1) : 0,
-      invalid_index);
-  std::vector<index_type> new_id_d(
-      max_id_dim >= 0 ? static_cast<std::size_t>(max_id_dim + 1) : 0,
-      invalid_index);
+      max_id_dim_minus_1 >= 0 ? static_cast<std::size_t>(max_id_dim_minus_1 + 1) : 0, invalid_index);
+  std::vector<index_type> new_id_d(max_id_dim >= 0 ? static_cast<std::size_t>(max_id_dim + 1) : 0, invalid_index);
 
   index_type next_dim_minus_1 = 0;
   index_type next_dim = 0;
@@ -164,11 +167,13 @@ inline rhomboid_tiling_interface_output<index_type> bifiltration_to_slicer_outpu
     boundary.reserve(bc.boundary.size());
     for (const int idx : bc.boundary) {
       if (idx < 0 || static_cast<std::size_t>(idx) >= lower_dim_new_id_map.size()) {
-        throw std::invalid_argument("rhomboid_tiling conversion failed: boundary index is outside expected dimension block.");
+        throw std::invalid_argument(
+            "rhomboid_tiling conversion failed: boundary index is outside expected dimension block.");
       }
       const index_type local_id = lower_dim_new_id_map[static_cast<std::size_t>(idx)];
       if (local_id == invalid_index) {
-        throw std::invalid_argument("rhomboid_tiling conversion failed: boundary index is outside expected dimension block.");
+        throw std::invalid_argument(
+            "rhomboid_tiling conversion failed: boundary index is outside expected dimension block.");
       }
       const std::size_t shifted_idx = static_cast<std::size_t>(local_id) + shift;
       if (shifted_idx >= number_of_cells) {
@@ -256,10 +261,10 @@ inline rhomboid_tiling_interface_output<index_type> build_from_points(
     const double core_sec = std::chrono::duration<double>(t_core_done - t_core_start).count();
     const double convert_sec = std::chrono::duration<double>(t_convert_done - t_convert_start).count();
     const double total_sec = std::chrono::duration<double>(t_convert_done - t_total_start).count();
-    std::cout << "[multipers.rhomboid][timing] points_to_kernel=" << points_sec
-              << "s rhomboid_core=" << core_sec << "s interface_convert=" << convert_sec
-              << "s total=" << total_sec << "s bifiltration_cells=" << bifiltration.size()
-              << " output_cells=" << out.dimensions.size() << std::endl;
+    std::cout << "[multipers.rhomboid][timing] points_to_kernel=" << points_sec << "s rhomboid_core=" << core_sec
+              << "s interface_convert=" << convert_sec << "s total=" << total_sec
+              << "s bifiltration_cells=" << bifiltration.size() << " output_cells=" << out.dimensions.size()
+              << std::endl;
   }
 
   return out;
@@ -300,6 +305,7 @@ rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface
   return detail::build_from_points<Dt3, index_type>(input, k_max, degree, verbose_output);
 }
 
+#if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
 template <typename index_type>
 contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
     const rhomboid_tiling_interface_input<index_type>& input,
@@ -309,28 +315,27 @@ contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
   auto out = rhomboid_tiling_to_slicer_interface<index_type>(input, k_max, degree, verbose_output);
   return build_contiguous_f64_slicer_from_output<index_type>(out.filtration_values, out.boundaries, out.dimensions);
 }
+#endif
 
 #else
 
 template <typename index_type>
-rhomboid_tiling_interface_output<index_type> rhomboid_tiling_to_slicer_interface(
-    const rhomboid_tiling_interface_input<index_type>&,
-    int,
-    int,
-    bool) {
-  throw std::runtime_error("rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
-                           "rhomboidtiling + CGAL headers and rebuild.");
+rhomboid_tiling_interface_output<index_type>
+rhomboid_tiling_to_slicer_interface(const rhomboid_tiling_interface_input<index_type>&, int, int, bool) {
+  throw std::runtime_error(
+      "rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
+      "rhomboidtiling + CGAL headers and rebuild.");
 }
 
+#if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
 template <typename index_type>
-contiguous_f64_complex rhomboid_tiling_to_contiguous_slicer_interface(
-    const rhomboid_tiling_interface_input<index_type>&,
-    int,
-    int,
-    bool) {
-  throw std::runtime_error("rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
-                           "rhomboidtiling + CGAL headers and rebuild.");
+contiguous_f64_complex
+rhomboid_tiling_to_contiguous_slicer_interface(const rhomboid_tiling_interface_input<index_type>&, int, int, bool) {
+  throw std::runtime_error(
+      "rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
+      "rhomboidtiling + CGAL headers and rebuild.");
 }
+#endif
 
 #endif
 

@@ -7,8 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "contiguous_slicer_bridge.hpp"
-
 namespace multipers {
 
 template <typename index_type>
@@ -34,13 +32,6 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
     bool use_multi_chunk = true,
     bool verbose_output = false);
 
-template <typename kcontiguous_slicer_type>
-contiguous_f64_complex multi_critical_resolution_contiguous_interface(
-    kcontiguous_slicer_type& input,
-    bool use_logpath = true,
-    bool use_multi_chunk = true,
-    bool verbose_output = false);
-
 template <typename index_type>
 multi_critical_interface_output<index_type> multi_critical_minpres_interface(
     const multi_critical_interface_input<index_type>& input,
@@ -62,6 +53,20 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
 
 #ifndef MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 #define MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+#include "contiguous_slicer_bridge.hpp"
+
+namespace multipers {
+
+template <typename kcontiguous_slicer_type>
+contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type& input,
+                                                                      bool use_logpath = true,
+                                                                      bool use_multi_chunk = true,
+                                                                      bool verbose_output = false);
+
+}  // namespace multipers
 #endif
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE && __has_include(<multi_critical/free_resolution.h>) && \
@@ -361,7 +366,8 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
 }
 
 template <typename kcontiguous_slicer_type>
-inline multi_critical_interface_input<int> multi_critical_input_from_kcontiguous_slicer(kcontiguous_slicer_type& slicer) {
+inline multi_critical_interface_input<int> multi_critical_input_from_kcontiguous_slicer(
+    kcontiguous_slicer_type& slicer) {
   multi_critical_interface_input<int> input;
 
   const auto dimensions = slicer.get_dimensions();
@@ -419,17 +425,17 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
   return multi_critical_detail::convert_chain_complex<index_type>(shifted_matrices);
 }
 
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 template <typename kcontiguous_slicer_type>
-inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(
-    kcontiguous_slicer_type& input,
-    bool use_logpath,
-    bool use_multi_chunk,
-    bool verbose_output) {
+inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type& input,
+                                                                             bool use_logpath,
+                                                                             bool use_multi_chunk,
+                                                                             bool verbose_output) {
   auto converted_input = multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input);
-  auto out = multi_critical_resolution_interface<int>(
-      converted_input, use_logpath, use_multi_chunk, verbose_output);
+  auto out = multi_critical_resolution_interface<int>(converted_input, use_logpath, use_multi_chunk, verbose_output);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
 }
+#endif
 
 template <typename index_type>
 multi_critical_interface_output<index_type> multi_critical_minpres_interface(
@@ -511,11 +517,16 @@ multi_critical_resolution_interface(const multi_critical_interface_input<index_t
       "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 template <typename kcontiguous_slicer_type>
-inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type&, bool, bool, bool) {
+inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type&,
+                                                                             bool,
+                                                                             bool,
+                                                                             bool) {
   throw std::runtime_error(
       "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
 }
+#endif
 
 template <typename index_type>
 multi_critical_interface_output<index_type>

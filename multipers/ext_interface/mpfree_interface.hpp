@@ -8,8 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "contiguous_slicer_bridge.hpp"
-
 namespace multipers {
 
 template <typename index_type>
@@ -36,6 +34,17 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
                                                              bool use_clearing = false,
                                                              bool verbose_output = false);
 
+}  // namespace multipers
+
+#ifndef MULTIPERS_DISABLE_MPFREE_INTERFACE
+#define MULTIPERS_DISABLE_MPFREE_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_MPFREE_INTERFACE
+#include "contiguous_slicer_bridge.hpp"
+
+namespace multipers {
+
 template <typename contiguous_slicer_type>
 contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_type& input,
                                                            int degree,
@@ -45,9 +54,6 @@ contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_typ
                                                            bool verbose_output = false);
 
 }  // namespace multipers
-
-#ifndef MULTIPERS_DISABLE_MPFREE_INTERFACE
-#define MULTIPERS_DISABLE_MPFREE_INTERFACE 0
 #endif
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE && __has_include(<mpfree/mpfree.h>) && __has_include(<mpp_utils/Graded_matrix.h>)
@@ -320,6 +326,7 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
   return detail::convert_minpres_to_output<index_type>(min_rep, degree, full_resolution);
 }
 
+#if !MULTIPERS_DISABLE_MPFREE_INTERFACE
 template <typename contiguous_slicer_type>
 inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_type& input,
                                                                   int degree,
@@ -328,10 +335,11 @@ inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_sli
                                                                   bool use_clearing,
                                                                   bool verbose_output) {
   auto converted_input = detail::convert_contiguous_slicer_to_input<int>(input);
-  auto out = mpfree_minpres_interface<int>(
-      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+  auto out =
+      mpfree_minpres_interface<int>(converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
 }
+#endif
 
 #else
 
@@ -346,6 +354,7 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
       "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 
+#if !MULTIPERS_DISABLE_MPFREE_INTERFACE
 template <typename contiguous_slicer_type>
 inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_type&,
                                                                   int,
@@ -356,6 +365,7 @@ inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_sli
   throw std::runtime_error(
       "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
+#endif
 
 #endif
 
