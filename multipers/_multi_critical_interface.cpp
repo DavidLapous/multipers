@@ -3,7 +3,11 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <cstdio>
 #include <cstdint>
+#include <fcntl.h>
+#include <mutex>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -35,6 +39,44 @@ template <typename T>
 std::vector<std::vector<T>> cast_matrix(nb::handle h) {
   return nb::cast<std::vector<std::vector<T>>>(h);
 }
+
+struct ScopedStdoutSilence {
+  bool active = false;
+  int saved_stdout = -1;
+  int devnull = -1;
+  std::unique_lock<std::mutex> lock;
+
+  static std::mutex& mutex() {
+    static std::mutex m;
+    return m;
+  }
+
+  explicit ScopedStdoutSilence(bool silence)
+      : active(silence), lock(mutex(), std::defer_lock) {
+    if (!active) return;
+    lock.lock();
+    std::fflush(stdout);
+    devnull = open("/dev/null", O_WRONLY);
+    saved_stdout = dup(STDOUT_FILENO);
+    if (devnull >= 0 && saved_stdout >= 0) {
+      dup2(devnull, STDOUT_FILENO);
+    } else {
+      active = false;
+      if (saved_stdout >= 0) close(saved_stdout);
+      if (devnull >= 0) close(devnull);
+    }
+  }
+
+  ~ScopedStdoutSilence() {
+    if (!lock.owns_lock()) return;
+    if (active) {
+      std::fflush(stdout);
+      dup2(saved_stdout, STDOUT_FILENO);
+      close(saved_stdout);
+      close(devnull);
+    }
+  }
+};
 
 std::vector<std::vector<int>> boundaries_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
@@ -177,6 +219,7 @@ NB_MODULE(_multi_critical_interface, m) {
          nb::object degree_obj,
          nb::object swedish_obj,
          bool verbose,
+         bool backend_stdout,
          bool kcritical,
          std::string filtration_container) {
         if (!multipers::multi_critical_interface_available()) {
@@ -204,10 +247,12 @@ NB_MODULE(_multi_critical_interface, m) {
 
         auto input = mpmc::input_from_kcritical_slicer(input_slicer);
         if (!reduce) {
+          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
           return mpmc::output_to_slicer(new_slicer_type, out, false, -1);
         }
         if (degree_obj.is_none()) {
+          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           auto outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
           nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outs.size() > 0 ? outs.size() - 1 : 0)));
           for (size_t i = 1; i < outs.size(); ++i) {
@@ -217,6 +262,7 @@ NB_MODULE(_multi_critical_interface, m) {
           return nb::object(result);
         }
         int degree = nb::cast<int>(degree_obj);
+        mpmc::ScopedStdoutSilence silence(!backend_stdout);
         auto out =
             multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
         return mpmc::output_to_slicer(new_slicer_type, out, true, degree);
@@ -227,6 +273,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "degree"_a = nb::none(),
       "swedish"_a = nb::none(),
       "verbose"_a = false,
+      "_backend_stdout"_a = false,
       "kcritical"_a = false,
       "filtration_container"_a = "contiguous");
 
@@ -239,7 +286,8 @@ NB_MODULE(_multi_critical_interface, m) {
          nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat,
          bool use_tree,
          bool use_multi_chunk,
-         bool verbose) {
+         bool verbose,
+         bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
         }
@@ -251,6 +299,7 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         multipers::multi_critical_interface_output<int> output;
         {
+          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           output = multipers::multi_critical_resolution_interface<int>(
               input,
@@ -267,7 +316,8 @@ NB_MODULE(_multi_critical_interface, m) {
       "grades_flat"_a,
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
-      "verbose"_a = false);
+      "verbose"_a = false,
+      "_backend_stdout"_a = false);
 
   m.def(
       "minpres_from_packed",
@@ -280,7 +330,8 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish) {
+         bool swedish,
+         bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
         }
@@ -292,6 +343,7 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         multipers::multi_critical_interface_output<int> output;
         {
+          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           output = multipers::multi_critical_minpres_interface<int>(
               input,
@@ -312,7 +364,8 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true);
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
 
   m.def(
       "minpres_all_from_packed",
@@ -324,7 +377,8 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish) {
+         bool swedish,
+         bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
         }
@@ -336,6 +390,7 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
         {
+          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           outputs = multipers::multi_critical_minpres_all_interface<int>(
               input,
@@ -360,5 +415,6 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true);
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
 }

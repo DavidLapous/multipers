@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Iterable, Literal, Optional
 import multipers.logs as _mp_logs
+from multipers._stdout_silence import call_silencing_stdout
 
 
 def aida(s, bool sort=True, bool verbose=False, bool progress=False):
@@ -64,7 +65,8 @@ def one_criticalify(
         F = None
     if reduce is None and degree is not None:
         reduce = True
-    out = _multi_critical_from_slicer(
+    out = call_silencing_stdout(
+        _multi_critical_from_slicer,
         working_slicer,
         reduce=reduce,
         algo=algo,
@@ -74,6 +76,7 @@ def one_criticalify(
         verbose=verbose,
         kcritical=kcritical,
         filtration_container=filtration_container,
+        enabled=True,
     )
     if not reduce and is_slicer(out):
         out = out.astype(
@@ -146,7 +149,8 @@ def minimal_presentation(
     if idx >= dimensions.shape[0] or dimensions[idx] != degree:
         return type(slicer)()
 
-    return _minimal_presentation_from_slicer(
+    return call_silencing_stdout(
+        _minimal_presentation_from_slicer,
         slicer,
         degree=degree,
         backend=backend,
@@ -155,4 +159,5 @@ def minimal_presentation(
         full_resolution=full_resolution,
         use_chunk=use_chunk,
         use_clearing=use_clearing,
+        enabled=True,
     )
