@@ -130,22 +130,18 @@ def _rebuild_from_current_simplices(self, target_cls, transform):
 
 
 def _get_class(dtype, kcritical=False, ftype="Contiguous"):
-    dtype = np.dtype(dtype)
-    for cls in available_simplextrees:
-        sample = cls()
-        if (
-            np.dtype(sample.dtype) == dtype
-            and sample.is_kcritical == kcritical
-            and sample.filtration_container.lower() == str(ftype).lower()
-        ):
-            return cls
-    raise TypeError(
-        f"No SimplexTreeMulti implementation for dtype={dtype}, kcritical={kcritical}, ftype={ftype}."
-    )
+    try:
+        return _nb._get_simplextree_class(np.dtype(dtype).type, kcritical, str(ftype))
+    except TypeError as exc:
+        raise TypeError(
+            f"No SimplexTreeMulti implementation for dtype={np.dtype(dtype)}, kcritical={kcritical}, ftype={ftype}."
+        ) from exc
 
 
 def is_simplextree_multi(input) -> bool:
-    return any(isinstance(input, cls) for cls in available_simplextrees)
+    if input is None:
+        return False
+    return _nb.is_simplextree_multi(input)
 
 
 def _safe_simplextree_multify(
@@ -1019,7 +1015,6 @@ def _install_python_api():
 
         cls.__repr__ = _repr
         cls.__len__ = _len
-        cls.__iter__ = _iter
         cls.__deepcopy__ = _deepcopy
         cls.__getstate__ = _getstate
         cls.__setstate__ = _setstate
@@ -1031,9 +1026,6 @@ def _install_python_api():
         cls.insert = cls._insert
         cls.assign_filtration = _assign_filtration
         cls.insert_batch = cls._insert_batch
-        cls.get_simplices = _get_simplices
-        cls.get_skeleton = _get_skeleton
-        cls.get_boundaries = _get_boundaries
         cls.flagify = _flagify
         cls.__contains__ = _contains
         cls.remove_maximal_simplex = _remove_maximal_simplex

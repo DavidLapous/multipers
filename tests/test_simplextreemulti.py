@@ -6,6 +6,7 @@ import pytest
 from numpy import array
 
 import multipers as mp
+import multipers.simplex_tree_multi as stm
 from multipers.tests import assert_st_simplices, random_st
 from multipers.simplex_tree_multi import available_dtype, available_simplextrees
 
@@ -74,6 +75,12 @@ def test_4():
     st.insert([0, 1, 2], [2.5, 0.5])
     st.insert([0, 1, 2], [0.5, 2.5])
 
+    expected_edge_filtration = array([[0.0, 1.0]])
+    for simplex in ([0], [1], [2], [0, 1], [0, 2], [1, 2]):
+        assert np.array_equal(np.asarray(st[simplex]), expected_edge_filtration), (
+            f"Unexpected filtration update on lower-dimensional simplex {simplex}"
+        )
+
     s = mp.Slicer(st, vineyard=True)
 
     assert np.array_equal(
@@ -81,17 +88,11 @@ def test_4():
         array(
             [
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.0, 1.0],
-                [1.0, 0.0],
                 [0.5, 2.5],
                 [1.0, 2.0],
                 [1.5, 1.5],
@@ -113,8 +114,6 @@ def test_4():
                 [1.0, 2.5],
                 [1.5, 2.0],
                 [2.0, 1.5],
-                [2.5, 1.0],
-                [np.inf, 0.5],
             ]
         ),
     )
