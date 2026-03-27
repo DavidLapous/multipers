@@ -35,6 +35,7 @@ exp = _jnp.exp
 log = _jnp.log
 sin = _jnp.sin
 cos = _jnp.cos
+sinc = _jnp.sinc
 sqrt = _jnp.sqrt
 matmul = _jnp.matmul
 einsum = _jnp.einsum

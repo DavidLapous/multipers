@@ -30,6 +30,7 @@ exp = _np.exp
 log = _np.log
 sin = _np.sin
 cos = _np.cos
+sinc = _np.sinc
 sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum

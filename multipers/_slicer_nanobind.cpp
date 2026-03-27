@@ -178,8 +178,8 @@ SlicerRuntimeInfo get_slicer_runtime_info(const nb::handle& input) {
   if (!has_slicer_template_id(input)) {
     throw nb::value_error("First argument must be a simplextree or a slicer !");
   }
-  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> SlicerRuntimeInfo {
-    const auto& wrapper = nb::cast<const typename Desc::wrapper&>(input);
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename D>() -> SlicerRuntimeInfo {
+    const auto& wrapper = nb::cast<const typename D::wrapper&>(input);
     return SlicerRuntimeInfo{!is_none_or_empty(wrapper.filtration_grid), wrapper.filtration_grid};
   });
 }
@@ -188,11 +188,11 @@ nb::object compute_filtration_bounds(const nb::handle& input) {
   if (!has_slicer_template_id(input)) {
     throw nb::value_error("First argument must be a simplextree or a slicer !");
   }
-  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> nb::object {
-    using Wrapper = typename Desc::wrapper;
-    using Value = typename Desc::value_type;
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename D>() -> nb::object {
+    using Wrapper = typename D::wrapper;
+    using Value = typename D::value_type;
     const auto& wrapper = nb::cast<const Wrapper&>(input);
-    size_t num_parameters = Desc::is_degree_rips ? size_t(2) : wrapper.truc.get_number_of_parameters();
+    size_t num_parameters = D::is_degree_rips ? size_t(2) : wrapper.truc.get_number_of_parameters();
     std::vector<Value> mins(num_parameters);
     std::vector<Value> maxs(num_parameters);
     bool initialized = false;
@@ -201,7 +201,7 @@ nb::object compute_filtration_bounds(const nb::handle& input) {
       const auto& filtrations = wrapper.truc.get_filtration_values();
       for (size_t i = 0; i < filtrations.size(); ++i) {
         const auto& filtration = filtrations[i];
-        if constexpr (Desc::is_degree_rips) {
+        if constexpr (D::is_degree_rips) {
           for (size_t g = 0; g < filtration.num_generators(); ++g) {
             Value values[2] = {filtration(g, 0), static_cast<Value>(g)};
             if (!initialized) {
@@ -233,10 +233,10 @@ nb::object compute_filtration_bounds(const nb::handle& input) {
     }
     nb::object np = nb::module_::import_("numpy");
     if (!initialized) {
-      return np.attr("empty")(nb::make_tuple(2, 0), "dtype"_a = numpy_dtype_type(Desc::dtype_name));
+      return np.attr("empty")(nb::make_tuple(2, 0), "dtype"_a = numpy_dtype_type(D::dtype_name));
     }
     return np.attr("array")(nb::make_tuple(nb::cast(mins), nb::cast(maxs)),
-                            "dtype"_a = numpy_dtype_type(Desc::dtype_name));
+                            "dtype"_a = numpy_dtype_type(D::dtype_name));
   });
 }
 
@@ -253,8 +253,8 @@ bool slicer_class_matches(bool is_vineyard,
          lowercase_copy(std::string(Desc::filtration_container)) == filtration_container;
 }
 
-template <typename... Desc>
-nb::object get_slicer_class(type_list<Desc...>,
+template <typename... Ds>
+nb::object get_slicer_class(type_list<Ds...>,
                             bool is_vineyard,
                             bool is_k_critical,
                             const nb::handle& dtype,
@@ -268,13 +268,13 @@ nb::object get_slicer_class(type_list<Desc...>,
   bool matched = false;
   nb::object result;
   (
-      [&] {
-        if (!matched && slicer_class_matches<Desc>(
-                            is_vineyard, is_k_critical, dtype_name, col, pers_backend, filtration_container)) {
-          result = nb::module_::import_("multipers._slicer_nanobind").attr(Desc::python_name.data());
+      [&]<typename D>() {
+        if (!matched &&
+            slicer_class_matches<D>(is_vineyard, is_k_critical, dtype_name, col, pers_backend, filtration_container)) {
+          result = nb::module_::import_("multipers._slicer_nanobind").attr(D::python_name.data());
           matched = true;
         }
-      }(),
+      }.template operator()<Ds>(),
       ...);
   if (!matched) {
     throw nb::value_error("Unimplemented slicer combination.");
@@ -400,8 +400,8 @@ bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& sourc
   bool is_function_simplextree =
       nb::hasattr(source, "_is_function_simplextree") ? nb::cast<bool>(source.attr("_is_function_simplextree")) : false;
   intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
-  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename Desc>() {
-    build_from_simplextree_desc<Desc, Wrapper, Concrete>(self, source, is_function_simplextree, ptr);
+  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename D>() {
+    build_from_simplextree_desc<D, Wrapper, Concrete>(self, source, is_function_simplextree, ptr);
   });
   return true;
 }
@@ -749,8 +749,8 @@ bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
   if (!has_slicer_template_id(source)) {
     return false;
   }
-  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename Desc>() {
-    const auto& other = nb::cast<const typename Desc::wrapper&>(source);
+  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename D>() {
+    const auto& other = nb::cast<const typename D::wrapper&>(source);
     {
       nb::gil_scoped_release release;
       self.truc = TargetConcrete(other.truc);
@@ -1333,8 +1333,8 @@ void bind_all_slicers(type_list<Desc...>, nb::module_& m, nb::list& available_sl
   (bind_slicer_class<Desc>(m, available_slicers), ...);
 }
 
-template <typename... Desc>
-nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
+template <typename... Ds>
+nb::tuple compute_hilbert_signed_measure(type_list<Ds...>,
                                          nb::handle slicer,
                                          std::vector<indices_type>& container,
                                          const std::vector<indices_type>& full_shape,
@@ -1344,31 +1344,23 @@ nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
                                          indices_type n_jobs,
                                          bool verbose,
                                          bool ignore_inf) {
-  bool matched = false;
-  nb::tuple result;
-  (
-      [&] {
-        if (!matched && nb::isinstance<typename Desc::wrapper>(slicer)) {
-          auto& wrapper = nb::cast<typename Desc::wrapper&>(slicer);
-          signed_measure_type sm;
-          {
-            nb::gil_scoped_release release;
-            sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
-                wrapper.truc, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
-          }
-          result = signed_measure_to_python(sm, width);
-          matched = true;
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
-  return result;
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
+    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+    signed_measure_type sm;
+    {
+      nb::gil_scoped_release release;
+      sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
+          wrapper.truc, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
+    }
+    return signed_measure_to_python(sm, width);
+  });
 }
 
-template <typename... Desc>
-nb::tuple compute_rank_tensor(type_list<Desc...>,
+template <typename... Ds>
+nb::tuple compute_rank_tensor(type_list<Ds...>,
                               nb::handle slicer,
                               std::vector<tensor_dtype>& container,
                               const std::vector<indices_type>& full_shape,
@@ -1376,27 +1368,18 @@ nb::tuple compute_rank_tensor(type_list<Desc...>,
                               size_t total,
                               indices_type n_jobs,
                               bool ignore_inf) {
-  bool matched = false;
-  nb::tuple result;
-  (
-      [&] {
-        if (!matched && nb::isinstance<typename Desc::wrapper>(slicer)) {
-          auto& wrapper = nb::cast<typename Desc::wrapper&>(slicer);
-          {
-            nb::gil_scoped_release release;
-            Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
-                wrapper.truc, container.data(), full_shape, degrees, n_jobs, ignore_inf);
-          }
-          result =
-              nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
-          matched = true;
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
-  return result;
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
+    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+    {
+      nb::gil_scoped_release release;
+      Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
+          wrapper.truc, container.data(), full_shape, degrees, n_jobs, ignore_inf);
+    }
+    return nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
+  });
 }
 
 template <typename Desc>
@@ -1424,8 +1407,8 @@ nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
   }
 }
 
-template <typename... Desc>
-nb::object compute_module_approximation_from_slicer(type_list<Desc...>,
+template <typename... Ds>
+nb::object compute_module_approximation_from_slicer(type_list<Ds...>,
                                                     nb::handle slicer,
                                                     const std::vector<double>& direction,
                                                     double max_error,
@@ -1435,22 +1418,14 @@ nb::object compute_module_approximation_from_slicer(type_list<Desc...>,
                                                     bool verbose,
                                                     int n_jobs,
                                                     const nb::object& mma_module) {
-  bool matched = false;
-  nb::object result;
-  (
-      [&] {
-        if (!matched && nb::isinstance<typename Desc::wrapper>(slicer)) {
-          auto& wrapper = nb::cast<typename Desc::wrapper&>(slicer);
-          result = module_approximation_from_desc<Desc>(
-              wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs, mma_module);
-          matched = true;
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   }
-  return result;
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::object {
+    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+    return module_approximation_from_desc<D>(
+        wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs, mma_module);
+  });
 }
 
 inline nb::object module_approximation_single_input(nb::object input,

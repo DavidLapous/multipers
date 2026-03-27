@@ -38,6 +38,8 @@ cython/
 multipers/gudhi/filtrations_extern_templates.h
 multipers/gudhi/simplextree_multi_extern_templates.h
 multipers/gudhi/slicer_extern_templates.h
+multipers/_slicer_nanobind_registry.inc
+multipers/_mma_nanobind_registry.inc
 tools/core/*.inc
 
 ## docs folders

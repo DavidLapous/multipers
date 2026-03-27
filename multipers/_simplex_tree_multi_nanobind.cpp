@@ -124,6 +124,10 @@ inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input,
 
 inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
 
+inline bool has_simplextree_template_id(const nb::handle& input) {
+  return has_template_id(input) && nb::hasattr(input, "thisptr") && nb::hasattr(input, "_is_function_simplextree");
+}
+
 inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
   return np.attr("dtype")(std::string(name)).attr("type");
@@ -225,8 +229,8 @@ bool try_build_from_slicer(Wrapper& self, nb::handle source, int max_dim) {
     return false;
   }
   intptr_t ptr = nb::cast<intptr_t>(source.attr("get_ptr")());
-  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename Desc>() {
-    build_from_slicer_desc<Desc, Wrapper, Interface>(self, source, max_dim, ptr);
+  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename D>() {
+    build_from_slicer_desc<D, Wrapper, Interface>(self, source, max_dim, ptr);
   });
   return true;
 }
@@ -293,9 +297,8 @@ bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
   if (!has_template_id(source) || !nb::hasattr(source, "thisptr") || !nb::hasattr(source, "_is_function_simplextree")) {
     return false;
   }
-  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename Desc>() {
-    copy_from_desc<Desc, TargetWrapper, TargetInterface>(self, source);
-  });
+  dispatch_simplextree_by_template_id(
+      template_id_of(source), [&]<typename D>() { copy_from_desc<D, TargetWrapper, TargetInterface>(self, source); });
   return true;
 }
 
@@ -766,32 +769,6 @@ void bind_all_simplextrees(type_list<Desc...>, nb::module_& m, nb::list& availab
   (bind_simplextree_class<Desc>(m, available_simplextrees), ...);
 }
 
-template <typename Desc>
-bool try_compute_hilbert_desc(nb::handle simplextree,
-                              std::vector<indices_type>& container,
-                              const std::vector<indices_type>& full_shape,
-                              const std::vector<indices_type>& degrees,
-                              size_t width,
-                              bool zero_pad,
-                              indices_type n_jobs,
-                              bool verbose,
-                              bool expand_collapse,
-                              nb::tuple& out) {
-  using Wrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
-  if (!nb::isinstance<Wrapper>(simplextree)) {
-    return false;
-  }
-  auto& st = nb::cast<Wrapper&>(simplextree).tree;
-  signed_measure_type sm;
-  {
-    nb::gil_scoped_release release;
-    sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
-        st, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse);
-  }
-  out = signed_measure_to_python(sm, width);
-  return true;
-}
-
 template <typename... Desc>
 nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
                                          nb::handle simplextree,
@@ -803,47 +780,20 @@ nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
                                          indices_type n_jobs,
                                          bool verbose,
                                          bool expand_collapse) {
-  bool matched = false;
-  nb::tuple out;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_compute_hilbert_desc<Desc>(
-              simplextree, container, full_shape, degrees, width, zero_pad, n_jobs, verbose, expand_collapse, out);
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_simplextree_template_id(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
-  return out;
-}
-
-template <typename Desc>
-bool try_compute_euler_desc(nb::handle simplextree,
-                            std::vector<tensor_dtype>& container,
-                            const std::vector<indices_type>& grid_shape,
-                            size_t width,
-                            bool zero_pad,
-                            bool verbose,
-                            nb::tuple& out) {
-  if constexpr (Desc::is_kcritical) {
-    return false;
-  } else {
-    using Wrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
-    if (!nb::isinstance<Wrapper>(simplextree)) {
-      return false;
-    }
+  return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
+    using Wrapper = PySimplexTree<typename D::interface_type, typename D::value_type>;
     auto& st = nb::cast<Wrapper&>(simplextree).tree;
     signed_measure_type sm;
     {
       nb::gil_scoped_release release;
-      sm = Gudhi::multiparameter::euler_characteristic::get_euler_signed_measure(
-          st, container.data(), grid_shape, zero_pad, verbose);
+      sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
+          st, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse);
     }
-    out = signed_measure_to_python(sm, width);
-    return true;
-  }
+    return signed_measure_to_python(sm, width);
+  });
 }
 
 template <typename... Desc>
@@ -854,42 +804,24 @@ nb::tuple compute_euler_signed_measure(type_list<Desc...>,
                                        size_t width,
                                        bool zero_pad,
                                        bool verbose) {
-  bool matched = false;
-  nb::tuple out;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_compute_euler_desc<Desc>(simplextree, container, grid_shape, width, zero_pad, verbose, out);
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_simplextree_template_id(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
-  return out;
-}
-
-template <typename Desc>
-bool try_compute_rank_desc(nb::handle simplextree,
-                           std::vector<tensor_dtype>& container,
-                           const std::vector<indices_type>& full_shape,
-                           const std::vector<indices_type>& degrees,
-                           size_t total,
-                           indices_type n_jobs,
-                           bool expand_collapse,
-                           nb::tuple& out) {
-  using Wrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
-  if (!nb::isinstance<Wrapper>(simplextree)) {
-    return false;
-  }
-  auto& st = nb::cast<Wrapper&>(simplextree).tree;
-  {
-    nb::gil_scoped_release release;
-    Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
-        st, container.data(), full_shape, degrees, n_jobs, expand_collapse);
-  }
-  out = nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
-  return true;
+  return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
+    if constexpr (D::is_kcritical) {
+      throw std::runtime_error("Unsupported SimplexTreeMulti type.");
+    } else {
+      using Wrapper = PySimplexTree<typename D::interface_type, typename D::value_type>;
+      auto& st = nb::cast<Wrapper&>(simplextree).tree;
+      signed_measure_type sm;
+      {
+        nb::gil_scoped_release release;
+        sm = Gudhi::multiparameter::euler_characteristic::get_euler_signed_measure(
+            st, container.data(), grid_shape, zero_pad, verbose);
+      }
+      return signed_measure_to_python(sm, width);
+    }
+  });
 }
 
 template <typename... Desc>
@@ -901,20 +833,19 @@ nb::tuple compute_rank_tensor(type_list<Desc...>,
                               size_t total,
                               indices_type n_jobs,
                               bool expand_collapse) {
-  bool matched = false;
-  nb::tuple out;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_compute_rank_desc<Desc>(
-              simplextree, container, full_shape, degrees, total, n_jobs, expand_collapse, out);
-        }
-      }(),
-      ...);
-  if (!matched) {
+  if (!has_simplextree_template_id(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
-  return out;
+  return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
+    using Wrapper = PySimplexTree<typename D::interface_type, typename D::value_type>;
+    auto& st = nb::cast<Wrapper&>(simplextree).tree;
+    {
+      nb::gil_scoped_release release;
+      Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
+          st, container.data(), full_shape, degrees, n_jobs, expand_collapse);
+    }
+    return nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
+  });
 }
 
 }  // namespace mpst
