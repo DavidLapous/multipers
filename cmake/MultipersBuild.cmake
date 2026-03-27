@@ -218,38 +218,46 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_mpfree_interface")
     multipers_link_shared_core(${target_name})
-    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-    multipers_link_openmp(${target_name})
-    multipers_link_tbb(${target_name})
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
+    if(NOT WIN32)
+      target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_openmp(${target_name})
+      multipers_link_tbb(${target_name})
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
+    endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_function_delaunay_interface")
     multipers_link_shared_core(${target_name})
-    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-    multipers_link_openmp(${target_name})
-    multipers_link_tbb(${target_name})
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
+    if(NOT WIN32)
+      target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_openmp(${target_name})
+      multipers_link_tbb(${target_name})
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
+    endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_multi_critical_interface")
     multipers_link_shared_core(${target_name})
-    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-    multipers_link_openmp(${target_name})
-    multipers_link_tbb(${target_name})
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS})
+    if(NOT WIN32)
+      target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_openmp(${target_name})
+      multipers_link_tbb(${target_name})
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS})
+    endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_rhomboid_tiling_interface")
     multipers_link_shared_core(${target_name})
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-    multipers_link_tbb(${target_name})
-    multipers_link_cgal(${target_name})
-    target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS})
+    if(TARGET multipers_rhomboid_tiling_static)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_tbb(${target_name})
+      multipers_link_cgal(${target_name})
+      target_link_libraries(${target_name} PRIVATE multipers_rhomboid_tiling_static)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS})
+    endif()
 
   elseif(module_name STREQUAL "_aida_interface")
     target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -260,14 +268,16 @@ function(multipers_configure_module module_name target_name)
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_hera_interface")
-    multipers_link_openmp(${target_name})
-    target_include_directories(
-      ${target_name}
-      BEFORE
-      PRIVATE
-        ${MULTIPERS_HERA_PHAT_INCLUDE_DIRS}
-        ${MULTIPERS_HERA_INCLUDE_DIRS}
-    )
+    if(NOT WIN32)
+      multipers_link_openmp(${target_name})
+      target_include_directories(
+        ${target_name}
+        BEFORE
+        PRIVATE
+          ${MULTIPERS_HERA_PHAT_INCLUDE_DIRS}
+          ${MULTIPERS_HERA_INCLUDE_DIRS}
+      )
+    endif()
     set(_use_phat_includes FALSE)
 
   endif()
@@ -433,20 +443,12 @@ set(MULTIPERS_NANOBIND_MODULES
   _slicer_nanobind
   _mma_nanobind
   _simplex_tree_multi_nanobind
+  _mpfree_interface
+  _function_delaunay_interface
+  _hera_interface
+  _multi_critical_interface
+  _rhomboid_tiling_interface
 )
-
-if(NOT WIN32)
-  list(APPEND MULTIPERS_NANOBIND_MODULES
-    _mpfree_interface
-    _function_delaunay_interface
-    _hera_interface
-    _multi_critical_interface
-  )
-endif()
-
-if(TARGET multipers_rhomboid_tiling_static)
-  list(APPEND MULTIPERS_NANOBIND_MODULES _rhomboid_tiling_interface)
-endif()
 
 if(TARGET multipers_aida_static)
   list(APPEND MULTIPERS_NANOBIND_MODULES _aida_interface)
