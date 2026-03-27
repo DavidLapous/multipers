@@ -4,8 +4,10 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -191,6 +193,12 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
     for (auto& vals : values) {
       std::sort(vals.begin(), vals.end());
       vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
+      if constexpr (std::numeric_limits<T>::has_infinity) {
+        const T pos_inf = std::numeric_limits<T>::infinity();
+        const T neg_inf = -pos_inf;
+        if (!vals.empty() && vals.back() == pos_inf) vals.pop_back();
+        if (!vals.empty() && vals.front() == neg_inf) vals.erase(vals.begin());
+      }
     }
   }
   return values;

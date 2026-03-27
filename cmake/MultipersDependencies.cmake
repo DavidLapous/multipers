@@ -134,5 +134,11 @@ if(NOT WIN32)
   )
   target_include_directories(multipers_aida_static PUBLIC ${MULTIPERS_AIDA_INCLUDE_DIRS})
   target_link_libraries(multipers_aida_static PUBLIC Boost::timer Boost::chrono)
+  set_target_properties(
+    multipers_aida_static
+    PROPERTIES
+      CXX_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN ON
+  )
   set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
 endif()
