@@ -318,6 +318,7 @@ def _render_slicer_nanobind_registry(
                 f"  using value_type = {slicer['C_VALUE_TYPE']};",
                 f"  using coarsened_concrete = {coarsened['TRUC_TYPE']};",
                 "  using coarsened_wrapper = PySlicer<coarsened_concrete>;",
+                f"  static constexpr int template_id = {index};",
                 f"  static constexpr bool is_vine = {_bool_cpp(slicer['IS_VINE'])};",
                 f"  static constexpr bool is_kcritical = {_bool_cpp(slicer['IS_KCRITICAL'])};",
                 f"  static constexpr bool is_degree_rips = {_bool_cpp(slicer['SHORT_FILTRATION_TYPE'] == 'Flat')};",
@@ -339,6 +340,11 @@ def _render_slicer_nanobind_registry(
     slicer_names = ", ".join(f"SlicerDesc_{index}" for index in range(len(slicers)))
     lines.append(f"using SlicerDescriptorList = type_list<{slicer_names}>;")
     lines.append("")
+    lines.append("#define MP_FOR_EACH_SLICER_DESC(X) \\")
+    for index in range(len(slicers)):
+        suffix = " \\" if index + 1 < len(slicers) else ""
+        lines.append(f"  X(SlicerDesc_{index}){suffix}")
+    lines.append("")
 
     for index, simplextree in enumerate(simplextrees):
         lines.extend(
@@ -349,6 +355,7 @@ def _render_slicer_nanobind_registry(
                 "  using interface_type = Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<",
                 "      filtration_type,",
                 "      value_type>;",
+                f"  static constexpr int template_id = {index};",
                 f"  static constexpr bool is_kcritical = {_bool_cpp(simplextree['IS_KCRITICAL'])};",
                 f"  static constexpr bool is_float = {_bool_cpp(simplextree['IS_FLOAT'])};",
                 f'  static constexpr std::string_view python_name = "{simplextree["PY_CLASS_NAME"]}";',
@@ -366,6 +373,11 @@ def _render_slicer_nanobind_registry(
     )
     lines.append(f"using SimplexTreeDescriptorList = type_list<{simplextree_names}>;")
     lines.append("")
+    lines.append("#define MP_FOR_EACH_SIMPLEXTREE_DESC(X) \\")
+    for index in range(len(simplextrees)):
+        suffix = " \\" if index + 1 < len(simplextrees) else ""
+        lines.append(f"  X(SimplexTreeDesc_{index}){suffix}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -381,6 +393,7 @@ def _render_mma_nanobind_registry(value_types: list[tuple[str, str, str]]) -> st
             [
                 f"struct MMADesc_{index} {{",
                 f"  using value_type = {ctype};",
+                f"  static constexpr int template_id = {index};",
                 f"  static constexpr bool is_float = {_bool_cpp(short.startswith('f'))};",
                 f'  static constexpr std::string_view short_name = "{short}";',
                 f'  static constexpr std::string_view dtype_name = "{dtype_name}";',
@@ -397,6 +410,11 @@ def _render_mma_nanobind_registry(value_types: list[tuple[str, str, str]]) -> st
         f"MMADesc_{index}" for index in range(len(value_types))
     )
     lines.append(f"using MMADescriptorList = type_list<{descriptor_names}>;")
+    lines.append("")
+    lines.append("#define MP_FOR_EACH_MMA_DESC(X) \\")
+    for index in range(len(value_types)):
+        suffix = " \\" if index + 1 < len(value_types) else ""
+        lines.append(f"  X(MMADesc_{index}){suffix}")
     lines.append("")
     return "\n".join(lines)
 
