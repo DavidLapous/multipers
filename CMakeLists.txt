@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.27)
 project(multipers LANGUAGES C CXX)
 
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

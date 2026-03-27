@@ -28,7 +28,13 @@ find_package(nanobind CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+if(POLICY CMP0167)
+  set(CMAKE_POLICY_DEFAULT_CMP0167 NEW)
+endif()
 find_package(CGAL QUIET COMPONENTS Core)
+if(POLICY CMP0167)
+  unset(CMAKE_POLICY_DEFAULT_CMP0167)
+endif()
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
