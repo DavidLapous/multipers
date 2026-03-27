@@ -76,7 +76,7 @@ def one_criticalify(
         verbose=verbose,
         kcritical=kcritical,
         filtration_container=filtration_container,
-        enabled=True,
+        enabled=not _mp_logs.ext_log_enabled(),
     )
     if not reduce and is_slicer(out):
         out = out.astype(
@@ -159,5 +159,5 @@ def minimal_presentation(
         full_resolution=full_resolution,
         use_chunk=use_chunk,
         use_clearing=use_clearing,
-        enabled=True,
+        enabled=not _mp_logs.ext_log_enabled(),
     )

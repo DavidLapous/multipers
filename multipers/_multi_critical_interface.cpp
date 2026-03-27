@@ -3,14 +3,15 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include <cstdio>
 #include <cstdint>
-#include <fcntl.h>
-#include <mutex>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 
+#include "multi_critical/basic.h"
+#include "multi_chunk/basic.h"
+#include "mpp_utils/basic.h"
+#include "mpfree/global.h"
+#include "scc/basic.h"
 #include "ext_interface/multi_critical_interface.hpp"
 
 namespace nb = nanobind;
@@ -40,43 +41,14 @@ std::vector<std::vector<T>> cast_matrix(nb::handle h) {
   return nb::cast<std::vector<std::vector<T>>>(h);
 }
 
-struct ScopedStdoutSilence {
-  bool active = false;
-  int saved_stdout = -1;
-  int devnull = -1;
-  std::unique_lock<std::mutex> lock;
-
-  static std::mutex& mutex() {
-    static std::mutex m;
-    return m;
-  }
-
-  explicit ScopedStdoutSilence(bool silence)
-      : active(silence), lock(mutex(), std::defer_lock) {
-    if (!active) return;
-    lock.lock();
-    std::fflush(stdout);
-    devnull = open("/dev/null", O_WRONLY);
-    saved_stdout = dup(STDOUT_FILENO);
-    if (devnull >= 0 && saved_stdout >= 0) {
-      dup2(devnull, STDOUT_FILENO);
-    } else {
-      active = false;
-      if (saved_stdout >= 0) close(saved_stdout);
-      if (devnull >= 0) close(devnull);
-    }
-  }
-
-  ~ScopedStdoutSilence() {
-    if (!lock.owns_lock()) return;
-    if (active) {
-      std::fflush(stdout);
-      dup2(saved_stdout, STDOUT_FILENO);
-      close(saved_stdout);
-      close(devnull);
-    }
-  }
-};
+inline void set_backend_stdout(bool enabled) {
+  multi_critical::verbose = enabled;
+  multi_critical::very_verbose = enabled;
+  multi_chunk::verbose = enabled;
+  mpp_utils::verbose = enabled;
+  mpfree::verbose = enabled;
+  scc::verbose = enabled;
+}
 
 std::vector<std::vector<int>> boundaries_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
@@ -202,6 +174,14 @@ nb::object output_to_slicer(nb::object slicer_type,
 }  // namespace mpmc
 
 NB_MODULE(_multi_critical_interface, m) {
+  bool ext_log_enabled = false;
+  try {
+    ext_log_enabled = nb::cast<bool>(nb::module_::import_("multipers.logs").attr("ext_log_enabled")());
+  } catch (...) {
+    ext_log_enabled = false;
+  }
+  mpmc::set_backend_stdout(ext_log_enabled);
+
   m.def("_is_available", []() {
     if (!multipers::multi_critical_interface_available()) return false;
     auto slicer_module = nb::module_::import_("multipers.slicer");
@@ -210,6 +190,8 @@ NB_MODULE(_multi_critical_interface, m) {
     }
     return false;
   });
+
+  m.def("_set_backend_stdout", [](bool enabled) { mpmc::set_backend_stdout(enabled); }, "enabled"_a);
 
   m.def(
       "one_criticalify",
@@ -247,13 +229,11 @@ NB_MODULE(_multi_critical_interface, m) {
 
         auto input = mpmc::input_from_kcritical_slicer(input_slicer);
         if (!reduce) {
-          mpmc::ScopedStdoutSilence silence(!backend_stdout);
-          auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
+          auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, backend_stdout);
           return mpmc::output_to_slicer(new_slicer_type, out, false, -1);
         }
         if (degree_obj.is_none()) {
-          mpmc::ScopedStdoutSilence silence(!backend_stdout);
-          auto outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
+          auto outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, backend_stdout, swedish);
           nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outs.size() > 0 ? outs.size() - 1 : 0)));
           for (size_t i = 1; i < outs.size(); ++i) {
             nb::object value = mpmc::output_to_slicer(new_slicer_type, outs[i], true, (int)(i - 1));
@@ -262,9 +242,8 @@ NB_MODULE(_multi_critical_interface, m) {
           return nb::object(result);
         }
         int degree = nb::cast<int>(degree_obj);
-        mpmc::ScopedStdoutSilence silence(!backend_stdout);
         auto out =
-            multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
+            multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, backend_stdout, swedish);
         return mpmc::output_to_slicer(new_slicer_type, out, true, degree);
       },
       "slicer"_a,
@@ -299,13 +278,12 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         multipers::multi_critical_interface_output<int> output;
         {
-          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           output = multipers::multi_critical_resolution_interface<int>(
               input,
               use_tree,
               use_multi_chunk,
-              verbose);
+              backend_stdout);
         }
         return mpmc::output_to_raw_arrays(output);
       },
@@ -343,14 +321,13 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         multipers::multi_critical_interface_output<int> output;
         {
-          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           output = multipers::multi_critical_minpres_interface<int>(
               input,
               degree + 1,
               use_tree,
               use_multi_chunk,
-              verbose,
+              backend_stdout,
               swedish);
         }
         return mpmc::output_to_raw_arrays(output, true);
@@ -390,13 +367,12 @@ NB_MODULE(_multi_critical_interface, m) {
             grades_flat);
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
         {
-          mpmc::ScopedStdoutSilence silence(!backend_stdout);
           nb::gil_scoped_release release;
           outputs = multipers::multi_critical_minpres_all_interface<int>(
               input,
               use_tree,
               use_multi_chunk,
-              verbose,
+              backend_stdout,
               swedish);
         }
         nb::tuple result = nb::steal<nb::tuple>(
