@@ -5,7 +5,6 @@ from functools import reduce
 from operator import or_
 from typing import Any, Iterable, Literal, Optional, Sequence
 from warnings import warn
-from itertools import chain, combinations
 
 import gudhi as gd
 import numpy as np
@@ -353,22 +352,10 @@ def _insert(self, simplex, filtration=None):
     filtration = np.asarray(filtration, dtype=self.dtype)
     if self.is_kcritical and filtration.ndim == 1:
         if simplex in self:
-            simplex = tuple(simplex)
-
-            def powerset(iterable):
-                s = tuple(iterable)
-                return chain.from_iterable(
-                    combinations(s, r) for r in range(1, len(s) + 1)
-                )
-
-            for face in powerset(simplex):
-                current = [
-                    np.asarray(row, dtype=self.dtype) for row in self[list(face)]
-                ]
-                current.append(filtration)
-                self._assign_filtration(
-                    list(face), np.asarray(current, dtype=self.dtype)
-                )
+            simplex = list(simplex)
+            current = [np.asarray(row, dtype=self.dtype) for row in self[simplex]]
+            current.append(filtration)
+            self._assign_filtration(simplex, np.asarray(current, dtype=self.dtype))
             return True
         filtration = filtration[None, :]
     return self._insert_simplex(np.asarray(simplex, dtype=np.int32), filtration, False)
@@ -1041,9 +1028,9 @@ def _install_python_api():
         cls.filtration = _filtration
         cls.__getitem__ = _getitem
         cls.astype = _astype
-        cls.insert = _insert
+        cls.insert = cls._insert
         cls.assign_filtration = _assign_filtration
-        cls.insert_batch = _insert_batch
+        cls.insert_batch = cls._insert_batch
         cls.get_simplices = _get_simplices
         cls.get_skeleton = _get_skeleton
         cls.get_boundaries = _get_boundaries
