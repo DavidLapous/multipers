@@ -37,6 +37,32 @@ struct PySlicer;
 
 #include "_slicer_nanobind_registry.inc"
 
+template <typename Func>
+decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
+  switch (template_id) {
+#define MP_SLICER_CASE(desc) \
+  case desc::template_id:    \
+    return std::forward<Func>(func).template operator()<desc>();
+    MP_FOR_EACH_SLICER_DESC(MP_SLICER_CASE)
+#undef MP_SLICER_CASE
+    default:
+      throw nb::type_error("Unknown slicer template id.");
+  }
+}
+
+template <typename Func>
+decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func) {
+  switch (template_id) {
+#define MP_SIMPLEXTREE_CASE(desc) \
+  case desc::template_id:         \
+    return std::forward<Func>(func).template operator()<desc>();
+    MP_FOR_EACH_SIMPLEXTREE_DESC(MP_SIMPLEXTREE_CASE)
+#undef MP_SIMPLEXTREE_CASE
+    default:
+      throw nb::type_error("Unknown SimplexTreeMulti template id.");
+  }
+}
+
 template <typename T>
 void delete_vector_capsule(void* ptr) noexcept {
   delete static_cast<std::vector<T>*>(ptr);
@@ -93,6 +119,10 @@ inline std::string numpy_dtype_name(const nb::handle& dtype) {
   nb::object np = nb::module_::import_("numpy");
   return nb::cast<std::string>(np.attr("dtype")(nb::borrow(dtype)).attr("name"));
 }
+
+inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
+
+inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
 
 inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
@@ -173,22 +203,7 @@ void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSli
 }
 
 template <typename Desc, typename Wrapper, typename Interface>
-bool try_build_from_slicer_desc(Wrapper& self,
-                                nb::handle source,
-                                int max_dim,
-                                bool is_kcritical,
-                                bool is_vine,
-                                const std::string& filtration_container,
-                                const std::string& dtype_name,
-                                const std::string& backend,
-                                const std::string& column_type,
-                                intptr_t ptr) {
-  if (is_kcritical != Desc::is_kcritical || is_vine != Desc::is_vine ||
-      filtration_container != lowercase_copy(std::string(Desc::filtration_container)) ||
-      dtype_name != Desc::dtype_name || backend != Desc::backend_type || column_type != Desc::column_type) {
-    return false;
-  }
-
+void build_from_slicer_desc(Wrapper& self, nb::handle source, int max_dim, intptr_t ptr) {
   using SourceSlicer = typename Desc::concrete;
   auto* slicer_ptr = reinterpret_cast<SourceSlicer*>(ptr);
   {
@@ -197,39 +212,6 @@ bool try_build_from_slicer_desc(Wrapper& self,
   }
   self.filtration_grid = nb::list();
   self.is_function_simplextree = false;
-  return true;
-}
-
-template <typename Wrapper, typename Interface, typename... Desc>
-bool try_build_from_slicer_impl(type_list<Desc...>,
-                                Wrapper& self,
-                                nb::handle source,
-                                int max_dim,
-                                bool is_kcritical,
-                                bool is_vine,
-                                const std::string& filtration_container,
-                                const std::string& dtype_name,
-                                const std::string& backend,
-                                const std::string& column_type,
-                                intptr_t ptr) {
-  bool matched = false;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_build_from_slicer_desc<Desc, Wrapper, Interface>(self,
-                                                                         source,
-                                                                         max_dim,
-                                                                         is_kcritical,
-                                                                         is_vine,
-                                                                         filtration_container,
-                                                                         dtype_name,
-                                                                         backend,
-                                                                         column_type,
-                                                                         ptr);
-        }
-      }(),
-      ...);
-  return matched;
 }
 
 template <typename Wrapper, typename Interface>
@@ -239,26 +221,14 @@ bool try_build_from_slicer(Wrapper& self, nb::handle source, int max_dim) {
       !nb::hasattr(source, "is_vine") || !nb::hasattr(source, "pers_backend") || !nb::hasattr(source, "col_type")) {
     return false;
   }
-
-  bool is_kcritical = nb::cast<bool>(source.attr("is_kcritical"));
-  bool is_vine = nb::cast<bool>(source.attr("is_vine"));
-  std::string filtration_container = lowercase_copy(nb::cast<std::string>(source.attr("filtration_container")));
-  std::string dtype_name = numpy_dtype_name(source.attr("dtype"));
-  std::string backend = nb::cast<std::string>(source.attr("pers_backend"));
-  std::string column_type = nb::cast<std::string>(source.attr("col_type"));
+  if (!has_template_id(source)) {
+    return false;
+  }
   intptr_t ptr = nb::cast<intptr_t>(source.attr("get_ptr")());
-
-  return try_build_from_slicer_impl<Wrapper, Interface>(SlicerDescriptorList{},
-                                                        self,
-                                                        source,
-                                                        max_dim,
-                                                        is_kcritical,
-                                                        is_vine,
-                                                        filtration_container,
-                                                        dtype_name,
-                                                        backend,
-                                                        column_type,
-                                                        ptr);
+  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename Desc>() {
+    build_from_slicer_desc<Desc, Wrapper, Interface>(self, source, max_dim, ptr);
+  });
+  return true;
 }
 
 template <typename Filtration, typename T, bool IsKCritical>
@@ -307,37 +277,26 @@ nb::object filtration_to_python(const Filtration& filtration, nb::handle owner =
 }
 
 template <typename Desc, typename TargetWrapper, typename TargetInterface>
-bool try_copy_from_desc(TargetWrapper& self, nb::handle source) {
-  using SourceWrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
-  if (!nb::isinstance<SourceWrapper>(source)) {
-    return false;
-  }
-  const auto& other = nb::cast<const SourceWrapper&>(source);
+void copy_from_desc(TargetWrapper& self, nb::handle source) {
+  intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
+  auto* other = reinterpret_cast<typename Desc::interface_type*>(ptr);
   {
     nb::gil_scoped_release release;
-    self.tree.template copy_from_interface<typename Desc::filtration_type>(reinterpret_cast<intptr_t>(&other.tree));
+    self.tree.template copy_from_interface<typename Desc::filtration_type>(reinterpret_cast<intptr_t>(other));
   }
-  self.filtration_grid = other.filtration_grid;
-  self.is_function_simplextree = other.is_function_simplextree;
-  return true;
-}
-
-template <typename TargetWrapper, typename TargetInterface, typename... Desc>
-bool try_copy_from_any_impl(type_list<Desc...>, TargetWrapper& self, nb::handle source) {
-  bool matched = false;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_copy_from_desc<Desc, TargetWrapper, TargetInterface>(self, source);
-        }
-      }(),
-      ...);
-  return matched;
+  self.filtration_grid = source.attr("filtration_grid");
+  self.is_function_simplextree = nb::cast<bool>(source.attr("_is_function_simplextree"));
 }
 
 template <typename TargetWrapper, typename TargetInterface>
 bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
-  return try_copy_from_any_impl<TargetWrapper, TargetInterface>(SimplexTreeDescriptorList{}, self, source);
+  if (!has_template_id(source) || !nb::hasattr(source, "thisptr") || !nb::hasattr(source, "_is_function_simplextree")) {
+    return false;
+  }
+  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename Desc>() {
+    copy_from_desc<Desc, TargetWrapper, TargetInterface>(self, source);
+  });
+  return true;
 }
 
 template <typename Wrapper, typename Filtration, typename T, bool IsKCritical>
@@ -789,11 +748,12 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                         return self;
                       },
                      nb::rv_policy::reference_internal)
-                 .def("__eq__", [](Wrapper& self, Wrapper& other) { return self.tree == other.tree; })
-                 .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.tree.num_parameters(); })
-                 .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return k_is_kcritical; })
-                 .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
-                 .def_prop_ro("ftype", [](const Wrapper&) -> std::string { return std::string(Desc::ftype_name); })
+                  .def("__eq__", [](Wrapper& self, Wrapper& other) { return self.tree == other.tree; })
+                  .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.tree.num_parameters(); })
+                  .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return k_is_kcritical; })
+                  .def_prop_ro("_template_id", [](const Wrapper&) -> int { return Desc::template_id; })
+                  .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
+                  .def_prop_ro("ftype", [](const Wrapper&) -> std::string { return std::string(Desc::ftype_name); })
                  .def_prop_ro("filtration_container", [](const Wrapper&) -> std::string {
                    return std::string(Desc::filtration_container_name);
                  });

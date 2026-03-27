@@ -50,6 +50,32 @@ struct type_list {};
 
 #include "_slicer_nanobind_registry.inc"
 
+template <typename Func>
+decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
+  switch (template_id) {
+#define MP_SLICER_CASE(desc) \
+  case desc::template_id:    \
+    return std::forward<Func>(func).template operator()<desc>();
+    MP_FOR_EACH_SLICER_DESC(MP_SLICER_CASE)
+#undef MP_SLICER_CASE
+    default:
+      throw nb::type_error("Unknown slicer template id.");
+  }
+}
+
+template <typename Func>
+decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func) {
+  switch (template_id) {
+#define MP_SIMPLEXTREE_CASE(desc) \
+  case desc::template_id:         \
+    return std::forward<Func>(func).template operator()<desc>();
+    MP_FOR_EACH_SIMPLEXTREE_DESC(MP_SIMPLEXTREE_CASE)
+#undef MP_SIMPLEXTREE_CASE
+    default:
+      throw nb::type_error("Unknown SimplexTreeMulti template id.");
+  }
+}
+
 template <typename T>
 void delete_vector_capsule(void* ptr) noexcept {
   delete static_cast<std::vector<T>*>(ptr);
@@ -129,12 +155,14 @@ inline std::string numpy_dtype_name(const nb::handle& dtype) {
   return nb::cast<std::string>(np.attr("dtype")(nb::borrow(dtype)).attr("name"));
 }
 
+inline nb::object numpy_dtype_type(std::string_view name);
+
+inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
+
+inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
+
 inline void print_flush(const std::string& message, std::string end = "\n") {
   nb::module_::import_("builtins").attr("print")(message, "end"_a = end, "flush"_a = true);
-}
-
-inline bool is_slicer_object(const nb::handle& input) {
-  return nb::cast<bool>(nb::module_::import_("multipers.slicer").attr("is_slicer")(nb::borrow(input)));
 }
 
 struct SlicerRuntimeInfo {
@@ -142,106 +170,116 @@ struct SlicerRuntimeInfo {
   nb::object filtration_grid;
 };
 
-template <typename Desc>
-bool try_get_slicer_runtime_info_desc(const nb::handle& input, SlicerRuntimeInfo& info) {
-  if (!nb::isinstance<typename Desc::wrapper>(input)) {
-    return false;
-  }
-  const auto& wrapper = nb::cast<const typename Desc::wrapper&>(input);
-  info.is_squeezed = !is_none_or_empty(wrapper.filtration_grid);
-  info.filtration_grid = wrapper.filtration_grid;
-  return true;
+inline bool has_slicer_template_id(const nb::handle& input) {
+  return has_template_id(input) && nb::hasattr(input, "col_type") && nb::hasattr(input, "pers_backend");
 }
 
-template <typename... Desc>
-SlicerRuntimeInfo get_slicer_runtime_info(type_list<Desc...>, const nb::handle& input) {
-  SlicerRuntimeInfo info{false, nb::none()};
-  bool matched = false;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_get_slicer_runtime_info_desc<Desc>(input, info);
-        }
-      }(),
-      ...);
-  if (!matched) {
+SlicerRuntimeInfo get_slicer_runtime_info(const nb::handle& input) {
+  if (!has_slicer_template_id(input)) {
     throw nb::value_error("First argument must be a simplextree or a slicer !");
   }
-  return info;
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> SlicerRuntimeInfo {
+    const auto& wrapper = nb::cast<const typename Desc::wrapper&>(input);
+    return SlicerRuntimeInfo{!is_none_or_empty(wrapper.filtration_grid), wrapper.filtration_grid};
+  });
 }
 
-template <typename Desc>
-bool try_compute_filtration_bounds_desc(const nb::handle& input, nb::object& out) {
-  if (!nb::isinstance<typename Desc::wrapper>(input)) {
-    return false;
+nb::object compute_filtration_bounds(const nb::handle& input) {
+  if (!has_slicer_template_id(input)) {
+    throw nb::value_error("First argument must be a simplextree or a slicer !");
   }
-  using Wrapper = typename Desc::wrapper;
-  using Value = typename Desc::value_type;
-  const auto& wrapper = nb::cast<const Wrapper&>(input);
-  size_t num_parameters = Desc::is_degree_rips ? size_t(2) : wrapper.truc.get_number_of_parameters();
-  std::vector<Value> mins(num_parameters);
-  std::vector<Value> maxs(num_parameters);
-  bool initialized = false;
-  {
-    nb::gil_scoped_release release;
-    const auto& filtrations = wrapper.truc.get_filtration_values();
-    for (size_t i = 0; i < filtrations.size(); ++i) {
-      const auto& filtration = filtrations[i];
-      if constexpr (Desc::is_degree_rips) {
-        for (size_t g = 0; g < filtration.num_generators(); ++g) {
-          Value values[2] = {filtration(g, 0), static_cast<Value>(g)};
-          if (!initialized) {
-            mins.assign(values, values + 2);
-            maxs.assign(values, values + 2);
-            initialized = true;
-          } else {
-            for (size_t p = 0; p < 2; ++p) {
-              mins[p] = std::min(mins[p], values[p]);
-              maxs[p] = std::max(maxs[p], values[p]);
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> nb::object {
+    using Wrapper = typename Desc::wrapper;
+    using Value = typename Desc::value_type;
+    const auto& wrapper = nb::cast<const Wrapper&>(input);
+    size_t num_parameters = Desc::is_degree_rips ? size_t(2) : wrapper.truc.get_number_of_parameters();
+    std::vector<Value> mins(num_parameters);
+    std::vector<Value> maxs(num_parameters);
+    bool initialized = false;
+    {
+      nb::gil_scoped_release release;
+      const auto& filtrations = wrapper.truc.get_filtration_values();
+      for (size_t i = 0; i < filtrations.size(); ++i) {
+        const auto& filtration = filtrations[i];
+        if constexpr (Desc::is_degree_rips) {
+          for (size_t g = 0; g < filtration.num_generators(); ++g) {
+            Value values[2] = {filtration(g, 0), static_cast<Value>(g)};
+            if (!initialized) {
+              mins.assign(values, values + 2);
+              maxs.assign(values, values + 2);
+              initialized = true;
+            } else {
+              for (size_t p = 0; p < 2; ++p) {
+                mins[p] = std::min(mins[p], values[p]);
+                maxs[p] = std::max(maxs[p], values[p]);
+              }
             }
           }
-        }
-      } else {
-        for (size_t g = 0; g < filtration.num_generators(); ++g) {
-          for (size_t p = 0; p < num_parameters; ++p) {
-            Value value = filtration.is_finite() ? filtration(g, p) : filtration(g, 0);
-            if (!initialized) {
-              std::fill(mins.begin(), mins.end(), value);
-              std::fill(maxs.begin(), maxs.end(), value);
-              initialized = true;
+        } else {
+          for (size_t g = 0; g < filtration.num_generators(); ++g) {
+            for (size_t p = 0; p < num_parameters; ++p) {
+              Value value = filtration.is_finite() ? filtration(g, p) : filtration(g, 0);
+              if (!initialized) {
+                std::fill(mins.begin(), mins.end(), value);
+                std::fill(maxs.begin(), maxs.end(), value);
+                initialized = true;
+              }
+              mins[p] = std::min(mins[p], value);
+              maxs[p] = std::max(maxs[p], value);
             }
-            mins[p] = std::min(mins[p], value);
-            maxs[p] = std::max(maxs[p], value);
           }
         }
       }
     }
-  }
-  nb::object np = nb::module_::import_("numpy");
-  if (!initialized) {
-    out = np.attr("empty")(nb::make_tuple(2, 0), "dtype"_a = numpy_dtype_type(Desc::dtype_name));
-  } else {
-    out = np.attr("array")(nb::make_tuple(nb::cast(mins), nb::cast(maxs)),
-                           "dtype"_a = numpy_dtype_type(Desc::dtype_name));
-  }
-  return true;
+    nb::object np = nb::module_::import_("numpy");
+    if (!initialized) {
+      return np.attr("empty")(nb::make_tuple(2, 0), "dtype"_a = numpy_dtype_type(Desc::dtype_name));
+    }
+    return np.attr("array")(nb::make_tuple(nb::cast(mins), nb::cast(maxs)),
+                            "dtype"_a = numpy_dtype_type(Desc::dtype_name));
+  });
+}
+
+template <typename Desc>
+bool slicer_class_matches(bool is_vineyard,
+                          bool is_k_critical,
+                          const std::string& dtype_name,
+                          const std::string& col,
+                          const std::string& pers_backend,
+                          const std::string& filtration_container) {
+  return Desc::is_vine == is_vineyard && Desc::is_kcritical == is_k_critical && Desc::dtype_name == dtype_name &&
+         lowercase_copy(std::string(Desc::column_type)) == col &&
+         lowercase_copy(std::string(Desc::backend_type)) == pers_backend &&
+         lowercase_copy(std::string(Desc::filtration_container)) == filtration_container;
 }
 
 template <typename... Desc>
-nb::object compute_filtration_bounds(type_list<Desc...>, const nb::handle& input) {
-  nb::object out;
+nb::object get_slicer_class(type_list<Desc...>,
+                            bool is_vineyard,
+                            bool is_k_critical,
+                            const nb::handle& dtype,
+                            std::string col,
+                            std::string pers_backend,
+                            std::string filtration_container) {
+  std::string dtype_name = numpy_dtype_name(dtype);
+  col = lowercase_copy(std::move(col));
+  pers_backend = lowercase_copy(std::move(pers_backend));
+  filtration_container = lowercase_copy(std::move(filtration_container));
   bool matched = false;
+  nb::object result;
   (
       [&] {
-        if (!matched) {
-          matched = try_compute_filtration_bounds_desc<Desc>(input, out);
+        if (!matched && slicer_class_matches<Desc>(
+                            is_vineyard, is_k_critical, dtype_name, col, pers_backend, filtration_container)) {
+          result = nb::module_::import_("multipers._slicer_nanobind").attr(Desc::python_name.data());
+          matched = true;
         }
       }(),
       ...);
   if (!matched) {
-    throw nb::value_error("First argument must be a simplextree or a slicer !");
+    throw nb::value_error("Unimplemented slicer combination.");
   }
-  return out;
+  return result;
 }
 
 inline nb::object prepare_box_object(const std::vector<std::vector<double>>& box) {
@@ -332,23 +370,13 @@ inline bool is_simplextree_multi(const nb::handle& source) {
 }
 
 template <typename Desc, typename Wrapper, typename Concrete>
-bool try_build_from_simplextree_desc(Wrapper& self,
-                                     const nb::handle& source,
-                                     bool is_function_simplextree,
-                                     bool is_kcritical,
-                                     const std::string& filtration_container,
-                                     const std::string& dtype_name,
-                                     intptr_t ptr) {
-  if (is_kcritical != Desc::is_kcritical || filtration_container != Desc::filtration_container ||
-      dtype_name != Desc::dtype_name) {
-    return false;
-  }
-
+void build_from_simplextree_desc(Wrapper& self, const nb::handle& source, bool is_function_simplextree, intptr_t ptr) {
   using SourceInterface = typename Desc::interface_type;
   auto* st_ptr = reinterpret_cast<SourceInterface*>(ptr);
   if constexpr (Desc::is_kcritical) {
     if (!is_function_simplextree) {
-      return try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, st_ptr, source);
+      (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, st_ptr, source);
+      return;
     }
   }
   {
@@ -361,51 +389,21 @@ bool try_build_from_simplextree_desc(Wrapper& self,
     self.filtration_grid = nb::none();
   }
   self.minpres_degree = -1;
-  return true;
-}
-
-template <typename Wrapper, typename Concrete, typename... Desc>
-bool try_build_from_multipers_simplextree_impl(type_list<Desc...>,
-                                               Wrapper& self,
-                                               const nb::handle& source,
-                                               bool is_function_simplextree,
-                                               bool is_kcritical,
-                                               const std::string& filtration_container,
-                                               const std::string& dtype_name,
-                                               intptr_t ptr) {
-  bool matched = false;
-  (
-      [&] {
-        if (!matched) {
-          matched = try_build_from_simplextree_desc<Desc, Wrapper, Concrete>(
-              self, source, is_function_simplextree, is_kcritical, filtration_container, dtype_name, ptr);
-        }
-      }(),
-      ...);
-  return matched;
 }
 
 template <typename Wrapper, typename Concrete>
 bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& source) {
-  if (!is_simplextree_multi(source)) {
+  if (!is_simplextree_multi(source) || !has_template_id(source)) {
     return false;
   }
 
-  bool is_kcritical = nb::cast<bool>(source.attr("is_kcritical"));
   bool is_function_simplextree =
       nb::hasattr(source, "_is_function_simplextree") ? nb::cast<bool>(source.attr("_is_function_simplextree")) : false;
-  std::string filtration_container = lowercase_copy(nb::cast<std::string>(source.attr("filtration_container")));
-  std::string dtype_name = numpy_dtype_name(source.attr("dtype"));
   intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
-
-  return try_build_from_multipers_simplextree_impl<Wrapper, Concrete>(SimplexTreeDescriptorList{},
-                                                                      self,
-                                                                      source,
-                                                                      is_function_simplextree,
-                                                                      is_kcritical,
-                                                                      filtration_container,
-                                                                      dtype_name,
-                                                                      ptr);
+  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename Desc>() {
+    build_from_simplextree_desc<Desc, Wrapper, Concrete>(self, source, is_function_simplextree, ptr);
+  });
+  return true;
 }
 
 template <typename Barcode, typename Value>
@@ -746,29 +744,21 @@ nb::object filtration_values_array(Wrapper& self) {
   }
 }
 
-template <typename TargetWrapper, typename TargetConcrete, typename... Desc>
-bool try_copy_from_existing_impl(type_list<Desc...>, TargetWrapper& self, const nb::handle& source) {
-  bool matched = false;
-  (
-      [&] {
-        if (!matched && nb::isinstance<typename Desc::wrapper>(source)) {
-          const auto& other = nb::cast<const typename Desc::wrapper&>(source);
-          {
-            nb::gil_scoped_release release;
-            self.truc = TargetConcrete(other.truc);
-          }
-          self.filtration_grid = other.filtration_grid;
-          self.minpres_degree = other.minpres_degree;
-          matched = true;
-        }
-      }(),
-      ...);
-  return matched;
-}
-
 template <typename TargetWrapper, typename TargetConcrete>
 bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
-  return try_copy_from_existing_impl<TargetWrapper, TargetConcrete>(SlicerDescriptorList{}, self, source);
+  if (!has_slicer_template_id(source)) {
+    return false;
+  }
+  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename Desc>() {
+    const auto& other = nb::cast<const typename Desc::wrapper&>(source);
+    {
+      nb::gil_scoped_release release;
+      self.truc = TargetConcrete(other.truc);
+    }
+    self.filtration_grid = other.filtration_grid;
+    self.minpres_degree = other.minpres_degree;
+  });
+  return true;
 }
 
 template <typename Filtration>
@@ -1162,6 +1152,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def_prop_ro("num_generators", [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
       .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
+      .def_prop_ro("_template_id", [](const Wrapper&) -> int { return Desc::template_id; })
       .def_prop_ro("col_type", [](const Wrapper&) -> std::string { return std::string(Desc::column_type); })
       .def_prop_ro("filtration_container", [](const Wrapper&) -> std::string { return std::string(Desc::filtration_container); })
       .def_prop_ro("is_vine", [](const Wrapper&) -> bool { return Desc::is_vine; })
@@ -1483,9 +1474,10 @@ inline nb::object module_approximation_single_input(nb::object input,
     input = nb::module_::import_("multipers._slicer_meta")
                 .attr("Slicer")(input, "backend"_a = "matrix", "vineyard"_a = true);
   }
-  if (!is_slicer_object(input)) {
+  if (!has_slicer_template_id(input)) {
     throw nb::value_error("First argument must be a simplextree or a slicer !");
   }
+  SlicerRuntimeInfo runtime_info = get_slicer_runtime_info(input);
 
   std::vector<double> c_direction = cast_vector<double>(direction);
   bool is_degenerate = false;
@@ -1502,7 +1494,7 @@ inline nb::object module_approximation_single_input(nb::object input,
         "Got a degenerate direction. This function may fail if the first line is not generic.");
   }
 
-  if (from_coordinates && !nb::cast<bool>(input.attr("is_squeezed"))) {
+  if (from_coordinates && !runtime_info.is_squeezed) {
     if (verbose) {
       print_flush("Preparing filtration (squeeze)... ", "");
     }
@@ -1510,21 +1502,22 @@ inline nb::object module_approximation_single_input(nb::object input,
       mp_logs.attr("warn_copy")("Got a non-squeezed input with `from_coordinates=True`.");
     }
     input = input.attr("grid_squeeze")();
+    runtime_info = get_slicer_runtime_info(input);
     if (verbose) {
       print_flush("Done.");
     }
   }
 
   nb::object unsqueeze_grid = nb::none();
-  if (nb::cast<bool>(input.attr("is_squeezed"))) {
+  if (runtime_info.is_squeezed) {
     if (verbose) {
       print_flush("Preparing filtration (unsqueeze)... ", "");
     }
     if (from_coordinates) {
-      unsqueeze_grid =
-          nb::module_::import_("multipers.grids")
-              .attr("sanitize_grid")(input.attr("filtration_grid"), "numpyfy"_a = true, "add_inf"_a = true);
+      unsqueeze_grid = nb::module_::import_("multipers.grids")
+                           .attr("sanitize_grid")(runtime_info.filtration_grid, "numpyfy"_a = true, "add_inf"_a = true);
       input = input.attr("astype")("dtype"_a = np.attr("float64"));
+      runtime_info = get_slicer_runtime_info(input);
       if (c_direction.empty()) {
         nb::tuple unsqueeze_grid_tuple = nb::cast<nb::tuple>(unsqueeze_grid);
         c_direction.resize(nb::len(unsqueeze_grid_tuple));
@@ -1548,6 +1541,7 @@ inline nb::object module_approximation_single_input(nb::object input,
         mp_logs.attr("warn_copy")("Got a squeezed input.");
       }
       input = input.attr("unsqueeze")();
+      runtime_info = get_slicer_runtime_info(input);
     }
     if (verbose) {
       print_flush("Done.");
@@ -1558,7 +1552,7 @@ inline nb::object module_approximation_single_input(nb::object input,
     if (verbose) {
       print_flush("No box given. Using filtration bounds to infer it.");
     }
-    box = input.attr("filtration_bounds")();
+    box = compute_filtration_bounds(input);
     if (verbose) {
       print_flush("Using inferred box.");
     }
@@ -1830,6 +1824,29 @@ NB_MODULE(_slicer_nanobind, m) {
       "direction"_a = nb::make_tuple(),
       "swap_box_coords"_a = nb::make_tuple(),
       "n_jobs"_a = -1);
+
+  m.def(
+      "_get_slicer_class",
+      [](bool is_vineyard,
+         bool is_k_critical,
+         nb::handle dtype,
+         std::string col,
+         std::string pers_backend,
+         std::string filtration_container) {
+        return mpnb::get_slicer_class(mpnb::SlicerDescriptorList{},
+                                      is_vineyard,
+                                      is_k_critical,
+                                      dtype,
+                                      std::move(col),
+                                      std::move(pers_backend),
+                                      std::move(filtration_container));
+      },
+      "is_vineyard"_a,
+      "is_k_critical"_a,
+      "dtype"_a,
+      "col"_a,
+      "pers_backend"_a,
+      "filtration_container"_a);
 
   mpnb::bind_bitmap_builders(mpnb::SlicerDescriptorList{}, m);
 

@@ -27,6 +27,19 @@ struct type_list {};
 
 #include "_mma_nanobind_registry.inc"
 
+template <typename Func>
+decltype(auto) dispatch_mma_by_template_id(int template_id, Func&& func) {
+  switch (template_id) {
+#define MP_MMA_CASE(desc) \
+  case desc::template_id: \
+    return std::forward<Func>(func).template operator()<desc>();
+    MP_FOR_EACH_MMA_DESC(MP_MMA_CASE)
+#undef MP_MMA_CASE
+    default:
+      throw nb::type_error("Unknown MMA template id.");
+  }
+}
+
 template <typename T>
 void delete_vector_capsule(void* ptr) noexcept {
   delete static_cast<std::vector<T>*>(ptr);
@@ -221,6 +234,10 @@ inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
   return np.attr("dtype")(std::string(name)).attr("type");
 }
+
+inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
+
+inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
 
 template <typename Desc, typename Class>
 void bind_float_module_methods(Class& cls) {
@@ -426,6 +443,7 @@ void bind_mma_type(nb::module_& m) {
              auto deaths = self.sum.compute_death_list();
              return deaths.empty() ? 0 : deaths[0].num_parameters();
            })
+      .def_prop_ro("_template_id", [](const WrapperSum&) -> int { return Desc::template_id; })
       .def_prop_ro("dtype", [](const WrapperSum&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
       .def("__eq__", [](WrapperSum& self, WrapperSum& other) { return self.sum == other.sum; });
 
@@ -464,6 +482,7 @@ void bind_mma_type(nb::module_& m) {
              }
              return nb::cast(owned_array<T>(std::move(flat), {size_t(2), lower.size()}));
            })
+      .def_prop_ro("_template_id", [](const WrapperBox&) -> int { return Desc::template_id; })
       .def_prop_ro("dtype", [](const WrapperBox&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
 
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
@@ -493,6 +512,7 @@ void bind_mma_type(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def("__len__", [](WrapperMod& self) -> int { return self.mod.size(); })
           .def("__eq__", [](WrapperMod& self, WrapperMod& other) { return self.mod == other.mod; })
+          .def_prop_ro("_template_id", [](const WrapperMod&) -> int { return Desc::template_id; })
           .def("__getitem__",
                [](WrapperMod& self, nb::object key) -> nb::object {
                  if (PySlice_Check(key.ptr())) {
@@ -753,9 +773,16 @@ bool is_mma_desc(nb::handle stuff) {
   return nb::isinstance<WrapperMod>(stuff);
 }
 
-template <typename... Desc>
-bool is_mma(type_list<Desc...>, nb::handle stuff) {
-  return (is_mma_desc<Desc>(stuff) || ...);
+inline bool is_mma(nb::handle stuff) {
+  if (!has_template_id(stuff)) {
+    return false;
+  }
+  try {
+    return dispatch_mma_by_template_id(template_id_of(stuff),
+                                       [&]<typename Desc>() -> bool { return is_mma_desc<Desc>(stuff); });
+  } catch (...) {
+    return false;
+  }
 }
 
 }  // namespace mpmma
@@ -763,5 +790,5 @@ bool is_mma(type_list<Desc...>, nb::handle stuff) {
 NB_MODULE(_mma_nanobind, m) {
   m.doc() = "nanobind MMA bindings";
   mpmma::bind_all_mma(mpmma::MMADescriptorList{}, m);
-  m.def("is_mma", [](nb::handle stuff) { return mpmma::is_mma(mpmma::MMADescriptorList{}, stuff); });
+  m.def("is_mma", [](nb::handle stuff) { return mpmma::is_mma(stuff); });
 }

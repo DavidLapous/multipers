@@ -16,9 +16,21 @@ import multipers.logs as _mp_logs
 import cython
 cimport cython
 cimport numpy as cnp
-from multipers import _function_delaunay_interface
-from multipers import _multi_critical_interface
-from multipers import _rhomboid_tiling_interface
+
+try:
+    from . import _function_delaunay_interface
+except ImportError:
+    _function_delaunay_interface = None
+
+try:
+    from . import _multi_critical_interface
+except ImportError:
+    _multi_critical_interface = None
+
+try:
+    from . import _rhomboid_tiling_interface
+except ImportError:
+    _rhomboid_tiling_interface = None
 
 current_doc_url = "https://davidlapous.github.io/multipers/"
 doc_soft_urls = {
@@ -93,6 +105,10 @@ doc_soft_urls = defaultdict(lambda:"<Unknown url>", doc_soft_urls)
 doc_soft_easy_install = defaultdict(lambda:"<Unknown>", doc_soft_easy_install)
 
 available_reduce_softs = Literal["mpfree","multi_chunk","2pac", "multi_critical"]
+
+
+def _interface_is_available(module):
+    return module is not None and module._is_available()
 
 def _path_init(soft:str|os.PathLike):
     a = which(f"./{soft}")
@@ -343,7 +359,7 @@ def function_delaunay_presentation_to_slicer(
             f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
         )
 
-    if _function_delaunay_interface._is_available():
+    if _interface_is_available(_function_delaunay_interface):
         if verbose:
             print(
                 f"[multipers.io] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk}",
@@ -419,7 +435,7 @@ def function_delaunay_presentation_to_simplextree(
             f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
         )
 
-    if _function_delaunay_interface._is_available():
+    if _interface_is_available(_function_delaunay_interface):
         st = SimplexTreeMulti(num_parameters=2, dtype=dtype)
         return _function_delaunay_interface.function_delaunay_to_simplextree(
             st,
@@ -457,7 +473,7 @@ def _rhomboid_tiling_to_slicer(
     if point_cloud.ndim != 2 or not point_cloud.shape[1] in [2,3]:
         raise ValueError(f"point_cloud should be a 2d array of shape (-,2) or (-,3). Got {point_cloud.shape=}")
 
-    if _rhomboid_tiling_interface._is_available():
+    if _interface_is_available(_rhomboid_tiling_interface):
         t_cpp_start = time.perf_counter()
         if verbose:
             print(
@@ -534,7 +550,7 @@ def _multi_critical_from_slicer(
     cdef bool need_split = False
     swedish = degree is not None if swedish is None else swedish
 
-    if _multi_critical_interface._is_available():
+    if _interface_is_available(_multi_critical_interface):
         if reduce:
             out_kcritical = kcritical
             out_filtration_container = filtration_container

@@ -673,21 +673,19 @@ def _signed_measure_from_scc(minimal_presentation):
 def get_matrix_slicer(
     is_vineyard, is_k_critical, dtype, col, pers_backend, filtration_container
 ):
-    dtype = np.dtype(dtype).type
-    for cls in available_slicers:
-        sample = cls()
-        if (
-            sample.is_vine == is_vineyard
-            and sample.is_kcritical == is_k_critical
-            and np.dtype(sample.dtype) == np.dtype(dtype)
-            and sample.col_type.lower() == str(col).lower()
-            and sample.pers_backend.lower() == str(pers_backend).lower()
-            and sample.filtration_container.lower() == str(filtration_container).lower()
-        ):
-            return cls
-    raise ValueError(
-        f"Unimplemented combo for {pers_backend} : {is_vineyard=}, {is_k_critical=}, {dtype=}, {col=}, {filtration_container=}"
-    )
+    try:
+        return _nb._get_slicer_class(
+            is_vineyard,
+            is_k_critical,
+            np.dtype(dtype).type,
+            str(col),
+            str(pers_backend),
+            str(filtration_container),
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"Unimplemented combo for {pers_backend} : {is_vineyard=}, {is_k_critical=}, {dtype=}, {col=}, {filtration_container=}"
+        ) from exc
 
 
 from multipers._slicer_algorithms import (  # noqa: E402
@@ -720,13 +718,12 @@ def from_function_delaunay(
             clear=clear,
             dtype=dtype,
         )
-    s = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
+    slicer = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
     function_delaunay_presentation_to_slicer(
-        s, points, grades, degree=degree, verbose=verbose, clear=clear
+        slicer, points, grades, degree=degree, verbose=verbose, clear=clear
     )
-    if degree >= 0:
-        s.minpres_degree = degree
-    return s
+    slicer.minpres_degree = degree
+    return slicer
 
 
 def _install_python_api():

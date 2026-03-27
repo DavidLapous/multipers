@@ -149,7 +149,11 @@ def DelaunayLowerstar(
      - function : ArrayLike of shape (num_data, )
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    from multipers.slicer import from_function_delaunay
+    from multipers.io import (
+        function_delaunay_presentation_to_simplextree,
+        function_delaunay_presentation_to_slicer,
+    )
+    import multipers
 
     t0 = perf_counter()
     t_prev = t0
@@ -178,15 +182,28 @@ def DelaunayLowerstar(
         raise ValueError(
             "Delaunay Lowerstar is only compatible with 1 additional parameter."
         )
-    slicer = from_function_delaunay(
-        api.asnumpy(points),
-        api.asnumpy(function),
-        degree=-1 if flagify else reduce_degree,
-        vineyard=vineyard,
-        dtype=dtype,
-        verbose=verbose,
-        clear=clear,
-    )
+    points_np = api.asnumpy(points)
+    function_np = api.asnumpy(function)
+    degree = -1 if flagify else reduce_degree
+    if degree < 0:
+        slicer = function_delaunay_presentation_to_simplextree(
+            points_np,
+            function_np,
+            verbose=verbose,
+            clear=clear,
+            dtype=dtype,
+        )
+    else:
+        slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
+        function_delaunay_presentation_to_slicer(
+            slicer,
+            points_np,
+            function_np,
+            degree=degree,
+            verbose=verbose,
+            clear=clear,
+        )
+        slicer.minpres_degree = degree
     _log_step("built function-delaunay")
     if flagify:
         from multipers.simplex_tree_multi import is_simplextree_multi
