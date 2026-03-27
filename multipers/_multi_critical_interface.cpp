@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <chrono>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -12,12 +13,37 @@
 #include "mpp_utils/basic.h"
 #include "mpfree/global.h"
 #include "scc/basic.h"
+#include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mpmc {
+
+using Clock = std::chrono::steady_clock;
+
+double elapsed_seconds(const Clock::time_point& start) {
+  return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+struct ptr_bridge_stats {
+  double convert_s = 0.0;
+  double free_resolution_s = 0.0;
+  double minpres_s = 0.0;
+  double output_pack_s = 0.0;
+};
+
+nb::dict stats_to_dict(const ptr_bridge_stats& stats) {
+  nb::dict out;
+  out["convert_s"] = nb::float_(stats.convert_s);
+  out["free_resolution_s"] = nb::float_(stats.free_resolution_s);
+  out["minpres_s"] = nb::float_(stats.minpres_s);
+  out["output_pack_s"] = nb::float_(stats.output_pack_s);
+  out["total_s"] = nb::float_(
+      stats.convert_s + stats.free_resolution_s + stats.minpres_s + stats.output_pack_s);
+  return out;
+}
 
 template <typename T>
 std::vector<T> cast_vector(nb::handle h) {
@@ -96,6 +122,184 @@ multipers::multi_critical_interface_input<int> input_from_packed(
     }
   }
   return input;
+}
+
+multipers::multi_critical_interface_input<int> input_from_bridge_ptr(
+    const multipers::packed_multi_critical_bridge_input& input_bridge) {
+  multipers::multi_critical_interface_input<int> input;
+  const size_t num_cells = input_bridge.dimensions.size();
+  input.dimensions.reserve(num_cells);
+  input.boundaries.resize(num_cells);
+  input.filtration_values.resize(num_cells);
+  for (size_t i = 0; i < num_cells; ++i) {
+    input.dimensions.push_back((int) input_bridge.dimensions[i]);
+    auto& out_boundary = input.boundaries[i];
+    out_boundary.reserve(input_bridge.boundaries[i].size());
+    for (uint32_t face : input_bridge.boundaries[i]) {
+      out_boundary.push_back((int) face);
+    }
+    auto& out = input.filtration_values[i];
+    const int64_t begin = input_bridge.grade_indptr[i];
+    const int64_t end = input_bridge.grade_indptr[i + 1];
+    out.reserve((size_t) std::max<int64_t>(end - begin, 0));
+    for (int64_t row = begin; row < end; ++row) {
+      out.emplace_back(
+          input_bridge.grade_values[2 * (size_t) row],
+          input_bridge.grade_values[2 * (size_t) row + 1]);
+    }
+  }
+  return input;
+}
+
+class packed_bridge_parser {
+ public:
+  explicit packed_bridge_parser(const multipers::packed_multi_critical_bridge_input& input)
+      : input_(input) {
+    const std::size_t num_generators = input_.dimensions.size();
+    if (input_.boundaries.size() != num_generators || input_.grade_indptr.size() != num_generators + 1) {
+      throw std::invalid_argument(
+          "Invalid packed bridge input: sizes of grades, boundaries and dimensions differ.");
+    }
+    if (num_generators == 0) return;
+    if (!std::is_sorted(input_.dimensions.begin(), input_.dimensions.end())) {
+      throw std::invalid_argument("Dimensions are expected to be sorted in non-decreasing order.");
+    }
+    const int max_dim = input_.dimensions.back();
+    if (max_dim < 0) {
+      throw std::invalid_argument("Dimensions must be non-negative.");
+    }
+    indices_by_level_.resize((std::size_t) max_dim + 1);
+    shifted_indices_.assign(num_generators, -1);
+    for (std::size_t i = 0; i < num_generators; ++i) {
+      const int dim = input_.dimensions[i];
+      const std::size_t level_idx = static_cast<std::size_t>(max_dim - dim);
+      shifted_indices_[i] = static_cast<long>(indices_by_level_[level_idx].size());
+      indices_by_level_[level_idx].push_back(i);
+    }
+    offsets_.assign(indices_by_level_.size(), 0);
+  }
+
+  int number_of_parameters() { return 2; }
+
+  int number_of_levels() { return static_cast<int>(indices_by_level_.size() + 1); }
+
+  bool has_next_column(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return false;
+    }
+    return offsets_[level - 1] < indices_by_level_[level - 1].size();
+  }
+
+  bool has_grades_on_last_level() { return false; }
+
+  template <typename OutputIterator1, typename OutputIterator2>
+  void next_column(int level, OutputIterator1 out1, OutputIterator2 out2) {
+    validate_level(level);
+    if (!has_next_column(level)) {
+      throw std::out_of_range("No more columns on requested level.");
+    }
+    const std::size_t global_idx = indices_by_level_[level - 1][offsets_[level - 1]++];
+    const int64_t begin = input_.grade_indptr[global_idx];
+    const int64_t end = input_.grade_indptr[global_idx + 1];
+    if (begin >= end) {
+      throw std::invalid_argument("Each generator must have at least one filtration grade.");
+    }
+    for (int64_t row = begin; row < end; ++row) {
+      *out1++ = input_.grade_values[2 * (std::size_t) row];
+      *out1++ = input_.grade_values[2 * (std::size_t) row + 1];
+    }
+    const int simplex_dim = input_.dimensions[global_idx];
+    const auto& boundary = input_.boundaries[global_idx];
+    if (simplex_dim == 0 && !boundary.empty()) {
+      throw std::invalid_argument("Dimension-0 generators must have empty boundaries.");
+    }
+    for (uint32_t bd_idx_typed : boundary) {
+      const std::size_t bd_idx = static_cast<std::size_t>(bd_idx_typed);
+      if (bd_idx >= input_.dimensions.size()) {
+        throw std::invalid_argument("Boundary index out of range.");
+      }
+      if (simplex_dim > 0 && input_.dimensions[bd_idx] != simplex_dim - 1) {
+        throw std::invalid_argument("Boundary index does not point to previous dimension.");
+      }
+      const long shifted = shifted_indices_[bd_idx];
+      if (shifted < 0) {
+        throw std::invalid_argument("Internal index conversion failed.");
+      }
+      *out2++ = std::make_pair(shifted, 1);
+    }
+  }
+
+  int number_of_generators(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return 0;
+    }
+    return static_cast<int>(indices_by_level_[level - 1].size());
+  }
+
+  void reset(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return;
+    }
+    offsets_[level - 1] = 0;
+  }
+
+  void reset_all() { std::fill(offsets_.begin(), offsets_.end(), 0); }
+
+ private:
+  const multipers::packed_multi_critical_bridge_input& input_;
+  std::vector<std::vector<std::size_t>> indices_by_level_;
+  std::vector<std::size_t> offsets_;
+  std::vector<long> shifted_indices_;
+
+  void validate_level(int level) const {
+    if (level < 1 || static_cast<std::size_t>(level) > indices_by_level_.size() + 1) {
+      throw std::out_of_range("Requested level is out of parser range.");
+    }
+  }
+};
+
+std::vector<multipers::multi_critical_detail::Graded_matrix> compute_free_resolution_matrices_from_bridge(
+    const multipers::packed_multi_critical_bridge_input& input,
+    bool use_logpath,
+    bool use_multi_chunk,
+    bool verbose_output,
+    ptr_bridge_stats* stats = nullptr) {
+  if (input.dimensions.empty()) {
+    return {};
+  }
+  auto t_convert = Clock::now();
+  packed_bridge_parser parser(input);
+  if (stats != nullptr) {
+    stats->convert_s += elapsed_seconds(t_convert);
+  }
+  const bool old_mc_verbose = multi_critical::verbose;
+  const bool old_mc_very_verbose = multi_critical::very_verbose;
+  const bool old_chunk_verbose = multi_chunk::verbose;
+  multi_critical::verbose = verbose_output;
+  multi_critical::very_verbose = false;
+  multi_chunk::verbose = verbose_output;
+  auto t_free = Clock::now();
+  std::vector<multipers::multi_critical_detail::Graded_matrix> matrices;
+  multi_critical::free_resolution(parser, matrices, use_logpath);
+  for (std::size_t i = 0; i < matrices.size(); ++i) {
+    auto& mat = matrices[i];
+    if (!mpp_utils::is_lex_sorted(mat)) {
+      mpp_utils::to_lex_order(mat, i + 1 < matrices.size(), false);
+    }
+  }
+  if (use_multi_chunk) {
+    multi_chunk::compress(matrices);
+  }
+  multi_critical::verbose = old_mc_verbose;
+  multi_critical::very_verbose = old_mc_very_verbose;
+  multi_chunk::verbose = old_chunk_verbose;
+  if (stats != nullptr) {
+    stats->free_resolution_s += elapsed_seconds(t_free);
+  }
+  return matrices;
 }
 
 nb::tuple output_to_raw_arrays(const multipers::multi_critical_interface_output<int>& output, bool mark_minpres = false) {
@@ -388,6 +592,243 @@ NB_MODULE(_multi_critical_interface, m) {
       "dimensions"_a,
       "grade_indptr"_a,
       "grades_flat"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "resolution_from_ptr",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout);
+          if (matrices.size() > 1) {
+            std::vector<multipers::multi_critical_detail::Graded_matrix> shifted_matrices(
+                matrices.begin(), matrices.end() - 1);
+            output = multipers::multi_critical_detail::convert_chain_complex<int>(shifted_matrices);
+          }
+        }
+        return mpmc::output_to_raw_arrays(output);
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "resolution_from_ptr_with_stats",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout, &stats);
+          if (matrices.size() > 1) {
+            std::vector<multipers::multi_critical_detail::Graded_matrix> shifted_matrices(
+                matrices.begin(), matrices.end() - 1);
+            output = multipers::multi_critical_detail::convert_chain_complex<int>(shifted_matrices);
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple raw = mpmc::output_to_raw_arrays(output);
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(raw), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "minpres_from_ptr",
+      [](intptr_t input_ptr,
+         int degree,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish,
+         bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout);
+          if (matrices.size() >= 2) {
+            const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+            if (matrix_index >= 1 && matrix_index < static_cast<int>(matrices.size())) {
+              auto first = matrices[(size_t) matrix_index - 1];
+              auto second = matrices[(size_t) matrix_index];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              const bool old_verbose = mpfree::verbose;
+              mpfree::verbose = backend_stdout;
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              mpfree::verbose = old_verbose;
+              output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+            }
+          }
+        }
+        return mpmc::output_to_raw_arrays(output, true);
+      },
+      "input_ptr"_a,
+      "degree"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "minpres_from_ptr_with_stats",
+      [](intptr_t input_ptr,
+         int degree,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish,
+         bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout, &stats);
+          if (matrices.size() >= 2) {
+            const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+            if (matrix_index >= 1 && matrix_index < static_cast<int>(matrices.size())) {
+              auto first = matrices[(size_t) matrix_index - 1];
+              auto second = matrices[(size_t) matrix_index];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              const bool old_verbose = mpfree::verbose;
+              mpfree::verbose = backend_stdout;
+              auto t_minpres = mpmc::Clock::now();
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+              mpfree::verbose = old_verbose;
+              output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+            }
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple raw = mpmc::output_to_raw_arrays(output, true);
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(raw), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "degree"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "minpres_all_from_ptr",
+      [](intptr_t input_ptr,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish,
+         bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout);
+          if (matrices.size() >= 2) {
+            outputs.reserve(matrices.size() - 1);
+            const bool old_verbose = mpfree::verbose;
+            mpfree::verbose = backend_stdout;
+            for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
+              auto first = matrices[i];
+              auto second = matrices[i + 1];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
+            }
+            mpfree::verbose = old_verbose;
+          }
+        }
+        nb::tuple result = nb::steal<nb::tuple>(
+            PyTuple_New((Py_ssize_t)(outputs.size() > 0 ? outputs.size() - 1 : 0)));
+        for (size_t i = 1; i < outputs.size(); ++i) {
+          nb::object value = mpmc::output_to_raw_arrays(outputs[i], true);
+          PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
+        }
+        return result;
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
+
+  m.def(
+      "minpres_all_from_ptr_with_stats",
+      [](intptr_t input_ptr,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish,
+         bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout, &stats);
+          if (matrices.size() >= 2) {
+            outputs.reserve(matrices.size() - 1);
+            const bool old_verbose = mpfree::verbose;
+            mpfree::verbose = backend_stdout;
+            auto t_minpres = mpmc::Clock::now();
+            for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
+              auto first = matrices[i];
+              auto second = matrices[i + 1];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
+            }
+            stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+            mpfree::verbose = old_verbose;
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple result = nb::steal<nb::tuple>(
+            PyTuple_New((Py_ssize_t)(outputs.size() > 0 ? outputs.size() - 1 : 0)));
+        for (size_t i = 1; i < outputs.size(); ++i) {
+          nb::object value = mpmc::output_to_raw_arrays(outputs[i], true);
+          PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
+        }
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(result), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,

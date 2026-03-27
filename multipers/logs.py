@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+from importlib import import_module
 from warnings import warn
 
 
@@ -58,6 +59,7 @@ _DEFAULTS = {
 }
 
 _TOGGLE_HINT_SHOWN = {key: False for key in _WARNING_CLASSES}
+_EXT_LOG_ENABLED = False
 
 
 def _emit(kind: str, message: str, stacklevel: int = 2) -> None:
@@ -111,3 +113,30 @@ def set_level(level: int) -> None:
             warning_cls.enabled = True
         return
     raise ValueError(f"Invalid level {level}. Expected 0, 1, or 2.")
+
+
+def enable_ext_log(enabled: bool = True) -> None:
+    """Enable or disable raw stdout coming from external backends.
+
+    This flag is global to the current Python process. It is intended for
+    debugging only. Do not toggle it while threaded backend computations are
+    already running.
+    """
+
+    global _EXT_LOG_ENABLED
+    _EXT_LOG_ENABLED = bool(enabled)
+    for module_name in (
+        "multipers._multi_critical_interface",
+        "multipers._mpfree_interface",
+    ):
+        try:
+            module = import_module(module_name)
+        except Exception:
+            continue
+        setter = getattr(module, "_set_backend_stdout", None)
+        if setter is not None:
+            setter(_EXT_LOG_ENABLED)
+
+
+def ext_log_enabled() -> bool:
+    return _EXT_LOG_ENABLED
