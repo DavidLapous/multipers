@@ -342,6 +342,10 @@ def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=N
 def _insert(self, simplex, filtration=None):
     num_parameters = self.num_parameters
     if filtration is None:
+        if self.is_kcritical:
+            return self._insert_simplex(
+                np.asarray(simplex, dtype=np.int32), None, False
+            )
         filtration = np.array(
             [_t_minus_inf(self.dtype)] * num_parameters, dtype=self.dtype
         )
@@ -763,11 +767,7 @@ def _unsqueeze(self, grid=None):
         kcritical=self.is_kcritical,
         ftype=self.filtration_container,
     )()
-    new_st = _rebuild_from_current_simplices(
-        self,
-        type(new_st),
-        lambda filtration: _values_from_coords(filtration, cgrid, dtype=np.float64),
-    )
+    _unsqueeze_to_raw[type(self)](self, new_st, cgrid)
     return new_st
 
 

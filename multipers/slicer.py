@@ -140,20 +140,7 @@ def _get_filtrations(
 
 
 def _make_filtration_non_decreasing(self, safe=True):
-    if self.is_kcritical:
-        raise NotImplementedError(
-            "make_filtration_non_decreasing is only available for one-critical slicers."
-        )
-    if self.is_squeezed and safe:
-        for f in self.filtration_grid:
-            if len(f) > 1 and not (np.asarray(f[1:]) >= np.asarray(f[:-1])).all():
-                raise ValueError("Found non-sorted grid.")
-    filtrations = self.get_filtrations(view=True)
-    boundaries = self.get_boundaries()
-    for i, boundary in enumerate(boundaries):
-        for b in boundary:
-            filtrations[b][:] = np.maximum(filtrations[b], filtrations[i])
-    return self
+    return self._make_filtration_non_decreasing_raw(safe=safe)
 
 
 def _compute_persistence(
@@ -751,8 +738,7 @@ def _install_python_api():
         cls.is_minpres = property(_is_minpres)
         cls.dimension = property(_dimension)
         cls.info = property(_info)
-        if not cls().is_kcritical:
-            cls.make_filtration_non_decreasing = _make_filtration_non_decreasing
+        cls.make_filtration_non_decreasing = _make_filtration_non_decreasing
 
 
 _install_python_api()

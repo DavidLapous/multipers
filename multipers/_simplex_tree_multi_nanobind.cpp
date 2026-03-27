@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -332,6 +333,45 @@ Filtration filtration_from_handle(nb::handle filtration_handle, int num_paramete
   }
 }
 
+template <typename Tree, typename Filtration>
+Filtration first_possible_filtration(Tree& tree, const std::vector<int>& simplex) {
+  auto simplex_handle = tree.find(simplex);
+  Filtration out = Filtration::minus_inf(tree.num_parameters());
+  if (simplex_handle == tree.null_simplex()) {
+    return out;
+  }
+  for (auto boundary_handle : tree.boundary_simplex_range(simplex_handle)) {
+    intersect_lifetimes(out, tree.filtration(boundary_handle));
+  }
+  return out;
+}
+
+template <typename Tree, typename Filtration>
+bool insert_kcritical_simplex(Tree& tree, const std::vector<int>& simplex, const Filtration* filtration) {
+  if (tree.find_simplex(simplex)) {
+    auto updated = *tree.simplex_filtration(simplex);
+    if (filtration != nullptr) {
+      unify_lifetimes(updated, *filtration);
+    } else {
+      auto first_possible = first_possible_filtration<Tree, Filtration>(tree, simplex);
+      unify_lifetimes(updated, first_possible);
+    }
+    tree.assign_simplex_filtration(simplex, updated);
+    return true;
+  }
+
+  if (filtration != nullptr) {
+    return tree.insert_force(simplex, *filtration);
+  }
+
+  using BaseTree = typename Tree::Base_tree;
+  auto& base_tree = static_cast<BaseTree&>(tree);
+  return base_tree
+      .insert_simplex_and_subfaces(
+          simplex, Filtration::minus_inf(tree.num_parameters()), BaseTree::Insertion_strategy::FIRST_POSSIBLE)
+      .second;
+}
+
 template <typename Filtration, typename T>
 Filtration default_filtration_from_handle(nb::handle filtration_handle, int num_parameters) {
   auto values = vector_from_handle<T>(filtration_handle);
@@ -369,30 +409,22 @@ nb::tuple simplex_entry_to_python(Wrapper& self, SimplexHandle sh) {
 
 template <typename Wrapper, typename Filtration, typename T, bool IsKCritical>
 bool insert_single_simplex(Wrapper& self, const std::vector<int>& simplex, nb::handle filtration_handle, bool force) {
-  auto filtration = filtration_from_handle<Filtration, T, IsKCritical>(filtration_handle, self.tree.num_parameters());
   if constexpr (IsKCritical) {
-    bool single_generator = filtration_handle.is_none() || !nb::hasattr(filtration_handle, "ndim") ||
-                            nb::cast<int>(filtration_handle.attr("ndim")) == 1;
+    (void)force;
+    bool has_filtration = !filtration_handle.is_none();
+    std::unique_ptr<Filtration> filtration;
+    if (has_filtration) {
+      filtration = std::make_unique<Filtration>(
+          filtration_from_handle<Filtration, T, IsKCritical>(filtration_handle, self.tree.num_parameters()));
+    }
     bool inserted = false;
     {
       nb::gil_scoped_release release;
-      if (single_generator && self.tree.find_simplex(simplex)) {
-        auto updated = *self.tree.simplex_filtration(simplex);
-        for (size_t g = 0; g < filtration.num_generators(); ++g) {
-          std::vector<T> row(filtration.num_parameters());
-          for (size_t p = 0; p < filtration.num_parameters(); ++p) {
-            row[p] = filtration(g, p);
-          }
-          updated.add_generator(row);
-        }
-        self.tree.assign_simplex_filtration(simplex, updated);
-        inserted = true;
-      } else {
-        inserted = force ? self.tree.insert_force(simplex, filtration) : self.tree.insert(simplex, filtration);
-      }
+      inserted = insert_kcritical_simplex(self.tree, simplex, filtration.get());
     }
     return inserted;
   } else {
+    auto filtration = filtration_from_handle<Filtration, T, IsKCritical>(filtration_handle, self.tree.num_parameters());
     bool inserted = false;
     {
       nb::gil_scoped_release release;
@@ -694,15 +726,14 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                           {
                             nb::gil_scoped_release release;
                             for (size_t i = 0; i < n; ++i) {
-                              if (empty_filtration) {
-                                self.tree.insert_force(simplices[i], Filtration::minus_inf(self.tree.num_parameters()));
-                              } else {
-                                self.tree.insert_force(simplices[i], filtrations[i]);
-                              }
+                              insert_kcritical_simplex(
+                                  self.tree,
+                                  simplices[i],
+                                  empty_filtration ? nullptr : &filtrations[i]);
                             }
                           }
                         }
-                        if (empty_filtration) {
+                        if (empty_filtration && !k_is_kcritical) {
                           nb::gil_scoped_release release;
                           self.tree.make_filtration_non_decreasing();
                         }

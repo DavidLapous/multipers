@@ -144,6 +144,49 @@ inline bool is_none_or_empty(const nb::handle& h) {
   return false;
 }
 
+template <typename Wrapper>
+void ensure_sorted_filtration_grid(const Wrapper& self) {
+  if (is_none_or_empty(self.filtration_grid)) {
+    return;
+  }
+  for (nb::handle row_handle : nb::iter(self.filtration_grid)) {
+    auto row = cast_vector<double>(row_handle);
+    for (size_t i = 1; i < row.size(); ++i) {
+      if (row[i] < row[i - 1]) {
+        throw nb::value_error("Found non-sorted grid.");
+      }
+    }
+  }
+}
+
+template <typename Wrapper>
+Wrapper& make_filtration_non_decreasing_inplace(Wrapper& self, bool safe) {
+  if (safe && !is_none_or_empty(self.filtration_grid)) {
+    ensure_sorted_filtration_grid(self);
+  }
+
+  {
+    nb::gil_scoped_release release;
+    auto& filtrations = self.truc.get_filtration_values();
+    const auto& boundaries = self.truc.get_boundaries();
+    const bool ordered = self.truc.get_filtered_complex().is_ordered_by_dimension();
+
+    bool modified = true;
+    while (modified) {
+      modified = false;
+      for (size_t i = boundaries.size(); i-- > 0;) {
+        for (auto b : boundaries[i]) {
+          modified |= intersect_lifetimes(filtrations[b], filtrations[i]);
+        }
+      }
+      if (ordered) {
+        break;
+      }
+    }
+  }
+  return self;
+}
+
 inline std::string lowercase_copy(std::string value) {
   std::transform(
       value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -890,6 +933,69 @@ Wrapper construct_from_generator_data(nb::object generator_maps,
   return out;
 }
 
+template <typename Wrapper, typename Concrete, typename Value>
+Wrapper construct_kcritical_from_packed(
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+    nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+  Wrapper out;
+  if (boundary_indptr.shape(0) == 0) {
+    return out;
+  }
+
+  const size_t num_generators = (size_t)boundary_indptr.shape(0) - 1;
+  if ((size_t)generator_dimensions.shape(0) != num_generators || (size_t)grade_indptr.shape(0) != num_generators + 1) {
+    throw std::runtime_error("Invalid packed input, shape do not coincide.");
+  }
+
+  std::vector<std::vector<uint32_t>> boundaries(num_generators);
+  const int64_t* boundary_ptr = boundary_indptr.data();
+  const int32_t* boundary_vals = boundary_flat.data();
+  for (size_t i = 0; i < num_generators; ++i) {
+    const int64_t begin = boundary_ptr[i];
+    const int64_t end = boundary_ptr[i + 1];
+    auto& row = boundaries[i];
+    row.reserve((size_t)std::max<int64_t>(end - begin, 0));
+    for (int64_t idx = begin; idx < end; ++idx) {
+      row.push_back((uint32_t)boundary_vals[idx]);
+    }
+  }
+
+  std::vector<int> dims;
+  dims.reserve(num_generators);
+  for (size_t i = 0; i < num_generators; ++i) {
+    dims.push_back((int)generator_dimensions(i));
+  }
+
+  const size_t num_parameters = grades_flat.shape(1);
+  std::vector<typename Concrete::Filtration_value> filtrations;
+  filtrations.reserve(num_generators);
+  const int64_t* grade_ptr = grade_indptr.data();
+  for (size_t i = 0; i < num_generators; ++i) {
+    typename Concrete::Filtration_value filtration(num_parameters);
+    auto inf = Concrete::Filtration_value::inf(num_parameters);
+    filtration.push_to_least_common_upper_bound(inf, false);
+    const int64_t begin = grade_ptr[i];
+    const int64_t end = grade_ptr[i + 1];
+    for (int64_t row = begin; row < end; ++row) {
+      std::vector<Value> grade(num_parameters);
+      for (size_t p = 0; p < num_parameters; ++p) {
+        grade[p] = static_cast<Value>(grades_flat((size_t)row, p));
+      }
+      filtration.add_generator(grade);
+    }
+    filtrations.push_back(std::move(filtration));
+  }
+
+  Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
+      boundaries, dims, filtrations);
+  out.truc = Concrete(cpx);
+  reset_python_state(out);
+  return out;
+}
+
 inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
   return np.attr("dtype")(std::string(name)).attr("type");
@@ -1287,6 +1393,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
         }
         return self;
       }, nb::rv_policy::reference_internal)
+      .def("_make_filtration_non_decreasing_raw",
+           [](Wrapper& self, bool safe) -> Wrapper& { return make_filtration_non_decreasing_inplace(self, safe); },
+           "safe"_a = true,
+           nb::rv_policy::reference_internal)
       .def("coarsen_on_grid_inplace", [](Wrapper& self, std::vector<std::vector<Value>> grid, bool coordinates) -> Wrapper& {
         {
           nb::gil_scoped_release release;
@@ -1657,6 +1767,23 @@ NB_MODULE(_slicer_nanobind, m) {
   nb::list available_slicers;
 
   mpnb::bind_all_slicers(mpnb::SlicerDescriptorList{}, m, available_slicers);
+
+  m.def(
+      "build_kcritical_contiguous_slicer_from_packed_f64",
+      [](nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
+         nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+        return mpnb::
+            construct_kcritical_from_packed<mpnb::SlicerDesc_15::wrapper, mpnb::SlicerDesc_15::concrete, double>(
+                boundary_indptr, boundary_flat, generator_dimensions, grade_indptr, grades_flat);
+      },
+      "boundary_indptr"_a,
+      "boundary_flat"_a,
+      "generator_dimensions"_a,
+      "grade_indptr"_a,
+      "grades_flat"_a);
 
   m.def(
       "_compute_hilbert_signed_measure",
