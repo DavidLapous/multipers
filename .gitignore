@@ -21,7 +21,10 @@ build_*/
 dist
 *.egg-info
 *.cpp
+!multipers/_function_delaunay_interface.cpp
+!multipers/_mpfree_interface.cpp
 !multipers/_mma_nanobind.cpp
+!multipers/_rhomboid_tiling_interface.cpp
 !multipers/_slicer_nanobind.cpp
 !multipers/_simplex_tree_multi_nanobind.cpp
 *.so

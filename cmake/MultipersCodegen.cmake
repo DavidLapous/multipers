@@ -7,9 +7,6 @@ set(MULTIPERS_TEMPLATE_FILES
   "${CMAKE_SOURCE_DIR}/multipers/filtrations.pxd.tp"
   "${CMAKE_SOURCE_DIR}/multipers/filtration_conversions.pxd.tp"
   "${CMAKE_SOURCE_DIR}/multipers/slicer.pxd.tp"
-  "${CMAKE_SOURCE_DIR}/multipers/_function_delaunay_interface.cpp.tp"
-  "${CMAKE_SOURCE_DIR}/multipers/_mpfree_interface.cpp.tp"
-  "${CMAKE_SOURCE_DIR}/multipers/_rhomboid_tiling_interface.cpp.tp"
   "${CMAKE_SOURCE_DIR}/multipers/simplex_tree_multi.pxd.tp"
 )
 
@@ -17,9 +14,6 @@ set(MULTIPERS_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/multipers/filtrations.pxd"
   "${MULTIPERS_GENERATED_ROOT}/multipers/filtration_conversions.pxd"
   "${MULTIPERS_GENERATED_ROOT}/multipers/slicer.pxd"
-  "${MULTIPERS_GENERATED_ROOT}/multipers/_function_delaunay_interface.cpp"
-  "${MULTIPERS_GENERATED_ROOT}/multipers/_mpfree_interface.cpp"
-  "${MULTIPERS_GENERATED_ROOT}/multipers/_rhomboid_tiling_interface.cpp"
   "${MULTIPERS_GENERATED_ROOT}/multipers/simplex_tree_multi.pxd"
 )
 
