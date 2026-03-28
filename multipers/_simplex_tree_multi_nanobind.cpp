@@ -36,7 +36,7 @@ struct type_list {};
 template <typename Slicer>
 struct PySlicer;
 
-#include "_slicer_nanobind_registry.inc"
+#include <_slicer_nanobind_registry.inc>
 
 template <typename Func>
 decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
@@ -125,18 +125,8 @@ inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input,
 
 inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
 
-inline bool has_simplextree_template_id(const nb::handle& input) {
-  return has_template_id(input) && nb::hasattr(input, "thisptr") && nb::hasattr(input, "_is_function_simplextree");
-}
-
 template <typename Interface, typename T>
 struct PySimplexTree;
-
-template <typename Desc>
-bool simplextree_class_matches(const std::string& dtype_name, bool kcritical, const std::string& filtration_container) {
-  return Desc::dtype_name == dtype_name && Desc::is_kcritical == kcritical &&
-         lowercase_copy(std::string(Desc::filtration_container_name)) == filtration_container;
-}
 
 template <typename... Ds>
 nb::object get_simplextree_class(type_list<Ds...>,
@@ -145,11 +135,13 @@ nb::object get_simplextree_class(type_list<Ds...>,
                                  std::string filtration_container) {
   std::string dtype_name = numpy_dtype_name(dtype);
   filtration_container = lowercase_copy(std::move(filtration_container));
+  std::string_view normalized_filtration_container = filtration_container;
   bool matched = false;
   nb::object result;
   (
       [&]<typename D>() {
-        if (!matched && simplextree_class_matches<D>(dtype_name, kcritical, filtration_container)) {
+        if (!matched && D::dtype_name == dtype_name && D::is_kcritical == kcritical &&
+            D::filtration_container == normalized_filtration_container) {
           result = nb::module_::import_("multipers._simplex_tree_multi_nanobind").attr(D::python_name.data());
           matched = true;
         }
@@ -161,7 +153,13 @@ nb::object get_simplextree_class(type_list<Ds...>,
   return result;
 }
 
-inline bool is_simplextree_multi(nb::handle input) { return has_simplextree_template_id(input); }
+inline nb::object get_simplextree_class_from_template_id(int template_id) {
+  return dispatch_simplextree_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
+    return nb::module_::import_("multipers._simplex_tree_multi_nanobind").attr(Desc::python_name.data());
+  });
+}
+
+inline bool is_simplextree_multi(nb::handle input) { return has_template_id(input) && nb::hasattr(input, "thisptr"); }
 
 inline nb::object numpy_dtype_type(std::string_view name) {
   nb::object np = nb::module_::import_("numpy");
@@ -436,19 +434,21 @@ bool insert_single_simplex(Wrapper& self, const std::vector<int>& simplex, nb::h
 
 template <typename Desc, typename TargetWrapper, typename TargetInterface>
 void copy_from_desc(TargetWrapper& self, nb::handle source) {
+  using SourceWrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
   intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
   auto* other = reinterpret_cast<typename Desc::interface_type*>(ptr);
+  const auto& source_wrapper = nb::cast<const SourceWrapper&>(source);
   {
     nb::gil_scoped_release release;
     self.tree.template copy_from_interface<typename Desc::filtration_type>(reinterpret_cast<intptr_t>(other));
   }
   self.filtration_grid = source.attr("filtration_grid");
-  self.is_function_simplextree = nb::cast<bool>(source.attr("_is_function_simplextree"));
+  self.is_function_simplextree = source_wrapper.is_function_simplextree;
 }
 
 template <typename TargetWrapper, typename TargetInterface>
 bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
-  if (!has_template_id(source) || !nb::hasattr(source, "thisptr") || !nb::hasattr(source, "_is_function_simplextree")) {
+  if (!has_template_id(source) || !nb::hasattr(source, "thisptr")) {
     return false;
   }
   dispatch_simplextree_by_template_id(
@@ -527,6 +527,7 @@ void load_state(Wrapper& self, nb::handle state) {
     }
     self.tree.set_num_parameters(num_parameters);
   }
+  self.is_function_simplextree = false;
 }
 
 template <typename T>
@@ -561,6 +562,19 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
             *self.owner, self.handles[self.index++]);
       });
 
+  auto adopt_ptr = [](Wrapper& self, intptr_t ptr) -> Wrapper& {
+    Interface* other = reinterpret_cast<Interface*>(ptr);
+    self.tree = *other;
+    delete other;
+    return self;
+  };
+
+  auto adopt_interface_ptr = [adopt_ptr](Wrapper& self, intptr_t ptr) -> Wrapper& {
+    adopt_ptr(self, ptr);
+    self.is_function_simplextree = true;
+    return self;
+  };
+
   auto cls = nb::class_<Wrapper>(m, Desc::python_name.data())
                  .def(nb::init<>())
                  .def(
@@ -577,29 +591,34 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                      [](Wrapper& self) -> nb::object { return self.filtration_grid; },
                      [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::list() : value; },
                      nb::arg("value").none())
-                 .def_prop_rw(
-                     "_is_function_simplextree",
-                     [](const Wrapper& self) -> bool { return self.is_function_simplextree; },
-                     [](Wrapper& self, bool value) { self.is_function_simplextree = value; })
-                 .def_prop_rw(
-                     "thisptr",
-                     [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
-                     [](Wrapper& self, intptr_t ptr) {
-                       Interface* other = reinterpret_cast<Interface*>(ptr);
-                       self.tree = *other;
-                       delete other;
-                     })
-                 .def(
-                     "_from_ptr",
-                     [](Wrapper& self, intptr_t ptr) -> Wrapper& {
-                       Interface* other = reinterpret_cast<Interface*>(ptr);
-                       self.tree = *other;
-                       delete other;
-                       return self;
-                     },
-                     nb::rv_policy::reference_internal)
-                 .def(
-                     "_copy_from_any",
+                 .def("_get_function_simplextree_mode", [](const Wrapper& self) -> bool { return self.is_function_simplextree; })
+                 .def("_set_function_simplextree_mode",
+                      [](Wrapper& self, bool value) -> Wrapper& {
+                        self.is_function_simplextree = value;
+                        return self;
+                      },
+                      nb::rv_policy::reference_internal)
+                  .def_prop_rw(
+                      "thisptr",
+                      [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
+                      [adopt_ptr](Wrapper& self, intptr_t ptr) {
+                        adopt_ptr(self, ptr);
+                        self.is_function_simplextree = false;
+                      })
+                  .def(
+                      "_from_ptr",
+                      [adopt_ptr](Wrapper& self, intptr_t ptr) -> Wrapper& {
+                        adopt_ptr(self, ptr);
+                        self.is_function_simplextree = false;
+                        return self;
+                      },
+                      nb::rv_policy::reference_internal)
+                  .def(
+                      "_from_interface_ptr",
+                      adopt_interface_ptr,
+                      nb::rv_policy::reference_internal)
+                  .def(
+                      "_copy_from_any",
                      [](Wrapper& self, nb::handle other) -> Wrapper& {
                        if (!try_copy_from_any<Wrapper, Interface>(self, other)) {
                          throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
@@ -618,9 +637,9 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                      "slicer"_a,
                      "max_dim"_a = -1,
                      nb::rv_policy::reference_internal)
-                 .def(
-                     "_from_gudhi_state",
-                     [](Wrapper& self, nb::handle state, int num_parameters, nb::handle default_values) -> Wrapper& {
+                  .def(
+                      "_from_gudhi_state",
+                      [](Wrapper& self, nb::handle state, int num_parameters, nb::handle default_values) -> Wrapper& {
                         auto buffer = vector_from_handle<uint8_t>(state);
                         auto default_filtration = default_filtration_from_handle<Filtration, Value>(default_values, num_parameters);
                         {
@@ -631,6 +650,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                           self.tree.resize_all_filtrations(num_parameters);
                           self.tree.set_num_parameters(num_parameters);
                         }
+                        self.is_function_simplextree = false;
                         return self;
                       },
                       nb::rv_policy::reference_internal)
@@ -1077,7 +1097,7 @@ nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
                                          indices_type n_jobs,
                                          bool verbose,
                                          bool expand_collapse) {
-  if (!has_simplextree_template_id(simplextree)) {
+  if (!is_simplextree_multi(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
   return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
@@ -1101,7 +1121,7 @@ nb::tuple compute_euler_signed_measure(type_list<Desc...>,
                                        size_t width,
                                        bool zero_pad,
                                        bool verbose) {
-  if (!has_simplextree_template_id(simplextree)) {
+  if (!is_simplextree_multi(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
   return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
@@ -1130,7 +1150,7 @@ nb::tuple compute_rank_tensor(type_list<Desc...>,
                               size_t total,
                               indices_type n_jobs,
                               bool expand_collapse) {
-  if (!has_simplextree_template_id(simplextree)) {
+  if (!is_simplextree_multi(simplextree)) {
     throw std::runtime_error("Unsupported SimplexTreeMulti type.");
   }
   return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
@@ -1161,6 +1181,7 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
       "dtype"_a,
       "kcritical"_a = false,
       "filtration_container"_a = "Contiguous");
+  m.def("_get_simplextree_class_from_template_id", &mpst::get_simplextree_class_from_template_id, "template_id"_a);
   m.def("is_simplextree_multi", [](nb::object input) { return mpst::is_simplextree_multi(input); });
 
   m.def(

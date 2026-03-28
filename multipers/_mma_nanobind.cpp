@@ -27,7 +27,7 @@ namespace mpmma {
 template <typename... Types>
 struct type_list {};
 
-#include "_mma_nanobind_registry.inc"
+#include <_mma_nanobind_registry.inc>
 
 template <typename Func>
 decltype(auto) dispatch_mma_by_template_id(int template_id, Func&& func) {

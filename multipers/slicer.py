@@ -316,19 +316,17 @@ def _persistence_on_lines(
 
 
 def _getstate(self):
-    return (
-        self.get_boundaries(),
-        self.get_dimensions(),
-        self.get_filtrations(),
-        self.filtration_grid,
-        self.minpres_degree,
-    )
+    return self._serialize_state(), self.filtration_grid, self.minpres_degree
 
 
 def _setstate(self, dump):
-    boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
-    copy = type(self)(boundaries, dimensions, filtrations)
-    self._from_ptr(copy.get_ptr())
+    if isinstance(dump, tuple) and len(dump) == 3:
+        serialized, filtration_grid, minpres_degree = dump
+        self._deserialize_state(serialized)
+    else:
+        boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
+        copy = type(self)(boundaries, dimensions, filtrations)
+        self._from_ptr(copy.get_ptr())
     self.minpres_degree = minpres_degree
     self.filtration_grid = filtration_grid
 
@@ -706,7 +704,7 @@ def from_function_delaunay(
             dtype=dtype,
         )
     slicer = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    function_delaunay_presentation_to_slicer(
+    slicer = function_delaunay_presentation_to_slicer(
         slicer, points, grades, degree=degree, verbose=verbose, clear=clear
     )
     slicer.minpres_degree = degree

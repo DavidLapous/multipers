@@ -2,7 +2,6 @@
 #include <nanobind/stl/vector.h>
 
 #include <stdexcept>
-#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -31,18 +30,6 @@ std::vector<std::vector<T>> cast_matrix(nb::handle h) {
 
 inline nb::object numpy_float64() { return nb::module_::import_("numpy").attr("float64"); }
 
-inline nb::object ensure_supported_slicer_target(nb::object slicer) {
-  if (multipers::nanobind_helpers::is_supported_contiguous_f64_slicer_object(slicer)) {
-    return slicer;
-  }
-  return slicer.attr("astype")("vineyard"_a = slicer.attr("is_vine"),
-                               "kcritical"_a = false,
-                               "dtype"_a = numpy_float64(),
-                               "col"_a = slicer.attr("col_type"),
-                               "pers_backend"_a = "matrix",
-                               "filtration_container"_a = "contiguous");
-}
-
 inline nb::object ensure_supported_simplextree_target(nb::object simplextree) {
   return simplextree.attr("astype")(
       "dtype"_a = numpy_float64(), "kcritical"_a = false, "filtration_container"_a = "contiguous");
@@ -61,18 +48,15 @@ inline multipers::function_delaunay_interface_input<int> build_input(nb::handle 
   return input;
 }
 
-template <typename Desc>
 nb::object function_delaunay_to_slicer_for_target(nb::object target,
                                                   const multipers::function_delaunay_interface_input<int>& input,
                                                   int degree,
                                                   bool multi_chunk,
                                                   bool verbose) {
-  using Concrete = typename Desc::concrete;
   auto complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
-  nb::object out = target.type()();
-  auto* out_cpp = reinterpret_cast<Concrete*>(nb::cast<intptr_t>(out.attr("get_ptr")()));
-  multipers::build_slicer_from_complex(*out_cpp, complex);
-  return out;
+  auto* target_cpp = reinterpret_cast<multipers::contiguous_f64_slicer*>(nb::cast<intptr_t>(target.attr("get_ptr")()));
+  multipers::build_slicer_from_complex(*target_cpp, complex);
+  return target;
 }
 
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,
@@ -82,23 +66,8 @@ nb::object function_delaunay_to_simplextree_for_target(nb::object target,
   nb::object out = target.type()();
   out.attr("set_num_parameter")(2);
   using Interface = multipers::function_delaunay_simplextree_interface_output;
-  out.attr("_from_ptr")(reinterpret_cast<intptr_t>(new Interface(output)));
+  out.attr("_from_interface_ptr")(reinterpret_cast<intptr_t>(new Interface(output)));
   return out;
-}
-
-inline nb::object convert_back_to_original_slicer_type(nb::object original, nb::object out) {
-  return out.attr("astype")("vineyard"_a = original.attr("is_vine"),
-                            "kcritical"_a = original.attr("is_kcritical"),
-                            "dtype"_a = original.attr("dtype"),
-                            "col"_a = original.attr("col_type"),
-                            "pers_backend"_a = original.attr("pers_backend"),
-                            "filtration_container"_a = original.attr("filtration_container"));
-}
-
-inline nb::object convert_back_to_original_simplextree_type(nb::object original, nb::object out) {
-  return out.attr("astype")("dtype"_a = original.attr("dtype"),
-                            "kcritical"_a = original.attr("is_kcritical"),
-                            "filtration_container"_a = original.attr("filtration_container"));
 }
 
 #endif
@@ -120,19 +89,12 @@ NB_MODULE(_function_delaunay_interface, m) {
         throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
 #else
         auto input = mpfd::build_input(point_cloud, function_values);
-        nb::object target = mpfd::ensure_supported_slicer_target(slicer);
-        nb::object out = multipers::nanobind_helpers::dispatch_slicer_by_template_id(
-            multipers::nanobind_helpers::template_id_of(target), [&]<typename Desc>() -> nb::object {
-              if constexpr (multipers::nanobind_helpers::is_contiguous_f64_slicer_v<Desc>) {
-                return mpfd::function_delaunay_to_slicer_for_target<Desc>(target, input, degree, multi_chunk, verbose);
-              } else {
-                throw nb::type_error("Unsupported slicer template for function_delaunay interface.");
-              }
-            });
+        nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
+        nb::object out = mpfd::function_delaunay_to_slicer_for_target(target, input, degree, multi_chunk, verbose);
         if (target.ptr() == slicer.ptr()) {
           return out;
         }
-        return mpfd::convert_back_to_original_slicer_type(slicer, out);
+        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
 #endif
       },
       "slicer"_a,
@@ -149,26 +111,12 @@ NB_MODULE(_function_delaunay_interface, m) {
         throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
 #else
         auto input = mpfd::build_input(point_cloud, function_values);
-        nb::object target;
-        try {
-          target = mpfd::ensure_supported_simplextree_target(simplextree);
-        } catch (const std::exception& e) {
-          throw std::runtime_error(std::string("ensure_supported_simplextree_target failed: ") + e.what());
-        }
-        nb::object out;
-        try {
-          out = mpfd::function_delaunay_to_simplextree_for_target(target, input, verbose);
-        } catch (const std::exception& e) {
-          throw std::runtime_error(std::string("function_delaunay_to_simplextree_for_target failed: ") + e.what());
-        }
+        nb::object target = mpfd::ensure_supported_simplextree_target(simplextree);
+        nb::object out = mpfd::function_delaunay_to_simplextree_for_target(target, input, verbose);
         if (target.ptr() == simplextree.ptr()) {
           return out;
         }
-        try {
-          return mpfd::convert_back_to_original_simplextree_type(simplextree, out);
-        } catch (const std::exception& e) {
-          throw std::runtime_error(std::string("convert_back_to_original_simplextree_type failed: ") + e.what());
-        }
+        return multipers::nanobind_helpers::astype_simplextree_to_original_type(simplextree, out);
 #endif
       },
       "simplextree"_a,

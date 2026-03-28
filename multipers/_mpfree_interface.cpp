@@ -4,6 +4,10 @@
 
 #include "ext_interface/mpfree_interface.hpp"
 
+#if !MULTIPERS_DISABLE_MPFREE_INTERFACE
+#include "ext_interface/nanobind_registry_helpers.hpp"
+#endif
+
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -38,15 +42,6 @@ nb::object minimal_presentation_for_target(nb::object target,
   auto* out_cpp = reinterpret_cast<multipers::contiguous_f64_slicer*>(nb::cast<intptr_t>(out.attr("get_ptr")()));
   multipers::build_slicer_from_complex(*out_cpp, complex);
   return out;
-}
-
-inline nb::object convert_back_to_original_type(nb::object original, nb::object out) {
-  return out.attr("astype")("vineyard"_a = original.attr("is_vine"),
-                            "kcritical"_a = original.attr("is_kcritical"),
-                            "dtype"_a = original.attr("dtype"),
-                            "col"_a = original.attr("col_type"),
-                            "pers_backend"_a = original.attr("pers_backend"),
-                            "filtration_container"_a = original.attr("filtration_container"));
 }
 
 }  // namespace mpmi
@@ -95,7 +90,7 @@ NB_MODULE(_mpfree_interface, m) {
         if (target.ptr() == slicer.ptr()) {
           return out;
         }
-        return mpmi::convert_back_to_original_type(slicer, out);
+        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
 #endif
       },
       "slicer"_a,
