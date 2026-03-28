@@ -188,7 +188,6 @@ endfunction()
 # =============================================================================
 # Each module explicitly declares its dependencies. No conditional checks -
 # if a dependency is missing, CMake will fail with a clear error.
-# To disable a module, remove it from MULTIPERS_MODULES below.
 
 function(multipers_configure_module module_name target_name)
   # Default: add standard phat includes
@@ -210,20 +209,8 @@ function(multipers_configure_module module_name target_name)
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
-  elseif(module_name STREQUAL "function_rips")
+  elseif(module_name STREQUAL "_function_rips_nanobind")
     multipers_link_tbb(${target_name})
-
-  elseif(module_name STREQUAL "point_measure")
-    multipers_link_tbb(${target_name})
-
-  elseif(module_name STREQUAL "grids")
-    multipers_link_tbb(${target_name})
-
-  elseif(module_name STREQUAL "io")
-    # No special dependencies
-
-  elseif(module_name STREQUAL "ops")
-    # No special dependencies
 
   elseif(module_name STREQUAL "_mpfree_interface")
     multipers_link_shared_core(${target_name})
@@ -366,102 +353,11 @@ function(multipers_add_nanobind_module module_name)
   endif()
 endfunction()
 
-function(multipers_add_extension module_name)
-  string(REPLACE "." "/" module_path "${module_name}")
-  set(source_pyx_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx")
-  set(generated_pyx_file "${MULTIPERS_GENERATED_ROOT}/multipers/${module_path}.pyx")
-  set(pyx_template "${CMAKE_SOURCE_DIR}/multipers/${module_path}.pyx.tp")
-  if(EXISTS "${pyx_template}")
-    set(pyx_file "${generated_pyx_file}")
-  elseif(EXISTS "${source_pyx_file}")
-    set(pyx_file "${source_pyx_file}")
-  else()
-    message(FATAL_ERROR "Missing Cython source/template: ${source_pyx_file}")
-  endif()
-
-  set(cpp_file "${CMAKE_BINARY_DIR}/cython/${module_path}.cpp")
-  set(dep_file "${cpp_file}.dep")
-  get_filename_component(cpp_dir "${cpp_file}" DIRECTORY)
-
-  add_custom_command(
-    OUTPUT "${cpp_file}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${cpp_dir}"
-    COMMAND "${Python3_EXECUTABLE}" -m cython ${MULTIPERS_CYTHON_COMMON_ARGS} -M "${pyx_file}" -o "${cpp_file}"
-    DEPENDS "${pyx_file}" ${MULTIPERS_GENERATED_FILES}
-    DEPFILE "${dep_file}"
-    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    VERBATIM
-  )
-
-  string(REPLACE "." "_" target_name "multipers_${module_name}")
-  Python3_add_library(${target_name} MODULE WITH_SOABI "${cpp_file}")
-  add_dependencies(${target_name} multipers_tempita)
-  set_target_properties(${target_name} PROPERTIES PREFIX "")
-
-  target_include_directories(
-    ${target_name}
-    PRIVATE
-      ${MULTIPERS_GENERATED_INCLUDE_DIRS}
-      ${MULTIPERS_BASE_INCLUDE_DIRS}
-  )
-  multipers_apply_common_build_flags(${target_name})
-  multipers_configure_module("${module_name}" ${target_name})
-
-  set(output_name "${module_name}")
-  set(package_dir "multipers")
-
-  set_target_properties(
-    ${target_name}
-    PROPERTIES
-      OUTPUT_NAME "${output_name}"
-      LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
-      RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
-  )
-  if(WIN32)
-    if(DEFINED MULTIPERS_WINDOWS_RUNTIME_DEP_SET)
-      install(TARGETS ${target_name}
-        RUNTIME_DEPENDENCY_SET ${MULTIPERS_WINDOWS_RUNTIME_DEP_SET}
-        LIBRARY DESTINATION "${package_dir}"
-        RUNTIME DESTINATION "${package_dir}"
-        ARCHIVE DESTINATION "${package_dir}"
-      )
-    else()
-      install(TARGETS ${target_name}
-        LIBRARY DESTINATION "${package_dir}"
-        RUNTIME DESTINATION "${package_dir}"
-        ARCHIVE DESTINATION "${package_dir}"
-      )
-    endif()
-  else()
-
-    install(TARGETS ${target_name}
-    LIBRARY DESTINATION "${package_dir}"
-  )
-  endif()
-endfunction()
-
-set(MULTIPERS_MODULES
-  io
-  function_rips
-  point_measure
-  grids
-  ops
-)
-
-if(WIN32)
-  list(REMOVE_ITEM MULTIPERS_MODULES ops)
-endif()
-
-foreach(module_name IN LISTS MULTIPERS_MODULES)
-  multipers_add_extension(${module_name})
-  string(REPLACE "." "_" module_target_name "multipers_${module_name}")
-  list(APPEND MULTIPERS_EXTENSION_TARGETS ${module_target_name})
-endforeach()
-
 set(MULTIPERS_NANOBIND_MODULES
   _slicer_nanobind
   _mma_nanobind
   _simplex_tree_multi_nanobind
+  _function_rips_nanobind
   _mpfree_interface
   _function_delaunay_interface
   _2pac_interface

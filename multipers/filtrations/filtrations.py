@@ -636,7 +636,7 @@ def RhomboidBifiltration(
     if x.ndim not in (2, 3):
         raise ValueError("Only 2-3D dimensional point cloud are supported.")
     out = Slicer()
-    _rhomboid_tiling_to_slicer(
+    out = _rhomboid_tiling_to_slicer(
         slicer=out,
         point_cloud=x,
         k_max=k_max,

@@ -125,7 +125,6 @@ def _rebuild_from_current_simplices(self, target_cls, transform):
                 ]
             )
             out.insert_batch(vertex_array, filtrations)
-    out._is_function_simplextree = self._is_function_simplextree
     return out
 
 
@@ -272,7 +271,6 @@ def _copy(self):
     stree = type(self)()
     stree._copy_from_any(self)
     stree.filtration_grid = self.filtration_grid
-    stree._is_function_simplextree = self._is_function_simplextree
     return stree
 
 
@@ -293,17 +291,16 @@ def _iter(self):
 
 
 def _getstate(self):
-    return self._serialize_state(), self.filtration_grid, self._is_function_simplextree
+    return self._serialize_state(), self.filtration_grid
 
 
 def _setstate(self, state):
-    if isinstance(state, tuple) and len(state) == 3:
-        serialized, filtration_grid, is_function = state
+    if isinstance(state, tuple) and len(state) == 2:
+        serialized, filtration_grid = state
     else:
-        serialized, filtration_grid, is_function = state, [], False
+        serialized, filtration_grid = state, []
     self._deserialize_state(serialized)
     self.filtration_grid = filtration_grid
-    self._is_function_simplextree = is_function
 
 
 def _reconstruct_from_pickle(cls, state):
@@ -335,7 +332,6 @@ def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=N
     out = cls()
     out._copy_from_any(self)
     out.filtration_grid = self.filtration_grid
-    out._is_function_simplextree = self._is_function_simplextree
     return out
 
 
@@ -893,7 +889,6 @@ def _reconstruct_from_edge_list(self, edges, swap=True, expand_dimension=0):
     reduced_tree = type(self)()
     reduced_tree.set_num_parameter(self.num_parameters)
     reduced_tree.filtration_grid = self.filtration_grid
-    reduced_tree._is_function_simplextree = self._is_function_simplextree
     if self.num_vertices > 0:
         vertices = np.fromiter(
             (splx[0] for splx, _ in self.get_skeleton(0)), dtype=np.int32
@@ -910,10 +905,8 @@ def _reconstruct_from_edge_list(self, edges, swap=True, expand_dimension=0):
         reduced_tree.insert_batch(edges_idx, edges_filtration)
     if swap:
         filtration_grid = self.filtration_grid
-        is_function = self._is_function_simplextree
         self._copy_from_any(reduced_tree)
         self.filtration_grid = filtration_grid
-        self._is_function_simplextree = is_function
     if expand_dimension > 0:
         self.expansion(expand_dimension)
     return self if swap else reduced_tree

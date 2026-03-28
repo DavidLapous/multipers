@@ -50,7 +50,6 @@ keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 requires = [
   "scikit-build-core>=0.12",
   "numpy",
-  "Cython",
   "nanobind",
 ]
 build-backend = "scikit_build_core.build"
