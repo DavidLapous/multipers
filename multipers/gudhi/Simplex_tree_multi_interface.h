@@ -518,12 +518,6 @@ class Simplex_tree_multi_interface
 
   kscc_type kcritical_simplextree_to_scc() { return Gudhi::multiparameter::mma::kcritical_simplextree_to_scc(*this); }
 
-  using function_scc_type = std::vector<std::pair<std::vector<std::vector<std::vector<value_type>>>, boundary_matrix>>;
-
-  function_scc_type function_simplextree_to_scc() {
-    return Gudhi::multiparameter::mma::function_simplextree_to_scc(*this);
-  }
-
   using flattened_scc_type = std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<unsigned int>>>;
 
   flattened_scc_type simplextree_to_ordered_bf() {

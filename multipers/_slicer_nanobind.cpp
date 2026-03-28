@@ -48,7 +48,40 @@ struct PySlicer {
 template <typename... Types>
 struct type_list {};
 
-#include "_slicer_nanobind_registry.inc"
+#include <_slicer_nanobind_registry.inc>
+
+template <typename Desc>
+inline constexpr bool is_kcritical_contiguous_f64_matrix_slicer_v =
+    std::is_same_v<typename Desc::value_type, double> && !Desc::is_vine && Desc::is_kcritical &&
+    !Desc::is_degree_rips && Desc::column_type == std::string_view("UNORDERED_SET") &&
+    Desc::backend_type == std::string_view("Matrix") && Desc::filtration_container == std::string_view("Contiguous");
+
+template <typename List>
+struct kcritical_contiguous_f64_matrix_slicer_desc_impl;
+
+template <>
+struct kcritical_contiguous_f64_matrix_slicer_desc_impl<type_list<>> {
+  using type = void;
+  static constexpr bool found = false;
+  static constexpr int matches = 0;
+};
+
+template <typename Head, typename... Tail>
+struct kcritical_contiguous_f64_matrix_slicer_desc_impl<type_list<Head, Tail...>> {
+  using tail = kcritical_contiguous_f64_matrix_slicer_desc_impl<type_list<Tail...>>;
+  static constexpr bool is_match = is_kcritical_contiguous_f64_matrix_slicer_v<Head>;
+  static constexpr bool found = is_match || tail::found;
+  static constexpr int matches = tail::matches + (is_match ? 1 : 0);
+  using type = std::conditional_t<is_match, Head, typename tail::type>;
+};
+
+using KcriticalContiguousF64MatrixSlicerDesc =
+    typename kcritical_contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::type;
+
+static_assert(!std::is_void_v<KcriticalContiguousF64MatrixSlicerDesc>,
+              "Expected exactly one k-critical contiguous float64 matrix slicer template.");
+static_assert(kcritical_contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::matches == 1,
+              "k-critical contiguous float64 matrix slicer template must be unique.");
 
 template <typename Func>
 decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
@@ -283,19 +316,6 @@ nb::object compute_filtration_bounds(const nb::handle& input) {
   });
 }
 
-template <typename Desc>
-bool slicer_class_matches(bool is_vineyard,
-                          bool is_k_critical,
-                          const std::string& dtype_name,
-                          const std::string& col,
-                          const std::string& pers_backend,
-                          const std::string& filtration_container) {
-  return Desc::is_vine == is_vineyard && Desc::is_kcritical == is_k_critical && Desc::dtype_name == dtype_name &&
-         lowercase_copy(std::string(Desc::column_type)) == col &&
-         lowercase_copy(std::string(Desc::backend_type)) == pers_backend &&
-         lowercase_copy(std::string(Desc::filtration_container)) == filtration_container;
-}
-
 template <typename... Ds>
 nb::object get_slicer_class(type_list<Ds...>,
                             bool is_vineyard,
@@ -312,8 +332,10 @@ nb::object get_slicer_class(type_list<Ds...>,
   nb::object result;
   (
       [&]<typename D>() {
-        if (!matched &&
-            slicer_class_matches<D>(is_vineyard, is_k_critical, dtype_name, col, pers_backend, filtration_container)) {
+        if (!matched && D::is_vine == is_vineyard && D::is_kcritical == is_k_critical && D::dtype_name == dtype_name &&
+            lowercase_copy(std::string(D::column_type)) == col &&
+            lowercase_copy(std::string(D::backend_type)) == pers_backend &&
+            lowercase_copy(std::string(D::filtration_container)) == filtration_container) {
           result = nb::module_::import_("multipers._slicer_nanobind").attr(D::python_name.data());
           matched = true;
         }
@@ -323,6 +345,12 @@ nb::object get_slicer_class(type_list<Ds...>,
     throw nb::value_error("Unimplemented slicer combination.");
   }
   return result;
+}
+
+inline nb::object get_slicer_class_from_template_id(int template_id) {
+  return dispatch_slicer_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
+    return nb::module_::import_("multipers._slicer_nanobind").attr(Desc::python_name.data());
+  });
 }
 
 inline nb::object prepare_box_object(const std::vector<std::vector<double>>& box) {
@@ -413,14 +441,12 @@ inline bool is_simplextree_multi(const nb::handle& source) {
 }
 
 template <typename Desc, typename Wrapper, typename Concrete>
-void build_from_simplextree_desc(Wrapper& self, const nb::handle& source, bool is_function_simplextree, intptr_t ptr) {
+void build_from_simplextree_desc(Wrapper& self, const nb::handle& source, intptr_t ptr) {
   using SourceInterface = typename Desc::interface_type;
   auto* st_ptr = reinterpret_cast<SourceInterface*>(ptr);
   if constexpr (Desc::is_kcritical) {
-    if (!is_function_simplextree) {
-      (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, st_ptr, source);
-      return;
-    }
+    (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, st_ptr, source);
+    return;
   }
   {
     nb::gil_scoped_release release;
@@ -436,15 +462,12 @@ void build_from_simplextree_desc(Wrapper& self, const nb::handle& source, bool i
 
 template <typename Wrapper, typename Concrete>
 bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& source) {
-  if (!is_simplextree_multi(source) || !has_template_id(source)) {
+  if (!is_simplextree_multi(source)) {
     return false;
   }
-
-  bool is_function_simplextree =
-      nb::hasattr(source, "_is_function_simplextree") ? nb::cast<bool>(source.attr("_is_function_simplextree")) : false;
   intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
   dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename D>() {
-    build_from_simplextree_desc<D, Wrapper, Concrete>(self, source, is_function_simplextree, ptr);
+    build_from_simplextree_desc<D, Wrapper, Concrete>(self, source, ptr);
   });
   return true;
 }
@@ -871,6 +894,254 @@ void reset_python_state(Wrapper& self) {
   self.minpres_degree = -1;
 }
 
+inline constexpr uint32_t kSlicerSerializationMagic = 0x4d50534c;
+inline constexpr uint32_t kSlicerSerializationVersion = 1;
+
+enum class SlicerSerializationMode : uint32_t {
+  OneCritical = 0,
+  KCritical = 1,
+  DegreeRips = 2,
+};
+
+template <typename T>
+void append_scalar(std::vector<uint8_t>& buffer, T value) {
+  size_t offset = buffer.size();
+  buffer.resize(offset + sizeof(T));
+  std::memcpy(buffer.data() + offset, &value, sizeof(T));
+}
+
+template <typename T>
+void append_vector(std::vector<uint8_t>& buffer, const std::vector<T>& values) {
+  if (values.empty()) {
+    return;
+  }
+  size_t offset = buffer.size();
+  buffer.resize(offset + values.size() * sizeof(T));
+  std::memcpy(buffer.data() + offset, values.data(), values.size() * sizeof(T));
+}
+
+inline void ensure_serialized_bytes_available(const uint8_t* ptr, const uint8_t* end, size_t num_bytes) {
+  if ((size_t)(end - ptr) < num_bytes) {
+    throw std::runtime_error("Invalid serialized slicer state.");
+  }
+}
+
+template <typename T>
+T read_scalar(const uint8_t*& ptr, const uint8_t* end) {
+  ensure_serialized_bytes_available(ptr, end, sizeof(T));
+  T value;
+  std::memcpy(&value, ptr, sizeof(T));
+  ptr += sizeof(T);
+  return value;
+}
+
+template <typename T>
+std::vector<T> read_vector(const uint8_t*& ptr, const uint8_t* end, size_t count) {
+  std::vector<T> out(count);
+  if (count == 0) {
+    return out;
+  }
+  ensure_serialized_bytes_available(ptr, end, count * sizeof(T));
+  std::memcpy(out.data(), ptr, count * sizeof(T));
+  ptr += count * sizeof(T);
+  return out;
+}
+
+template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
+nb::object serialized_state(Wrapper& self) {
+  std::vector<uint64_t> boundary_indptr;
+  std::vector<uint32_t> boundary_flat;
+  std::vector<int32_t> dimensions;
+  std::vector<int64_t> grade_indptr;
+  std::vector<Value> grades_flat;
+  size_t num_generators = 0;
+  uint64_t encoded_num_parameters = 0;
+  uint64_t filtration_rows = 0;
+
+  {
+    nb::gil_scoped_release release;
+    const auto& boundaries = self.truc.get_boundaries();
+    const auto& dims = self.truc.get_dimensions();
+    const auto& filtrations = self.truc.get_filtration_values();
+
+    num_generators = boundaries.size();
+    boundary_indptr.assign(num_generators + 1, 0);
+    dimensions.reserve(dims.size());
+
+    size_t total_boundary_size = 0;
+    for (size_t i = 0; i < num_generators; ++i) {
+      total_boundary_size += boundaries[i].size();
+      boundary_indptr[i + 1] = total_boundary_size;
+      dimensions.push_back((int32_t)dims[i]);
+    }
+    boundary_flat.reserve(total_boundary_size);
+    for (const auto& row : boundaries) {
+      boundary_flat.insert(boundary_flat.end(), row.begin(), row.end());
+    }
+
+    if constexpr (IsKCritical) {
+      encoded_num_parameters = IsDegreeRips ? uint64_t(2) : (uint64_t)self.truc.get_number_of_parameters();
+      grade_indptr.assign(num_generators + 1, 0);
+      size_t total_rows = 0;
+      for (size_t i = 0; i < num_generators; ++i) {
+        total_rows += filtrations[i].num_generators();
+        grade_indptr[i + 1] = (int64_t)total_rows;
+      }
+      filtration_rows = (uint64_t)total_rows;
+      grades_flat.resize(total_rows * encoded_num_parameters);
+      size_t offset = 0;
+      for (size_t i = 0; i < num_generators; ++i) {
+        size_t k = filtrations[i].num_generators();
+        for (size_t g = 0; g < k; ++g) {
+          if constexpr (IsDegreeRips) {
+            grades_flat[2 * (offset + g)] = filtrations[i](g, 0);
+            grades_flat[2 * (offset + g) + 1] = static_cast<Value>(g);
+          } else {
+            for (size_t p = 0; p < encoded_num_parameters; ++p) {
+              grades_flat[(offset + g) * encoded_num_parameters + p] = filtrations[i](g, p);
+            }
+          }
+        }
+        offset += k;
+      }
+    } else {
+      encoded_num_parameters = (uint64_t)self.truc.get_number_of_parameters();
+      filtration_rows = (uint64_t)num_generators;
+      grades_flat.resize(num_generators * encoded_num_parameters);
+      for (size_t i = 0; i < num_generators; ++i) {
+        if (!filtrations[i].is_finite()) {
+          std::fill_n(grades_flat.data() + i * encoded_num_parameters, encoded_num_parameters, filtrations[i](0, 0));
+        } else if (encoded_num_parameters > 0) {
+          std::memcpy(grades_flat.data() + i * encoded_num_parameters,
+                      &filtrations[i](0, 0),
+                      encoded_num_parameters * sizeof(Value));
+        }
+      }
+    }
+  }
+
+  std::vector<uint8_t> buffer;
+  buffer.reserve(3 * sizeof(uint32_t) + 4 * sizeof(uint64_t) + boundary_indptr.size() * sizeof(uint64_t) +
+                 boundary_flat.size() * sizeof(uint32_t) + dimensions.size() * sizeof(int32_t) +
+                 grade_indptr.size() * sizeof(int64_t) + grades_flat.size() * sizeof(Value));
+  append_scalar<uint32_t>(buffer, kSlicerSerializationMagic);
+  append_scalar<uint32_t>(buffer, kSlicerSerializationVersion);
+  append_scalar<uint32_t>(buffer,
+                          static_cast<uint32_t>(IsDegreeRips ? SlicerSerializationMode::DegreeRips
+                                                             : (IsKCritical ? SlicerSerializationMode::KCritical
+                                                                            : SlicerSerializationMode::OneCritical)));
+  append_scalar<uint64_t>(buffer, (uint64_t)num_generators);
+  append_scalar<uint64_t>(buffer, (uint64_t)boundary_flat.size());
+  append_scalar<uint64_t>(buffer, encoded_num_parameters);
+  append_scalar<uint64_t>(buffer, filtration_rows);
+  append_vector<uint64_t>(buffer, boundary_indptr);
+  append_vector<uint32_t>(buffer, boundary_flat);
+  append_vector<int32_t>(buffer, dimensions);
+  if constexpr (IsKCritical) {
+    append_vector<int64_t>(buffer, grade_indptr);
+  }
+  append_vector<Value>(buffer, grades_flat);
+  return nb::cast(owned_array<uint8_t>(std::move(buffer), {buffer.size()}));
+}
+
+template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical, bool IsDegreeRips>
+void load_state(Wrapper& self, nb::handle state) {
+  auto buffer = cast_vector<uint8_t>(state);
+  const uint8_t* ptr = buffer.data();
+  const uint8_t* end = ptr + buffer.size();
+
+  uint32_t magic = read_scalar<uint32_t>(ptr, end);
+  uint32_t version = read_scalar<uint32_t>(ptr, end);
+  uint32_t mode = read_scalar<uint32_t>(ptr, end);
+  if (magic != kSlicerSerializationMagic || version != kSlicerSerializationVersion) {
+    throw std::runtime_error("Invalid serialized slicer state.");
+  }
+  uint32_t expected_mode = static_cast<uint32_t>(
+      IsDegreeRips ? SlicerSerializationMode::DegreeRips
+                   : (IsKCritical ? SlicerSerializationMode::KCritical : SlicerSerializationMode::OneCritical));
+  if (mode != expected_mode) {
+    throw std::runtime_error("Serialized slicer state does not match target type.");
+  }
+
+  uint64_t num_generators = read_scalar<uint64_t>(ptr, end);
+  uint64_t boundary_flat_size = read_scalar<uint64_t>(ptr, end);
+  uint64_t encoded_num_parameters = read_scalar<uint64_t>(ptr, end);
+  uint64_t filtration_rows = read_scalar<uint64_t>(ptr, end);
+
+  auto boundary_indptr = read_vector<uint64_t>(ptr, end, (size_t)num_generators + 1);
+  auto boundary_flat = read_vector<uint32_t>(ptr, end, (size_t)boundary_flat_size);
+  auto dimensions32 = read_vector<int32_t>(ptr, end, (size_t)num_generators);
+  if (boundary_indptr.empty() || boundary_indptr.back() != boundary_flat_size) {
+    throw std::runtime_error("Invalid serialized slicer boundaries.");
+  }
+
+  std::vector<std::vector<uint32_t>> boundaries((size_t)num_generators);
+  for (size_t i = 0; i < (size_t)num_generators; ++i) {
+    uint64_t begin = boundary_indptr[i];
+    uint64_t finish = boundary_indptr[i + 1];
+    if (begin > finish || finish > boundary_flat.size()) {
+      throw std::runtime_error("Invalid serialized slicer boundaries.");
+    }
+    boundaries[i].assign(boundary_flat.begin() + (ptrdiff_t)begin, boundary_flat.begin() + (ptrdiff_t)finish);
+  }
+
+  std::vector<int> dimensions(dimensions32.begin(), dimensions32.end());
+  std::vector<typename Concrete::Filtration_value> c_filtrations;
+  c_filtrations.reserve((size_t)num_generators);
+
+  if constexpr (IsKCritical) {
+    auto grade_indptr = read_vector<int64_t>(ptr, end, (size_t)num_generators + 1);
+    auto grades_flat = read_vector<Value>(ptr, end, (size_t)(filtration_rows * encoded_num_parameters));
+    if (grade_indptr.empty() || grade_indptr.back() != (int64_t)filtration_rows) {
+      throw std::runtime_error("Invalid serialized slicer filtrations.");
+    }
+    for (size_t i = 0; i < (size_t)num_generators; ++i) {
+      int64_t begin = grade_indptr[i];
+      int64_t finish = grade_indptr[i + 1];
+      if (begin > finish || finish > (int64_t)filtration_rows) {
+        throw std::runtime_error("Invalid serialized slicer filtrations.");
+      }
+      typename Concrete::Filtration_value filtration((size_t)encoded_num_parameters);
+      auto inf = Concrete::Filtration_value::inf((size_t)encoded_num_parameters);
+      filtration.push_to_least_common_upper_bound(inf, false);
+      for (int64_t row = begin; row < finish; ++row) {
+        std::vector<Value> grade((size_t)encoded_num_parameters);
+        size_t offset = (size_t)row * (size_t)encoded_num_parameters;
+        if (!grade.empty()) {
+          std::memcpy(grade.data(), grades_flat.data() + offset, grade.size() * sizeof(Value));
+        }
+        filtration.add_generator(grade);
+      }
+      c_filtrations.push_back(std::move(filtration));
+    }
+  } else {
+    auto grades_flat = read_vector<Value>(ptr, end, (size_t)(num_generators * encoded_num_parameters));
+    for (size_t i = 0; i < (size_t)num_generators; ++i) {
+      std::vector<Value> grade((size_t)encoded_num_parameters);
+      size_t offset = i * (size_t)encoded_num_parameters;
+      if (!grade.empty()) {
+        std::memcpy(grade.data(), grades_flat.data() + offset, grade.size() * sizeof(Value));
+      }
+      c_filtrations.emplace_back(grade);
+    }
+  }
+
+  if (ptr != end) {
+    throw std::runtime_error("Invalid serialized slicer state.");
+  }
+
+  if (num_generators == 0) {
+    self.truc = Concrete();
+    reset_python_state(self);
+    return;
+  }
+
+  Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
+      boundaries, dimensions, c_filtrations);
+  self.truc = Concrete(cpx);
+  reset_python_state(self);
+}
+
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical>
 Wrapper construct_from_generator_data(nb::object generator_maps,
                                       nb::object generator_dimensions,
@@ -1254,6 +1525,15 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
         self.truc = *reinterpret_cast<Concrete*>(slicer_ptr);
         return self;
       }, nb::rv_policy::reference_internal)
+      .def("_serialize_state",
+           [](Wrapper& self) -> nb::object { return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self); })
+      .def("_deserialize_state",
+           [](Wrapper& self, nb::handle state) -> Wrapper& {
+             load_state<Wrapper, Concrete, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, state);
+             return self;
+           },
+           "state"_a,
+           nb::rv_policy::reference_internal)
       .def("__len__", [](Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_generators", [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
@@ -1775,9 +2055,10 @@ NB_MODULE(_slicer_nanobind, m) {
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
          nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
          nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
-        return mpnb::
-            construct_kcritical_from_packed<mpnb::SlicerDesc_15::wrapper, mpnb::SlicerDesc_15::concrete, double>(
-                boundary_indptr, boundary_flat, generator_dimensions, grade_indptr, grades_flat);
+        return mpnb::construct_kcritical_from_packed<mpnb::KcriticalContiguousF64MatrixSlicerDesc::wrapper,
+                                                     mpnb::KcriticalContiguousF64MatrixSlicerDesc::concrete,
+                                                     double>(
+            boundary_indptr, boundary_flat, generator_dimensions, grade_indptr, grades_flat);
       },
       "boundary_indptr"_a,
       "boundary_flat"_a,
@@ -1949,6 +2230,8 @@ NB_MODULE(_slicer_nanobind, m) {
       "col"_a,
       "pers_backend"_a,
       "filtration_container"_a);
+
+  m.def("_get_slicer_class_from_template_id", &mpnb::get_slicer_class_from_template_id, "template_id"_a);
 
   mpnb::bind_bitmap_builders(mpnb::SlicerDescriptorList{}, m);
 
