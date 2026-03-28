@@ -112,6 +112,34 @@ if(CGAL_FOUND)
   list(APPEND MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS ${CGAL_INCLUDE_DIRS})
 endif()
 
+set(MULTIPERS_2PAC_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/2pac" CACHE PATH "Path to a 2pac source tree")
+set(MULTIPERS_2PAC_INCLUDE_DIRS "")
+if(EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.hpp" AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp")
+  set(MULTIPERS_2PAC_INCLUDE_DIRS "${MULTIPERS_2PAC_SOURCE_DIR}")
+  add_library(
+    multipers_2pac_static
+    STATIC
+    "${MULTIPERS_2PAC_SOURCE_DIR}/minimize.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/factor.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/chunk.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/ArrayColumn.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/HeapColumn.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/time_measurement.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/block_column_matrix.cpp"
+  )
+  target_include_directories(multipers_2pac_static PUBLIC ${MULTIPERS_2PAC_INCLUDE_DIRS})
+  target_link_libraries(multipers_2pac_static PUBLIC OpenMP::OpenMP_CXX)
+  target_compile_definitions(multipers_2pac_static PUBLIC MULTIPERS_HAS_2PAC_INTERFACE=1)
+  set_target_properties(
+    multipers_2pac_static
+    PROPERTIES
+      CXX_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN ON
+  )
+endif()
+
 if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
   add_library(
     multipers_rhomboid_tiling_static
@@ -146,5 +174,7 @@ if(NOT WIN32)
       CXX_VISIBILITY_PRESET hidden
       VISIBILITY_INLINES_HIDDEN ON
   )
-  set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
+  if(NOT MSVC)
+    set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
+  endif()
 endif()

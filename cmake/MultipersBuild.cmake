@@ -15,6 +15,7 @@ function(multipers_apply_common_build_flags target_name)
       PRIVATE
         MULTIPERS_DISABLE_MPFREE_INTERFACE=1
         MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
+        MULTIPERS_DISABLE_2PAC_INTERFACE=1
         MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
         MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
         MULTIPERS_DISABLE_HERA_INTERFACE=1
@@ -34,6 +35,14 @@ function(multipers_apply_common_build_flags target_name)
       ${target_name}
       PRIVATE
         MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
+    )
+  endif()
+
+  if(NOT TARGET multipers_2pac_static)
+    target_compile_definitions(
+      ${target_name}
+      PRIVATE
+        MULTIPERS_DISABLE_2PAC_INTERFACE=1
     )
   endif()
 
@@ -259,6 +268,14 @@ function(multipers_configure_module module_name target_name)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS})
     endif()
 
+  elseif(module_name STREQUAL "_2pac_interface")
+    multipers_link_shared_core(${target_name})
+    if(TARGET multipers_2pac_static)
+      target_link_libraries(${target_name} PRIVATE multipers_2pac_static)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_2PAC_INCLUDE_DIRS})
+      multipers_link_openmp(${target_name})
+    endif()
+
   elseif(module_name STREQUAL "_aida_interface")
     target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
     target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
@@ -287,7 +304,9 @@ function(multipers_configure_module module_name target_name)
     target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
   endif()
 
-  set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
+  if(NOT MSVC)
+    set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
+  endif()
 endfunction()
 
 function(multipers_add_nanobind_module module_name)
@@ -295,10 +314,10 @@ function(multipers_add_nanobind_module module_name)
   set(source_cpp_file "${CMAKE_SOURCE_DIR}/multipers/${module_path}.cpp")
   set(generated_cpp_file "${MULTIPERS_GENERATED_ROOT}/multipers/${module_path}.cpp")
   set(cpp_template "${CMAKE_SOURCE_DIR}/multipers/${module_path}.cpp.tp")
-  if(EXISTS "${cpp_template}")
-    set(cpp_file "${generated_cpp_file}")
-  elseif(EXISTS "${source_cpp_file}")
+  if(EXISTS "${source_cpp_file}")
     set(cpp_file "${source_cpp_file}")
+  elseif(EXISTS "${cpp_template}")
+    set(cpp_file "${generated_cpp_file}")
   else()
     message(FATAL_ERROR "Missing C++ source/template: ${source_cpp_file}")
   endif()
@@ -445,6 +464,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _simplex_tree_multi_nanobind
   _mpfree_interface
   _function_delaunay_interface
+  _2pac_interface
   _hera_interface
   _multi_critical_interface
   _rhomboid_tiling_interface
