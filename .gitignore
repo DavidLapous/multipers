@@ -32,17 +32,6 @@ multipers/filtrations.pxd.tp
 multipers/filtration_conversions.pxd.tp
 multipers/slicer.pxd.tp
 multipers/simplex_tree_multi.pxd.tp
-*.cpp
-!multipers/_aida_interface.cpp
-!multipers/_function_delaunay_interface.cpp
-!multipers/_function_rips_nanobind.cpp
-!multipers/_hera_interface.cpp
-!multipers/_mpfree_interface.cpp
-!multipers/_mma_nanobind.cpp
-!multipers/_multi_critical_interface.cpp
-!multipers/_rhomboid_tiling_interface.cpp
-!multipers/_slicer_nanobind.cpp
-!multipers/_simplex_tree_multi_nanobind.cpp
 *.so
 *.o
 *.whl
