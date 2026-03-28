@@ -170,9 +170,8 @@ template <typename Interface, typename T>
 struct PySimplexTree {
   Interface tree;
   nb::object filtration_grid;
-  bool is_function_simplextree;
 
-  PySimplexTree() : filtration_grid(nb::list()), is_function_simplextree(false) {}
+  PySimplexTree() : filtration_grid(nb::list()) {}
 };
 
 template <typename Interface, typename T>
@@ -287,7 +286,6 @@ void build_from_slicer_desc(Wrapper& self, nb::handle source, int max_dim, intpt
     copy_simplicial_slicer_to_simplextree<Interface>(self.tree, *slicer_ptr, max_dim);
   }
   self.filtration_grid = nb::list();
-  self.is_function_simplextree = false;
 }
 
 template <typename Wrapper, typename Interface>
@@ -434,16 +432,13 @@ bool insert_single_simplex(Wrapper& self, const std::vector<int>& simplex, nb::h
 
 template <typename Desc, typename TargetWrapper, typename TargetInterface>
 void copy_from_desc(TargetWrapper& self, nb::handle source) {
-  using SourceWrapper = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
   intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
   auto* other = reinterpret_cast<typename Desc::interface_type*>(ptr);
-  const auto& source_wrapper = nb::cast<const SourceWrapper&>(source);
   {
     nb::gil_scoped_release release;
     self.tree.template copy_from_interface<typename Desc::filtration_type>(reinterpret_cast<intptr_t>(other));
   }
   self.filtration_grid = source.attr("filtration_grid");
-  self.is_function_simplextree = source_wrapper.is_function_simplextree;
 }
 
 template <typename TargetWrapper, typename TargetInterface>
@@ -527,7 +522,6 @@ void load_state(Wrapper& self, nb::handle state) {
     }
     self.tree.set_num_parameters(num_parameters);
   }
-  self.is_function_simplextree = false;
 }
 
 template <typename T>
@@ -569,12 +563,6 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
     return self;
   };
 
-  auto adopt_interface_ptr = [adopt_ptr](Wrapper& self, intptr_t ptr) -> Wrapper& {
-    adopt_ptr(self, ptr);
-    self.is_function_simplextree = true;
-    return self;
-  };
-
   auto cls = nb::class_<Wrapper>(m, Desc::python_name.data())
                  .def(nb::init<>())
                  .def(
@@ -591,32 +579,18 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                      [](Wrapper& self) -> nb::object { return self.filtration_grid; },
                      [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::list() : value; },
                      nb::arg("value").none())
-                 .def("_get_function_simplextree_mode", [](const Wrapper& self) -> bool { return self.is_function_simplextree; })
-                 .def("_set_function_simplextree_mode",
-                      [](Wrapper& self, bool value) -> Wrapper& {
-                        self.is_function_simplextree = value;
-                        return self;
-                      },
-                      nb::rv_policy::reference_internal)
-                  .def_prop_rw(
-                      "thisptr",
-                      [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
-                      [adopt_ptr](Wrapper& self, intptr_t ptr) {
-                        adopt_ptr(self, ptr);
-                        self.is_function_simplextree = false;
-                      })
-                  .def(
-                      "_from_ptr",
-                      [adopt_ptr](Wrapper& self, intptr_t ptr) -> Wrapper& {
-                        adopt_ptr(self, ptr);
-                        self.is_function_simplextree = false;
-                        return self;
-                      },
-                      nb::rv_policy::reference_internal)
-                  .def(
-                      "_from_interface_ptr",
-                      adopt_interface_ptr,
-                      nb::rv_policy::reference_internal)
+                 .def_prop_rw(
+                     "thisptr",
+                     [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
+                     [adopt_ptr](Wrapper& self, intptr_t ptr) { adopt_ptr(self, ptr); })
+                 .def(
+                     "_from_ptr",
+                     adopt_ptr,
+                     nb::rv_policy::reference_internal)
+                 .def(
+                     "_from_interface_ptr",
+                     adopt_ptr,
+                     nb::rv_policy::reference_internal)
                   .def(
                       "_copy_from_any",
                      [](Wrapper& self, nb::handle other) -> Wrapper& {
@@ -644,13 +618,12 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                         auto default_filtration = default_filtration_from_handle<Filtration, Value>(default_values, num_parameters);
                         {
                           nb::gil_scoped_release release;
-                          if (!buffer.empty()) {
-                            self.tree.from_std(reinterpret_cast<char*>(buffer.data()), buffer.size(), 0, default_filtration);
-                          }
-                          self.tree.resize_all_filtrations(num_parameters);
-                          self.tree.set_num_parameters(num_parameters);
-                        }
-                        self.is_function_simplextree = false;
+                         if (!buffer.empty()) {
+                           self.tree.from_std(reinterpret_cast<char*>(buffer.data()), buffer.size(), 0, default_filtration);
+                         }
+                         self.tree.resize_all_filtrations(num_parameters);
+                         self.tree.set_num_parameters(num_parameters);
+                       }
                         return self;
                       },
                       nb::rv_policy::reference_internal)
@@ -837,22 +810,14 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                   .def(
                       "_to_scc_blocks",
                       [](Wrapper& self, bool flattened) {
-                        if (flattened) {
-                          decltype(self.tree.simplextree_to_ordered_bf()) out;
-                          {
-                            nb::gil_scoped_release release;
-                            out = self.tree.simplextree_to_ordered_bf();
-                          }
-                          return nb::cast(out);
-                        }
-                        if (self.is_function_simplextree) {
-                          decltype(self.tree.function_simplextree_to_scc()) out;
-                          {
-                            nb::gil_scoped_release release;
-                            out = self.tree.function_simplextree_to_scc();
-                          }
-                          return nb::cast(out);
-                        }
+                       if (flattened) {
+                         decltype(self.tree.simplextree_to_ordered_bf()) out;
+                         {
+                           nb::gil_scoped_release release;
+                           out = self.tree.simplextree_to_ordered_bf();
+                         }
+                         return nb::cast(out);
+                       }
                         if constexpr (k_is_kcritical) {
                           decltype(self.tree.kcritical_simplextree_to_scc()) out;
                           {
