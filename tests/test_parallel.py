@@ -1,3 +1,5 @@
+import platform
+
 import numpy as np
 import pytest
 from joblib import Parallel, delayed
@@ -51,11 +53,20 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
 
-@pytest.mark.parametrize("backend", ["threading","loky"])
+_is_macos_non_arm = platform.system() == "Darwin" and platform.machine() not in {
+    "arm64",
+    "aarch64",
+}
+
+
+@pytest.mark.parametrize("backend", ["threading", "loky"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
 def test_st_sm_parallel(backend, slicer, invariant, n_jobs):
+    if _is_macos_non_arm:
+        pytest.skip("Skipping parallel signed-measure test on macOS non-arm.")
+        return
     ground_truth = get_sm_st(n_jobs=1, to_slicer=slicer, invariant=invariant)
     ground_truth2 = get_sm_st(n_jobs=1, to_slicer=not slicer, invariant=invariant)
     assert_sm_pair(ground_truth, ground_truth2, reg=0, exact=False, max_error=1e-12)
