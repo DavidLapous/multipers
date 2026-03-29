@@ -51,7 +51,7 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
 
-@pytest.mark.parametrize("backend", ["loky", "threading"])
+@pytest.mark.parametrize("backend", ["threading","loky"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
