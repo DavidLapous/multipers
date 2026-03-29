@@ -8,6 +8,9 @@ from scipy import sparse
 from multipers.array_api import api_from_tensor, api_from_tensors
 
 import multipers.grids as mpg
+import multipers.logs as _mp_logs
+
+from . import _grid_helper_nanobind as _mg_nb
 
 
 # from scipy.sparse import coo_array
@@ -15,17 +18,13 @@ import multipers.grids as mpg
 
 
 def signed_betti(hilbert_function: np.ndarray, threshold=False):
-    n = hilbert_function.ndim
-    # zero out the "end" of the Hilbert function
-    if threshold:
-        for dimension in range(n):
-            slicer = tuple([slice(None) if i != dimension else -1 for i in range(n)])
-            hilbert_function[slicer] = 0
-    for i in range(n):
-        minus = tuple([slice(None) if j != i else slice(0, -1) for j in range(n)])
-        plus = tuple([slice(None) if j != i else slice(1, None) for j in range(n)])
-        hilbert_function[plus] -= hilbert_function[minus]
-    return hilbert_function
+    api = api_from_tensor(hilbert_function)
+    if api.has_grad(hilbert_function):
+        _mp_logs.warn_autodiff(
+            "`signed_betti` converts its input to NumPy and loses autodiff information."
+        )
+    hilbert_function = np.ascontiguousarray(api.asnumpy(hilbert_function))
+    return _mg_nb.signed_betti_inplace(hilbert_function, threshold=threshold)
 
 
 def rank_decomposition_by_rectangles(rank_invariant: np.ndarray, threshold=False):
@@ -74,39 +73,39 @@ def integrate_measure(
      - weights : array of weights (num_pts,)
      - filtration_grid (optional) : list of 1d arrays
      - resolution : int or list of int
-     - return_grid : return the grid of the measure
+    - return_grid : return the grid of the measure
      - **get_fitration_kwargs : arguments to compute the grid,
         if the grid is not given.
     """
-    if filtration_grid is None:
-        import multipers.simplex_tree_multi
+    api = api_from_tensors(pts, weights)
+    if (
+        api.has_grad(pts)
+        or api.has_grad(weights)
+        or (
+            filtration_grid is not None
+            and any(api.has_grad(f) for f in filtration_grid)
+        )
+    ):
+        _mp_logs.warn_autodiff(
+            "`integrate_measure` converts its inputs to NumPy and loses autodiff information."
+        )
 
+    if filtration_grid is None:
+        pts_numpy = api.asnumpy(pts)
         filtration_grid = mpg.compute_grid(
-            np.asarray(pts).T,
+            pts_numpy.T,
             strategy=grid_strategy,
             resolution=resolution,
             **get_fitration_kwargs,
         )
-    if pts.size == 0:
+    if api.size(pts) == 0:
         return np.empty()
-    resolution = np.asarray([len(f) for f in filtration_grid])
-    num_pts = pts.shape[0]
-    num_parameters = pts.shape[1]
-    assert weights.shape[0] == num_pts
-    out = np.zeros(
-        shape=resolution, dtype=np.int32
-    )  ## dim cannot be known at compiletime
-    # cdef some_float[:] filtration_of_parameter
-    # cdef cnp.ndarray indices = np.zeros(shape=num_parameters, dtype=int)
-    #
-    pts_coords = np.empty((num_parameters, num_pts), dtype=np.int64)
-    for parameter in range(num_parameters):
-        pts_coords[parameter] = np.searchsorted(
-            filtration_grid[parameter], pts[:, parameter]
-        )
-    for i in range(num_pts):
-        cone = tuple(slice(c, r) for r, c in zip(resolution, pts_coords[:, i]))
-        out[cone] += weights[i]
+    pts = np.ascontiguousarray(api.asnumpy(pts))
+    weights = np.ascontiguousarray(api.asnumpy(weights))
+    filtration_grid = tuple(
+        np.ascontiguousarray(api_from_tensor(f).asnumpy(f)) for f in filtration_grid
+    )
+    out = _mg_nb.integrate_measure(pts, weights, filtration_grid)
     if plot:
         from multipers.plots import plot_surface
 

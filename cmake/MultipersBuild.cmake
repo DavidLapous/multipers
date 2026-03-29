@@ -358,6 +358,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _mma_nanobind
   _simplex_tree_multi_nanobind
   _function_rips_nanobind
+  _grid_helper_nanobind
   _mpfree_interface
   _function_delaunay_interface
   _2pac_interface
