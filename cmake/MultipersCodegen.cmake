@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 set(MULTIPERS_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
-set(MULTIPERS_TEMPITA_CACHE_DIR "${CMAKE_BINARY_DIR}/tmp")
+set(MULTIPERS_CODEGEN_CACHE_DIR "${CMAKE_BINARY_DIR}/tmp")
 
 set(MULTIPERS_CORE_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/tools/core/filtrations_instantiations.inc"
@@ -14,7 +14,7 @@ set(MULTIPERS_CORE_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/slicer_extern_templates.h"
 )
 
-set(MULTIPERS_TEMPITA_GRID_GEN "${CMAKE_SOURCE_DIR}/tools/tempita_grid_gen.py")
+set(MULTIPERS_CODEGEN_DRIVER "${CMAKE_SOURCE_DIR}/tools/tempita_grid_gen.py")
 
 execute_process(
   COMMAND
@@ -44,33 +44,35 @@ message(
 )
 
 option(
-  MULTIPERS_TEMPITA_GRID_VERBOSE
-  "Enable verbose Tempita grid generation logs"
+  MULTIPERS_CODEGEN_VERBOSE
+  "Enable verbose generated-registry/codegen logs"
   OFF
 )
 
-if(MULTIPERS_TEMPITA_GRID_VERBOSE)
+if(MULTIPERS_CODEGEN_VERBOSE)
   set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "1")
 else()
   set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "0")
 endif()
 
+# Generate the native registry / instantiation files used by the active build.
+
 add_custom_command(
   OUTPUT ${MULTIPERS_CORE_GENERATED_FILES}
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${MULTIPERS_GENERATED_ROOT}"
-  COMMAND "${CMAKE_COMMAND}" -E make_directory "${MULTIPERS_TEMPITA_CACHE_DIR}"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${MULTIPERS_CODEGEN_CACHE_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E env
     "MULTIPERS_TEMPITA_GRID_VERBOSE=${MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE}"
     "MULTIPERS_TEMPITA_GRID_OUTPUT_ROOT=${MULTIPERS_GENERATED_ROOT}"
-    "MULTIPERS_TEMPITA_CACHE_DIR=${MULTIPERS_TEMPITA_CACHE_DIR}"
-    "${Python3_EXECUTABLE}" "${MULTIPERS_TEMPITA_GRID_GEN}"
+    "MULTIPERS_TEMPITA_CACHE_DIR=${MULTIPERS_CODEGEN_CACHE_DIR}"
+    "${Python3_EXECUTABLE}" "${MULTIPERS_CODEGEN_DRIVER}"
   DEPENDS
-    "${MULTIPERS_TEMPITA_GRID_GEN}"
+    "${MULTIPERS_CODEGEN_DRIVER}"
     "${CMAKE_SOURCE_DIR}/options.py"
     "${CMAKE_SOURCE_DIR}/tools/codegen/_registry.py"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
   VERBATIM
 )
 
-add_custom_target(multipers_tempita DEPENDS ${MULTIPERS_CORE_GENERATED_FILES})
+add_custom_target(multipers_codegen DEPENDS ${MULTIPERS_CORE_GENERATED_FILES})

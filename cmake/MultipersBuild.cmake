@@ -1,5 +1,52 @@
 include_guard(GLOBAL)
 
+set(MULTIPERS_DISABLE_MPFREE_INTERFACE OFF)
+set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE OFF)
+set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE OFF)
+set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE OFF)
+set(MULTIPERS_DISABLE_HERA_INTERFACE OFF)
+
+if(WIN32)
+  set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
+  set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
+  set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE ON)
+  set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
+  set(MULTIPERS_DISABLE_HERA_INTERFACE ON)
+endif()
+
+if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER)
+  set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE ON)
+endif()
+
+if(NOT CGAL_FOUND)
+  set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
+endif()
+
+if(NOT TARGET multipers_2pac_static)
+  set(MULTIPERS_DISABLE_2PAC_INTERFACE ON)
+endif()
+
+if(NOT TARGET multipers_aida_static)
+  set(MULTIPERS_DISABLE_AIDA_INTERFACE ON)
+endif()
+
+set(MULTIPERS_INTERFACE_DISABLE_FLAGS
+  MULTIPERS_DISABLE_MPFREE_INTERFACE
+  MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+  MULTIPERS_DISABLE_2PAC_INTERFACE
+  MULTIPERS_DISABLE_AIDA_INTERFACE
+  MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+  MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
+  MULTIPERS_DISABLE_HERA_INTERFACE
+)
+
+set(MULTIPERS_INTERFACE_DISABLE_DEFINITIONS "")
+foreach(_flag IN LISTS MULTIPERS_INTERFACE_DISABLE_FLAGS)
+  if(${_flag})
+    list(APPEND MULTIPERS_INTERFACE_DISABLE_DEFINITIONS "${_flag}=1")
+  endif()
+endforeach()
+
 function(multipers_apply_common_build_flags target_name)
   target_compile_definitions(
     ${target_name}
@@ -7,53 +54,8 @@ function(multipers_apply_common_build_flags target_name)
       NPY_NO_DEPRECATED_API=NPY_2_0_API_VERSION
       GUDHI_USE_TBB
       WITH_TBB=ON
+      ${MULTIPERS_INTERFACE_DISABLE_DEFINITIONS}
   )
-
-  if(WIN32)
-    target_compile_definitions(
-      ${target_name}
-      PRIVATE
-        MULTIPERS_DISABLE_MPFREE_INTERFACE=1
-        MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
-        MULTIPERS_DISABLE_2PAC_INTERFACE=1
-        MULTIPERS_DISABLE_AIDA_INTERFACE=1
-        MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
-        MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
-        MULTIPERS_DISABLE_HERA_INTERFACE=1
-    )
-  endif()
-
-  if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER)
-    target_compile_definitions(
-      ${target_name}
-      PRIVATE
-        MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
-    )
-  endif()
-
-  if(NOT CGAL_FOUND)
-    target_compile_definitions(
-      ${target_name}
-      PRIVATE
-        MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
-    )
-  endif()
-
-  if(NOT TARGET multipers_2pac_static)
-    target_compile_definitions(
-      ${target_name}
-      PRIVATE
-        MULTIPERS_DISABLE_2PAC_INTERFACE=1
-    )
-  endif()
-
-  if(MULTIPERS_DISABLE_AIDA_INTERFACE OR NOT TARGET multipers_aida_static)
-    target_compile_definitions(
-      ${target_name}
-      PRIVATE
-        MULTIPERS_DISABLE_AIDA_INTERFACE=1
-    )
-  endif()
 
   if(MSVC)
     target_compile_options(${target_name} PRIVATE /O2 /DNDEBUG /W1 /WX- /openmp)
@@ -112,7 +114,7 @@ endif()
 
 function(multipers_add_core_object_library target_name source_file)
   add_library(${target_name} OBJECT "${source_file}")
-  add_dependencies(${target_name} multipers_tempita ${ARGN})
+  add_dependencies(${target_name} multipers_codegen ${ARGN})
   target_include_directories(
     ${target_name}
     PRIVATE
@@ -147,7 +149,7 @@ add_library(
   $<TARGET_OBJECTS:multipers_core_simplextree_obj>
   $<TARGET_OBJECTS:multipers_core_slicer_obj>
 )
-add_dependencies(multipers_core_shared multipers_tempita)
+add_dependencies(multipers_core_shared multipers_codegen)
 multipers_link_tbb(multipers_core_shared)
 
 set(MULTIPERS_LOCAL_RPATH "")
@@ -195,18 +197,14 @@ endfunction()
 # =============================================================================
 # Per-module configuration
 # =============================================================================
-# Each module explicitly declares its dependencies. No conditional checks -
-# if a dependency is missing, CMake will fail with a clear error.
+# Each module explicitly declares its link requirements; optional backends are
+# compiled as runtime stubs when their disable flag is active.
 
 function(multipers_configure_module module_name target_name)
   # Default: add standard phat includes
   set(_use_phat_includes TRUE)
 
   if(module_name STREQUAL "_simplex_tree_multi_nanobind")
-    multipers_link_shared_core(${target_name})
-    multipers_link_tbb(${target_name})
-
-  elseif(module_name STREQUAL "slicer")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
@@ -223,7 +221,7 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_mpfree_interface")
     multipers_link_shared_core(${target_name})
-    if(NOT WIN32)
+    if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
       multipers_link_openmp(${target_name})
@@ -234,7 +232,7 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_function_delaunay_interface")
     multipers_link_shared_core(${target_name})
-    if(NOT WIN32)
+    if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
       multipers_link_openmp(${target_name})
@@ -245,7 +243,7 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_multi_critical_interface")
     multipers_link_shared_core(${target_name})
-    if(NOT WIN32)
+    if(NOT MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
       multipers_link_openmp(${target_name})
@@ -256,7 +254,7 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_rhomboid_tiling_interface")
     multipers_link_shared_core(${target_name})
-    if(TARGET multipers_rhomboid_tiling_static)
+    if(NOT MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
       multipers_link_tbb(${target_name})
       multipers_link_cgal(${target_name})
@@ -266,14 +264,14 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_2pac_interface")
     multipers_link_shared_core(${target_name})
-    if(TARGET multipers_2pac_static)
+    if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE)
       target_link_libraries(${target_name} PRIVATE multipers_2pac_static)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_2PAC_INCLUDE_DIRS})
       multipers_link_openmp(${target_name})
     endif()
 
   elseif(module_name STREQUAL "_aida_interface")
-    if(TARGET multipers_aida_static)
+    if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
       multipers_link_openmp(${target_name})
@@ -283,7 +281,7 @@ function(multipers_configure_module module_name target_name)
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_hera_interface")
-    if(NOT WIN32)
+    if(NOT MULTIPERS_DISABLE_HERA_INTERFACE)
       multipers_link_openmp(${target_name})
       target_include_directories(
         ${target_name}
@@ -322,7 +320,7 @@ function(multipers_add_nanobind_module module_name)
 
   string(REPLACE "." "_" target_name "multipers_${module_name}")
   nanobind_add_module(${target_name} NB_STATIC "${cpp_file}")
-  add_dependencies(${target_name} multipers_tempita)
+  add_dependencies(${target_name} multipers_codegen)
   set_target_properties(${target_name} PROPERTIES PREFIX "")
 
   target_include_directories(
