@@ -203,6 +203,7 @@ def minvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     if keepdim is None:
         keepdim = keepdims
     if dim is not None:
+        keepdim = bool(keepdim)
         return _torch.min(x, dim, keepdim).values
     return _torch.min(x)
 
@@ -213,6 +214,7 @@ def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     if keepdim is None:
         keepdim = keepdims
     if dim is not None:
+        keepdim = bool(keepdim)
         return _torch.max(x, dim, keepdim).values
     return _torch.max(x)
 
