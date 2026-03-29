@@ -4,12 +4,12 @@
 
 #include <vector>
 
-#include "aida_interface.hpp"
-#include "config.hpp"
+#include "ext_interface/aida_interface.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
+#if !MULTIPERS_DISABLE_AIDA_INTERFACE
 namespace mpaida {
 
 template <typename T>
@@ -31,13 +31,23 @@ std::vector<std::pair<double, double>> cast_pair_vector(nb::handle h) {
 }
 
 }  // namespace mpaida
+#endif
 
 NB_MODULE(_aida_interface, m) {
-  m.def("_is_available", []() { return true; });
+  m.def("_is_available", []() {
+#if MULTIPERS_DISABLE_AIDA_INTERFACE
+    return false;
+#else
+    return true;
+#endif
+  });
 
   m.def(
       "aida",
       [](nb::object s, bool sort, bool verbose, bool progress) {
+#if MULTIPERS_DISABLE_AIDA_INTERFACE
+        throw std::runtime_error("AIDA in-memory interface is disabled at compile time.");
+#else
         auto slicer_module = nb::module_::import_("multipers.slicer");
         if (!nb::cast<bool>(slicer_module.attr("is_slicer")(s))) {
           throw std::runtime_error("Input has to be a slicer.");
@@ -109,6 +119,7 @@ NB_MODULE(_aida_interface, m) {
           out.append(slicer);
         }
         return out;
+#endif
       },
       "s"_a,
       "sort"_a = true,

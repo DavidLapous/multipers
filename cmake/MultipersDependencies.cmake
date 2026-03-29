@@ -38,6 +38,11 @@ endif()
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
+set(MULTIPERS_DISABLE_AIDA_INTERFACE OFF)
+if(WIN32)
+  set(MULTIPERS_DISABLE_AIDA_INTERFACE ON)
+endif()
+
 set(MULTIPERS_BASE_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/multipers/gudhi"
   "${CMAKE_SOURCE_DIR}/multipers"
@@ -154,7 +159,7 @@ if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_vers
   endif()
 endif()
 
-if(NOT WIN32)
+if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
   add_library(
     multipers_aida_static
     STATIC

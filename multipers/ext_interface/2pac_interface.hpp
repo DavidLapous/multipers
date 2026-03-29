@@ -37,7 +37,11 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
 }  // namespace multipers
 
 #ifndef MULTIPERS_DISABLE_2PAC_INTERFACE
+#if defined(_WIN32)
+#define MULTIPERS_DISABLE_2PAC_INTERFACE 1
+#else
 #define MULTIPERS_DISABLE_2PAC_INTERFACE 0
+#endif
 #endif
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE

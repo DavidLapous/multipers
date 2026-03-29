@@ -16,6 +16,7 @@ function(multipers_apply_common_build_flags target_name)
         MULTIPERS_DISABLE_MPFREE_INTERFACE=1
         MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=1
         MULTIPERS_DISABLE_2PAC_INTERFACE=1
+        MULTIPERS_DISABLE_AIDA_INTERFACE=1
         MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=1
         MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=1
         MULTIPERS_DISABLE_HERA_INTERFACE=1
@@ -43,6 +44,14 @@ function(multipers_apply_common_build_flags target_name)
       ${target_name}
       PRIVATE
         MULTIPERS_DISABLE_2PAC_INTERFACE=1
+    )
+  endif()
+
+  if(MULTIPERS_DISABLE_AIDA_INTERFACE OR NOT TARGET multipers_aida_static)
+    target_compile_definitions(
+      ${target_name}
+      PRIVATE
+        MULTIPERS_DISABLE_AIDA_INTERFACE=1
     )
   endif()
 
@@ -264,11 +273,13 @@ function(multipers_configure_module module_name target_name)
     endif()
 
   elseif(module_name STREQUAL "_aida_interface")
-    target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
-    target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
-    multipers_link_openmp(${target_name})
-    target_link_libraries(${target_name} PRIVATE multipers_aida_static)
-    target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
+    if(TARGET multipers_aida_static)
+      target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_openmp(${target_name})
+      target_link_libraries(${target_name} PRIVATE multipers_aida_static)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
+    endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_hera_interface")
@@ -365,11 +376,8 @@ set(MULTIPERS_NANOBIND_MODULES
   _hera_interface
   _multi_critical_interface
   _rhomboid_tiling_interface
+  _aida_interface
 )
-
-if(TARGET multipers_aida_static)
-  list(APPEND MULTIPERS_NANOBIND_MODULES _aida_interface)
-endif()
 
 foreach(module_name IN LISTS MULTIPERS_NANOBIND_MODULES)
   multipers_add_nanobind_module(${module_name})
