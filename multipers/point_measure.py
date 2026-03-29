@@ -1,5 +1,4 @@
 import numpy as np
-import itertools
 from typing import Iterable, Optional
 
 from collections import defaultdict
@@ -171,10 +170,13 @@ def clean_signed_measure_old(pts, weights, dtype=np.float32):
 
 def clean_signed_measure(pts, w, dtype=np.int32):
     api = api_from_tensor(pts)
+    w_api = api_from_tensor(w)
     _, idx, inv = np.unique(
         api.asnumpy(pts), return_index=True, return_inverse=True, axis=0
     )
-    new_w = np.bincount(inv, weights=w).astype(w.dtype)
+    w_numpy = w_api.asnumpy(w)
+    new_w = np.bincount(inv, weights=w_numpy).astype(w_numpy.dtype, copy=False)
+    new_w = w_api.astensor(new_w, contiguous=True)
     pts, w = pts[idx], new_w
     idx = w != 0
     return pts[idx], w[idx]
@@ -198,36 +200,26 @@ def zero_out_sm(pts, weights, mass_default):
     """
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
-    from itertools import product
-
-    # merge pts, weights
-    PTS = np.concatenate([pts, weights[:, None]], axis=1)[None]
+    api = api_from_tensors(pts, weights, mass_default)
+    pts = api.astensor(pts, contiguous=True)
+    weights = api.astensor(weights, contiguous=True)
+    mass_default = api.astensor(mass_default, contiguous=True, dtype=pts.dtype)
 
     num_diracs, num_parameters = pts.shape
+    corner_coords = api.cartesian_product(*([api.tensor([1, 0])] * num_parameters))
+    corners = corner_coords > 0
+    corner_signs = 1 - 2 * (api.sum(1 - corner_coords, axis=1) % 2)
 
-    # corners of the square of dim num_parameters. shape : (num_corners,num_parameters)
-    C = np.fromiter(
-        product(*([[1, 0]] * num_parameters)),
-        dtype=np.dtype((np.bool_, num_parameters)),
+    new_pts = api.where(
+        corners[:, None, :], pts[None, :, :], mass_default[None, None, :]
     )
-    Cw = 1 - 2 * ((~C).sum(axis=1) % 2)
-    # add 1 in the end to copy the shape
-    C = np.concatenate([C, np.ones((C.shape[0], 1))], axis=1).astype(np.bool_)
+    new_pts = api.reshape(new_pts, (-1, num_parameters))
 
-    # signs of each corner
-    Cw = 1 - 2 * ((~C).sum(axis=1) & 1)
+    repeated_weights = api.reshape(api.stack([weights] * corners.shape[0]), (-1,))
+    repeated_signs = api.repeat_interleave(corner_signs, num_diracs)
+    new_masses = repeated_weights * repeated_signs
 
-    # something useless in the end to ensure that the shape is correct (as we added 1 in pts)
-    mass_default = np.concatenate([mass_default, [np.nan]])
-    mass_default = mass_default[None, None, :]  ## num c, num_pts, num_params
-    # each point `pt` becomes a corner of the square [`pt`, `mass_default`]
-    new = np.where(C[:, None, :], PTS, mass_default).reshape(-1, (num_parameters + 1))
-    new_pts = new[:, :-1]
-    new_masses = new[:, -1] * np.repeat(Cw, num_diracs)
-    ## a bunch of stuff are in the same place, better clean it
-    return clean_signed_measure(
-        new_pts.astype(np.float64), new_masses.astype(np.int64), dtype=np.float64
-    )
+    return clean_signed_measure(new_pts, new_masses)
 
 
 def zero_out_sms(sms, mass_default):
@@ -264,56 +256,64 @@ def barcode_from_rank_sm(
     If full is True, the barcode is given as coordinates in R^{`num_parameters`} instead
     of coordinates w.r.t. the line.
     """
-    basepoint = np.asarray(basepoint)
-    num_parameters = basepoint.shape[0]
     x, w = sm
+    api = (
+        api_from_tensors(x, basepoint)
+        if direction is None
+        else api_from_tensors(x, basepoint, direction)
+    )
+    basepoint = api.astensor(basepoint, contiguous=True)
+    num_parameters = basepoint.shape[0]
+    x = api.astensor(x, contiguous=True)
     assert x.shape[1] // 2 == num_parameters, (
         f"Incoherent number of parameters. sm:{x.shape[1] // 2} vs {num_parameters}"
     )
     x, y = x[:, :num_parameters], x[:, num_parameters:]
     if direction is not None:
-        direction = np.asarray(direction)
+        direction = api.astensor(direction, contiguous=True)
         ok_idx = direction > 0
         if ok_idx.sum() == 0:
             raise ValueError(f"Got invalid direction {direction}")
-        zero_idx = None if np.all(ok_idx) else direction == 0
+        zero_idx = None if np.all(api.asnumpy(ok_idx)) else direction == 0
     else:
-        direction = np.asarray([1], dtype=int)
+        direction = api.astensor([1], dtype=basepoint.dtype, contiguous=True)
         ok_idx = slice(None)
         zero_idx = None
-    xa = np.max(
+    xa = api.maxvalues(
         (x[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=1
     )
-    ya = np.min(
+    ya = api.minvalues(
         (y[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=1
     )
     if zero_idx is not None:
-        xb = np.where(x[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
-        yb = np.where(y[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
-        xs = np.max(np.concatenate([xa, xb], axis=1), axis=1, keepdims=1)
-        ys = np.min(np.concatenate([ya, yb], axis=1), axis=1, keepdims=1)
+        xb = api.where(x[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
+        yb = api.where(y[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
+        xs = api.maxvalues(api.cat([xa, xb], axis=1), axis=1, keepdims=1)
+        ys = api.minvalues(api.cat([ya, yb], axis=1), axis=1, keepdims=1)
     else:
         xs = xa
         ys = ya
-    out = np.concatenate([xs, ys], axis=1, dtype=np.float64)
+    out = api.cat([xs, ys], axis=1)
 
-    ## TODO: check if this is faster than doing a np.repeat on x ?
-    d = {}
-    c_out = out
-    c_w = np.asarray(w, dtype=np.int64)
-    num_pts = out.shape[0]
-    # for i, stuff in enumerate(out):
-    #     if stuff[0] < np.inf:
-    #         d[tuple(stuff)] = d.get(tuple(stuff), 0) + w[i]
-    for i in range(num_pts):
-        if c_out[i][0] < np.inf:
-            machin = tuple(c_out[i])
-            d[machin] = d.get(machin, 0) + c_w[i]
-
-    out = np.fromiter(
-        itertools.chain.from_iterable(([x] * w for x, w in d.items() if x[0] < x[1])),
-        dtype=np.dtype((np.float64, 2)),
+    out_np = np.ascontiguousarray(api.asnumpy(out, dtype=np.float64))
+    w_api = api_from_tensor(w)
+    w_np = np.ascontiguousarray(w_api.asnumpy(w), dtype=np.int64)
+    _, first_idx, inv = np.unique(
+        out_np, return_index=True, return_inverse=True, axis=0
     )
+    order = np.argsort(first_idx, kind="stable")
+    first_idx = np.ascontiguousarray(first_idx[order], dtype=np.int64)
+    agg_w = np.bincount(inv, weights=w_np).astype(np.int64, copy=False)[order]
+    keep = np.nonzero((out_np[first_idx, 0] < out_np[first_idx, 1]) & (agg_w > 0))[0]
+    if len(keep) == 0:
+        out = api.empty((0, 2), dtype=out.dtype, device=api.device(out))
+    else:
+        keep = np.ascontiguousarray(keep, dtype=np.int64)
+        out = out[first_idx[keep]]
+        repeat_idx = np.ascontiguousarray(
+            np.repeat(np.arange(len(keep), dtype=np.int64), agg_w[keep])
+        )
+        out = out[repeat_idx]
     if full:
         out = basepoint[None, None] + out[..., None] * direction[None, None]
     return out
