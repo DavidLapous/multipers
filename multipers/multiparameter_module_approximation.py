@@ -401,15 +401,6 @@ def module_approximation(
             raise ValueError(
                 "Modules cannot be merged unless they are minimal presentations."
             )
-        if not (
-            np.unique([s.minpres_degree for s in input if len(s)], return_counts=True)[
-                1
-            ]
-            <= 1
-        ).all():
-            raise ValueError(
-                "Multiple modules are at the same degree, cannot merge modules"
-            )
         if len(input) == 0:
             return (
                 constructor() if constructor is not None else available_pymodules[0]()
@@ -448,7 +439,7 @@ def module_approximation(
             raise ValueError(f"Unsupported module dtype {dtype} for module merge.")
         mod = constructor().set_box(box)
         for i, m in enumerate(modules):
-            mod.merge(m, input[i].minpres_degree)
+            mod.merge(m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree)
         return mod
 
     if len(input) == 0:
