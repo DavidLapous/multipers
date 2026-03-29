@@ -1,4 +1,5 @@
 from functools import wraps
+from typing import Any, cast
 
 import torch as _torch
 
@@ -8,7 +9,11 @@ import multipers.logs as _mp_logs
 _mpapi.add_interface("torch")
 
 backend = _torch
+LazyTensor = cast(Any, None)
+_is_keops_available = None
 int64 = _torch.int64
+inf = float("inf")
+
 ones = _torch.ones
 reshape = _torch.reshape
 arange = _torch.arange
@@ -27,7 +32,6 @@ max = _torch.max
 repeat_interleave = _torch.repeat_interleave
 linspace = _torch.linspace
 cartesian_product = _torch.cartesian_prod
-inf = _torch.inf
 searchsorted = _torch.searchsorted
 relu = _torch.relu
 abs = _torch.abs
@@ -35,13 +39,12 @@ exp = _torch.exp
 log = _torch.log
 sin = _torch.sin
 cos = _torch.cos
+sinc = _torch.sinc
 sqrt = _torch.sqrt
 matmul = _torch.matmul
 einsum = _torch.einsum
 moveaxis = _torch.moveaxis
-
-LazyTensor = None
-_is_keops_available = None
+from_numpy = _torch.from_numpy
 
 
 def jit(fn=None, **kwargs):
@@ -80,18 +83,18 @@ def norm(x, axis=None, dim=None, **kwargs):
 
 
 def astype(x, dtype):
-    return astensor(x).type(dtype)
+    return astensor(x).to(dtype=dtype)
 
 
 def astensor(x, contiguous=False, dtype=None):
-    tensor = _torch.as_tensor(x, dtype=dtype)
+    out = _torch.as_tensor(x, dtype=dtype)
     if contiguous:
-        tensor = tensor.contiguous()
-    return tensor
+        out = out.contiguous()
+    return out
 
 
 def clip(x, min=None, max=None):
-    return _torch.clamp(x, min, max)
+    return _torch.clamp(x, min=min, max=max)
 
 
 def split_with_sizes(arr, sizes):
@@ -123,10 +126,6 @@ def check_keops():
         _is_keops_available = False
 
     return _is_keops_available
-
-
-def from_numpy(x):
-    return _torch.from_numpy(x)
 
 
 def ascontiguous(x):
@@ -186,26 +185,36 @@ def unique(x, assume_sorted=False, _mean=False):
         x = x.sort().values
     _, counts = _torch.unique_consecutive(x, return_counts=True)
     if _mean:
-        x = _torch.segment_reduce(
+        return _torch.segment_reduce(
             data=x, reduce="mean", lengths=counts, unsafe=True, axis=0
         )
-    else:
-        starts = _torch.cumsum(counts, dim=0)
-        starts.sub_(counts)
-        x = x[starts]
-    return x
+    starts = _torch.cumsum(counts, dim=0)
+    starts.sub_(counts)
+    return x[starts]
 
 
 def quantile_closest(x, q, axis=None):
     return _torch.quantile(x, q, dim=axis, interpolation="nearest")
 
 
-def minvalues(x, **kwargs):
-    return _torch.min(x, **kwargs).values
+def minvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if dim is None:
+        dim = axis
+    if keepdim is None:
+        keepdim = keepdims
+    if dim is not None:
+        return _torch.min(x, dim, keepdim).values
+    return _torch.min(x)
 
 
-def maxvalues(x, **kwargs):
-    return _torch.max(x, **kwargs).values
+def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if dim is None:
+        dim = axis
+    if keepdim is None:
+        keepdim = keepdims
+    if dim is not None:
+        return _torch.max(x, dim, keepdim).values
+    return _torch.max(x)
 
 
 def asnumpy(x, dtype=None):
@@ -220,11 +229,11 @@ def is_tensor(x):
 
 
 def is_promotable(x):
-    return isinstance(x, _torch.Tensor)
+    return isinstance(x, (_torch.Tensor, list, tuple))
 
 
 def has_grad(x):
-    return x.requires_grad
+    return getattr(x, "requires_grad", False)
 
 
 def to_device(x, device):
@@ -238,7 +247,7 @@ def size(x):
 
 
 def dtype_is_float(dtype):
-    return getattr(dtype, "is_floating_point", False)
+    return False if dtype is None else dtype.is_floating_point
 
 
 def dtype_default():
