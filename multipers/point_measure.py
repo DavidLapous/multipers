@@ -240,11 +240,11 @@ def zero_out_sms(sms, mass_default):
 def add_sms(sms):
     if len(sms) == 0:
         return (np.empty((0, 2)), np.empty())
-    pts = tuple(sm[0][:] for sm in sms)
-    api = api_from_tensor(pts[0])
+    api = api_from_tensor(sms[0][0])
+    pts = [sm[0][:] for sm in sms]
     pts = api.cat(pts)
 
-    weights = tuple(sm[1][:] for sm in sms)
+    weights = [sm[1][:] for sm in sms]
     api = api_from_tensor(weights[0])
     weights = api.cat(weights)
 

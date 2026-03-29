@@ -6,6 +6,8 @@ from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
 import multipers.logs as _mp_logs
 
+from . import _grid_helper_nanobind as _mg_nb
+
 available_strategies = [
     "exact",
     "regular",
@@ -347,25 +349,10 @@ def _todo_regular_closest(f, r, unique, api=None):
     if f.ndim != 1:
         raise ValueError(f"Got ndim!=1. {f=}")
     sorted_f = api.sort(f)
-    with api.no_grad():
-        f_regular = api.linspace(
-            sorted_f[0],
-            sorted_f[-1],
-            r,
-            dtype=sorted_f.dtype,
-            device=api.device(sorted_f),
-        )
-        right_idx = api.searchsorted(sorted_f, f_regular)
-    max_idx = sorted_f.shape[0] - 1
-    right_idx = api.clip(right_idx, min=0, max=max_idx)
-    left_idx = api.clip(right_idx - 1, min=0, max=max_idx)
-    right_vals = sorted_f[right_idx]
-    left_vals = sorted_f[left_idx]
-    choose_left = api.abs(f_regular - left_vals) <= api.abs(right_vals - f_regular)
-    f_regular_closest = api.where(choose_left, left_vals, right_vals)
-    if unique:
-        f_regular_closest = api.unique(f_regular_closest)
-    return f_regular_closest
+    sorted_f_np = np.ascontiguousarray(api.asnumpy(sorted_f))
+    indices = _mg_nb.regular_closest_1d_indices(sorted_f_np, int(r), unique)
+    indices = np.ascontiguousarray(indices)
+    return sorted_f[indices]
 
 
 def _todo_regular_left(f, r, unique, api):
@@ -421,7 +408,9 @@ def compute_bounding_box(stuff, inflate=0.0):
     then if (x,z) is the output of this function, we have
     $x\le y \le z$.
     """
-    box = np.array(compute_grid(stuff, strategy="regular", resolution=2)).T
+    grid = compute_grid(stuff, strategy="regular", resolution=2)
+    api = api_from_tensors(*grid)
+    box = api.moveaxis(api.stack(grid), 0, 1)
     if inflate:
         box[0] -= inflate
         box[1] += inflate
@@ -433,18 +422,17 @@ def push_to_grid(points, grid, return_coordinate=False):
     Given points and a grid (list of one parameter grids),
     pushes the points onto the grid.
     """
-    num_points, num_parameters = points.shape[0], points.shape[1]
-    coordinates = np.empty((num_points, num_parameters), dtype=np.int64)
-    for parameter in range(num_parameters):
-        coordinates[:, parameter] = np.searchsorted(
-            grid[parameter], points[:, parameter]
-        )
+    api = api_from_tensors(points, *grid)
+    points = api.astensor(points, contiguous=True)
+    grid = tuple(api.astensor(g, contiguous=True) for g in grid)
+    coordinates = _mg_nb.push_to_grid_coordinates(
+        np.ascontiguousarray(api.asnumpy(points)),
+        tuple(np.ascontiguousarray(api.asnumpy(g)) for g in grid),
+    )
+    coordinates = np.ascontiguousarray(coordinates)
     if return_coordinate:
         return coordinates
-    out = np.empty((num_points, num_parameters), grid[0].dtype)
-    for parameter in range(num_parameters):
-        out[:, parameter] = grid[parameter][coordinates[:, parameter]]
-    return out
+    return evaluate_in_grid(coordinates, grid)
 
 
 def coarsen_points(points, strategy="exact", resolution=-1, coordinate=False):
