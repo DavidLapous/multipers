@@ -1,16 +1,15 @@
+from importlib import import_module as _import_module
 from importlib.metadata import version as _version
 import sys
 
 __version__ = _version("multipers")
 # Doc
 from . import (
-    data,
     filtrations,
     grids,
     io,
     logs,
     multiparameter_module_approximation,
-    plots,
     simplex_tree_multi,
     slicer,
 )
@@ -43,3 +42,11 @@ __all__ = [
 
 if sys.platform != "win32":
     __all__.append("ops")
+
+
+def __getattr__(name):
+    if name in {"data", "plots"}:
+        module = _import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

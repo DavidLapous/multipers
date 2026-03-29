@@ -2,7 +2,6 @@ import numpy as np
 from typing import Iterable, Optional
 
 from collections import defaultdict
-from scipy import sparse
 
 from multipers.array_api import api_from_tensor, api_from_tensors
 
@@ -135,6 +134,8 @@ def sparsify(x):
     --
     cost : scipy sparse + num_points*num_parameters^2 divisions
     """
+    from scipy import sparse
+
     num_parameters = x.ndim
     sx = sparse.coo_array(x.ravel())
     idx = sx.col
