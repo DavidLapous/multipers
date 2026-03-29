@@ -112,6 +112,7 @@ NB_MODULE(_aida_interface, m) {
           for (const auto& p : summand.row_degrees) filtration_values.push_back({p.first, p.second});
           for (const auto& p : summand.col_degrees) filtration_values.push_back({p.first, p.second});
           nb::object slicer = slicer_type(boundary_container, nb::cast(dims), nb::cast(filtration_values));
+          slicer.attr("minpres_degree") = degree;
           if (is_squeezed) {
             slicer.attr("filtration_grid") = s.attr("filtration_grid");
             slicer.attr("_clean_filtration_grid")();
