@@ -29,3 +29,7 @@
 	path = ext/rhomboidtiling_newer_cgal_version
 	url = https://github.com/DavidLapous/rhomboidtiling_newer_cgal_version
 	branch = master
+[submodule "ext/hera"]
+	path = ext/hera
+	url = https://github.com/DavidLapous/hera.git
+	branch = little_fix

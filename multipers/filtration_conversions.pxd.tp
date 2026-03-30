@@ -215,7 +215,7 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False, bool r
 
   cdef int num_parameters = 2
 
-  cdef {{f["c_value_type"]}}[:] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,0)))
+  cdef {{f["c_value_type"]}}[::1] data_view = <{{f["c_value_type"]}}[:k]>(&(dereference(x)(0,0)))
   numpy_view = np.asarray(data_view, dtype={{f["py_value_type"]}})
   if raw:
     return np.array(numpy_view, copy=True) if copy else numpy_view
@@ -242,7 +242,7 @@ cdef inline {{f['python']}}_2_python({{f['python']}}* x, bool copy=False, bool r
   cdef Py_ssize_t num_parameters = dereference(x).num_parameters()
   if not dereference(x).is_finite():
     return np.full(shape=num_parameters, fill_value=dereference(x)(0,0))
-  cdef {{f['c_value_type']}}[:] x_view = <{{f['c_value_type']}}[:num_parameters]>(&(dereference(x)(0,0)))
+  cdef {{f['c_value_type']}}[::1] x_view = <{{f['c_value_type']}}[:num_parameters]>(&(dereference(x)(0,0)))
   return np.array(x_view) if copy else np.asarray(x_view)
 {{endif}}
 

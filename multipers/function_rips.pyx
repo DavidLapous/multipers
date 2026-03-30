@@ -1,4 +1,5 @@
 # cimport multipers.tensor as mt
+from libc.stddef cimport size_t
 from libc.stdint cimport intptr_t, uint16_t, uint32_t, int32_t
 from libcpp.vector cimport vector
 from libcpp cimport bool, int, float
@@ -27,7 +28,7 @@ from gudhi.simplex_tree import SimplexTree
 cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::multiparameter::function_rips":
 	void compute_function_rips_surface_python(const intptr_t, tensor_dtype* , const vector[indices_type], indices_type,indices_type, bool, bool, indices_type) except + nogil
 	signed_measure_type compute_function_rips_signed_measure_python(const intptr_t, tensor_dtype* , const vector[indices_type], indices_type,indices_type, bool, bool, indices_type) except + nogil
-	void get_degree_rips_st_python(const intptr_t,const intptr_t, const vector[int]) except + nogil
+	void get_degree_rips_st_python(const char*, size_t, const intptr_t, const vector[int]) except + nogil
 
 
 import multipers.grids as mpg
@@ -38,10 +39,16 @@ def get_degree_rips(st, vector[int] degrees):
 	assert isinstance(st,SimplexTree), "Input has to be a Gudhi simplextree for now."
 	assert st.dimension() == 1, "Simplextree has to be of dimension 1. You can use the `prune_above_dimension` method."
 	degree_rips_st = _SimplexTreeMulti_Flat_Kf64(num_parameters=2)
-	cdef intptr_t simplextree_ptr = st.thisptr
 	cdef intptr_t st_multi_ptr = degree_rips_st.thisptr
+	cdef char[:] buffer
+	cdef size_t buffer_size
+	cdef char* buffer_start
+	stree_buffer = st.__getstate__()
+	buffer = stree_buffer
+	buffer_size = buffer.shape[0]
+	buffer_start = &buffer[0]
 	with nogil:
-		get_degree_rips_st_python(simplextree_ptr, st_multi_ptr, degrees)
+		get_degree_rips_st_python(buffer_start, buffer_size, st_multi_ptr, degrees)
 	return degree_rips_st
 
 def function_rips_surface(st_multi, vector[indices_type] homological_degrees, bool mobius_inversion=True, bool zero_pad=False, indices_type n_jobs=0):

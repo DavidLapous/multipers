@@ -2,6 +2,7 @@
 
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <cstddef>
 #include <limits>
 #include <stdexcept>
 
@@ -257,10 +258,12 @@ inline void compute_2d_function_rips(
 
 // python interface
 
-inline void get_degree_rips_st_python(const intptr_t simplextree_ptr,
+inline void get_degree_rips_st_python(const char *buffer_start,
+                                      const std::size_t buffer_size,
                                       const intptr_t st_multi_ptr,
                                       const std::vector<int> &degrees) {
-  auto &st_std = python_interface::get_simplextree_from_pointer<python_interface::interface_std>(simplextree_ptr);
+  python_interface::interface_std st_std;
+  st_std.deserialize(buffer_start, buffer_size);
   auto &st_multi_python_container = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
   auto st_multi = get_degree_filtrations(st_std, degrees);
   st_multi_python_container = std::move(st_multi);

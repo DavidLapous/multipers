@@ -41,6 +41,8 @@ __copyright__ = "Copyright (C) 2016 Inria"
 __license__ = "MIT"
 
 from libc.stdint cimport intptr_t, int32_t, int64_t
+from libc.stddef cimport size_t
+from libc.string cimport memcpy
 from cython.operator import dereference, preincrement
 from libc.stdint cimport intptr_t
 from libc.stdint cimport uintptr_t, intptr_t
@@ -81,6 +83,21 @@ import multipers.logs as _mp_logs
 from warnings import warn
 
 SAFE_CONVERSION=False #Slower but at least it works everywhere
+
+
+cdef object _reconstruct_gudhi_simplextree(vector[char]& state):
+    cdef object np_state
+    cdef object simplex_tree
+    cdef size_t buffer_size = state.size()
+    cdef char[::1] buffer
+
+    np_state = np.empty(buffer_size, dtype=np.int8)
+    buffer = np_state
+    if buffer_size > 0:
+        memcpy(&buffer[0], &state[0], buffer_size)
+    simplex_tree = SimplexTree.__new__(SimplexTree)
+    simplex_tree.__setstate__(np_state)
+    return simplex_tree
 
 _available_strategies =Lstrategies
 
@@ -156,7 +173,7 @@ cdef class {{D["PY_CLASS_NAME"]}}:
                   ): #TODO doc
         cdef vector[{{CTYPE}}] c_default_values
         cdef intptr_t other_ptr
-        cdef char[:] buffer
+        cdef char[::1] buffer
         cdef size_t buffer_size
         cdef char* buffer_start
         if other is not None:
@@ -270,6 +287,30 @@ cdef class {{D["PY_CLASS_NAME"]}}:
             #will be corrected once the gudhi simplex tree can dump the number of parameters
             self.get_ptr().set_num_parameters(0)
 
+
+    def astype(self, dtype, bool kcritical=False, ftype="Contiguous")->SimplexTreeMulti_type:
+        """
+        Converts the simplex tree to a different filtration type.
+        """
+        if dtype == self.dtype and kcritical == self.is_kcritical and ftype == self.filtration_container:
+            return self
+        
+        cdef int num_parameters = self.num_parameters
+        new_st = SimplexTreeMulti(num_parameters=num_parameters, dtype=dtype, kcritical=kcritical, ftype=ftype)
+
+        cdef intptr_t other_ptr = self.thisptr
+        cdef intptr_t new_st_ptr
+        if False:
+            pass
+        {{for ST2 in to_iter}}
+        elif isinstance(new_st, {{ST2['PY_CLASS_NAME']}}):
+            new_st_ptr = new_st.get_ptr()
+            with nogil:
+                (<{{ST2["ST_INTERFACE"]}}*>new_st_ptr).copy_from_interface_{{PyFil}}(other_ptr)
+        {{endfor}}
+
+        new_st.filtration_grid = self.filtration_grid
+        return new_st
 
     def copy(self)->{{PY_CLASS_NAME}}:
         """
@@ -1361,19 +1402,21 @@ cdef class {{D["PY_CLASS_NAME"]}}:
                 filtrations_values[i][f == np.inf] = np.nan
                 filtrations_values[i][f == - np.inf] = np.nan
         return filtrations_values
-    def _clean_filtration_grid(self):
+    def _clean_filtration_grid(self, api = None):
         """
         Removes the values in filtration_grid that are not linked to any splx.
         """
         if not self.is_squeezed:
             raise ValueError("No grid to clean.")
         F = self.filtration_grid
+        if api is None:
+            api = api_from_tensor(F[0])
         self.filtration_grid=None
         cleaned_coordinates = compute_grid(self)
         new_st = self.grid_squeeze(cleaned_coordinates)
 
         self.thisptr, new_st.thisptr = new_st.thisptr, self.thisptr
-        self.filtration_grid = tuple(f[g] for f,g in zip(F,cleaned_coordinates))
+        self.filtration_grid = tuple(api.ascontiguous(f[g]) for f,g in zip(F,cleaned_coordinates))
         return self
 
 
@@ -1622,12 +1665,9 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         A SimplexTree with chosen 1D filtration.
         """
         # FIXME : deal with multicritical filtrations
-        import gudhi as gd
-        new_simplextree = gd.SimplexTree()
+        cdef vector[char] serialized
         assert parameter < self.get_ptr().num_parameters()
         cdef int c_parameter = parameter
-        cdef intptr_t old_ptr = self.thisptr
-        cdef intptr_t new_ptr = new_simplextree.thisptr
         if basepoint is None:
           basepoint = np.array([np.inf]*self.get_ptr().num_parameters())
           basepoint[parameter] = 0
@@ -1640,9 +1680,8 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         cdef vector[double] c_basepoint = _py2p_f64(basepoint)
         cdef vector[double] c_direction = _py2p_f64(direction)
         cdef Line[double] c_line = Line[double](c_basepoint, c_direction)
-        with nogil:
-            self.get_ptr().to_std(new_ptr, c_line, c_parameter)
-        return new_simplextree
+        serialized = self.get_ptr().get_to_std_state(c_line, c_parameter)
+        return _reconstruct_gudhi_simplextree(serialized)
 
     def linear_projections(self, linear_forms:np.ndarray)->Iterable[SimplexTree]:
         """
@@ -1660,26 +1699,15 @@ cdef class {{D["PY_CLASS_NAME"]}}:
         """
         cdef Py_ssize_t num_projections = linear_forms.shape[0]
         cdef Py_ssize_t num_parameters = linear_forms.shape[1]
+        cdef vector[char] serialized
         if num_projections == 0:  return []
         cdef vector[vector[double]] c_linear_forms = linear_forms
         assert num_parameters==self.num_parameters, f"The linear forms has to have the same number of parameter as the simplextree ({self.num_parameters})."
 
-        # Gudhi copies are faster than inserting simplices one by one
-        import gudhi as gd
-        # flattened_simplextree = gd.SimplexTree()
-        # cdef intptr_t multi_prt = self.thisptr
-        # cdef intptr_t flattened_ptr = flattened_simplextree.thisptr
-        # with nogil:
-        #     # flatten_from_ptr(multi_prt, flattened_ptr, num_parameters)
-        #     self.get_ptr().to_std(flattened_ptr, num_parameters)
-        flattened_simplextree = self.project_on_line()
-        out = [flattened_simplextree] + [gd.SimplexTree(flattened_simplextree) for _ in range(num_projections-1)]
-
-        # Fills the 1-parameter simplextrees.
-        cdef vector[intptr_t] out_ptrs = [st.thisptr for st in out]
-        with nogil:
-            for i in range(num_projections):
-                self.get_ptr().to_std_linear_projection(out_ptrs[i], c_linear_forms[i])
+        out = []
+        for i in range(num_projections):
+            serialized = self.get_ptr().get_to_std_linear_projection_state(c_linear_forms[i])
+            out.append(_reconstruct_gudhi_simplextree(serialized))
         return out
 
 

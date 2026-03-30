@@ -372,9 +372,26 @@ class Simplex_tree_multi_interface
     }
   }
 
+  template <typename Line_like>
+  std::vector<char> get_to_std_state(const Line_like &line, int dimension) {
+    interface_std st;
+    to_std(reinterpret_cast<intptr_t>(&st), line, dimension);
+    std::vector<char> buffer(st.get_serialization_size());
+    st.serialize(buffer.data(), buffer.size());
+    return buffer;
+  }
+
   void to_std_linear_projection(intptr_t ptr, std::vector<double> linear_form) {
     auto &st = get_simplextree_from_pointer<interface_std>(ptr);
     linear_projection(st, *this, linear_form);
+  }
+
+  std::vector<char> get_to_std_linear_projection_state(const std::vector<double> &linear_form) {
+    interface_std st;
+    linear_projection(st, *this, linear_form);
+    std::vector<char> buffer(st.get_serialization_size());
+    st.serialize(buffer.data(), buffer.size());
+    return buffer;
   }
 
   void squeeze_filtration_inplace(const std::vector<std::vector<double>> &grid, const bool coordinate_values = true) {
@@ -392,60 +409,50 @@ class Simplex_tree_multi_interface
     }
   }
 
-  void unsqueeze_filtration(const intptr_t grid_st_ptr,
-                            const std::vector<std::vector<double>> &grid) {  // TODO : this is const but GUDHI
-    constexpr const bool verbose = false;
-    using int_fil_type = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
-    using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
-    st_coord_type &grid_st = *(st_coord_type *)grid_st_ptr;  // TODO : maybe fix this.
-    std::vector<int> simplex_vertex;
-    int num_parameters = grid_st.num_parameters();
-    for (auto &simplex_handle : grid_st.complex_simplex_range()) {
-      const auto &simplex_filtration = grid_st.filtration(simplex_handle);
-      // if you can be sure that the used filtration values will always be 1-critical whatever the use,
-      // a static_assert/constexpr with condition Filtration_value::ensures_1_criticality() can be used instead.
-      if (simplex_filtration.num_generators() > 1) throw std::invalid_argument("Multicritical not supported yet");
-      if constexpr (verbose) std::cout << "Filtration_value " << simplex_filtration << "\n";
-      Filtration_value splx_filtration(simplex_filtration.num_parameters(), 1.);
-      if (simplex_filtration.is_finite()) {
-        for (auto i : std::views::iota(num_parameters)) splx_filtration(0,i) = grid[i][simplex_filtration(0,i)];
-      } else if (simplex_filtration.is_plus_inf()) {
-        splx_filtration = Filtration_value::inf(num_parameters);
-      } else if (simplex_filtration.is_minus_inf()) {
-        splx_filtration = Filtration_value::minus_inf(num_parameters);
-      } else if (simplex_filtration.is_nan()) {
-        splx_filtration = Filtration_value::nan(num_parameters);
-      }
-      if constexpr (verbose) std::cout << "Filtration_value " << splx_filtration << "\n";
-      for (const auto s : grid_st.simplex_vertex_range(simplex_handle)) simplex_vertex.push_back(s);
-      insert_simplex(simplex_vertex, splx_filtration);
-      if constexpr (verbose) std::cout << "Coords in st" << Base::filtration(Base::find(simplex_vertex)) << std::endl;
-      simplex_vertex.clear();
-    }
+  template <typename OtherFiltrationValue>
+  void copy_from_interface(intptr_t other_ptr) {
+    Simplex_tree_multi_interface<OtherFiltrationValue> &other =
+        *(Simplex_tree_multi_interface<OtherFiltrationValue> *)(other_ptr);
+    Base::clear();
+    Base::set_num_parameters(other.num_parameters());
+    Base::copy_from(other,
+                    [](const auto &fil) { return fil.template as_type<typename Filtration_value::value_type>(); });
   }
 
-  void squeeze_filtration(const intptr_t outptr,
-                          const std::vector<std::vector<double>> &grid) {  // TODO : this is const but GUDHI
-    constexpr const bool verbose = false;
+  void unsqueeze_filtration(const intptr_t grid_st_ptr, const std::vector<std::vector<double>> &grid) {
     using int_fil_type = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
     using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
-    st_coord_type &out = *(st_coord_type *)outptr;  // TODO : maybe fix this.
-    std::vector<int> simplex_vertex;
-    for (const auto &simplex_handle : Base::complex_simplex_range()) {
-    // tbb::enumerable_thread_specific<std::vector<int>> simplex_vertex_cache;
-    // tbb::parallel_for_each(Base::complex_simplex_range(), [&](const auto& simplex_handle){
-      // auto& simplex_vertex = simplex_vertex_cache.local();
-      // simplex_vertex.clear();
-      const auto &simplex_filtration = Base::filtration(simplex_handle);
-      if constexpr (verbose) std::cout << "Filtration_value " << simplex_filtration << "\n";
-      const auto &coords = compute_coordinates_in_grid(simplex_filtration, grid);
-      if constexpr (verbose) std::cout << "Coords " << coords << "\n";
-      for (auto s : Base::simplex_vertex_range(simplex_handle)) simplex_vertex.push_back(s);
-      out.insert_simplex(simplex_vertex, coords);
-      if constexpr (verbose) std::cout << "Coords in st" << out.filtration(out.find(simplex_vertex)) << std::endl;
-      simplex_vertex.clear();
-    // });
-    }
+    st_coord_type &grid_st = *(st_coord_type *)grid_st_ptr;
+    Base::clear();
+    Base::set_num_parameters(grid_st.num_parameters());
+    int num_parameters = grid_st.num_parameters();
+    Base::copy_from(grid_st, [&](const auto &simplex_filtration) {
+      Filtration_value splx_filtration(num_parameters);
+      if (simplex_filtration.is_finite()) {
+        for (int i = 0; i < num_parameters; ++i) {
+          auto coord = simplex_filtration(0, i);
+          if (coord >= 0 && static_cast<std::size_t>(coord) < grid[i].size())
+            splx_filtration(0, i) = grid[i][coord];
+          else if (coord < 0)
+            splx_filtration(0, i) = Filtration_value::T_m_inf;
+          else
+            splx_filtration(0, i) = Filtration_value::T_inf;
+        }
+      } else {
+        splx_filtration = simplex_filtration.template as_type<typename Filtration_value::value_type>();
+      }
+      return splx_filtration;
+    });
+  }
+
+  void squeeze_filtration(const intptr_t outptr, const std::vector<std::vector<double>> &grid) {
+    using int_fil_type = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
+    using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
+    st_coord_type &out = *(st_coord_type *)outptr;
+    out.clear();
+    out.set_num_parameters(Base::num_parameters());
+    out.copy_from(
+        *this, [&](const auto &simplex_filtration) { return compute_coordinates_in_grid(simplex_filtration, grid); });
   }
 
   std::vector<std::vector<std::vector<value_type>>>  // dim, pts, param

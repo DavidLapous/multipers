@@ -1,9 +1,6 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.27)
 project(multipers LANGUAGES C CXX)
 
-if(POLICY CMP0167)
-  cmake_policy(SET CMP0167 NEW)
-endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,6 +12,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(
     $<$<COMPILE_LANGUAGE:C>:-fdiagnostics-color=always>
     $<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>
+    -g0
   )
 endif()
 

@@ -95,6 +95,9 @@ def minimal_presentation(
     bool force=False,
     bool auto_clean=True,
     bool verbose=False,
+    bool full_resolution=True,
+    bool use_chunk=True,
+    bool use_clearing=True,
 ):
     """
     Computes a minimal presentation of a (1-critical) multifiltered complex.
@@ -138,4 +141,7 @@ def minimal_presentation(
         backend=backend,
         auto_clean=auto_clean,
         verbose=verbose,
+        full_resolution=full_resolution,
+        use_chunk=use_chunk,
+        use_clearing=use_clearing,
     )

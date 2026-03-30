@@ -11,8 +11,8 @@ from typing import Iterable,Literal,Optional
 from itertools import product
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
-from multipers.array_api import check_keops
 import multipers.logs as _mp_logs
+cimport cython
 
 available_strategies = ["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
 Lstrategies = Literal["exact","regular","regular_closest", "regular_left", "partition", "quantile", "precomputed"]
@@ -34,7 +34,7 @@ def sanitize_grid(grid, bool numpyfy=False, bool add_inf=False):
         grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = tuple(api.astensor(grid[i]) for i in range(num_parameters))
+        grid = tuple(api.astensor(grid[i], contiguous=True) for i in range(num_parameters))
     if add_inf:
         api = api_from_tensors(grid[0])
         inf = api.astensor(_inf_value(grid[0]))
@@ -55,7 +55,7 @@ def threshold_slice(a, m,M):
 
 
 def _exact_grid(x, api, _mean):
-    return tuple(api.unique(api.astensor(f), _mean=_mean) for f in x)
+    return [api.unique(api.astensor(f), _mean=_mean) for f in x]
 
 
 def get_exact_grid(
@@ -111,6 +111,8 @@ def get_exact_grid(
             threshold_slice(xx,a,b) 
             for xx,a,b in zip(initial_grid, threshold_min, threshold_max)
         ]
+    for i in range(num_parameters):
+        initial_grid[i] = api.ascontiguous(initial_grid[i])
     if return_api:
         return initial_grid, api
     return initial_grid
@@ -129,6 +131,7 @@ def compute_grid(
         threshold_min = None,
         threshold_max = None,
         bool _mean = False,
+        bool force_contiguous = True,
         ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -174,6 +177,10 @@ def compute_grid(
         drop_quantiles=drop_quantiles,
         api = api,
     )
+    if force_contiguous:
+        grid = tuple(
+            api.astensor(x, contiguous=True) for x in grid
+        )
     if dense:
         grid = todense(grid)
     return grid
@@ -314,32 +321,31 @@ def _todo_regular(f, int r, api):
     with api.no_grad():
         return api.linspace(api.min(f), api.max(f), r)
 
-def _project_on_1d_grid(f,grid, bool unique, api):
-    # api=api_from_tensors(f,grid)
+def _todo_regular_closest(f, int r, bool unique, api=None):
+    if api is None:
+        api = api_from_tensor(f)
+    f = api.astensor(f)
     if f.ndim != 1:
         raise ValueError(f"Got ndim!=1. {f=}")
-    f = api.unique(f)
+    sorted_f = api.sort(f)
     with api.no_grad():
-        _f = api.LazyTensor(f[:, None, None])
-        _f_reg = api.LazyTensor(grid[None, :, None])
-        indices = (_f - _f_reg).abs().argmin(0).ravel()
-    f = api.cat([f, api.tensor([api.inf], dtype=f.dtype)])
-    f_proj = f[indices]
+        f_regular = api.linspace(
+            sorted_f[0],
+            sorted_f[-1],
+            r,
+            dtype=sorted_f.dtype,
+            device=api.device(sorted_f),
+        )
+        right_idx = api.searchsorted(sorted_f, f_regular)
+    max_idx = sorted_f.shape[0] - 1
+    right_idx = api.clip(right_idx, min=0, max=max_idx)
+    left_idx = api.clip(right_idx - 1, min=0, max=max_idx)
+    right_vals = sorted_f[right_idx]
+    left_vals = sorted_f[left_idx]
+    choose_left = api.abs(f_regular - left_vals) <= api.abs(right_vals - f_regular)
+    f_regular_closest = api.where(choose_left, left_vals, right_vals)
     if unique:
-        f_proj = api.unique(f_proj)
-    return f_proj
-
-def _todo_regular_closest_keops(f, int r, bool unique, api):
-    f = api.astensor(f)
-    with api.no_grad():
-        f_regular = api.linspace(api.min(f), api.max(f), r, device = api.device(f),dtype=f.dtype)
-    return _project_on_1d_grid(f,f_regular,unique,api)
-
-def _todo_regular_closest_old(some_float[:] f, int r, bool unique, api=None):
-    f_array = np.asarray(f)
-    f_regular = np.linspace(np.min(f), np.max(f),num=r, dtype=f_array.dtype)
-    f_regular_closest = np.asarray([f[<int64_t>np.argmin(np.abs(f_array-f_regular[i]))] for i in range(r)], dtype=f_array.dtype)
-    if unique: f_regular_closest = np.unique(f_regular_closest)
+        f_regular_closest = api.unique(f_regular_closest)
     return f_regular_closest
 
 def _todo_regular_left(f, int r, bool unique,api):
@@ -351,7 +357,7 @@ def _todo_regular_left(f, int r, bool unique,api):
     if unique: f_regular_closest = api.unique(f_regular_closest)
     return f_regular_closest
 
-def _todo_regular_left_old(some_float[:] f, int r, bool unique):
+def _todo_regular_left_old(some_float[::1] f, int r, bool unique):
     sorted_f = np.sort(f)
     f_regular = np.linspace(sorted_f[0],sorted_f[-1],num=r, dtype=sorted_f.dtype)
     f_regular_closest = sorted_f[np.searchsorted(sorted_f,f_regular)]
@@ -364,21 +370,13 @@ def _todo_partition(x, int resolution, bool unique, api):
     out = _todo_partition_(api.asnumpy(x), resolution, unique)
     return api.from_numpy(out)
 
-def _todo_partition_(some_float[:] data,int resolution, bool unique):
+def _todo_partition_(some_float[::1] data,int resolution, bool unique):
     if data.shape[0] < resolution: resolution=data.shape[0]
     k = data.shape[0] // resolution
     partitions = np.partition(data, k)
     f = partitions[[i*k for i in range(resolution)]]
     if unique: f= np.unique(f)
     return f
-
-
-if check_keops():
-    _todo_regular_closest = _todo_regular_closest_keops
-else:
-    _todo_regular_closest = _todo_regular_closest_old
-
-
 def compute_bounding_box(stuff, inflate = 0.):
     r"""
     Returns a array of shape (2, num_parameters)
@@ -584,8 +582,10 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
         directions = api.astensor(directions)
 
     out = api.empty((num_lines, num_pts), dtype=pts.dtype)
-    for i in range(num_lines):
-        out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
+    cdef int i
+    with cython.boundscheck(False), cython.wraparound(False):
+        for i in range(num_lines):
+            out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
     return out
 
 

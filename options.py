@@ -14,8 +14,8 @@ VALUE_TYPES = [
 
 # Persistence matrix column IDs
 COLUMNS = [
-    "INTRUSIVE_LIST",
-    # "UNORDERED_SET",
+    "UNORDERED_SET",
+    # "INTRUSIVE_LIST",
     # "INTRUSIVE_SET",
     # "SET",
     # "HEAP",
@@ -54,7 +54,7 @@ FILTRATION_CONTAINERS = [
 ]
 
 # Aliases used by generated Python wrappers
-COARSENNED_VALUE_TYPE = "int32"
+COARSENED_VALUE_TYPE = "int32"
 REAL_VALUE_TYPE = "float64"
 
 # Rule format (short style):
@@ -66,7 +66,7 @@ RULES = [
     "Degree_rips_bifiltration => kcritical=True",
     "Graph|Clement => vine=True",
     "GudhiCohomology => vine=False",
-    "Graph|GudhiCohomology => column=INTRUSIVE_LIST",
+    f"Graph|GudhiCohomology => column={COLUMNS[0]}",
 ]
 
 # Hard requirements validated after RULES are applied.

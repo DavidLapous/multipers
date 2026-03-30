@@ -1,6 +1,6 @@
 [project]
 name = "multipers"
-version = "2.5.0b4"
+version = "2.5.0"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
@@ -48,16 +48,18 @@ keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 
 [build-system]
 requires = [
-  "scikit-build-core",
+  "scikit-build-core>=0.12",
   "numpy",
   "Cython",
 ]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
-cmake.version = ">=3.24"
+minimum-version = "build-system.requires"
+cmake.version = ">=3.27"
+ninja.version = ">=1.11"
 cmake.build-type = "Release"
-build-dir = "build/{wheel_tag}"
+build-dir = "build"
 
 [tool.scikit-build.cmake.define]
 CMAKE_COLOR_DIAGNOSTICS = "ON"

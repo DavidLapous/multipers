@@ -72,6 +72,16 @@ set(MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src"
 )
 
+set(MULTIPERS_HERA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/hera" CACHE PATH "Path to a Hera source checkout")
+set(MULTIPERS_HERA_INCLUDE_DIRS "")
+set(MULTIPERS_HERA_PHAT_INCLUDE_DIRS "")
+if(EXISTS "${MULTIPERS_HERA_SOURCE_DIR}/include/hera/matching_distance.h")
+  list(APPEND MULTIPERS_HERA_INCLUDE_DIRS "${MULTIPERS_HERA_SOURCE_DIR}/include")
+endif()
+if(EXISTS "${MULTIPERS_HERA_SOURCE_DIR}/extern/phat/boundary_matrix.h")
+  list(APPEND MULTIPERS_HERA_PHAT_INCLUDE_DIRS "${MULTIPERS_HERA_SOURCE_DIR}/extern")
+endif()
+
 if(CGAL_FOUND)
   list(APPEND MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS ${CGAL_INCLUDE_DIRS})
 endif()
@@ -106,4 +116,3 @@ if(NOT WIN32)
   target_link_libraries(multipers_aida_static PUBLIC Boost::timer Boost::chrono)
   set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
 endif()
-

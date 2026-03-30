@@ -1,14 +1,18 @@
 import torch as _t
+from functools import wraps
 import multipers.array_api as _mpapi
 import sys
 import multipers.logs as _mp_logs
 
-_mpapi.available_api.append(sys.modules[__name__])
+_mpapi.add_interface("torch")
 
 backend = _t
+int64 = _t.int64
+ones = _t.ones
+reshape = _t.reshape
+arange = _t.arange
 cat = _t.cat
-norm = _t.norm
-astensor = _t.as_tensor
+det = _t.linalg.det
 tensor = _t.tensor
 stack = _t.stack
 empty = _t.empty
@@ -31,16 +35,55 @@ exp = _t.exp
 log = _t.log
 sin = _t.sin
 cos = _t.cos
+sqrt = _t.sqrt
 matmul = _t.matmul
 einsum = _t.einsum
+
+
+def jit(fn=None, **kwargs):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **inner_kwargs):
+            return func(*args, **inner_kwargs)
+
+        return wrapped
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
 
 
 def argsort(x, axis=-1):
     return _t.argsort(x, dim=axis)
 
 
+def sum(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.sum(x, dim=dim, **kwargs)
+
+
+def mean(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.mean(x, dim=dim, **kwargs)
+
+
+def norm(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _t.norm(x, dim=dim, **kwargs)
+
+
 def astype(x, dtype):
     return astensor(x).type(dtype)
+
+
+def astensor(x, contiguous=False, dtype=None):
+    x = _t.as_tensor(x, dtype=dtype)
+    if contiguous:
+        x = x.contiguous()
+    return x
 
 
 _is_keops_available = None
@@ -103,6 +146,36 @@ def device(x):
 
 def sort(x, axis=-1):
     return _t.sort(x, dim=axis).values
+
+
+def set_at(x, idx, y):
+    x[idx] = y
+    return x
+
+
+def add_at(x, idx, y):
+    x[idx] += y
+    return x
+
+
+def mul_at(x, idx, y):
+    x[idx] *= y
+    return x
+
+
+def div_at(x, idx, y):
+    x[idx] /= y
+    return x
+
+
+def min_at(x, idx, y):
+    x[idx] = _t.min(x[idx], y)
+    return x
+
+
+def max_at(x, idx, y):
+    x[idx] = _t.max(x[idx], y)
+    return x
 
 
 # in our context, this allows to get a correct gradient.
@@ -169,3 +242,11 @@ def dtype_is_float(dtype):
 
 def dtype_default():
     return _t.get_default_dtype()
+
+
+def cdist(x, y, p=2):
+    return _t.cdist(x, y, p=p)
+
+
+def moveaxis(x, source, destination):
+    return _t.moveaxis(x, source, destination)

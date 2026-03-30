@@ -244,6 +244,9 @@ def _minimal_presentation_from_slicer(
         str backend="mpfree",
         bool auto_clean=True,
         bool verbose=False,
+        bool full_resolution=True,
+        bool use_clearing = True,
+        bool use_chunk = True,
     ):
     """
     Computes a minimal presentation from a slicer, using the in-memory bridge when
@@ -262,9 +265,9 @@ def _minimal_presentation_from_slicer(
                 slicer,
                 degree=degree,
                 verbose=verbose,
-                use_chunk=True,
-                use_clearing=True,
-                full_resolution=True,
+                use_chunk=use_chunk,
+                use_clearing=use_clearing,
+                full_resolution=full_resolution,
             )
             new_slicer.minpres_degree = degree
             new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None

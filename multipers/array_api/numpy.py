@@ -1,13 +1,14 @@
 from contextlib import nullcontext
+from functools import wraps
 
 import numpy as _np
-from scipy.spatial.distance import cdist, pdist
+from scipy.spatial.distance import cdist as _sp_cdist, pdist as _sp_pdist
 import multipers.logs as _mp_logs
 
 backend = _np
+int64 = _np.int64
 cat = _np.concatenate
-norm = _np.linalg.norm
-astensor = _np.asarray
+det = _np.linalg.det
 asnumpy = _np.asarray
 tensor = _np.array
 stack = _np.stack
@@ -17,9 +18,12 @@ no_grad = nullcontext
 zeros = _np.zeros
 min = _np.min
 max = _np.max
+reshape = _np.reshape
+arange = _np.arange
+moveaxis = _np.moveaxis
+ones = _np.ones
 repeat_interleave = _np.repeat
-cdist = cdist  # type: ignore[no-redef]
-pdist = pdist  # type: ignore[no-redef]
+pdist = _sp_pdist  # type: ignore[no-redef]
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -28,14 +32,61 @@ exp = _np.exp
 log = _np.log
 sin = _np.sin
 cos = _np.cos
+sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum
+
+
+def jit(fn=None, **kwargs):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **inner_kwargs):
+            return func(*args, **inner_kwargs)
+
+        return wrapped
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
+
+
+def astensor(x, contiguous=False, dtype=None):
+    if contiguous:
+        return _np.ascontiguousarray(x, dtype=dtype)
+    return _np.asarray(x, dtype=dtype)
 
 
 def unique(x, assume_sorted=False, _mean=False):
     return _np.unique(x)
 
-def empty(*args,device=None,**kwargs):
+
+def cdist(x, y, p=2):
+    if p == 1:
+        return _sp_cdist(x, y, metric="cityblock")
+    if p == 2:
+        return _sp_cdist(x, y, metric="euclidean")
+    return _sp_cdist(x, y, metric="minkowski", p=p)
+
+
+def sum(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.sum(x, axis=axis, **kwargs)
+
+
+def mean(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.mean(x, axis=axis, **kwargs)
+
+
+def norm(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.linalg.norm(x, axis=axis, **kwargs)
+
+
+def empty(*args, device=None, **kwargs):
     return _np.empty(*args, **kwargs)
 
 
@@ -106,8 +157,38 @@ def sort(x, axis=-1):
     return _np.sort(x, axis=axis)
 
 
-def device(x):  # type: ignore[no-unused-arg]
-    return None
+def set_at(x, idx, y):
+    x[idx] = y
+    return x
+
+
+def add_at(x, idx, y):
+    x[idx] += y
+    return x
+
+
+def mul_at(x, idx, y):
+    x[idx] *= y
+    return x
+
+
+def div_at(x, idx, y):
+    x[idx] /= y
+    return x
+
+
+def min_at(x, idx, y):
+    x[idx] = _np.minimum(x[idx], y)
+    return x
+
+
+def max_at(x, idx, y):
+    x[idx] = _np.maximum(x[idx], y)
+    return x
+
+
+def device(x):
+    return x.device
 
 
 # type: ignore[no-unused-arg]
@@ -146,11 +227,7 @@ def has_grad(_):
 
 
 def to_device(x, device):
-    if device is None or str(device) in ("None", "cpu"):
-        return x
-    raise ValueError(
-        f"NumPy backend only supports CPU tensors, requested device {device!r}."
-    )
+    return x.to_device(device)
 
 
 def size(x):

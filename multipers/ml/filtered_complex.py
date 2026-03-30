@@ -10,7 +10,9 @@ from tqdm import tqdm
 
 import multipers as mp
 import multipers.slicer as mps
-from multipers.filtrations.density import DTM, KDE, available_kernels
+from multipers.filtrations.density import available_kernels
+from multipers.filtrations import RipsCodensity, _AlphaCodensity, DelaunayCodensity
+from multipers.array_api import api_from_tensor
 
 
 class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
@@ -62,7 +64,8 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.complex = complex
         self.threshold = threshold
         self.sparse = sparse
-        self._get_sts = lambda: Exception("Fit first")
+        self._get_sts = lambda x: Exception("Fit first")
+        self._api = None
         self.safe_conversion = safe_conversion
         return
 
@@ -81,8 +84,10 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         def compute_max_scale(x):
             from pykeops.numpy import LazyTensor
 
-            a = LazyTensor(x[None, :, :])
-            b = LazyTensor(x[:, None, :])
+            x_np = self._api.asnumpy(x)
+            a = LazyTensor(x_np[None, :, :])
+            b = LazyTensor(x_np[:, None, :])
+            # Use 1000 as a batch size for max reduction to avoid memory issues
             return np.sqrt(((a - b) ** 2).sum(2).max(1).min(0)[0])
 
         diameter = np.max([compute_max_scale(x) for x in (X[i] for i in indices)])
@@ -95,92 +100,104 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         else:
             self._threshold = -diameter * self.threshold
 
-        if self.threshold > 0:
+        if self.threshold > 0 and len(self._scale) > 0:
             self._scale[self._scale > self.threshold] = self.threshold
 
         if self.progress:
             print(f"Done. Chosen scales {qs} are {self._scale}", flush=True)
         return self._scale
 
+    def _get_sts_all(self, x):
+        res = []
+        for bandwidth in self._bandwidths:
+            if self.complex == "rips":
+                st = RipsCodensity(
+                    points=x,
+                    bandwidth=bandwidth,
+                    kernel=self.kernel,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                    sparse=self.sparse,
+                )
+            elif self.complex == "alpha":
+                st = _AlphaCodensity(
+                    points=x,
+                    bandwidth=bandwidth,
+                    kernel=self.kernel,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                )
+            elif self.complex == "delaunay":
+                st = DelaunayCodensity(
+                    points=x,
+                    bandwidth=bandwidth,
+                    kernel=self.kernel,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                    verbose=self.verbose,
+                )
+            else:
+                raise ValueError(f"Invalid complex {self.complex}")
+            res.append(st)
+
+        for dtm_mass in self.masses:
+            if self.complex == "rips":
+                st = RipsCodensity(
+                    points=x,
+                    dtm_mass=dtm_mass,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                    sparse=self.sparse,
+                )
+            elif self.complex == "alpha":
+                st = _AlphaCodensity(
+                    points=x,
+                    dtm_mass=dtm_mass,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                )
+            elif self.complex == "delaunay":
+                st = DelaunayCodensity(
+                    points=x,
+                    dtm_mass=dtm_mass,
+                    return_log=self.log_density,
+                    threshold_radius=self._threshold,
+                    verbose=self.verbose,
+                )
+            else:
+                raise ValueError(f"Invalid complex {self.complex}")
+            res.append(st)
+        return res
+
     def _get_sts_rips(self, x):
-        if self.sparse is None:
-            st_init = gd.SimplexTree.create_from_array(
-                cdist(x, x), max_filtration=self._threshold
-            )
-        else:
-            st_init = gd.RipsComplex(
-                points=x, max_edge_length=self._threshold, sparse=self.sparse
-            ).create_simplex_tree(max_dimension=1)
-        st_init = mp.simplex_tree_multi.SimplexTreeMulti(
-            st_init, num_parameters=2, safe_conversion=self.safe_conversion
-        )
-        codensities = self._get_codensities(x_fit=x, x_sample=x)
-        num_axes = codensities.shape[0]
-        sts = [st_init] + [st_init.copy() for _ in range(num_axes - 1)]
-        # no need to multithread here, most operations are memory
-        for codensity, st_copy in zip(codensities, sts):
-            # RIPS has contigus vertices, so vertices are ordered.
-            st_copy.fill_lowerstar(codensity, parameter=1)
+        return self._get_sts_all(x)
 
-        return sts
+    def _get_sts_alpha(self, x):
+        return self._get_sts_all(x)
 
-    def _get_sts_alpha(self, x: np.ndarray, return_alpha=False):
-        alpha_complex = gd.AlphaComplex(points=x)
-        st = alpha_complex.create_simplex_tree(max_alpha_square=self._threshold**2)
-        vertices = np.array([i for (i,), _ in st.get_skeleton(0)])
-        new_points = np.asarray(
-            [alpha_complex.get_point(int(i)) for i in vertices]
-        )  # Seems to be unsafe for some reason
-        # new_points = x
-        st = mp.simplex_tree_multi.SimplexTreeMulti(
-            st, num_parameters=2, safe_conversion=self.safe_conversion
-        )
-        codensities = self._get_codensities(x_fit=x, x_sample=new_points)
-        num_axes = codensities.shape[0]
-        sts = [st] + [st.copy() for _ in range(num_axes - 1)]
-        # no need to multithread here, most operations are memory
-        max_vertices = vertices.max() + 2  # +1 to be safe
-        for codensity, st_copy in zip(codensities, sts):
-            alligned_codensity = np.array([np.nan] * max_vertices)
-            alligned_codensity[vertices] = codensity
-            # alligned_codensity = np.array([codensity[i] if i in vertices else np.nan for i in range(max_vertices)])
-            st_copy.fill_lowerstar(alligned_codensity, parameter=1)
-        if return_alpha:
-            return alpha_complex, sts
-        return sts
-
-    def _get_sts_delaunay(self, x: np.ndarray):
-        codensities = self._get_codensities(x_fit=x, x_sample=x)
-
-        def get_st(c):
-            slicer = mps.from_function_delaunay(
-                x,
-                c,
-                verbose=self.verbose,
-                clear=not self.verbose,
-            )
-            return slicer
-
-        sts = Parallel(backend="threading", n_jobs=self.n_jobs)(
-            delayed(get_st)(c) for c in codensities
-        )
-        return sts
+    def _get_sts_delaunay(self, x):
+        return self._get_sts_all(x)
 
     def _get_codensities(self, x_fit, x_sample):
-        x_fit = np.asarray(x_fit, dtype=np.float64)
-        x_sample = np.asarray(x_sample, dtype=np.float64)
-        codensities_kde = np.asarray(
-            [
-                -KDE(
-                    bandwidth=bandwidth, kernel=self.kernel, return_log=self.log_density
-                )
-                .fit(x_fit)
-                .score_samples(x_sample)
-                for bandwidth in self._bandwidths
-            ],
-        ).reshape(len(self._bandwidths), len(x_sample))
+        from multipers.filtrations.density import DTM, KDE
+
+        x_fit = self._api.astensor(x_fit)
+        x_sample = self._api.astensor(x_sample, dtype=x_fit.dtype)
+        if len(self.bandwidths) == 0:
+            codensities_kde=self._api.empty((0, len(x_sample)))
+        else:
+            codensities_kde = self._api.stack(
+                [
+                    -KDE(
+                        bandwidth=bandwidth, kernel=self.kernel, return_log=self.log_density
+                    )
+                    .fit(x_fit)
+                    .score_samples(x_sample)
+                    for bandwidth in self._bandwidths
+                ],
+            ).reshape(len(self._bandwidths), len(x_sample))
         if len(self.masses) == 0:
-            codensities_dtm = np.empty((0, len(x_sample)))
+            codensities_dtm = self._api.empty((0, len(x_sample)))
         else:
             codensities_dtm = (
                 DTM(masses=self.masses)
@@ -188,7 +205,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 .score_samples(x_sample)
                 .reshape(len(self.masses), len(x_sample))
             )
-        return np.concatenate([codensities_kde, codensities_dtm])
+        return self._api.cat([codensities_kde, codensities_dtm])
 
     def _define_sts(self):
         match self.complex:
@@ -216,6 +233,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 
     def fit(self, X: np.ndarray | list, y=None):
         # self.bandwidth = "silverman" ## not good, as is can make bandwidth not constant
+        self._api = api_from_tensor(X[0])
         self._define_sts()
         self._define_bandwidths(X)
         # PRECOMPILE FIRST
@@ -223,8 +241,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        # precompile first
-        # self._get_sts(X[0][:5])
         self._get_codensities(X[0][:2], X[0][:2])
         with tqdm(
             X, desc="Filling simplextrees", disable=not self.progress, total=len(X)

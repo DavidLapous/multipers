@@ -365,17 +365,17 @@ cdef class PyModule_{{SHORT}}:
         """
         if len(self) ==0:
             return np.empty((self.num_parameters,0))
-        values = tuple(
+        values = [
                 tuple(stuff) 
-                if len(stuff:=get_summand_filtration_values_{{SHORT}}(summand)) == self.num_parameters else list(stuff) + [[]]*(self.num_parameters - len(stuff)) for summand in self.cmod)
-        try:
-          values = tuple(np.concatenate([
-            f[parameter]
-            for f in values
-            ], axis=0) for parameter in range(self.num_parameters)
-          )
-        except:
-          return values
+                if len(stuff:=get_summand_filtration_values_{{SHORT}}(summand)) == self.num_parameters else list(stuff) + [[]]*(self.num_parameters - len(stuff))
+                for summand in self.cmod]
+        # TODO : this is slow...
+        values = [
+            np.concatenate([
+              f[parameter]
+              for f in values
+              ], axis=0) for parameter in range(self.num_parameters)
+        ]
         if unique:
             return [np.unique(f) for f in values]
         return values

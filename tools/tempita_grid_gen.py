@@ -288,21 +288,21 @@ _require_known(
     set(registry.FILTRATION_CONTAINER_SHORT_NAMES),
 )
 
-coarsenned_value_type_id = getattr(
+coarsened_value_type_id = getattr(
     user_options,
-    "COARSENNED_VALUE_TYPE",
+    "COARSENED_VALUE_TYPE",
     getattr(user_options, "COARSENED_VALUE_TYPE", None),
 )
-if coarsenned_value_type_id is None:
+if coarsened_value_type_id is None:
     raise ValueError(
-        "Missing COARSENNED_VALUE_TYPE (or COARSENED_VALUE_TYPE) in options"
+        "Missing COARSENED_VALUE_TYPE (or COARSENED_VALUE_TYPE) in options"
     )
 
 real_value_type_id = user_options.REAL_VALUE_TYPE
 
 _require_known(
     "coarsenned value type alias",
-    [coarsenned_value_type_id],
+    [coarsened_value_type_id],
     set(registry.VALUE_TYPE_REGISTRY),
 )
 _require_known(
@@ -316,12 +316,12 @@ value_types = [
 ]
 columns_name = [registry.COLUMN_REGISTRY[column_id] for column_id in column_ids]
 short_filtration_container = dict(registry.FILTRATION_CONTAINER_SHORT_NAMES)
-COARSENNED_VALUE_TYPE = registry.VALUE_TYPE_REGISTRY[coarsenned_value_type_id]
+COARSENED_VALUE_TYPE = registry.VALUE_TYPE_REGISTRY[coarsened_value_type_id]
 REAL_VALUE_TYPE = registry.VALUE_TYPE_REGISTRY[real_value_type_id]
 
-if COARSENNED_VALUE_TYPE not in value_types:
+if COARSENED_VALUE_TYPE not in value_types:
     raise ValueError(
-        f"COARSENNED_VALUE_TYPE={coarsenned_value_type_id!r} must be enabled in VALUE_TYPES"
+        f"COARSENED_VALUE_TYPE={coarsened_value_type_id!r} must be enabled in VALUE_TYPES"
     )
 if REAL_VALUE_TYPE not in value_types:
     raise ValueError(
@@ -444,7 +444,7 @@ def get_slicer(
             backend_type,
             is_vine,
             is_kcritical,
-            COARSENNED_VALUE_TYPE,
+            COARSENED_VALUE_TYPE,
             column_type,
             filtration_container,
         )[0],
@@ -576,7 +576,7 @@ def get_simplextree(is_kcritical, value_type, filtration_container):
         is_kcritical, value_type, filtration_container
     )
     coarsenned_class_name = get_simplextree_class_name(
-        is_kcritical, COARSENNED_VALUE_TYPE, filtration_container
+        is_kcritical, COARSENED_VALUE_TYPE, filtration_container
     )
     real_class_name = get_simplextree_class_name(
         is_kcritical, REAL_VALUE_TYPE, filtration_container

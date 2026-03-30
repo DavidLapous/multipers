@@ -40,6 +40,8 @@ def batch_signed_measure_convolutions(
 
     if api is None:
         api = api_from_tensors(signed_measures, x)
+    if not api.check_keops():
+        raise NotImplementedError(f"This function needs keops, which failed to init for {api=}.")
     if signed_measures.ndim == 2:
         signed_measures = signed_measures[None, :, :]
     sms = signed_measures[..., :-1]
@@ -150,14 +152,14 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         # homological degrees + None for euler
-        degrees: list[int | None] = [],
-        rank_degrees: list[int] = [],  # same for rank invariant
+        degrees: Optional[list[int | None]] = None,
+        rank_degrees: Optional[list[int]] = None,
         filtration_grid: (
             Sequence[Sequence[np.ndarray]]
             # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
             | None
         ) = None,
-        progress=False,  # tqdm
+        progress: bool = False,  # tqdm
         num_collapses: int | str = 0,  # edge collapses before computing
         n_jobs=None,
         resolution: (
@@ -183,8 +185,8 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
         backend: Optional[str] = None,
     ):
         super().__init__()
-        self.degrees = degrees
-        self.rank_degrees = rank_degrees
+        self.degrees = degrees if degrees is not None else []
+        self.rank_degrees = rank_degrees if rank_degrees is not None else []
         self.filtration_grid = filtration_grid
         self.progress = progress
         self.num_collapses = num_collapses
@@ -457,60 +459,53 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
                 delayed(todo_x)(x) for x in X
             )
         )
-        # out = Parallel(n_jobs=self.n_jobs, backend="threading")(
-        #     delayed(self.transform1)(to_st, thread_id=str(thread_id))
-        #     for thread_id, to_st in tqdm(
-        #         enumerate(X),
-        #         disable=not self.progress,
-        #         desc="Computing signed measure decompositions",
-        #     )
-        # )
         return out
 
 
 class SimplexTree2SignedMeasure(FilteredComplex2SignedMeasure):
     def __init__(
         self,
-        # homological degrees + None for euler
-        degrees: list[int | None] = [],
-        rank_degrees: list[int] = [],  # same for rank invariant
-        filtration_grid: (
-            Sequence[Sequence[np.ndarray]]
-            # filtration values to consider. Format : [ filtration values of Fi for Fi:filtration values of parameter i]
-            | None
-        ) = None,
-        progress=False,  # tqdm
-        num_collapses: int | str = 0,  # edge collapses before computing
+        degrees: Optional[list[int | None]] = None,
+        rank_degrees: Optional[list[int]] = None,
+        filtration_grid: (Sequence[Sequence[np.ndarray]] | None) = None,
+        progress: bool = False,
+        num_collapses: int | str = 0,
         n_jobs=None,
-        resolution: (
-            Iterable[int] | int | None
-        ) = None,  # when filtration grid is not given, the resolution of the filtration grid to infer
-        # sparse=True, # sparse output # DEPRECATED TO Ssigned measure formatter
+        resolution: (Iterable[int] | int | None) = None,
         plot: bool = False,
-        filtration_quantile: float = 0.0,  # quantile for inferring filtration grid
-        # wether or not to do the möbius inversion (not recommended to touch)
-        # _möbius_inversion: bool = True,
-        expand=False,  # expand the simplextree befoe computing the homology
+        filtration_quantile: float = 0.0,
+        expand: bool = False,
         normalize_filtrations: bool = False,
-        # exact_computation:bool=False, # compute the exact signed measure.
         grid_strategy: str = "exact",
-        seed: int = 0,  # if fit_fraction is not 1, the seed sampling
-        fit_fraction=1,  # the fraction of the data on which to fit
+        seed: int = 0,
+        fit_fraction=1,
         out_resolution: Iterable[int] | int | None = None,
-        individual_grid: Optional[
-            bool
-        ] = None,  # Can be significantly faster for some grid strategies, but can drop statistical performance
+        individual_grid: Optional[bool] = None,
         enforce_null_mass: bool = False,
-        flatten=True,
+        flatten: bool = True,
         backend: Optional[str] = None,
     ):
-        stuff = locals()
-        stuff.pop("self")
-        keys = list(stuff.keys())
-        for key in keys:
-            if key.startswith("__"):
-                stuff.pop(key)
-        super().__init__(**stuff)
+        super().__init__(
+            degrees=degrees,
+            rank_degrees=rank_degrees,
+            filtration_grid=filtration_grid,
+            progress=progress,
+            num_collapses=num_collapses,
+            n_jobs=n_jobs,
+            resolution=resolution,
+            plot=plot,
+            filtration_quantile=filtration_quantile,
+            expand=expand,
+            normalize_filtrations=normalize_filtrations,
+            grid_strategy=grid_strategy,
+            seed=seed,
+            fit_fraction=fit_fraction,
+            out_resolution=out_resolution,
+            individual_grid=individual_grid,
+            enforce_null_mass=enforce_null_mass,
+            flatten=flatten,
+            backend=backend,
+        )
         from warnings import warn
 
         warn("This class is deprecated, use FilteredComplex2SignedMeasure instead.")
@@ -716,12 +711,12 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self.grid_strategy = grid_strategy
         self._infered_grids = None
         self._axis_iterator = None
-        self._backend = None
+        self._api = None
         return
 
     def _get_filtration_bounds(self, X, axis):
         stuff = [
-            self._backend.cat(
+            self._api.cat(
                 [sm[axis][degree][0] for sm in X],
                 axis=0,
             )
@@ -730,13 +725,13 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         sizes_ = np.array([len(x) == 0 for x in stuff])
         assert np.all(~sizes_), f"Degree axis {np.where(sizes_)} is/are trivial !"
 
-        filtrations_bounds = self._backend.asnumpy(
-            self._backend.stack(
+        filtrations_bounds = self._api.asnumpy(
+            self._api.stack(
                 [
-                    self._backend.stack(
+                    self._api.stack(
                         [
-                            self._backend.minvalues(f, axis=0),
-                            self._backend.maxvalues(f, axis=0),
+                            self._api.minvalues(f, axis=0),
+                            self._api.maxvalues(f, axis=0),
                         ]
                     )
                     for f in stuff
@@ -801,13 +796,14 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self._num_axis = len(X[0])
         self._axis_iterator = range(self._num_axis) if self.axis == -1 else [self.axis]
 
-    def _check_backend(self, X):
+    def _check_api(self, X):
         if self._has_axis:
             # data, axis, degrees, (pts, weights)
-            first_sm = X[0][0][0][0]
+            first_sm_pts = X[0][0][0][0]
         else:
-            first_sm = X[0][0][0]
-        self._backend = api_from_tensor(first_sm, verbose=self.verbose)
+            # data, degrees, (pts, weights)
+            first_sm_pts = X[0][0][0]
+        self._api = api_from_tensor(first_sm_pts, verbose=self.verbose)
 
     def _check_measures(self, X):
         if self._has_axis:
@@ -846,8 +842,8 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                 ) = self._get_filtration_bounds(X, axis=ax)
                 self._filtrations_bounds.append(filtration_bounds)
                 self._normalization_factors.append(normalization_factors)
-            self._filtrations_bounds = self._backend.astensor(self._filtrations_bounds)
-            self._normalization_factors = self._backend.astensor(
+            self._filtrations_bounds = self._api.astensor(self._filtrations_bounds)
+            self._normalization_factors = self._api.astensor(
                 self._normalization_factors
             )
             # else:
@@ -874,7 +870,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             ]
             # axis, filtration_values
             filtration_values = [
-                self._backend.astensor(
+                self._api.astensor(
                     compute_grid(
                         f_ax.T, resolution=self.resolution, strategy=self.grid_strategy
                     )
@@ -914,7 +910,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             return self
 
         self._check_axis(X)
-        self._check_backend(X)
+        self._check_api(X)
         self._check_measures(X)
         self._check_resolution()
         self._check_weights()
@@ -943,9 +939,9 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         if self.flatten:
             out = np.concatenate(out).flatten()
         elif self.axis == -1:
-            return np.asarray(out)
+            return self._api.stack(out)
         else:
-            return np.asarray(out)[0]
+            return self._api.stack(out)[0]
 
     @staticmethod
     def _integrate_measure(sm, filtrations):
@@ -1099,24 +1095,21 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        filtration_grid: Iterable[np.ndarray] = None,
+        filtration_grid: Optional[Iterable[np.ndarray]] = None,
         kernel: available_kernels = "gaussian",
         bandwidth: float | Iterable[float] = 1.0,
         flatten: bool = False,
         n_jobs: int = 1,
-        resolution: int | None = None,
+        resolution: Optional[int] = None,
         grid_strategy: str = "regular",
         progress: bool = False,
         backend: str = "pykeops",
         plot: bool = False,
         log_density: bool = False,
-        **kde_kwargs,
-        #   **kwargs ## DANGEROUS
     ):
         super().__init__()
         self.kernel: available_kernels = kernel
         self.bandwidth = bandwidth
-        # self.more_kde_kwargs=kwargs
         self.filtration_grid = filtration_grid
         self.flatten = flatten
         self.progress = progress
@@ -1131,7 +1124,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         self.backend = backend
         self.plot = plot
         self.log_density = log_density
-        self.kde_kwargs = kde_kwargs
         self._api = None
         return
 
@@ -1139,14 +1131,14 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         # Infers if the input is sparse given X
         if len(X) == 0:
             return self
-        first = X[0]
-        if isinstance(first[0], tuple):
+        # X is (data) x (degree) x (pts, weights)
+        first_sample = X[0]
+        if isinstance(first_sample[0], tuple):
             self._is_input_sparse = True
-
-            self._api = api_from_tensor(first[0][0], verbose=self.progress)
+            first_pts = first_sample[0][0]
+            self._api = api_from_tensor(first_pts, verbose=self.progress)
         else:
             self._is_input_sparse = False
-
             self._api = api_from_tensor(X, verbose=self.progress)
         # print(f"IMG output is set to {'sparse' if self.sparse else 'matrix'}")
         if not self._is_input_sparse:
@@ -1221,7 +1213,6 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             n_jobs=self.n_jobs,
             kernel=self.kernel,
             backend=self.backend,
-            **self.kde_kwargs,
         )
 
     def _plot_imgs(self, imgs: Iterable[np.ndarray], size=4):
@@ -1300,6 +1291,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         progress=False,
         grid_reconversion=None,
         scales=None,
+        seed: int = 42,
     ):
         super().__init__()
         self.n_jobs = n_jobs
@@ -1311,6 +1303,8 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         self.progress = progress
         self.grid_reconversion = grid_reconversion
         self.scales = scales
+        self.seed = seed
+        self._api = None
         return
 
     def fit(self, X, y=None):
@@ -1322,6 +1316,14 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         # _DISTANCE = lambda : SlicedWassersteinDistance(num_directions=self.num_directions) if self._sliced else WassersteinDistance(epsilon=self.epsilon, ground_norm=self.ground_norm) # WARNING if _sliced is false, this distance is not CNSD
         if len(X) == 0:
             return self
+
+        # X is (data) x (degree) x (pts, weights)
+        first_sample = X[0]
+        # signed measures are of the form tuple(pts,weights), weights are not autodiff.
+        # inferred from the pts of the signed measures
+        first_pts = first_sample[0][0]
+        self._api = api_from_tensor(first_pts, verbose=self.progress)
+
         num_degrees = len(X[0])
         self._SWD_list = [
             (
@@ -1329,6 +1331,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
                     num_directions=self.num_directions,
                     n_jobs=self.n_jobs,
                     scales=self.scales,
+                    seed=self.seed,
                 )
                 if self._sliced
                 else WassersteinDistance(
@@ -1362,7 +1365,7 @@ class SignedMeasure2SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
             out = Parallel(n_jobs=self.n_jobs, prefer="threads")(
                 delayed(todo)(swd, [x[degree] for x in X]) for degree, swd in SWD_it
             )
-            return np.asarray(out)
+            return self._api.stack(out)
 
     def predict(self, X):
         return self.transform(X)
@@ -1390,16 +1393,33 @@ class SignedMeasures2SlicedWassersteinDistances(BaseEstimator, TransformerMixin)
         progress=False,
         n_jobs: int = 1,
         scales: Iterable[Iterable[float]] | None = None,
-        **kwargs,
+        num_directions: int = 10,
+        _sliced: bool = True,
+        epsilon: float = -1,
+        ground_norm: float = 1,
+        grid_reconversion=None,
     ):  # same init
+        self.progress = progress
+        self.n_jobs = n_jobs
+        self.scales = scales
+        self.num_directions = num_directions
+        self._sliced = _sliced
+        self.epsilon = epsilon
+        self.ground_norm = ground_norm
+        self.grid_reconversion = grid_reconversion
+
         self._init_child = SignedMeasure2SlicedWassersteinDistance(
-            progress=False, scales=None, n_jobs=-1, **kwargs
+            progress=False,
+            scales=None,
+            n_jobs=-1,
+            num_directions=num_directions,
+            _sliced=_sliced,
+            epsilon=epsilon,
+            ground_norm=ground_norm,
+            grid_reconversion=grid_reconversion,
         )
         self._axe_iterator = None
         self._childs_to_fit = None
-        self.scales = scales
-        self.progress = progress
-        self.n_jobs = n_jobs
         return
 
     def fit(self, X, y=None):
