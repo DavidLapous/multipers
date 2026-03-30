@@ -108,6 +108,20 @@ available_dtype = set([
 {{endfor}}
 ])
 
+global available_simplextrees, SimplexTreeMulti_type
+available_simplextrees = tuple((
+  {{for D in to_iter}}
+  # WARN : updating locals {{locals().update(D)}}
+  {{PY_CLASS_NAME}},
+  {{endfor}}
+))
+SimplexTreeMulti_type:type= Union[
+  {{for D in to_iter}}
+  # WARN : updating locals {{locals().update(D)}}
+  {{PY_CLASS_NAME}},
+  {{endfor}}
+]
+
 
 {{for D in to_iter}}
 # WARN : updating locals {{locals().update(D)}}
@@ -1806,20 +1820,6 @@ def _safe_simplextree_multify_{{PyFil}}2(simplextree:SimplexTree,int num_paramet
         # print(f"adding {S.shape,F.shape}")
     return st_multi
 {{endfor}}
-
-global available_simplextrees, SimplexTreeMulti_type
-available_simplextrees = tuple((
-  {{for D in to_iter}}
-  # WARN : updating locals {{locals().update(D)}}
-  {{PY_CLASS_NAME}},
-  {{endfor}}
-))
-SimplexTreeMulti_type:type= Union[
-  {{for D in to_iter}}
-  # WARN : updating locals {{locals().update(D)}}
-  {{PY_CLASS_NAME}},
-  {{endfor}}
-]
 
 def is_simplextree_multi(input)->bool:
   return (False
