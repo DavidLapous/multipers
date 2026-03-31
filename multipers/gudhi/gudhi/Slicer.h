@@ -503,7 +503,7 @@ class Slicer
    * index \f$ d \f$ of the returned vector. A cycle is represented by a vector of boundary indices. That is, the index
    * \f$ i \f$ in a cycle represents the cell which boundary can be retrieved by @ref get_boundary "get_boundary(i)".
    *
-   * Throws `std::invalid_argument` if `PersistenceAlgorithm::has_rep_cycles` is false.
+   * Only available if PersistenceAlgorithm::has_rep_cycles is true.
    *
    * @pre @ref initialize_persistence_computation has to be called at least once before.
    *
@@ -517,41 +517,38 @@ class Slicer
 
   Cycle get_most_persistent_cycle(Dimension dim = 1, bool update = true)
   {
-    if constexpr (!Persistence::has_rep_cycles) {
-      (void)dim;
-      (void)update;
-      throw std::invalid_argument("Representative cycles not enabled by the chosen PersistenceAlgorithm class.");
-    } else {
-      auto barcodeIndices = persistence_.get_barcode();
+    static_assert(Persistence::has_rep_cycles,
+                  "Representative cycles not enabled by the chosen PersistenceAlgorithm class.");
 
-      Index maxIndex = -1;
-      Index maxBirth = std::numeric_limits<Index>::max();
-      T maxLength = 0;
-      Index i = 0;
-      for (const auto& bar : barcodeIndices) {
-        if (bar.dim == dim) {
-          if (bar.death == Persistence::nullDeath) {
-            if (maxBirth > bar.birth) {
-              maxBirth = bar.birth;
-              maxIndex = i;
-              maxLength = Filtration_value::T_inf;
-            }
-          } else {
-            T length = std::abs(slice_[bar.death] - slice_[bar.birth]);
-            if (maxLength < length) {
-              maxLength = length;
-              maxIndex = i;
-            }
+    auto barcodeIndices = persistence_.get_barcode();
+
+    Index maxIndex = -1;
+    Index maxBirth = std::numeric_limits<Index>::max();
+    T maxLength = 0;
+    Index i = 0;
+    for (const auto& bar : barcodeIndices) {
+      if (bar.dim == dim) {
+        if (bar.death == Persistence::nullDeath) {
+          if (maxBirth > bar.birth) {
+            maxBirth = bar.birth;
+            maxIndex = i;
+            maxLength = Filtration_value::T_inf;
+          }
+        } else {
+          T length = std::abs(slice_[bar.death] - slice_[bar.birth]);
+          if (maxLength < length) {
+            maxLength = length;
+            maxIndex = i;
           }
         }
-        ++i;
       }
-
-      if (maxIndex == static_cast<Index>(-1)) return {};
-
-      auto cycle = persistence_.get_representative_cycle(maxIndex, update);
-      return {cycle.begin(), cycle.end()};
+      ++i;
     }
+
+    if (maxIndex == static_cast<Index>(-1)) return {};
+
+    auto cycle = persistence_.get_representative_cycle(maxIndex, update);
+    return {cycle.begin(), cycle.end()};
   }
 
   // FRIENDS
@@ -697,23 +694,20 @@ class Slicer
 
   std::vector<std::vector<Cycle>> _get_representative_cycles(const Complex& complex, bool update = true)
   {
-    if constexpr (!Persistence::has_rep_cycles) {
-      (void)complex;
-      (void)update;
-      throw std::invalid_argument("Representative cycles not enabled by the chosen PersistenceAlgorithm class.");
-    } else {
-      const auto& dimensions = complex.get_dimensions();
-      auto cycleKeys = persistence_.get_all_representative_cycles(update);
-      auto numCycles = cycleKeys.size();
-      std::vector<std::vector<Cycle>> out(complex.get_max_dimension() + 1);
-      for (auto& cyclesDim : out) cyclesDim.reserve(numCycles);
-      for (const auto& cycle : cycleKeys) {
-        GUDHI_CHECK(!cycle.empty(), "A cycle should not be empty...");
-        // assumes cycle to be never empty & all faces have same dimension
-        out[dimensions[cycle[0]]].push_back(cycle);
-      }
-      return out;
+    static_assert(Persistence::has_rep_cycles,
+                  "Representative cycles not enabled by the chosen PersistenceAlgorithm class.");
+
+    const auto& dimensions = complex.get_dimensions();
+    auto cycleKeys = persistence_.get_all_representative_cycles(update);
+    auto numCycles = cycleKeys.size();
+    std::vector<std::vector<Cycle>> out(complex.get_max_dimension() + 1);
+    for (auto& cyclesDim : out) cyclesDim.reserve(numCycles);
+    for (const auto& cycle : cycleKeys) {
+      GUDHI_CHECK(!cycle.empty(), "A cycle should not be empty...");
+      // assumes cycle to be never empty & all faces have same dimension
+      out[dimensions[cycle[0]]].push_back(cycle);
     }
+    return out;
   }
 
  private:

@@ -227,7 +227,6 @@ class Persistent_cohomology {
       update_cohomology_groups(sh, dim_simplex);
     }
 
-    // Compute infinite interval of dimension > 0
     for (auto cocycle : transverse_idx_) {
       persistent_pairs_.emplace_back(
           cpx_->simplex(cocycle.first), cpx_->null_simplex(), cocycle.second.characteristics_);

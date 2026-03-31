@@ -923,47 +923,6 @@ inline bool Unordered_set_column<Master_matrix>::_generic_add(const Entry_range&
 {
   bool pivotIsZeroed = false;
 
-  if constexpr (requires { source.size(); }) {
-    const std::size_t sourceSize = static_cast<std::size_t>(source.size());
-    if (sourceSize >= 8) {
-      const std::size_t targetSize = column_.size() + sourceSize;
-      const float maxLoad = column_.max_load_factor();
-      const std::size_t bucketCount = column_.bucket_count();
-      if (bucketCount == 0 || static_cast<float>(targetSize) > static_cast<float>(bucketCount) * maxLoad) {
-        column_.reserve(targetSize);
-      }
-    }
-  }
-
-  if constexpr (!Master_matrix::Option_list::has_row_access) {
-    for (const Entry& entry : source) {
-      Entry lookup(entry.get_row_index());
-      auto it = column_.find(&lookup);
-      if (it == column_.end()) {
-        Entry* newEntry = entryPool_->construct(entry.get_row_index());
-        newEntry->set_element(entry.get_element());
-        std::forward<F1>(process_source)(entry, newEntry);
-        column_.insert(newEntry);
-      } else {
-        if constexpr (Master_matrix::Option_list::is_z2) {
-          if constexpr (Master_matrix::isNonBasic && !Master_matrix::Option_list::is_of_boundary_type) {
-            if (entry.get_row_index() == Chain_opt::_get_pivot()) pivotIsZeroed = true;
-          }
-          _delete_entry(it);
-        } else {
-          std::forward<F2>(update_target)(*it, entry);
-          if ((*it)->get_element() == Field_operators::get_additive_identity()) {
-            if constexpr (Master_matrix::isNonBasic && !Master_matrix::Option_list::is_of_boundary_type) {
-              if ((*it)->get_row_index() == Chain_opt::_get_pivot()) pivotIsZeroed = true;
-            }
-            _delete_entry(it);
-          }
-        }
-      }
-    }
-    return pivotIsZeroed;
-  }
-
   for (const Entry& entry : source) {
     Entry* newEntry;
     if constexpr (Master_matrix::Option_list::has_row_access) {

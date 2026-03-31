@@ -39,12 +39,7 @@ enum class Column_types : std::uint8_t {
   NAIVE_VECTOR,   /**< @ref Naive_vector_column "": Underlying container is a std::vector<@ref Entry*>. */
   SMALL_VECTOR,   /**< @ref Naive_vector_column "": Underlying container is a
                        boost::container::small_vector<@ref Entry*, 8>. */
-  PHAT_VECTOR,    /**< @ref Phat_vector_column "": PHAT-style vector column implementation. */
-  PHAT_BIT_TREE,  /**< @ref Phat_bit_tree_column "": PHAT-style bit-tree pivot interface. */
   UNORDERED_SET,  /**< @ref Unordered_set_column "": Underlying container is a std::unordered_set<@ref Entry*>. */
-  // CHATTY_COLUMN,  /**< @ref Chatty_column "": Unordered-set column with sparse-workload optimizations. */
-  // CHATTY_COLUMN_FLIP, /**< @ref Chatty_column "": Insert-first flip tuned for sparse additions. */
-  // CHATTY_COLUMN_ADAPTIVE, /**< @ref Chatty_column "": Adaptive flip between probe-first and insert-first. */
   INTRUSIVE_LIST, /**< @ref Intrusive_list_column "": Underlying container is a boost::intrusive::list<@ref Entry>. */
   INTRUSIVE_SET   /**< @ref Intrusive_set_column "": Underlying container is a boost::intrusive::set<@ref Entry>. */
 };

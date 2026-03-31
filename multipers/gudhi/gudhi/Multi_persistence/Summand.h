@@ -29,6 +29,7 @@
 #endif
 
 #include <gudhi/Debug_utils.h>
+#include <gudhi/simple_mdspan.h>
 #include <gudhi/Dynamic_multi_parameter_filtration.h>
 #include <gudhi/Multi_filtration/multi_filtration_utils.h>
 #include <gudhi/Multi_filtration/multi_filtration_conversions.h>
@@ -84,6 +85,10 @@ class Summand {
 
   [[nodiscard]] int get_number_of_parameters() const { return birthCorners_.num_parameters(); }
 
+  [[nodiscard]] int get_number_of_birth_corners() const { return birthCorners_.num_generators(); }
+
+  [[nodiscard]] int get_number_of_death_corners() const { return deathCorners_.num_generators(); }
+
   template <class MultiFiltrationValue>
   bool contains(const MultiFiltrationValue &x) const {
     auto xPos = Gudhi::multi_filtration::as_type<Births>(x);
@@ -117,14 +122,12 @@ class Summand {
 
   const Deaths &get_downset() const { return deathCorners_; }
 
-  template <class MultiFiltrationValue = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, true> >
-  std::vector<MultiFiltrationValue> compute_birth_list() const {
-    return _compute_list<MultiFiltrationValue>(birthCorners_);
+  std::vector<value_type> compute_birth_list() const {
+    return _compute_list(birthCorners_);
   }
 
-  template <class MultiFiltrationValue = Gudhi::multi_filtration::Multi_parameter_filtration<T, false, true> >
-  std::vector<MultiFiltrationValue> compute_death_list() const {
-    return _compute_list<MultiFiltrationValue>(deathCorners_);
+  std::vector<value_type> compute_death_list() const {
+    return _compute_list(deathCorners_);
   }
 
   void complete_birth(value_type precision) {
@@ -161,7 +164,7 @@ class Summand {
     deathCorners_.simplify();
   }
 
-  std::pair<value_type, value_type> get_bar(const Line<value_type> &l) const {
+  std::array<value_type, 2> get_bar(const Line<value_type> &l) const {
     value_type pushedBirth = T_inf;
     value_type pushedDeath = T_m_inf;
 
@@ -288,17 +291,15 @@ class Summand {
     }
   }
 
-  template <class MultiFiltrationValue, class Corners>
-  static std::vector<MultiFiltrationValue> _compute_list(const Corners &corners) {
-    std::vector<MultiFiltrationValue> res(corners.num_generators());
-
+  template <class Corners>
+  static std::vector<value_type> _compute_list(const Corners &corners) {
+    std::vector<value_type> res(corners.num_generators() * corners.num_parameters());
+    Simple_mdspan view(res.data(), corners.num_generators(), corners.num_parameters());
     for (Index g = 0; g < corners.num_generators(); ++g) {
-      res[g] = as_type<MultiFiltrationValue>(corners[g], corners.num_parameters());
-      // could be done in a more generic way, but this should be the fastest without changing the current interface
-      if constexpr (Gudhi::multi_filtration::RangeTraits<MultiFiltrationValue>::is_dynamic_multi_filtration)
-        res[g].force_generator_size_to_number_of_parameters(0);
+      for (Index p = 0; p < corners.num_parameters(); ++p) {
+        view(g, p) = corners(g, p);
+      }
     }
-
     return res;
   }
 
