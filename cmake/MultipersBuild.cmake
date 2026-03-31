@@ -125,6 +125,26 @@ function(multipers_add_core_object_library target_name source_file)
   multipers_apply_common_build_flags(${target_name})
 endfunction()
 
+function(multipers_add_nanobind_object_library target_name source_file)
+  add_library(${target_name} OBJECT "${source_file}")
+  add_dependencies(${target_name} multipers_codegen ${ARGN})
+  target_include_directories(
+    ${target_name}
+    PRIVATE
+      ${MULTIPERS_GENERATED_INCLUDE_DIRS}
+      ${MULTIPERS_BASE_INCLUDE_DIRS}
+      ${MULTIPERS_NANOBIND_INCLUDE_DIR}
+  )
+  target_include_directories(${target_name} SYSTEM PRIVATE ${MULTIPERS_NANOBIND_ROBIN_MAP_INCLUDE_DIR})
+  target_include_directories(${target_name} BEFORE PRIVATE ${MULTIPERS_PHAT_INCLUDE_DIRS})
+  target_compile_definitions(${target_name} PRIVATE NB_COMPACT_ASSERTIONS)
+  multipers_apply_common_build_flags(${target_name})
+  if(NOT MSVC)
+    target_compile_options(${target_name} PRIVATE -fvisibility=hidden)
+    set_target_properties(${target_name} PROPERTIES COMPILE_FLAGS "--no-warnings")
+  endif()
+endfunction()
+
 multipers_add_core_object_library(
   multipers_core_filtrations_obj
   "${CMAKE_SOURCE_DIR}/tools/core/filtrations_core.cc"
@@ -194,6 +214,16 @@ function(multipers_link_shared_core target_name)
   endif()
 endfunction()
 
+multipers_add_nanobind_object_library(
+  multipers_nanobind_runtime_obj
+  "${CMAKE_SOURCE_DIR}/multipers/ext_interface/nanobind_registry_runtime.cpp"
+)
+
+function(multipers_link_nanobind_runtime target_name)
+  add_dependencies(${target_name} multipers_nanobind_runtime_obj)
+  target_sources(${target_name} PRIVATE $<TARGET_OBJECTS:multipers_nanobind_runtime_obj>)
+endfunction()
+
 # =============================================================================
 # Per-module configuration
 # =============================================================================
@@ -220,6 +250,7 @@ function(multipers_configure_module module_name target_name)
     multipers_link_tbb(${target_name})
 
   elseif(module_name STREQUAL "_mpfree_interface")
+    multipers_link_nanobind_runtime(${target_name})
     multipers_link_shared_core(${target_name})
     if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -231,6 +262,7 @@ function(multipers_configure_module module_name target_name)
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_function_delaunay_interface")
+    multipers_link_nanobind_runtime(${target_name})
     multipers_link_shared_core(${target_name})
     if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -253,6 +285,7 @@ function(multipers_configure_module module_name target_name)
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_rhomboid_tiling_interface")
+    multipers_link_nanobind_runtime(${target_name})
     multipers_link_shared_core(${target_name})
     if(NOT MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
@@ -263,6 +296,7 @@ function(multipers_configure_module module_name target_name)
     endif()
 
   elseif(module_name STREQUAL "_2pac_interface")
+    multipers_link_nanobind_runtime(${target_name})
     multipers_link_shared_core(${target_name})
     if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE)
       target_link_libraries(${target_name} PRIVATE multipers_2pac_static)
@@ -271,6 +305,8 @@ function(multipers_configure_module module_name target_name)
     endif()
 
   elseif(module_name STREQUAL "_aida_interface")
+    multipers_link_nanobind_runtime(${target_name})
+    multipers_link_shared_core(${target_name})
     if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
       target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
@@ -278,7 +314,6 @@ function(multipers_configure_module module_name target_name)
       target_link_libraries(${target_name} PRIVATE multipers_aida_static)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
     endif()
-    set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_hera_interface")
     if(NOT MULTIPERS_DISABLE_HERA_INTERFACE)

@@ -8,7 +8,7 @@
 #include "ext_interface/rhomboid_tiling_interface.hpp"
 
 #if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
-#include "ext_interface/nanobind_registry_helpers.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
 namespace nb = nanobind;
@@ -16,6 +16,8 @@ using namespace nb::literals;
 
 #if !MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
 namespace mprt {
+
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
 inline nb::object numpy_float64() { return nb::module_::import_("numpy").attr("float64"); }
 
@@ -25,10 +27,9 @@ nb::object rhomboid_tiling_to_slicer_for_target(nb::object target,
                                                 int degree,
                                                 bool verbose) {
   auto complex = multipers::rhomboid_tiling_to_contiguous_slicer_interface<int>(input, k_max, degree, verbose);
-  return multipers::nanobind_helpers::visit_slicer_wrapper(target, [&]<typename Desc>(typename Desc::wrapper& wrapper) {
-    multipers::build_slicer_from_complex(wrapper.truc, complex);
-    return target;
-  });
+  auto& wrapper = nb::cast<CanonicalWrapper&>(target);
+  multipers::build_slicer_from_complex(wrapper.truc, complex);
+  return target;
 }
 
 }  // namespace mprt

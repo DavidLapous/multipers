@@ -6,12 +6,16 @@ set(MULTIPERS_CODEGEN_CACHE_DIR "${CMAKE_BINARY_DIR}/tmp")
 set(MULTIPERS_CORE_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/tools/core/filtrations_instantiations.inc"
   "${MULTIPERS_GENERATED_ROOT}/tools/core/simplextree_instantiations.inc"
+  "${MULTIPERS_GENERATED_ROOT}/tools/core/simplextree_conversion_instantiations.inc"
   "${MULTIPERS_GENERATED_ROOT}/tools/core/slicer_instantiations.inc"
+  "${MULTIPERS_GENERATED_ROOT}/tools/core/slicer_conversion_instantiations.inc"
   "${MULTIPERS_GENERATED_ROOT}/multipers/_slicer_nanobind_registry.inc"
   "${MULTIPERS_GENERATED_ROOT}/multipers/_mma_nanobind_registry.inc"
   "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/filtrations_extern_templates.h"
   "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/simplextree_multi_extern_templates.h"
+  "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/simplextree_conversion_extern_templates.h"
   "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/slicer_extern_templates.h"
+  "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi/slicer_conversion_extern_templates.h"
 )
 
 set(MULTIPERS_CODEGEN_DRIVER "${CMAKE_SOURCE_DIR}/tools/tempita_grid_gen.py")

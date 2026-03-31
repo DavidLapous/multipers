@@ -2,9 +2,16 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "ext_interface/aida_interface.hpp"
+
+#if !MULTIPERS_DISABLE_AIDA_INTERFACE
+#include "ext_interface/nanobind_registry_runtime.hpp"
+#endif
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -12,20 +19,103 @@ using namespace nb::literals;
 #if !MULTIPERS_DISABLE_AIDA_INTERFACE
 namespace mpaida {
 
-template <typename T>
-std::vector<T> cast_vector(nb::handle h) {
-  return nb::cast<std::vector<T>>(h);
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
+
+struct prepared_input {
+  std::vector<std::pair<double, double> > row_degree;
+  std::vector<std::pair<double, double> > col_degree;
+  std::vector<std::vector<int> > matrix;
+  nb::object filtration_grid = nb::none();
+  int degree = -1;
+  bool is_squeezed = false;
+};
+
+inline bool has_nonempty_filtration_grid(const nb::handle& grid) {
+  if (!grid.is_valid() || grid.is_none() || !nb::hasattr(grid, "__len__") || nb::len(grid) == 0) {
+    return false;
+  }
+
+  for (nb::handle row : nb::iter(grid)) {
+    return nb::hasattr(row, "__len__") && nb::len(row) > 0;
+  }
+  return false;
 }
 
-template <typename T>
-std::vector<std::vector<T>> cast_matrix(nb::handle h) {
-  return nb::cast<std::vector<std::vector<T>>>(h);
+inline nb::object ensure_supported_target(nb::object slicer) {
+  return multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
 }
 
-std::vector<std::pair<double, double>> cast_pair_vector(nb::handle h) {
-  std::vector<std::pair<double, double>> out;
-  for (const auto& row : cast_matrix<double>(h)) {
-    out.emplace_back(row[0], row[1]);
+prepared_input build_input_from_slicer(const CanonicalWrapper& wrapper) {
+  if (wrapper.minpres_degree < 0) {
+    throw std::runtime_error("AIDA takes a minimal presentation as an input.");
+  }
+  if (wrapper.truc.get_number_of_parameters() != 2) {
+    throw std::runtime_error("AIDA is only compatible with 2-parameter minimal presentations.");
+  }
+
+  prepared_input out;
+  out.degree = wrapper.minpres_degree;
+  out.filtration_grid = wrapper.filtration_grid;
+  out.is_squeezed = has_nonempty_filtration_grid(wrapper.filtration_grid);
+
+  const auto& dimensions = wrapper.truc.get_dimensions();
+  const auto& filtrations = wrapper.truc.get_filtration_values();
+  const auto& boundaries = wrapper.truc.get_boundaries();
+
+  const std::size_t row_start = std::lower_bound(dimensions.begin(), dimensions.end(), out.degree) - dimensions.begin();
+  const std::size_t row_end =
+      std::lower_bound(dimensions.begin(), dimensions.end(), out.degree + 1) - dimensions.begin();
+  const std::size_t col_end =
+      std::lower_bound(dimensions.begin(), dimensions.end(), out.degree + 2) - dimensions.begin();
+
+  out.row_degree.reserve(row_end - row_start);
+  for (std::size_t i = row_start; i < row_end; ++i) {
+    out.row_degree.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
+  }
+
+  out.col_degree.reserve(col_end - row_end);
+  out.matrix.reserve(col_end - row_end);
+  for (std::size_t i = row_end; i < col_end; ++i) {
+    out.col_degree.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
+    auto& boundary = out.matrix.emplace_back();
+    boundary.reserve(boundaries[i].size());
+    for (const auto boundary_index : boundaries[i]) {
+      boundary.push_back(static_cast<int>(boundary_index));
+    }
+  }
+
+  return out;
+}
+
+template <typename Summand>
+nb::object summand_to_slicer(nb::object target,
+                             const Summand& summand,
+                             int degree,
+                             bool is_squeezed,
+                             const nb::object& filtration_grid) {
+  std::vector<int> dimensions(summand.row_degrees.size() + summand.col_degrees.size());
+  std::fill_n(dimensions.begin(), summand.row_degrees.size(), degree);
+  std::fill(dimensions.begin() + static_cast<std::ptrdiff_t>(summand.row_degrees.size()), dimensions.end(), degree + 1);
+
+  std::vector<std::vector<int> > boundaries(dimensions.size());
+  for (std::size_t i = 0; i < summand.matrix.size(); ++i) {
+    boundaries[summand.row_degrees.size() + i] = summand.matrix[i];
+  }
+
+  std::vector<std::pair<double, double> > filtration_values;
+  filtration_values.reserve(summand.row_degrees.size() + summand.col_degrees.size());
+  filtration_values.insert(filtration_values.end(), summand.row_degrees.begin(), summand.row_degrees.end());
+  filtration_values.insert(filtration_values.end(), summand.col_degrees.begin(), summand.col_degrees.end());
+
+  auto complex = multipers::build_contiguous_f64_slicer_from_output(filtration_values, boundaries, dimensions);
+
+  nb::object out = target.type()();
+  auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
+  multipers::build_slicer_from_complex(out_wrapper.truc, complex);
+  out_wrapper.minpres_degree = degree;
+  if (is_squeezed) {
+    out_wrapper.filtration_grid = filtration_grid;
+    out.attr("_clean_filtration_grid")();
   }
   return out;
 }
@@ -48,74 +138,28 @@ NB_MODULE(_aida_interface, m) {
 #if MULTIPERS_DISABLE_AIDA_INTERFACE
         throw std::runtime_error("AIDA in-memory interface is disabled at compile time.");
 #else
-        auto slicer_module = nb::module_::import_("multipers.slicer");
-        if (!nb::cast<bool>(slicer_module.attr("is_slicer")(s))) {
-          throw std::runtime_error("Input has to be a slicer.");
-        }
-        if (!nb::cast<bool>(s.attr("is_minpres"))) {
-          throw std::runtime_error("AIDA takes a minimal presentation as an input.");
-        }
-        if (nb::cast<int>(s.attr("num_parameters")) != 2) {
-          throw std::runtime_error("AIDA is only compatible with 2-parameter minimal presentations.");
-        }
-
-        bool is_squeezed = nb::cast<bool>(s.attr("is_squeezed"));
-        int degree = nb::cast<int>(s.attr("minpres_degree"));
         if (sort) {
           s = s.attr("to_colexical")();
         }
 
-        auto F = mpaida::cast_matrix<double>(
-            nb::module_::import_("numpy").attr("asarray")(s.attr("get_filtrations")("view"_a = false)));
-        auto D = mpaida::cast_vector<int>(s.attr("get_dimensions")());
-
-        std::vector<std::pair<double, double>> row_degree, col_degree;
-        for (size_t i = 0; i < D.size(); ++i) {
-          if (D[i] == degree)
-            row_degree.emplace_back(F[i][0], F[i][1]);
-          else if (D[i] == degree + 1)
-            col_degree.emplace_back(F[i][0], F[i][1]);
-        }
-
-        auto boundaries = nb::cast<std::vector<nb::object>>(s.attr("get_boundaries")());
-        std::vector<std::vector<int>> matrix;
-        size_t start = std::lower_bound(D.begin(), D.end(), degree + 1) - D.begin();
-        size_t stop = std::lower_bound(D.begin(), D.end(), degree + 2) - D.begin();
-        matrix.reserve(stop - start);
-        for (size_t i = start; i < stop; ++i) {
-          matrix.push_back(mpaida::cast_vector<int>(boundaries[i]));
-        }
+        nb::object target = mpaida::ensure_supported_target(s);
+        const auto& target_wrapper = nb::cast<const mpaida::CanonicalWrapper&>(target);
+        auto prepared = mpaida::build_input_from_slicer(target_wrapper);
 
         aida::AIDA_functor functor;
         functor.config.show_info = verbose;
         functor.config.sort_output = false;
         functor.config.sort = sort;
         functor.config.progress = progress;
-        auto input = aida::multipers_interface_input<int>(col_degree, row_degree, matrix);
+        auto input = aida::multipers_interface_input<int>(prepared.col_degree, prepared.row_degree, prepared.matrix);
         auto output = functor.multipers_interface(input);
 
-        auto mp_module = nb::module_::import_("multipers");
-        nb::object slicer_type = mp_module.attr("Slicer")(
-            s, "return_type_only"_a = true, "dtype"_a = nb::module_::import_("numpy").attr("float64"));
         nb::list out;
-
-        for (size_t i = 0; i < output.summands.size(); ++i) {
-          const auto& summand = output.summands[i];
-          std::vector<int> dims(summand.row_degrees.size() + summand.col_degrees.size());
-          for (size_t j = 0; j < summand.row_degrees.size(); ++j) dims[j] = degree;
-          for (size_t j = 0; j < summand.col_degrees.size(); ++j) dims[summand.row_degrees.size() + j] = degree + 1;
-          nb::list boundary_container;
-          for (size_t j = 0; j < summand.row_degrees.size(); ++j) boundary_container.append(nb::list());
-          for (const auto& row : summand.matrix) boundary_container.append(nb::cast(row));
-          std::vector<std::vector<double>> filtration_values;
-          filtration_values.reserve(summand.row_degrees.size() + summand.col_degrees.size());
-          for (const auto& p : summand.row_degrees) filtration_values.push_back({p.first, p.second});
-          for (const auto& p : summand.col_degrees) filtration_values.push_back({p.first, p.second});
-          nb::object slicer = slicer_type(boundary_container, nb::cast(dims), nb::cast(filtration_values));
-          slicer.attr("minpres_degree") = degree;
-          if (is_squeezed) {
-            slicer.attr("filtration_grid") = s.attr("filtration_grid");
-            slicer.attr("_clean_filtration_grid")();
+        for (const auto& summand : output.summands) {
+          nb::object slicer = mpaida::summand_to_slicer(
+              target, summand, prepared.degree, prepared.is_squeezed, prepared.filtration_grid);
+          if (target.ptr() != s.ptr()) {
+            slicer = multipers::nanobind_helpers::astype_slicer_to_original_type(s, slicer);
           }
           out.append(slicer);
         }

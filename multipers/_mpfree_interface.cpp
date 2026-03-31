@@ -7,7 +7,7 @@
 #include "ext_interface/mpfree_interface.hpp"
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
-#include "ext_interface/nanobind_registry_helpers.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
 namespace nb = nanobind;
@@ -20,15 +20,10 @@ namespace mpmi {
 
 inline void set_backend_stdout(bool enabled) { mpfree::verbose = enabled; }
 
-inline nb::object numpy_float64() { return nb::module_::import_("numpy").attr("float64"); }
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
 inline nb::object ensure_supported_target(nb::object slicer) {
-  return slicer.attr("astype")("vineyard"_a = false,
-                               "kcritical"_a = false,
-                               "dtype"_a = numpy_float64(),
-                               "col"_a = slicer.attr("col_type"),
-                               "pers_backend"_a = "matrix",
-                               "filtration_container"_a = "contiguous");
+  return multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
 }
 
 nb::object minimal_presentation_for_target(nb::object target,
@@ -38,75 +33,73 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool use_chunk,
                                            bool backend_stdout,
                                            bool keep_generators) {
-  return multipers::nanobind_helpers::visit_slicer_wrapper(
-      target, [&]<typename Desc>(typename Desc::wrapper& input_wrapper) {
-        nb::object out = target.type()();
-        auto& out_wrapper = nb::cast<typename Desc::wrapper&>(out);
+  auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
+  nb::object out = target.type()();
+  auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
 
-        if (!keep_generators) {
-          auto complex = multipers::mpfree_minpres_contiguous_interface(
-              input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
-          multipers::build_slicer_from_complex(out_wrapper.truc, complex);
-          return out;
-        }
+  if (!keep_generators) {
+    auto complex = multipers::mpfree_minpres_contiguous_interface(
+        input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+    multipers::build_slicer_from_complex(out_wrapper.truc, complex);
+    return out;
+  }
 
-        auto result = multipers::mpfree_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
-        multipers::build_slicer_from_complex(out_wrapper.truc, result.first);
+  auto result = multipers::mpfree_minpres_with_generators_contiguous_interface(
+      input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+  multipers::build_slicer_from_complex(out_wrapper.truc, result.first);
 
-        const auto dimensions = input_wrapper.truc.get_dimensions();
-        const auto& boundaries = input_wrapper.truc.get_boundaries();
-        auto& filtrations = input_wrapper.truc.get_filtration_values();
-        std::vector<size_t> degree_indices;
-        degree_indices.reserve(dimensions.size());
-        for (size_t i = 0; i < dimensions.size(); ++i) {
-          if (dimensions[i] == degree) {
-            degree_indices.push_back(i);
-          }
-        }
-        std::stable_sort(degree_indices.begin(), degree_indices.end(), [&](size_t a, size_t b) {
-          const auto& fa = filtrations[a];
-          const auto& fb = filtrations[b];
-          return fa(0, 1) < fb(0, 1) || (fa(0, 1) == fb(0, 1) && fa(0, 0) < fb(0, 0));
-        });
+  const auto dimensions = input_wrapper.truc.get_dimensions();
+  const auto& boundaries = input_wrapper.truc.get_boundaries();
+  auto& filtrations = input_wrapper.truc.get_filtration_values();
+  std::vector<size_t> degree_indices;
+  degree_indices.reserve(dimensions.size());
+  for (size_t i = 0; i < dimensions.size(); ++i) {
+    if (dimensions[i] == degree) {
+      degree_indices.push_back(i);
+    }
+  }
+  std::stable_sort(degree_indices.begin(), degree_indices.end(), [&](size_t a, size_t b) {
+    const auto& fa = filtrations[a];
+    const auto& fb = filtrations[b];
+    return fa(0, 1) < fb(0, 1) || (fa(0, 1) == fb(0, 1) && fa(0, 0) < fb(0, 0));
+  });
 
-        if (result.second.row_indices.size() != result.second.row_grades.size()) {
-          throw std::runtime_error("mpfree generator-basis extraction failed: row count mismatch.");
-        }
-        for (size_t i = 0; i < result.second.row_indices.size(); ++i) {
-          const auto row_idx = static_cast<size_t>(result.second.row_indices[i]);
-          if (row_idx >= degree_indices.size()) {
-            throw std::runtime_error("mpfree generator-basis extraction failed: row index out of range.");
-          }
-          const auto& filtration = filtrations[degree_indices[row_idx]];
-          const auto& grade = result.second.row_grades[i];
-          if (filtration(0, 0) != grade.first || filtration(0, 1) != grade.second) {
-            throw std::runtime_error(
-                "mpfree generator-basis extraction failed: row grades do not match the original degree block.");
-          }
-        }
+  if (result.second.row_indices.size() != result.second.row_grades.size()) {
+    throw std::runtime_error("mpfree generator-basis extraction failed: row count mismatch.");
+  }
+  for (size_t i = 0; i < result.second.row_indices.size(); ++i) {
+    const auto row_idx = static_cast<size_t>(result.second.row_indices[i]);
+    if (row_idx >= degree_indices.size()) {
+      throw std::runtime_error("mpfree generator-basis extraction failed: row index out of range.");
+    }
+    const auto& filtration = filtrations[degree_indices[row_idx]];
+    const auto& grade = result.second.row_grades[i];
+    if (filtration(0, 0) != grade.first || filtration(0, 1) != grade.second) {
+      throw std::runtime_error(
+          "mpfree generator-basis extraction failed: row grades do not match the original degree block.");
+    }
+  }
 
-        nb::list row_boundaries;
-        for (auto raw_row_idx : result.second.row_indices) {
-          const auto row_idx = static_cast<size_t>(raw_row_idx);
-          const auto idx = degree_indices[row_idx];
-          std::vector<uint32_t> boundary;
-          boundary.reserve(boundaries[idx].size());
-          for (auto value : boundaries[idx]) {
-            boundary.push_back(static_cast<uint32_t>(value));
-          }
-          row_boundaries.append(nb::cast(std::move(boundary)));
-        }
+  nb::list row_boundaries;
+  for (auto raw_row_idx : result.second.row_indices) {
+    const auto row_idx = static_cast<size_t>(raw_row_idx);
+    const auto idx = degree_indices[row_idx];
+    std::vector<uint32_t> boundary;
+    boundary.reserve(boundaries[idx].size());
+    for (auto value : boundaries[idx]) {
+      boundary.push_back(static_cast<uint32_t>(value));
+    }
+    row_boundaries.append(nb::cast(std::move(boundary)));
+  }
 
-        nb::dict basis;
-        basis["degree"] = degree;
-        basis["row_boundaries"] = std::move(row_boundaries);
-        basis["columns"] = nb::cast(std::move(result.second.columns));
-        basis["row_grades"] = nb::cast(std::move(result.second.row_grades));
-        basis["column_grades"] = nb::cast(std::move(result.second.column_grades));
-        out.attr("_generator_basis") = std::move(basis);
-        return out;
-      });
+  nb::dict basis;
+  basis["degree"] = degree;
+  basis["row_boundaries"] = std::move(row_boundaries);
+  basis["columns"] = nb::cast(std::move(result.second.columns));
+  basis["row_grades"] = nb::cast(std::move(result.second.row_grades));
+  basis["column_grades"] = nb::cast(std::move(result.second.column_grades));
+  out.attr("_generator_basis") = std::move(basis);
+  return out;
 }
 
 }  // namespace mpmi

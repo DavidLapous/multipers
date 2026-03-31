@@ -8,7 +8,7 @@
 #include "ext_interface/function_delaunay_interface.hpp"
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
-#include "ext_interface/nanobind_registry_helpers.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
 namespace nb = nanobind;
@@ -27,6 +27,8 @@ std::vector<std::vector<T>> cast_matrix(nb::handle h) {
 }
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
 inline nb::object numpy_float64() { return nb::module_::import_("numpy").attr("float64"); }
 
@@ -54,10 +56,9 @@ nb::object function_delaunay_to_slicer_for_target(nb::object target,
                                                   bool multi_chunk,
                                                   bool verbose) {
   auto complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
-  return multipers::nanobind_helpers::visit_slicer_wrapper(target, [&]<typename Desc>(typename Desc::wrapper& wrapper) {
-    multipers::build_slicer_from_complex(wrapper.truc, complex);
-    return target;
-  });
+  auto& wrapper = nb::cast<CanonicalWrapper&>(target);
+  multipers::build_slicer_from_complex(wrapper.truc, complex);
+  return target;
 }
 
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,

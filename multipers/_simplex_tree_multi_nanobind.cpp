@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ext_interface/nanobind_registry_helpers.hpp"
+#include "simplextree_conversion_core.hpp"
 #include "nanobind_array_utils.hpp"
 #include "nanobind_object_utils.hpp"
 #include "nanobind_simplextree_utils.hpp"
@@ -36,6 +37,7 @@ using tensor_dtype = int32_t;
 using indices_type = int32_t;
 using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>;
 
+using multipers::core::SimplexTreeConversion;
 using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
 using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
 using multipers::nanobind_helpers::is_simplextree_object;
@@ -629,7 +631,7 @@ template <typename Desc, typename TargetWrapper, typename TargetInterface>
 void copy_from_desc(TargetWrapper& self, const simplextree_wrapper_t<Desc>& source) {
   {
     nb::gil_scoped_release release;
-    self.tree.template copy_from_interface<typename Desc::filtration_type>(reinterpret_cast<intptr_t>(&source.tree));
+    SimplexTreeConversion<TargetInterface, typename Desc::interface_type>::run(self.tree, source.tree);
   }
   self.filtration_grid = source.filtration_grid;
 }

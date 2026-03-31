@@ -24,6 +24,7 @@
 #include "Persistence_slices_interface.h"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
+#include "gudhi/slicer_conversion_core.hpp"
 #include "gudhi/slicer_helpers.h"
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
@@ -42,6 +43,7 @@ using tensor_dtype = int32_t;
 using indices_type = int32_t;
 using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>;
 
+using multipers::core::SlicerConversion;
 using multipers::nanobind_dense_utils::matrix_from_array;
 using multipers::nanobind_dense_utils::vector_from_array;
 using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
@@ -653,7 +655,7 @@ bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
   visit_const_slicer_wrapper(source, [&]<typename D>(const typename D::wrapper& other) {
     {
       nb::gil_scoped_release release;
-      self.truc = TargetConcrete(other.truc);
+      self.truc = SlicerConversion<TargetConcrete, typename D::concrete>::run(other.truc);
     }
     self.filtration_grid = other.filtration_grid;
     self.generator_basis = other.generator_basis;
@@ -669,7 +671,7 @@ typename TargetDesc::wrapper construct_from_slicer_wrapper(const typename Source
   Wrapper out;
   {
     nb::gil_scoped_release release;
-    out.truc = Concrete(source.truc);
+    out.truc = SlicerConversion<Concrete, typename SourceDesc::concrete>::run(source.truc);
   }
   out.filtration_grid = source.filtration_grid;
   out.generator_basis = source.generator_basis;
@@ -2133,17 +2135,17 @@ NB_MODULE(_slicer_nanobind, m) {
          int n_jobs) {
         return nb::module_::import_("multipers.multiparameter_module_approximation")
             .attr("_module_approximation_single_input")(input,
-                                                           box,
-                                                           max_error,
-                                                           nlines,
-                                                           from_coordinates,
-                                                           complete,
-                                                           threshold,
-                                                           verbose,
-                                                           ignore_warnings,
-                                                           nb::borrow(direction),
-                                                           nb::borrow(swap_box_coords),
-                                                           n_jobs);
+                                                        box,
+                                                        max_error,
+                                                        nlines,
+                                                        from_coordinates,
+                                                        complete,
+                                                        threshold,
+                                                        verbose,
+                                                        ignore_warnings,
+                                                        nb::borrow(direction),
+                                                        nb::borrow(swap_box_coords),
+                                                        n_jobs);
       },
       "input"_a,
       "box"_a = nb::none(),
