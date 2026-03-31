@@ -5,6 +5,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -47,63 +48,53 @@ using multipers::nanobind_utils::tuple_from_size;
 using multipers::nanobind_utils::vector_from_handle;
 
 template <typename T>
-nb::object one_filtration_to_python(const multipers::tmp_interface::One_critical_filtration<T>& f) {
-  size_t p = f.num_parameters();
-  if (!f.is_finite()) {
-    return nb::cast(owned_array<T>(std::vector<T>(p, f(0, 0)), {p}));
-  }
-  std::vector<T> out(p);
-  for (size_t i = 0; i < p; ++i) {
-    out[i] = f(0, i);
-  }
-  return nb::cast(owned_array<T>(std::move(out), {p}));
-}
-
-template <typename T>
-nb::list filtration_list_to_python(const std::vector<multipers::tmp_interface::One_critical_filtration<T>>& values) {
-  nb::list out;
-  for (const auto& value : values) {
-    out.append(one_filtration_to_python(value));
-  }
-  return out;
-}
-
-template <typename T>
-nb::object filtration_matrix_to_python(
-    const std::vector<multipers::tmp_interface::One_critical_filtration<T>>& values) {
-  size_t rows = values.size();
-  size_t cols = rows == 0 ? 0 : values[0].num_parameters();
-  std::vector<T> flat;
-  flat.reserve(rows * cols);
-  for (const auto& value : values) {
-    if (!value.is_finite()) {
-      flat.insert(flat.end(), cols, value(0, 0));
-      continue;
-    }
-    for (size_t p = 0; p < cols; ++p) {
-      flat.push_back(value(0, p));
-    }
-  }
+nb::object corner_matrix_to_python(std::vector<T>&& flat, size_t rows, size_t cols) {
   return nb::cast(owned_array<T>(std::move(flat), {rows, cols}));
+}
+
+template <typename T>
+nb::object corner_matrix_to_python(const std::vector<T>& flat, size_t rows, size_t cols) {
+  return nb::cast(owned_array<T>(std::vector<T>(flat.begin(), flat.end()), {rows, cols}));
+}
+
+template <typename T>
+bool row_is_finite(const std::vector<T>& flat, size_t row, size_t cols) {
+  if constexpr (!std::numeric_limits<T>::has_infinity) {
+    return true;
+  } else {
+    const size_t offset = row * cols;
+    for (size_t col = 0; col < cols; ++col) {
+      if (!std::isfinite(static_cast<double>(flat[offset + col]))) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 template <typename T>
 nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
   auto births = summand.compute_birth_list();
   auto deaths = summand.compute_death_list();
+  const size_t num_parameters = static_cast<size_t>(summand.get_number_of_parameters());
   return nb::make_tuple(
-      filtration_matrix_to_python<T>(births), filtration_matrix_to_python<T>(deaths), summand.get_dimension());
+      corner_matrix_to_python<T>(
+          std::move(births), static_cast<size_t>(summand.get_number_of_birth_corners()), num_parameters),
+      corner_matrix_to_python<T>(
+          std::move(deaths), static_cast<size_t>(summand.get_number_of_death_corners()), num_parameters),
+      summand.get_dimension());
 }
 
 template <typename T>
-nb::tuple barcode_to_python(const std::vector<std::vector<std::pair<T, T>>>& barcode) {
+nb::tuple barcode_to_python(
+    const std::vector<std::vector<typename Gudhi::multi_persistence::Module<T>::Bar>>& barcode) {
   return tuple_from_size(barcode.size(), [&](size_t dim) -> nb::object {
     const auto& bars = barcode[dim];
     std::vector<T> flat;
     flat.reserve(bars.size() * 2);
     for (const auto& bar : bars) {
-      flat.push_back(bar.first);
-      flat.push_back(bar.second);
+      flat.push_back(bar[0]);
+      flat.push_back(bar[1]);
     }
     return nb::cast(owned_array<T>(std::move(flat), {bars.size(), size_t(2)}));
   });
@@ -296,12 +287,18 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
   for (const auto& summand : module) {
     auto births = summand.compute_birth_list();
     auto deaths = summand.compute_death_list();
+    const size_t birth_count = static_cast<size_t>(summand.get_number_of_birth_corners());
+    const size_t death_count = static_cast<size_t>(summand.get_number_of_death_corners());
     for (size_t p = 0; p < num_parameters; ++p) {
-      for (const auto& fil : births) {
-        if (fil.is_finite()) values[p].push_back(fil(0, p));
+      for (size_t row = 0; row < birth_count; ++row) {
+        if (row_is_finite(births, row, num_parameters)) {
+          values[p].push_back(births[row * num_parameters + p]);
+        }
       }
-      for (const auto& fil : deaths) {
-        if (fil.is_finite()) values[p].push_back(fil(0, p));
+      for (size_t row = 0; row < death_count; ++row) {
+        if (row_is_finite(deaths, row, num_parameters)) {
+          values[p].push_back(deaths[row * num_parameters + p]);
+        }
       }
     }
   }
@@ -639,22 +636,26 @@ void bind_mma_type(nb::module_& m) {
   nb::class_<WrapperSum>(m, Desc::summand_name.data())
       .def(nb::init<>())
       .def("get_birth_list",
-           [](WrapperSum& self) -> nb::list {
-             decltype(self.sum.compute_birth_list()) births;
+           [](WrapperSum& self) -> nb::object {
+             std::vector<T> births;
+             const size_t num_parameters = static_cast<size_t>(self.sum.get_number_of_parameters());
+             const size_t num_birth_corners = static_cast<size_t>(self.sum.get_number_of_birth_corners());
              {
                nb::gil_scoped_release release;
                births = self.sum.compute_birth_list();
              }
-             return filtration_list_to_python<T>(births);
+             return corner_matrix_to_python<T>(std::move(births), num_birth_corners, num_parameters);
            })
       .def("get_death_list",
-           [](WrapperSum& self) -> nb::list {
-             decltype(self.sum.compute_death_list()) deaths;
+           [](WrapperSum& self) -> nb::object {
+             std::vector<T> deaths;
+             const size_t num_parameters = static_cast<size_t>(self.sum.get_number_of_parameters());
+             const size_t num_death_corners = static_cast<size_t>(self.sum.get_number_of_death_corners());
              {
                nb::gil_scoped_release release;
                deaths = self.sum.compute_death_list();
              }
-             return filtration_list_to_python<T>(deaths);
+             return corner_matrix_to_python<T>(std::move(deaths), num_death_corners, num_parameters);
            })
       .def_prop_ro("degree", [](const WrapperSum& self) -> int { return self.sum.get_dimension(); })
       .def("get_bounds",
@@ -671,13 +672,7 @@ void bind_mma_type(nb::module_& m) {
                                    nb::cast(owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()),
                                                            {cbounds.second.size()})));
            })
-      .def("num_parameters",
-           [](WrapperSum& self) -> int {
-             auto births = self.sum.compute_birth_list();
-             if (!births.empty() && births[0].is_finite()) return births[0].num_parameters();
-             auto deaths = self.sum.compute_death_list();
-             return deaths.empty() ? 0 : deaths[0].num_parameters();
-           })
+      .def("num_parameters", [](WrapperSum& self) -> int { return self.sum.get_number_of_parameters(); })
       .def_prop_ro("_template_id", [](const WrapperSum&) -> int { return Desc::template_id; })
       .def_prop_ro("dtype", [](const WrapperSum&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
       .def("__eq__", [](WrapperSum& self, WrapperSum& other) { return self.sum == other.sum; });

@@ -329,7 +329,7 @@ bool insert_kcritical_simplex(Tree& tree, const std::vector<int>& simplex, const
   auto& base_tree = static_cast<BaseTree&>(tree);
   return base_tree
       .insert_simplex_and_subfaces(
-          simplex, Filtration::minus_inf(tree.num_parameters()), BaseTree::Insertion_strategy::FIRST_POSSIBLE)
+          BaseTree::Filtration_maintenance::INCREASE_NEW, simplex, Filtration::minus_inf(tree.num_parameters()))
       .second;
 }
 

@@ -438,10 +438,15 @@ class Simplex_tree_multi_interface
     int num_parameters = grid_st.num_parameters();
     Base::copy_from(grid_st, [&](const auto &simplex_filtration) {
       Filtration_value splx_filtration(num_parameters);
-      if (simplex_filtration.num_generators() > 1) {
+      const auto num_generators = simplex_filtration.num_generators();
+      if constexpr (Filtration_value::ensures_1_criticality()) {
+        if (num_generators > 1) {
+          throw std::logic_error("Cannot unsqueeze a multi-critical filtration into a 1-critical simplex tree.");
+        }
+      } else if (num_generators > 1) {
         splx_filtration.set_num_generators(simplex_filtration.num_generators());
       }
-      for (std::size_t g = 0; g < simplex_filtration.num_generators(); ++g) {
+      for (std::size_t g = 0; g < num_generators; ++g) {
         for (int i = 0; i < num_parameters; ++i) {
           const double coord = static_cast<double>(simplex_filtration(g, i));
           if (std::isnan(coord)) {

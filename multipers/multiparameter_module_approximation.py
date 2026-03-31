@@ -285,14 +285,15 @@ def _module_plot(self, degree: int = -1, **kwargs):
         return None
 
     mod = self.get_module_of_degree(degree)
-    corners = []
+    birth_corners = []
+    death_corners = []
     for summand in mod:
-        corners.append(
-            (np.asarray(summand.get_birth_list()), np.asarray(summand.get_death_list()))
-        )
+        birth_corners.append(np.asarray(summand.get_birth_list()))
+        death_corners.append(np.asarray(summand.get_death_list()))
     interleavings = mod.get_interleavings(box)
     plot2d_PyModule(
-        corners,
+        birth_corners,
+        death_corners,
         box=box,
         dimension=degree,
         interleavings=interleavings,
