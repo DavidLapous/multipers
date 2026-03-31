@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -217,84 +219,11 @@ nb::object self_handle(Wrapper& self) {
   return nb::find(self);
 }
 
-template <typename Concrete, typename Rows>
-typename Concrete::Filtration_value make_kcritical_filtration(const Rows& rows) {
-  using TargetValue = typename Concrete::Filtration_value::value_type;
-
-  size_t num_parameters = rows.empty() ? 0 : rows.front().size();
-  typename Concrete::Filtration_value filtration(num_parameters);
-  auto inf = Concrete::Filtration_value::inf(num_parameters);
-  filtration.push_to_least_common_upper_bound(inf, false);
-  for (const auto& row : rows) {
-    if constexpr (std::is_same_v<typename Rows::value_type::value_type, TargetValue>) {
-      filtration.add_generator(row);
-    } else {
-      std::vector<TargetValue> converted(row.begin(), row.end());
-      filtration.add_generator(converted);
-    }
-  }
-  return filtration;
-}
-
-template <typename Wrapper, typename Concrete, typename SourceWrapper>
-bool try_build_kcritical_from_simplextree_scc(Wrapper& self, SourceWrapper& source) {
-  using Complex = Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value>;
-  Concrete built;
-  {
-    nb::gil_scoped_release release;
-    auto blocks = source.tree.kcritical_simplextree_to_scc();
-    size_t total_size = 0;
-    std::vector<size_t> block_sizes;
-    block_sizes.reserve(blocks.size());
-    for (const auto& block : blocks) {
-      block_sizes.push_back(block.first.size());
-      total_size += block.first.size();
-    }
-
-    typename Complex::Boundary_container boundaries;
-    typename Complex::Dimension_container dimensions;
-    typename Complex::Filtration_value_container filtrations;
-    boundaries.reserve(total_size);
-    dimensions.reserve(total_size);
-    filtrations.reserve(total_size);
-
-    size_t shift = 0;
-    size_t previous_block_size = 0;
-    for (size_t dim = 0; dim < blocks.size(); ++dim) {
-      const auto& block_filtrations = blocks[dim].first;
-      const auto& block_boundaries = blocks[dim].second;
-      for (size_t i = 0; i < block_filtrations.size(); ++i) {
-        typename Complex::Boundary boundary;
-        boundary.reserve(block_boundaries[i].size());
-        for (unsigned int value : block_boundaries[i]) {
-          boundary.push_back(static_cast<uint32_t>(value + shift));
-        }
-        std::sort(boundary.begin(), boundary.end());
-        boundaries.push_back(std::move(boundary));
-        dimensions.push_back(static_cast<int>(dim));
-        filtrations.push_back(make_kcritical_filtration<Concrete>(block_filtrations[i]));
-      }
-      shift += previous_block_size;
-      previous_block_size = block_sizes[dim];
-    }
-
-    built = Concrete(Complex(std::move(boundaries), std::move(dimensions), std::move(filtrations)));
-  }
-  self.truc = std::move(built);
-  self.filtration_grid = source.filtration_grid;
-  self.generator_basis = nb::none();
-  self.minpres_degree = -1;
-  return true;
-}
 
 inline bool is_simplextree_multi(const nb::handle& source) { return is_simplextree_object(source); }
 
 template <typename Desc, typename Wrapper, typename Concrete>
 void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& source) {
-  if constexpr (Desc::is_kcritical) {
-    (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, source);
-    return;
-  }
   {
     nb::gil_scoped_release release;
     self.truc = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Concrete>(source.tree);

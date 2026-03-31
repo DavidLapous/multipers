@@ -140,6 +140,7 @@ exclude = [
   "*.yml",
   "cmake_install.cmake",
   ".DS_Store",
+  "*.tmp"
 ]
 include = [
   "multipers/",
@@ -148,7 +149,7 @@ include = [
   "tools/codegen/_registry.py",
   "tools/core/**",
   # BEGIN GENERATED SDIST EXT INCLUDE
-  # Generated from `ninja -t deps`; update with
+  # Generated from `ninja -C build -t deps`; update with
   # `python tools/update_sdist_ext_whitelist.py --write`.
   "ext/2pac/ArrayColumn.cpp",
   "ext/2pac/ArrayColumn.hpp",

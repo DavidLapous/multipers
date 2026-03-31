@@ -243,7 +243,6 @@ function(multipers_configure_module module_name target_name)
     multipers_link_tbb(${target_name})
 
   elseif(module_name STREQUAL "_mma_nanobind")
-    multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
 
   elseif(module_name STREQUAL "_function_rips_nanobind")

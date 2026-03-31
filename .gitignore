@@ -9,6 +9,7 @@ _*.pkl
 .pytest_cache
 .virtual_documents
 .ruff_cache
+*.tmp
 
 # bear
 compile_commands.json

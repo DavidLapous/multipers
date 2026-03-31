@@ -26,7 +26,6 @@
 #include "Persistence_slices_interface.h"
 #include "gudhi/Multi_filtration/multi_filtration_utils.h"
 #include "gudhi/multi_simplex_tree_helpers.h"
-#include "../multiparameter_module_approximation/format_python-cpp.h"
 
 namespace Gudhi {
 namespace multiparameter {
@@ -511,13 +510,6 @@ class Simplex_tree_multi_interface
     }
     return out;
   }
-
-  using boundary_type = std::vector<unsigned int>;
-  using boundary_matrix = std::vector<boundary_type>;
-
-  using kscc_type = mma::kscc_type<SimplexTreeOptions>;
-
-  kscc_type kcritical_simplextree_to_scc() { return Gudhi::multiparameter::mma::kcritical_simplextree_to_scc(*this); }
 
   // Diff / grid stuff
 

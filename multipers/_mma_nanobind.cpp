@@ -58,21 +58,6 @@ nb::object corner_matrix_to_python(const std::vector<T>& flat, size_t rows, size
 }
 
 template <typename T>
-bool row_is_finite(const std::vector<T>& flat, size_t row, size_t cols) {
-  if constexpr (!std::numeric_limits<T>::has_infinity) {
-    return true;
-  } else {
-    const size_t offset = row * cols;
-    for (size_t col = 0; col < cols; ++col) {
-      if (!std::isfinite(static_cast<double>(flat[offset + col]))) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
-template <typename T>
 nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
   auto births = summand.compute_birth_list();
   auto deaths = summand.compute_death_list();
@@ -291,13 +276,19 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
     const size_t death_count = static_cast<size_t>(summand.get_number_of_death_corners());
     for (size_t p = 0; p < num_parameters; ++p) {
       for (size_t row = 0; row < birth_count; ++row) {
-        if (row_is_finite(births, row, num_parameters)) {
-          values[p].push_back(births[row * num_parameters + p]);
+        const T value = births[row * num_parameters + p];
+        if constexpr (!std::numeric_limits<T>::has_infinity) {
+          values[p].push_back(value);
+        } else if (std::isfinite(static_cast<double>(value))) {
+          values[p].push_back(value);
         }
       }
       for (size_t row = 0; row < death_count; ++row) {
-        if (row_is_finite(deaths, row, num_parameters)) {
-          values[p].push_back(deaths[row * num_parameters + p]);
+        const T value = deaths[row * num_parameters + p];
+        if constexpr (!std::numeric_limits<T>::has_infinity) {
+          values[p].push_back(value);
+        } else if (std::isfinite(static_cast<double>(value))) {
+          values[p].push_back(value);
         }
       }
     }

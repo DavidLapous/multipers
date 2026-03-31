@@ -232,6 +232,23 @@ def _module_landscapes(
     return out
 
 
+def _module_landscape(
+    self,
+    degree: int,
+    k: int = 0,
+    box=None,
+    resolution: Sequence[int] | np.ndarray = (100, 100),
+    plot: bool = False,
+):
+    return self.landscapes(
+        degree=degree,
+        ks=[k],
+        box=box,
+        resolution=resolution,
+        plot=plot,
+    )[0]
+
+
 def _module_barcode2(
     self,
     basepoint,
@@ -245,6 +262,8 @@ def _module_barcode2(
     basepoint = np.ascontiguousarray(basepoint, dtype=self.dtype)
     if direction is not None:
         direction = np.ascontiguousarray(direction, dtype=self.dtype)
+    if threshold:
+        keep_inf = False
     bc = tuple(
         np.asarray(x).reshape(-1, 2)
         for x in self._get_barcode_from_line(basepoint, direction, int(degree))
@@ -254,6 +273,57 @@ def _module_barcode2(
     if full:
         bc = type(self)._bc_to_full(bc, basepoint, direction)
     return bc
+
+
+def _module_barcodes(
+    self,
+    degree: int = -1,
+    basepoints=None,
+    num: int = 100,
+    box=None,
+    threshold: bool = False,
+):
+    if box is None:
+        box = self.get_box()
+    if basepoints is None:
+        if len(box[0]) != 2:
+            raise ValueError(
+                "Basepoints have to be specified for filtration dimension >= 3."
+            )
+        height = box[1][1] - box[0][1]
+        basepoints = np.linspace(
+            [box[0][0] - height, box[0][1]],
+            [box[1][0], box[0][1]],
+            num=num,
+        )
+    else:
+        num = len(basepoints)
+
+    basepoints = np.ascontiguousarray(basepoints, dtype=self.dtype)
+    per_dimension = [[] for _ in range(self.max_degree + 1)]
+    for basepoint in basepoints:
+        barcodes = self.barcode2(
+            basepoint=basepoint,
+            degree=degree,
+            threshold=threshold,
+            keep_inf=not threshold,
+        )
+        for dim, bars in enumerate(barcodes):
+            per_dimension[dim].append(np.asarray(bars).reshape(-1, 2))
+
+    dtype = np.dtype(self.dtype)
+    out = []
+    for bars in per_dimension:
+        if not bars:
+            out.append(np.empty((num, 0, 2), dtype=dtype))
+            continue
+        first_shape = bars[0].shape
+        if any(bar.shape != first_shape for bar in bars[1:]):
+            raise ValueError(
+                "Barcodes along different lines do not have a consistent shape."
+            )
+        out.append(np.stack(bars, axis=0))
+    return tuple(out)
 
 
 def _module_plot(self, degree: int = -1, **kwargs):
@@ -311,7 +381,10 @@ def _install_python_api():
         cls._threshold_bc = staticmethod(_module_threshold_bc)
         if np.issubdtype(np.dtype(cls().dtype), np.floating):
             cls.plot = _module_plot
+            cls.landscape = _module_landscape
             cls.landscapes = _module_landscapes
+            cls.barcodes = _module_barcodes
+            cls.barcodes2 = _module_barcodes
             cls.representation = _module_representation
             cls.barcode2 = _module_barcode2
 
