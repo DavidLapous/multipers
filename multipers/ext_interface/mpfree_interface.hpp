@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -244,6 +246,265 @@ inline std::vector<std::size_t> row_order_for_output(const Graded_matrix& matrix
   return order;
 }
 
+template <typename GradedMatrix1, typename GradedMatrix2>
+concept has_chunk_preprocessing_with_surviving_rows =
+    requires(GradedMatrix1& M1, GradedMatrix2& M2, std::vector<phat::index>* surviving_rows) {
+      mpfree::chunk_preprocessing(M1, M2, surviving_rows);
+    };
+
+template <typename GradedMatrix>
+inline void chunk_preprocessing_with_surviving_rows_fallback(GradedMatrix& M1,
+                                                             GradedMatrix& M2,
+                                                             std::vector<phat::index>& surviving_rows) {
+  using index = phat::index;
+
+  if (mpfree::verbose) std::cout << "Num entries at start chunk: " << M1.get_num_entries() << std::endl;
+
+  std::vector<int> local_pivots;
+  local_pivots.reserve(M1.num_rows);
+  for (index i = 0; i < M1.num_rows; i++) {
+    local_pivots.push_back(-1);
+  }
+  if (mpfree::verbose) std::cout << "Local reduction" << std::endl;
+  std::vector<index> global_indices;
+  for (index i = 0; i < M1.get_num_cols(); i++) {
+    while (M1.is_local(i)) {
+      index p = M1.get_max_index(i);
+      index j = local_pivots[p];
+      if (j != -1) {
+        M1.add_to(j, i);
+      } else {
+        local_pivots[p] = i;
+        break;
+      }
+    }
+    if (!M1.is_local(i)) {
+      global_indices.push_back(i);
+    }
+    if (M1.is_empty(i)) {
+      M1.clear(i);
+    }
+  }
+
+  if (mpfree::verbose) std::cout << "Num entries after local reduce: " << M1.get_num_entries() << std::endl;
+  if (mpfree::verbose) std::cout << "Sparsification" << std::endl;
+
+  std::vector<index> col;
+  M1.sync();
+#pragma omp parallel for schedule(guided, 1), private(col)
+  for (index r = 0; r < global_indices.size(); r++) {
+    col.clear();
+    index i = global_indices[r];
+    while (!M1.is_empty(i)) {
+      index p = M1.get_max_index(i);
+      index j = local_pivots[p];
+      if (j != -1) {
+        M1.add_to(j, i);
+      } else {
+        col.push_back(p);
+        M1.remove_max(i);
+      }
+    }
+    std::reverse(col.begin(), col.end());
+    M1.set_col(i, col);
+  }
+  M1.sync();
+
+  if (mpfree::verbose) std::cout << "Build up smaller matrices" << std::endl;
+  std::vector<int> new_row_index;
+  new_row_index.resize(M1.num_rows);
+  index row_count = 0;
+  surviving_rows.clear();
+  surviving_rows.reserve(M1.num_rows);
+  for (index i = 0; i < M1.num_rows; i++) {
+    if (local_pivots[i] == -1) {
+      new_row_index[i] = row_count++;
+      surviving_rows.push_back(i);
+    } else {
+      new_row_index[i] = -1;
+    }
+  }
+
+  std::vector<int> new_col_index;
+  new_col_index.resize(M1.get_num_cols());
+  index col_count = 0;
+  for (index i = 0; i < M1.get_num_cols(); i++) {
+    if (M1.is_empty(i) || M1.is_local(i)) {
+      new_col_index[i] = -1;
+    } else {
+      new_col_index[i] = col_count++;
+    }
+  }
+
+  for (index i = 0; i < M1.get_num_cols(); i++) {
+    if (new_col_index[i] != -1) {
+      index j = new_col_index[i];
+      assert(j <= i);
+      M1.grades[j] = M1.grades[i];
+      std::vector<index> current_col;
+      M1.get_col(i, current_col);
+      for (index k = 0; k < current_col.size(); k++) {
+        current_col[k] = new_row_index[current_col[k]];
+      }
+      M1.set_col(j, current_col);
+    }
+  }
+
+  M1.set_dimensions(row_count, col_count);
+
+  for (index i = 0; i < M1.num_rows; i++) {
+    if (local_pivots[i] == -1) {
+      int j = new_row_index[i];
+      assert(j <= i);
+      M1.row_grades[j] = M1.row_grades[i];
+      M2.grades[j] = M1.row_grades[i];
+      std::vector<index> current_col;
+      M2.get_col(i, current_col);
+      M2.set_col(j, current_col);
+    }
+  }
+  M2.set_dimensions(M2.num_rows, row_count);
+  M2.grades.resize(row_count);
+  M1.row_grades.resize(row_count);
+  M1.num_rows = row_count;
+
+  M1.assign_slave_matrix();
+  M1.assign_pivots();
+  M2.assign_slave_matrix();
+  M2.assign_pivots();
+
+  M1.pq_row.resize(M1.num_grades_y);
+  M2.pq_row.resize(M2.num_grades_y);
+
+  if (mpfree::verbose)
+    std::cout << "After chunk reduction, matrix has " << M1.get_num_cols() << " columns and " << M1.num_rows << " rows"
+              << std::endl;
+  if (mpfree::verbose) std::cout << "N' is " << M1.get_num_cols() + M1.num_rows << std::endl;
+  if (mpfree::verbose) std::cout << "Num entries after chunk: " << M1.get_num_entries() << std::endl;
+}
+
+template <typename GradedMatrix1, typename GradedMatrix2>
+inline void chunk_preprocessing_with_surviving_rows(GradedMatrix1& M1,
+                                                    GradedMatrix2& M2,
+                                                    std::vector<phat::index>& surviving_rows) {
+  if constexpr (has_chunk_preprocessing_with_surviving_rows<GradedMatrix1, GradedMatrix2>) {
+    mpfree::chunk_preprocessing(M1, M2, &surviving_rows);
+  } else {
+    chunk_preprocessing_with_surviving_rows_fallback(M1, M2, surviving_rows);
+  }
+}
+
+template <typename GradedMatrixInput, typename GradedMatrixOutput>
+concept has_minimize_with_kept_rows =
+    requires(GradedMatrixInput& M, GradedMatrixOutput& result, std::vector<phat::index>* kept_rows) {
+      mpfree::minimize(M, result, kept_rows);
+    };
+
+template <typename GradedMatrixInput, typename GradedMatrixOutput>
+inline void minimize_with_kept_rows_fallback(GradedMatrixInput& M,
+                                             GradedMatrixOutput& result,
+                                             std::vector<phat::index>& kept_rows) {
+  using Grade = typename GradedMatrixInput::Grade;
+  using index = phat::index;
+  using Column = std::vector<index>;
+
+  GradedMatrixInput& VVM = M;
+  VVM.assign_pivots();
+
+  std::set<index> rows_to_delete;
+  std::vector<index> cols_to_keep;
+  std::vector<Grade> col_grades;
+  for (index i = 0; i < VVM.get_num_cols(); i++) {
+    while (!VVM.is_empty(i)) {
+      index col_grade_x = VVM.grades[i].index_at[0];
+      index col_grade_y = VVM.grades[i].index_at[1];
+      index p = VVM.get_max_index(i);
+      index row_grade_x = VVM.row_grades[p].index_at[0];
+      index row_grade_y = VVM.row_grades[p].index_at[1];
+
+      if (col_grade_x != row_grade_x || col_grade_y != row_grade_y) {
+        cols_to_keep.push_back(i);
+        col_grades.push_back(VVM.grades[i]);
+        break;
+      }
+      if (VVM.pivots[p] == -1) {
+        rows_to_delete.insert(p);
+        VVM.pivots[p] = i;
+        break;
+      }
+      VVM.add_to(VVM.pivots[p], i);
+    }
+    assert(!VVM.is_empty(i));
+  }
+
+  std::vector<Column> new_cols(cols_to_keep.size());
+  VVM.sync();
+#pragma omp parallel for schedule(guided, 1)
+  for (index k = 0; k < cols_to_keep.size(); k++) {
+    Column& col = new_cols[k];
+    index i = cols_to_keep[k];
+    while (!VVM.is_empty(i)) {
+      index p = VVM.get_max_index(i);
+      if (VVM.pivots[p] == -1) {
+        col.push_back(p);
+        VVM.remove_max(i);
+      } else {
+        VVM.add_to(VVM.pivots[p], i);
+      }
+    }
+    std::reverse(col.begin(), col.end());
+  }
+  VVM.sync();
+
+  index nr = VVM.num_rows;
+  index count = 0;
+  std::unordered_map<index, index> index_map;
+  std::vector<Grade> res_row_grades;
+  for (index i = 0; i < nr; i++) {
+    if (rows_to_delete.count(i) == 0) {
+      index_map[i] = count++;
+      res_row_grades.push_back(VVM.row_grades[i]);
+    }
+  }
+
+  kept_rows.clear();
+  kept_rows.reserve(index_map.size());
+  for (index i = 0; i < nr; i++) {
+    if (rows_to_delete.count(i) == 0) {
+      kept_rows.push_back(i);
+    }
+  }
+
+  for (index i = 0; i < cols_to_keep.size(); i++) {
+    Column& col = new_cols[i];
+    for (int j = 0; j < col.size(); j++) {
+      assert(index_map.count(col[j]));
+      col[j] = index_map[col[j]];
+    }
+  }
+
+  result.number_of_parameters = M.number_of_parameters;
+  result.set_dimensions(index_map.size(), cols_to_keep.size());
+  result.num_rows = index_map.size();
+  result.grades = col_grades;
+  std::copy(res_row_grades.begin(), res_row_grades.end(), std::back_inserter(result.row_grades));
+  for (int i = 0; i < cols_to_keep.size(); i++) {
+    result.set_col(i, new_cols[i]);
+  }
+  mpp_utils::assign_grade_indices(result);
+}
+
+template <typename GradedMatrixInput, typename GradedMatrixOutput>
+inline void minimize_with_kept_rows(GradedMatrixInput& M,
+                                    GradedMatrixOutput& result,
+                                    std::vector<phat::index>& kept_rows) {
+  if constexpr (has_minimize_with_kept_rows<GradedMatrixInput, GradedMatrixOutput>) {
+    mpfree::minimize(M, result, &kept_rows);
+  } else {
+    minimize_with_kept_rows_fallback(M, result, kept_rows);
+  }
+}
+
 template <typename index_type>
 inline mpfree_generator_matrix_output<index_type> convert_generator_matrix_to_output(
     const Graded_matrix& kernel_basis,
@@ -444,7 +705,7 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
   mpfree_raw_result out;
 
   if (use_chunk) {
-    mpfree::chunk_preprocessing(GM1, GM2, &out.chain_row_indices);
+    chunk_preprocessing_with_surviving_rows(GM1, GM2, out.chain_row_indices);
   } else {
     out.chain_row_indices.reserve(gm_lower.grades.size());
     for (phat::index i = 0; i < static_cast<phat::index>(gm_lower.grades.size()); ++i) {
@@ -470,7 +731,7 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
 
   out.kernel_basis = Ker_base;
   out.has_generators = true;
-  mpfree::minimize(semi_min_rep, out.min_rep, &out.surviving_rows);
+  minimize_with_kept_rows(semi_min_rep, out.min_rep, out.surviving_rows);
   mpfree::verbose = old_verbose;
   return out;
 }
