@@ -104,6 +104,44 @@ def convolution_signed_measures(
                 **kwargs,
             )
 
+        case "dense" | "jax":
+            if backend == "jax" and not _is_jax_api(api):
+                raise ValueError("The jax backend requires JAX arrays.")
+
+            def convolution_signed_measures_on_grid(
+                signed_measures: Iterable[tuple[np.ndarray, np.ndarray]],
+            ) -> np.ndarray:
+                return api.cat(
+                    [
+                        _pts_convolution_dense(
+                            pts=pts,
+                            pts_weights=weights,
+                            grid_iterator=grid_iterator,
+                            bandwidth=bandwidth,
+                            kernel=kernel,
+                            api=api,
+                            **kwargs,
+                        )
+                        for pts, weights in signed_measures
+                    ],
+                    axis=0,
+                )
+
+            pts, weights = iterable_of_signed_measures[0][0]
+            small_pts, small_weights = pts[:2], weights[:2]
+            _pts_convolution_dense(
+                small_pts,
+                small_weights,
+                grid_iterator=grid_iterator,
+                bandwidth=bandwidth,
+                kernel=kernel,
+                api=api,
+                **kwargs,
+            )
+
+        case _:
+            raise ValueError(f"Unknown convolution backend {backend}.")
+
     if n_jobs > 1 or n_jobs == -1:
         prefer = "processes" if backend == "sklearn" else "threads"
         from joblib import Parallel, delayed
@@ -158,6 +196,7 @@ def _pts_convolution_sparse_old(
     )  # TODO : check rtol
     pos_indices = pts_weights > 0
     neg_indices = pts_weights < 0
+    normalizer = len(pts)
     img_pos = (
         np.zeros(len(grid_iterator))
         if pos_indices.sum() == 0
@@ -172,7 +211,13 @@ def _pts_convolution_sparse_old(
             pts[neg_indices], sample_weight=-pts_weights[neg_indices]
         ).score_samples(grid_iterator)
     )
-    return np.exp(img_pos) - np.exp(img_neg)
+    pos_scale = (
+        pts_weights[pos_indices].sum() / normalizer if pos_indices.any() else 0.0
+    )
+    neg_scale = (
+        (-pts_weights[neg_indices]).sum() / normalizer if neg_indices.any() else 0.0
+    )
+    return np.exp(img_pos) * pos_scale - np.exp(img_neg) * neg_scale
 
 
 def _pts_convolution_pykeops(
@@ -185,13 +230,40 @@ def _pts_convolution_pykeops(
     **more_kde_args,
 ):
     """
-    Pykeops convolution
+    KDE-based convolution. Uses PyKeOps when available for the input backend.
     """
     if api is None:
         api = api_from_tensor(pts)
     pts = api.astensor(pts)
     dtype = pts.dtype
     kde = KDE(kernel=kernel, bandwidth=bandwidth, **more_kde_args)
+    return kde.fit(
+        pts, sample_weights=api.astype(pts_weights, dtype), api=api
+    ).score_samples(api.astype(grid_iterator, dtype))
+
+
+def _pts_convolution_dense(
+    pts,
+    pts_weights,
+    grid_iterator,
+    kernel: available_kernels = "gaussian",
+    bandwidth=0.1,
+    api=None,
+    **more_kde_args,
+):
+    """
+    Exact dense convolution using the current array backend.
+    """
+    if api is None:
+        api = api_from_tensor(pts)
+    pts = api.astensor(pts)
+    dtype = pts.dtype
+    kde = KDE(
+        kernel=kernel,
+        bandwidth=bandwidth,
+        implementation="dense",
+        **more_kde_args,
+    )
     return kde.fit(
         pts, sample_weights=api.astype(pts_weights, dtype), api=api
     ).score_samples(api.astype(grid_iterator, dtype))
@@ -236,13 +308,66 @@ def sinc_kernel(x_i, y_j, bandwidth, api=_npapi):
     return kernel
 
 
+def _is_jax_api(api) -> bool:
+    return getattr(api, "__name__", "") == "multipers.array_api.jax"
+
+
+def _dense_kernel(
+    X,
+    Y,
+    *,
+    kernel: available_kernels,
+    bandwidth,
+    api,
+    **kwargs,
+):
+    if callable(kernel):
+        raise NotImplementedError(
+            "Custom kernels are only supported with the PyKeOps implementation."
+        )
+
+    X = api.astensor(X)
+    Y = api.astype(Y, X.dtype)
+    dim = X.shape[-1]
+
+    match kernel:
+        case "gaussian":
+            pairwise_distances = api.cdist(X, Y)
+            bandwidth = api.astensor(bandwidth, dtype=X.dtype)
+            exponent = -((pairwise_distances / bandwidth) ** 2) / 2
+            normalization = api.astensor(
+                (bandwidth * (2 * np.pi) ** 0.5) ** dim, dtype=X.dtype
+            )
+            return api.exp(exponent) / normalization
+        case "exponential" | "exponential_kernel":
+            pairwise_distances = api.cdist(X, Y)
+            bandwidth = api.astensor(bandwidth, dtype=X.dtype)
+            return api.exp(-(pairwise_distances / bandwidth)) / bandwidth
+        case "multivariate_gaussian":
+            covariance_matrix_inverse = api.astype(bandwidth, X.dtype)
+            z = X[:, None, :] - Y[None, :, :]
+            quad_form = api.einsum("...i,ij,...j->...", z, covariance_matrix_inverse, z)
+            normalization = api.astensor(
+                (2 * np.pi) ** (-dim / 2), dtype=X.dtype
+            ) * api.sqrt(api.det(covariance_matrix_inverse))
+            return normalization * api.exp(-(quad_form / 2))
+        case "sinc":
+            pairwise_distances = api.cdist(X, Y)
+            bandwidth = api.astensor(bandwidth, dtype=X.dtype)
+            norm = pairwise_distances / bandwidth
+            sinc = api.sinc
+            return 2 * sinc(2 * norm) - sinc(norm)
+        case _:
+            raise ValueError(f"Unknown kernel {kernel}.")
+
+
 def _kernel(
     kernel: available_kernels = "gaussian",
 ):
     match kernel:
         case "gaussian":
             return gaussian_kernel
-        case "exponential":
+        case "exponential" | "exponential_kernel":
             return exponential_kernel
         case "multivariate_gaussian":
             return multivariate_gaussian_kernel
@@ -265,7 +390,10 @@ def _kernel(
 # TODO : multiple bandwidths at once with lazy tensors
 class KDE:
     """
-    Fast, scikit-style, and differentiable kernel density estimation, using PyKeops.
+    Fast, scikit-style, differentiable kernel density estimation.
+
+    Uses PyKeOps when available for NumPy and Torch inputs, and falls back to an
+    exact dense implementation otherwise.
     """
 
     def __init__(
@@ -273,6 +401,8 @@ class KDE:
         bandwidth: Any = 1,
         kernel: available_kernels = "gaussian",
         return_log: bool = False,
+        implementation: Literal["auto", "pykeops", "dense"] = "auto",
+        chunk_size: int = 2048,
         **kwargs,
     ):
         """
@@ -286,6 +416,10 @@ class KDE:
         self.api = None
         self._sample_weights = None
         self.return_log = return_log
+        self.implementation = implementation
+        self.chunk_size = chunk_size
+        self._implementation = None
+        self._dense_score_samples = None
         self.kwargs = kwargs
 
     def fit(self, X, sample_weights=None, y=None, api=None):
@@ -293,7 +427,78 @@ class KDE:
         self.X = self.api.astensor(X)
         self._sample_weights = sample_weights
         self._kernel = _kernel(self.kernel)
+        self._implementation = self._resolve_implementation()
+        self._dense_score_samples = None
         return self
+
+    def _resolve_implementation(self) -> Literal["pykeops", "dense"]:
+        if self.implementation == "auto":
+            if getattr(self.api, "check_keops", lambda: False)():
+                return "pykeops"
+            return "dense"
+        if self.implementation == "pykeops":
+            if not getattr(self.api, "check_keops", lambda: False)():
+                raise ValueError("PyKeOps is unavailable for this backend.")
+            return "pykeops"
+        return "dense"
+
+    def _make_dense_score_samples(self):
+        assert self.api is not None and self.X is not None
+        X = self.X
+        weights = None
+        if self._sample_weights is not None:
+            weights = self.api.astype(self._sample_weights, X.dtype)
+
+        def score_chunk(X_chunk, Y_chunk):
+            kernel_values = _dense_kernel(
+                X_chunk,
+                Y_chunk,
+                kernel=self.kernel,
+                bandwidth=self.bandwidth,
+                api=self.api,
+                **self.kwargs,
+            )
+            if weights is not None:
+                kernel_values = kernel_values * weights[:, None]
+            return self.api.sum(kernel_values, axis=0) / kernel_values.shape[0]
+
+        if _is_jax_api(self.api):
+            return self.api.jit(score_chunk)
+        return score_chunk
+
+    def _score_samples_dense(self, Y, return_kernel=False):
+        assert self.api is not None and self.X is not None
+        X = self.X
+        if X.shape[0] == 0:
+            return self.api.zeros((Y.shape[0]), dtype=X.dtype)
+        if self._dense_score_samples is None:
+            self._dense_score_samples = self._make_dense_score_samples()
+
+        Y = self.api.astype(Y, X.dtype)
+        if return_kernel:
+            kernel_values = _dense_kernel(
+                X,
+                Y,
+                kernel=self.kernel,
+                bandwidth=self.bandwidth,
+                api=self.api,
+                **self.kwargs,
+            )
+            if self._sample_weights is not None:
+                kernel_values = (
+                    kernel_values
+                    * self.api.astype(self._sample_weights, X.dtype)[:, None]
+                )
+            return kernel_values
+
+        outputs = []
+        for start in range(0, Y.shape[0], self.chunk_size):
+            stop = min(start + self.chunk_size, Y.shape[0])
+            outputs.append(self._dense_score_samples(X, Y[start:stop]))
+        density_estimation = outputs[0] if len(outputs) == 1 else self.api.cat(outputs)
+        return (
+            self.api.log(density_estimation) if self.return_log else density_estimation
+        )
 
     @staticmethod
     def to_lazy(X, Y, x_weights):
@@ -345,10 +550,13 @@ class KDE:
                 log probability densities for each of the queried points in `Y`
         """
         assert self.api is not None and self._kernel is not None, "Fit first."
-        X = self.X if X is None else X
+        X = self.X if X is None else self.api.astensor(X)
+        Y = self.api.astensor(Y)
         if X.shape[0] == 0:
-            return self.api.zeros((Y.shape[0]), dtype = X.dtype)
+            return self.api.zeros((Y.shape[0]), dtype=X.dtype)
         assert Y.shape[1] == X.shape[1] and X.ndim == Y.ndim == 2
+        if self._implementation == "dense":
+            return self._score_samples_dense(Y, return_kernel=return_kernel)
         lazy_x, lazy_y, w = self.to_lazy(X, Y, x_weights=self._sample_weights)
         kernel = self._kernel(
             lazy_x,
