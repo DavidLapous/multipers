@@ -6,7 +6,6 @@ import pytest
 from numpy import array
 
 import multipers as mp
-import multipers.simplex_tree_multi as stm
 from multipers.tests import assert_st_simplices, random_st
 from multipers.simplex_tree_multi import available_dtype, available_simplextrees
 
@@ -58,6 +57,22 @@ def test_3():
 has_kcritical = np.any(
     [a().is_kcritical for a in mp.simplex_tree_multi.available_simplextrees]
 )
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+def test_kcritical_insert_without_filtration_uses_first_possible_time():
+    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
+    st.insert([0], [1, 2])
+    st.insert([1], [3, 0])
+
+    st.insert([0, 1])
+
+    assert np.array_equal(np.asarray(st[[0]]), np.array([[1.0, 2.0]]))
+    assert np.array_equal(np.asarray(st[[1]]), np.array([[3.0, 0.0]]))
+    assert np.array_equal(np.asarray(st[[0, 1]]), np.array([[3.0, 2.0]]))
 
 
 @pytest.mark.skipif(
@@ -182,6 +197,24 @@ def test_serialize():
     )
 
 
+def test_simplextree_unsqueeze_roundtrip_random_st():
+    np.random.seed(0)
+    st = random_st(npts=12, num_parameters=3, max_dim=2)
+    assert st.grid_squeeze().unsqueeze() == st
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+def test_simplextree_unsqueeze_roundtrip_kcritical():
+    np.random.seed(0)
+    st = mp.filtrations.CoreDelaunay(
+        points=np.random.uniform(size=(12, 2)), ks=[1, 2, 3]
+    )
+    assert st.grid_squeeze().unsqueeze() == st
+
+
 def test_project_on_line_does_not_require_gudhi_thisptr(monkeypatch):
     stm = random_st(num_parameters=3)
     reference = stm.project_on_line(parameter=0)
@@ -267,6 +300,61 @@ def test_astypes():
         assert np.dtype(out.dtype) == np.dtype(sample.dtype)
         assert out.is_kcritical == sample.is_kcritical
         assert out.filtration_container == sample.filtration_container
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        lambda: random_st(npts=8, num_parameters=2, max_dim=2),
+        lambda: mp.filtrations.DegreeRips(
+            points=mp.data.three_annulus(8, 0),
+            ks=[1, 2, 3],
+            threshold_radius=0.8,
+            squeeze=False,
+        ),
+        lambda: mp.filtrations.CoreDelaunay(
+            points=mp.data.three_annulus(8, 4),
+            ks=[1, 2, 3],
+        ),
+    ],
+)
+def test_simplextree_to_scc_matches_slicer_export(builder, tmp_path):
+    np.random.seed(0)
+    st = builder()
+    slicer = mp.Slicer(st, dtype=st.dtype)
+
+    st_path = tmp_path / "simplextree.scc"
+    slicer_path = tmp_path / "slicer.scc"
+
+    st.to_scc(st_path, degree=1, strip_comments=True)
+    slicer.to_scc(slicer_path, degree=1, strip_comments=True, unsqueeze=False)
+
+    assert st_path.read_text() == slicer_path.read_text()
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+def test_kcritical_simplextree_to_scc_matches_slicer_export(tmp_path):
+    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
+    for simplex in ([0], [1]):
+        st.insert(simplex, [0.0, 0.0])
+    st.insert([0, 1], [1.0, 2.0])
+    st.insert([0, 1], [2.0, 1.0])
+
+    st_path = tmp_path / "simplextree_kcritical.scc"
+    slicer_path = tmp_path / "slicer_kcritical.scc"
+
+    st.to_scc(st_path, degree=1, strip_comments=True)
+    mp.Slicer(st, dtype=st.dtype).to_scc(
+        slicer_path,
+        degree=1,
+        strip_comments=True,
+        unsqueeze=False,
+    )
+
+    assert st_path.read_text() == slicer_path.read_text()
 
 
 @pytest.mark.skipif(

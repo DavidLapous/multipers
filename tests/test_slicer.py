@@ -8,6 +8,8 @@ from numpy import array
 import multipers as mp
 import multipers.slicer as mps
 from multipers.tests import assert_sm
+import multipers._2pac_interface as _2pac_interface
+import multipers._mpfree_interface as _mpfree_interface
 
 mpfree_flag = mp.io._check_available("mpfree")
 fd_flag = mp.io._check_available("function_delaunay")
@@ -18,6 +20,9 @@ def test_1():
     st.insert([0], [0, 1])
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
+    generator_maps = [[], [], [0, 1]]
+    generator_dimensions = np.asarray([0, 0, 1], dtype=np.int32)
+    filtration_values = np.asarray([[0, 1], [1, 0], [1, 1]], dtype=np.float64)
     for S in mps.available_slicers:
         # TODO : investigate gudhi ??
         if (
@@ -26,14 +31,6 @@ def test_1():
             or not np.issubdtype(S().dtype, np.floating)
         ):
             continue
-        from multipers._slicer_meta import _blocks2boundary_dimension_grades
-
-        generator_maps, generator_dimensions, filtration_values = (
-            _blocks2boundary_dimension_grades(
-                st._to_scc(),
-                inplace=False,
-            )
-        )
         s = S(generator_maps, generator_dimensions, filtration_values)
         print(type(s), s.col_type, s.pers_backend)
 
@@ -57,7 +54,9 @@ def test_2():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     st.insert([0, 1, 2], [2, 2])
-    assert mp.slicer.to_simplextree(mp.Slicer(st, dtype=st.dtype)) == st
+    slicer = mp.Slicer(st, dtype=st.dtype)
+    assert mp.slicer.to_simplextree(slicer) == st
+    assert mp.SimplexTreeMulti(slicer, dtype=st.dtype, kcritical=st.is_kcritical) == st
 
 
 def test_3():
@@ -92,6 +91,19 @@ def test_3():
     assert_sm(sm3, it)
 
 
+def test_make_filtration_non_decreasing_propagates_transitively():
+    slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64)
+    slicer = slicer_type(
+        [[], [], [0, 1], [2]],
+        np.asarray([0, 0, 1, 2], dtype=np.int32),
+        np.asarray([[0, 0], [0, 0], [1, 1], [5, 5]], dtype=np.float64),
+    )
+
+    slicer.make_filtration_non_decreasing()
+
+    got = np.asarray(slicer.get_filtrations(), dtype=np.float64)
+    expected = np.asarray([[5, 5], [5, 5], [5, 5], [5, 5]], dtype=np.float64)
+    assert np.array_equal(got, expected)
 def test_rank_custom():
     B = [[], [0], [0], [0], [0]]
     F = [[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]]
