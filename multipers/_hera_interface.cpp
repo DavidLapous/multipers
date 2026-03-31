@@ -10,7 +10,10 @@
 #include <vector>
 
 #include "ext_interface/hera_interface.hpp"
+
+#if !MULTIPERS_DISABLE_HERA_INTERFACE
 #include "ext_interface/nanobind_registry_helpers.hpp"
+#endif
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -38,6 +41,7 @@ std::vector<std::pair<double, double>> diagram_from_handle(nb::handle h, bool dr
 }
 
 multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::object slicer) {
+#if !MULTIPERS_DISABLE_HERA_INTERFACE
   if (!multipers::nanobind_helpers::is_slicer_object(slicer)) {
     throw std::runtime_error("Input has to be a slicer.");
   }
@@ -78,6 +82,10 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
         }
         return out;
       });
+#else
+  static_cast<void>(slicer);
+  throw std::runtime_error("Hera in-memory interface is disabled at compile time.");
+#endif
 }
 
 }  // namespace mphera
@@ -98,6 +106,20 @@ NB_MODULE(_hera_interface, m) {
          bool tolerate_max_iter_exceeded,
          bool stop_asap,
          bool return_stats) -> nb::object {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+        static_cast<void>(left);
+        static_cast<void>(right);
+        static_cast<void>(hera_epsilon);
+        static_cast<void>(delta);
+        static_cast<void>(max_depth);
+        static_cast<void>(initialization_depth);
+        static_cast<void>(bound_strategy);
+        static_cast<void>(traverse_strategy);
+        static_cast<void>(tolerate_max_iter_exceeded);
+        static_cast<void>(stop_asap);
+        static_cast<void>(return_stats);
+        throw std::runtime_error("Hera in-memory interface is disabled at compile time.");
+#else
         auto left_input = mphera::module_input_from_slicer(left);
         auto right_input = mphera::module_input_from_slicer(right);
         multipers::hera_interface_params params;
@@ -118,6 +140,7 @@ NB_MODULE(_hera_interface, m) {
           return nb::cast(nb::make_tuple(result.distance, stats));
         }
         return nb::cast(result.distance);
+#endif
       },
       "left"_a,
       "right"_a,
