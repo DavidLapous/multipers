@@ -3,9 +3,11 @@
 #include <nanobind/nanobind.h>
 
 #include <type_traits>
+#include <utility>
 
 #include "Persistence_slices_interface.h"
 #include "Simplex_tree_multi_interface.h"
+#include "nanobind_object_utils.hpp"
 #include "contiguous_slicer_bridge.hpp"
 
 namespace nb = nanobind;
@@ -16,9 +18,18 @@ template <typename Slicer>
 struct PySlicer {
   Slicer truc;
   nb::object filtration_grid;
+  nb::object generator_basis;
   int minpres_degree;
 
-  PySlicer() : filtration_grid(nb::none()), minpres_degree(-1) {}
+  PySlicer() : filtration_grid(nb::none()), generator_basis(nb::none()), minpres_degree(-1) {}
+};
+
+template <typename Interface, typename T>
+struct PySimplexTree {
+  Interface tree;
+  nb::object filtration_grid;
+
+  PySimplexTree() : filtration_grid(nb::list()) {}
 };
 
 template <typename... Types>
@@ -26,14 +37,11 @@ struct type_list {};
 
 #include <_slicer_nanobind_registry.inc>
 
-inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
+using multipers::nanobind_utils::has_template_id;
+using multipers::nanobind_utils::template_id_of;
 
-inline int template_id_of(const nb::handle& input) {
-  if (!has_template_id(input)) {
-    throw nb::type_error("Object does not expose a template id.");
-  }
-  return nb::cast<int>(input.attr("_template_id"));
-}
+template <typename Desc>
+using simplextree_wrapper_t = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
 
 template <typename Func>
 decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
@@ -58,6 +66,62 @@ decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func)
 #undef MP_SIMPLEXTREE_CASE
     default:
       throw nb::type_error("Unknown SimplexTreeMulti template id.");
+  }
+}
+
+template <typename Func>
+decltype(auto) visit_slicer_wrapper(const nb::handle& input, Func&& func) {
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
+    auto& wrapper = nb::cast<typename Desc::wrapper&>(input);
+    return std::forward<Func>(func).template operator()<Desc>(wrapper);
+  });
+}
+
+template <typename Func>
+decltype(auto) visit_const_slicer_wrapper(const nb::handle& input, Func&& func) {
+  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
+    const auto& wrapper = nb::cast<const typename Desc::wrapper&>(input);
+    return std::forward<Func>(func).template operator()<Desc>(wrapper);
+  });
+}
+
+template <typename Func>
+decltype(auto) visit_simplextree_wrapper(const nb::handle& input, Func&& func) {
+  return dispatch_simplextree_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
+    auto& wrapper = nb::cast<simplextree_wrapper_t<Desc>&>(input);
+    return std::forward<Func>(func).template operator()<Desc>(wrapper);
+  });
+}
+
+template <typename Func>
+decltype(auto) visit_const_simplextree_wrapper(const nb::handle& input, Func&& func) {
+  return dispatch_simplextree_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
+    const auto& wrapper = nb::cast<const simplextree_wrapper_t<Desc>&>(input);
+    return std::forward<Func>(func).template operator()<Desc>(wrapper);
+  });
+}
+
+inline bool is_slicer_object(const nb::handle& input) {
+  if (!has_template_id(input)) {
+    return false;
+  }
+  try {
+    return visit_const_slicer_wrapper(input,
+                                      [&]<typename Desc>(const typename Desc::wrapper&) -> bool { return true; });
+  } catch (...) {
+    return false;
+  }
+}
+
+inline bool is_simplextree_object(const nb::handle& input) {
+  if (!has_template_id(input)) {
+    return false;
+  }
+  try {
+    return visit_const_simplextree_wrapper(
+        input, [&]<typename Desc>(const simplextree_wrapper_t<Desc>&) -> bool { return true; });
+  } catch (...) {
+    return false;
   }
 }
 
@@ -97,23 +161,20 @@ inline bool is_canonical_contiguous_f64_slicer_object(const nb::handle& input) {
   return has_template_id(input) && template_id_of(input) == canonical_contiguous_f64_slicer_template_id;
 }
 
-inline nb::module_ slicer_nanobind_module() { return nb::module_::import_("multipers._slicer_nanobind"); }
-
-inline nb::module_ simplextree_nanobind_module() {
-  return nb::module_::import_("multipers._simplex_tree_multi_nanobind");
-}
-
 inline nb::object canonical_contiguous_f64_slicer_class() {
-  return slicer_nanobind_module().attr("_get_slicer_class_from_template_id")(
-      canonical_contiguous_f64_slicer_template_id);
+  return nb::borrow<nb::object>(nb::type<typename canonical_contiguous_f64_slicer_desc::wrapper>());
 }
 
 inline nb::object slicer_class_from_template_id(int template_id) {
-  return slicer_nanobind_module().attr("_get_slicer_class_from_template_id")(template_id);
+  return dispatch_slicer_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
+    return nb::borrow<nb::object>(nb::type<typename Desc::wrapper>());
+  });
 }
 
 inline nb::object simplextree_class_from_template_id(int template_id) {
-  return simplextree_nanobind_module().attr("_get_simplextree_class_from_template_id")(template_id);
+  return dispatch_simplextree_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
+    return nb::borrow<nb::object>(nb::type<simplextree_wrapper_t<Desc>>());
+  });
 }
 
 inline nb::object astype_slicer_to_template_id(const nb::object& source, int template_id) {
@@ -142,9 +203,8 @@ inline nb::object astype_simplextree_to_original_type(const nb::object& original
 
 inline void copy_into_canonical_contiguous_f64_slicer(const nb::handle& input,
                                                       canonical_contiguous_f64_slicer& output) {
-  dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() {
-    auto* source = reinterpret_cast<const typename Desc::concrete*>(nb::cast<intptr_t>(input.attr("get_ptr")()));
-    output = canonical_contiguous_f64_slicer(*source);
+  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
+    output = canonical_contiguous_f64_slicer(source.truc);
   });
 }
 
@@ -153,14 +213,13 @@ inline nb::object ensure_canonical_contiguous_f64_slicer_object(const nb::object
     return input;
   }
   nb::object out = canonical_contiguous_f64_slicer_class()();
-  auto* out_cpp = reinterpret_cast<canonical_contiguous_f64_slicer*>(nb::cast<intptr_t>(out.attr("get_ptr")()));
-  copy_into_canonical_contiguous_f64_slicer(input, *out_cpp);
-  if (nb::hasattr(input, "filtration_grid")) {
-    out.attr("filtration_grid") = input.attr("filtration_grid");
-  }
-  if (nb::hasattr(input, "minpres_degree")) {
-    out.attr("minpres_degree") = input.attr("minpres_degree");
-  }
+  auto& out_wrapper = nb::cast<typename canonical_contiguous_f64_slicer_desc::wrapper&>(out);
+  copy_into_canonical_contiguous_f64_slicer(input, out_wrapper.truc);
+  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
+    out_wrapper.filtration_grid = source.filtration_grid;
+    out_wrapper.generator_basis = source.generator_basis;
+    out_wrapper.minpres_degree = source.minpres_degree;
+  });
   return out;
 }
 

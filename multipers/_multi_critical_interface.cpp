@@ -12,6 +12,8 @@
 
 #include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
+#include "nanobind_array_utils.hpp"
+#include "nanobind_object_utils.hpp"
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 #include "multi_critical/basic.h"
@@ -28,6 +30,10 @@ using namespace nb::literals;
 namespace mpmc {
 
 using Clock = std::chrono::steady_clock;
+using multipers::nanobind_utils::cast_matrix;
+using multipers::nanobind_utils::cast_vector;
+using multipers::nanobind_utils::owned_array;
+using multipers::nanobind_utils::tuple_from_size;
 
 double elapsed_seconds(const Clock::time_point& start) {
   return std::chrono::duration<double>(Clock::now() - start).count();
@@ -48,28 +54,6 @@ nb::dict stats_to_dict(const ptr_bridge_stats& stats) {
   out["output_pack_s"] = nb::float_(stats.output_pack_s);
   out["total_s"] = nb::float_(stats.convert_s + stats.free_resolution_s + stats.minpres_s + stats.output_pack_s);
   return out;
-}
-
-template <typename T>
-std::vector<T> cast_vector(nb::handle h) {
-  return nb::cast<std::vector<T>>(h);
-}
-
-template <typename T>
-void delete_vector_capsule(void* ptr) noexcept {
-  delete static_cast<std::vector<T>*>(ptr);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
-}
-
-template <typename T>
-std::vector<std::vector<T>> cast_matrix(nb::handle h) {
-  return nb::cast<std::vector<std::vector<T>>>(h);
 }
 
 inline void set_backend_stdout(bool enabled) {
@@ -458,12 +442,9 @@ NB_MODULE(_multi_critical_interface, m) {
         if (degree_obj.is_none()) {
           auto outs =
               multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, backend_stdout, swedish);
-          nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outs.size() > 0 ? outs.size() - 1 : 0)));
-          for (size_t i = 1; i < outs.size(); ++i) {
-            nb::object value = mpmc::output_to_slicer(new_slicer_type, outs[i], true, (int)(i - 1));
-            PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
-          }
-          return nb::object(result);
+          return nb::object(mpmc::tuple_from_size(outs.size() > 0 ? outs.size() - 1 : 0, [&](size_t i) -> nb::object {
+            return mpmc::output_to_slicer(new_slicer_type, outs[i + 1], true, (int)i);
+          }));
         }
         int degree = nb::cast<int>(degree_obj);
         auto out = multipers::multi_critical_minpres_interface<int>(
@@ -572,12 +553,9 @@ NB_MODULE(_multi_critical_interface, m) {
           outputs = multipers::multi_critical_minpres_all_interface<int>(
               input, use_tree, use_multi_chunk, backend_stdout, swedish);
         }
-        nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outputs.size() > 0 ? outputs.size() - 1 : 0)));
-        for (size_t i = 1; i < outputs.size(); ++i) {
-          nb::object value = mpmc::output_to_raw_arrays(outputs[i], true);
-          PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
-        }
-        return result;
+        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
+          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
+        });
       },
       "boundary_indptr"_a,
       "boundary_flat"_a,
@@ -733,6 +711,59 @@ NB_MODULE(_multi_critical_interface, m) {
       "_backend_stdout"_a = false);
 
   m.def(
+      "minpres_degrees_from_ptr_with_stats",
+      [](intptr_t input_ptr,
+         std::vector<int> degrees,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish,
+         bool backend_stdout) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::lock_guard<std::mutex> lock(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          auto matrices = mpmc::compute_free_resolution_matrices_from_bridge(
+              *input_bridge, use_tree, use_multi_chunk, backend_stdout, &stats);
+          if (matrices.size() >= 2) {
+            outputs.reserve(degrees.size());
+            const bool old_verbose = mpfree::verbose;
+            mpfree::verbose = backend_stdout;
+            auto t_minpres = mpmc::Clock::now();
+            for (int degree : degrees) {
+              multipers::multi_critical_interface_output<int> output;
+              const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+              if (matrix_index >= 1 && matrix_index < static_cast<int>(matrices.size())) {
+                auto first = matrices[(size_t)matrix_index - 1];
+                auto second = matrices[(size_t)matrix_index];
+                multipers::multi_critical_detail::Graded_matrix min_rep;
+                mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+                output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+              }
+              outputs.push_back(std::move(output));
+            }
+            stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+            mpfree::verbose = old_verbose;
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple result = mpmc::tuple_from_size(
+            outputs.size(), [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i], true); });
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(result), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "degrees"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true,
+      "_backend_stdout"_a = false);
+
+  m.def(
       "minpres_all_from_ptr",
       [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish, bool backend_stdout) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
@@ -757,12 +788,9 @@ NB_MODULE(_multi_critical_interface, m) {
             mpfree::verbose = old_verbose;
           }
         }
-        nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outputs.size() > 0 ? outputs.size() - 1 : 0)));
-        for (size_t i = 1; i < outputs.size(); ++i) {
-          nb::object value = mpmc::output_to_raw_arrays(outputs[i], true);
-          PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
-        }
-        return result;
+        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
+          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
+        });
       },
       "input_ptr"_a,
       "use_tree"_a = false,
@@ -800,11 +828,9 @@ NB_MODULE(_multi_critical_interface, m) {
           }
         }
         auto t_output = mpmc::Clock::now();
-        nb::tuple result = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)(outputs.size() > 0 ? outputs.size() - 1 : 0)));
-        for (size_t i = 1; i < outputs.size(); ++i) {
-          nb::object value = mpmc::output_to_raw_arrays(outputs[i], true);
-          PyTuple_SET_ITEM(result.ptr(), (Py_ssize_t)(i - 1), value.release().ptr());
-        }
+        nb::tuple result = mpmc::tuple_from_size(
+            outputs.size() > 0 ? outputs.size() - 1 : 0,
+            [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i + 1], true); });
         stats.output_pack_s += mpmc::elapsed_seconds(t_output);
         return nb::make_tuple(std::move(result), mpmc::stats_to_dict(stats));
       },

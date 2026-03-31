@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ext_interface/hera_interface.hpp"
+#include "ext_interface/nanobind_registry_helpers.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -37,47 +38,46 @@ std::vector<std::pair<double, double>> diagram_from_handle(nb::handle h, bool dr
 }
 
 multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::object slicer) {
-  auto slicer_module = nb::module_::import_("multipers.slicer");
-  if (!nb::cast<bool>(slicer_module.attr("is_slicer")(slicer))) {
+  if (!multipers::nanobind_helpers::is_slicer_object(slicer)) {
     throw std::runtime_error("Input has to be a slicer.");
   }
-  if (nb::cast<int>(slicer.attr("num_parameters")) != 2) {
-    throw std::runtime_error("Matching distance only supports 2-parameter slicers.");
-  }
-  if (nb::cast<bool>(slicer.attr("is_kcritical"))) {
-    throw std::runtime_error("Matching distance expects 1-critical minimal-presentation slicers.");
-  }
+  return multipers::nanobind_helpers::visit_const_slicer_wrapper(
+      slicer, [&]<typename Desc>(const typename Desc::wrapper& wrapper) {
+        if (wrapper.truc.get_number_of_parameters() != 2) {
+          throw std::runtime_error("Matching distance only supports 2-parameter slicers.");
+        }
+        if constexpr (Desc::is_kcritical) {
+          throw std::runtime_error("Matching distance expects 1-critical minimal-presentation slicers.");
+        }
 
-  auto dimensions = cast_vector<int>(slicer.attr("get_dimensions")());
-  auto filtrations = cast_matrix<double>(slicer.attr("get_filtrations")("view"_a = false));
-  auto packed_boundaries = nb::cast<nb::tuple>(slicer.attr("get_boundaries")("packed"_a = true));
-  auto boundaries_indptr = cast_vector<int64_t>(packed_boundaries[0]);
-  auto boundaries_indices = cast_vector<int>(packed_boundaries[1]);
-  int degree = nb::cast<int>(slicer.attr("minpres_degree"));
+        const auto dimensions = wrapper.truc.get_dimensions();
+        const auto& filtrations = wrapper.truc.get_filtration_values();
+        const auto& boundaries = wrapper.truc.get_boundaries();
+        int degree = wrapper.minpres_degree;
 
-  multipers::hera_module_presentation_input<int> out;
-  size_t row_start = std::lower_bound(dimensions.begin(), dimensions.end(), degree) - dimensions.begin();
-  size_t row_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 1) - dimensions.begin();
-  size_t col_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 2) - dimensions.begin();
+        multipers::hera_module_presentation_input<int> out;
+        size_t row_start = std::lower_bound(dimensions.begin(), dimensions.end(), degree) - dimensions.begin();
+        size_t row_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 1) - dimensions.begin();
+        size_t col_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 2) - dimensions.begin();
 
-  out.generator_grades.reserve(row_end - row_start);
-  for (size_t i = row_start; i < row_end; ++i) {
-    out.generator_grades.emplace_back(filtrations[i][0], filtrations[i][1]);
-  }
-  out.relation_grades.reserve(col_end - row_end);
-  out.relation_components.resize(col_end - row_end);
-  for (size_t i = row_end; i < col_end; ++i) {
-    out.relation_grades.emplace_back(filtrations[i][0], filtrations[i][1]);
-    for (size_t j = (size_t)boundaries_indptr[i]; j < (size_t)boundaries_indptr[i + 1]; ++j) {
-      int boundary_index = boundaries_indices[j];
-      if (boundary_index < (int)row_start || boundary_index >= (int)row_end) {
-        throw std::runtime_error(
-            "Invalid minimal presentation slicer: relation boundaries must reference degree-d generators only.");
-      }
-      out.relation_components[i - row_end].push_back(boundary_index - (int)row_start);
-    }
-  }
-  return out;
+        out.generator_grades.reserve(row_end - row_start);
+        for (size_t i = row_start; i < row_end; ++i) {
+          out.generator_grades.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
+        }
+        out.relation_grades.reserve(col_end - row_end);
+        out.relation_components.resize(col_end - row_end);
+        for (size_t i = row_end; i < col_end; ++i) {
+          out.relation_grades.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
+          for (auto boundary_index : boundaries[i]) {
+            if (boundary_index < static_cast<int>(row_start) || boundary_index >= static_cast<int>(row_end)) {
+              throw std::runtime_error(
+                  "Invalid minimal presentation slicer: relation boundaries must reference degree-d generators only.");
+            }
+            out.relation_components[i - row_end].push_back(boundary_index - static_cast<int>(row_start));
+          }
+        }
+        return out;
+      });
 }
 
 }  // namespace mphera

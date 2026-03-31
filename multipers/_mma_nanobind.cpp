@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -18,61 +19,32 @@
 #include "gudhi/Multi_persistence/Module.h"
 #include "gudhi/Multi_persistence/Summand.h"
 #include "gudhi/Multi_persistence/module_helpers.h"
+#include "nanobind_array_utils.hpp"
+#include "nanobind_dense_array_utils.hpp"
+#include "nanobind_mma_registry_helpers.hpp"
+#include "nanobind_object_utils.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mpmma {
 
-template <typename... Types>
-struct type_list {};
-
-#include <_mma_nanobind_registry.inc>
-
-template <typename Func>
-decltype(auto) dispatch_mma_by_template_id(int template_id, Func&& func) {
-  switch (template_id) {
-#define MP_MMA_CASE(desc) \
-  case desc::template_id: \
-    return std::forward<Func>(func).template operator()<desc>();
-    MP_FOR_EACH_MMA_DESC(MP_MMA_CASE)
-#undef MP_MMA_CASE
-    default:
-      throw nb::type_error("Unknown MMA template id.");
-  }
-}
-
-template <typename T>
-void delete_vector_capsule(void* ptr) noexcept {
-  delete static_cast<std::vector<T>*>(ptr);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
-}
-
-template <typename T>
-std::vector<T> vector_from_handle(nb::handle h) {
-  nb::object np = nb::module_::import_("numpy");
-  nb::object obj = nb::borrow(h);
-  if (nb::hasattr(obj, "shape")) {
-    obj = np.attr("asarray")(obj).attr("reshape")(-1);
-  }
-  return nb::cast<std::vector<T>>(obj);
-}
-
-template <typename T>
-std::vector<std::vector<T>> matrix_from_handle(nb::handle h) {
-  nb::object np = nb::module_::import_("numpy");
-  nb::object obj = nb::borrow(h);
-  if (nb::hasattr(obj, "shape")) {
-    obj = np.attr("asarray")(obj);
-  }
-  return nb::cast<std::vector<std::vector<T>>>(obj);
-}
+using multipers::nanobind_dense_utils::cast_vector_from_array;
+using multipers::nanobind_dense_utils::matrix_from_array;
+using multipers::nanobind_dense_utils::vector_from_array;
+using multipers::nanobind_mma_helpers::dispatch_mma_by_template_id;
+using multipers::nanobind_mma_helpers::is_mma_module_object;
+using multipers::nanobind_mma_helpers::MMADescriptorList;
+using multipers::nanobind_mma_helpers::module_wrapper_t;
+using multipers::nanobind_mma_helpers::PyModule;
+using multipers::nanobind_mma_helpers::type_list;
+using multipers::nanobind_utils::has_template_id;
+using multipers::nanobind_utils::matrix_from_handle;
+using multipers::nanobind_utils::numpy_dtype_type;
+using multipers::nanobind_utils::owned_array;
+using multipers::nanobind_utils::template_id_of;
+using multipers::nanobind_utils::tuple_from_size;
+using multipers::nanobind_utils::vector_from_handle;
 
 template <typename T>
 nb::object one_filtration_to_python(const multipers::tmp_interface::One_critical_filtration<T>& f) {
@@ -97,18 +69,35 @@ nb::list filtration_list_to_python(const std::vector<multipers::tmp_interface::O
 }
 
 template <typename T>
+nb::object filtration_matrix_to_python(
+    const std::vector<multipers::tmp_interface::One_critical_filtration<T>>& values) {
+  size_t rows = values.size();
+  size_t cols = rows == 0 ? 0 : values[0].num_parameters();
+  std::vector<T> flat;
+  flat.reserve(rows * cols);
+  for (const auto& value : values) {
+    if (!value.is_finite()) {
+      flat.insert(flat.end(), cols, value(0, 0));
+      continue;
+    }
+    for (size_t p = 0; p < cols; ++p) {
+      flat.push_back(value(0, p));
+    }
+  }
+  return nb::cast(owned_array<T>(std::move(flat), {rows, cols}));
+}
+
+template <typename T>
 nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
-  auto births = filtration_list_to_python<T>(summand.compute_birth_list());
-  auto deaths = filtration_list_to_python<T>(summand.compute_death_list());
-  nb::object births_arr = nb::module_::import_("numpy").attr("array")(births);
-  nb::object deaths_arr = nb::module_::import_("numpy").attr("array")(deaths);
-  return nb::make_tuple(births_arr, deaths_arr, summand.get_dimension());
+  auto births = summand.compute_birth_list();
+  auto deaths = summand.compute_death_list();
+  return nb::make_tuple(
+      filtration_matrix_to_python<T>(births), filtration_matrix_to_python<T>(deaths), summand.get_dimension());
 }
 
 template <typename T>
 nb::tuple barcode_to_python(const std::vector<std::vector<std::pair<T, T>>>& barcode) {
-  nb::tuple out = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)barcode.size()));
-  for (size_t dim = 0; dim < barcode.size(); ++dim) {
+  return tuple_from_size(barcode.size(), [&](size_t dim) -> nb::object {
     const auto& bars = barcode[dim];
     std::vector<T> flat;
     flat.reserve(bars.size() * 2);
@@ -116,10 +105,8 @@ nb::tuple barcode_to_python(const std::vector<std::vector<std::pair<T, T>>>& bar
       flat.push_back(bar.first);
       flat.push_back(bar.second);
     }
-    nb::object value = nb::cast(owned_array<T>(std::move(flat), {bars.size(), size_t(2)}));
-    PyTuple_SET_ITEM(out.ptr(), (Py_ssize_t)dim, value.release().ptr());
-  }
-  return out;
+    return nb::cast(owned_array<T>(std::move(flat), {bars.size(), size_t(2)}));
+  });
 }
 
 template <typename T>
@@ -145,16 +132,145 @@ nb::tuple dump_module(const Gudhi::multi_persistence::Module<T>& module) {
   auto box = module.get_box();
   std::vector<T> lower(box.get_lower_corner().begin(), box.get_lower_corner().end());
   std::vector<T> upper(box.get_upper_corner().begin(), box.get_upper_corner().end());
-  nb::object box_arr = nb::module_::import_("numpy").attr("array")(
-      nb::make_tuple(nb::cast(owned_array<T>(std::move(lower), {box.get_lower_corner().size()})),
-                     nb::cast(owned_array<T>(std::move(upper), {box.get_upper_corner().size()}))));
+  std::vector<T> flat_box;
+  flat_box.reserve(lower.size() + upper.size());
+  flat_box.insert(flat_box.end(), lower.begin(), lower.end());
+  flat_box.insert(flat_box.end(), upper.begin(), upper.end());
+  nb::object box_arr = nb::cast(owned_array<T>(std::move(flat_box), {size_t(2), box.get_lower_corner().size()}));
 
-  nb::tuple summands = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)module.size()));
-  for (size_t i = 0; i < module.size(); ++i) {
-    nb::object value = dump_summand<T>(module.get_summand((unsigned int)i));
-    PyTuple_SET_ITEM(summands.ptr(), (Py_ssize_t)i, value.release().ptr());
-  }
+  nb::tuple summands = tuple_from_size(
+      module.size(), [&](size_t i) -> nb::object { return dump_summand<T>(module.get_summand((unsigned int)i)); });
   return nb::make_tuple(box_arr, summands);
+}
+
+template <typename T>
+Gudhi::multi_persistence::Box<T> box_from_rows(const std::vector<std::vector<T>>& rows) {
+  if (rows.size() != 2) {
+    throw std::runtime_error("Expected a box with shape (2, n_parameters).");
+  }
+  return Gudhi::multi_persistence::Box<T>(rows[0], rows[1]);
+}
+
+template <typename T>
+Gudhi::multi_persistence::Box<T> box_from_handle(nb::handle h) {
+  return box_from_rows<T>(matrix_from_handle<T>(h));
+}
+
+template <typename T>
+Gudhi::multi_persistence::Line<T> line_from_vectors(const std::vector<T>& basepoint, const std::vector<T>* direction) {
+  return direction == nullptr ? Gudhi::multi_persistence::Line<T>(basepoint)
+                              : Gudhi::multi_persistence::Line<T>(basepoint, *direction);
+}
+
+template <typename T>
+nb::tuple barcode_from_line_impl(PyModule<T>& self,
+                                 const std::vector<T>& basepoint,
+                                 const std::vector<T>* direction,
+                                 int degree) {
+  auto line = line_from_vectors(basepoint, direction);
+  decltype(self.mod.get_barcode_from_line(line, degree)) barcode;
+  {
+    nb::gil_scoped_release release;
+    barcode = self.mod.get_barcode_from_line(line, degree);
+  }
+  return barcode_to_python<T>(barcode);
+}
+
+template <typename T>
+PyModule<T>& evaluate_in_grid_impl(PyModule<T>& self, const std::vector<std::vector<T>>& grid) {
+  {
+    nb::gil_scoped_release release;
+    self.mod.evaluate_in_grid(grid);
+  }
+  return self;
+}
+
+template <typename T>
+nb::object compute_landscapes_box_impl(PyModule<T>& self,
+                                       int degree,
+                                       const std::vector<unsigned int>& ks,
+                                       const Gudhi::multi_persistence::Box<T>& box,
+                                       const std::vector<unsigned int>& resolution,
+                                       int n_jobs) {
+  decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
+      self.mod, degree, ks, box, resolution, n_jobs)) out;
+  {
+    nb::gil_scoped_release release;
+    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, box, resolution, n_jobs);
+  }
+  return nb::cast(out);
+}
+
+template <typename T>
+nb::object compute_landscapes_grid_impl(PyModule<T>& self,
+                                        int degree,
+                                        const std::vector<unsigned int>& ks,
+                                        const std::vector<std::vector<T>>& grid,
+                                        int n_jobs) {
+  decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs)) out;
+  {
+    nb::gil_scoped_release release;
+    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs);
+  }
+  return nb::cast(out);
+}
+
+template <typename T>
+nb::object compute_pixels_impl(PyModule<T>& self,
+                               const std::vector<std::vector<T>>& coordinates,
+                               const std::vector<int>& degrees,
+                               const Gudhi::multi_persistence::Box<T>& box,
+                               T delta,
+                               T p,
+                               bool normalize,
+                               int n_jobs) {
+  std::vector<std::vector<T>> out;
+  {
+    nb::gil_scoped_release release;
+    out = Gudhi::multi_persistence::compute_module_pixels(
+        self.mod, coordinates, degrees, box, delta, p, normalize, n_jobs);
+  }
+  return nb::cast(out);
+}
+
+template <typename T>
+nb::object distance_to_impl(PyModule<T>& self,
+                            const std::vector<std::vector<T>>& pts,
+                            bool signed_distance,
+                            int n_jobs) {
+  std::vector<T> out(pts.size() * self.mod.size());
+  {
+    nb::gil_scoped_release release;
+    Gudhi::multi_persistence::compute_module_distances_to(self.mod, out.data(), pts, signed_distance, n_jobs);
+  }
+  return nb::cast(owned_array<T>(std::move(out), {pts.size(), self.mod.size()}));
+}
+
+template <typename T>
+PyModule<T>& set_box_impl(PyModule<T>& self, const Gudhi::multi_persistence::Box<T>& box) {
+  {
+    nb::gil_scoped_release release;
+    self.mod.set_box(box);
+  }
+  return self;
+}
+
+template <typename T>
+PyModule<T>& rescale_impl(PyModule<T>& self, const std::vector<T>& factors, int degree) {
+  {
+    nb::gil_scoped_release release;
+    self.mod.rescale(factors, degree);
+  }
+  return self;
+}
+
+template <typename T>
+PyModule<T>& translate_impl(PyModule<T>& self, const std::vector<T>& factors, int degree) {
+  {
+    nb::gil_scoped_release release;
+    self.mod.translate(factors, degree);
+  }
+  return self;
 }
 
 template <typename T>
@@ -223,11 +339,6 @@ struct PyBox {
 };
 
 template <typename T>
-struct PyModule {
-  Gudhi::multi_persistence::Module<T> mod;
-};
-
-template <typename T>
 struct PyModuleIterator {
   PyModule<T>* module = nullptr;
   size_t index = 0;
@@ -237,15 +348,6 @@ template <typename Wrapper>
 nb::object self_handle(Wrapper& self) {
   return nb::find(self);
 }
-
-inline nb::object numpy_dtype_type(std::string_view name) {
-  nb::object np = nb::module_::import_("numpy");
-  return np.attr("dtype")(std::string(name)).attr("type");
-}
-
-inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
-
-inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
 
 template <typename Desc, typename Class>
 void bind_float_module_methods(Class& cls) {
@@ -258,29 +360,37 @@ void bind_float_module_methods(Class& cls) {
            "_get_barcode_from_line",
            [](WrapperMod& self, nb::handle basepoint_handle, nb::handle direction_handle, int degree) -> nb::tuple {
              auto basepoint = vector_from_handle<T>(basepoint_handle);
-             Gudhi::multi_persistence::Line<T> line =
-                 direction_handle.is_none()
-                     ? Gudhi::multi_persistence::Line<T>(basepoint)
-                     : Gudhi::multi_persistence::Line<T>(basepoint, vector_from_handle<T>(direction_handle));
-             decltype(self.mod.get_barcode_from_line(line, degree)) barcode;
-             {
-               nb::gil_scoped_release release;
-               barcode = self.mod.get_barcode_from_line(line, degree);
-             }
-             return barcode_to_python<T>(barcode);
+             auto direction = direction_handle.is_none()
+                                  ? std::optional<std::vector<T>>{}
+                                  : std::optional<std::vector<T>>(vector_from_handle<T>(direction_handle));
+             return barcode_from_line_impl<T>(self, basepoint, direction ? &*direction : nullptr, degree);
            },
            "basepoint"_a,
            "direction"_a = nb::none(),
            "degree"_a = -1)
         .def(
+            "_get_barcode_from_line",
+            [](WrapperMod& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> basepoint,
+               nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> direction,
+               int degree) -> nb::tuple {
+              auto basepoint_values = vector_from_array(basepoint);
+              auto direction_values = vector_from_array(direction);
+              return barcode_from_line_impl<T>(self, basepoint_values, &direction_values, degree);
+            },
+            "basepoint"_a,
+            "direction"_a,
+            "degree"_a = -1)
+        .def(
             "evaluate_in_grid",
             [](WrapperMod& self, nb::handle grid_handle) -> WrapperMod& {
-              auto grid = matrix_from_handle<T>(grid_handle);
-              {
-                nb::gil_scoped_release release;
-                self.mod.evaluate_in_grid(grid);
-              }
-              return self;
+              return evaluate_in_grid_impl<T>(self, matrix_from_handle<T>(grid_handle));
+            },
+            nb::rv_policy::reference_internal)
+        .def(
+            "evaluate_in_grid",
+            [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid) -> WrapperMod& {
+              return evaluate_in_grid_impl<T>(self, matrix_from_array(grid));
             },
             nb::rv_policy::reference_internal)
         .def(
@@ -295,19 +405,52 @@ void bind_float_module_methods(Class& cls) {
               std::vector<unsigned int> ks;
               ks.reserve(ks_in.size());
               for (int k : ks_in) ks.push_back((unsigned int)k);
-              auto box_values = matrix_from_handle<T>(box_handle);
               auto resolution_in = vector_from_handle<int>(resolution_handle);
               std::vector<unsigned int> resolution;
               resolution.reserve(resolution_in.size());
               for (int r : resolution_in) resolution.push_back((unsigned int)r);
-              decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
-                  self.mod, degree, ks, Box(box_values[0], box_values[1]), resolution, n_jobs)) out;
-              {
-                nb::gil_scoped_release release;
-                out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-                    self.mod, degree, ks, Box(box_values[0], box_values[1]), resolution, n_jobs);
-              }
-              return nb::cast(out);
+              return compute_landscapes_box_impl<T>(
+                  self, degree, ks, box_from_handle<T>(box_handle), resolution, n_jobs);
+            },
+            "degree"_a,
+            "ks"_a,
+            "box"_a,
+            "resolution"_a,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_landscapes_box",
+            [](WrapperMod& self,
+               int degree,
+               nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> ks,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
+               nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> resolution,
+               int n_jobs) {
+              return compute_landscapes_box_impl<T>(self,
+                                                    degree,
+                                                    cast_vector_from_array<unsigned int>(ks),
+                                                    box_from_rows<T>(matrix_from_array(box)),
+                                                    cast_vector_from_array<unsigned int>(resolution),
+                                                    n_jobs);
+            },
+            "degree"_a,
+            "ks"_a,
+            "box"_a,
+            "resolution"_a,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_landscapes_box",
+            [](WrapperMod& self,
+               int degree,
+               nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> ks,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
+               nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> resolution,
+               int n_jobs) {
+              return compute_landscapes_box_impl<T>(self,
+                                                    degree,
+                                                    cast_vector_from_array<unsigned int>(ks),
+                                                    box_from_rows<T>(matrix_from_array(box)),
+                                                    cast_vector_from_array<unsigned int>(resolution),
+                                                    n_jobs);
             },
             "degree"_a,
             "ks"_a,
@@ -321,14 +464,35 @@ void bind_float_module_methods(Class& cls) {
               std::vector<unsigned int> ks;
               ks.reserve(ks_in.size());
               for (int k : ks_in) ks.push_back((unsigned int)k);
-              auto grid = matrix_from_handle<T>(grid_handle);
-              decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
-                  self.mod, degree, ks, grid, n_jobs)) out;
-              {
-                nb::gil_scoped_release release;
-                out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs);
-              }
-              return nb::cast(out);
+              return compute_landscapes_grid_impl<T>(self, degree, ks, matrix_from_handle<T>(grid_handle), n_jobs);
+            },
+            "degree"_a,
+            "ks"_a,
+            "grid"_a,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_landscapes_grid",
+            [](WrapperMod& self,
+               int degree,
+               nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> ks,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
+               int n_jobs) {
+              return compute_landscapes_grid_impl<T>(
+                  self, degree, cast_vector_from_array<unsigned int>(ks), matrix_from_array(grid), n_jobs);
+            },
+            "degree"_a,
+            "ks"_a,
+            "grid"_a,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_landscapes_grid",
+            [](WrapperMod& self,
+               int degree,
+               nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> ks,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
+               int n_jobs) {
+              return compute_landscapes_grid_impl<T>(
+                  self, degree, cast_vector_from_array<unsigned int>(ks), matrix_from_array(grid), n_jobs);
             },
             "degree"_a,
             "ks"_a,
@@ -344,16 +508,66 @@ void bind_float_module_methods(Class& cls) {
                T p,
                bool normalize,
                int n_jobs) {
-              auto coordinates = matrix_from_handle<T>(coordinates_handle);
-              auto degrees = vector_from_handle<int>(degrees_handle);
-              auto box_values = matrix_from_handle<T>(box_handle);
-              std::vector<std::vector<T>> out;
-              {
-                nb::gil_scoped_release release;
-                out = Gudhi::multi_persistence::compute_module_pixels(
-                    self.mod, coordinates, degrees, Box(box_values[0], box_values[1]), delta, p, normalize, n_jobs);
-              }
-              return nb::cast(out);
+              return compute_pixels_impl<T>(self,
+                                            matrix_from_handle<T>(coordinates_handle),
+                                            vector_from_handle<int>(degrees_handle),
+                                            box_from_handle<T>(box_handle),
+                                            delta,
+                                            p,
+                                            normalize,
+                                            n_jobs);
+            },
+            "coordinates"_a,
+            "degrees"_a,
+            "box"_a,
+            "delta"_a,
+            "p"_a,
+            "normalize"_a = false,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_pixels",
+            [](WrapperMod& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
+               nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
+               T delta,
+               T p,
+               bool normalize,
+               int n_jobs) {
+              return compute_pixels_impl<T>(self,
+                                            matrix_from_array(coordinates),
+                                            cast_vector_from_array<int>(degrees),
+                                            box_from_rows<T>(matrix_from_array(box)),
+                                            delta,
+                                            p,
+                                            normalize,
+                                            n_jobs);
+            },
+            "coordinates"_a,
+            "degrees"_a,
+            "box"_a,
+            "delta"_a,
+            "p"_a,
+            "normalize"_a = false,
+            "n_jobs"_a = 0)
+        .def(
+            "_compute_pixels",
+            [](WrapperMod& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
+               nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> degrees,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
+               T delta,
+               T p,
+               bool normalize,
+               int n_jobs) {
+              return compute_pixels_impl<T>(self,
+                                            matrix_from_array(coordinates),
+                                            cast_vector_from_array<int>(degrees),
+                                            box_from_rows<T>(matrix_from_array(box)),
+                                            delta,
+                                            p,
+                                            normalize,
+                                            n_jobs);
             },
             "coordinates"_a,
             "degrees"_a,
@@ -365,15 +579,17 @@ void bind_float_module_methods(Class& cls) {
         .def(
             "distance_to",
             [](WrapperMod& self, nb::handle pts_handle, bool signed_distance, int n_jobs) {
-              auto pts = matrix_from_handle<T>(pts_handle);
-              std::vector<T> out(pts.size() * self.mod.size());
-              {
-                nb::gil_scoped_release release;
-                Gudhi::multi_persistence::compute_module_distances_to(
-                    self.mod, out.data(), pts, signed_distance, n_jobs);
-              }
-              return nb::cast(owned_array<T>(std::move(out), {pts.size(), self.mod.size()}));
+              return distance_to_impl<T>(self, matrix_from_handle<T>(pts_handle), signed_distance, n_jobs);
             },
+            "pts"_a,
+            "signed"_a = false,
+            "n_jobs"_a = 0)
+        .def(
+            "distance_to",
+            [](WrapperMod& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> pts,
+               bool signed_distance,
+               int n_jobs) { return distance_to_impl<T>(self, matrix_from_array(pts), signed_distance, n_jobs); },
             "pts"_a,
             "signed"_a = false,
             "n_jobs"_a = 0)
@@ -384,8 +600,7 @@ void bind_float_module_methods(Class& cls) {
               if (box_handle.is_none()) {
                 box = self.mod.get_box();
               } else {
-                auto box_values = matrix_from_handle<T>(box_handle);
-                box = Box(box_values[0], box_values[1]);
+                box = box_from_handle<T>(box_handle);
               }
               std::vector<T> interleavings;
               {
@@ -394,7 +609,19 @@ void bind_float_module_methods(Class& cls) {
               }
               return nb::cast(owned_array<T>(std::move(interleavings), {interleavings.size()}));
             },
-            "box"_a = nb::none());
+            "box"_a = nb::none())
+        .def(
+            "get_interleavings",
+            [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) {
+              std::vector<T> interleavings;
+              {
+                nb::gil_scoped_release release;
+                interleavings = Gudhi::multi_persistence::compute_module_interleavings(
+                    self.mod, box_from_rows<T>(matrix_from_array(box)));
+              }
+              return nb::cast(owned_array<T>(std::move(interleavings), {interleavings.size()}));
+            },
+            "box"_a);
   }
 }
 
@@ -465,11 +692,23 @@ void bind_mma_type(nb::module_& m) {
            }),
            "bottomCorner"_a,
            "topCorner"_a)
+      .def(nb::new_([](nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> bottom,
+                       nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> top) {
+             WrapperBox out;
+             out.box = Box(vector_from_array(bottom), vector_from_array(top));
+             return out;
+           }),
+           "bottomCorner"_a,
+           "topCorner"_a)
       .def_prop_ro("num_parameters", [](const WrapperBox& self) -> int { return self.box.get_lower_corner().size(); })
       .def("contains",
            [](WrapperBox& self, nb::handle x) {
              auto values = vector_from_handle<T>(x);
              return self.box.contains(values);
+           })
+      .def("contains",
+           [](WrapperBox& self, nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> x) {
+             return self.box.contains(vector_from_array(x));
            })
       .def("get",
            [](WrapperBox& self) -> nb::tuple {
@@ -579,12 +818,13 @@ void bind_mma_type(nb::module_& m) {
           .def(
               "set_box",
               [](WrapperMod& self, nb::handle box_handle) -> WrapperMod& {
-                auto box = matrix_from_handle<T>(box_handle);
-                {
-                  nb::gil_scoped_release release;
-                  self.mod.set_box(Box(box[0], box[1]));
-                }
-                return self;
+                return set_box_impl<T>(self, box_from_handle<T>(box_handle));
+              },
+              nb::rv_policy::reference_internal)
+          .def(
+              "set_box",
+              [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) -> WrapperMod& {
+                return set_box_impl<T>(self, box_from_rows<T>(matrix_from_array(box)));
               },
               nb::rv_policy::reference_internal)
           .def("get_module_of_degree",
@@ -693,9 +933,12 @@ void bind_mma_type(nb::module_& m) {
                                              self.mod.get_box().get_lower_corner().end());
                  auto upper = std::vector<T>(self.mod.get_box().get_upper_corner().begin(),
                                              self.mod.get_box().get_upper_corner().end());
-                 return nb::module_::import_("numpy").attr("array")(nb::make_tuple(
-                     nb::cast(owned_array<T>(std::move(lower), {self.mod.get_box().get_lower_corner().size()})),
-                     nb::cast(owned_array<T>(std::move(upper), {self.mod.get_box().get_upper_corner().size()}))));
+                 std::vector<T> flat_box;
+                 flat_box.reserve(lower.size() + upper.size());
+                 flat_box.insert(flat_box.end(), lower.begin(), lower.end());
+                 flat_box.insert(flat_box.end(), upper.begin(), upper.end());
+                 return nb::cast(
+                     owned_array<T>(std::move(flat_box), {size_t(2), self.mod.get_box().get_lower_corner().size()}));
                })
           .def_prop_ro("max_degree", [](const WrapperMod& self) -> int { return self.mod.get_max_dimension(); })
           .def_prop_ro("num_parameters",
@@ -718,26 +961,32 @@ void bind_mma_type(nb::module_& m) {
           .def(
               "rescale",
               [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
-                auto c_factors = vector_from_handle<T>(factors);
-                {
-                  nb::gil_scoped_release release;
-                  self.mod.rescale(c_factors, degree);
-                }
-                return self;
+                return rescale_impl<T>(self, vector_from_handle<T>(factors), degree);
               },
+              "rescale_factors"_a,
+              "degree"_a = -1,
+              nb::rv_policy::reference_internal)
+          .def(
+              "rescale",
+              [](WrapperMod& self,
+                 nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> factors,
+                 int degree) -> WrapperMod& { return rescale_impl<T>(self, vector_from_array(factors), degree); },
               "rescale_factors"_a,
               "degree"_a = -1,
               nb::rv_policy::reference_internal)
           .def(
               "translate",
               [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
-                auto c_factors = vector_from_handle<T>(factors);
-                {
-                  nb::gil_scoped_release release;
-                  self.mod.translate(c_factors, degree);
-                }
-                return self;
+                return translate_impl<T>(self, vector_from_handle<T>(factors), degree);
               },
+              "translation"_a,
+              "degree"_a = -1,
+              nb::rv_policy::reference_internal)
+          .def(
+              "translate",
+              [](WrapperMod& self,
+                 nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> factors,
+                 int degree) -> WrapperMod& { return translate_impl<T>(self, vector_from_array(factors), degree); },
               "translation"_a,
               "degree"_a = -1,
               nb::rv_policy::reference_internal)
@@ -777,21 +1026,11 @@ void bind_all_mma(type_list<Desc...>, nb::module_& m) {
 
 template <typename Desc>
 bool is_mma_desc(nb::handle stuff) {
-  using WrapperMod = PyModule<typename Desc::value_type>;
+  using WrapperMod = module_wrapper_t<Desc>;
   return nb::isinstance<WrapperMod>(stuff);
 }
 
-inline bool is_mma(nb::handle stuff) {
-  if (!has_template_id(stuff)) {
-    return false;
-  }
-  try {
-    return dispatch_mma_by_template_id(template_id_of(stuff),
-                                       [&]<typename Desc>() -> bool { return is_mma_desc<Desc>(stuff); });
-  } catch (...) {
-    return false;
-  }
-}
+inline bool is_mma(nb::handle stuff) { return is_mma_module_object(stuff); }
 
 }  // namespace mpmma
 

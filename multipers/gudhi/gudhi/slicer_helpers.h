@@ -77,8 +77,7 @@ inline Multi_parameter_filtered_complex<MultiFiltrationValue, I, D> build_comple
     const std::string& inFilePath,
     bool isRivetCompatible = false,
     bool isReversed = false,
-    int shiftDimensions = 0)
-{
+    int shiftDimensions = 0) {
   using Fil = MultiFiltrationValue;
   using Complex = Multi_parameter_filtered_complex<Fil, I, D>;
   using Index = typename Complex::Index;
@@ -259,8 +258,7 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
                                       bool rivetCompatible = false,
                                       bool ignoreLastGenerators = false,
                                       bool stripComments = false,
-                                      bool reverse = false)
-{
+                                      bool reverse = false) {
   if (!complex.is_ordered_by_dimension()) {
     // other solution would be to call build_permuted_complex ourself, but this is a good way to make the
     // user aware of it.
@@ -301,7 +299,7 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
   int minDim = maxDim;
   const auto& dimensions = complex.get_dimensions();
 
-  std::vector<std::vector<std::size_t> > indicesByDim(maxDim + 1);
+  std::vector<std::vector<std::size_t>> indicesByDim(maxDim + 1);
   std::vector<std::size_t> shiftedIndices(complex.get_number_of_cycle_generators());
   for (std::size_t i = 0; i < complex.get_number_of_cycle_generators(); ++i) {
     auto dim = dimensions[i];
@@ -343,8 +341,8 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
 
   file << std::setprecision(std::numeric_limits<typename Fil::value_type>::digits);
 
-  std::size_t startIndex = reverse ? minIndex + 1 : minIndex;
-  std::size_t endIndex = reverse ? maxIndex : maxIndex - 1;
+  int startIndex = reverse ? minIndex + 1 : minIndex;
+  int endIndex = reverse ? maxIndex : maxIndex - 1;
   const auto& filtValues = complex.get_filtration_values();
   const auto& boundaries = complex.get_boundaries();
   int currDim;
@@ -355,14 +353,14 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
 
   if (reverse) {
     if (!stripComments) file << "# Block of dimension " << currDim++ << "\n";
-    if (minIndex >= 0) {
+    if (minIndex >= 0 && minIndex <= maxDim) {
       for (auto index : indicesByDim[minIndex]) {
         print_fil_values(filtValues[index]);
         file << ";\n";
       }
     }
   }
-  for (std::size_t i = startIndex; i <= endIndex; ++i) {
+  for (int i = startIndex; i <= endIndex; ++i) {
     if (!stripComments) {
       file << "# Block of dimension " << currDim << "\n";
       if (reverse)
@@ -379,7 +377,7 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
   }
   if (!reverse) {
     if (!stripComments) file << "# Block of dimension " << currDim << "\n";
-    if (maxIndex <= maxDim) {
+    if (maxIndex >= 0 && maxIndex <= maxDim) {
       for (auto index : indicesByDim[maxIndex]) {
         print_fil_values(filtValues[index]);
         file << ";\n";
@@ -411,8 +409,7 @@ inline void write_complex_to_scc_file(const std::string& outFilePath,
 template <class OneCriticalMultiFiltrationValue, typename I = std::uint32_t, typename D = int>
 inline Multi_parameter_filtered_complex<OneCriticalMultiFiltrationValue, I, D> build_complex_from_bitmap(
     const std::vector<OneCriticalMultiFiltrationValue>& vertexValues,
-    const std::vector<unsigned int>& shape)
-{
+    const std::vector<unsigned int>& shape) {
   using Fil = OneCriticalMultiFiltrationValue;
   using Complex = Multi_parameter_filtered_complex<Fil, I, D>;
   using Index = typename Complex::Index;
@@ -493,8 +490,7 @@ inline Multi_parameter_filtered_complex<OneCriticalMultiFiltrationValue, I, D> b
  */
 template <class MultiFiltrationValue, class SimplexTreeOptions, typename I = std::uint32_t, typename D = int>
 inline Multi_parameter_filtered_complex<MultiFiltrationValue, I, D> build_complex_from_simplex_tree(
-    Simplex_tree<SimplexTreeOptions>& simplexTree)
-{
+    Simplex_tree<SimplexTreeOptions>& simplexTree) {
   // declared here to enable custom `as_type` methods which are not in this namespace.
   using namespace Gudhi::multi_filtration;
 
@@ -579,8 +575,7 @@ template <class Slicer>
 inline Slicer build_slicer_from_scc_file(const std::string& inFilePath,
                                          bool isRivetCompatible = false,
                                          bool isReversed = false,
-                                         int shiftDimensions = 0)
-{
+                                         int shiftDimensions = 0) {
   auto cpx = build_complex_from_scc_file<typename Slicer::Filtration_value,
                                          typename Slicer::Index,
                                          typename Slicer::Dimension>(
@@ -607,8 +602,7 @@ inline Slicer build_slicer_from_scc_file(const std::string& inFilePath,
  */
 template <class Slicer>
 inline Slicer build_slicer_from_bitmap(const std::vector<typename Slicer::Filtration_value>& vertexValues,
-                                       const std::vector<unsigned int>& shape)
-{
+                                       const std::vector<unsigned int>& shape) {
   auto cpx =
       build_complex_from_bitmap<typename Slicer::Filtration_value, typename Slicer::Index, typename Slicer::Dimension>(
           vertexValues, shape);
@@ -626,8 +620,7 @@ inline Slicer build_slicer_from_bitmap(const std::vector<typename Slicer::Filtra
  * @param simplexTree Simplex tree to convert.
  */
 template <class Slicer, class SimplexTreeOptions>
-inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& simplexTree)
-{
+inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& simplexTree) {
   auto cpx = build_complex_from_simplex_tree<typename Slicer::Filtration_value,
                                              SimplexTreeOptions,
                                              typename Slicer::Index,
@@ -640,8 +633,7 @@ inline Slicer build_slicer_from_simplex_tree(Simplex_tree<SimplexTreeOptions>& s
  */
 template <bool idx, class U, class Slicer, class F>
 inline std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
-persistence_on_slices_(Slicer& slicer, F&& ini_slicer, unsigned int size, [[maybe_unused]] bool ignoreInf = false)
-{
+persistence_on_slices_(Slicer& slicer, F&& ini_slicer, unsigned int size, [[maybe_unused]] bool ignoreInf = false) {
   using Barcode = typename Slicer::template Multi_dimensional_flat_barcode<U>;
 
   if (size == 0) return {};
@@ -706,8 +698,7 @@ inline std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> 
     Slicer& slicer,
     const std::vector<std::vector<T>>& basePoints,
     const std::vector<std::vector<T>>& directions,
-    bool ignoreInf = false)
-{
+    bool ignoreInf = false) {
   GUDHI_CHECK(directions.empty() || directions.size() == basePoints.size(),
               "There should be as many directions than base points.");
   GUDHI_CHECK(basePoints.empty() || basePoints[0].size() == slicer.get_number_of_parameters(),
@@ -743,8 +734,7 @@ inline std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>> 
  */
 template <class Slicer, class T, class U = T, bool idx = false>
 inline std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
-persistence_on_slices(Slicer& slicer, const std::vector<std::vector<T>>& slices, bool ignoreInf = false)
-{
+persistence_on_slices(Slicer& slicer, const std::vector<std::vector<T>>& slices, bool ignoreInf = false) {
   GUDHI_CHECK(slices.empty() || slices[0].size() == slicer.get_number_of_cycle_generators(),
               "There should be as many elements in a slice than cells in the slicer.");
 
@@ -772,8 +762,7 @@ persistence_on_slices(Slicer& slicer, const std::vector<std::vector<T>>& slices,
  */
 template <class Slicer, class T, class U = T, bool idx = false, class = std::enable_if_t<std::is_arithmetic_v<T>>>
 inline std::vector<typename Slicer::template Multi_dimensional_flat_barcode<U>>
-persistence_on_slices(Slicer& slicer, T* slices, unsigned int numberOfSlices, bool ignoreInf = false)
-{
+persistence_on_slices(Slicer& slicer, T* slices, unsigned int numberOfSlices, bool ignoreInf = false) {
   auto num_gen = slicer.get_number_of_cycle_generators();
   auto view = Gudhi::Simple_mdspan(slices, numberOfSlices, num_gen);
 

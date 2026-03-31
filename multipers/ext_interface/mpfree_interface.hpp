@@ -24,6 +24,20 @@ struct mpfree_interface_output {
   std::vector<int> dimensions;
 };
 
+template <typename index_type>
+struct mpfree_generator_matrix_output {
+  std::vector<index_type> row_indices;
+  std::vector<std::pair<double, double> > row_grades;
+  std::vector<std::pair<double, double> > column_grades;
+  std::vector<std::vector<index_type> > columns;
+};
+
+template <typename index_type>
+struct mpfree_minpres_with_generators_output {
+  mpfree_interface_output<index_type> minimal_presentation;
+  mpfree_generator_matrix_output<index_type> generator_matrix;
+};
+
 inline bool mpfree_interface_available();
 
 template <typename index_type>
@@ -33,6 +47,15 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
                                                              bool use_chunk = true,
                                                              bool use_clearing = false,
                                                              bool verbose_output = false);
+
+template <typename index_type>
+mpfree_minpres_with_generators_output<index_type> mpfree_minpres_with_generators_interface(
+    const mpfree_interface_input<index_type>& input,
+    int degree,
+    bool full_resolution = true,
+    bool use_chunk = false,
+    bool use_clearing = false,
+    bool verbose_output = false);
 
 }  // namespace multipers
 
@@ -52,6 +75,15 @@ contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_typ
                                                            bool use_chunk = true,
                                                            bool use_clearing = false,
                                                            bool verbose_output = false);
+
+template <typename contiguous_slicer_type>
+std::pair<contiguous_f64_complex, mpfree_generator_matrix_output<int> >
+mpfree_minpres_with_generators_contiguous_interface(contiguous_slicer_type& input,
+                                                    int degree,
+                                                    bool full_resolution = true,
+                                                    bool use_chunk = false,
+                                                    bool use_clearing = false,
+                                                    bool verbose_output = false);
 
 }  // namespace multipers
 #endif
@@ -81,6 +113,15 @@ inline std::mutex& mpfree_interface_mutex() {
 
 using Graded_matrix = mpp_utils::Graded_matrix<phat::vector_vector>;
 using Grade = typename Graded_matrix::Grade;
+
+struct mpfree_raw_result {
+  Graded_matrix min_rep;
+  Graded_matrix kernel_basis;
+  std::vector<Grade> chain_row_grades;
+  std::vector<phat::index> chain_row_indices;
+  std::vector<phat::index> surviving_rows;
+  bool has_generators = false;
+};
 
 inline std::size_t first_index_of_dimension(const std::vector<int>& dimensions, int dim) {
   return static_cast<std::size_t>(std::lower_bound(dimensions.begin(), dimensions.end(), dim) - dimensions.begin());
@@ -181,6 +222,63 @@ inline void append_columns_as_generators(const Graded_matrix& matrix,
   }
 }
 
+inline std::vector<std::size_t> row_order_for_output(const Graded_matrix& matrix, bool full_resolution) {
+  std::vector<std::size_t> order(matrix.row_grades.size());
+  for (std::size_t i = 0; i < order.size(); ++i) {
+    order[i] = i;
+  }
+  if (!full_resolution) {
+    return order;
+  }
+  std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+    const auto& ga = matrix.row_grades[a].at;
+    const auto& gb = matrix.row_grades[b].at;
+    if (ga[1] != gb[1]) {
+      return ga[1] < gb[1];
+    }
+    if (ga[0] != gb[0]) {
+      return ga[0] < gb[0];
+    }
+    return a < b;
+  });
+  return order;
+}
+
+template <typename index_type>
+inline mpfree_generator_matrix_output<index_type> convert_generator_matrix_to_output(
+    const Graded_matrix& kernel_basis,
+    const std::vector<Grade>& chain_row_grades,
+    const std::vector<phat::index>& chain_row_indices,
+    const std::vector<phat::index>& surviving_rows,
+    const std::vector<std::size_t>& row_order,
+    const Graded_matrix& min_rep) {
+  mpfree_generator_matrix_output<index_type> out;
+  out.row_indices.reserve(chain_row_indices.size());
+  for (const auto row_idx : chain_row_indices) {
+    out.row_indices.push_back(static_cast<index_type>(row_idx));
+  }
+  out.row_grades.reserve(chain_row_grades.size());
+  for (const auto& row_grade : chain_row_grades) {
+    out.row_grades.emplace_back(row_grade.at[0], row_grade.at[1]);
+  }
+
+  out.column_grades.reserve(row_order.size());
+  out.columns.reserve(row_order.size());
+  for (std::size_t output_idx : row_order) {
+    const auto generator_idx = surviving_rows[output_idx];
+    out.column_grades.emplace_back(min_rep.row_grades[output_idx].at[0], min_rep.row_grades[output_idx].at[1]);
+    std::vector<phat::index> column;
+    kernel_basis.get_col(generator_idx, column);
+    std::vector<index_type> support;
+    support.reserve(column.size());
+    for (const auto row_idx : column) {
+      support.push_back(static_cast<index_type>(row_idx));
+    }
+    out.columns.push_back(std::move(support));
+  }
+  return out;
+}
+
 template <typename index_type>
 inline mpfree_interface_output<index_type> convert_minpres_to_output(Graded_matrix& min_rep,
                                                                      int degree,
@@ -250,16 +348,14 @@ inline mpfree_interface_input<index_type> convert_contiguous_slicer_to_input(con
   return input;
 }
 
-}  // namespace detail
-
 template <typename index_type>
-mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interface_input<index_type>& input,
-                                                             int degree,
-                                                             bool full_resolution,
-                                                             bool use_chunk,
-                                                             bool use_clearing,
-                                                             bool verbose_output) {
-  std::lock_guard<std::mutex> lock(detail::mpfree_interface_mutex());
+inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input<index_type>& input,
+                                                    int degree,
+                                                    bool use_chunk,
+                                                    bool use_clearing,
+                                                    bool verbose_output,
+                                                    bool capture_generators) {
+  std::lock_guard<std::mutex> lock(mpfree_interface_mutex());
 
   if (degree < 0) {
     throw std::invalid_argument("mpfree interface expects a non-negative homological degree.");
@@ -270,43 +366,37 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
     throw std::invalid_argument("Invalid multipers input: sizes of filtrations, boundaries and dimensions differ.");
   }
 
-  // for (const auto& grade : input.filtration_values) {
-  //   if (!std::isfinite(grade.first) || !std::isfinite(grade.second)) {
-  //     throw std::invalid_argument("mpfree interface expects finite bifiltration values.");
-  //   }
-  // }
-
   if (!std::is_sorted(input.dimensions.begin(), input.dimensions.end())) {
     throw std::invalid_argument("Dimensions are expected to be sorted in non-decreasing order.");
   }
 
-  const std::size_t start_dm1 = detail::first_index_of_dimension(input.dimensions, degree - 1);
-  const std::size_t start_d = detail::first_index_of_dimension(input.dimensions, degree);
-  const std::size_t start_dp1 = detail::first_index_of_dimension(input.dimensions, degree + 1);
-  const std::size_t start_dp2 = detail::first_index_of_dimension(input.dimensions, degree + 2);
+  const std::size_t start_dm1 = first_index_of_dimension(input.dimensions, degree - 1);
+  const std::size_t start_d = first_index_of_dimension(input.dimensions, degree);
+  const std::size_t start_dp1 = first_index_of_dimension(input.dimensions, degree + 1);
+  const std::size_t start_dp2 = first_index_of_dimension(input.dimensions, degree + 2);
 
   const auto n_dm1 = start_d - start_dm1;
   const auto n_d = start_dp1 - start_d;
   const auto n_dp1 = start_dp2 - start_dp1;
 
-  using Pre_column = mpp_utils::Pre_column_struct<detail::Grade>;
+  using Pre_column = mpp_utils::Pre_column_struct<Grade>;
   std::vector<std::vector<Pre_column> > pre_matrices(2);
   pre_matrices[0].reserve(n_dp1);
   pre_matrices[1].reserve(n_d);
 
   for (std::size_t i = start_dp1; i < start_dp2; ++i) {
-    auto boundary = detail::convert_boundary(input.boundaries[i], start_d, start_dp1, "Upper matrix", i - start_dp1);
-    auto grade = detail::pair_to_grade(input.filtration_values[i]);
+    auto boundary = convert_boundary(input.boundaries[i], start_d, start_dp1, "Upper matrix", i - start_dp1);
+    auto grade = pair_to_grade(input.filtration_values[i]);
     pre_matrices[0].emplace_back(static_cast<mpp_utils::index>(i - start_dp1), grade, boundary);
   }
 
   for (std::size_t i = start_d; i < start_dp1; ++i) {
-    auto boundary = detail::convert_boundary(input.boundaries[i], start_dm1, start_d, "Lower matrix", i - start_d);
-    auto grade = detail::pair_to_grade(input.filtration_values[i]);
+    auto boundary = convert_boundary(input.boundaries[i], start_dm1, start_d, "Lower matrix", i - start_d);
+    auto grade = pair_to_grade(input.filtration_values[i]);
     pre_matrices[1].emplace_back(static_cast<mpp_utils::index>(i - start_d), grade, boundary);
   }
 
-  std::vector<detail::Graded_matrix> matrices;
+  std::vector<Graded_matrix> matrices;
   mpp_utils::create_graded_matrices_from_pre_column_struct(
       pre_matrices, matrices, static_cast<int>(n_dm1), false, true);
 
@@ -314,16 +404,107 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
     throw std::runtime_error("Internal mpfree conversion failure: expected two graded matrices.");
   }
 
-  detail::Graded_matrix gm_upper = std::move(matrices[0]);
-  detail::Graded_matrix gm_lower = std::move(matrices[1]);
+  Graded_matrix gm_upper = std::move(matrices[0]);
+  Graded_matrix gm_lower = std::move(matrices[1]);
 
-  detail::Graded_matrix min_rep;
+  if (!capture_generators) {
+    mpfree_raw_result out;
+    const bool old_verbose = mpfree::verbose;
+    mpfree::verbose = verbose_output;
+    mpfree::compute_minimal_presentation(gm_upper, gm_lower, out.min_rep, use_chunk, use_clearing);
+    mpfree::verbose = old_verbose;
+    return out;
+  }
+
+  typedef typename mpfree::Extend_matrix<Graded_matrix>::Type Graded_matrix_extended;
+
+  if (!mpp_utils::is_colex_sorted(gm_upper)) {
+    mpp_utils::to_colex_order(gm_upper, true, false);
+    gm_upper.grade_indices_assigned = false;
+  }
+  if (!mpp_utils::is_colex_sorted_columns(gm_lower)) {
+    mpp_utils::to_colex_order(gm_lower, false, false);
+    gm_lower.grade_indices_assigned = false;
+  }
+  if (!gm_upper.grade_indices_assigned || !gm_lower.grade_indices_assigned) {
+    mpp_utils::assign_grade_indices_of_pair(gm_upper, gm_lower);
+  }
+
+  Graded_matrix_extended GM1(&gm_upper);
+  Graded_matrix_extended GM2(&gm_lower);
+  GM1.assign_slave_matrix();
+  GM1.assign_pivots();
+  GM2.assign_slave_matrix();
+  GM2.assign_pivots();
+  GM1.pq_row.resize(GM1.num_grades_y);
+  GM2.pq_row.resize(GM2.num_grades_y);
+
   const bool old_verbose = mpfree::verbose;
   mpfree::verbose = verbose_output;
-  mpfree::compute_minimal_presentation(gm_upper, gm_lower, min_rep, use_chunk, use_clearing);
-  mpfree::verbose = old_verbose;
+  mpfree_raw_result out;
 
-  return detail::convert_minpres_to_output<index_type>(min_rep, degree, full_resolution);
+  if (use_chunk) {
+    mpfree::chunk_preprocessing(GM1, GM2, &out.chain_row_indices);
+  } else {
+    out.chain_row_indices.reserve(gm_lower.grades.size());
+    for (phat::index i = 0; i < static_cast<phat::index>(gm_lower.grades.size()); ++i) {
+      out.chain_row_indices.push_back(i);
+    }
+  }
+
+  Graded_matrix MG_base, Ker_base;
+  Graded_matrix_extended MG(&MG_base), Ker(&Ker_base);
+  GM1.grid_scheduler = mpfree::Grid_scheduler(GM1);
+  mpfree::min_gens(GM1, MG, use_clearing);
+  gm_upper = Graded_matrix();
+
+  GM2.grid_scheduler = mpfree::Grid_scheduler(GM2);
+  mpfree::ker_basis(GM2, Ker, MG, use_clearing);
+  out.chain_row_grades = gm_lower.grades;
+  gm_lower = Graded_matrix();
+
+  Graded_matrix semi_min_rep_base;
+  Graded_matrix_extended semi_min_rep(&semi_min_rep_base);
+  mpfree::reparameterize(MG, Ker, semi_min_rep);
+  MG_base = Graded_matrix();
+
+  out.kernel_basis = Ker_base;
+  out.has_generators = true;
+  mpfree::minimize(semi_min_rep, out.min_rep, &out.surviving_rows);
+  mpfree::verbose = old_verbose;
+  return out;
+}
+
+}  // namespace detail
+
+template <typename index_type>
+mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interface_input<index_type>& input,
+                                                             int degree,
+                                                             bool full_resolution,
+                                                             bool use_chunk,
+                                                             bool use_clearing,
+                                                             bool verbose_output) {
+  auto raw = detail::compute_mpfree_minpres_raw(input, degree, use_chunk, use_clearing, verbose_output, false);
+  return detail::convert_minpres_to_output<index_type>(raw.min_rep, degree, full_resolution);
+}
+
+template <typename index_type>
+mpfree_minpres_with_generators_output<index_type> mpfree_minpres_with_generators_interface(
+    const mpfree_interface_input<index_type>& input,
+    int degree,
+    bool full_resolution,
+    bool use_chunk,
+    bool use_clearing,
+    bool verbose_output) {
+  auto raw = detail::compute_mpfree_minpres_raw(input, degree, use_chunk, use_clearing, verbose_output, true);
+  auto row_order = detail::row_order_for_output(raw.min_rep, full_resolution);
+  auto generator_matrix = detail::convert_generator_matrix_to_output<index_type>(
+      raw.kernel_basis, raw.chain_row_grades, raw.chain_row_indices, raw.surviving_rows, row_order, raw.min_rep);
+
+  mpfree_minpres_with_generators_output<index_type> out;
+  out.minimal_presentation = detail::convert_minpres_to_output<index_type>(raw.min_rep, degree, full_resolution);
+  out.generator_matrix = std::move(generator_matrix);
+  return out;
 }
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
@@ -338,6 +519,23 @@ inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_sli
   auto out =
       mpfree_minpres_interface<int>(converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
+}
+
+template <typename contiguous_slicer_type>
+inline std::pair<contiguous_f64_complex, mpfree_generator_matrix_output<int> >
+mpfree_minpres_with_generators_contiguous_interface(contiguous_slicer_type& input,
+                                                    int degree,
+                                                    bool full_resolution,
+                                                    bool use_chunk,
+                                                    bool use_clearing,
+                                                    bool verbose_output) {
+  auto converted_input = detail::convert_contiguous_slicer_to_input<int>(input);
+  auto out = mpfree_minpres_with_generators_interface<int>(
+      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+  return std::make_pair(build_contiguous_f64_slicer_from_output<int>(out.minimal_presentation.filtration_values,
+                                                                     out.minimal_presentation.boundaries,
+                                                                     out.minimal_presentation.dimensions),
+                        std::move(out.generator_matrix));
 }
 #endif
 
@@ -354,6 +552,13 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
       "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 
+template <typename index_type>
+mpfree_minpres_with_generators_output<index_type>
+mpfree_minpres_with_generators_interface(const mpfree_interface_input<index_type>&, int, bool, bool, bool, bool) {
+  throw std::runtime_error(
+      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+}
+
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
 template <typename contiguous_slicer_type>
 inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_slicer_type&,
@@ -362,6 +567,13 @@ inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_sli
                                                                   bool,
                                                                   bool,
                                                                   bool) {
+  throw std::runtime_error(
+      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+}
+
+template <typename contiguous_slicer_type>
+inline std::pair<contiguous_f64_complex, mpfree_generator_matrix_output<int> >
+mpfree_minpres_with_generators_contiguous_interface(contiguous_slicer_type&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
       "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }

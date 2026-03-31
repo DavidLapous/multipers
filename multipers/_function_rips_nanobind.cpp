@@ -7,6 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include "ext_interface/nanobind_registry_helpers.hpp"
+#include "nanobind_array_utils.hpp"
+#include "nanobind_dense_array_utils.hpp"
 #include "multi_parameter_rank_invariant/function_rips.h"
 
 namespace nb = nanobind;
@@ -17,33 +20,36 @@ namespace mpfrn {
 using tensor_dtype = int32_t;
 using indices_type = int32_t;
 
-template <typename T>
-void delete_vector_capsule(void* ptr) noexcept {
-  delete static_cast<std::vector<T>*>(ptr);
-}
+using multipers::nanobind_dense_utils::cast_vector_from_array;
+using multipers::nanobind_helpers::is_simplextree_object;
+using multipers::nanobind_helpers::visit_const_simplextree_wrapper;
+using multipers::nanobind_utils::owned_array;
 
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
-}
-
-template <typename T>
-std::vector<T> to_vector(const nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig>& array) {
-  return std::vector<T>(array.data(), array.data() + array.shape(0));
+template <typename Func>
+decltype(auto) visit_simplextree(const nb::handle& simplextree, Func&& func) {
+  if (!is_simplextree_object(simplextree)) {
+    throw nb::type_error("Expected a multipers SimplexTreeMulti.");
+  }
+  return visit_const_simplextree_wrapper(simplextree, std::forward<Func>(func));
 }
 
 inline indices_type grid_rows(const nb::handle& simplextree) {
-  return nb::cast<indices_type>(simplextree.attr("filtration_grid")[0].attr("shape")[0]);
+  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
+    nb::ndarray<> axis = nb::cast<nb::ndarray<>>(wrapper.filtration_grid[0]);
+    return static_cast<indices_type>(axis.shape(0));
+  });
 }
 
 inline indices_type num_parameters(const nb::handle& simplextree) {
-  return nb::cast<indices_type>(simplextree.attr("num_parameters"));
+  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
+    return static_cast<indices_type>(wrapper.tree.num_parameters());
+  });
 }
 
 inline intptr_t simplextree_ptr(const nb::handle& simplextree) {
-  return nb::cast<intptr_t>(simplextree.attr("thisptr"));
+  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> intptr_t {
+    return reinterpret_cast<intptr_t>(&wrapper.tree);
+  });
 }
 
 inline std::vector<indices_type> flatten_points(const std::vector<std::vector<indices_type>>& points,
@@ -64,7 +70,7 @@ NB_MODULE(_function_rips_nanobind, m) {
       [](nb::object target,
          nb::ndarray<nb::numpy, const int8_t, nb::ndim<1>, nb::c_contig> gudhi_state,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees) -> nb::object {
-        auto degree_vector = mpfrn::to_vector<int32_t>(degrees);
+        auto degree_vector = mpfrn::cast_vector_from_array<int>(degrees);
         auto target_ptr = mpfrn::simplextree_ptr(target);
         {
           nb::gil_scoped_release release;
@@ -84,7 +90,7 @@ NB_MODULE(_function_rips_nanobind, m) {
          bool mobius_inversion,
          bool zero_pad,
          mpfrn::indices_type n_jobs) {
-        auto degree_vector = mpfrn::to_vector<int32_t>(homological_degrees);
+        auto degree_vector = mpfrn::cast_vector_from_array<mpfrn::indices_type>(homological_degrees);
         const auto I = mpfrn::grid_rows(simplextree);
         const auto J = mpfrn::num_parameters(simplextree);
         std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);
@@ -117,7 +123,7 @@ NB_MODULE(_function_rips_nanobind, m) {
          bool mobius_inversion,
          bool zero_pad,
          mpfrn::indices_type n_jobs) {
-        auto degree_vector = mpfrn::to_vector<int32_t>(homological_degrees);
+        auto degree_vector = mpfrn::cast_vector_from_array<mpfrn::indices_type>(homological_degrees);
         const auto I = mpfrn::grid_rows(simplextree);
         const auto J = mpfrn::num_parameters(simplextree);
         std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);

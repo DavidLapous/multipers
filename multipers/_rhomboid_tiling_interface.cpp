@@ -25,9 +25,10 @@ nb::object rhomboid_tiling_to_slicer_for_target(nb::object target,
                                                 int degree,
                                                 bool verbose) {
   auto complex = multipers::rhomboid_tiling_to_contiguous_slicer_interface<int>(input, k_max, degree, verbose);
-  auto* target_cpp = reinterpret_cast<multipers::contiguous_f64_slicer*>(nb::cast<intptr_t>(target.attr("get_ptr")()));
-  multipers::build_slicer_from_complex(*target_cpp, complex);
-  return target;
+  return multipers::nanobind_helpers::visit_slicer_wrapper(target, [&]<typename Desc>(typename Desc::wrapper& wrapper) {
+    multipers::build_slicer_from_complex(wrapper.truc, complex);
+    return target;
+  });
 }
 
 }  // namespace mprt

@@ -198,8 +198,7 @@ def SimplexTreeMulti(
         return out
 
     if is_simplextree_multi(input):
-        out = cls()
-        out._copy_from_any(input)
+        out = cls(input)
         if num_parameters > 0 and num_parameters != input.num_parameters:
             out.set_num_parameter(num_parameters)
         return out
@@ -207,8 +206,7 @@ def SimplexTreeMulti(
     from multipers.slicer import is_slicer
 
     if is_slicer(input, allow_minpres=False):
-        out = cls()
-        out._from_slicer(input, max_dim=max_dim)
+        out = cls(input, max_dim=max_dim)
         if num_parameters > 0 and num_parameters != input.num_parameters:
             out.set_num_parameter(num_parameters)
         return out
@@ -268,10 +266,7 @@ def _len(self):
 
 
 def _copy(self):
-    stree = type(self)()
-    stree._copy_from_any(self)
-    stree.filtration_grid = self.filtration_grid
-    return stree
+    return type(self)(self)
 
 
 def _deepcopy(self, memo=None):
@@ -329,10 +324,7 @@ def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=N
     if cls is type(self):
         return self
 
-    out = cls()
-    out._copy_from_any(self)
-    out.filtration_grid = self.filtration_grid
-    return out
+    return cls(self)
 
 
 def _insert(self, simplex, filtration=None):
@@ -526,110 +518,32 @@ def _set_key(self, simplex, key):
     return None
 
 
-def _to_scc_python_fallback(self, filtration_dtype=None, flattened=False):
-    filtration_dtype = self.dtype if filtration_dtype is None else filtration_dtype
-    if flattened:
-        simplices = list(self.get_simplices())
-        filtrations = np.asarray(
-            [np.asarray(f, dtype=filtration_dtype).reshape(-1) for _, f in simplices],
-            dtype=filtration_dtype,
-        )
-        simplex_to_index = {
-            tuple(np.asarray(simplex, dtype=np.int32).tolist()): i
-            for i, (simplex, _) in enumerate(simplices)
-        }
-        boundaries = []
-        for simplex, _ in simplices:
-            simplex_tuple = tuple(np.asarray(simplex, dtype=np.int32).tolist())
-            if len(simplex_tuple) <= 1:
-                boundaries.append(tuple())
-            else:
-                faces = [
-                    tuple(np.asarray(face, dtype=np.int32).tolist())
-                    for face, _ in self.get_boundaries(simplex)
-                ]
-                boundaries.append(tuple(simplex_to_index[face] for face in faces))
-        return filtrations, tuple(boundaries)
+def _to_scc_file(
+    self,
+    path,
+    degree=-1,
+    rivet_compatible=False,
+    ignore_last_generators=False,
+    strip_comments=False,
+    reverse=False,
+):
+    from multipers._slicer_meta import Slicer as _Slicer
 
-    simplices = list(self.get_simplices())
-    max_dim = max((len(simplex) - 1 for simplex, _ in simplices), default=-1)
-    blocks = []
-    previous_index = {}
-    for dim in range(max_dim + 1):
-        simplices_dim = []
-        filtrations_dim = []
-        boundaries_dim = []
-        current_index = {}
-        for simplex, filtration in simplices:
-            simplex_tuple = tuple(np.asarray(simplex, dtype=np.int32).tolist())
-            if len(simplex_tuple) - 1 != dim:
-                continue
-            current_index[simplex_tuple] = len(simplices_dim)
-            simplices_dim.append(simplex_tuple)
-            if self.is_kcritical:
-                filtration_array = np.asarray(filtration, dtype=filtration_dtype)
-                if filtration_array.ndim == 1:
-                    filtration_array = filtration_array[None, :]
-                filtration_array = filtration_array[
-                    ~np.isinf(filtration_array).all(axis=1)
-                ]
-                filtrations_dim.append(tuple(filtration_array))
-            else:
-                filtrations_dim.append(np.asarray(filtration, dtype=filtration_dtype))
-            if dim == 0:
-                boundaries_dim.append(tuple())
-            else:
-                faces = [
-                    tuple(np.asarray(face, dtype=np.int32).tolist())
-                    for face, _ in self.get_boundaries(simplex)
-                ]
-                boundaries_dim.append(tuple(previous_index[face] for face in faces))
-        previous_index = current_index
-        if self.is_kcritical:
-            blocks.append((tuple(filtrations_dim), tuple(boundaries_dim)))
-        else:
-            blocks.append(
-                (
-                    np.asarray(filtrations_dim, dtype=filtration_dtype),
-                    tuple(boundaries_dim),
-                )
-            )
-    return blocks[::-1]
-
-
-def _to_scc(self, filtration_dtype=None, flattened=False):
-    filtration_dtype = self.dtype if filtration_dtype is None else filtration_dtype
-    try:
-        blocks = _to_scc_blocks_raw[type(self)](self, flattened)
-    except Exception:
-        return _to_scc_python_fallback(
-            self,
-            filtration_dtype=filtration_dtype,
-            flattened=flattened,
-        )
-
-    if flattened:
-        filtrations, boundaries = blocks
-        return np.asarray(filtrations, dtype=filtration_dtype), tuple(
-            tuple(boundary) for boundary in boundaries
-        )
-
-    if self.is_kcritical:
-        return [
-            (
-                tuple(np.asarray(f, dtype=filtration_dtype) for f in filtrations),
-                tuple(tuple(boundary) for boundary in boundaries),
-            )
-            for filtrations, boundaries in blocks[::-1]
-        ]
-
-    return [
-        (
-            np.asarray(filtrations, dtype=filtration_dtype),
-            tuple(tuple(boundary) for boundary in boundaries),
-        )
-        for filtrations, boundaries in blocks[::-1]
-    ]
+    slicer = _Slicer(
+        self,
+        dtype=self.dtype,
+        kcritical=self.is_kcritical,
+        filtration_container=self.filtration_container,
+    )
+    slicer.to_scc(
+        path=path,
+        degree=degree,
+        rivet_compatible=rivet_compatible,
+        ignore_last_generators=ignore_last_generators,
+        strip_comments=strip_comments,
+        reverse=reverse,
+        unsqueeze=False,
+    )
 
 
 def _get_filtration_values(self, degrees=(-1,), inf_to_nan=False, return_raw=False):
@@ -960,7 +874,6 @@ _get_simplices_of_dimension_raw = {}
 _get_key_raw = {}
 _set_key_raw = {}
 _set_keys_to_enumerate_raw = {}
-_to_scc_blocks_raw = {}
 _get_filtration_values_raw = {}
 _squeeze_inplace_raw = {}
 _squeeze_to_raw = {}
@@ -991,7 +904,6 @@ def _install_python_api():
         _get_key_raw[cls] = cls.get_key
         _set_key_raw[cls] = cls.set_key
         _set_keys_to_enumerate_raw[cls] = cls.set_keys_to_enumerate
-        _to_scc_blocks_raw[cls] = cls._to_scc_blocks
         _get_filtration_values_raw[cls] = cls._get_filtration_values
         _squeeze_inplace_raw[cls] = cls._squeeze_inplace
         _squeeze_to_raw[cls] = cls._squeeze_to
@@ -1030,7 +942,7 @@ def _install_python_api():
         cls.key = _key
         cls.set_key = _set_key
         cls.set_keys_to_enumerate = _set_keys_to_enumerate
-        cls._to_scc = _to_scc
+        cls.to_scc = _to_scc_file
         cls._get_filtration_values = _get_filtration_values
         cls._clean_filtration_grid = _clean_filtration_grid
         cls.get_filtration_grid = _get_filtration_grid

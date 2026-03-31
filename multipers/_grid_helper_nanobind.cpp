@@ -9,29 +9,14 @@
 #include <utility>
 #include <vector>
 
+#include "nanobind_array_utils.hpp"
+
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mpgnb {
 
-template <typename T>
-void delete_vector_capsule(void* ptr) noexcept {
-  delete static_cast<std::vector<T>*>(ptr);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, const std::vector<size_t>& shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape.size(), shape.data(), owner);
-}
+using multipers::nanobind_utils::owned_array;
 
 template <typename T>
 std::vector<size_t> shape_of(const nb::ndarray<nb::numpy, T, nb::c_contig>& array) {

@@ -118,12 +118,15 @@ def minimal_presentation(
     full_resolution=True,
     use_chunk=True,
     use_clearing=True,
+    keep_generators: bool = False,
 ):
     """
     Computes a minimal presentation of a (1-critical) multifiltered complex.
 
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
+
+    Available backends include `mpfree` and `2pac`.
     """
     from multipers.io import _minimal_presentation_from_slicer
     from joblib import Parallel, delayed
@@ -144,6 +147,10 @@ def minimal_presentation(
                 backend=backend,
                 force=force,
                 auto_clean=auto_clean,
+                full_resolution=full_resolution,
+                use_chunk=use_chunk,
+                use_clearing=use_clearing,
+                keep_generators=keep_generators,
             )
 
         return tuple(
@@ -167,5 +174,6 @@ def minimal_presentation(
         full_resolution=full_resolution,
         use_chunk=use_chunk,
         use_clearing=use_clearing,
+        keep_generators=keep_generators,
         enabled=not _mp_logs.ext_log_enabled(),
     )

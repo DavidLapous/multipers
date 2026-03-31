@@ -316,19 +316,30 @@ def _persistence_on_lines(
 
 
 def _getstate(self):
-    return self._serialize_state(), self.filtration_grid, self.minpres_degree
+    return (
+        self._serialize_state(),
+        self.filtration_grid,
+        getattr(self, "_generator_basis", None),
+        self.minpres_degree,
+    )
 
 
 def _setstate(self, dump):
-    if isinstance(dump, tuple) and len(dump) == 3:
+    if isinstance(dump, tuple) and len(dump) == 4:
+        serialized, filtration_grid, generator_basis, minpres_degree = dump
+        self._deserialize_state(serialized)
+    elif isinstance(dump, tuple) and len(dump) == 3:
         serialized, filtration_grid, minpres_degree = dump
+        generator_basis = None
         self._deserialize_state(serialized)
     else:
+        generator_basis = None
         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
         copy = type(self)(boundaries, dimensions, filtrations)
         self._from_ptr(copy.get_ptr())
     self.minpres_degree = minpres_degree
     self.filtration_grid = filtration_grid
+    self._generator_basis = generator_basis
 
 
 def _eq(self, other):
@@ -462,6 +473,9 @@ def _minpres(
     force=True,
     auto_clean=True,
     full_resolution=True,
+    use_chunk=True,
+    use_clearing=True,
+    keep_generators=False,
 ):
     if degrees is None:
         degrees = []
@@ -475,6 +489,9 @@ def _minpres(
         force=force,
         auto_clean=auto_clean,
         full_resolution=full_resolution,
+        use_chunk=use_chunk,
+        use_clearing=use_clearing,
+        keep_generators=keep_generators,
     )
 
 
@@ -562,31 +579,6 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
     return new_slicer
 
 
-def slicer2blocks(slicer, degree=-1, reverse=True):
-    dims = np.asarray(slicer.get_dimensions(), dtype=np.int32)
-    num_empty_blocks_to_add = 1 if degree == -1 else dims.min() - degree + 1
-    _, counts = np.unique(dims, return_counts=True)
-    indices = np.concatenate([[0], counts], dtype=np.int32).cumsum()
-    filtration_values = slicer.get_filtrations()
-    filtration_values = [
-        filtration_values[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)
-    ]
-    boundaries = slicer.get_boundaries()
-    boundaries = [
-        boundaries[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)
-    ]
-    shift = np.concatenate([[0], indices], dtype=np.int32)
-    boundaries = [
-        tuple(np.asarray(x - s, dtype=np.int32) for x in block)
-        for s, block in zip(shift, boundaries)
-    ]
-    blocks = [tuple((f, tuple(b))) for b, f in zip(boundaries, filtration_values)]
-    blocks = ([(np.empty((0,)), [])] * num_empty_blocks_to_add) + blocks
-    if reverse:
-        blocks.reverse()
-    return blocks
-
-
 def to_simplextree(s: Slicer_type, max_dim: int = -1):
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
@@ -610,22 +602,6 @@ def is_slicer(input, allow_minpres=True) -> bool:
     if allow_minpres and (isinstance(input, list) or isinstance(input, tuple)):
         return len(input) > 0 and all(_is_slicer(s) and s.is_minpres for s in input)
     return False
-
-
-def to_blocks(input):
-    if is_slicer(input):
-        return slicer2blocks(input)
-    if isinstance(input, list) or isinstance(input, tuple):
-        return input
-    from multipers.simplex_tree_multi import is_simplextree_multi
-
-    if is_simplextree_multi(input):
-        return input._to_scc()
-    if isinstance(input, str) or isinstance(input, os.PathLike):
-        from multipers.io import scc_parser
-
-        return scc_parser(input)
-    raise ValueError("Input cannot be converted to blocks.")
 
 
 def _signed_measure_from_slicer(slicer: Slicer_type, shift: int = 0):
@@ -752,11 +728,9 @@ __all__ = [
     "available_filtration_container",
     "from_bitmap",
     "from_function_delaunay",
-    "slicer2blocks",
     "to_simplextree",
     "_is_slicer",
     "is_slicer",
-    "to_blocks",
     "_signed_measure_from_slicer",
     "_signed_measure_from_scc",
     "get_matrix_slicer",

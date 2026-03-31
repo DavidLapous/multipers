@@ -98,36 +98,6 @@ bool inline is_strictly_smaller_simplex(const boundary_type &s1, const boundary_
 // }
 
 template <typename Options>
-using scc_type =
-    std::vector<std::pair<std::vector<std::vector<typename Options::Filtration_value::value_type>>, boundary_matrix>>;
-
-template <typename STOptions>
-inline scc_type<STOptions> simplextree_to_scc(Gudhi::Simplex_tree<STOptions> &st) {
-  scc_type<STOptions> out(st.dimension() + 1);
-  if (st.num_simplices() <= 0) return out;
-
-  /* Assigns keys to simplices according their dimension */
-  std::vector<int> simplices_per_block_dim(st.dimension() + 1);
-  for (auto sh : st.filtration_simplex_range()) st.assign_key(sh, simplices_per_block_dim[st.dimension(sh)]++);
-
-  std::vector<unsigned int> key_boundary_container;
-  for (auto &simplex : st.filtration_simplex_range()) {
-    key_boundary_container.clear();
-    for (const auto &simplex_id : st.boundary_simplex_range(simplex)) {
-      key_boundary_container.push_back(st.key(simplex_id));
-    }
-    auto &[block_filtrations, block_matrix] = out[st.dimension(simplex)];
-    const typename STOptions::Filtration_value &simplex_filtration = st.filtration(simplex);
-    block_matrix.push_back(key_boundary_container);
-    block_filtrations.emplace_back(simplex_filtration.num_parameters());
-    for (unsigned int p = 0; p < simplex_filtration.num_parameters(); ++p) {
-      block_filtrations.back()[p] = simplex_filtration(0, p);
-    }
-  }
-  return out;
-}
-
-template <typename Options>
 using kscc_type = std::vector<
     std::pair<std::vector<std::vector<std::vector<typename Options::Filtration_value::value_type>>>, boundary_matrix>>;
 
@@ -162,50 +132,6 @@ inline kscc_type<STOptions> kcritical_simplextree_to_scc(Gudhi::Simplex_tree<STO
   return out;
 }
 
-// scc_type inline simplextree_to_scc(const uintptr_t splxptr) {
-//   using option =
-//       Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>;
-//   Gudhi::Simplex_tree<option> &st = *(Gudhi::Simplex_tree<option> *)(splxptr);
-//   return simplextree_to_scc<option>(st);
-// }
-template <typename Options>
-using flattened_scc_type =
-    std::pair<std::vector<std::vector<typename Options::value_type>>, std::vector<std::vector<unsigned int>>>;
-
-template <typename Options>
-flattened_scc_type<typename Options::Filtration_value> inline simplextree_to_ordered_bf(
-    Gudhi::Simplex_tree<Options> &st) {
-  auto scc = simplextree_to_scc<Options>(st);
-  flattened_scc_type<typename Options::Filtration_value> out;
-  auto &[filtration, boundary] = out;
-  std::size_t num_simplices = 0;
-  std::vector<std::size_t> cumsum_sizes = {0, 0};
-  for (auto &[f, b] : scc) {
-    num_simplices += b.size();
-    cumsum_sizes.push_back(num_simplices);
-  }
-  filtration.reserve(num_simplices);
-  boundary.reserve(num_simplices);
-  for (auto i = 0u; i < scc.size(); ++i) {
-    auto shift = cumsum_sizes[i];
-    auto &[f, b] = scc[i];
-    for (auto j = 0u; j < b.size(); ++j) {
-      filtration.push_back(f[j]);
-      auto new_b = b[j];
-      for (auto &stuff : new_b) stuff += shift;
-      boundary.push_back(new_b);
-    }
-  }
-  return out;
-}
-
-// template <
-//     typename Options =
-//         Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<>>
-// flattened_scc_type<Options> simplextree_to_ordered_bf(const uintptr_t splxptr) {
-//   Gudhi::Simplex_tree<Options> &st = *(Gudhi::Simplex_tree<Options> *)(splxptr);
-//   return simplextree_to_ordered_bf<Options>(st);
-// }
 template <typename MultiFiltration>
 using BoundaryFiltration = std::pair<boundary_matrix, std::vector<MultiFiltration>>;
 

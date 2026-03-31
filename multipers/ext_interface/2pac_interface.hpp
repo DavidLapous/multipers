@@ -24,6 +24,20 @@ struct twopac_interface_output {
   std::vector<int> dimensions;
 };
 
+template <typename index_type>
+struct twopac_generator_matrix_output {
+  std::vector<index_type> row_indices;
+  std::vector<std::pair<double, double>> row_grades;
+  std::vector<std::pair<double, double>> column_grades;
+  std::vector<std::vector<index_type>> columns;
+};
+
+template <typename index_type>
+struct twopac_minpres_with_generators_output {
+  twopac_interface_output<index_type> minimal_presentation;
+  twopac_generator_matrix_output<index_type> generator_matrix;
+};
+
 inline bool twopac_interface_available();
 
 template <typename index_type>
@@ -33,6 +47,15 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool use_chunk = true,
                                                              bool use_clearing = false,
                                                              bool verbose_output = false);
+
+template <typename index_type>
+twopac_minpres_with_generators_output<index_type> twopac_minpres_with_generators_interface(
+    const twopac_interface_input<index_type>& input,
+    int degree,
+    bool full_resolution = true,
+    bool use_chunk = false,
+    bool use_clearing = false,
+    bool verbose_output = false);
 
 }  // namespace multipers
 
@@ -57,6 +80,15 @@ contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_slicer_typ
                                                            bool use_clearing = false,
                                                            bool verbose_output = false);
 
+template <typename contiguous_slicer_type>
+std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
+twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& input,
+                                                    int degree,
+                                                    bool full_resolution = true,
+                                                    bool use_chunk = false,
+                                                    bool use_clearing = false,
+                                                    bool verbose_output = false);
+
 }  // namespace multipers
 #endif
 
@@ -80,6 +112,12 @@ inline bool twopac_interface_available() { return true; }
 namespace twopac_detail {
 
 using twopac_resolution_t = std::pair<GradedMatrix, GradedMatrix>;
+
+struct twopac_raw_result {
+  twopac_resolution_t resolution;
+  std::optional<GradedMatrix> generators;
+  std::vector<size_t> generator_row_indices;
+};
 
 inline std::mutex& twopac_interface_mutex() {
   static std::mutex m;
@@ -240,6 +278,85 @@ inline twopac_resolution_t homology_step(GradedMatrix D,
 }
 
 template <typename index_type>
+inline twopac_generator_matrix_output<index_type> convert_generator_matrix_to_output(GradedMatrix matrix,
+                                                                                     std::vector<size_t> row_indices) {
+  matrix.data.consolidate();
+
+  twopac_generator_matrix_output<index_type> out;
+  out.row_indices.reserve(row_indices.size());
+  for (const auto row_idx : row_indices) {
+    out.row_indices.push_back(static_cast<index_type>(row_idx));
+  }
+  out.row_grades.reserve(matrix.row_grades.size());
+  for (const auto& row_grade : matrix.row_grades) {
+    out.row_grades.emplace_back(row_grade.x, row_grade.y);
+  }
+
+  out.column_grades.reserve(matrix.column_grades.size());
+  out.columns.reserve(matrix.columns());
+  for (uint col = 0; col < matrix.columns(); ++col) {
+    out.column_grades.emplace_back(matrix.column_grades[col].x, matrix.column_grades[col].y);
+    std::vector<index_type> support;
+    support.reserve(matrix.data[col].data.size());
+    for (const auto row_idx : matrix.data[col].data) {
+      support.push_back(static_cast<index_type>(row_idx));
+    }
+    out.columns.push_back(std::move(support));
+  }
+
+  return out;
+}
+
+inline std::vector<size_t> identity_indices(std::size_t size) {
+  std::vector<size_t> indices(size);
+  for (std::size_t i = 0; i < size; ++i) {
+    indices[i] = i;
+  }
+  return indices;
+}
+
+inline std::vector<GradedMatrix> chunk_chain_matrices_with_provenance(std::vector<GradedMatrix> matrices,
+                                                                      int target_degree,
+                                                                      std::vector<size_t>& target_row_indices) {
+  std::vector<GradedMatrix> out;
+  if (matrices.empty()) {
+    target_row_indices.clear();
+    return out;
+  }
+
+  out.reserve(matrices.size());
+  std::vector<size_t> non_local_rows_d1;
+  std::vector<size_t> current_basis = identity_indices(matrices[0].columns());
+  GradedMatrix on_hold;
+  std::tie(non_local_rows_d1, current_basis, on_hold) = minimize(matrices[0]);
+  if (target_degree == 0) {
+    target_row_indices = non_local_rows_d1;
+  }
+
+  if (matrices.size() == 1) {
+    out.push_back(std::move(on_hold));
+    return out;
+  }
+
+  for (std::size_t idx = 1; idx < matrices.size(); ++idx) {
+    GradedMatrix next = std::move(matrices[idx]).get_rows(current_basis);
+    std::vector<size_t> non_local_rows;
+    std::vector<size_t> non_local_columns;
+    std::tie(non_local_rows, non_local_columns, next) = minimize(next);
+    on_hold = std::move(on_hold).get_columns(non_local_rows);
+    if (static_cast<int>(idx) == target_degree) {
+      target_row_indices = get_elements(current_basis, non_local_rows);
+    }
+    out.push_back(std::move(on_hold));
+    on_hold = std::move(next);
+    current_basis = std::move(non_local_columns);
+  }
+
+  out.push_back(std::move(on_hold));
+  return out;
+}
+
+template <typename index_type>
 inline twopac_interface_output<index_type> convert_resolution_to_output(twopac_resolution_t resolution,
                                                                         int degree,
                                                                         bool full_resolution) {
@@ -322,6 +439,55 @@ inline twopac_interface_input<index_type> convert_contiguous_slicer_to_input(con
   return input;
 }
 
+template <typename index_type>
+inline twopac_raw_result compute_twopac_minpres_raw(const twopac_interface_input<index_type>& input,
+                                                    int degree,
+                                                    bool use_chunk,
+                                                    bool verbose_output,
+                                                    bool capture_generators) {
+  std::lock_guard<std::mutex> lock(twopac_interface_mutex());
+  timing_mute_guard timing_guard(verbose_output);
+
+  auto matrices = build_boundary_matrices(input, degree);
+  if (matrices.empty()) {
+    return twopac_raw_result{};
+  }
+
+  if (capture_generators && use_chunk) {
+    twopac_raw_result out;
+    auto chunked = chunk_chain_matrices_with_provenance(std::move(matrices), degree, out.generator_row_indices);
+    std::optional<GradedMatrix> cycles;
+    std::optional<GradedMatrix> generators;
+    twopac_resolution_t resolution;
+    for (int dim = 0; dim <= degree; ++dim) {
+      const bool want_generators = dim == degree;
+      resolution = homology_step(std::move(chunked[dim]), cycles, want_generators ? &generators : nullptr);
+    }
+    out.resolution = std::move(resolution);
+    out.generators = std::move(generators);
+    return out;
+  }
+
+  std::shared_ptr<Complex> complex = std::make_shared<VectorChainComplex>(std::move(matrices));
+  if (use_chunk) {
+    complex = std::make_shared<Chunk>(std::move(complex), static_cast<uint>(degree + 1));
+  }
+
+  std::optional<GradedMatrix> cycles;
+  twopac_resolution_t resolution;
+  std::optional<GradedMatrix> generators;
+  for (int dim = 0; dim <= degree; ++dim) {
+    const bool want_generators = capture_generators && dim == degree;
+    resolution = homology_step(complex->next_matrix(), cycles, want_generators ? &generators : nullptr);
+  }
+
+  twopac_raw_result out{std::move(resolution), std::move(generators), {}};
+  if (capture_generators && out.generators.has_value()) {
+    out.generator_row_indices = identity_indices(out.generators->row_grades.size());
+  }
+  return out;
+}
+
 }  // namespace twopac_detail
 
 template <typename index_type>
@@ -331,27 +497,41 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool use_chunk,
                                                              bool use_clearing,
                                                              bool verbose_output) {
-  std::lock_guard<std::mutex> lock(twopac_detail::twopac_interface_mutex());
-  twopac_detail::timing_mute_guard timing_guard(verbose_output);
   (void)use_clearing;
 
-  auto matrices = twopac_detail::build_boundary_matrices(input, degree);
-  if (matrices.empty()) {
+  auto raw = twopac_detail::compute_twopac_minpres_raw(input, degree, use_chunk, verbose_output, false);
+  if (raw.resolution.first.rows() == 0 && raw.resolution.first.columns() == 0 && raw.resolution.second.rows() == 0 &&
+      raw.resolution.second.columns() == 0) {
     return twopac_interface_output<index_type>();
   }
 
-  std::shared_ptr<Complex> complex = std::make_shared<twopac_detail::VectorChainComplex>(std::move(matrices));
-  if (use_chunk) {
-    complex = std::make_shared<Chunk>(std::move(complex), static_cast<uint>(degree + 1));
+  return twopac_detail::convert_resolution_to_output<index_type>(std::move(raw.resolution), degree, full_resolution);
+}
+
+template <typename index_type>
+twopac_minpres_with_generators_output<index_type> twopac_minpres_with_generators_interface(
+    const twopac_interface_input<index_type>& input,
+    int degree,
+    bool full_resolution,
+    bool use_chunk,
+    bool use_clearing,
+    bool verbose_output) {
+  (void)use_clearing;
+
+  auto raw = twopac_detail::compute_twopac_minpres_raw(input, degree, use_chunk, verbose_output, true);
+  if (!raw.generators.has_value() && raw.resolution.first.rows() == 0 && raw.resolution.first.columns() == 0 &&
+      raw.resolution.second.rows() == 0 && raw.resolution.second.columns() == 0) {
+    return twopac_minpres_with_generators_output<index_type>();
   }
 
-  std::optional<GradedMatrix> cycles;
-  twopac_detail::twopac_resolution_t resolution;
-  for (int dim = 0; dim <= degree; ++dim) {
-    resolution = twopac_detail::homology_step(complex->next_matrix(), cycles);
+  twopac_minpres_with_generators_output<index_type> out;
+  out.minimal_presentation =
+      twopac_detail::convert_resolution_to_output<index_type>(std::move(raw.resolution), degree, full_resolution);
+  if (raw.generators.has_value()) {
+    out.generator_matrix = twopac_detail::convert_generator_matrix_to_output<index_type>(
+        std::move(*raw.generators), std::move(raw.generator_row_indices));
   }
-
-  return twopac_detail::convert_resolution_to_output<index_type>(std::move(resolution), degree, full_resolution);
+  return out;
 }
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
@@ -366,6 +546,23 @@ inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_sli
   auto out =
       twopac_minpres_interface<int>(converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
+}
+
+template <typename contiguous_slicer_type>
+inline std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
+twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& input,
+                                                    int degree,
+                                                    bool full_resolution,
+                                                    bool use_chunk,
+                                                    bool use_clearing,
+                                                    bool verbose_output) {
+  auto converted_input = twopac_detail::convert_contiguous_slicer_to_input<int>(input);
+  auto out = twopac_minpres_with_generators_interface<int>(
+      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+  return {build_contiguous_f64_slicer_from_output<int>(out.minimal_presentation.filtration_values,
+                                                       out.minimal_presentation.boundaries,
+                                                       out.minimal_presentation.dimensions),
+          std::move(out.generator_matrix)};
 }
 #endif
 
@@ -389,6 +586,14 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
 }
 
+template <typename index_type>
+twopac_minpres_with_generators_output<index_type>
+twopac_minpres_with_generators_interface(const twopac_interface_input<index_type>&, int, bool, bool, bool, bool) {
+  throw std::runtime_error(
+      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+}
+
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
 template <typename contiguous_slicer_type>
 inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_slicer_type&,
@@ -397,6 +602,14 @@ inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_sli
                                                                   bool,
                                                                   bool,
                                                                   bool) {
+  throw std::runtime_error(
+      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+}
+
+template <typename contiguous_slicer_type>
+inline std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
+twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
       "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");

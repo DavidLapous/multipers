@@ -54,9 +54,10 @@ nb::object function_delaunay_to_slicer_for_target(nb::object target,
                                                   bool multi_chunk,
                                                   bool verbose) {
   auto complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
-  auto* target_cpp = reinterpret_cast<multipers::contiguous_f64_slicer*>(nb::cast<intptr_t>(target.attr("get_ptr")()));
-  multipers::build_slicer_from_complex(*target_cpp, complex);
-  return target;
+  return multipers::nanobind_helpers::visit_slicer_wrapper(target, [&]<typename Desc>(typename Desc::wrapper& wrapper) {
+    multipers::build_slicer_from_complex(wrapper.truc, complex);
+    return target;
+  });
 }
 
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,

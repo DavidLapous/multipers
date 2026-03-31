@@ -15,17 +15,23 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <tbb/parallel_for.h>
 
 #include "Persistence_slices_interface.h"
+#include "ext_interface/nanobind_registry_helpers.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
 #include "gudhi/slicer_helpers.h"
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
 #include "multiparameter_module_approximation/approximation.h"
+#include "nanobind_array_utils.hpp"
+#include "nanobind_dense_array_utils.hpp"
+#include "nanobind_mma_registry_helpers.hpp"
+#include "nanobind_object_utils.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -36,19 +42,32 @@ using tensor_dtype = int32_t;
 using indices_type = int32_t;
 using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>;
 
-template <typename Slicer>
-struct PySlicer {
-  Slicer truc;
-  nb::object filtration_grid;
-  int minpres_degree;
-
-  PySlicer() : filtration_grid(nb::none()), minpres_degree(-1) {}
-};
-
-template <typename... Types>
-struct type_list {};
-
-#include <_slicer_nanobind_registry.inc>
+using multipers::nanobind_dense_utils::matrix_from_array;
+using multipers::nanobind_dense_utils::vector_from_array;
+using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
+using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
+using multipers::nanobind_helpers::is_simplextree_object;
+using multipers::nanobind_helpers::is_slicer_object;
+using multipers::nanobind_helpers::PySlicer;
+using multipers::nanobind_helpers::simplextree_wrapper_t;
+using multipers::nanobind_helpers::SimplexTreeDescriptorList;
+using multipers::nanobind_helpers::SlicerDescriptorList;
+using multipers::nanobind_helpers::type_list;
+using multipers::nanobind_helpers::visit_const_slicer_wrapper;
+using multipers::nanobind_helpers::visit_simplextree_wrapper;
+using multipers::nanobind_mma_helpers::canonical_double_mma_desc;
+using multipers::nanobind_mma_helpers::module_wrapper_t;
+using multipers::nanobind_utils::cast_matrix;
+using multipers::nanobind_utils::cast_tensor3;
+using multipers::nanobind_utils::cast_vector;
+using multipers::nanobind_utils::has_template_id;
+using multipers::nanobind_utils::lowercase_copy;
+using multipers::nanobind_utils::numpy_dtype_name;
+using multipers::nanobind_utils::numpy_dtype_type;
+using multipers::nanobind_utils::owned_array;
+using multipers::nanobind_utils::template_id_of;
+using multipers::nanobind_utils::tuple_from_size;
+using multipers::nanobind_utils::view_array;
 
 template <typename Desc>
 inline constexpr bool is_kcritical_contiguous_f64_matrix_slicer_v =
@@ -83,49 +102,6 @@ static_assert(!std::is_void_v<KcriticalContiguousF64MatrixSlicerDesc>,
 static_assert(kcritical_contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::matches == 1,
               "k-critical contiguous float64 matrix slicer template must be unique.");
 
-template <typename Func>
-decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
-  switch (template_id) {
-#define MP_SLICER_CASE(desc) \
-  case desc::template_id:    \
-    return std::forward<Func>(func).template operator()<desc>();
-    MP_FOR_EACH_SLICER_DESC(MP_SLICER_CASE)
-#undef MP_SLICER_CASE
-    default:
-      throw nb::type_error("Unknown slicer template id.");
-  }
-}
-
-template <typename Func>
-decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func) {
-  switch (template_id) {
-#define MP_SIMPLEXTREE_CASE(desc) \
-  case desc::template_id:         \
-    return std::forward<Func>(func).template operator()<desc>();
-    MP_FOR_EACH_SIMPLEXTREE_DESC(MP_SIMPLEXTREE_CASE)
-#undef MP_SIMPLEXTREE_CASE
-    default:
-      throw nb::type_error("Unknown SimplexTreeMulti template id.");
-  }
-}
-
-template <typename T>
-void delete_vector_capsule(void* ptr) noexcept {
-  delete static_cast<std::vector<T>*>(ptr);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> owned_array(std::vector<T>&& values, std::initializer_list<size_t> shape) {
-  auto* storage = new std::vector<T>(std::move(values));
-  nb::capsule owner(storage, &delete_vector_capsule<T>);
-  return nb::ndarray<nb::numpy, T>(storage->data(), shape, owner);
-}
-
-template <typename T>
-nb::ndarray<nb::numpy, T> view_array(T* ptr, std::initializer_list<size_t> shape, nb::handle owner) {
-  return nb::ndarray<nb::numpy, T>(ptr, shape, owner);
-}
-
 inline nb::tuple signed_measure_to_python(const signed_measure_type& sm, size_t width) {
   std::vector<indices_type> flat_pts;
   flat_pts.reserve(sm.first.size() * width);
@@ -140,31 +116,6 @@ inline nb::tuple signed_measure_to_python(const signed_measure_type& sm, size_t 
 template <typename T>
 nb::ndarray<nb::numpy, T> filled_array(size_t size, T value) {
   return owned_array<T>(std::vector<T>(size, value), {size});
-}
-
-template <typename T>
-std::vector<T> cast_vector(const nb::handle& h) {
-  nb::object np = nb::module_::import_("numpy");
-  nb::object obj = nb::borrow(h);
-  if (nb::hasattr(obj, "shape")) {
-    obj = np.attr("asarray")(obj).attr("reshape")(-1);
-  }
-  return nb::cast<std::vector<T>>(obj);
-}
-
-template <typename T>
-std::vector<std::vector<T>> cast_matrix(const nb::handle& h) {
-  nb::object np = nb::module_::import_("numpy");
-  nb::object obj = nb::borrow(h);
-  if (nb::hasattr(obj, "shape")) {
-    obj = np.attr("asarray")(obj);
-  }
-  return nb::cast<std::vector<std::vector<T>>>(obj);
-}
-
-template <typename T>
-std::vector<std::vector<std::vector<T>>> cast_tensor3(const nb::handle& h) {
-  return nb::cast<std::vector<std::vector<std::vector<T>>>>(h);
 }
 
 inline bool is_none_or_empty(const nb::handle& h) {
@@ -220,101 +171,7 @@ Wrapper& make_filtration_non_decreasing_inplace(Wrapper& self, bool safe) {
   return self;
 }
 
-inline std::string lowercase_copy(std::string value) {
-  std::transform(
-      value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
-}
-
-inline std::string numpy_dtype_name(const nb::handle& dtype) {
-  nb::object np = nb::module_::import_("numpy");
-  return nb::cast<std::string>(np.attr("dtype")(nb::borrow(dtype)).attr("name"));
-}
-
-inline nb::object numpy_dtype_type(std::string_view name);
-
-inline bool has_template_id(const nb::handle& input) { return nb::hasattr(input, "_template_id"); }
-
-inline int template_id_of(const nb::handle& input) { return nb::cast<int>(input.attr("_template_id")); }
-
-inline void print_flush(const std::string& message, std::string end = "\n") {
-  nb::module_::import_("builtins").attr("print")(message, "end"_a = end, "flush"_a = true);
-}
-
-struct SlicerRuntimeInfo {
-  bool is_squeezed;
-  nb::object filtration_grid;
-};
-
-inline bool has_slicer_template_id(const nb::handle& input) {
-  return has_template_id(input) && nb::hasattr(input, "col_type") && nb::hasattr(input, "pers_backend");
-}
-
-SlicerRuntimeInfo get_slicer_runtime_info(const nb::handle& input) {
-  if (!has_slicer_template_id(input)) {
-    throw nb::value_error("First argument must be a simplextree or a slicer !");
-  }
-  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename D>() -> SlicerRuntimeInfo {
-    const auto& wrapper = nb::cast<const typename D::wrapper&>(input);
-    return SlicerRuntimeInfo{!is_none_or_empty(wrapper.filtration_grid), wrapper.filtration_grid};
-  });
-}
-
-nb::object compute_filtration_bounds(const nb::handle& input) {
-  if (!has_slicer_template_id(input)) {
-    throw nb::value_error("First argument must be a simplextree or a slicer !");
-  }
-  return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename D>() -> nb::object {
-    using Wrapper = typename D::wrapper;
-    using Value = typename D::value_type;
-    const auto& wrapper = nb::cast<const Wrapper&>(input);
-    size_t num_parameters = D::is_degree_rips ? size_t(2) : wrapper.truc.get_number_of_parameters();
-    std::vector<Value> mins(num_parameters);
-    std::vector<Value> maxs(num_parameters);
-    bool initialized = false;
-    {
-      nb::gil_scoped_release release;
-      const auto& filtrations = wrapper.truc.get_filtration_values();
-      for (size_t i = 0; i < filtrations.size(); ++i) {
-        const auto& filtration = filtrations[i];
-        if constexpr (D::is_degree_rips) {
-          for (size_t g = 0; g < filtration.num_generators(); ++g) {
-            Value values[2] = {filtration(g, 0), static_cast<Value>(g)};
-            if (!initialized) {
-              mins.assign(values, values + 2);
-              maxs.assign(values, values + 2);
-              initialized = true;
-            } else {
-              for (size_t p = 0; p < 2; ++p) {
-                mins[p] = std::min(mins[p], values[p]);
-                maxs[p] = std::max(maxs[p], values[p]);
-              }
-            }
-          }
-        } else {
-          for (size_t g = 0; g < filtration.num_generators(); ++g) {
-            for (size_t p = 0; p < num_parameters; ++p) {
-              Value value = filtration.is_finite() ? filtration(g, p) : filtration(g, 0);
-              if (!initialized) {
-                std::fill(mins.begin(), mins.end(), value);
-                std::fill(maxs.begin(), maxs.end(), value);
-                initialized = true;
-              }
-              mins[p] = std::min(mins[p], value);
-              maxs[p] = std::max(maxs[p], value);
-            }
-          }
-        }
-      }
-    }
-    nb::object np = nb::module_::import_("numpy");
-    if (!initialized) {
-      return np.attr("empty")(nb::make_tuple(2, 0), "dtype"_a = numpy_dtype_type(D::dtype_name));
-    }
-    return np.attr("array")(nb::make_tuple(nb::cast(mins), nb::cast(maxs)),
-                            "dtype"_a = numpy_dtype_type(D::dtype_name));
-  });
-}
+inline bool has_slicer_template_id(const nb::handle& input) { return is_slicer_object(input); }
 
 template <typename... Ds>
 nb::object get_slicer_class(type_list<Ds...>,
@@ -336,7 +193,7 @@ nb::object get_slicer_class(type_list<Ds...>,
             lowercase_copy(std::string(D::column_type)) == col &&
             lowercase_copy(std::string(D::backend_type)) == pers_backend &&
             lowercase_copy(std::string(D::filtration_container)) == filtration_container) {
-          result = nb::module_::import_("multipers._slicer_nanobind").attr(D::python_name.data());
+          result = nb::borrow<nb::object>(nb::type<typename D::wrapper>());
           matched = true;
         }
       }.template operator()<Ds>(),
@@ -349,12 +206,8 @@ nb::object get_slicer_class(type_list<Ds...>,
 
 inline nb::object get_slicer_class_from_template_id(int template_id) {
   return dispatch_slicer_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
-    return nb::module_::import_("multipers._slicer_nanobind").attr(Desc::python_name.data());
+    return nb::borrow<nb::object>(nb::type<typename Desc::wrapper>());
   });
-}
-
-inline nb::object prepare_box_object(const std::vector<std::vector<double>>& box) {
-  return nb::module_::import_("numpy").attr("array")(nb::cast(box));
 }
 
 template <typename Wrapper>
@@ -381,13 +234,13 @@ typename Concrete::Filtration_value make_kcritical_filtration(const Rows& rows) 
   return filtration;
 }
 
-template <typename Wrapper, typename Concrete, typename SourceInterface>
-bool try_build_kcritical_from_simplextree_scc(Wrapper& self, SourceInterface* st_ptr, const nb::handle& source) {
+template <typename Wrapper, typename Concrete, typename SourceWrapper>
+bool try_build_kcritical_from_simplextree_scc(Wrapper& self, SourceWrapper& source) {
   using Complex = Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value>;
   Concrete built;
   {
     nb::gil_scoped_release release;
-    auto blocks = st_ptr->kcritical_simplextree_to_scc();
+    auto blocks = source.tree.kcritical_simplextree_to_scc();
     size_t total_size = 0;
     std::vector<size_t> block_sizes;
     block_sizes.reserve(blocks.size());
@@ -426,48 +279,36 @@ bool try_build_kcritical_from_simplextree_scc(Wrapper& self, SourceInterface* st
     built = Concrete(Complex(std::move(boundaries), std::move(dimensions), std::move(filtrations)));
   }
   self.truc = std::move(built);
-  if (nb::hasattr(source, "filtration_grid")) {
-    self.filtration_grid = source.attr("filtration_grid");
-  } else {
-    self.filtration_grid = nb::none();
-  }
+  self.filtration_grid = source.filtration_grid;
+  self.generator_basis = nb::none();
   self.minpres_degree = -1;
   return true;
 }
 
-inline bool is_simplextree_multi(const nb::handle& source) {
-  auto checker = nb::module_::import_("multipers.simplex_tree_multi").attr("is_simplextree_multi");
-  return nb::cast<bool>(checker(source));
-}
+inline bool is_simplextree_multi(const nb::handle& source) { return is_simplextree_object(source); }
 
 template <typename Desc, typename Wrapper, typename Concrete>
-void build_from_simplextree_desc(Wrapper& self, const nb::handle& source, intptr_t ptr) {
-  using SourceInterface = typename Desc::interface_type;
-  auto* st_ptr = reinterpret_cast<SourceInterface*>(ptr);
+void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& source) {
   if constexpr (Desc::is_kcritical) {
-    (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, st_ptr, source);
+    (void)try_build_kcritical_from_simplextree_scc<Wrapper, Concrete>(self, source);
     return;
   }
   {
     nb::gil_scoped_release release;
-    self.truc = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Concrete>(*st_ptr);
+    self.truc = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Concrete>(source.tree);
   }
-  if (nb::hasattr(source, "filtration_grid")) {
-    self.filtration_grid = source.attr("filtration_grid");
-  } else {
-    self.filtration_grid = nb::none();
-  }
+  self.filtration_grid = source.filtration_grid;
+  self.generator_basis = nb::none();
   self.minpres_degree = -1;
 }
 
 template <typename Wrapper, typename Concrete>
 bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& source) {
-  if (!is_simplextree_multi(source)) {
+  if (!is_simplextree_object(source)) {
     return false;
   }
-  intptr_t ptr = nb::cast<intptr_t>(source.attr("thisptr"));
-  dispatch_simplextree_by_template_id(template_id_of(source), [&]<typename D>() {
-    build_from_simplextree_desc<D, Wrapper, Concrete>(self, source, ptr);
+  visit_simplextree_wrapper(source, [&]<typename D>(simplextree_wrapper_t<D>& wrapper) {
+    build_from_simplextree_desc<D, Wrapper, Concrete>(self, wrapper);
   });
   return true;
 }
@@ -475,9 +316,8 @@ bool try_build_from_multipers_simplextree(Wrapper& self, const nb::handle& sourc
 template <typename Barcode, typename Value>
 nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
   size_t dims = barcode.size();
-  nb::tuple out = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)dims));
-  for (size_t dim = 0; dim < dims; ++dim) {
-    auto& bc = barcode[dim];
+  return tuple_from_size(dims, [&](size_t dim) -> nb::object {
+    const auto& bc = barcode[dim];
     std::vector<Value> flat;
     flat.reserve(bc.size() * 2);
     auto* data = bc.data();
@@ -485,10 +325,8 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
       flat.push_back(data[i][0]);
       flat.push_back(data[i][1]);
     }
-    nb::object value = nb::cast(owned_array<Value>(std::move(flat), {bc.size(), size_t(2)}));
-    PyTuple_SET_ITEM(out.ptr(), (Py_ssize_t)dim, value.release().ptr());
-  }
-  return out;
+    return nb::cast(owned_array<Value>(std::move(flat), {bc.size(), size_t(2)}));
+  });
 }
 
 template <typename Wrapper>
@@ -530,20 +368,17 @@ nb::object boundaries_object(Wrapper& self, bool packed) {
     return nb::make_tuple(indptr_arr, indices_arr);
   }
 
-  nb::tuple out = nb::steal<nb::tuple>(PyTuple_New((Py_ssize_t)num_rows));
   auto indptr_view = indptr_arr.template view<uint64_t, nb::ndim<1>>();
   auto indices_view = indices_arr.template view<uint32_t, nb::ndim<1>>();
-  for (size_t i = 0; i < num_rows; ++i) {
+  return tuple_from_size(num_rows, [&](size_t i) -> nb::object {
     uint64_t start = indptr_view(i);
     uint64_t stop = indptr_view(i + 1);
     std::vector<uint32_t> row(stop - start);
     for (uint64_t j = start; j < stop; ++j) {
       row[j - start] = indices_view(j);
     }
-    nb::object value = nb::cast(owned_array<uint32_t>(std::move(row), {size_t(stop - start)}));
-    PyTuple_SET_ITEM(out.ptr(), (Py_ssize_t)i, value.release().ptr());
-  }
-  return out;
+    return nb::cast(owned_array<uint32_t>(std::move(row), {size_t(stop - start)}));
+  });
 }
 
 template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
@@ -815,16 +650,78 @@ bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
   if (!has_slicer_template_id(source)) {
     return false;
   }
-  dispatch_slicer_by_template_id(template_id_of(source), [&]<typename D>() {
-    const auto& other = nb::cast<const typename D::wrapper&>(source);
+  visit_const_slicer_wrapper(source, [&]<typename D>(const typename D::wrapper& other) {
     {
       nb::gil_scoped_release release;
       self.truc = TargetConcrete(other.truc);
     }
     self.filtration_grid = other.filtration_grid;
+    self.generator_basis = other.generator_basis;
     self.minpres_degree = other.minpres_degree;
   });
   return true;
+}
+
+template <typename TargetDesc, typename SourceDesc>
+typename TargetDesc::wrapper construct_from_slicer_wrapper(const typename SourceDesc::wrapper& source) {
+  using Wrapper = typename TargetDesc::wrapper;
+  using Concrete = typename TargetDesc::concrete;
+  Wrapper out;
+  {
+    nb::gil_scoped_release release;
+    out.truc = Concrete(source.truc);
+  }
+  out.filtration_grid = source.filtration_grid;
+  out.generator_basis = source.generator_basis;
+  out.minpres_degree = source.minpres_degree;
+  return out;
+}
+
+template <typename TargetDesc, typename SourceDesc>
+typename TargetDesc::wrapper construct_from_simplextree_wrapper(simplextree_wrapper_t<SourceDesc>& source) {
+  using Wrapper = typename TargetDesc::wrapper;
+  using Concrete = typename TargetDesc::concrete;
+  Wrapper out;
+  build_from_simplextree_desc<SourceDesc, Wrapper, Concrete>(out, source);
+  return out;
+}
+
+template <typename TargetDesc, typename Class, typename... SourceDesc>
+void bind_slicer_source_constructors(Class& cls, type_list<SourceDesc...>) {
+  (cls.def(nb::new_([](const typename SourceDesc::wrapper& source) {
+             return construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source);
+           }),
+           "source"_a),
+   ...);
+}
+
+template <typename TargetDesc, typename Class, typename... SourceDesc>
+void bind_simplextree_source_constructors(Class& cls, type_list<SourceDesc...>) {
+  (cls.def(nb::new_([](simplextree_wrapper_t<SourceDesc>& source) {
+             return construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source);
+           }),
+           "source"_a),
+   ...);
+}
+
+template <typename TargetDesc, typename Class>
+void bind_typed_source_constructors(Class& cls) {
+  bind_slicer_source_constructors<TargetDesc>(cls, SlicerDescriptorList{});
+  bind_simplextree_source_constructors<TargetDesc>(cls, SimplexTreeDescriptorList{});
+}
+
+template <typename Wrapper>
+void reset_python_state(Wrapper& self);
+
+template <typename Wrapper, typename Concrete>
+Wrapper construct_from_scc_file(const std::string& path, int shift_dimension) {
+  Wrapper out;
+  {
+    nb::gil_scoped_release release;
+    out.truc = Gudhi::multi_persistence::build_slicer_from_scc_file<Concrete>(path, false, false, shift_dimension);
+  }
+  reset_python_state(out);
+  return out;
 }
 
 template <typename Filtration>
@@ -891,7 +788,71 @@ bool wrapper_equals(Wrapper& self, const nb::handle& other) {
 template <typename Wrapper>
 void reset_python_state(Wrapper& self) {
   self.filtration_grid = nb::none();
+  self.generator_basis = nb::none();
   self.minpres_degree = -1;
+}
+
+struct GeneratorBasisData {
+  bool active = false;
+  int degree = -1;
+  std::vector<std::vector<uint32_t>> columns;
+  std::vector<std::vector<uint32_t>> row_boundaries;
+};
+
+template <typename Wrapper>
+GeneratorBasisData extract_generator_basis(const Wrapper& self) {
+  GeneratorBasisData out;
+  if (self.generator_basis.is_none()) {
+    return out;
+  }
+  nb::dict basis = nb::cast<nb::dict>(self.generator_basis);
+  if (!basis.contains("degree") || !basis.contains("columns") || !basis.contains("row_boundaries")) {
+    throw std::runtime_error("Invalid `_generator_basis`: expected keys `degree`, `columns`, and `row_boundaries`.");
+  }
+  out.degree = nb::cast<int>(basis["degree"]);
+  out.columns = nb::cast<std::vector<std::vector<uint32_t>>>(basis["columns"]);
+  out.row_boundaries = nb::cast<std::vector<std::vector<uint32_t>>>(basis["row_boundaries"]);
+  out.active = true;
+  return out;
+}
+
+inline std::vector<std::vector<uint32_t>> expand_cycle_in_generator_basis(const std::vector<uint32_t>& cycle,
+                                                                          const GeneratorBasisData& basis) {
+  std::vector<uint8_t> active_rows(basis.row_boundaries.size(), 0);
+  for (uint32_t generator_idx : cycle) {
+    if (generator_idx >= basis.columns.size()) {
+      throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
+    }
+    for (uint32_t row_idx : basis.columns[generator_idx]) {
+      if (row_idx >= basis.row_boundaries.size()) {
+        throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_boundaries`.");
+      }
+      active_rows[row_idx] ^= 1;
+    }
+  }
+
+  std::vector<std::vector<uint32_t>> out;
+  for (size_t row_idx = 0; row_idx < active_rows.size(); ++row_idx) {
+    if (active_rows[row_idx] != 0) {
+      out.push_back(basis.row_boundaries[row_idx]);
+    }
+  }
+  return out;
+}
+
+inline bool cycle_intersects_points(const std::vector<std::vector<uint32_t>>& cycle,
+                                    const std::unordered_set<uint32_t>& intersect_points) {
+  if (intersect_points.empty()) {
+    return false;
+  }
+  for (const auto& simplex : cycle) {
+    for (uint32_t vertex : simplex) {
+      if (intersect_points.contains(vertex)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 inline constexpr uint32_t kSlicerSerializationMagic = 0x4d50534c;
@@ -1204,6 +1165,70 @@ Wrapper construct_from_generator_data(nb::object generator_maps,
   return out;
 }
 
+inline std::vector<std::vector<uint32_t>> boundaries_from_generator_maps(const nb::handle& generator_maps) {
+  std::vector<std::vector<uint32_t>> boundaries;
+  boundaries.reserve(nb::len(generator_maps));
+  for (nb::handle row_handle : nb::iter(generator_maps)) {
+    boundaries.push_back(cast_vector<uint32_t>(row_handle));
+  }
+  return boundaries;
+}
+
+template <typename Wrapper, typename Concrete, typename Value, typename Index>
+Wrapper construct_from_dense_generator_data(nb::iterable generator_maps,
+                                            nb::ndarray<nb::numpy, const Index, nb::ndim<1>> generator_dimensions,
+                                            nb::ndarray<nb::numpy, const Value, nb::ndim<2>> filtration_values) {
+  Wrapper out;
+  if (nb::len(generator_maps) == 0) {
+    return out;
+  }
+
+  auto boundaries = boundaries_from_generator_maps(generator_maps);
+  const size_t num_generators = boundaries.size();
+  if (generator_dimensions.shape(0) != num_generators || filtration_values.shape(0) != num_generators) {
+    throw std::runtime_error("Invalid input, shape do not coincide.");
+  }
+
+  std::vector<int> dims;
+  dims.reserve(num_generators);
+  for (size_t i = 0; i < num_generators; ++i) {
+    dims.push_back((int)generator_dimensions(i));
+  }
+
+  std::vector<typename Concrete::Filtration_value> c_filtrations;
+  c_filtrations.reserve(num_generators);
+  const auto view = filtration_values.view();
+  const size_t num_parameters = filtration_values.shape(1);
+  for (size_t i = 0; i < num_generators; ++i) {
+    std::vector<Value> row(num_parameters);
+    for (size_t p = 0; p < num_parameters; ++p) {
+      row[p] = view(i, p);
+    }
+    c_filtrations.emplace_back(row);
+  }
+
+  Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
+      boundaries, dims, c_filtrations);
+  out.truc = Concrete(cpx);
+  reset_python_state(out);
+  return out;
+}
+
+template <typename Class, typename Wrapper, typename Concrete, typename Value, bool IsKCritical, typename Index>
+void bind_dense_generator_data_overloads(Class& cls) {
+  if constexpr (!IsKCritical) {
+    cls.def(nb::new_([](nb::iterable generator_maps,
+                        nb::ndarray<nb::numpy, const Index, nb::ndim<1>> generator_dimensions,
+                        nb::ndarray<nb::numpy, const Value, nb::ndim<2>> filtration_values) {
+              return construct_from_dense_generator_data<Wrapper, Concrete, Value>(
+                  generator_maps, generator_dimensions, filtration_values);
+            }),
+            "generator_maps"_a,
+            "generator_dimensions"_a,
+            "filtration_values"_a);
+  }
+}
+
 template <typename Wrapper, typename Concrete, typename Value>
 Wrapper construct_kcritical_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
@@ -1267,38 +1292,6 @@ Wrapper construct_kcritical_from_packed(
   return out;
 }
 
-inline nb::object numpy_dtype_type(std::string_view name) {
-  nb::object np = nb::module_::import_("numpy");
-  return np.attr("dtype")(std::string(name)).attr("type");
-}
-
-template <typename Desc>
-typename Desc::wrapper construct_from_source(nb::object source) {
-  using Wrapper = typename Desc::wrapper;
-  using Concrete = typename Desc::concrete;
-  using Value = typename Desc::value_type;
-
-  Wrapper out;
-  if (is_none_or_empty(source)) {
-    return out;
-  }
-  if (try_copy_from_existing<Wrapper, Concrete>(out, source)) {
-    return out;
-  }
-  if (is_simplextree_multi(source)) {
-    if (try_build_from_multipers_simplextree<Wrapper, Concrete>(out, source)) {
-      return out;
-    }
-    throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
-  }
-
-  auto helper = nb::module_::import_("multipers._slicer_meta").attr("_blocks2boundary_dimension_grades");
-  nb::object blocks = nb::hasattr(source, "_to_scc") ? source.attr("_to_scc")() : source;
-  nb::tuple converted = nb::cast<nb::tuple>(helper(blocks, "inplace"_a = false, "is_kcritical"_a = Desc::is_kcritical));
-  return construct_from_generator_data<Wrapper, Concrete, Value, Desc::is_kcritical>(
-      converted[0], converted[1], converted[2]);
-}
-
 template <typename Desc, typename Class>
 void bind_grid_methods(Class& cls) {
   if constexpr (Desc::has_grid_methods) {
@@ -1315,6 +1308,7 @@ void bind_grid_methods(Class& cls) {
                 out.truc = build_slicer_coarsen_on_grid(self.truc, grid);
               }
               out.filtration_grid = self.filtration_grid;
+              out.generator_basis = self.generator_basis;
               out.minpres_degree = self.minpres_degree;
               return out;
             })
@@ -1324,6 +1318,7 @@ void bind_grid_methods(Class& cls) {
               Wrapper out;
               if (self.truc.get_number_of_cycle_generators() == 0) {
                 out.filtration_grid = self.filtration_grid;
+                out.generator_basis = self.generator_basis;
                 out.minpres_degree = self.minpres_degree;
                 return out;
               }
@@ -1333,6 +1328,7 @@ void bind_grid_methods(Class& cls) {
                 out.truc = build_slicer_from_projective_cover_kernel(self.truc, dim);
               }
               out.filtration_grid = self.filtration_grid;
+              out.generator_basis = self.generator_basis;
               out.minpres_degree = self.minpres_degree;
               return out;
             },
@@ -1371,13 +1367,21 @@ void bind_vine_methods(Class& cls) {
            nb::rv_policy::reference_internal)
         .def(
             "get_representative_cycles",
-            [](Wrapper& self, bool update, nb::object idx_obj) {
+            [](Wrapper& self, bool update, nb::object idx_obj, nb::object intersect_points_obj) {
               std::vector<int64_t> requested;
               bool filter_cycles = !idx_obj.is_none();
               if (filter_cycles) {
                 requested = cast_vector<int64_t>(idx_obj);
               }
+              std::unordered_set<uint32_t> intersect_points;
+              const bool filter_points = !intersect_points_obj.is_none();
+              if (filter_points) {
+                auto requested_points = cast_vector<uint32_t>(intersect_points_obj);
+                intersect_points.insert(requested_points.begin(), requested_points.end());
+              }
+              GeneratorBasisData generator_basis = extract_generator_basis(self);
               std::vector<std::vector<std::vector<std::vector<uint32_t>>>> out_cpp;
+              std::vector<std::vector<uint8_t>> keep_mask;
               {
                 nb::gil_scoped_release release;
                 auto cycle_idx = self.truc.get_representative_cycles(update);
@@ -1410,14 +1414,18 @@ void bind_vine_methods(Class& cls) {
                   }
                 }
                 out_cpp.resize(cycle_idx.size());
+                keep_mask.resize(cycle_idx.size());
                 for (size_t i = 0; i < cycle_idx.size(); ++i) {
                   out_cpp[i].resize(selected_indices[i].size());
+                  keep_mask[i].assign(selected_indices[i].size(), 0);
                 }
                 tbb::parallel_for(size_t(0), cycle_idx.size(), [&](size_t i) {
                   for (size_t j = 0; j < selected_indices[i].size(); ++j) {
                     size_t selected_idx = selected_indices[i][j];
                     if (!cycle_idx[i][selected_idx].empty()) {
-                      if (self.truc.get_boundary(cycle_idx[i][selected_idx][0]).empty()) {
+                      if (generator_basis.active && static_cast<int>(i) == generator_basis.degree) {
+                        out_cpp[i][j] = expand_cycle_in_generator_basis(cycle_idx[i][selected_idx], generator_basis);
+                      } else if (self.truc.get_boundary(cycle_idx[i][selected_idx][0]).empty()) {
                         out_cpp[i][j] = {std::vector<uint32_t>{}};
                       } else {
                         out_cpp[i][j].resize(cycle_idx[i][selected_idx].size());
@@ -1425,6 +1433,11 @@ void bind_vine_methods(Class& cls) {
                           out_cpp[i][j][k] = self.truc.get_boundary(cycle_idx[i][selected_idx][k]);
                         }
                       }
+                      if (!filter_points || cycle_intersects_points(out_cpp[i][j], intersect_points)) {
+                        keep_mask[i][j] = 1;
+                      }
+                    } else if (!filter_points) {
+                      keep_mask[i][j] = 1;
                     }
                   }
                 });
@@ -1433,6 +1446,9 @@ void bind_vine_methods(Class& cls) {
               for (size_t i = 0; i < out_cpp.size(); ++i) {
                 nb::list dim_cycles;
                 for (size_t j = 0; j < out_cpp[i].size(); ++j) {
+                  if (!keep_mask[i][j]) {
+                    continue;
+                  }
                   nb::list cycle;
                   for (size_t k = 0; k < out_cpp[i][j].size(); ++k) {
                     auto boundary = std::move(out_cpp[i][j][k]);
@@ -1445,7 +1461,8 @@ void bind_vine_methods(Class& cls) {
               return out;
             },
             "update"_a = true,
-            "idx"_a = nb::none())
+            "idx"_a = nb::none(),
+            "intersect_points"_a = nb::none())
         .def(
             "get_most_persistent_cycle",
             [](Wrapper& self, int dim, bool update, bool idx) {
@@ -1490,228 +1507,348 @@ void bind_vine_methods(Class& cls) {
 }
 
 template <typename Desc>
+typename Desc::wrapper construct_from_supported_source(nb::object source) {
+  using Wrapper = typename Desc::wrapper;
+  using Concrete = typename Desc::concrete;
+
+  Wrapper out;
+  if (is_none_or_empty(source)) {
+    return out;
+  }
+  if (try_copy_from_existing<Wrapper, Concrete>(out, source)) {
+    return out;
+  }
+  if (is_simplextree_multi(source)) {
+    if (try_build_from_multipers_simplextree<Wrapper, Concrete>(out, source)) {
+      return out;
+    }
+    throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
+  }
+  throw nb::type_error(
+      "Slicer construction from Python SCC/block iterables has been removed. "
+      "Construct from a SimplexTreeMulti, an existing slicer, an SCC file path, "
+      "or explicit (generator_maps, generator_dimensions, filtration_values) data.");
+}
+
+template <typename Desc>
 void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
   using Wrapper = typename Desc::wrapper;
   using Concrete = typename Desc::concrete;
   using Value = typename Desc::value_type;
 
-  auto cls = nb::class_<Wrapper>(m, Desc::python_name.data())
-      .def(nb::init<>())
-      .def(
-          nb::new_([](nb::object source) {
-            return construct_from_source<Desc>(source);
-          }),
-          "source"_a = nb::none())
-      .def(
-          nb::new_([](nb::object generator_maps, nb::object generator_dimensions, nb::object filtration_values) {
-            return construct_from_generator_data<Wrapper, Concrete, Value, Desc::is_kcritical>(
-                generator_maps,
-                generator_dimensions,
-                filtration_values);
-          }),
-          "generator_maps"_a,
-          "generator_dimensions"_a,
-          "filtration_values"_a)
+  auto cls =
+      nb::class_<Wrapper>(m, Desc::python_name.data())
+          .def(nb::init<>())
+          .def(nb::new_([](nb::object source) { return construct_from_supported_source<Desc>(source); }),
+               "source"_a = nb::none())
+          .def(nb::new_([](std::string path, int shift_dimension) {
+                 return construct_from_scc_file<Wrapper, Concrete>(path, shift_dimension);
+               }),
+               "path"_a,
+               "shift_dimension"_a = 0)
+          .def(nb::new_([](nb::object generator_maps, nb::object generator_dimensions, nb::object filtration_values) {
+                 return construct_from_generator_data<Wrapper, Concrete, Value, Desc::is_kcritical>(
+                     generator_maps, generator_dimensions, filtration_values);
+               }),
+               "generator_maps"_a,
+               "generator_dimensions"_a,
+               "filtration_values"_a);
+
+  bind_typed_source_constructors<Desc>(cls);
+
+  bind_dense_generator_data_overloads<decltype(cls), Wrapper, Concrete, Value, Desc::is_kcritical, int32_t>(cls);
+  bind_dense_generator_data_overloads<decltype(cls), Wrapper, Concrete, Value, Desc::is_kcritical, int64_t>(cls);
+
+  cls.def_prop_rw(
+         "filtration_grid",
+         [](Wrapper& self) -> nb::object { return self.filtration_grid; },
+         [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::none() : value; },
+         nb::arg("value").none())
       .def_prop_rw(
-          "filtration_grid",
-          [](Wrapper& self) -> nb::object { return self.filtration_grid; },
-          [](Wrapper& self, nb::object value) {
-            self.filtration_grid = value.is_none() ? nb::none() : value;
-          },
+          "_generator_basis",
+          [](Wrapper& self) -> nb::object { return self.generator_basis; },
+          [](Wrapper& self, nb::object value) { self.generator_basis = value.is_none() ? nb::none() : value; },
           nb::arg("value").none())
       .def_rw("minpres_degree", &Wrapper::minpres_degree)
       .def("get_ptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.truc); })
-      .def("_from_ptr", [](Wrapper& self, intptr_t slicer_ptr) -> Wrapper& {
-        self.truc = *reinterpret_cast<Concrete*>(slicer_ptr);
-        return self;
-      }, nb::rv_policy::reference_internal)
+      .def(
+          "_from_ptr",
+          [](Wrapper& self, intptr_t slicer_ptr) -> Wrapper& {
+            self.truc = *reinterpret_cast<Concrete*>(slicer_ptr);
+            return self;
+          },
+          nb::rv_policy::reference_internal)
       .def("_serialize_state",
-           [](Wrapper& self) -> nb::object { return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self); })
-      .def("_deserialize_state",
-           [](Wrapper& self, nb::handle state) -> Wrapper& {
-             load_state<Wrapper, Concrete, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, state);
-             return self;
-           },
-           "state"_a,
-           nb::rv_policy::reference_internal)
+           [](Wrapper& self) -> nb::object {
+             return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
+           })
+      .def(
+          "_deserialize_state",
+          [](Wrapper& self, nb::handle state) -> Wrapper& {
+            load_state<Wrapper, Concrete, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, state);
+            return self;
+          },
+          "state"_a,
+          nb::rv_policy::reference_internal)
       .def("__len__", [](Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
-      .def_prop_ro("num_generators", [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
+      .def_prop_ro("num_generators",
+                   [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
       .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
       .def_prop_ro("_template_id", [](const Wrapper&) -> int { return Desc::template_id; })
       .def_prop_ro("col_type", [](const Wrapper&) -> std::string { return std::string(Desc::column_type); })
-      .def_prop_ro("filtration_container", [](const Wrapper&) -> std::string { return std::string(Desc::filtration_container); })
+      .def_prop_ro("filtration_container",
+                   [](const Wrapper&) -> std::string { return std::string(Desc::filtration_container); })
       .def_prop_ro("is_vine", [](const Wrapper&) -> bool { return Desc::is_vine; })
       .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return Desc::is_kcritical; })
       .def_prop_ro("pers_backend", [](const Wrapper&) -> std::string { return std::string(Desc::backend_type); })
       .def_prop_ro("ftype", [](const Wrapper&) -> std::string { return std::string(Desc::filtration_type); })
-      .def("__eq__", [](Wrapper& self, nb::handle other) -> bool { return wrapper_equals<Wrapper, Concrete, Desc::is_kcritical>(self, other); })
-      .def_static("_inf_value", []() {
-        if constexpr (std::is_floating_point_v<Value>) {
-          return nb::cast(std::numeric_limits<Value>::infinity());
-        }
-        return nb::cast(std::numeric_limits<Value>::max());
-      })
+      .def("__eq__",
+           [](Wrapper& self, nb::handle other) -> bool {
+             return wrapper_equals<Wrapper, Concrete, Desc::is_kcritical>(self, other);
+           })
+      .def_static("_inf_value",
+                  []() {
+                    if constexpr (std::is_floating_point_v<Value>) {
+                      return nb::cast(std::numeric_limits<Value>::infinity());
+                    }
+                    return nb::cast(std::numeric_limits<Value>::max());
+                  })
       .def("get_dimensions", [](Wrapper& self) -> nb::object { return dimensions_array(self); })
-      .def("get_boundaries", [](Wrapper& self, bool packed) -> nb::object { return boundaries_object(self, packed); }, "packed"_a = false)
-      .def("get_filtration", [](Wrapper& self, int idx, bool raw) {
-        Py_ssize_t n = static_cast<Py_ssize_t>(self.truc.get_number_of_cycle_generators());
-        Py_ssize_t i = idx;
-        if (i < 0) {
-          i += n;
-        }
-        if (i < 0 || i >= n) {
-          throw nb::index_error("Generator index out of range.");
-        }
-        return filtration_value_to_python<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, static_cast<size_t>(i), false, raw);
-      }, "idx"_a, "raw"_a = false)
-      .def("_get_filtrations_impl", [](Wrapper& self, bool raw, bool view, bool packed) -> nb::object {
-        if (packed) {
-          return pack_filtrations<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, raw);
-        }
-        if (view) {
-          nb::list out;
-          size_t n = self.truc.get_number_of_cycle_generators();
-          for (size_t i = 0; i < n; ++i) {
-            out.append(filtration_value_to_python<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, i, false, raw));
-          }
-          return nb::object(out);
-        }
-        return copy_filtrations<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, raw);
-      }, "raw"_a = false, "view"_a = false, "packed"_a = false)
-      .def("get_filtrations_values", [](Wrapper& self) -> nb::object {
-        return filtration_values_array<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
-      })
-      .def("build_from_simplex_tree", [](Wrapper& self, nb::object st) -> Wrapper& {
-        if (try_build_from_multipers_simplextree<Wrapper, Concrete>(self, st)) {
-          return self;
-        }
-        throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
-      }, nb::rv_policy::reference_internal)
-      .def("_build_from_scc_file", [](Wrapper& self, std::string path, bool rivet_compatible, bool reverse, int shift_dimension) -> Wrapper& {
-        {
-          nb::gil_scoped_release release;
-          self.truc = Gudhi::multi_persistence::build_slicer_from_scc_file<Concrete>(path, rivet_compatible, reverse, shift_dimension);
-        }
-        return self;
-      }, "path"_a, "rivet_compatible"_a = false, "reverse"_a = false, "shift_dimension"_a = 0, nb::rv_policy::reference_internal)
-      .def("_to_scc_raw", [](Wrapper& self, std::string path, int degree, bool rivet_compatible, bool ignore_last_generators, bool strip_comments, bool reverse) -> void {
-        {
-          nb::gil_scoped_release release;
-          write_slicer_to_scc_file(path, self.truc, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse);
-        }
-      }, "path"_a, "degree"_a = -1, "rivet_compatible"_a = false, "ignore_last_generators"_a = false, "strip_comments"_a = false, "reverse"_a = false)
-      .def("push_to_line", [](Wrapper& self, nb::object basepoint, nb::object direction) -> Wrapper& {
-        std::vector<Value> bp = cast_vector<Value>(basepoint);
-        std::vector<Value> dir;
-        bool has_direction = !direction.is_none();
-        if (has_direction) {
-          dir = cast_vector<Value>(direction);
-        }
-        {
-          nb::gil_scoped_release release;
-          if (has_direction) {
-            self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp, dir));
-          } else {
-            self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp));
-          }
-        }
-        return self;
-      }, "basepoint"_a, "direction"_a = nb::none(), nb::rv_policy::reference_internal)
-      .def("set_slice", [](Wrapper& self, nb::object values) -> Wrapper& {
-        auto c_values = cast_vector<Value>(values);
-        {
-          nb::gil_scoped_release release;
-          self.truc.set_slice(c_values);
-        }
-        return self;
-      }, nb::rv_policy::reference_internal)
-      .def("initialize_persistence_computation", [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
-        {
-          nb::gil_scoped_release release;
-          self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
-        }
-        return self;
-      }, "ignore_infinite_filtration_values"_a = true, nb::rv_policy::reference_internal)
-      .def("update_persistence_computation", [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
-        {
-          nb::gil_scoped_release release;
-          self.truc.update_persistence_computation(ignore_infinite_filtration_values);
-        }
-        return self;
-      }, "ignore_infinite_filtration_values"_a = false, nb::rv_policy::reference_internal)
-      .def("get_barcode", [](Wrapper& self) -> nb::tuple {
-        using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
-        Barcode barcode;
-        {
-          nb::gil_scoped_release release;
-          barcode = self.truc.template get_flat_barcode<true, Value, false>();
-        }
-        return dim_barcode_to_tuple<Barcode, Value>(barcode);
-      })
-      .def("get_barcode_idx", [](Wrapper& self) -> nb::tuple {
-        using Barcode = decltype(self.truc.template get_flat_barcode<true, int, true>());
-        Barcode barcode;
-        {
-          nb::gil_scoped_release release;
-          barcode = self.truc.template get_flat_barcode<true, int, true>();
-        }
-        return dim_barcode_to_tuple<Barcode, int>(barcode);
-      })
-      .def("get_current_filtration", [](Wrapper& self) -> nb::object {
-        std::vector<Value> current;
-        {
-          nb::gil_scoped_release release;
-          current = self.truc.get_slice();
-        }
-        return nb::cast(owned_array<Value>(std::move(current), {current.size()}));
-      })
-      .def("prune_above_dimension", [](Wrapper& self, int max_dimension) -> Wrapper& {
-        {
-          nb::gil_scoped_release release;
-          self.truc.prune_above_dimension(max_dimension);
-        }
-        return self;
-      }, nb::rv_policy::reference_internal)
-      .def("_make_filtration_non_decreasing_raw",
-           [](Wrapper& self, bool safe) -> Wrapper& { return make_filtration_non_decreasing_inplace(self, safe); },
-           "safe"_a = true,
-           nb::rv_policy::reference_internal)
-      .def("coarsen_on_grid_inplace", [](Wrapper& self, std::vector<std::vector<Value>> grid, bool coordinates) -> Wrapper& {
-        {
-          nb::gil_scoped_release release;
-          self.truc.coarsen_on_grid(grid, coordinates);
-        }
-        return self;
-      }, nb::rv_policy::reference_internal)
-      .def("to_colexical", [](Wrapper& self, bool return_permutation) {
-        decltype(build_permuted_slicer(self.truc)) stuff;
-        {
-          nb::gil_scoped_release release;
-          stuff = build_permuted_slicer(self.truc);
-        }
-        Wrapper out;
-        out.truc = std::move(stuff.first);
-        out.filtration_grid = self.filtration_grid;
-        out.minpres_degree = self.minpres_degree;
-        if (!return_permutation) {
-          return nb::object(nb::cast(out));
-        }
-        std::vector<uint32_t> perm(stuff.second.begin(), stuff.second.end());
-        return nb::object(nb::make_tuple(nb::cast(out), owned_array<uint32_t>(std::move(perm), {stuff.second.size()})));
-      }, "return_permutation"_a = false)
-      .def("permute_generators", [](Wrapper& self, std::vector<uint32_t> permutation) {
-        Wrapper out;
-        {
-          nb::gil_scoped_release release;
-          out.truc = build_permuted_slicer(self.truc, permutation);
-        }
-        out.filtration_grid = self.filtration_grid;
-        out.minpres_degree = self.minpres_degree;
-        return out;
-      })
+      .def(
+          "get_boundaries",
+          [](Wrapper& self, bool packed) -> nb::object { return boundaries_object(self, packed); },
+          "packed"_a = false)
+      .def(
+          "get_filtration",
+          [](Wrapper& self, int idx, bool raw) {
+            Py_ssize_t n = static_cast<Py_ssize_t>(self.truc.get_number_of_cycle_generators());
+            Py_ssize_t i = idx;
+            if (i < 0) {
+              i += n;
+            }
+            if (i < 0 || i >= n) {
+              throw nb::index_error("Generator index out of range.");
+            }
+            return filtration_value_to_python<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(
+                self, static_cast<size_t>(i), false, raw);
+          },
+          "idx"_a,
+          "raw"_a = false)
+      .def(
+          "_get_filtrations_impl",
+          [](Wrapper& self, bool raw, bool view, bool packed) -> nb::object {
+            if (packed) {
+              return pack_filtrations<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, raw);
+            }
+            if (view) {
+              nb::list out;
+              size_t n = self.truc.get_number_of_cycle_generators();
+              for (size_t i = 0; i < n; ++i) {
+                out.append(filtration_value_to_python<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(
+                    self, i, false, raw));
+              }
+              return nb::object(out);
+            }
+            return copy_filtrations<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, raw);
+          },
+          "raw"_a = false,
+          "view"_a = false,
+          "packed"_a = false)
+      .def("get_filtrations_values",
+           [](Wrapper& self) -> nb::object {
+             return filtration_values_array<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
+           })
+      .def(
+          "build_from_simplex_tree",
+          [](Wrapper& self, nb::object st) -> Wrapper& {
+            if (try_build_from_multipers_simplextree<Wrapper, Concrete>(self, st)) {
+              return self;
+            }
+            throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
+          },
+          nb::rv_policy::reference_internal)
+      .def(
+          "_build_from_scc_file",
+          [](Wrapper& self, std::string path, bool rivet_compatible, bool reverse, int shift_dimension) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.truc = Gudhi::multi_persistence::build_slicer_from_scc_file<Concrete>(
+                  path, rivet_compatible, reverse, shift_dimension);
+            }
+            return self;
+          },
+          "path"_a,
+          "rivet_compatible"_a = false,
+          "reverse"_a = false,
+          "shift_dimension"_a = 0,
+          nb::rv_policy::reference_internal)
+      .def(
+          "_to_scc_raw",
+          [](Wrapper& self,
+             std::string path,
+             int degree,
+             bool rivet_compatible,
+             bool ignore_last_generators,
+             bool strip_comments,
+             bool reverse) -> void {
+            {
+              nb::gil_scoped_release release;
+              write_slicer_to_scc_file(
+                  path, self.truc, degree, rivet_compatible, ignore_last_generators, strip_comments, reverse);
+            }
+          },
+          "path"_a,
+          "degree"_a = -1,
+          "rivet_compatible"_a = false,
+          "ignore_last_generators"_a = false,
+          "strip_comments"_a = false,
+          "reverse"_a = false)
+      .def(
+          "push_to_line",
+          [](Wrapper& self, nb::object basepoint, nb::object direction) -> Wrapper& {
+            std::vector<Value> bp = cast_vector<Value>(basepoint);
+            std::vector<Value> dir;
+            bool has_direction = !direction.is_none();
+            if (has_direction) {
+              dir = cast_vector<Value>(direction);
+            }
+            {
+              nb::gil_scoped_release release;
+              if (has_direction) {
+                self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp, dir));
+              } else {
+                self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp));
+              }
+            }
+            return self;
+          },
+          "basepoint"_a,
+          "direction"_a = nb::none(),
+          nb::rv_policy::reference_internal)
+      .def(
+          "set_slice",
+          [](Wrapper& self, nb::object values) -> Wrapper& {
+            auto c_values = cast_vector<Value>(values);
+            {
+              nb::gil_scoped_release release;
+              self.truc.set_slice(c_values);
+            }
+            return self;
+          },
+          nb::rv_policy::reference_internal)
+      .def(
+          "initialize_persistence_computation",
+          [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
+            }
+            return self;
+          },
+          "ignore_infinite_filtration_values"_a = true,
+          nb::rv_policy::reference_internal)
+      .def(
+          "update_persistence_computation",
+          [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.truc.update_persistence_computation(ignore_infinite_filtration_values);
+            }
+            return self;
+          },
+          "ignore_infinite_filtration_values"_a = false,
+          nb::rv_policy::reference_internal)
+      .def("get_barcode",
+           [](Wrapper& self) -> nb::tuple {
+             using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
+             Barcode barcode;
+             {
+               nb::gil_scoped_release release;
+               barcode = self.truc.template get_flat_barcode<true, Value, false>();
+             }
+             return dim_barcode_to_tuple<Barcode, Value>(barcode);
+           })
+      .def("get_barcode_idx",
+           [](Wrapper& self) -> nb::tuple {
+             using Barcode = decltype(self.truc.template get_flat_barcode<true, int, true>());
+             Barcode barcode;
+             {
+               nb::gil_scoped_release release;
+               barcode = self.truc.template get_flat_barcode<true, int, true>();
+             }
+             return dim_barcode_to_tuple<Barcode, int>(barcode);
+           })
+      .def("get_current_filtration",
+           [](Wrapper& self) -> nb::object {
+             std::vector<Value> current;
+             {
+               nb::gil_scoped_release release;
+               current = self.truc.get_slice();
+             }
+             return nb::cast(owned_array<Value>(std::move(current), {current.size()}));
+           })
+      .def(
+          "prune_above_dimension",
+          [](Wrapper& self, int max_dimension) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.truc.prune_above_dimension(max_dimension);
+            }
+            return self;
+          },
+          nb::rv_policy::reference_internal)
+      .def(
+          "_make_filtration_non_decreasing_raw",
+          [](Wrapper& self, bool safe) -> Wrapper& { return make_filtration_non_decreasing_inplace(self, safe); },
+          "safe"_a = true,
+          nb::rv_policy::reference_internal)
+      .def(
+          "coarsen_on_grid_inplace",
+          [](Wrapper& self, std::vector<std::vector<Value>> grid, bool coordinates) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.truc.coarsen_on_grid(grid, coordinates);
+            }
+            return self;
+          },
+          nb::rv_policy::reference_internal)
+      .def(
+          "to_colexical",
+          [](Wrapper& self, bool return_permutation) {
+            decltype(build_permuted_slicer(self.truc)) stuff;
+            {
+              nb::gil_scoped_release release;
+              stuff = build_permuted_slicer(self.truc);
+            }
+            Wrapper out;
+            out.truc = std::move(stuff.first);
+            out.filtration_grid = self.filtration_grid;
+            out.generator_basis = self.generator_basis;
+            out.minpres_degree = self.minpres_degree;
+            if (!return_permutation) {
+              return nb::object(nb::cast(out));
+            }
+            std::vector<uint32_t> perm(stuff.second.begin(), stuff.second.end());
+            return nb::object(
+                nb::make_tuple(nb::cast(out), owned_array<uint32_t>(std::move(perm), {stuff.second.size()})));
+          },
+          "return_permutation"_a = false)
+      .def("permute_generators",
+           [](Wrapper& self, std::vector<uint32_t> permutation) {
+             Wrapper out;
+             {
+               nb::gil_scoped_release release;
+               out.truc = build_permuted_slicer(self.truc, permutation);
+             }
+             out.filtration_grid = self.filtration_grid;
+             out.generator_basis = self.generator_basis;
+             out.minpres_degree = self.minpres_degree;
+             return out;
+           })
       .def("copy", [](Wrapper& self) -> Wrapper { return Wrapper(self); })
-      .def("_info_string", [](Wrapper& self) -> std::string { return multipers::tmp_interface::slicer_to_str(self.truc); });
+      .def("_info_string",
+           [](Wrapper& self) -> std::string { return multipers::tmp_interface::slicer_to_str(self.truc); });
 
   bind_grid_methods<Desc>(cls);
   bind_vine_methods<Desc>(cls);
@@ -1780,8 +1917,7 @@ nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
                                           bool threshold,
                                           bool complete,
                                           bool verbose,
-                                          int n_jobs,
-                                          const nb::object& mma_module) {
+                                          int n_jobs) {
   if constexpr (!Desc::enable_module_approximation) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   } else {
@@ -1791,9 +1927,9 @@ nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
       mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
           wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
     }
-    nb::object out = mma_module.attr("PyModule_f64")();
-    out.attr("_from_ptr")(reinterpret_cast<intptr_t>(new Gudhi::multi_persistence::Module<double>(std::move(mod))));
-    return out;
+    module_wrapper_t<canonical_double_mma_desc> out;
+    out.mod = std::move(mod);
+    return nb::cast(out);
   }
 }
 
@@ -1806,199 +1942,14 @@ nb::object compute_module_approximation_from_slicer(type_list<Ds...>,
                                                     bool threshold,
                                                     bool complete,
                                                     bool verbose,
-                                                    int n_jobs,
-                                                    const nb::object& mma_module) {
+                                                    int n_jobs) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   }
   return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::object {
     auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
-    return module_approximation_from_desc<D>(
-        wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs, mma_module);
+    return module_approximation_from_desc<D>(wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs);
   });
-}
-
-inline nb::object module_approximation_single_input(nb::object input,
-                                                    nb::object box,
-                                                    double max_error,
-                                                    int nlines,
-                                                    bool from_coordinates,
-                                                    bool complete,
-                                                    bool threshold,
-                                                    bool verbose,
-                                                    bool ignore_warnings,
-                                                    nb::handle direction_handle,
-                                                    nb::handle swap_box_coords_handle,
-                                                    int n_jobs) {
-  nb::object np = nb::module_::import_("numpy");
-  nb::object mp_logs = nb::module_::import_("multipers.logs");
-  nb::object direction = nb::borrow(direction_handle);
-  nb::object swap_box_coords = nb::borrow(swap_box_coords_handle);
-
-  if (is_simplextree_multi(input)) {
-    input = nb::module_::import_("multipers._slicer_meta")
-                .attr("Slicer")(input, "backend"_a = "matrix", "vineyard"_a = true);
-  }
-  if (!has_slicer_template_id(input)) {
-    throw nb::value_error("First argument must be a simplextree or a slicer !");
-  }
-  SlicerRuntimeInfo runtime_info = get_slicer_runtime_info(input);
-
-  std::vector<double> c_direction = cast_vector<double>(direction);
-  bool is_degenerate = false;
-  for (double value : c_direction) {
-    if (value < 0) {
-      throw nb::value_error("Got an invalid negative direction.");
-    }
-    if (value == 0) {
-      is_degenerate = true;
-    }
-  }
-  if (is_degenerate && !ignore_warnings) {
-    mp_logs.attr("warn_geometry")(
-        "Got a degenerate direction. This function may fail if the first line is not generic.");
-  }
-
-  if (from_coordinates && !runtime_info.is_squeezed) {
-    if (verbose) {
-      print_flush("Preparing filtration (squeeze)... ", "");
-    }
-    if (!ignore_warnings) {
-      mp_logs.attr("warn_copy")("Got a non-squeezed input with `from_coordinates=True`.");
-    }
-    input = input.attr("grid_squeeze")();
-    runtime_info = get_slicer_runtime_info(input);
-    if (verbose) {
-      print_flush("Done.");
-    }
-  }
-
-  nb::object unsqueeze_grid = nb::none();
-  if (runtime_info.is_squeezed) {
-    if (verbose) {
-      print_flush("Preparing filtration (unsqueeze)... ", "");
-    }
-    if (from_coordinates) {
-      unsqueeze_grid = nb::module_::import_("multipers.grids")
-                           .attr("sanitize_grid")(runtime_info.filtration_grid, "numpyfy"_a = true, "add_inf"_a = true);
-      input = input.attr("astype")("dtype"_a = np.attr("float64"));
-      runtime_info = get_slicer_runtime_info(input);
-      if (c_direction.empty()) {
-        nb::tuple unsqueeze_grid_tuple = nb::cast<nb::tuple>(unsqueeze_grid);
-        c_direction.resize(nb::len(unsqueeze_grid_tuple));
-        double norm_sq = 0.;
-        for (size_t i = 0; i < c_direction.size(); ++i) {
-          nb::object axis_grid = unsqueeze_grid_tuple[(Py_ssize_t)i];
-          c_direction[i] = 1.0 / static_cast<double>(PyObject_Length(axis_grid.ptr()));
-          norm_sq += c_direction[i] * c_direction[i];
-        }
-        double norm = std::sqrt(norm_sq);
-        for (double& value : c_direction) {
-          value /= norm;
-        }
-        direction = np.attr("array")(nb::cast(c_direction), "dtype"_a = np.attr("float64"));
-      }
-      if (verbose) {
-        print_flush("Updated  `direction=...`, and `max_error=...` ", "");
-      }
-    } else {
-      if (!ignore_warnings) {
-        mp_logs.attr("warn_copy")("Got a squeezed input.");
-      }
-      input = input.attr("unsqueeze")();
-      runtime_info = get_slicer_runtime_info(input);
-    }
-    if (verbose) {
-      print_flush("Done.");
-    }
-  }
-
-  if (nb::cast<size_t>(box.attr("size")) == 0) {
-    if (verbose) {
-      print_flush("No box given. Using filtration bounds to infer it.");
-    }
-    box = compute_filtration_bounds(input);
-    if (verbose) {
-      print_flush("Using inferred box.");
-    }
-  }
-
-  if (nb::cast<int>(box.attr("ndim")) != 2) {
-    throw nb::value_error("Invalid box dimension. Expected ndim == 2.");
-  }
-
-  std::vector<std::vector<double>> c_box = cast_matrix<double>(box);
-  std::vector<double> scales(c_box[0].size(), 0.);
-  double max_scale = 0.;
-  for (size_t i = 0; i < scales.size(); ++i) {
-    scales[i] = c_box[1][i] - c_box[0][i];
-    max_scale = std::max(max_scale, scales[i]);
-  }
-  if (max_scale != 0.) {
-    for (double& value : scales) {
-      value /= max_scale;
-    }
-  }
-  if (std::any_of(scales.begin(), scales.end(), [](double value) { return value < 0.1; })) {
-    mp_logs.attr("warn_geometry")(
-        "Squewed filtration detected. Consider rescaling the filtration for interpretable results.");
-  }
-
-  bool has_trivial_box_coord = false;
-  for (size_t i = 0; i < c_box[0].size(); ++i) {
-    if (c_box[1][i] == c_box[0][i]) {
-      has_trivial_box_coord = true;
-      c_box[1][i] += 1.0;
-    }
-  }
-  if (has_trivial_box_coord && !ignore_warnings) {
-    mp_logs.attr("warn_geometry")("Got trivial box coordinates.");
-  }
-
-  for (int idx : cast_vector<int>(swap_box_coords)) {
-    std::swap(c_box[0][idx], c_box[1][idx]);
-  }
-  box = prepare_box_object(c_box);
-
-  size_t num_parameters = c_box[0].size();
-  if (!c_direction.empty() && c_direction.size() != num_parameters) {
-    throw nb::value_error("Invalid line direction size.");
-  }
-
-  double prod = 0.;
-  for (size_t i = 0; i < num_parameters; ++i) {
-    if (!c_direction.empty() && c_direction[i] == 0.) {
-      continue;
-    }
-    double term = 1.;
-    for (size_t j = 0; j < num_parameters; ++j) {
-      if (i == j) {
-        continue;
-      }
-      term *= std::abs(c_box[1][j] - c_box[0][j]);
-    }
-    prod += term;
-  }
-  if (max_error <= 0) {
-    max_error = std::pow(prod / static_cast<double>(nlines), 1.0 / static_cast<double>(num_parameters - 1));
-  }
-  double estimated_nlines = prod / std::pow(max_error, static_cast<double>(num_parameters - 1));
-  if (!ignore_warnings && estimated_nlines >= 10000.) {
-    throw nb::value_error(
-        "Warning: the number of lines may be too high. Try to increase the precision parameter or set "
-        "ignore_warnings=True.");
-  }
-
-  return nb::module_::import_("multipers.multiparameter_module_approximation")
-      .attr("module_approximation_from_slicer")(input,
-                                                "box"_a = box,
-                                                "max_error"_a = max_error,
-                                                "complete"_a = complete,
-                                                "threshold"_a = threshold,
-                                                "verbose"_a = verbose,
-                                                "direction"_a = direction,
-                                                "unsqueeze_grid"_a = unsqueeze_grid,
-                                                "n_jobs"_a = n_jobs);
 }
 
 template <typename Desc>
@@ -2137,27 +2088,25 @@ NB_MODULE(_slicer_nanobind, m) {
   m.def(
       "_compute_module_approximation_from_slicer",
       [](nb::handle slicer,
-         nb::handle direction_handle,
+         nb::ndarray<nb::numpy, const double, nb::ndim<1>, nb::c_contig> direction,
          double max_error,
-         nb::handle box_handle,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> box_array,
          bool threshold,
          bool complete,
          bool verbose,
          int n_jobs) {
-        auto direction = mpnb::cast_vector<double>(direction_handle);
-        auto box_values = mpnb::cast_matrix<double>(box_handle);
+        auto direction_values = mpnb::vector_from_array(direction);
+        auto box_values = mpnb::matrix_from_array(box_array);
         Gudhi::multi_persistence::Box<double> box(box_values[0], box_values[1]);
-        auto mma_module = nb::module_::import_("multipers._mma_nanobind");
         return mpnb::compute_module_approximation_from_slicer(mpnb::SlicerDescriptorList{},
                                                               slicer,
-                                                              direction,
+                                                              direction_values,
                                                               max_error,
                                                               box,
                                                               threshold,
                                                               complete,
                                                               verbose,
-                                                              n_jobs,
-                                                              mma_module);
+                                                              n_jobs);
       },
       "slicer"_a,
       "direction"_a,
@@ -2182,18 +2131,19 @@ NB_MODULE(_slicer_nanobind, m) {
          nb::handle direction,
          nb::handle swap_box_coords,
          int n_jobs) {
-        return mpnb::module_approximation_single_input(input,
-                                                       box,
-                                                       max_error,
-                                                       nlines,
-                                                       from_coordinates,
-                                                       complete,
-                                                       threshold,
-                                                       verbose,
-                                                       ignore_warnings,
-                                                       direction,
-                                                       swap_box_coords,
-                                                       n_jobs);
+        return nb::module_::import_("multipers.multiparameter_module_approximation")
+            .attr("_module_approximation_single_input")(input,
+                                                           box,
+                                                           max_error,
+                                                           nlines,
+                                                           from_coordinates,
+                                                           complete,
+                                                           threshold,
+                                                           verbose,
+                                                           ignore_warnings,
+                                                           nb::borrow(direction),
+                                                           nb::borrow(swap_box_coords),
+                                                           n_jobs);
       },
       "input"_a,
       "box"_a = nb::none(),

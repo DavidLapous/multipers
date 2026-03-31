@@ -36,10 +36,10 @@ PyModule_type = reduce(or_, available_pymodules) if available_pymodules else Any
 PySummand_type = reduce(or_, available_pysummands) if available_pysummands else Any
 PyBox_type = reduce(or_, available_pyboxes) if available_pyboxes else Any
 
-_MMA_EMPTY = {np.dtype(cls().dtype): cls for cls in available_pymodules}
+_MMA_CONSTRUCTORS = {np.dtype(cls().dtype): cls for cls in available_pymodules}
 
 AVAILABLE_MMA_FLOAT_DTYPES = tuple(
-    dtype for dtype in _MMA_EMPTY if np.issubdtype(dtype, np.floating)
+    dtype for dtype in _MMA_CONSTRUCTORS if np.issubdtype(dtype, np.floating)
 )
 
 
@@ -375,6 +375,163 @@ def module_approximation_from_slicer(
     return approx_mod
 
 
+def _normalized_coordinate_direction(grid) -> np.ndarray:
+    direction = np.asarray([1.0 / len(axis) for axis in grid], dtype=np.float64)
+    norm = np.linalg.norm(direction)
+    if norm != 0.0:
+        direction /= norm
+    return direction
+
+
+def _prepare_module_approximation_box(
+    box: np.ndarray,
+    swap_box_coords: np.ndarray,
+    ignore_warnings: bool,
+):
+    if box.ndim != 2:
+        raise ValueError("Invalid box dimension. Expected ndim == 2.")
+
+    box = np.array(box, dtype=np.float64, copy=True)
+    scales = box[1] - box[0]
+    max_scale = np.max(scales) if scales.size else 0.0
+    if max_scale != 0.0:
+        normalized_scales = scales / max_scale
+    else:
+        normalized_scales = scales
+    if np.any(normalized_scales < 0.01):
+        _mp_logs.warn_geometry(
+            "Squewed filtration detected. Consider rescaling the filtration for interpretable results."
+        )
+
+    trivial_coords = box[1] == box[0]
+    if np.any(trivial_coords):
+        box[1, trivial_coords] += 1.0
+        if not ignore_warnings:
+            _mp_logs.warn_geometry("Got trivial box coordinates.")
+
+    for idx in np.asarray(swap_box_coords, dtype=np.int32):
+        box[:, idx] = box[::-1, idx]
+    return box
+
+
+def _infer_max_error_from_box(
+    box: np.ndarray,
+    direction: np.ndarray,
+    max_error: float,
+    nlines: int,
+    ignore_warnings: bool,
+) -> float:
+    num_parameters = box.shape[1]
+    widths = np.abs(box[1] - box[0])
+    terms = np.prod(np.where(np.eye(num_parameters, dtype=bool), 1.0, widths), axis=1)
+    if direction.size:
+        terms = terms[direction != 0.0]
+    prod = float(np.sum(terms))
+
+    if max_error <= 0:
+        max_error = float(prod / float(nlines)) ** (1.0 / float(num_parameters - 1))
+
+    estimated_nlines = prod / (max_error ** float(num_parameters - 1))
+    if not ignore_warnings and estimated_nlines >= 10000.0:
+        raise ValueError(
+            "Warning: the number of lines may be too high. Try to increase the precision parameter or set "
+            "ignore_warnings=True."
+        )
+    return max_error
+
+
+def _module_approximation_single_input(
+    input,
+    box,
+    max_error,
+    nlines,
+    from_coordinates,
+    complete,
+    threshold,
+    verbose,
+    ignore_warnings,
+    direction,
+    swap_box_coords,
+    n_jobs,
+):
+    from multipers._slicer_meta import Slicer
+
+    if is_simplextree_multi(input):
+        input = Slicer(input, backend="matrix", vineyard=True)
+    if not is_slicer(input):
+        raise ValueError("First argument must be a simplextree or a slicer !")
+
+    direction = np.asarray(direction, dtype=np.float64)
+    if np.any(direction < 0):
+        raise ValueError("Got an invalid negative direction.")
+    if np.any(direction == 0.0) and not ignore_warnings:
+        _mp_logs.warn_geometry(
+            "Got a degenerate direction. This function may fail if the first line is not generic."
+        )
+
+    if from_coordinates and not input.is_squeezed:
+        if verbose:
+            print("Preparing filtration (squeeze)... ", end="", flush=True)
+        if not ignore_warnings:
+            _mp_logs.warn_copy("Got a non-squeezed input with `from_coordinates=True`.")
+        input = input.grid_squeeze()
+        if verbose:
+            print("Done.", flush=True)
+
+    unsqueeze_grid = None
+    if input.is_squeezed:
+        if verbose:
+            print("Preparing filtration (unsqueeze)... ", end="", flush=True)
+        if from_coordinates:
+            unsqueeze_grid = mpg.sanitize_grid(
+                input.filtration_grid, numpyfy=True, add_inf=True
+            )
+            input = input.astype(dtype=np.float64)
+            if direction.size == 0:
+                direction = _normalized_coordinate_direction(unsqueeze_grid)
+            if verbose:
+                print(
+                    "Updated  `direction=...`, and `max_error=...` ", end="", flush=True
+                )
+        else:
+            if not ignore_warnings:
+                _mp_logs.warn_copy("Got a squeezed input.")
+            input = input.unsqueeze()
+        if verbose:
+            print("Done.", flush=True)
+
+    if np.size(box) == 0:
+        if verbose:
+            print("No box given. Using filtration bounds to infer it.", flush=True)
+        box = input.filtration_bounds()
+        if verbose:
+            print("Using inferred box.", flush=True)
+
+    box = _prepare_module_approximation_box(
+        np.asarray(box, dtype=np.float64), swap_box_coords, ignore_warnings
+    )
+
+    if direction.size and direction.size != box.shape[1]:
+        raise ValueError("Invalid line direction size.")
+
+    max_error = _infer_max_error_from_box(
+        box, direction, max_error, nlines, ignore_warnings
+    )
+
+    return module_approximation_from_slicer(
+        input,
+        box=box,
+        max_error=max_error,
+        complete=complete,
+        threshold=threshold,
+        verbose=verbose,
+        direction=direction,
+        warnings=not ignore_warnings,
+        unsqueeze_grid=unsqueeze_grid,
+        n_jobs=n_jobs,
+    )
+
+
 def module_approximation(
     input: Union[SimplexTreeMulti_type, Slicer_type, tuple],
     box: Optional[np.ndarray] = None,
@@ -394,7 +551,7 @@ def module_approximation(
         dtype = next((np.dtype(s.dtype) for s in input if hasattr(s, "dtype")), None)
     else:
         dtype = np.dtype(input.dtype) if hasattr(input, "dtype") else None
-    constructor = _MMA_EMPTY.get(dtype, None)
+    constructor = _MMA_CONSTRUCTORS.get(dtype, None)
 
     if isinstance(input, tuple) or isinstance(input, list):
         if not all(is_slicer(s) and (s.is_minpres or len(s) == 0) for s in input):
@@ -439,7 +596,9 @@ def module_approximation(
             raise ValueError(f"Unsupported module dtype {dtype} for module merge.")
         mod = constructor().set_box(box)
         for i, m in enumerate(modules):
-            mod.merge(m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree)
+            mod.merge(
+                m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree
+            )
         return mod
 
     if len(input) == 0:
@@ -454,7 +613,7 @@ def module_approximation(
     else:
         box = np.asarray(box, dtype=np.float64)
 
-    return _nb._module_approximation_single_input(
+    return _module_approximation_single_input(
         input=input,
         box=box,
         max_error=max_error,
