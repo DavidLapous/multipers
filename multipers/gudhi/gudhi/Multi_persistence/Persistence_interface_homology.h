@@ -145,39 +145,29 @@ class Persistence_interface_homology
 
   auto get_all_representative_cycles(bool update = true, Dimension dim = nullDimension)
   {
-    if constexpr (!has_rep_cycles) {
-      (void)update;
-      (void)dim;
-      throw std::invalid_argument("`get_all_representative_cycles` is not enabled with the given options.");
-    } else {
-      GUDHI_CHECK(is_initialized(), std::logic_error("Representative cycles can not be computed uninitialized."));
+    static_assert(has_rep_cycles, "`get_all_representative_cycles` is not enabled with the given options.");
+    GUDHI_CHECK(is_initialized(), std::logic_error("Representative cycles can not be computed uninitialized."));
 
-      if (update) matrix_.update_all_representative_cycles(dim);
-      const auto& cycles = matrix_.get_all_representative_cycles();
-      return boost::adaptors::transform(cycles, [&](const Cycle& cycle) -> Cycle {
-        Cycle c(cycle.size());
-        for (Index i = 0; i < cycle.size(); ++i) {
-          c[i] = order_[cycle[i]];
-        }
-        return c;
-      });
-    }
+    if (update) matrix_.update_all_representative_cycles(dim);
+    const auto& cycles = matrix_.get_all_representative_cycles();
+    return boost::adaptors::transform(cycles, [&](const Cycle& cycle) -> Cycle {
+      Cycle c(cycle.size());
+      for (Index i = 0; i < cycle.size(); ++i) {
+        c[i] = order_[cycle[i]];
+      }
+      return c;
+    });
   }
 
   auto get_representative_cycle(Index barcodeIndex, bool update = true)
   {
-    if constexpr (!has_rep_cycles) {
-      (void)barcodeIndex;
-      (void)update;
-      throw std::invalid_argument("`get_representative_cycle` is not enabled with the given options.");
-    } else {
-      GUDHI_CHECK(is_initialized(), std::logic_error("Representative cycles can not be computed uninitialized."));
+    static_assert(has_rep_cycles, "`get_representative_cycle` is not enabled with the given options.");
+    GUDHI_CHECK(is_initialized(), std::logic_error("Representative cycles can not be computed uninitialized."));
 
-      const auto& bar = matrix_.get_current_barcode()[barcodeIndex];
-      if (update) matrix_.update_representative_cycle(bar);
-      const auto& cycle = matrix_.get_representative_cycle(bar);
-      return boost::adaptors::transform(cycle, [&](const Index& i) -> Index { return order_[i]; });
-    }
+    const auto& bar = matrix_.get_current_barcode()[barcodeIndex];
+    if (update) matrix_.update_representative_cycle(bar);
+    const auto& cycle = matrix_.get_representative_cycle(bar);
+    return boost::adaptors::transform(cycle, [&](const Index& i) -> Index { return order_[i]; });
   }
 
   friend std::ostream& operator<<(std::ostream& stream, Persistence_interface_homology& pers)

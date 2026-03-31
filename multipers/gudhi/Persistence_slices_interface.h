@@ -72,6 +72,7 @@ struct No_vine_multi_persistence_options : Gudhi::persistence_matrix::Default_op
   static const bool has_matrix_maximal_dimension_access = false;
   static const bool has_column_pairings = true;
   static const bool has_vine_update = false;
+  static const bool can_retrieve_representative_cycles = true;
 };
 
 // template <Gudhi::persistence_matrix::Column_types column_type = Gudhi::persistence_matrix::Column_types::INTRUSIVE_SET,

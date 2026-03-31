@@ -123,6 +123,11 @@ class Simplex_tree_multi_interface
     return *this;
   }
 
+  template<typename OtherSimplexTreeOptions, typename F>
+  void copy_from(const Simplex_tree<OtherSimplexTreeOptions>& complex_source, F&& translate_filtration_value) {
+    Base::copy_from(complex_source, std::forward<F>(translate_filtration_value));
+  }
+
   bool find_simplex(const Simplex &simplex) { return (Base::find(simplex) != Base::null_simplex()); }
 
   int simplex_dimension(const Simplex &simplex) {
@@ -137,13 +142,13 @@ class Simplex_tree_multi_interface
   }
 
   bool insert(const Simplex &simplex, const Filtration_value &filtration) {
-    Insertion_result result = Base_tree::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::HIGHEST);
+    Insertion_result result = Base_tree::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, simplex, filtration);
     if (result.first != Base::null_simplex()) Base::clear_filtration();
     return (result.second);
   }
 
   bool insert_force(const Simplex &simplex, const Filtration_value &filtration) {
-    Insertion_result result = Base_tree::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::FORCE);
+    Insertion_result result = Base_tree::insert_simplex_and_subfaces(Base::Filtration_maintenance::IGNORE_VALIDITY, simplex, filtration);
     Base::clear_filtration();
     return (result.second);
   }
@@ -163,13 +168,13 @@ class Simplex_tree_multi_interface
 
   // Do not interface this function, only used in interface for complex creation
   bool insert_simplex_and_subfaces(const Simplex &simplex, const Filtration_value &filtration) {
-    Insertion_result result = Base_tree::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::HIGHEST);
+    Insertion_result result = Base_tree::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, simplex, filtration);
     return (result.second);
   }
 
   // bool insert_simplex_and_subfaces(const Simplex &simplex, const Python_filtration_type &filtration) {
   //   Filtration_value &filtration_ = *(Filtration_value *)(&filtration);  // Jardinage for no copy.
-  //   Insertion_result result = Base::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::HIGHEST);
+  //   Insertion_result result = Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, simplex, filtration);
   //   return (result.second);
   // }
 
@@ -183,7 +188,7 @@ class Simplex_tree_multi_interface
   // Do not interface this function, only used in strong witness interface for
   // complex creation
   bool insert_simplex_and_subfaces(const std::vector<std::size_t> &simplex, const Filtration_value &filtration) {
-    Insertion_result result = Base_tree::insert_simplex_and_subfaces(simplex, filtration, Base::Insertion_strategy::HIGHEST);
+    Insertion_result result = Base_tree::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, simplex, filtration);
     return (result.second);
   }
 

@@ -20,7 +20,6 @@
 #define MP_LINE_FILTRATION_H_INCLUDED
 
 #include <cstddef>
-#include <iterator>
 #include <stdexcept>
 
 #include <gudhi/Debug_utils.h>

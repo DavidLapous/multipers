@@ -5,6 +5,7 @@
  *    Copyright (C) 2022 Inria
  *
  *    Modification(s):
+ *      - 2025/11 Jānis Lazovskis: Added insert_maximal_cell method
  *      - YYYY/MM Author: Description of the modification
  */
 
@@ -67,95 +68,10 @@
 #include <gudhi/Persistence_matrix/columns/naive_vector_column.h>
 #include <gudhi/Persistence_matrix/columns/heap_column.h>
 
-// #include <gudhi/Persistence_matrix/columns/chatty_column.h>
-// #include <gudhi/Persistence_matrix/columns/hybrid_small_unordered_column.h>
-#include <gudhi/Persistence_matrix/columns/phat_bit_tree_column.h>
-#include <gudhi/Persistence_matrix/columns/phat_vector_column.h>
-
 /// Gudhi namespace.
 namespace Gudhi {
 /// Persistence matrix namespace.
 namespace persistence_matrix {
-
-template <Column_types column_type, class MatrixType>
-struct Matrix_column_type_map {
-  using type = Intrusive_set_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::HEAP, MatrixType> {
-  using type = Heap_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::LIST, MatrixType> {
-  using type = List_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::SET, MatrixType> {
-  using type = Set_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::UNORDERED_SET, MatrixType> {
-  using type = Unordered_set_column<MatrixType>;
-};
-
-// template <class MatrixType>
-// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN, MatrixType> {
-//   using type = Chatty_column<MatrixType>;
-// };
-//
-// template <class MatrixType>
-// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN_FLIP, MatrixType> {
-//   using type = Chatty_column<MatrixType>;
-// };
-//
-// template <class MatrixType>
-// struct Matrix_column_type_map<Column_types::CHATTY_COLUMN_ADAPTIVE, MatrixType> {
-//   using type = Chatty_column<MatrixType>;
-// };
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::VECTOR, MatrixType> {
-  using type = Vector_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::INTRUSIVE_LIST, MatrixType> {
-  using type = Intrusive_list_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::NAIVE_VECTOR, MatrixType> {
-  using type = Naive_std_vector_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::SMALL_VECTOR, MatrixType> {
-  using type = Naive_small_vector_column<MatrixType>;
-};
-
-// template <class MatrixType>
-// struct Matrix_column_type_map<Column_types::HYBRID_SMALL_UNORDERED, MatrixType> {
-//   using type = Hybrid_small_unordered_column<MatrixType>;
-// };
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::PHAT_VECTOR, MatrixType> {
-  using type = Phat_vector_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::PHAT_BIT_TREE, MatrixType> {
-  using type = Phat_bit_tree_column<MatrixType>;
-};
-
-template <class MatrixType>
-struct Matrix_column_type_map<Column_types::INTRUSIVE_SET, MatrixType> {
-  using type = Intrusive_set_column<MatrixType>;
-};
 
 /**
  * @class Matrix matrix.h gudhi/matrix.h
@@ -227,7 +143,8 @@ struct Matrix_column_type_map<Column_types::INTRUSIVE_SET, MatrixType> {
  * See description of @ref PersistenceMatrixOptions for more details.
  */
 template <class PersistenceMatrixOptions = Default_options<> >
-class Matrix {
+class Matrix
+{
  public:
   using Option_list = PersistenceMatrixOptions;                   // to make it accessible from the other classes
   using Index = typename PersistenceMatrixOptions::Index;         /**< Type of @ref MatIdx index. */
@@ -251,7 +168,8 @@ class Matrix {
    * @brief Returns value from a type when not set.
    */
   template <typename T>
-  static constexpr T get_null_value() {
+  static constexpr T get_null_value()
+  {
     return -1;
   }
 
@@ -328,39 +246,44 @@ class Matrix {
   /**
    * @private
    */
-  static ID_index get_row_index(const Matrix_entry& e) { return e.get_row_index(); }
-
+  static ID_index get_row_index(const Matrix_entry& e)
+  {
+    return e.get_row_index();
+  }
   /**
    * @private
    */
-  static ID_index get_row_index(const Entry_representative& e) {
+  static ID_index get_row_index(const Entry_representative& e)
+  {
     if constexpr (PersistenceMatrixOptions::is_z2) {
       return e;
     } else {
       return e.first;
     }
   }
-
   /**
    * @private
    */
-  static ID_index& get_row_index(Entry_representative& e) {
+  static ID_index& get_row_index(Entry_representative& e)
+  {
     if constexpr (PersistenceMatrixOptions::is_z2) {
       return e;
     } else {
       return e.first;
     }
   }
-
   /**
    * @private
    */
-  static Element get_element(const Matrix_entry& e) { return e.get_element(); }
-
+  static Element get_element(const Matrix_entry& e)
+  {
+    return e.get_element();
+  }
   /**
    * @private
    */
-  static Element get_element(const Entry_representative& e) {
+  static Element get_element(const Entry_representative& e)
+  {
     if constexpr (PersistenceMatrixOptions::is_z2) {
       return Field_operators::get_multiplicative_identity();
     } else {
@@ -372,7 +295,8 @@ class Matrix {
    * @brief Compares two entries by their position in the row. They are assume to be in the same row.
    */
   struct RowEntryComp {
-    bool operator()(const Matrix_entry& c1, const Matrix_entry& c2) const {
+    bool operator()(const Matrix_entry& c1, const Matrix_entry& c2) const
+    {
       return c1.get_column_index() < c2.get_column_index();
     }
   };
@@ -417,27 +341,54 @@ class Matrix {
                                                  Chain_column_extra_properties<Matrix<PersistenceMatrixOptions> >,
                                                  Dummy_chain_properties>;
 
+  using Matrix_heap_column = Heap_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_list_column = List_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_vector_column = Vector_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_naive_vector_column = Naive_std_vector_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_small_vector_column = Naive_small_vector_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_set_column = Set_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_unordered_set_column = Unordered_set_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_intrusive_list_column = Intrusive_list_column<Matrix<PersistenceMatrixOptions> >;
+  using Matrix_intrusive_set_column = Intrusive_set_column<Matrix<PersistenceMatrixOptions> >;
+
   /**
    * @brief Type of the columns stored in the matrix. The type depends on the value of
    * @ref PersistenceMatrixOptions::column_type defined in the given options. See @ref Column_types for a more detailed
    * description. All columns follow the @ref PersistenceMatrixColumn concept.
    */
-  using Column =
-      typename Matrix_column_type_map<PersistenceMatrixOptions::column_type, Matrix<PersistenceMatrixOptions> >::type;
+  using Column = std::conditional_t<
+      PersistenceMatrixOptions::column_type == Column_types::HEAP,
+      Matrix_heap_column,
+      std::conditional_t<
+          PersistenceMatrixOptions::column_type == Column_types::LIST,
+          Matrix_list_column,
+          std::conditional_t<
+              PersistenceMatrixOptions::column_type == Column_types::SET,
+              Matrix_set_column,
+              std::conditional_t<
+                  PersistenceMatrixOptions::column_type == Column_types::UNORDERED_SET,
+                  Matrix_unordered_set_column,
+                  std::conditional_t<
+                      PersistenceMatrixOptions::column_type == Column_types::VECTOR,
+                      Matrix_vector_column,
+                      std::conditional_t<
+                          PersistenceMatrixOptions::column_type == Column_types::INTRUSIVE_LIST,
+                          Matrix_intrusive_list_column,
+                          std::conditional_t<
+                              PersistenceMatrixOptions::column_type == Column_types::NAIVE_VECTOR,
+                              Matrix_naive_vector_column,
+                              std::conditional_t<PersistenceMatrixOptions::column_type == Column_types::SMALL_VECTOR,
+                                                 Matrix_small_vector_column,
+                                                 Matrix_intrusive_set_column>
+                              > > > > > > >;
 
   struct Column_z2_settings {
     Column_z2_settings() : entryConstructor() {}
-
     Column_z2_settings([[maybe_unused]] Characteristic characteristic) : entryConstructor() {}
-
     Column_z2_settings([[maybe_unused]] const Column_z2_settings& toCopy) : entryConstructor() {}
-
     Column_z2_settings([[maybe_unused]] Column_z2_settings&& toMove) noexcept : entryConstructor() {}
-
     ~Column_z2_settings() = default;
-
     Column_z2_settings& operator=([[maybe_unused]] const Column_z2_settings& other) { return *this; }
-
     Column_z2_settings& operator=([[maybe_unused]] Column_z2_settings&& other) noexcept { return *this; }
 
     Entry_constructor entryConstructor;  // will be replaced by more specific allocators depending on the column type.
@@ -445,22 +396,18 @@ class Matrix {
 
   struct Column_zp_settings {
     Column_zp_settings() : operators(), entryConstructor() {}
-
     Column_zp_settings(Characteristic characteristic) : operators(characteristic), entryConstructor() {}
-
     Column_zp_settings(const Column_zp_settings& toCopy) : operators(toCopy.operators), entryConstructor() {}
-
     Column_zp_settings(Column_zp_settings&& toMove) noexcept
         : operators(std::move(toMove.operators)), entryConstructor() {}
-
     ~Column_zp_settings() = default;
-
-    Column_zp_settings& operator=(const Column_zp_settings& other) {
+    Column_zp_settings& operator=(const Column_zp_settings& other)
+    {
       operators = other.operators;
       return *this;
     }
-
-    Column_zp_settings& operator=(Column_zp_settings&& other) noexcept {
+    Column_zp_settings& operator=(Column_zp_settings&& other) noexcept
+    {
       if (this == &other) return *this;
 
       operators = std::move(other.operators);
@@ -496,27 +443,27 @@ class Matrix {
   /**
    * @private
    */
-  static Field_operators const* get_operator_ptr(Column_settings const* colSettings) {
+  static Field_operators const* get_operator_ptr(Column_settings const* colSettings)
+  {
     if constexpr (PersistenceMatrixOptions::is_z2) {
       return nullptr;
     } else {
-      if (colSettings == nullptr) return nullptr;  // used for dummy columns
+      if (colSettings == nullptr) return nullptr; // used for dummy columns
       return &(colSettings->operators);
     }
   }
-
   /**
    * @private
    */
   template <typename T>
-  static Element get_coefficient_value(T v, [[maybe_unused]] Field_operators const* operators) {
+  static Element get_coefficient_value(T v, [[maybe_unused]] Field_operators const* operators)
+  {
     if constexpr (PersistenceMatrixOptions::is_z2) {
       return Field_operators::get_value(v);
     } else {
       return operators->get_value(v);
     }
   }
-
   /**
    * @private
    */
@@ -629,7 +576,8 @@ class Matrix {
    * @private
    */
   template <class EntryRange>
-  static Cycle build_cycle_from_range(const EntryRange& entries) {
+  static Cycle build_cycle_from_range(const EntryRange& entries)
+  {
     Cycle cycle;
     if constexpr (RangeTraits<EntryRange>::has_size) {
       cycle.reserve(entries.size());
@@ -842,7 +790,7 @@ class Matrix {
   void insert_column(const Container& column, Index columnIndex);
   /**
    * @brief Inserts a new column at the end of the matrix. The column will consist of the given index only.
-   *
+   * 
    * @param idx Entry ID.
    * @param e Entry coefficient. Ignored if the coefficient field is Z2. Default value: 1.
    */
@@ -903,9 +851,34 @@ class Matrix {
    * chains used to reduce the boundary. Otherwise, nothing.
    */
   template <class Boundary_range = Boundary>
-  Insertion_return insert_boundary(ID_index cellIndex,
-                                   const Boundary_range& boundary,
+  Insertion_return insert_boundary(ID_index cellIndex, const Boundary_range& boundary,
                                    Dimension dim = Matrix::get_null_value<Dimension>());
+
+  /**
+   * @brief Inserts the given cell boundary at the given position in the matrix/filtration such that the matrix remains
+   * consistent. Requires @ref PersistenceMatrixOptions::has_vine_update to be true. Only available for
+   * @ref boundarymatrix "RU matrices", but not if @ref PersistenceMatrixOptions::column_indexation_type is set to
+   * @ref Column_indexation_types::IDENTIFIER.
+   *
+   * Appends the input column to the end of the matrix using the @ref insert_boundary "insert boundary" method,
+   * and moves the column using the @ref vine_swap "vine swaps" method to the requested position, which maintains a
+   * reduced decomposition. As a result, the input column (and other columns) may have a different boundary when it
+   * is finally in the requested position `columnIndex`, compared with the boundary `boundary` upon input. No check
+   * is made as to whether the order of cells, after the function has finished, will correspond to a valid filtration.
+   *
+   * See also @ref remove_maximal_cell (for the complementary action) and @ref insert_boundary (for inserting at the
+   * highest index).
+   *
+   * @param columnIndex @ref MatIdx Index where the column should be inserted. This will be the index of the input
+   * column `boundary` after the function has finished.
+   * @param boundary Boundary generating the new column. The indices of the boundary have to correspond to the
+   * @p cellIndex values of the matrix and should be ordered in increasing order.
+   * @param dim Dimension of the cell whose boundary is given. If the complex is simplicial,
+   * this parameter can be omitted, in which case it will be deduced from the size of the boundary.
+   */
+  template <class Boundary_range = Boundary>
+  void insert_maximal_cell(Index columnIndex, const Boundary_range& boundary,
+                           Dimension dim = Matrix::get_null_value<Dimension>());
 
   /**
    * @brief Returns the column at the given @ref MatIdx index.
@@ -1048,7 +1021,7 @@ class Matrix {
    * @ref remove_maximal_cell(ID_index cellIndex, const std::vector<ID_index>& columnsToSwap)
    * "remove_maximal_cell(cellID, {})" will be faster than @ref remove_last().
    *
-   * See also @ref remove_last.
+   * See also @ref remove_last (for removing at the highest index), @ref insert_maximal_cell (for the complementary action).
    *
    * @param cellIndex @ref IDIdx index of the cell to remove
    * @param columnsToSwap Vector of @ref IDIdx indices of the cells coming after @p cellIndex in the filtration.
@@ -1341,7 +1314,8 @@ class Matrix {
    * @param matrix1 First matrix to swap.
    * @param matrix2 Second matrix to swap.
    */
-  friend void swap(Matrix& matrix1, Matrix& matrix2) noexcept {
+  friend void swap(Matrix& matrix1, Matrix& matrix2) noexcept
+  {
     swap(matrix1.matrix_, matrix2.matrix_);
     std::swap(matrix1.colSettings_, matrix2.colSettings_);
   }
@@ -1510,18 +1484,21 @@ class Matrix {
                   PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::CONTAINER ||
                       PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::POSITION,
                   Master_RU_matrix,
-                  Id_to_index_overlay<Master_RU_matrix, Matrix<PersistenceMatrixOptions> > >,
+                  Id_to_index_overlay<Master_RU_matrix, Matrix<PersistenceMatrixOptions>
+              > >,
               std::conditional_t<
                   PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::CONTAINER ||
                       PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::POSITION,
                   Master_boundary_matrix,
-                  Id_to_index_overlay<Master_boundary_matrix, Matrix<PersistenceMatrixOptions> > > >,
+                  Id_to_index_overlay<Master_boundary_matrix, Matrix<PersistenceMatrixOptions>
+              > > >,
           std::conditional_t<
               PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::CONTAINER,
               Master_chain_matrix,
               std::conditional_t<PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::POSITION,
                                  Position_to_index_overlay<Master_chain_matrix, Matrix<PersistenceMatrixOptions> >,
-                                 Id_to_index_overlay<Master_chain_matrix, Matrix<PersistenceMatrixOptions> > > > >,
+                                 Id_to_index_overlay<Master_chain_matrix, Matrix<PersistenceMatrixOptions>
+                                > > > >,
       Master_base_matrix>;
 
   // Field_operators* operators_;
@@ -1535,7 +1512,8 @@ class Matrix {
 };
 
 template <class PersistenceMatrixOptions>
-inline Matrix<PersistenceMatrixOptions>::Matrix() : colSettings_(new Column_settings()), matrix_(colSettings_) {
+inline Matrix<PersistenceMatrixOptions>::Matrix() : colSettings_(new Column_settings()), matrix_(colSettings_)
+{
   static_assert(
       PersistenceMatrixOptions::is_of_boundary_type || !PersistenceMatrixOptions::has_vine_update ||
           PersistenceMatrixOptions::has_column_pairings,
@@ -1546,7 +1524,8 @@ inline Matrix<PersistenceMatrixOptions>::Matrix() : colSettings_(new Column_sett
 template <class PersistenceMatrixOptions>
 template <class Container>
 inline Matrix<PersistenceMatrixOptions>::Matrix(const std::vector<Container>& columns, Characteristic characteristic)
-    : colSettings_(new Column_settings(characteristic)), matrix_(columns, colSettings_) {
+    : colSettings_(new Column_settings(characteristic)), matrix_(columns, colSettings_)
+{
   static_assert(PersistenceMatrixOptions::is_of_boundary_type || !PersistenceMatrixOptions::has_vine_update ||
                     PersistenceMatrixOptions::has_column_pairings,
                 "When no barcode is recorded with vine swaps for chain matrices, comparison functions for the columns "
@@ -1556,7 +1535,8 @@ inline Matrix<PersistenceMatrixOptions>::Matrix(const std::vector<Container>& co
 
 template <class PersistenceMatrixOptions>
 inline Matrix<PersistenceMatrixOptions>::Matrix(unsigned int numberOfColumns, Characteristic characteristic)
-    : colSettings_(new Column_settings(characteristic)), matrix_(numberOfColumns, colSettings_) {
+    : colSettings_(new Column_settings(characteristic)), matrix_(numberOfColumns, colSettings_)
+{
   static_assert(PersistenceMatrixOptions::is_of_boundary_type || !PersistenceMatrixOptions::has_vine_update ||
                     PersistenceMatrixOptions::has_column_pairings,
                 "When no barcode is recorded with vine swaps for chain matrices, comparison functions for the columns "
@@ -1567,7 +1547,8 @@ inline Matrix<PersistenceMatrixOptions>::Matrix(unsigned int numberOfColumns, Ch
 template <class PersistenceMatrixOptions>
 inline Matrix<PersistenceMatrixOptions>::Matrix(const std::function<bool(Pos_index, Pos_index)>& birthComparator,
                                                 const std::function<bool(Pos_index, Pos_index)>& deathComparator)
-    : colSettings_(new Column_settings()), matrix_(colSettings_, birthComparator, deathComparator) {
+    : colSettings_(new Column_settings()), matrix_(colSettings_, birthComparator, deathComparator)
+{
   static_assert(
       !PersistenceMatrixOptions::is_of_boundary_type && PersistenceMatrixOptions::has_vine_update &&
           !PersistenceMatrixOptions::has_column_pairings,
@@ -1582,7 +1563,8 @@ inline Matrix<PersistenceMatrixOptions>::Matrix(const std::vector<Boundary_range
                                                 const std::function<bool(Pos_index, Pos_index)>& deathComparator,
                                                 Characteristic characteristic)
     : colSettings_(new Column_settings(characteristic)),
-      matrix_(orderedBoundaries, colSettings_, birthComparator, deathComparator) {
+      matrix_(orderedBoundaries, colSettings_, birthComparator, deathComparator)
+{
   static_assert(
       !PersistenceMatrixOptions::is_of_boundary_type && PersistenceMatrixOptions::has_vine_update &&
           !PersistenceMatrixOptions::has_column_pairings,
@@ -1596,7 +1578,8 @@ inline Matrix<PersistenceMatrixOptions>::Matrix(unsigned int numberOfColumns,
                                                 const std::function<bool(Pos_index, Pos_index)>& deathComparator,
                                                 Characteristic characteristic)
     : colSettings_(new Column_settings(characteristic)),
-      matrix_(numberOfColumns, colSettings_, birthComparator, deathComparator) {
+      matrix_(numberOfColumns, colSettings_, birthComparator, deathComparator)
+{
   static_assert(
       !PersistenceMatrixOptions::is_of_boundary_type && PersistenceMatrixOptions::has_vine_update &&
           !PersistenceMatrixOptions::has_column_pairings,
@@ -1606,24 +1589,28 @@ inline Matrix<PersistenceMatrixOptions>::Matrix(unsigned int numberOfColumns,
 
 template <class PersistenceMatrixOptions>
 inline Matrix<PersistenceMatrixOptions>::Matrix(const Matrix& matrixToCopy)
-    : colSettings_(new Column_settings(*matrixToCopy.colSettings_)), matrix_(matrixToCopy.matrix_, colSettings_) {
+    : colSettings_(new Column_settings(*matrixToCopy.colSettings_)), matrix_(matrixToCopy.matrix_, colSettings_)
+{
   _assert_options();
 }
 
 template <class PersistenceMatrixOptions>
 inline Matrix<PersistenceMatrixOptions>::Matrix(Matrix&& other) noexcept
-    : colSettings_(std::exchange(other.colSettings_, nullptr)), matrix_(std::move(other.matrix_)) {
+    : colSettings_(std::exchange(other.colSettings_, nullptr)), matrix_(std::move(other.matrix_))
+{
   _assert_options();
 }
 
 template <class PersistenceMatrixOptions>
-inline Matrix<PersistenceMatrixOptions>::~Matrix() {
+inline Matrix<PersistenceMatrixOptions>::~Matrix()
+{
   matrix_.reset(colSettings_);  // to avoid crashes at destruction, all columns have to be destroyed first
   delete colSettings_;
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::set_characteristic(Characteristic characteristic) {
+inline void Matrix<PersistenceMatrixOptions>::set_characteristic(Characteristic characteristic)
+{
   if constexpr (!PersistenceMatrixOptions::is_z2) {
     if (colSettings_->operators.get_characteristic() != Field_operators::nullCharacteristic) {
       std::cerr << "Warning: Characteristic already initialised. Changing it could lead to incoherences in the matrix "
@@ -1636,7 +1623,8 @@ inline void Matrix<PersistenceMatrixOptions>::set_characteristic(Characteristic 
 
 template <class PersistenceMatrixOptions>
 template <class Container, class>
-inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& column) {
+inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& column)
+{
   if constexpr (!PersistenceMatrixOptions::is_z2) {
     GUDHI_CHECK(colSettings_->operators.get_characteristic() != Field_operators::nullCharacteristic,
                 std::logic_error("Matrix::insert_column - Columns cannot be initialized if the coefficient field "
@@ -1651,7 +1639,8 @@ inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& col
 
 template <class PersistenceMatrixOptions>
 template <class Container, class>
-inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& column, Index columnIndex) {
+inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& column, Index columnIndex)
+{
   if constexpr (!PersistenceMatrixOptions::is_z2) {
     GUDHI_CHECK(colSettings_->operators.get_characteristic() != Field_operators::nullCharacteristic,
                 std::logic_error("Matrix::insert_column - Columns cannot be initialized if the coefficient field "
@@ -1666,7 +1655,8 @@ inline void Matrix<PersistenceMatrixOptions>::insert_column(const Container& col
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::insert_column(ID_index idx, [[maybe_unused]] Element e) {
+inline void Matrix<PersistenceMatrixOptions>::insert_column(ID_index idx, [[maybe_unused]] Element e)
+{
   static_assert(
       !isNonBasic,
       "'insert_column' not available for the chosen options. The input has to be in the form of a cell boundary.");
@@ -1685,7 +1675,8 @@ template <class PersistenceMatrixOptions>
 template <class Boundary_range>
 inline typename Matrix<PersistenceMatrixOptions>::Insertion_return Matrix<PersistenceMatrixOptions>::insert_boundary(
     const Boundary_range& boundary,
-    Dimension dim) {
+    Dimension dim)
+{
   if constexpr (!PersistenceMatrixOptions::is_z2) {
     GUDHI_CHECK(colSettings_->operators.get_characteristic() != Field_operators::nullCharacteristic,
                 std::logic_error("Matrix::insert_boundary - Columns cannot be initialized if the coefficient field "
@@ -1702,7 +1693,8 @@ inline typename Matrix<PersistenceMatrixOptions>::Insertion_return Matrix<Persis
 template <class PersistenceMatrixOptions>
 template <class Boundary_range>
 inline typename Matrix<PersistenceMatrixOptions>::Insertion_return
-Matrix<PersistenceMatrixOptions>::insert_boundary(ID_index cellIndex, const Boundary_range& boundary, Dimension dim) {
+Matrix<PersistenceMatrixOptions>::insert_boundary(ID_index cellIndex, const Boundary_range& boundary, Dimension dim)
+{
   if constexpr (!PersistenceMatrixOptions::is_z2) {
     GUDHI_CHECK(colSettings_->operators.get_characteristic() != Field_operators::nullCharacteristic,
                 std::logic_error("Matrix::insert_boundary - Columns cannot be initialized if the coefficient field "
@@ -1718,21 +1710,35 @@ Matrix<PersistenceMatrixOptions>::insert_boundary(ID_index cellIndex, const Boun
 }
 
 template <class PersistenceMatrixOptions>
+template <class Boundary_range>
+inline void Matrix<PersistenceMatrixOptions>::insert_maximal_cell(Index columnIndex, const Boundary_range& boundary,
+                                                                  Dimension dim) {
+  static_assert(isNonBasic && PersistenceMatrixOptions::has_vine_update,
+                "'insert_maximal_cell' is not available for the chosen options.");
+  static_assert(PersistenceMatrixOptions::is_of_boundary_type,
+                "'insert_maximal_cell' is not available for the chosen options.");
+  matrix_.insert_maximal_cell(columnIndex, boundary, dim);
+}
+
+template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Returned_column& Matrix<PersistenceMatrixOptions>::get_column(
-    Index columnIndex) {
+    Index columnIndex)
+{
   return matrix_.get_column(columnIndex);
 }
 
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Column& Matrix<PersistenceMatrixOptions>::get_column(
-    Index columnIndex) const {
+    Index columnIndex) const
+{
   return matrix_.get_column(columnIndex);
 }
 
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Column& Matrix<PersistenceMatrixOptions>::get_column(
     Index columnIndex,
-    bool inR) {
+    bool inR)
+{
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
       isNonBasic && PersistenceMatrixOptions::is_of_boundary_type &&
@@ -1745,7 +1751,8 @@ inline const typename Matrix<PersistenceMatrixOptions>::Column& Matrix<Persisten
 
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Returned_row& Matrix<PersistenceMatrixOptions>::get_row(
-    ID_index rowIndex) {
+    ID_index rowIndex)
+{
   static_assert(PersistenceMatrixOptions::has_row_access, "'get_row' is not available for the chosen options.");
 
   return matrix_.get_row(rowIndex);
@@ -1753,7 +1760,8 @@ inline typename Matrix<PersistenceMatrixOptions>::Returned_row& Matrix<Persisten
 
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Row& Matrix<PersistenceMatrixOptions>::get_row(
-    ID_index rowIndex) const {
+    ID_index rowIndex) const
+{
   static_assert(PersistenceMatrixOptions::has_row_access, "'get_row' is not available for the chosen options.");
 
   return matrix_.get_row(rowIndex);
@@ -1762,7 +1770,8 @@ inline const typename Matrix<PersistenceMatrixOptions>::Row& Matrix<PersistenceM
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Row& Matrix<PersistenceMatrixOptions>::get_row(
     ID_index rowIndex,
-    bool inR) {
+    bool inR)
+{
   static_assert(PersistenceMatrixOptions::has_row_access, "'get_row' is not available for the chosen options.");
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
@@ -1775,7 +1784,8 @@ inline const typename Matrix<PersistenceMatrixOptions>::Row& Matrix<PersistenceM
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::remove_column(Index columnIndex) {
+inline void Matrix<PersistenceMatrixOptions>::remove_column(Index columnIndex)
+{
   static_assert(PersistenceMatrixOptions::has_map_column_container && !isNonBasic &&
                     !PersistenceMatrixOptions::has_column_compression,
                 "'remove_column' is not available for the chosen options.");
@@ -1784,7 +1794,8 @@ inline void Matrix<PersistenceMatrixOptions>::remove_column(Index columnIndex) {
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::erase_empty_row(ID_index rowIndex) {
+inline void Matrix<PersistenceMatrixOptions>::erase_empty_row(ID_index rowIndex)
+{
   static_assert(
       !isNonBasic || PersistenceMatrixOptions::is_of_boundary_type || PersistenceMatrixOptions::has_removable_rows,
       "'erase_empty_row' is not available for the chosen options.");
@@ -1793,7 +1804,8 @@ inline void Matrix<PersistenceMatrixOptions>::erase_empty_row(ID_index rowIndex)
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::remove_maximal_cell(Index columnIndex) {
+inline void Matrix<PersistenceMatrixOptions>::remove_maximal_cell(Index columnIndex)
+{
   static_assert(PersistenceMatrixOptions::has_removable_columns,
                 "'remove_maximal_cell(ID_index)' is not available for the chosen options.");
   static_assert(isNonBasic && PersistenceMatrixOptions::has_vine_update,
@@ -1807,7 +1819,8 @@ inline void Matrix<PersistenceMatrixOptions>::remove_maximal_cell(Index columnIn
 
 template <class PersistenceMatrixOptions>
 inline void Matrix<PersistenceMatrixOptions>::remove_maximal_cell(ID_index cellIndex,
-                                                                  const std::vector<ID_index>& columnsToSwap) {
+                                                                  const std::vector<ID_index>& columnsToSwap)
+{
   static_assert(PersistenceMatrixOptions::has_removable_columns,
                 "'remove_maximal_cell(ID_index,const std::vector<Index>&)' is not available for the chosen options.");
   static_assert(isNonBasic && !PersistenceMatrixOptions::is_of_boundary_type,
@@ -1819,7 +1832,8 @@ inline void Matrix<PersistenceMatrixOptions>::remove_maximal_cell(ID_index cellI
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::remove_last() {
+inline void Matrix<PersistenceMatrixOptions>::remove_last()
+{
   static_assert(PersistenceMatrixOptions::has_removable_columns || !isNonBasic,
                 "'remove_last' is not available for the chosen options.");
   static_assert(!PersistenceMatrixOptions::has_column_compression || isNonBasic,
@@ -1832,22 +1846,23 @@ inline void Matrix<PersistenceMatrixOptions>::remove_last() {
 }
 
 template <class PersistenceMatrixOptions>
-inline typename Matrix<PersistenceMatrixOptions>::Dimension Matrix<PersistenceMatrixOptions>::get_max_dimension()
-    const {
+inline typename Matrix<PersistenceMatrixOptions>::Dimension Matrix<PersistenceMatrixOptions>::get_max_dimension() const
+{
   static_assert(isNonBasic, "'get_max_dimension' is not available for the chosen options.");
 
   return matrix_.get_max_dimension();
 }
 
 template <class PersistenceMatrixOptions>
-inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::get_number_of_columns()
-    const {
+inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::get_number_of_columns() const
+{
   return matrix_.get_number_of_columns();
 }
 
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Dimension Matrix<PersistenceMatrixOptions>::get_column_dimension(
-    Index columnIndex) const {
+    Index columnIndex) const
+{
   static_assert(isNonBasic, "'get_column_dimension' is not available for the chosen options.");
 
   return matrix_.get_column_dimension(columnIndex);
@@ -1857,7 +1872,8 @@ template <class PersistenceMatrixOptions>
 template <typename Integer_index>
 inline std::enable_if_t<std::is_integral_v<Integer_index> > Matrix<PersistenceMatrixOptions>::add_to(
     Integer_index sourceColumnIndex,
-    Integer_index targetColumnIndex) {
+    Integer_index targetColumnIndex)
+{
   matrix_.add_to(sourceColumnIndex, targetColumnIndex);
 }
 
@@ -1865,7 +1881,8 @@ template <class PersistenceMatrixOptions>
 template <class Entry_range>
 inline std::enable_if_t<!std::is_integral_v<Entry_range> > Matrix<PersistenceMatrixOptions>::add_to(
     const Entry_range& sourceColumn,
-    Index targetColumnIndex) {
+    Index targetColumnIndex)
+{
   static_assert(!isNonBasic,
                 "For boundary or chain matrices, only additions with columns inside the matrix is allowed to maintain "
                 "algebraic consistency.");
@@ -1878,7 +1895,8 @@ template <typename Integer_index>
 inline std::enable_if_t<std::is_integral_v<Integer_index> >
 Matrix<PersistenceMatrixOptions>::multiply_target_and_add_to(Integer_index sourceColumnIndex,
                                                              int coefficient,
-                                                             Integer_index targetColumnIndex) {
+                                                             Integer_index targetColumnIndex)
+{
   matrix_.multiply_target_and_add_to(sourceColumnIndex, _get_value(coefficient), targetColumnIndex);
 }
 
@@ -1887,7 +1905,8 @@ template <class Entry_range>
 inline std::enable_if_t<!std::is_integral_v<Entry_range> > Matrix<PersistenceMatrixOptions>::multiply_target_and_add_to(
     const Entry_range& sourceColumn,
     int coefficient,
-    Index targetColumnIndex) {
+    Index targetColumnIndex)
+{
   static_assert(!isNonBasic,
                 "For boundary or chain matrices, only additions with columns inside the matrix is allowed to maintain "
                 "algebraic consistency.");
@@ -1900,7 +1919,8 @@ template <typename Integer_index>
 inline std::enable_if_t<std::is_integral_v<Integer_index> >
 Matrix<PersistenceMatrixOptions>::multiply_source_and_add_to(int coefficient,
                                                              Integer_index sourceColumnIndex,
-                                                             Integer_index targetColumnIndex) {
+                                                             Integer_index targetColumnIndex)
+{
   matrix_.multiply_source_and_add_to(_get_value(coefficient), sourceColumnIndex, targetColumnIndex);
 }
 
@@ -1909,7 +1929,8 @@ template <class Entry_range>
 inline std::enable_if_t<!std::is_integral_v<Entry_range> > Matrix<PersistenceMatrixOptions>::multiply_source_and_add_to(
     int coefficient,
     const Entry_range& sourceColumn,
-    Index targetColumnIndex) {
+    Index targetColumnIndex)
+{
   static_assert(!isNonBasic,
                 "For boundary or chain matrices, only additions with columns inside the matrix is allowed to maintain "
                 "algebraic consistency.");
@@ -1918,7 +1939,8 @@ inline std::enable_if_t<!std::is_integral_v<Entry_range> > Matrix<PersistenceMat
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_index rowIndex) {
+inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_index rowIndex)
+{
   static_assert(PersistenceMatrixOptions::is_of_boundary_type && !PersistenceMatrixOptions::has_column_compression,
                 "'zero_entry' is not available for the chosen options.");
 
@@ -1926,7 +1948,8 @@ inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_i
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_index rowIndex, bool inR) {
+inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_index rowIndex, bool inR)
+{
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
       isNonBasic && PersistenceMatrixOptions::is_of_boundary_type &&
@@ -1938,7 +1961,8 @@ inline void Matrix<PersistenceMatrixOptions>::zero_entry(Index columnIndex, ID_i
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex) {
+inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex)
+{
   static_assert(PersistenceMatrixOptions::is_of_boundary_type && !PersistenceMatrixOptions::has_column_compression,
                 "'zero_column' is not available for the chosen options.");
 
@@ -1946,7 +1970,8 @@ inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex) {
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex, bool inR) {
+inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex, bool inR)
+{
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
       isNonBasic && PersistenceMatrixOptions::is_of_boundary_type &&
@@ -1958,12 +1983,14 @@ inline void Matrix<PersistenceMatrixOptions>::zero_column(Index columnIndex, boo
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::is_zero_entry(Index columnIndex, ID_index rowIndex) {
+inline bool Matrix<PersistenceMatrixOptions>::is_zero_entry(Index columnIndex, ID_index rowIndex)
+{
   return matrix_.is_zero_entry(columnIndex, rowIndex);
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::is_zero_entry(Index columnIndex, ID_index rowIndex, bool inR) const {
+inline bool Matrix<PersistenceMatrixOptions>::is_zero_entry(Index columnIndex, ID_index rowIndex, bool inR) const
+{
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
       isNonBasic && PersistenceMatrixOptions::is_of_boundary_type &&
@@ -1975,12 +2002,14 @@ inline bool Matrix<PersistenceMatrixOptions>::is_zero_entry(Index columnIndex, I
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::is_zero_column(Index columnIndex) {
+inline bool Matrix<PersistenceMatrixOptions>::is_zero_column(Index columnIndex)
+{
   return matrix_.is_zero_column(columnIndex);
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::is_zero_column(Index columnIndex, bool inR) {
+inline bool Matrix<PersistenceMatrixOptions>::is_zero_column(Index columnIndex, bool inR)
+{
   // TODO: I don't think there is a particular reason why the indexation is forced, should be removed.
   static_assert(
       isNonBasic && PersistenceMatrixOptions::is_of_boundary_type &&
@@ -1993,7 +2022,8 @@ inline bool Matrix<PersistenceMatrixOptions>::is_zero_column(Index columnIndex, 
 
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::get_column_with_pivot(
-    ID_index cellIndex) const {
+    ID_index cellIndex) const
+{
   static_assert(isNonBasic && (!PersistenceMatrixOptions::is_of_boundary_type ||
                                (PersistenceMatrixOptions::has_vine_update ||
                                 PersistenceMatrixOptions::can_retrieve_representative_cycles)),
@@ -2004,14 +2034,16 @@ inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrix
 
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::ID_index Matrix<PersistenceMatrixOptions>::get_pivot(
-    Index columnIndex) {
+    Index columnIndex)
+{
   static_assert(isNonBasic, "'get_pivot' is not available for the chosen options.");
 
   return matrix_.get_pivot(columnIndex);
 }
 
 template <class PersistenceMatrixOptions>
-inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::operator=(Matrix other) & {
+inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::operator=(Matrix other) &
+{
   swap(matrix_, other.matrix_);
   std::swap(colSettings_, other.colSettings_);
 
@@ -2019,7 +2051,8 @@ inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::opera
 }
 
 template <class PersistenceMatrixOptions>
-inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::operator=(Matrix&& other) && noexcept {
+inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::operator=(Matrix&& other) && noexcept
+{
   if (this == &other) return *this;
 
   matrix_ = std::move(other.matrix_);
@@ -2029,13 +2062,14 @@ inline Matrix<PersistenceMatrixOptions>& Matrix<PersistenceMatrixOptions>::opera
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::print() {
+inline void Matrix<PersistenceMatrixOptions>::print()
+{
   return matrix_.print();
 }
 
 template <class PersistenceMatrixOptions>
-inline const typename Matrix<PersistenceMatrixOptions>::Barcode&
-Matrix<PersistenceMatrixOptions>::get_current_barcode() {
+inline const typename Matrix<PersistenceMatrixOptions>::Barcode& Matrix<PersistenceMatrixOptions>::get_current_barcode()
+{
   static_assert(PersistenceMatrixOptions::has_column_pairings, "This method was not enabled.");
 
   return matrix_.get_current_barcode();
@@ -2043,7 +2077,8 @@ Matrix<PersistenceMatrixOptions>::get_current_barcode() {
 
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Barcode& Matrix<PersistenceMatrixOptions>::get_current_barcode()
-    const {
+    const
+{
   static_assert(PersistenceMatrixOptions::has_column_pairings, "This method was not enabled.");
   static_assert(
       !PersistenceMatrixOptions::is_of_boundary_type || PersistenceMatrixOptions::has_vine_update ||
@@ -2055,7 +2090,8 @@ inline const typename Matrix<PersistenceMatrixOptions>::Barcode& Matrix<Persiste
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::swap_columns(Index columnIndex1, Index columnIndex2) {
+inline void Matrix<PersistenceMatrixOptions>::swap_columns(Index columnIndex1, Index columnIndex2)
+{
   static_assert(
       (!isNonBasic && !PersistenceMatrixOptions::has_column_compression) ||
           (isNonBasic && PersistenceMatrixOptions::is_of_boundary_type && !PersistenceMatrixOptions::has_vine_update &&
@@ -2065,7 +2101,8 @@ inline void Matrix<PersistenceMatrixOptions>::swap_columns(Index columnIndex1, I
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::swap_rows(Index rowIndex1, Index rowIndex2) {
+inline void Matrix<PersistenceMatrixOptions>::swap_rows(Index rowIndex1, Index rowIndex2)
+{
   static_assert(
       (!isNonBasic && !PersistenceMatrixOptions::has_column_compression) ||
           (isNonBasic && PersistenceMatrixOptions::is_of_boundary_type && !PersistenceMatrixOptions::has_vine_update &&
@@ -2075,7 +2112,8 @@ inline void Matrix<PersistenceMatrixOptions>::swap_rows(Index rowIndex1, Index r
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::vine_swap_with_z_eq_1_case(Pos_index index) {
+inline bool Matrix<PersistenceMatrixOptions>::vine_swap_with_z_eq_1_case(Pos_index index)
+{
   static_assert(PersistenceMatrixOptions::has_vine_update, "This method was not enabled.");
   static_assert(PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::POSITION ||
                     (PersistenceMatrixOptions::is_of_boundary_type &&
@@ -2087,7 +2125,8 @@ inline bool Matrix<PersistenceMatrixOptions>::vine_swap_with_z_eq_1_case(Pos_ind
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::vine_swap_with_z_eq_1_case(
     Index columnIndex1,
-    Index columnIndex2) {
+    Index columnIndex2)
+{
   static_assert(PersistenceMatrixOptions::has_vine_update, "This method was not enabled.");
   static_assert(PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::IDENTIFIER ||
                     (!PersistenceMatrixOptions::is_of_boundary_type &&
@@ -2098,7 +2137,8 @@ inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrix
 }
 
 template <class PersistenceMatrixOptions>
-inline bool Matrix<PersistenceMatrixOptions>::vine_swap(Pos_index index) {
+inline bool Matrix<PersistenceMatrixOptions>::vine_swap(Pos_index index)
+{
   static_assert(PersistenceMatrixOptions::has_vine_update, "This method was not enabled.");
   static_assert(PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::POSITION ||
                     (PersistenceMatrixOptions::is_of_boundary_type &&
@@ -2108,9 +2148,9 @@ inline bool Matrix<PersistenceMatrixOptions>::vine_swap(Pos_index index) {
 }
 
 template <class PersistenceMatrixOptions>
-inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::vine_swap(
-    Index columnIndex1,
-    Index columnIndex2) {
+inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrixOptions>::vine_swap(Index columnIndex1,
+                                                                                                    Index columnIndex2)
+{
   static_assert(PersistenceMatrixOptions::has_vine_update, "This method was not enabled.");
   static_assert(PersistenceMatrixOptions::column_indexation_type == Column_indexation_types::IDENTIFIER ||
                     (!PersistenceMatrixOptions::is_of_boundary_type &&
@@ -2120,33 +2160,38 @@ inline typename Matrix<PersistenceMatrixOptions>::Index Matrix<PersistenceMatrix
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::update_all_representative_cycles(Dimension dim) {
+inline void Matrix<PersistenceMatrixOptions>::update_all_representative_cycles(Dimension dim)
+{
   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
   matrix_.update_all_representative_cycles(dim);
 }
 
 template <class PersistenceMatrixOptions>
-inline void Matrix<PersistenceMatrixOptions>::update_representative_cycle(const Bar& bar) {
+inline void Matrix<PersistenceMatrixOptions>::update_representative_cycle(const Bar& bar)
+{
   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
   matrix_.update_representative_cycle(bar);
 }
 
 template <class PersistenceMatrixOptions>
 inline const std::vector<typename Matrix<PersistenceMatrixOptions>::Cycle>&
-Matrix<PersistenceMatrixOptions>::get_all_representative_cycles() const {
+Matrix<PersistenceMatrixOptions>::get_all_representative_cycles() const
+{
   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
   return matrix_.get_all_representative_cycles();
 }
 
 template <class PersistenceMatrixOptions>
 inline const typename Matrix<PersistenceMatrixOptions>::Cycle&
-Matrix<PersistenceMatrixOptions>::get_representative_cycle(const Bar& bar) const {
+Matrix<PersistenceMatrixOptions>::get_representative_cycle(const Bar& bar) const
+{
   static_assert(PersistenceMatrixOptions::can_retrieve_representative_cycles, "This method was not enabled.");
   return matrix_.get_representative_cycle(bar);
 }
 
 template <class PersistenceMatrixOptions>
-constexpr void Matrix<PersistenceMatrixOptions>::_assert_options() {
+constexpr void Matrix<PersistenceMatrixOptions>::_assert_options()
+{
   static_assert(
       PersistenceMatrixOptions::column_type != Column_types::HEAP || !PersistenceMatrixOptions::has_row_access,
       "Row access is not possible for heap columns.");
@@ -2181,7 +2226,8 @@ constexpr void Matrix<PersistenceMatrixOptions>::_assert_options() {
 
 template <class PersistenceMatrixOptions>
 inline typename Matrix<PersistenceMatrixOptions>::Element Matrix<PersistenceMatrixOptions>::_get_value(
-    int coefficient) const {
+    int coefficient) const
+{
   return get_coefficient_value(coefficient, get_operator_ptr(colSettings_));
 }
 
