@@ -7,6 +7,7 @@
 #include "ext_interface/2pac_interface.hpp"
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
+#include "ext_interface/nanobind_generator_basis.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
@@ -44,58 +45,8 @@ nb::object minimal_presentation_for_target(nb::object target,
   auto result = multipers::twopac_minpres_with_generators_contiguous_interface(
       input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout || verbose);
   multipers::build_slicer_from_complex(out_wrapper.truc, result.first);
-
-  const auto dimensions = input_wrapper.truc.get_dimensions();
-  const auto& boundaries = input_wrapper.truc.get_boundaries();
-  auto& filtrations = input_wrapper.truc.get_filtration_values();
-  std::vector<size_t> degree_indices;
-  degree_indices.reserve(dimensions.size());
-  for (size_t i = 0; i < dimensions.size(); ++i) {
-    if (dimensions[i] == degree) {
-      degree_indices.push_back(i);
-    }
-  }
-  std::stable_sort(degree_indices.begin(), degree_indices.end(), [&](size_t a, size_t b) {
-    const auto& fa = filtrations[a];
-    const auto& fb = filtrations[b];
-    return fa(0, 1) < fb(0, 1) || (fa(0, 1) == fb(0, 1) && fa(0, 0) < fb(0, 0));
-  });
-
-  if (result.second.row_indices.size() != result.second.row_grades.size()) {
-    throw std::runtime_error("2pac generator-basis extraction failed: row count mismatch.");
-  }
-  for (size_t i = 0; i < result.second.row_indices.size(); ++i) {
-    const auto row_idx = static_cast<size_t>(result.second.row_indices[i]);
-    if (row_idx >= degree_indices.size()) {
-      throw std::runtime_error("2pac generator-basis extraction failed: row index out of range.");
-    }
-    const auto& filtration = filtrations[degree_indices[row_idx]];
-    const auto& grade = result.second.row_grades[i];
-    if (filtration(0, 0) != grade.first || filtration(0, 1) != grade.second) {
-      throw std::runtime_error(
-          "2pac generator-basis extraction failed: row grades do not match the original degree block.");
-    }
-  }
-
-  nb::list row_boundaries;
-  for (auto raw_row_idx : result.second.row_indices) {
-    const auto row_idx = static_cast<size_t>(raw_row_idx);
-    const auto idx = degree_indices[row_idx];
-    std::vector<uint32_t> boundary;
-    boundary.reserve(boundaries[idx].size());
-    for (auto value : boundaries[idx]) {
-      boundary.push_back(static_cast<uint32_t>(value));
-    }
-    row_boundaries.append(nb::cast(std::move(boundary)));
-  }
-
-  nb::dict basis;
-  basis["degree"] = degree;
-  basis["row_boundaries"] = std::move(row_boundaries);
-  basis["columns"] = nb::cast(std::move(result.second.columns));
-  basis["row_grades"] = nb::cast(std::move(result.second.row_grades));
-  basis["column_grades"] = nb::cast(std::move(result.second.column_grades));
-  out.attr("_generator_basis") = std::move(basis);
+  out.attr("_generator_basis") =
+      multipers::nanobind_helpers::generator_basis_from_degree_rows(input_wrapper, degree, result.second, "2pac");
   return out;
 }
 

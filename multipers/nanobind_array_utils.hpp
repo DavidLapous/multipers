@@ -36,11 +36,15 @@ nanobind::ndarray<nanobind::numpy, T> view_array(T* ptr, std::initializer_list<s
 
 template <typename Func>
 nanobind::tuple tuple_from_size(size_t size, Func&& make_item) {
-  nanobind::list out;
-  for (size_t i = 0; i < size; ++i) {
-    out.append(std::forward<Func>(make_item)(i));
+  nanobind::tuple out = nanobind::steal<nanobind::tuple>(PyTuple_New(static_cast<Py_ssize_t>(size)));
+  if (!out.is_valid()) {
+    throw nanobind::python_error();
   }
-  return nanobind::cast<nanobind::tuple>(nanobind::module_::import_("builtins").attr("tuple")(out));
+  for (size_t i = 0; i < size; ++i) {
+    nanobind::object item = make_item(i);
+    PyTuple_SET_ITEM(out.ptr(), static_cast<Py_ssize_t>(i), item.release().ptr());
+  }
+  return out;
 }
 
 }  // namespace multipers::nanobind_utils

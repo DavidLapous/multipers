@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -20,6 +21,7 @@ struct type_list {};
 #include <_slicer_nanobind_registry.inc>
 
 using multipers::nanobind_utils::has_template_id;
+using multipers::nanobind_utils::maybe_template_id_of;
 using multipers::nanobind_utils::template_id_of;
 
 template <typename Desc>
@@ -38,6 +40,18 @@ decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
   }
 }
 
+inline bool is_known_slicer_template_id(int template_id) {
+  switch (template_id) {
+#define MP_SLICER_CASE(desc) \
+  case desc::template_id:    \
+    return true;
+    MP_FOR_EACH_SLICER_DESC(MP_SLICER_CASE)
+#undef MP_SLICER_CASE
+    default:
+      return false;
+  }
+}
+
 template <typename Func>
 decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func) {
   switch (template_id) {
@@ -48,6 +62,18 @@ decltype(auto) dispatch_simplextree_by_template_id(int template_id, Func&& func)
 #undef MP_SIMPLEXTREE_CASE
     default:
       throw nb::type_error("Unknown SimplexTreeMulti template id.");
+  }
+}
+
+inline bool is_known_simplextree_template_id(int template_id) {
+  switch (template_id) {
+#define MP_SIMPLEXTREE_CASE(desc) \
+  case desc::template_id:         \
+    return true;
+    MP_FOR_EACH_SIMPLEXTREE_DESC(MP_SIMPLEXTREE_CASE)
+#undef MP_SIMPLEXTREE_CASE
+    default:
+      return false;
   }
 }
 
@@ -84,27 +110,21 @@ decltype(auto) visit_const_simplextree_wrapper(const nb::handle& input, Func&& f
 }
 
 inline bool is_slicer_object(const nb::handle& input) {
-  if (!has_template_id(input)) {
+  std::optional<int> template_id = maybe_template_id_of(input);
+  if (!template_id || !is_known_slicer_template_id(*template_id)) {
     return false;
   }
-  try {
-    return visit_const_slicer_wrapper(input,
-                                      [&]<typename Desc>(const typename Desc::wrapper&) -> bool { return true; });
-  } catch (...) {
-    return false;
-  }
+  return dispatch_slicer_by_template_id(
+      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<typename Desc::wrapper>(input); });
 }
 
 inline bool is_simplextree_object(const nb::handle& input) {
-  if (!has_template_id(input)) {
+  std::optional<int> template_id = maybe_template_id_of(input);
+  if (!template_id || !is_known_simplextree_template_id(*template_id)) {
     return false;
   }
-  try {
-    return visit_const_simplextree_wrapper(
-        input, [&]<typename Desc>(const simplextree_wrapper_t<Desc>&) -> bool { return true; });
-  } catch (...) {
-    return false;
-  }
+  return dispatch_simplextree_by_template_id(
+      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<simplextree_wrapper_t<Desc>>(input); });
 }
 
 }  // namespace multipers::nanobind_helpers

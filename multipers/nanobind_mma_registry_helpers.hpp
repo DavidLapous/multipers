@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -12,6 +13,7 @@
 namespace multipers::nanobind_mma_helpers {
 
 using multipers::nanobind_utils::has_template_id;
+using multipers::nanobind_utils::maybe_template_id_of;
 using multipers::nanobind_utils::template_id_of;
 
 template <typename T>
@@ -34,6 +36,18 @@ decltype(auto) dispatch_mma_by_template_id(int template_id, Func&& func) {
 #undef MP_MMA_CASE
     default:
       throw nanobind::type_error("Unknown MMA template id.");
+  }
+}
+
+inline bool is_known_mma_template_id(int template_id) {
+  switch (template_id) {
+#define MP_MMA_CASE(desc) \
+  case desc::template_id: \
+    return true;
+    MP_FOR_EACH_MMA_DESC(MP_MMA_CASE)
+#undef MP_MMA_CASE
+    default:
+      return false;
   }
 }
 
@@ -79,15 +93,12 @@ decltype(auto) visit_const_mma_module_wrapper(const nanobind::handle& input, Fun
 }
 
 inline bool is_mma_module_object(const nanobind::handle& input) {
-  if (!has_template_id(input)) {
+  std::optional<int> template_id = maybe_template_id_of(input);
+  if (!template_id || !is_known_mma_template_id(*template_id)) {
     return false;
   }
-  try {
-    return visit_const_mma_module_wrapper(input,
-                                          [&]<typename Desc>(const module_wrapper_t<Desc>&) -> bool { return true; });
-  } catch (...) {
-    return false;
-  }
+  return dispatch_mma_by_template_id(
+      *template_id, [&]<typename Desc>() -> bool { return nanobind::isinstance<module_wrapper_t<Desc>>(input); });
 }
 
 }  // namespace multipers::nanobind_mma_helpers

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <new>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -869,18 +870,9 @@ void bind_mma_type(nb::module_& m) {
                 return self;
               },
               nb::rv_policy::reference_internal)
-          .def("__reduce__",
-               [](WrapperMod& self) -> nb::tuple {
-                 return nb::make_tuple(
-                     nb::module_::import_("multipers.multiparameter_module_approximation").attr("_reconstruct_module"),
-                     nb::make_tuple(nb::str(Desc::from_dump_name.data()), dump_module<T>(self.mod)));
-               })
-          .def("__reduce_ex__",
-               [](WrapperMod& self, int) -> nb::tuple {
-                 return nb::make_tuple(
-                     nb::module_::import_("multipers.multiparameter_module_approximation").attr("_reconstruct_module"),
-                     nb::make_tuple(nb::str(Desc::from_dump_name.data()), dump_module<T>(self.mod)));
-               })
+          .def("__getstate__", [](WrapperMod& self) -> nb::tuple { return dump_module<T>(self.mod); })
+          .def("__setstate__",
+               [](WrapperMod& self, nb::handle state) { new (&self) WrapperMod{module_from_dump<T>(state)}; })
           .def(
               "_add_mmas",
               [](WrapperMod& self, nb::iterable mmas) -> WrapperMod& {

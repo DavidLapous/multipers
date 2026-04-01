@@ -219,7 +219,6 @@ nb::object self_handle(Wrapper& self) {
   return nb::find(self);
 }
 
-
 inline bool is_simplextree_multi(const nb::handle& source) { return is_simplextree_object(source); }
 
 template <typename Desc, typename Wrapper, typename Concrete>
@@ -2059,47 +2058,6 @@ NB_MODULE(_slicer_nanobind, m) {
       "threshold"_a = false,
       "complete"_a = true,
       "verbose"_a = false,
-      "n_jobs"_a = -1);
-
-  m.def(
-      "_module_approximation_single_input",
-      [](nb::object input,
-         nb::object box,
-         double max_error,
-         int nlines,
-         bool from_coordinates,
-         bool complete,
-         bool threshold,
-         bool verbose,
-         bool ignore_warnings,
-         nb::handle direction,
-         nb::handle swap_box_coords,
-         int n_jobs) {
-        return nb::module_::import_("multipers.multiparameter_module_approximation")
-            .attr("_module_approximation_single_input")(input,
-                                                        box,
-                                                        max_error,
-                                                        nlines,
-                                                        from_coordinates,
-                                                        complete,
-                                                        threshold,
-                                                        verbose,
-                                                        ignore_warnings,
-                                                        nb::borrow(direction),
-                                                        nb::borrow(swap_box_coords),
-                                                        n_jobs);
-      },
-      "input"_a,
-      "box"_a = nb::none(),
-      "max_error"_a = -1,
-      "nlines"_a = 557,
-      "from_coordinates"_a = false,
-      "complete"_a = true,
-      "threshold"_a = false,
-      "verbose"_a = false,
-      "ignore_warnings"_a = false,
-      "direction"_a = nb::make_tuple(),
-      "swap_box_coords"_a = nb::make_tuple(),
       "n_jobs"_a = -1);
 
   m.def(

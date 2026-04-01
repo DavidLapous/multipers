@@ -12,8 +12,8 @@
 
 #include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
 #include "nanobind_array_utils.hpp"
-#include "nanobind_object_utils.hpp"
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 #include "multi_critical/basic.h"
@@ -30,8 +30,7 @@ using namespace nb::literals;
 namespace mpmc {
 
 using Clock = std::chrono::steady_clock;
-using multipers::nanobind_utils::cast_matrix;
-using multipers::nanobind_utils::cast_vector;
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_kcontiguous_f64_slicer_wrapper;
 using multipers::nanobind_utils::owned_array;
 using multipers::nanobind_utils::tuple_from_size;
 
@@ -320,28 +319,6 @@ nb::tuple output_to_raw_arrays(const multipers::multi_critical_interface_output<
                         owned_array<double>(std::move(grades), {output.filtration_values.size(), size_t(2)}));
 }
 
-multipers::multi_critical_interface_input<int> input_from_kcritical_slicer(nb::object slicer) {
-  auto dimensions = cast_vector<int>(slicer.attr("get_dimensions")());
-  auto packed_boundaries = nb::cast<nb::tuple>(slicer.attr("get_boundaries")("packed"_a = true));
-  auto boundaries_indptr = cast_vector<int64_t>(packed_boundaries[0]);
-  auto boundaries_indices = cast_vector<int>(packed_boundaries[1]);
-  auto packed_filtrations = nb::cast<nb::tuple>(slicer.attr("get_filtrations")("packed"_a = true));
-  auto indptr = cast_vector<int64_t>(packed_filtrations[0]);
-  auto grades = cast_matrix<double>(packed_filtrations[1]);
-
-  multipers::multi_critical_interface_input<int> input;
-  input.dimensions = dimensions;
-  input.boundaries.resize(dimensions.size());
-  input.filtration_values.resize(dimensions.size());
-  for (size_t i = 0; i < dimensions.size(); ++i) {
-    for (int64_t j = boundaries_indptr[i]; j < boundaries_indptr[i + 1]; ++j)
-      input.boundaries[i].push_back(boundaries_indices[(size_t)j]);
-    for (int64_t j = indptr[i]; j < indptr[i + 1]; ++j)
-      input.filtration_values[i].push_back({grades[(size_t)j][0], grades[(size_t)j][1]});
-  }
-  return input;
-}
-
 nb::object output_to_slicer(nb::object slicer_type,
                             const multipers::multi_critical_interface_output<int>& output,
                             bool mark_minpres = false,
@@ -426,15 +403,9 @@ NB_MODULE(_multi_critical_interface, m) {
                                                     "return_type_only"_a = true,
                                                     "kcritical"_a = kcritical,
                                                     "filtration_container"_a = filtration_container);
-        nb::object input_slicer = slicer;
-        input_slicer = slicer.attr("astype")("vineyard"_a = false,
-                                             "kcritical"_a = true,
-                                             "dtype"_a = nb::module_::import_("numpy").attr("float64"),
-                                             "col"_a = slicer.attr("col_type"),
-                                             "pers_backend"_a = "matrix",
-                                             "filtration_container"_a = "contiguous");
-
-        auto input = mpmc::input_from_kcritical_slicer(input_slicer);
+        nb::object input_slicer = multipers::nanobind_helpers::ensure_canonical_kcontiguous_f64_slicer_object(slicer);
+        auto& input_wrapper = nb::cast<mpmc::CanonicalWrapper&>(input_slicer);
+        auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
         if (!reduce) {
           auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, backend_stdout);
           return mpmc::output_to_slicer(new_slicer_type, out, false, -1);
