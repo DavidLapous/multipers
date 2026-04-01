@@ -669,6 +669,7 @@ def from_function_delaunay(
     dtype=np.float64,
     verbose=False,
     clear=True,
+    recover_ids: bool = False,
 ):
     from multipers.io import (
         function_delaunay_presentation_to_simplextree,
@@ -682,10 +683,17 @@ def from_function_delaunay(
             verbose=verbose,
             clear=clear,
             dtype=dtype,
+            recover_ids=recover_ids,
         )
     slicer = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
     slicer = function_delaunay_presentation_to_slicer(
-        slicer, points, grades, degree=degree, verbose=verbose, clear=clear
+        slicer,
+        points,
+        grades,
+        degree=degree,
+        verbose=verbose,
+        clear=clear,
+        recover_ids=recover_ids,
     )
     slicer.minpres_degree = degree
     return slicer

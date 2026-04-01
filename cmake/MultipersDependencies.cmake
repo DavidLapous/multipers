@@ -58,14 +58,22 @@ find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
 if(NOT DEFINED MULTIPERS_DISABLE_2PAC_INTERFACE)
   set(MULTIPERS_DISABLE_2PAC_INTERFACE OFF)
+  message(STATUS "[2pac] Defaulted MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE}")
+else()
+  message(STATUS "[2pac] Preset MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE}")
 endif()
 if(NOT DEFINED MULTIPERS_DISABLE_AIDA_INTERFACE)
   set(MULTIPERS_DISABLE_AIDA_INTERFACE OFF)
+  message(STATUS "[aida] Defaulted MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
+else()
+  message(STATUS "[aida] Preset MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
 endif()
 
 if(WIN32)
   set(MULTIPERS_DISABLE_2PAC_INTERFACE ON)
+  message(STATUS "[2pac] Forced MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_AIDA_INTERFACE ON)
+  message(STATUS "[aida] Forced MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE} on WIN32")
 endif()
 
 set(
@@ -168,9 +176,12 @@ if(CGAL_FOUND)
 endif()
 
 set(MULTIPERS_2PAC_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/2pac" CACHE PATH "Path to a 2pac source tree")
+message(STATUS "[2pac] Set MULTIPERS_2PAC_SOURCE_DIR=${MULTIPERS_2PAC_SOURCE_DIR}")
 set(MULTIPERS_2PAC_INCLUDE_DIRS "")
+message(STATUS "[2pac] Set MULTIPERS_2PAC_INCLUDE_DIRS=${MULTIPERS_2PAC_INCLUDE_DIRS}")
 if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.hpp" AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp")
   set(MULTIPERS_2PAC_INCLUDE_DIRS "${MULTIPERS_2PAC_SOURCE_DIR}")
+  message(STATUS "[2pac] Set MULTIPERS_2PAC_INCLUDE_DIRS=${MULTIPERS_2PAC_INCLUDE_DIRS}")
   add_library(
     multipers_2pac_static
     STATIC
@@ -187,11 +198,17 @@ if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}
   target_include_directories(multipers_2pac_static PUBLIC ${MULTIPERS_2PAC_INCLUDE_DIRS})
   target_link_libraries(multipers_2pac_static PUBLIC OpenMP::OpenMP_CXX)
   target_compile_definitions(multipers_2pac_static PUBLIC MULTIPERS_HAS_2PAC_INTERFACE=1)
+  message(STATUS "[2pac] Created multipers_2pac_static with MULTIPERS_HAS_2PAC_INTERFACE=1")
   set_target_properties(
     multipers_2pac_static
     PROPERTIES
       CXX_VISIBILITY_PRESET hidden
       VISIBILITY_INLINES_HIDDEN ON
+  )
+else()
+  message(
+    STATUS
+      "[2pac] Skipped multipers_2pac_static creation: disable=${MULTIPERS_DISABLE_2PAC_INTERFACE}, source_dir=${MULTIPERS_2PAC_SOURCE_DIR}"
   )
 endif()
 
@@ -207,6 +224,9 @@ if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_vers
   if(TARGET CGAL::CGAL_Core)
     target_link_libraries(multipers_rhomboid_tiling_static PUBLIC CGAL::CGAL_Core)
   endif()
+  message(STATUS "[rhomboid] Created multipers_rhomboid_tiling_static")
+else()
+  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: CGAL_FOUND=${CGAL_FOUND}")
 endif()
 
 if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
@@ -232,4 +252,7 @@ if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
   if(NOT MSVC)
     set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
   endif()
+  message(STATUS "[aida] Created multipers_aida_static")
+else()
+  message(STATUS "[aida] Skipped multipers_aida_static creation: disable=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
 endif()

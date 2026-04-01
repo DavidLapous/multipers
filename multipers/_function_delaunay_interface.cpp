@@ -38,7 +38,8 @@ inline nb::object ensure_supported_simplextree_target(nb::object simplextree) {
 }
 
 inline multipers::function_delaunay_interface_input<int> build_input(nb::handle point_cloud,
-                                                                     nb::handle function_values) {
+                                                                     nb::handle function_values,
+                                                                     bool recover_ids) {
   auto points = cast_matrix<double>(point_cloud);
   auto values = cast_vector<double>(function_values);
   if (points.size() != values.size()) {
@@ -47,6 +48,7 @@ inline multipers::function_delaunay_interface_input<int> build_input(nb::handle 
   multipers::function_delaunay_interface_input<int> input;
   input.points = std::move(points);
   input.function_values = std::move(values);
+  input.recover_ids = recover_ids;
   return input;
 }
 
@@ -86,11 +88,12 @@ NB_MODULE(_function_delaunay_interface, m) {
          nb::handle function_values,
          int degree,
          bool multi_chunk,
+         bool recover_ids,
          bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
         throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
 #else
-        auto input = mpfd::build_input(point_cloud, function_values);
+        auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
         nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
         nb::object out = mpfd::function_delaunay_to_slicer_for_target(target, input, degree, multi_chunk, verbose);
         if (target.ptr() == slicer.ptr()) {
@@ -104,15 +107,16 @@ NB_MODULE(_function_delaunay_interface, m) {
       "function_values"_a,
       "degree"_a,
       "multi_chunk"_a,
+      "recover_ids"_a = false,
       "verbose"_a = false);
 
   m.def(
       "function_delaunay_to_simplextree",
-      [](nb::object simplextree, nb::handle point_cloud, nb::handle function_values, bool verbose) {
+      [](nb::object simplextree, nb::handle point_cloud, nb::handle function_values, bool recover_ids, bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
         throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
 #else
-        auto input = mpfd::build_input(point_cloud, function_values);
+        auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
         nb::object target = mpfd::ensure_supported_simplextree_target(simplextree);
         nb::object out = mpfd::function_delaunay_to_simplextree_for_target(target, input, verbose);
         if (target.ptr() == simplextree.ptr()) {
@@ -124,5 +128,6 @@ NB_MODULE(_function_delaunay_interface, m) {
       "simplextree"_a,
       "point_cloud"_a,
       "function_values"_a,
+      "recover_ids"_a = false,
       "verbose"_a = false);
 }

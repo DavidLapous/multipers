@@ -343,6 +343,7 @@ def function_delaunay_presentation_to_slicer(
     verbose: bool = False,
     degree=-1,
     multi_chunk=False,
+    recover_ids: bool = False,
 ):
     """
     Computes a function delaunay presentation, and returns it as a slicer.
@@ -351,9 +352,10 @@ def function_delaunay_presentation_to_slicer(
     points : (num_pts, n) float array
     grades : (num_pts,) float array
     degree (opt) : if given, computes a minimal presentation of this homological degree first
-    clear:bool, removes temporary files if true
-    degree: computes minimal presentation of this degree if given
-    verbose : bool
+     clear:bool, removes temporary files if true
+     degree: computes minimal presentation of this degree if given
+     recover_ids: when true, restore the original input vertex ids in the in-memory full-complex output
+     verbose : bool
     """
     global pathes
 
@@ -374,7 +376,7 @@ def function_delaunay_presentation_to_slicer(
     if _interface_is_available(_function_delaunay_interface):
         if verbose:
             print(
-                f"[multipers.io] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk}",
+                f"[multipers.io] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk} recover_ids={recover_ids}",
                 flush=True,
             )
         return _function_delaunay_interface.function_delaunay_to_slicer(
@@ -383,9 +385,14 @@ def function_delaunay_presentation_to_slicer(
             function_values,
             degree,
             multi_chunk,
+            recover_ids,
             verbose,
         )
     # fallbacks to doing scc file io
+    if recover_ids:
+        raise NotImplementedError(
+            "function_delaunay recover_ids=True is only supported by the in-memory interface."
+        )
     if verbose:
         print(
             f"[multipers.io] backend=function_delaunay mode=disk_interface degree={degree} multi_chunk={multi_chunk}",
@@ -427,6 +434,7 @@ def function_delaunay_presentation_to_simplextree(
     clear: bool = True,
     verbose: bool = False,
     dtype=np.float64,
+    recover_ids: bool = False,
 ):
     """
     Computes a function delaunay complex and returns it as a SimplexTreeMulti.
@@ -457,7 +465,13 @@ def function_delaunay_presentation_to_simplextree(
             st,
             point_cloud,
             function_values,
+            recover_ids,
             verbose,
+        )
+
+    if recover_ids:
+        raise NotImplementedError(
+            "function_delaunay recover_ids=True is only supported by the in-memory interface."
         )
 
     # external fallback: build slicer from SCC, then convert
@@ -470,6 +484,7 @@ def function_delaunay_presentation_to_simplextree(
         verbose=verbose,
         degree=-1,
         multi_chunk=False,
+        recover_ids=False,
     )
     return to_simplextree(s)
 

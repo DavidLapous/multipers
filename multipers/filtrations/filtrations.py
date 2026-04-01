@@ -139,6 +139,7 @@ def DelaunayLowerstar(
     verbose: bool = False,
     clear: bool = True,
     flagify: bool = False,
+    recover_ids: bool = False,
 ):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
@@ -192,6 +193,7 @@ def DelaunayLowerstar(
             verbose=verbose,
             clear=clear,
             dtype=dtype,
+            recover_ids=recover_ids,
         )
     else:
         slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
@@ -202,6 +204,7 @@ def DelaunayLowerstar(
             degree=degree,
             verbose=verbose,
             clear=clear,
+            recover_ids=recover_ids,
         )
         slicer.minpres_degree = degree
     _log_step("built function-delaunay")
