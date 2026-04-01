@@ -143,6 +143,10 @@ def _make_filtration_non_decreasing(self, safe=True):
     return self._make_filtration_non_decreasing_raw(safe=safe)
 
 
+def _simplify_filtration(self):
+    return self._simplify_filtration_raw()
+
+
 def _compute_persistence(
     self, one_filtration=None, ignore_infinite_filtration_values=True, verbose=False
 ):
@@ -713,6 +717,7 @@ def _install_python_api():
         cls.dimension = property(_dimension)
         cls.info = property(_info)
         cls.make_filtration_non_decreasing = _make_filtration_non_decreasing
+        cls._simplify_filtration = _simplify_filtration
 
 
 _install_python_api()

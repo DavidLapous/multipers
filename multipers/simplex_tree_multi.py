@@ -578,6 +578,10 @@ def _clean_filtration_grid(self, api=None):
     return self
 
 
+def _simplify_filtration(self):
+    return self._simplify_filtration_raw()
+
+
 def _get_filtration_grid(
     self,
     resolution=None,
@@ -945,6 +949,7 @@ def _install_python_api():
         cls.to_scc = _to_scc_file
         cls._get_filtration_values = _get_filtration_values
         cls._clean_filtration_grid = _clean_filtration_grid
+        cls._simplify_filtration = _simplify_filtration
         cls.get_filtration_grid = _get_filtration_grid
         cls.grid_squeeze = _grid_squeeze
         cls.unsqueeze = _unsqueeze
