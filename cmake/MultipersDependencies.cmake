@@ -68,7 +68,32 @@ if(WIN32)
   set(MULTIPERS_DISABLE_AIDA_INTERFACE ON)
 endif()
 
+set(
+  MULTIPERS_GUDHI_SOURCE_DIR
+  "${CMAKE_SOURCE_DIR}/ext/gudhi-devel"
+  CACHE PATH
+  "Path to a Gudhi source checkout"
+)
+
+set(MULTIPERS_GUDHI_INCLUDE_DIRS "")
+file(GLOB _multipers_gudhi_module_include_dirs LIST_DIRECTORIES TRUE
+  "${MULTIPERS_GUDHI_SOURCE_DIR}/src/*/include"
+)
+foreach(_gudhi_include_dir IN LISTS _multipers_gudhi_module_include_dirs)
+  if(IS_DIRECTORY "${_gudhi_include_dir}")
+    list(APPEND MULTIPERS_GUDHI_INCLUDE_DIRS "${_gudhi_include_dir}")
+  endif()
+endforeach()
+
+if(NOT EXISTS "${MULTIPERS_GUDHI_SOURCE_DIR}/src/Simplex_tree/include/gudhi/Simplex_tree.h")
+  message(
+    FATAL_ERROR
+      "Missing Gudhi headers under ${MULTIPERS_GUDHI_SOURCE_DIR}. Run git submodule update --init ext/gudhi-devel"
+  )
+endif()
+
 set(MULTIPERS_BASE_INCLUDE_DIRS
+  ${MULTIPERS_GUDHI_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/multipers/gudhi"
   "${CMAKE_SOURCE_DIR}/multipers"
 )
