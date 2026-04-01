@@ -547,7 +547,10 @@ def test_slicer_grid_squeeze_roundtrip_on_gudhi_and_multipers_simplextree():
         st_sq = st_.grid_squeeze(grid)
 
         assert mp.Slicer(st_sq) == mp.Slicer(st_).grid_squeeze()
-        assert mp.Slicer(st_) == mp.Slicer(st_sq).unsqueeze()
+        assert (
+            mp.Slicer(st_)._simplify_filtration()
+            == mp.Slicer(st_sq).unsqueeze()._simplify_filtration()
+        )
 
 
 def test_astypes():

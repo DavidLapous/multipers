@@ -1735,6 +1735,19 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           "safe"_a = true,
           nb::rv_policy::reference_internal)
       .def(
+          "_simplify_filtration_raw",
+          [](Wrapper& self) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              auto& filtrations = self.truc.get_filtration_values();
+              for (auto& filtration : filtrations) {
+                filtration.simplify();
+              }
+            }
+            return self;
+          },
+          nb::rv_policy::reference_internal)
+      .def(
           "coarsen_on_grid_inplace",
           [](Wrapper& self, std::vector<std::vector<Value>> grid, bool coordinates) -> Wrapper& {
             {

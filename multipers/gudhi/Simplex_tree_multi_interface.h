@@ -420,6 +420,14 @@ class Simplex_tree_multi_interface
     }
   }
 
+  void simplify_filtration_inplace() {
+    for (const auto &simplex_handle : Base::complex_simplex_range()) {
+      auto &simplex_filtration = Base::get_filtration_value(simplex_handle);
+      simplex_filtration.simplify();
+    }
+    // Base::clear_filtration();
+  }
+
   template <typename OtherFiltrationValue>
   void copy_from_interface(intptr_t other_ptr) {
     Simplex_tree_multi_interface<OtherFiltrationValue> &other =

@@ -1110,6 +1110,16 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
              return out;
            })
       .def(
+          "_simplify_filtration_raw",
+          [](Wrapper& self) -> Wrapper& {
+            {
+              nb::gil_scoped_release release;
+              self.tree.simplify_filtration_inplace();
+            }
+            return self;
+          },
+          nb::rv_policy::reference_internal)
+      .def(
           "reset_filtration",
           [](Wrapper& self, nb::handle filtration_handle, int min_dim) -> Wrapper& {
             auto filtration = filtration_from_handle<Filtration, Value, k_is_kcritical>(filtration_handle,
