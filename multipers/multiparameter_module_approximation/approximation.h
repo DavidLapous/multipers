@@ -32,10 +32,10 @@
 #include <vector>
 
 #include "../gudhi/Persistence_slices_interface.h"
-// #include "../gudhi/gudhi/Dynamic_multi_parameter_filtration.h"
-#include "../gudhi/gudhi/Multi_persistence/Line.h"
-#include "../gudhi/gudhi/Multi_persistence/Box.h"
-#include "../gudhi/gudhi/Multi_persistence/Module.h"
+// #include <gudhi/Dynamic_multi_parameter_filtration.h>
+#include <gudhi/Multi_persistence/Line.h>
+#include <gudhi/Multi_persistence/Box.h>
+#include <gudhi/Multi_persistence/Module.h>
 // #include "../tensor/tensor.h"
 // #include "gudhi/Multi_filtration/multi_filtration_utils.h"
 // #include "utilities.h"

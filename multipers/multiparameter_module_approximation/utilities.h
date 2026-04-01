@@ -17,8 +17,8 @@
 #include <utility>
 #include <vector>
 
-#include "../gudhi/gudhi/multi_simplex_tree_helpers.h"
-#include "../gudhi/gudhi/Multi_persistence/Box.h"
+#include <gudhi/multi_simplex_tree_helpers.h>
+#include <gudhi/Multi_persistence/Box.h>
 #include "../gudhi/Persistence_slices_interface.h"
 
 namespace Gudhi::multiparameter::mma {
@@ -402,8 +402,6 @@ void inline threshold_down(point_type &point,
   }
   for (unsigned int i = 0; i < point.size(); i++) point[i] += threshold;
 }
-
-
 
 }  // namespace Gudhi::multiparameter::mma
 
