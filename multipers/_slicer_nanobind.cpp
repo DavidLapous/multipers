@@ -1508,6 +1508,33 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
             return self;
           },
           nb::rv_policy::reference_internal)
+      .def("__getstate__",
+           [](Wrapper& self) -> nb::tuple {
+             return nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
+                                   self.filtration_grid,
+                                   self.generator_basis,
+                                   self.minpres_degree);
+           })
+      .def("__reduce__",
+           [](Wrapper& self) -> nb::tuple {
+             return nb::make_tuple(
+                 nb::borrow<nb::object>(nb::type<Wrapper>()),
+                 nb::make_tuple(),
+                 nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
+                                self.filtration_grid,
+                                self.generator_basis,
+                                self.minpres_degree));
+           })
+      .def("__reduce_ex__",
+           [](Wrapper& self, int) -> nb::tuple {
+             return nb::make_tuple(
+                 nb::borrow<nb::object>(nb::type<Wrapper>()),
+                 nb::make_tuple(),
+                 nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
+                                self.filtration_grid,
+                                self.generator_basis,
+                                self.minpres_degree));
+           })
       .def("_serialize_state",
            [](Wrapper& self) -> nb::object {
              return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);

@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/make_iterator.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
@@ -8,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <new>
 #include <optional>
@@ -328,9 +330,28 @@ struct PyBox {
 };
 
 template <typename T>
-struct PyModuleIterator {
-  PyModule<T>* module = nullptr;
+struct ModuleSummandIterator {
+  using iterator_category = std::input_iterator_tag;
+  using value_type = PySummand<T>;
+  using difference_type = std::ptrdiff_t;
+
+  Gudhi::multi_persistence::Module<T>* module = nullptr;
   size_t index = 0;
+
+  value_type operator*() const {
+    value_type out;
+    out.sum = module->get_summand((unsigned int)index);
+    return out;
+  }
+
+  ModuleSummandIterator& operator++() {
+    ++index;
+    return *this;
+  }
+
+  bool operator==(const ModuleSummandIterator& other) const { return module == other.module && index == other.index; }
+
+  bool operator!=(const ModuleSummandIterator& other) const { return !(*this == other); }
 };
 
 template <typename Wrapper>
@@ -623,7 +644,6 @@ void bind_mma_type(nb::module_& m) {
   using WrapperSum = PySummand<T>;
   using WrapperBox = PyBox<T>;
   using WrapperMod = PyModule<T>;
-  using WrapperIter = PyModuleIterator<T>;
 
   nb::class_<WrapperSum>(m, Desc::summand_name.data())
       .def(nb::init<>())
@@ -720,17 +740,6 @@ void bind_mma_type(nb::module_& m) {
       .def_prop_ro("dtype", [](const WrapperBox&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
 
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
-  nb::class_<WrapperIter>(m, iterator_name.c_str())
-      .def(
-          "__iter__", [](WrapperIter& self) -> WrapperIter& { return self; }, nb::rv_policy::reference_internal)
-      .def("__next__", [](WrapperIter& self) {
-        if (self.module == nullptr || self.index >= self.module->mod.size()) {
-          throw nb::stop_iteration();
-        }
-        WrapperSum out;
-        out.sum = self.module->mod.get_summand((unsigned int)self.index++);
-        return out;
-      });
 
   auto module_cls =
       nb::class_<WrapperMod>(m, Desc::module_name.data())
@@ -749,8 +758,10 @@ void bind_mma_type(nb::module_& m) {
           .def_prop_ro("_template_id", [](const WrapperMod&) -> int { return Desc::template_id; })
           .def("__getitem__",
                [](WrapperMod& self, nb::object key) -> nb::object {
-                 if (PySlice_Check(key.ptr())) {
-                   if (key.attr("start").is_none() && key.attr("stop").is_none() && key.attr("step").is_none()) {
+                 if (nb::isinstance<nb::slice>(key)) {
+                   auto [start, stop, step, length] = nb::cast<nb::slice>(key).compute(self.mod.size());
+                   if (start == 0 && stop == static_cast<Py_ssize_t>(self.mod.size()) && step == 1 &&
+                       length == self.mod.size()) {
                      return self_handle(self);
                    }
                    throw nb::index_error("Only [:] slices are supported.");
@@ -772,11 +783,11 @@ void bind_mma_type(nb::module_& m) {
                })
           .def(
               "__iter__",
-              [](WrapperMod& self) {
-                WrapperIter out;
-                out.module = &self;
-                out.index = 0;
-                return out;
+              [iterator_name](WrapperMod& self) {
+                return nb::make_iterator(nb::type<WrapperMod>(),
+                                         iterator_name.c_str(),
+                                         ModuleSummandIterator<T>{&self.mod, 0},
+                                         ModuleSummandIterator<T>{&self.mod, self.mod.size()});
               },
               nb::keep_alive<0, 1>())
           .def(

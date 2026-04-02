@@ -925,9 +925,7 @@ def _install_python_api():
         cls.__repr__ = _repr
         cls.__len__ = _len
         cls.__deepcopy__ = _deepcopy
-        cls.__getstate__ = _getstate
         cls.__setstate__ = _setstate
-        cls.__reduce__ = _reduce
         cls.copy = _copy
         cls.filtration = _filtration
         cls.__getitem__ = _getitem

@@ -851,6 +851,20 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                 return self;
               },
               nb::rv_policy::reference_internal)
+          .def("__getstate__",
+               [](Wrapper& self) -> nb::tuple { return nb::make_tuple(serialized_state(self), self.filtration_grid); })
+          .def("__reduce__",
+               [](Wrapper& self) -> nb::tuple {
+                 return nb::make_tuple(nb::borrow<nb::object>(nb::type<Wrapper>()),
+                                       nb::make_tuple(),
+                                       nb::make_tuple(serialized_state(self), self.filtration_grid));
+               })
+          .def("__reduce_ex__",
+               [](Wrapper& self, int) -> nb::tuple {
+                 return nb::make_tuple(nb::borrow<nb::object>(nb::type<Wrapper>()),
+                                       nb::make_tuple(),
+                                       nb::make_tuple(serialized_state(self), self.filtration_grid));
+               })
           .def("_serialize_state", [](Wrapper& self) -> nb::object { return serialized_state(self); })
           .def(
               "_deserialize_state",

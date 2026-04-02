@@ -1,6 +1,7 @@
 #include "ext_interface/nanobind_registry_runtime.hpp"
 
 #include "ext_interface/nanobind_registry_helpers.hpp"
+#include "simplextree_conversion_core.hpp"
 
 namespace nb = nanobind;
 
@@ -51,6 +52,18 @@ nb::object ensure_canonical_slicer_object_impl(const nb::object& input, IsCanoni
   return out;
 }
 
+template <typename TargetDesc, typename SourceDesc>
+simplextree_wrapper_t<TargetDesc> construct_from_simplextree_wrapper(const simplextree_wrapper_t<SourceDesc>& source) {
+  simplextree_wrapper_t<TargetDesc> out;
+  {
+    nb::gil_scoped_release release;
+    multipers::core::SimplexTreeConversion<typename TargetDesc::interface_type,
+                                           typename SourceDesc::interface_type>::run(out.tree, source.tree);
+  }
+  out.filtration_grid = source.filtration_grid;
+  return out;
+}
+
 }  // namespace
 
 nb::object astype_slicer_to_template_id(const nb::object& source, int template_id) {
@@ -64,9 +77,12 @@ nb::object astype_simplextree_to_template_id(const nb::object& source, int templ
   if (template_id_of(source) == template_id) {
     return source;
   }
-  nb::object out = simplextree_class_from_template_id(template_id)();
-  out.attr("_copy_from_any")(source);
-  return out;
+  return dispatch_simplextree_by_template_id(template_id, [&]<typename TargetDesc>() -> nb::object {
+    return visit_const_simplextree_wrapper(
+        source, [&]<typename SourceDesc>(const simplextree_wrapper_t<SourceDesc>& wrapper) {
+          return nb::cast(construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(wrapper));
+        });
+  });
 }
 
 nb::object astype_slicer_to_original_type(const nb::object& original, const nb::object& source) {

@@ -43,10 +43,6 @@ AVAILABLE_MMA_FLOAT_DTYPES = tuple(
 )
 
 
-def _reconstruct_module(loader_name: str, state):
-    return getattr(_mma, loader_name)(state)
-
-
 def _module_bc_to_full(bcs, basepoint, direction=None):
     basepoint = np.asarray(basepoint)[None, None, :]
     direction = 1 if direction is None else np.asarray(direction)[None, None, :]

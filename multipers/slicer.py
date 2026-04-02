@@ -703,7 +703,6 @@ def _install_python_api():
     for cls in available_slicers:
         _eq_raw.setdefault(cls, cls.__eq__)
         cls.__repr__ = _repr
-        cls.__getstate__ = _getstate
         cls.__setstate__ = _setstate
         cls.__eq__ = _eq_raw[cls]
         cls.astype = _astype
