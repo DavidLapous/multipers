@@ -813,7 +813,6 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); },
               [adopt_ptr](Wrapper& self, intptr_t ptr) { adopt_ptr(self, ptr); })
           .def("_from_ptr", adopt_ptr, nb::rv_policy::reference_internal)
-          .def("_from_interface_ptr", adopt_ptr, nb::rv_policy::reference_internal)
           .def(
               "_copy_from_any",
               [](Wrapper& self, nb::handle other) -> Wrapper& {
