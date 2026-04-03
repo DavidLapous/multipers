@@ -10,13 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+#include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "nanobind_array_utils.hpp"
-
-#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 #include "multi_critical/basic.h"
 #include "multi_chunk/basic.h"
 #include "mpp_utils/basic.h"
