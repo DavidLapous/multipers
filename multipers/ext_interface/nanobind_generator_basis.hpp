@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "contiguous_slicer_bridge.hpp"
+
 namespace multipers::nanobind_helpers {
 
 struct GeneratorBasisData {
@@ -174,6 +176,30 @@ nanobind::object generator_basis_object_from_degree_rows(const Wrapper& input_wr
                                                          const char* backend_name) {
   return generator_basis_to_python_object(
       generator_basis_from_degree_rows(input_wrapper, degree, generator_matrix, backend_name));
+}
+
+template <typename Wrapper, typename ComplexFactory, typename ResultFactory>
+nanobind::object build_minpres_slicer_output_for_target(nanobind::object target,
+                                                        const Wrapper& input_wrapper,
+                                                        int degree,
+                                                        bool keep_generators,
+                                                        const char* backend_name,
+                                                        ComplexFactory&& compute_complex,
+                                                        ResultFactory&& compute_with_generators) {
+  nanobind::object out = target.type()();
+  auto& out_wrapper = nanobind::cast<Wrapper&>(out);
+
+  if (!keep_generators) {
+    auto complex = std::forward<ComplexFactory>(compute_complex)();
+    build_slicer_from_complex(out_wrapper.truc, complex);
+    return out;
+  }
+
+  auto result = std::forward<ResultFactory>(compute_with_generators)();
+  build_slicer_from_complex(out_wrapper.truc, result.first);
+  out_wrapper.generator_basis = generator_basis_object_from_degree_rows(
+      input_wrapper, degree, result.second, backend_name);
+  return out;
 }
 
 }  // namespace multipers::nanobind_helpers

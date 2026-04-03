@@ -13,6 +13,7 @@
 
 #if !MULTIPERS_DISABLE_HERA_INTERFACE
 #include "ext_interface/nanobind_registry_helpers.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
 namespace nb = nanobind;
@@ -54,32 +55,13 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
           throw std::runtime_error("Matching distance expects 1-critical minimal-presentation slicers.");
         }
 
-        const auto dimensions = wrapper.truc.get_dimensions();
-        const auto& filtrations = wrapper.truc.get_filtration_values();
-        const auto& boundaries = wrapper.truc.get_boundaries();
-        int degree = wrapper.minpres_degree;
+        auto block = multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(
+            wrapper, wrapper.minpres_degree);
 
         multipers::hera_module_presentation_input<int> out;
-        size_t row_start = std::lower_bound(dimensions.begin(), dimensions.end(), degree) - dimensions.begin();
-        size_t row_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 1) - dimensions.begin();
-        size_t col_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 2) - dimensions.begin();
-
-        out.generator_grades.reserve(row_end - row_start);
-        for (size_t i = row_start; i < row_end; ++i) {
-          out.generator_grades.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
-        }
-        out.relation_grades.reserve(col_end - row_end);
-        out.relation_components.resize(col_end - row_end);
-        for (size_t i = row_end; i < col_end; ++i) {
-          out.relation_grades.emplace_back(filtrations[i](0, 0), filtrations[i](0, 1));
-          for (auto boundary_index : boundaries[i]) {
-            if (boundary_index < static_cast<int>(row_start) || boundary_index >= static_cast<int>(row_end)) {
-              throw std::runtime_error(
-                  "Invalid minimal presentation slicer: relation boundaries must reference degree-d generators only.");
-            }
-            out.relation_components[i - row_end].push_back(boundary_index - static_cast<int>(row_start));
-          }
-        }
+        out.generator_grades = std::move(block.row_grades);
+        out.relation_grades = std::move(block.relation_grades);
+        out.relation_components = multipers::nanobind_helpers::localize_degree_block_relation_boundaries(block);
         return out;
       });
 #else

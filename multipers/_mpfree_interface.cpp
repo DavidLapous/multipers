@@ -31,22 +31,20 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool backend_stdout,
                                            bool keep_generators) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
-  nb::object out = target.type()();
-  auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
-
-  if (!keep_generators) {
-    auto complex = multipers::mpfree_minpres_contiguous_interface(
-        input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
-    multipers::build_slicer_from_complex(out_wrapper.truc, complex);
-    return out;
-  }
-
-  auto result = multipers::mpfree_minpres_with_generators_contiguous_interface(
-      input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
-  multipers::build_slicer_from_complex(out_wrapper.truc, result.first);
-  out_wrapper.generator_basis = multipers::nanobind_helpers::generator_basis_object_from_degree_rows(
-      input_wrapper, degree, result.second, "mpfree");
-  return out;
+  return multipers::nanobind_helpers::build_minpres_slicer_output_for_target(
+      target,
+      input_wrapper,
+      degree,
+      keep_generators,
+      "mpfree",
+      [&] {
+        return multipers::mpfree_minpres_contiguous_interface(
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+      },
+      [&] {
+        return multipers::mpfree_minpres_with_generators_contiguous_interface(
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+      });
 }
 
 }  // namespace mpmi

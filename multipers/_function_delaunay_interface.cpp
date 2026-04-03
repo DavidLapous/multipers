@@ -59,9 +59,7 @@ nb::object function_delaunay_to_slicer_for_target(nb::object target,
                                                   bool multi_chunk,
                                                   bool verbose) {
   auto complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
-  auto& wrapper = nb::cast<CanonicalWrapper&>(target);
-  multipers::build_slicer_from_complex(wrapper.truc, complex);
-  return target;
+  return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
 }
 
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,

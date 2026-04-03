@@ -15,7 +15,6 @@ from multipers.slicer import (
     Slicer_type,
     _hilbert_signed_measure,
     _rank_from_slicer,
-    _signed_measure_from_scc,
     _signed_measure_from_slicer,
     is_slicer,
 )

@@ -7,12 +7,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cmath>
-#include <filesystem>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -52,7 +49,6 @@ using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, st
 using multipers::core::SlicerConversion;
 using multipers::nanobind_dense_utils::matrix_from_array;
 using multipers::nanobind_dense_utils::vector_from_array;
-using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
 using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
 using multipers::nanobind_helpers::is_simplextree_object;
 using multipers::nanobind_helpers::is_slicer_object;
@@ -75,9 +71,7 @@ using multipers::nanobind_helpers::visit_simplextree_wrapper;
 using multipers::nanobind_mma_helpers::canonical_double_mma_desc;
 using multipers::nanobind_mma_helpers::module_wrapper_t;
 using multipers::nanobind_utils::cast_matrix;
-using multipers::nanobind_utils::cast_tensor3;
 using multipers::nanobind_utils::cast_vector;
-using multipers::nanobind_utils::has_template_id;
 using multipers::nanobind_utils::lowercase_copy;
 using multipers::nanobind_utils::numpy_dtype_name;
 using multipers::nanobind_utils::numpy_dtype_type;
