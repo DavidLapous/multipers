@@ -45,9 +45,7 @@ nb::object ensure_canonical_slicer_object_impl(const nb::object& input, IsCanoni
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
   copy_into_canonical_slicer_impl(input, out_wrapper.truc);
   visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
-    out_wrapper.filtration_grid = source.filtration_grid;
-    out_wrapper.generator_basis = source.generator_basis;
-    out_wrapper.minpres_degree = source.minpres_degree;
+    copy_slicer_python_state(out_wrapper, source);
   });
   return out;
 }
@@ -60,7 +58,7 @@ simplextree_wrapper_t<TargetDesc> construct_from_simplextree_wrapper(const simpl
     multipers::core::SimplexTreeConversion<typename TargetDesc::interface_type,
                                            typename SourceDesc::interface_type>::run(out.tree, source.tree);
   }
-  out.filtration_grid = source.filtration_grid;
+  copy_simplextree_python_state(out, source);
   return out;
 }
 
@@ -87,6 +85,15 @@ nb::object astype_simplextree_to_template_id(const nb::object& source, int templ
 
 nb::object astype_slicer_to_original_type(const nb::object& original, const nb::object& source) {
   return astype_slicer_to_template_id(source, template_id_of(original));
+}
+
+nb::object rewrap_slicer_output_to_original_type(const nb::object& original,
+                                                 const nb::object& canonical_target,
+                                                 const nb::object& output) {
+  if (canonical_target.ptr() == original.ptr()) {
+    return output;
+  }
+  return astype_slicer_to_original_type(original, output);
 }
 
 nb::object astype_simplextree_to_original_type(const nb::object& original, const nb::object& source) {

@@ -563,19 +563,7 @@ def _get_filtration_values(self, degrees=(-1,), inf_to_nan=False, return_raw=Fal
 def _clean_filtration_grid(self, api=None):
     if not self.is_squeezed:
         raise ValueError("No grid to clean.")
-    filtration_grid = self.filtration_grid
-    if api is None:
-        api = api_from_tensor(filtration_grid[0])
-    self.filtration_grid = None
-    cleaned_coordinates = tuple(
-        np.asarray(coords, dtype=np.int32) for coords in compute_grid(self)
-    )
-    new_st = self.grid_squeeze(cleaned_coordinates)
-    self._copy_from_any(new_st)
-    self.filtration_grid = tuple(
-        api.ascontiguous(f[g]) for f, g in zip(filtration_grid, cleaned_coordinates)
-    )
-    return self
+    return self._clean_filtration_grid_raw()
 
 
 def _simplify_filtration(self):

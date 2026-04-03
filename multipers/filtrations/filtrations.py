@@ -229,7 +229,7 @@ def DelaunayLowerstar(
             zero = api.zeros(1, dtype=distances.dtype)
             zero = api.to_device(zero, api.device(distances))
             distance_values = api.cat([distances, zero])
-            grid = get_exact_grid([distance_values, function])
+            grid = get_exact_grid([distance_values, function], api=api)
             _log_step("computed exact grid")
             slicer = slicer.grid_squeeze(grid)
             _log_step("grid-squeezed")

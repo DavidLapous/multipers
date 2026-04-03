@@ -12,6 +12,7 @@ import multipers
 import multipers.logs as _mp_logs
 from multipers import _slicer_nanobind as _nb
 from multipers.array_api import api_from_tensor, api_from_tensors
+import multipers.array_api.numpy as npapi
 from multipers.grids import (
     compute_grid,
     evaluate_in_grid,
@@ -340,7 +341,7 @@ def _setstate(self, dump):
         generator_basis = None
         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
         copy = type(self)(boundaries, dimensions, filtrations)
-        self._from_ptr(copy.get_ptr())
+        self._copy_from_any(copy)
     self.minpres_degree = minpres_degree
     self.filtration_grid = filtration_grid
     self._generator_basis = generator_basis
@@ -432,20 +433,17 @@ def _grid_squeeze(
             threshold_max=threshold_max,
         )
     api = api_from_tensor(filtration_grid[0]) if len(filtration_grid) else None
-    if api is None or api.__name__.endswith("numpy"):
-        grid = tuple(np.asarray(g, dtype=self.dtype) for g in filtration_grid)
-        c_grid = grid
-    else:
-        grid = tuple(api.ascontiguous(g) for g in filtration_grid)
-        c_grid = tuple(api.asnumpy(g, dtype=self.dtype) for g in grid)
+    c_grid = [
+        np.ascontiguousarray(api.asnumpy(g, dtype=self.dtype)) for g in filtration_grid
+    ]
     if inplace or not coordinates:
         self.coarsen_on_grid_inplace(c_grid, coordinates)
         if coordinates:
-            self.filtration_grid = sanitize_grid(grid)
+            self.filtration_grid = sanitize_grid(filtration_grid, api=api)
         return self
     out = self.coarsen_on_grid_copy(c_grid)
     if coordinates:
-        out.filtration_grid = sanitize_grid(grid)
+        out.filtration_grid = sanitize_grid(filtration_grid, api=api)
     out.minpres_degree = self.minpres_degree
     return out
 
@@ -453,18 +451,7 @@ def _grid_squeeze(
 def _clean_filtration_grid(self):
     if not self.is_squeezed:
         raise ValueError("No grid to clean.")
-    filtration_grid = self.filtration_grid
-    self.filtration_grid = None
-    cleaned_coordinates = tuple(
-        np.asarray(coords, dtype=np.int32) for coords in compute_grid(self)
-    )
-    new_slicer = self.copy()
-    new_slicer.grid_squeeze(cleaned_coordinates, inplace=True)
-    self._from_ptr(new_slicer.get_ptr())
-    self.filtration_grid = tuple(
-        f[g] for f, g in zip(filtration_grid, cleaned_coordinates)
-    )
-    return self
+    return self._clean_filtration_grid_raw()
 
 
 def _minpres(

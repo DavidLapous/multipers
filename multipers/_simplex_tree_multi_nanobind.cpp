@@ -37,12 +37,18 @@ using tensor_dtype = int32_t;
 using indices_type = int32_t;
 using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>;
 
+using multipers::nanobind_helpers::cast_squeezed_coordinate_grid;
+using multipers::nanobind_helpers::compact_squeezed_filtration_grid;
 using multipers::core::SimplexTreeConversion;
+using multipers::nanobind_helpers::copy_simplextree_python_state;
 using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
 using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
+using multipers::nanobind_helpers::has_nonempty_filtration_grid;
 using multipers::nanobind_helpers::is_simplextree_object;
 using multipers::nanobind_helpers::is_slicer_object;
 using multipers::nanobind_helpers::PySimplexTree;
+using multipers::nanobind_helpers::reset_simplextree_python_state;
+using multipers::nanobind_helpers::squeezed_raw_index_from_value;
 using multipers::nanobind_helpers::simplextree_wrapper_t;
 using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::SlicerDescriptorList;
@@ -256,7 +262,7 @@ void build_from_slicer_desc(Wrapper& self, const typename Desc::wrapper& source,
     nb::gil_scoped_release release;
     copy_simplicial_slicer_to_simplextree<Interface>(self.tree, source.truc, max_dim);
   }
-  self.filtration_grid = nb::list();
+  reset_simplextree_python_state(self);
 }
 
 template <typename Wrapper, typename Interface>
@@ -633,7 +639,7 @@ void copy_from_desc(TargetWrapper& self, const simplextree_wrapper_t<Desc>& sour
     nb::gil_scoped_release release;
     SimplexTreeConversion<TargetInterface, typename Desc::interface_type>::run(self.tree, source.tree);
   }
-  self.filtration_grid = source.filtration_grid;
+  copy_simplextree_python_state(self, source);
 }
 
 template <typename TargetWrapper, typename TargetInterface>
@@ -645,6 +651,37 @@ bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
     copy_from_desc<D, TargetWrapper, TargetInterface>(self, wrapper);
   });
   return true;
+}
+
+template <typename Wrapper>
+std::vector<std::vector<int64_t>> collect_used_squeezed_coordinates(Wrapper& self) {
+  std::vector<std::vector<int64_t>> used_coordinates(static_cast<size_t>(self.tree.num_parameters()));
+  for (auto simplex_handle : self.tree.complex_simplex_range()) {
+    auto pair = self.tree.get_simplex_and_filtration(simplex_handle);
+    const auto& filtration = *pair.second;
+    for (size_t generator = 0; generator < filtration.num_generators(); ++generator) {
+      for (size_t parameter = 0; parameter < used_coordinates.size(); ++parameter) {
+        used_coordinates[parameter].push_back(
+            squeezed_raw_index_from_value(static_cast<double>(filtration(generator, parameter)), parameter));
+      }
+    }
+  }
+  return used_coordinates;
+}
+
+template <typename Wrapper>
+Wrapper& clean_squeezed_filtration_grid_inplace(Wrapper& self) {
+  if (!has_nonempty_filtration_grid(self.filtration_grid)) {
+    throw std::runtime_error("No grid to clean.");
+  }
+  auto compacted = compact_squeezed_filtration_grid(self.filtration_grid, collect_used_squeezed_coordinates(self));
+  auto coordinate_grid = cast_squeezed_coordinate_grid<double>(compacted.coordinates);
+  {
+    nb::gil_scoped_release release;
+    self.tree.squeeze_filtration_inplace(coordinate_grid, true);
+  }
+  self.filtration_grid = compacted.filtration_grid;
+  return self;
 }
 
 template <typename TargetDesc, typename SourceDesc>
@@ -1053,12 +1090,16 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
             return self;
           },
           nb::rv_policy::reference_internal)
+      .def(
+          "_clean_filtration_grid_raw",
+          [](Wrapper& self) -> Wrapper& { return clean_squeezed_filtration_grid_inplace(self); },
+          nb::rv_policy::reference_internal)
       .def("_squeeze_to",
            [](Wrapper& self, Wrapper& out, nb::handle grid_handle) {
              auto grid = matrix_from_handle<double>(grid_handle);
              {
                nb::gil_scoped_release release;
-               self.tree.squeeze_filtration(reinterpret_cast<intptr_t>(&out.tree), grid);
+               self.tree.squeeze_filtration_to(out.tree, grid);
              }
            })
       .def("_unsqueeze_to",
@@ -1066,7 +1107,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
              auto grid = matrix_from_handle<double>(grid_handle);
              {
                nb::gil_scoped_release release;
-               out.tree.unsqueeze_filtration(reinterpret_cast<intptr_t>(&self.tree), grid);
+               out.tree.unsqueeze_filtration_from(self.tree, grid);
              }
            })
       .def("num_vertices", [](Wrapper& self) -> int { return self.tree.num_vertices(); })

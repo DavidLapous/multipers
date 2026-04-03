@@ -368,9 +368,7 @@ class Simplex_tree_multi_interface
   }
 
   template <typename Line_like>
-  void to_std(intptr_t ptr, const Line_like &line, int dimension) {
-    auto &st = get_simplextree_from_pointer<interface_std>(ptr);
-
+  void to_std_object(interface_std &st, const Line_like &line, int dimension) {
     for (const auto &simplex_handle : this->complex_simplex_range()) {
       std::vector<int> simplex;
       for (auto vertex : this->simplex_vertex_range(simplex_handle)) simplex.push_back(vertex);
@@ -384,17 +382,27 @@ class Simplex_tree_multi_interface
   }
 
   template <typename Line_like>
+  void to_std(intptr_t ptr, const Line_like &line, int dimension) {
+    auto &st = get_simplextree_from_pointer<interface_std>(ptr);
+    to_std_object(st, line, dimension);
+  }
+
+  template <typename Line_like>
   std::vector<char> get_to_std_state(const Line_like &line, int dimension) {
     interface_std st;
-    to_std(reinterpret_cast<intptr_t>(&st), line, dimension);
+    to_std_object(st, line, dimension);
     std::vector<char> buffer(st.get_serialization_size());
     st.serialize(buffer.data(), buffer.size());
     return buffer;
   }
 
+  void to_std_linear_projection_object(interface_std &st, std::vector<double> linear_form) {
+    linear_projection(st, *this, linear_form);
+  }
+
   void to_std_linear_projection(intptr_t ptr, std::vector<double> linear_form) {
     auto &st = get_simplextree_from_pointer<interface_std>(ptr);
-    linear_projection(st, *this, linear_form);
+    to_std_linear_projection_object(st, linear_form);
   }
 
   std::vector<char> get_to_std_linear_projection_state(const std::vector<double> &linear_form) {
@@ -428,18 +436,22 @@ class Simplex_tree_multi_interface
     // Base::clear_filtration();
   }
 
-  template <typename OtherFiltrationValue>
-  void copy_from_interface(intptr_t other_ptr) {
-    Simplex_tree_multi_interface<OtherFiltrationValue> &other =
-        *(Simplex_tree_multi_interface<OtherFiltrationValue> *)(other_ptr);
+  template <typename OtherFiltrationValue, typename OtherValueType>
+  void copy_from_interface_object(const Simplex_tree_multi_interface<OtherFiltrationValue, OtherValueType> &other) {
     Base::clear();
     Base::set_num_parameters(other.num_parameters());
     Base::copy_from(other,
                     [](const auto &fil) { return fil.template as_type<typename Filtration_value::value_type>(); });
   }
 
-  void unsqueeze_filtration(const intptr_t grid_st_ptr, const std::vector<std::vector<double>> &grid) {
-    Simplex_tree_multi_interface &grid_st = *(Simplex_tree_multi_interface *)grid_st_ptr;
+  template <typename OtherFiltrationValue>
+  void copy_from_interface(intptr_t other_ptr) {
+    Simplex_tree_multi_interface<OtherFiltrationValue> &other =
+        *(Simplex_tree_multi_interface<OtherFiltrationValue> *)(other_ptr);
+    copy_from_interface_object(other);
+  }
+
+  void unsqueeze_filtration_from(const Simplex_tree_multi_interface &grid_st, const std::vector<std::vector<double>> &grid) {
     Base::clear();
     Base::set_num_parameters(grid_st.num_parameters());
     int num_parameters = grid_st.num_parameters();
@@ -471,14 +483,24 @@ class Simplex_tree_multi_interface
     });
   }
 
-  void squeeze_filtration(const intptr_t outptr, const std::vector<std::vector<double>> &grid) {
-    using int_fil_type = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
-    using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
-    st_coord_type &out = *(st_coord_type *)outptr;
+  void unsqueeze_filtration(const intptr_t grid_st_ptr, const std::vector<std::vector<double>> &grid) {
+    Simplex_tree_multi_interface &grid_st = *(Simplex_tree_multi_interface *)grid_st_ptr;
+    unsqueeze_filtration_from(grid_st, grid);
+  }
+
+  template <typename OutSimplexTree>
+  void squeeze_filtration_to(OutSimplexTree &out, const std::vector<std::vector<double>> &grid) {
     out.clear();
     out.set_num_parameters(Base::num_parameters());
     out.copy_from(
         *this, [&](const auto &simplex_filtration) { return compute_coordinates_in_grid(simplex_filtration, grid); });
+  }
+
+  void squeeze_filtration(const intptr_t outptr, const std::vector<std::vector<double>> &grid) {
+    using int_fil_type = decltype(std::declval<Filtration_value>().template as_type<std::int32_t>());
+    using st_coord_type = Simplex_tree_multi_interface<int_fil_type, int32_t>;
+    st_coord_type &out = *(st_coord_type *)outptr;
+    squeeze_filtration_to(out, grid);
   }
 
   std::vector<std::vector<std::vector<value_type>>>  // dim, pts, param

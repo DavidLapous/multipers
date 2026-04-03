@@ -9,8 +9,7 @@ namespace multipers::core {
 template <class TargetInterface, class SourceInterface>
 struct SimplexTreeConversion {
   static void run(TargetInterface& target, const SourceInterface& source) {
-    target.template copy_from_interface<typename SourceInterface::Filtration_value>(
-        reinterpret_cast<intptr_t>(const_cast<SourceInterface*>(&source)));
+    target.copy_from_interface_object(source);
   }
 };
 

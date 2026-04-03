@@ -2,6 +2,7 @@ from contextlib import nullcontext
 from functools import wraps
 
 import numpy as _np
+from scipy.special import logsumexp as _sp_logsumexp
 import multipers.logs as _mp_logs
 
 backend = _np
@@ -89,6 +90,14 @@ def mean(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
     return _np.mean(x, axis=axis, **kwargs)
+
+
+def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if axis is None:
+        axis = dim
+    if keepdim is None:
+        keepdim = keepdims
+    return _sp_logsumexp(x, axis=axis, keepdims=keepdim)
 
 
 def norm(x, axis=None, dim=None, **kwargs):

@@ -23,10 +23,6 @@ inline void set_backend_stdout(bool enabled) { mpfree::verbose = enabled; }
 
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
-inline nb::object ensure_supported_target(nb::object slicer) {
-  return multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
-}
-
 nb::object minimal_presentation_for_target(nb::object target,
                                            int degree,
                                            bool full_resolution,
@@ -48,8 +44,8 @@ nb::object minimal_presentation_for_target(nb::object target,
   auto result = multipers::mpfree_minpres_with_generators_contiguous_interface(
       input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
   multipers::build_slicer_from_complex(out_wrapper.truc, result.first);
-  out.attr("_generator_basis") =
-      multipers::nanobind_helpers::generator_basis_from_degree_rows(input_wrapper, degree, result.second, "mpfree");
+  out_wrapper.generator_basis = multipers::nanobind_helpers::generator_basis_object_from_degree_rows(
+      input_wrapper, degree, result.second, "mpfree");
   return out;
 }
 
@@ -94,13 +90,12 @@ NB_MODULE(_mpfree_interface, m) {
         if (!multipers::mpfree_interface_available()) {
           throw std::runtime_error("mpfree in-memory interface is not available.");
         }
-        nb::object target = mpmi::ensure_supported_target(slicer);
-        nb::object out = mpmi::minimal_presentation_for_target(
-            target, degree, full_resolution, use_clearing, use_chunk, backend_stdout, keep_generators);
-        if (target.ptr() == slicer.ptr()) {
-          return out;
-        }
-        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
+        return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
+            slicer,
+            [&](const nb::object& target) {
+              return mpmi::minimal_presentation_for_target(
+                  target, degree, full_resolution, use_clearing, use_chunk, backend_stdout, keep_generators);
+            });
 #endif
       },
       "slicer"_a,

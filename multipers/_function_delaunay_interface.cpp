@@ -34,8 +34,7 @@ void build_function_delaunay_simplextree(Wrapper& wrapper,
   Interface output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
   {
     nb::gil_scoped_release release;
-    wrapper.tree.template copy_from_interface<typename Interface::Filtration_value>(
-        reinterpret_cast<intptr_t>(&output));
+    wrapper.tree.copy_from_interface_object(output);
   }
 }
 
@@ -94,12 +93,11 @@ NB_MODULE(_function_delaunay_interface, m) {
         throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
 #else
         auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
-        nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
-        nb::object out = mpfd::function_delaunay_to_slicer_for_target(target, input, degree, multi_chunk, verbose);
-        if (target.ptr() == slicer.ptr()) {
-          return out;
-        }
-        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
+        return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
+            slicer,
+            [&](const nb::object& target) {
+              return mpfd::function_delaunay_to_slicer_for_target(target, input, degree, multi_chunk, verbose);
+            });
 #endif
       },
       "slicer"_a,

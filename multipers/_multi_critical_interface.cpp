@@ -12,6 +12,7 @@
 
 #include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
+#include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "nanobind_array_utils.hpp"
 
@@ -319,7 +320,7 @@ nb::tuple output_to_raw_arrays(const multipers::multi_critical_interface_output<
                         owned_array<double>(std::move(grades), {output.filtration_values.size(), size_t(2)}));
 }
 
-nb::object output_to_slicer(nb::object slicer_type,
+nb::object output_to_slicer(int target_template_id,
                             const multipers::multi_critical_interface_output<int>& output,
                             bool mark_minpres = false,
                             int degree = -1) {
@@ -327,14 +328,14 @@ nb::object output_to_slicer(nb::object slicer_type,
   if (mark_minpres) {
     for (auto& d : dims) d -= 1;
   }
-  nb::list boundaries;
-  for (const auto& row : output.boundaries) boundaries.append(nb::cast(row));
-  std::vector<std::vector<double>> filtrations;
-  filtrations.reserve(output.filtration_values.size());
-  for (const auto& p : output.filtration_values) filtrations.push_back({p.first, p.second});
-  nb::object out = slicer_type(boundaries, nb::cast(dims), nb::cast(filtrations));
-  if (mark_minpres) out.attr("minpres_degree") = degree;
-  return out;
+  auto complex = multipers::build_contiguous_f64_slicer_from_output(output.filtration_values, output.boundaries, dims);
+  nb::object canonical_out = nb::borrow<nb::object>(nb::type<CanonicalWrapper>())();
+  auto& canonical_wrapper = nb::cast<CanonicalWrapper&>(canonical_out);
+  multipers::build_slicer_from_complex(canonical_wrapper.truc, complex);
+  if (mark_minpres) {
+    canonical_wrapper.minpres_degree = degree;
+  }
+  return multipers::nanobind_helpers::astype_slicer_to_template_id(canonical_out, target_template_id);
 }
 
 }  // namespace mpmc
@@ -368,11 +369,8 @@ NB_MODULE(_multi_critical_interface, m) {
 
   m.def("_is_available", []() {
     if (!multipers::multi_critical_interface_available()) return false;
-    auto slicer_module = nb::module_::import_("multipers.slicer");
-    for (nb::handle container : nb::iter(slicer_module.attr("available_filtration_container"))) {
-      if (nb::cast<std::string>(container) == "Flat") return true;
-    }
-    return false;
+    return multipers::nanobind_helpers::has_slicer_filtration_container(
+        multipers::nanobind_helpers::SlicerDescriptorList{}, "Flat");
   });
 
   m.def("_set_backend_stdout", [](bool enabled) { mpmc::set_backend_stdout(enabled); }, "enabled"_a);
@@ -397,30 +395,26 @@ NB_MODULE(_multi_critical_interface, m) {
           throw std::runtime_error("Algo should be path or tree.");
         }
         bool swedish = swedish_obj.is_none() ? !degree_obj.is_none() : nb::cast<bool>(swedish_obj);
-        auto mp_module = nb::module_::import_("multipers");
-        nb::object slicer_factory = mp_module.attr("Slicer");
-        nb::object new_slicer_type = slicer_factory(slicer,
-                                                    "return_type_only"_a = true,
-                                                    "kcritical"_a = kcritical,
-                                                    "filtration_container"_a = filtration_container);
+        int target_template_id =
+            multipers::nanobind_helpers::related_slicer_template_id(slicer, kcritical, filtration_container);
         nb::object input_slicer = multipers::nanobind_helpers::ensure_canonical_kcontiguous_f64_slicer_object(slicer);
         auto& input_wrapper = nb::cast<mpmc::CanonicalWrapper&>(input_slicer);
         auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
         if (!reduce) {
           auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, backend_stdout);
-          return mpmc::output_to_slicer(new_slicer_type, out, false, -1);
+          return mpmc::output_to_slicer(target_template_id, out, false, -1);
         }
         if (degree_obj.is_none()) {
           auto outs =
               multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, backend_stdout, swedish);
           return nb::object(mpmc::tuple_from_size(outs.size() > 0 ? outs.size() - 1 : 0, [&](size_t i) -> nb::object {
-            return mpmc::output_to_slicer(new_slicer_type, outs[i + 1], true, (int)i);
+            return mpmc::output_to_slicer(target_template_id, outs[i + 1], true, (int)i);
           }));
         }
         int degree = nb::cast<int>(degree_obj);
         auto out = multipers::multi_critical_minpres_interface<int>(
             input, degree + 1, use_logpath, true, backend_stdout, swedish);
-        return mpmc::output_to_slicer(new_slicer_type, out, true, degree);
+        return mpmc::output_to_slicer(target_template_id, out, true, degree);
       },
       "slicer"_a,
       "reduce"_a = false,

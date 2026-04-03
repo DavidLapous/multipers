@@ -22,8 +22,11 @@ using indices_type = int32_t;
 
 using multipers::nanobind_dense_utils::cast_vector_from_array;
 using multipers::nanobind_helpers::is_simplextree_object;
+using multipers::nanobind_helpers::visit_simplextree_wrapper;
 using multipers::nanobind_helpers::visit_const_simplextree_wrapper;
 using multipers::nanobind_utils::owned_array;
+
+using degree_rips_interface = Gudhi::multiparameter::function_rips::interface_multi;
 
 template <typename Func>
 decltype(auto) visit_simplextree(const nb::handle& simplextree, Func&& func) {
@@ -46,12 +49,6 @@ inline indices_type num_parameters(const nb::handle& simplextree) {
   });
 }
 
-inline intptr_t simplextree_ptr(const nb::handle& simplextree) {
-  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> intptr_t {
-    return reinterpret_cast<intptr_t>(&wrapper.tree);
-  });
-}
-
 inline std::vector<indices_type> flatten_points(const std::vector<std::vector<indices_type>>& points,
                                                 size_t num_columns) {
   std::vector<indices_type> flat;
@@ -71,12 +68,16 @@ NB_MODULE(_function_rips_nanobind, m) {
          nb::ndarray<nb::numpy, const int8_t, nb::ndim<1>, nb::c_contig> gudhi_state,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees) -> nb::object {
         auto degree_vector = mpfrn::cast_vector_from_array<int>(degrees);
-        auto target_ptr = mpfrn::simplextree_ptr(target);
-        {
-          nb::gil_scoped_release release;
-          Gudhi::multiparameter::function_rips::get_degree_rips_st_python(
-              reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), target_ptr, degree_vector);
-        }
+        mpfrn::visit_simplextree_wrapper(target, [&]<typename Desc>(auto& wrapper) {
+          using Interface = typename Desc::interface_type;
+          if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
+            nb::gil_scoped_release release;
+            Gudhi::multiparameter::function_rips::get_degree_rips_st_python(
+                reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), wrapper.tree, degree_vector);
+          } else {
+            throw nb::type_error("get_degree_rips expects the canonical degree-Rips SimplexTreeMulti target.");
+          }
+        });
         return target;
       },
       "target"_a,
@@ -94,19 +95,24 @@ NB_MODULE(_function_rips_nanobind, m) {
         const auto I = mpfrn::grid_rows(simplextree);
         const auto J = mpfrn::num_parameters(simplextree);
         std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);
-        {
-          nb::gil_scoped_release release;
-          Gudhi::multiparameter::function_rips::compute_function_rips_surface_python<mpfrn::tensor_dtype,
-                                                                                     mpfrn::indices_type>(
-              mpfrn::simplextree_ptr(simplextree),
-              container.data(),
-              degree_vector,
-              I,
-              J,
-              mobius_inversion,
-              zero_pad,
-              n_jobs);
-        }
+        mpfrn::visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) {
+          using Interface = typename Desc::interface_type;
+          if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
+            nb::gil_scoped_release release;
+            Gudhi::multiparameter::function_rips::compute_function_rips_surface_python<mpfrn::tensor_dtype,
+                                                                                       mpfrn::indices_type>(
+                const_cast<Interface&>(wrapper.tree),
+                container.data(),
+                degree_vector,
+                I,
+                J,
+                mobius_inversion,
+                zero_pad,
+                n_jobs);
+          } else {
+            throw nb::type_error("function_rips_surface expects the canonical degree-Rips SimplexTreeMulti type.");
+          }
+        });
         return mpfrn::owned_array<mpfrn::tensor_dtype>(
             std::move(container), {degree_vector.size(), static_cast<size_t>(I), static_cast<size_t>(J)});
       },
@@ -128,19 +134,25 @@ NB_MODULE(_function_rips_nanobind, m) {
         const auto J = mpfrn::num_parameters(simplextree);
         std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);
         std::pair<std::vector<std::vector<mpfrn::indices_type>>, std::vector<mpfrn::tensor_dtype>> out;
-        {
-          nb::gil_scoped_release release;
-          out = Gudhi::multiparameter::function_rips::compute_function_rips_signed_measure_python<mpfrn::tensor_dtype,
-                                                                                                  mpfrn::indices_type>(
-              mpfrn::simplextree_ptr(simplextree),
-              container.data(),
-              degree_vector,
-              I,
-              J,
-              mobius_inversion,
-              zero_pad,
-              n_jobs);
-        }
+        mpfrn::visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) {
+          using Interface = typename Desc::interface_type;
+          if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
+            nb::gil_scoped_release release;
+            out = Gudhi::multiparameter::function_rips::compute_function_rips_signed_measure_python<mpfrn::tensor_dtype,
+                                                                                                    mpfrn::indices_type>(
+                const_cast<Interface&>(wrapper.tree),
+                container.data(),
+                degree_vector,
+                I,
+                J,
+                mobius_inversion,
+                zero_pad,
+                n_jobs);
+          } else {
+            throw nb::type_error(
+                "function_rips_signed_measure expects the canonical degree-Rips SimplexTreeMulti type.");
+          }
+        });
         const size_t num_columns = out.first.empty() ? 3u : out.first.front().size();
         auto flat_points = mpfrn::flatten_points(out.first, num_columns);
         return nb::make_tuple(

@@ -28,18 +28,18 @@ Lstrategies = Literal[
 ]
 
 
-def sanitize_grid(grid, numpyfy=False, add_inf=False):
+def sanitize_grid(grid, numpyfy=False, add_inf=False, api = None):
     num_parameters = len(grid)
     if num_parameters == 0:
         raise ValueError("empty filtration grid")
-    api = api_from_tensors(*grid)
+    api = api_from_tensors(*grid) if api is None else api
     if numpyfy:
         grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = tuple(
+        grid = [
             api.astensor(grid[i], contiguous=True) for i in range(num_parameters)
-        )
+        ]
     if add_inf:
         api = api_from_tensors(grid[0])
         inf = api.astensor(_inf_value(grid[0]))
@@ -69,6 +69,7 @@ def get_exact_grid(
     threshold_max=None,
     return_api=False,
     _mean=False,
+    api=None,
 ):
     """
     Computes an initial exact grid
@@ -79,27 +80,27 @@ def get_exact_grid(
 
     if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
         initial_grid = x.filtration_grid
-        api = api_from_tensors(*initial_grid)
+        api = api_from_tensors(*initial_grid) if api is None else api
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_slicer(x):
         initial_grid = x.get_filtrations_values().T
-        api = npapi
+        api = npapi if api is None else api
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_simplextree_multi(x):
         initial_grid = x._get_filtration_values()[0]
-        api = npapi
+        api = npapi if api is None else api
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif is_mma(x):
         initial_grid = x.get_filtration_values()
-        api = npapi
+        api = npapi if api is None else api
         initial_grid = _exact_grid(initial_grid, api, _mean)
     elif isinstance(x, np.ndarray):
-        api = npapi
+        api = npapi if api is None else api
         initial_grid = _exact_grid(x, api, _mean)
     else:
         if len(x) == 0:
             return [], npapi
-        api = api_from_tensors(*x)
+        api = api_from_tensors(*x) if api is None else api
         initial_grid = _exact_grid(x, api, _mean)
 
     num_parameters = len(initial_grid)
@@ -133,6 +134,7 @@ def compute_grid(
     threshold_max=None,
     _mean=False,
     force_contiguous=True,
+    api=None,
 ):
     """
     Computes a grid from filtration values, using some strategy.
@@ -158,6 +160,7 @@ def compute_grid(
         threshold_min=threshold_min,
         threshold_max=threshold_max,
         return_api=True,
+        api=api,
     )
     if len(initial_grid) == 0:
         return initial_grid
@@ -493,7 +496,7 @@ def _inf_value(array):
 
 
 def evaluate_in_grid(
-    pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None
+    pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None, api=None,
 ):
     """
     Input
@@ -505,7 +508,8 @@ def evaluate_in_grid(
         raise ValueError(f"`pts` must have ndim == 2. Got {pts.ndim}.")
     first_filtration = grid[0]
     dtype = first_filtration.dtype
-    api = api_from_tensors(*grid)
+    if api is None:
+        api = api_from_tensors(*grid)
     if mass_default is not None:
         grid = tuple(
             api.cat([g, api.astensor(m)[None]]) for g, m in zip(grid, mass_default)
@@ -519,10 +523,11 @@ def evaluate_in_grid(
     pts_inf = _inf_value(pts) if input_inf_value is None else input_inf_value
     coords_inf = _inf_value(coords) if output_inf_value is None else output_inf_value
     idx = np.argwhere(pts == pts_inf)
-    pts[idx[:, 0], idx[:, 1]] = 0
+    inf_idx = (idx[:, 0], idx[:, 1])
+    pts = api_from_tensor(pts).set_at(pts, inf_idx, 0)
     for i in range(dim):
-        coords[:, i] = grid[i][pts[:, i]]
-    coords[idx[:, 0], idx[:, 1]] = coords_inf
+        coords = api.set_at(coords, (slice(None), i), grid[i][pts[:, i]])
+    coords = api.set_at(coords, inf_idx, coords_inf)
     return coords
 
 
@@ -633,7 +638,11 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
 
     out = api.empty((num_lines, num_pts), dtype=pts.dtype)
     for i in range(num_lines):
-        out[i] = _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None]
+        out = api.set_at(
+            out,
+            i,
+            _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None],
+        )
     return out
 
 

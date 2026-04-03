@@ -109,6 +109,64 @@ decltype(auto) visit_const_simplextree_wrapper(const nb::handle& input, Func&& f
   });
 }
 
+template <typename... Ds>
+int select_slicer_template_id(type_list<Ds...>,
+                              bool is_vineyard,
+                              bool is_k_critical,
+                              std::string_view dtype_name,
+                              std::string col,
+                              std::string pers_backend,
+                              std::string filtration_container) {
+  col = nanobind_utils::lowercase_copy(std::move(col));
+  pers_backend = nanobind_utils::lowercase_copy(std::move(pers_backend));
+  filtration_container = nanobind_utils::lowercase_copy(std::move(filtration_container));
+
+  bool matched = false;
+  int result = -1;
+  (
+      [&]<typename D>() {
+        if (!matched && D::is_vine == is_vineyard && D::is_kcritical == is_k_critical &&
+            D::dtype_name == dtype_name && nanobind_utils::lowercase_copy(std::string(D::column_type)) == col &&
+            nanobind_utils::lowercase_copy(std::string(D::backend_type)) == pers_backend &&
+            nanobind_utils::lowercase_copy(std::string(D::filtration_container)) == filtration_container) {
+          result = D::template_id;
+          matched = true;
+        }
+      }.template operator()<Ds>(),
+      ...);
+
+  if (!matched) {
+    throw nb::value_error("Unimplemented slicer combination.");
+  }
+  return result;
+}
+
+template <typename... Ds>
+bool has_slicer_filtration_container(type_list<Ds...>, std::string filtration_container) {
+  filtration_container = nanobind_utils::lowercase_copy(std::move(filtration_container));
+  bool found = false;
+  (
+      [&]<typename D>() {
+        if (!found && nanobind_utils::lowercase_copy(std::string(D::filtration_container)) == filtration_container) {
+          found = true;
+        }
+      }.template operator()<Ds>(),
+      ...);
+  return found;
+}
+
+inline int related_slicer_template_id(const nb::handle& source, bool is_kcritical, const std::string& filtration_container) {
+  return visit_const_slicer_wrapper(source, [&]<typename Desc>(const typename Desc::wrapper&) -> int {
+    return select_slicer_template_id(SlicerDescriptorList{},
+                                     Desc::is_vine,
+                                     is_kcritical,
+                                     Desc::dtype_name,
+                                     std::string(Desc::column_type),
+                                     std::string(Desc::backend_type),
+                                     filtration_container);
+  });
+}
+
 inline bool is_slicer_object(const nb::handle& input) {
   std::optional<int> template_id = maybe_template_id_of(input);
   if (!template_id || !is_known_slicer_template_id(*template_id)) {

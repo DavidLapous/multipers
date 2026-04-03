@@ -30,19 +30,12 @@ struct prepared_input {
   bool is_squeezed = false;
 };
 
-inline bool has_nonempty_filtration_grid(const nb::handle& grid) {
-  if (!grid.is_valid() || grid.is_none() || !nb::hasattr(grid, "__len__") || nb::len(grid) == 0) {
-    return false;
-  }
-
-  for (nb::handle row : nb::iter(grid)) {
-    return nb::hasattr(row, "__len__") && nb::len(row) > 0;
-  }
-  return false;
-}
-
 inline nb::object ensure_supported_target(nb::object slicer) {
   return multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
+}
+
+inline nb::object to_colexical_target(const nb::object& target) {
+  return nb::cast(multipers::nanobind_helpers::colexical_slicer_copy(nb::cast<const CanonicalWrapper&>(target)));
 }
 
 prepared_input build_input_from_slicer(const CanonicalWrapper& wrapper) {
@@ -56,7 +49,7 @@ prepared_input build_input_from_slicer(const CanonicalWrapper& wrapper) {
   prepared_input out;
   out.degree = wrapper.minpres_degree;
   out.filtration_grid = wrapper.filtration_grid;
-  out.is_squeezed = has_nonempty_filtration_grid(wrapper.filtration_grid);
+  out.is_squeezed = multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.filtration_grid);
 
   const auto& dimensions = wrapper.truc.get_dimensions();
   const auto& filtrations = wrapper.truc.get_filtration_values();
@@ -107,6 +100,24 @@ nb::object summand_to_slicer(nb::object target,
   filtration_values.insert(filtration_values.end(), summand.row_degrees.begin(), summand.row_degrees.end());
   filtration_values.insert(filtration_values.end(), summand.col_degrees.begin(), summand.col_degrees.end());
 
+  nb::object compact_grid = nb::none();
+  if (is_squeezed) {
+    std::vector<std::vector<int64_t> > used_coordinates(2);
+    used_coordinates[0].reserve(filtration_values.size());
+    used_coordinates[1].reserve(filtration_values.size());
+    for (const auto& degree : filtration_values) {
+      used_coordinates[0].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.first, 0));
+      used_coordinates[1].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.second, 1));
+    }
+    auto compacted = multipers::nanobind_helpers::compact_squeezed_filtration_grid(
+        filtration_grid, std::move(used_coordinates));
+    compact_grid = compacted.filtration_grid;
+    for (auto& degree : filtration_values) {
+      degree.first = multipers::nanobind_helpers::remap_squeezed_coordinate(degree.first, 0, compacted.remap);
+      degree.second = multipers::nanobind_helpers::remap_squeezed_coordinate(degree.second, 1, compacted.remap);
+    }
+  }
+
   auto complex = multipers::build_contiguous_f64_slicer_from_output(filtration_values, boundaries, dimensions);
 
   nb::object out = target.type()();
@@ -114,8 +125,7 @@ nb::object summand_to_slicer(nb::object target,
   multipers::build_slicer_from_complex(out_wrapper.truc, complex);
   out_wrapper.minpres_degree = degree;
   if (is_squeezed) {
-    out_wrapper.filtration_grid = filtration_grid;
-    out.attr("_clean_filtration_grid")();
+    out_wrapper.filtration_grid = compact_grid;
   }
   return out;
 }
@@ -138,11 +148,10 @@ NB_MODULE(_aida_interface, m) {
 #if MULTIPERS_DISABLE_AIDA_INTERFACE
         throw std::runtime_error("AIDA in-memory interface is disabled at compile time.");
 #else
-        if (sort) {
-          s = s.attr("to_colexical")();
-        }
-
         nb::object target = mpaida::ensure_supported_target(s);
+        if (sort) {
+          target = mpaida::to_colexical_target(target);
+        }
         const auto& target_wrapper = nb::cast<const mpaida::CanonicalWrapper&>(target);
         auto prepared = mpaida::build_input_from_slicer(target_wrapper);
 
@@ -158,9 +167,7 @@ NB_MODULE(_aida_interface, m) {
         for (const auto& summand : output.summands) {
           nb::object slicer = mpaida::summand_to_slicer(
               target, summand, prepared.degree, prepared.is_squeezed, prepared.filtration_grid);
-          if (target.ptr() != s.ptr()) {
-            slicer = multipers::nanobind_helpers::astype_slicer_to_original_type(s, slicer);
-          }
+          slicer = multipers::nanobind_helpers::rewrap_slicer_output_to_original_type(s, target, slicer);
           out.append(slicer);
         }
         return out;

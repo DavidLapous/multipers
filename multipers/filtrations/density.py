@@ -312,6 +312,44 @@ def _is_jax_api(api) -> bool:
     return getattr(api, "__name__", "") == "multipers.array_api.jax"
 
 
+def _uses_logsumexp_dense_path(kernel: available_kernels) -> bool:
+    return not callable(kernel) and kernel in {
+        "gaussian",
+        "exponential",
+        "exponential_kernel",
+    }
+
+
+def _dense_log_kernel(
+    X,
+    Y,
+    *,
+    kernel: available_kernels,
+    bandwidth,
+    api,
+):
+    X = api.astensor(X)
+    Y = api.astype(Y, X.dtype)
+    pairwise_distances = api.cdist(X, Y)
+    bandwidth = api.astensor(bandwidth, dtype=X.dtype)
+    if bandwidth.ndim != 0:
+        bandwidth = bandwidth.reshape(())
+
+    match kernel:
+        case "gaussian":
+            dim = X.shape[-1]
+            log_normalization = api.astensor(
+                dim * 0.5 * np.log(2 * np.pi), dtype=X.dtype
+            ) + dim * api.log(bandwidth)
+            return -((pairwise_distances / bandwidth) ** 2) / 2 - log_normalization
+        case "exponential" | "exponential_kernel":
+            return -(pairwise_distances / bandwidth) - api.log(bandwidth)
+        case _:
+            raise ValueError(
+                f"Log-sum-exp dense scoring is unsupported for kernel {kernel}."
+            )
+
+
 def _dense_kernel(
     X,
     Y,
@@ -432,19 +470,87 @@ class KDE:
         return self
 
     def _resolve_implementation(self) -> Literal["pykeops", "dense"]:
+        if self.implementation == "pykeops":
+            if not self.api.check_keops():
+                raise ValueError("PyKeOps is unavailable for backend `{self.api}`.")
+            return "pykeops"
         if self.implementation == "auto":
             if getattr(self.api, "check_keops", lambda: False)():
                 return "pykeops"
             return "dense"
-        if self.implementation == "pykeops":
-            if not getattr(self.api, "check_keops", lambda: False)():
-                raise ValueError("PyKeOps is unavailable for this backend.")
-            return "pykeops"
         return "dense"
 
     def _make_dense_score_samples(self):
         assert self.api is not None and self.X is not None
         X = self.X
+        if _uses_logsumexp_dense_path(self.kernel):
+            log_normalizer = self.api.log(self.api.astensor(X.shape[0], dtype=X.dtype))
+            weights = None
+            positive_log_weights = None
+            negative_log_weights = None
+            positive_only = True
+            if self._sample_weights is not None:
+                weights = self.api.astype(self._sample_weights, X.dtype)
+                neg_inf = self.api.astensor(-np.inf, dtype=X.dtype)
+                abs_weights = self.api.abs(weights)
+                safe_abs_weights = self.api.where(
+                    abs_weights > 0, abs_weights, abs_weights * 0 + 1
+                )
+                log_abs_weights = self.api.where(
+                    abs_weights > 0, self.api.log(safe_abs_weights), neg_inf
+                )
+                positive_log_weights = self.api.where(
+                    weights > 0, log_abs_weights, neg_inf
+                )
+                negative_log_weights = self.api.where(
+                    weights < 0, log_abs_weights, neg_inf
+                )
+                positive_only = bool(
+                    float(self.api.asnumpy(self.api.minvalues(weights))) >= 0.0
+                )
+
+            def score_chunk(X_chunk, Y_chunk):
+                log_kernel_values = _dense_log_kernel(
+                    X_chunk,
+                    Y_chunk,
+                    kernel=self.kernel,
+                    bandwidth=self.bandwidth,
+                    api=self.api,
+                )
+                if weights is None:
+                    log_density = (
+                        self.api.logsumexp(log_kernel_values, axis=0) - log_normalizer
+                    )
+                    return log_density if self.return_log else self.api.exp(log_density)
+
+                positive_log_density = (
+                    self.api.logsumexp(
+                        log_kernel_values + positive_log_weights[:, None], axis=0
+                    )
+                    - log_normalizer
+                )
+                if positive_only:
+                    return (
+                        positive_log_density
+                        if self.return_log
+                        else self.api.exp(positive_log_density)
+                    )
+
+                negative_log_density = (
+                    self.api.logsumexp(
+                        log_kernel_values + negative_log_weights[:, None], axis=0
+                    )
+                    - log_normalizer
+                )
+                density = self.api.exp(positive_log_density) - self.api.exp(
+                    negative_log_density
+                )
+                return self.api.log(density) if self.return_log else density
+
+            if _is_jax_api(self.api):
+                return self.api.jit(score_chunk)
+            return score_chunk
+
         weights = None
         if self._sample_weights is not None:
             weights = self.api.astype(self._sample_weights, X.dtype)
@@ -496,6 +602,8 @@ class KDE:
             stop = min(start + self.chunk_size, Y.shape[0])
             outputs.append(self._dense_score_samples(X, Y[start:stop]))
         density_estimation = outputs[0] if len(outputs) == 1 else self.api.cat(outputs)
+        if _uses_logsumexp_dense_path(self.kernel):
+            return density_estimation
         return (
             self.api.log(density_estimation) if self.return_log else density_estimation
         )

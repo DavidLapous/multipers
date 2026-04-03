@@ -2,6 +2,7 @@ from contextlib import nullcontext
 from typing import Any, cast
 import jax as _jax
 import jax.numpy as _jnp
+import jax.scipy.special as _jsp_special
 import numpy as _np
 import multipers.array_api as _mpapi
 import sys
@@ -57,6 +58,14 @@ def mean(x, axis=None, dim=None, **kwargs):
     return _jnp.mean(x, axis=axis, **kwargs)
 
 
+def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if axis is None:
+        axis = dim
+    if keepdim is None:
+        keepdim = keepdims
+    return _jsp_special.logsumexp(x, axis=axis, keepdims=keepdim)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
@@ -88,8 +97,7 @@ def copy(x):
 
 
 def device(x):
-    return x.device()
-
+    return getattr(x, 'device', None)
 
 def sort(x, axis=-1):
     return _jnp.sort(x, axis=axis)
@@ -157,8 +165,15 @@ def cdist(x, y, p=2):
     return _jnp.sum(diff**p, axis=-1) ** (1.0 / p)
 
 
+@jit(static_argnames=("p",))
+def pdist(x, p=2):
+    distances = cdist(x, x, p=p)
+    row_idx, col_idx = _jnp.triu_indices(x.shape[0], k=1)
+    return distances[row_idx, col_idx]
+
+
 def asnumpy(x, dtype=None):
-    return _np.asarray(x, dtype=dtype)
+    return _np.asarray(_jax.lax.stop_gradient(x), dtype=dtype)
 
 
 def is_tensor(x):
@@ -170,8 +185,10 @@ def is_promotable(x):
 
 
 def has_grad(x):
-    # TODO : look at Tracer
-    return False  # JAX doesn't track this on the array itself like Torch
+    # JAX arrays do not carry a `requires_grad` flag like torch tensors do.
+    # The closest equivalent is whether the value is currently being traced by a
+    # JAX transformation such as `grad`, `jit`, or `vmap`.
+    return isinstance(x, _jax.core.Tracer)
 
 
 def to_device(x, device):

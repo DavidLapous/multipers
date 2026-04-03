@@ -46,12 +46,11 @@ NB_MODULE(_rhomboid_tiling_interface, m) {
 #else
         multipers::rhomboid_tiling_interface_input<int> input;
         input.points = nb::cast<std::vector<std::vector<double> > >(point_cloud);
-        nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
-        nb::object out = mprt::rhomboid_tiling_to_slicer_for_target(target, input, k_max, degree, verbose);
-        if (target.ptr() == slicer.ptr()) {
-          return out;
-        }
-        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
+        return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
+            slicer,
+            [&](const nb::object& target) {
+              return mprt::rhomboid_tiling_to_slicer_for_target(target, input, k_max, degree, verbose);
+            });
 #endif
       },
       "slicer"_a,

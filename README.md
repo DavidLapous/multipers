@@ -71,7 +71,7 @@ If I missed something, or you want to add something, feel free to open an issue.
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
 [Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration),<br>
-[Michael Kerber](https://www.geometrie.tugraz.at/kerber/) ([mpfree](https://bitbucket.org/mkerber/mpfree/src/master/), [function_delaunay](https://bitbucket.org/mkerber/function_delaunay), [multi_critical](https://bitbucket.org/mkerber/multi_critical) [multi_chunck](https://bitbucket.org/mkerber/multi_chunk) backends),<br>
+[Michael Kerber](https://www.geometrie.tugraz.at/kerber/) ([mpfree](https://bitbucket.org/mkerber/mpfree/src/master/), [function_delaunay](https://bitbucket.org/mkerber/function_delaunay), [multi_critical](https://bitbucket.org/mkerber/multi_critical), [multi_chunk](https://bitbucket.org/mkerber/multi_chunk) backends),<br>
 [Jan Jendrysiak](https://github.com/JanJend) ([Module Decomposition (AIDA)](https://github.com/JanJend/AIDA), [Persistence Algebra](https://github.com/JanJend/Persistence-Algebra)).<br>
 
 ## Licensing

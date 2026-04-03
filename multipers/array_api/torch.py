@@ -76,6 +76,14 @@ def mean(x, axis=None, dim=None, **kwargs):
     return _torch.mean(x, dim=dim, **kwargs)
 
 
+def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if dim is None:
+        dim = axis
+    if keepdim is None:
+        keepdim = keepdims
+    return _torch.logsumexp(x, dim=dim, keepdim=keepdim)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if dim is None:
         dim = axis
