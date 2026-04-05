@@ -472,7 +472,7 @@ class KDE:
     def _resolve_implementation(self) -> Literal["pykeops", "dense"]:
         if self.implementation == "pykeops":
             if not self.api.check_keops():
-                raise ValueError("PyKeOps is unavailable for backend `{self.api}`.")
+                raise ValueError(f"PyKeOps is unavailable for backend `{self.api}`.")
             return "pykeops"
         if self.implementation == "auto":
             if getattr(self.api, "check_keops", lambda: False)():
