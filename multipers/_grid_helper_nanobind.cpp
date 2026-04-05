@@ -251,7 +251,8 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "regular_closest_1d_indices",
       [](nb::ndarray<nb::numpy, const float, nb::ndim<1>, nb::c_contig> values, int resolution, bool unique) {
         auto out = mpgnb::regular_closest_1d_indices_impl(values, static_cast<size_t>(resolution), unique);
-        return mpgnb::owned_array<int64_t>(std::move(out), {out.size()});
+        auto len = out.size();
+        return mpgnb::owned_array<int64_t>(std::move(out), {len});
       },
       "values"_a,
       "resolution"_a,
@@ -260,7 +261,8 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "regular_closest_1d_indices",
       [](nb::ndarray<nb::numpy, const double, nb::ndim<1>, nb::c_contig> values, int resolution, bool unique) {
         auto out = mpgnb::regular_closest_1d_indices_impl(values, static_cast<size_t>(resolution), unique);
-        return mpgnb::owned_array<int64_t>(std::move(out), {out.size()});
+        auto len = out.size();
+        return mpgnb::owned_array<int64_t>(std::move(out), {len});
       },
       "values"_a,
       "resolution"_a,
