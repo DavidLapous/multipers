@@ -144,7 +144,7 @@ struct PySlicer : PySlicerPythonState {
 struct PySimplexTreePythonState {
   nanobind::object filtration_grid;
 
-  PySimplexTreePythonState() : filtration_grid(nanobind::list()) {}
+  PySimplexTreePythonState() : filtration_grid(nanobind::none()) {}
 };
 
 template <typename TargetState, typename SourceState>
@@ -154,7 +154,7 @@ inline void copy_simplextree_python_state(TargetState& target, const SourceState
 
 template <typename State>
 inline void reset_simplextree_python_state(State& state) {
-  state.filtration_grid = nanobind::list();
+  state.filtration_grid = nanobind::none();
 }
 
 template <typename Interface, typename T>

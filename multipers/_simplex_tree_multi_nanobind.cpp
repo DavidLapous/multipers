@@ -843,7 +843,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           .def_prop_rw(
               "filtration_grid",
               [](Wrapper& self) -> nb::object { return self.filtration_grid; },
-              [](Wrapper& self, nb::object value) { self.filtration_grid = value.is_none() ? nb::list() : value; },
+              [](Wrapper& self, nb::object value) { self.filtration_grid = value; },
               nb::arg("value").none())
           .def_prop_rw(
               "thisptr",

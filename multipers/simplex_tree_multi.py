@@ -293,7 +293,7 @@ def _setstate(self, state):
     if isinstance(state, tuple) and len(state) == 2:
         serialized, filtration_grid = state
     else:
-        serialized, filtration_grid = state, []
+        serialized, filtration_grid = state, None
     self._deserialize_state(serialized)
     self.filtration_grid = filtration_grid
 
