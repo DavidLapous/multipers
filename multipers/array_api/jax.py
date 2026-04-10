@@ -10,6 +10,7 @@ import sys
 _mpapi.add_interface("jax")
 
 backend = _jnp
+name = "jax"
 _has_jit = True
 int64 = _jnp.int64
 ones = _jnp.ones

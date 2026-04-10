@@ -28,7 +28,17 @@ def _has_jit(api):
     return getattr(api, "_has_jit", False)
 
 
-def api_from_tensor(x, *, verbose: bool = False, strict=False):
+def is_jax_api(api):
+    from importlib.util import find_spec
+
+    if not find_spec("jax"):
+        return False
+    import multipers.array_api.jax as jaxapi
+
+    return api is jaxapi
+
+
+def api_from_tensor(x, *, verbose: bool = False, strict=False, jit_promote: bool = False):
     from importlib.util import find_spec
 
     if strict:
@@ -49,6 +59,13 @@ def api_from_tensor(x, *, verbose: bool = False, strict=False):
                 pass
         raise ValueError(f"Unsupported (strict) type {type(x)=}")
     if npapi.is_promotable(x):
+        if jit_promote and not _has_jit(npapi) and find_spec("jax"):
+            import multipers.array_api.jax as jaxapi
+
+            if _has_jit(jaxapi):
+                if verbose:
+                    print("using jax backend")
+                return jaxapi
         if verbose:
             print("using numpy backend")
         return npapi

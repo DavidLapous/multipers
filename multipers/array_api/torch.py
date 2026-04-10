@@ -9,6 +9,7 @@ import multipers.logs as _mp_logs
 _mpapi.add_interface("torch")
 
 backend = _torch
+name = "torch"
 _has_jit = False
 LazyTensor = cast(Any, None)
 _is_keops_available = None

@@ -14,6 +14,7 @@ else:
     _NumbaError = None
 
 backend = _np
+name = "numpy"
 _has_jit = _numba is not None
 int64 = _np.int64
 cat = _np.concatenate
