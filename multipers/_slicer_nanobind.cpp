@@ -266,6 +266,32 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
   });
 }
 
+template <typename Wrapper, typename Value>
+nb::tuple compute_persistence_on_slices(
+    Wrapper& self,
+    const nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig>& values,
+    bool ignore_infinite_filtration_values) {
+  using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
+  const size_t num_slices = values.shape(0);
+  const size_t num_parameters = values.shape(1);
+  std::vector<Barcode> barcodes;
+  barcodes.reserve(num_slices);
+  std::vector<Value> slice(num_parameters);
+  const auto* data = values.data();
+  {
+    nb::gil_scoped_release release;
+    for (size_t i = 0; i < num_slices; ++i) {
+      std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
+      self.truc.set_slice(slice);
+      self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
+      barcodes.push_back(self.truc.template get_flat_barcode<true, Value, false>());
+    }
+  }
+  return tuple_from_size(num_slices, [&](size_t i) -> nb::object {
+    return dim_barcode_to_tuple<Barcode, Value>(barcodes[i]);
+  });
+}
+
 template <typename Wrapper>
 nb::object dimensions_array(Wrapper& self) {
   std::vector<int> dims;
@@ -1892,9 +1918,18 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
               self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
             }
             return self;
+           },
+           "ignore_infinite_filtration_values"_a = true,
+           nb::rv_policy::reference_internal)
+      .def(
+          "_compute_persistence_on_slices",
+          [](Wrapper& self,
+             nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> values,
+             bool ignore_infinite_filtration_values) -> nb::tuple {
+            return compute_persistence_on_slices(self, values, ignore_infinite_filtration_values);
           },
-          "ignore_infinite_filtration_values"_a = true,
-          nb::rv_policy::reference_internal)
+          "values"_a,
+          "ignore_infinite_filtration_values"_a = true)
       .def(
           "update_persistence_computation",
           [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
