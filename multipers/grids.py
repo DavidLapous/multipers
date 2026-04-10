@@ -531,6 +531,46 @@ def evaluate_in_grid(
     return coords
 
 
+_push_pts_to_lines_jit = {}
+
+
+def _get_push_pts_to_lines_kernel(api, with_directions):
+    key = (api, with_directions)
+    if key in _push_pts_to_lines_jit:
+        return _push_pts_to_lines_jit[key]
+
+    if with_directions:
+
+        def kernel(pts, basepoints, directions):
+            delta = pts[None, :, :] - basepoints[:, None, :]
+            positive_idx = directions > 0
+            safe_directions = api.where(positive_idx, directions, directions * 0 + 1)
+            positive_terms = api.where(
+                positive_idx[:, None, :],
+                delta / safe_directions[:, None, :],
+                -np.inf,
+            )
+            zero_terms = api.where(
+                (directions == 0)[:, None, :],
+                api.where(delta <= 0, -np.inf, np.inf),
+                -np.inf,
+            )
+            return api.maxvalues(
+                api.where(zero_terms > positive_terms, zero_terms, positive_terms),
+                axis=2,
+            )
+
+    else:
+
+        def kernel(pts, basepoints):
+            delta = pts[None, :, :] - basepoints[:, None, :]
+            return api.maxvalues(delta, axis=2)
+
+    kernel = api.jit(kernel)
+    _push_pts_to_lines_jit[key] = kernel
+    return kernel
+
+
 def sm_in_grid(pts, weights, grid, mass_default=None):
     """Given a measure whose points are coordinates,
     pushes this measure in this grid.
@@ -591,59 +631,25 @@ def sms_in_grid(sms, grid, mass_default=None):
     return sms
 
 
-def _push_pts_to_line(pts, basepoint, direction=None, api=None):
-    if api is None:
-        api = api_from_tensors(pts, basepoint)
-    pts = api.astensor(pts)
-    basepoint = api.astensor(basepoint)
-    num_parameters = basepoint.shape[0]
-    if direction is not None:
-        if not api.is_promotable(direction):
-            raise ValueError(
-                f"Incompatible input types. Got {type(pts)=}, {type(basepoint)=}, {type(direction)=}"
-            )
-
-        direction = api.astensor(direction)
-        ok_idx = direction > 0
-        if ok_idx.sum() == 0:
-            raise ValueError(f"Got invalid direction {direction}")
-        zero_idx = None if ok_idx.all() else direction == 0
-    else:
-        direction = api.tensor([1], dtype=int)
-        ok_idx = slice(None)
-        zero_idx = None
-    xa = api.maxvalues(
-        (pts[:, ok_idx] - basepoint[ok_idx]) / direction[ok_idx], axis=1, keepdims=True
-    )
-    if zero_idx is not None:
-        xb = api.where(pts[:, zero_idx] <= basepoint[zero_idx], -np.inf, np.inf)
-        xs = api.maxvalues(api.cat([xa, xb], axis=1), axis=1, keepdims=True)
-    else:
-        xs = xa
-    return xs.squeeze()
-
-
 def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
     if api is None:
-        api = api_from_tensors(pts, basepoints)
-    num_lines = len(basepoints)
-    num_pts = len(pts)
+        api = api_from_tensors(pts, basepoints, jit_promote=True)
 
     pts = api.astensor(pts)
     basepoints = api.astensor(basepoints)
-    if directions is None:
-        directions = [None] * num_lines
-    else:
-        directions = api.astensor(directions)
 
-    out = api.empty((num_lines, num_pts), dtype=pts.dtype)
-    for i in range(num_lines):
-        out = api.set_at(
-            out,
-            i,
-            _push_pts_to_line(pts, basepoints[i], directions[i], api=api)[None],
-        )
-    return out
+    if directions is None:
+        kernel = _get_push_pts_to_lines_kernel(api, with_directions=False)
+        return kernel(pts, basepoints)
+
+    directions = api.astensor(directions)
+    invalid_rows = api.sum(directions > 0, axis=1) <= 0
+    if api.any(invalid_rows):
+        invalid_direction = directions[invalid_rows][0]
+        raise ValueError(f"Got invalid direction {invalid_direction}")
+
+    kernel = _get_push_pts_to_lines_kernel(api, with_directions=True)
+    return kernel(pts, basepoints, directions)
 
 
 def evaluate_mod_in_grid(mod, grid, box=None):
