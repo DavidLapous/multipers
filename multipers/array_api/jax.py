@@ -10,6 +10,7 @@ import sys
 _mpapi.add_interface("jax")
 
 backend = _jnp
+_has_jit = True
 int64 = _jnp.int64
 ones = _jnp.ones
 reshape = _jnp.reshape
@@ -56,6 +57,12 @@ def mean(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
     return _jnp.mean(x, axis=axis, **kwargs)
+
+
+def any(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _jnp.any(x, axis=axis, **kwargs)
 
 
 def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
@@ -181,7 +188,7 @@ def is_tensor(x):
 
 
 def is_promotable(x):
-    return isinstance(x, (_jax.Array, list, tuple))
+    return isinstance(x, (_jax.Array, _np.ndarray, list, tuple))
 
 
 def has_grad(x):

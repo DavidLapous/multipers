@@ -1,11 +1,20 @@
 from contextlib import nullcontext
 from functools import wraps
+from importlib.util import find_spec
 
 import numpy as _np
 from scipy.special import logsumexp as _sp_logsumexp
 import multipers.logs as _mp_logs
 
+if find_spec("numba"):
+    import numba as _numba
+    from numba.core.errors import NumbaError as _NumbaError
+else:
+    _numba = None
+    _NumbaError = None
+
 backend = _np
+_has_jit = _numba is not None
 int64 = _np.int64
 cat = _np.concatenate
 det = _np.linalg.det
@@ -38,10 +47,27 @@ einsum = _np.einsum
 
 
 def jit(fn=None, **kwargs):
+    if _numba is None:
+        def decorator(func):
+            @wraps(func)
+            def wrapped(*args, **inner_kwargs):
+                return func(*args, **inner_kwargs)
+
+            return wrapped
+
+        if fn is None:
+            return decorator
+        return decorator(fn)
+
     def decorator(func):
+        compiled = _numba.njit(func)
+
         @wraps(func)
         def wrapped(*args, **inner_kwargs):
-            return func(*args, **inner_kwargs)
+            try:
+                return compiled(*args, **inner_kwargs)
+            except _NumbaError:
+                return func(*args, **inner_kwargs)
 
         return wrapped
 
@@ -90,6 +116,12 @@ def mean(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
     return _np.mean(x, axis=axis, **kwargs)
+
+
+def any(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.any(x, axis=axis, **kwargs)
 
 
 def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):

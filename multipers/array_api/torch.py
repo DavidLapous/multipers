@@ -9,6 +9,7 @@ import multipers.logs as _mp_logs
 _mpapi.add_interface("torch")
 
 backend = _torch
+_has_jit = False
 LazyTensor = cast(Any, None)
 _is_keops_available = None
 int64 = _torch.int64
@@ -76,11 +77,21 @@ def mean(x, axis=None, dim=None, **kwargs):
     return _torch.mean(x, dim=dim, **kwargs)
 
 
+def any(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _torch.any(x, dim=dim, **kwargs)
+
+
 def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     if dim is None:
         dim = axis
     if keepdim is None:
         keepdim = keepdims
+    if dim is None:
+        if x.ndim == 0:
+            return x
+        dim = tuple(range(x.ndim))
     return _torch.logsumexp(x, dim=dim, keepdim=keepdim)
 
 

@@ -21,7 +21,11 @@ def _looks_like_torch(x):
 
 def _looks_like_jax(x):
     module = _module_name(x)
-    return module.startswith("jax") or module.startswith("jaxlib")
+    return module.startswith("jax")
+
+
+def _has_jit(api):
+    return getattr(api, "_has_jit", False)
 
 
 def api_from_tensor(x, *, verbose: bool = False, strict=False):
@@ -70,7 +74,7 @@ def api_from_tensor(x, *, verbose: bool = False, strict=False):
     raise ValueError(f"Unsupported type {type(x)=}")
 
 
-def api_from_tensors(*args):
+def api_from_tensors(*args, jit_promote: bool = False):
     if len(args) == 0:
         raise ValueError("no tensor given")
     import multipers.array_api.numpy as npapi
@@ -81,6 +85,14 @@ def api_from_tensors(*args):
             is_numpy = False
             break
     if is_numpy:
+        if jit_promote and not _has_jit(npapi):
+            from importlib.util import find_spec
+
+            if find_spec("jax"):
+                import multipers.array_api.jax as jaxapi
+
+                if _has_jit(jaxapi):
+                    return jaxapi
         return npapi
 
     from importlib.util import find_spec
