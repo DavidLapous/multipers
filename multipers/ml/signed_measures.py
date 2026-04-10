@@ -1086,7 +1086,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
      - kernel : kernel to used to convolve the images.
      - flatten : flatten the images if True
      - progress : progress bar if True
-     - backend : sklearn, pykeops or numba.
+     - backend : auto, dense or pykeops.
      - plot : Creates a plot Figure.
 
     Output
@@ -1105,7 +1105,7 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         resolution: Optional[int] = None,
         grid_strategy: str = "regular",
         progress: bool = False,
-        backend: str = "pykeops",
+        backend: str = "auto",
         plot: bool = False,
         log_density: bool = False,
     ):
