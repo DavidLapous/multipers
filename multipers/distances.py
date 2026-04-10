@@ -321,6 +321,30 @@ def _require_hera_backend():
     return _hera_interface
 
 
+def _normalize_hera_strategy(strategy, options, name: str) -> int:
+    if isinstance(strategy, str):
+        try:
+            return options[strategy]
+        except KeyError as exc:
+            allowed = ", ".join(sorted(options))
+            raise ValueError(
+                f"Unknown {name} {strategy!r}. Expected one of: {allowed}."
+            ) from exc
+
+    if isinstance(strategy, (int, np.integer)):
+        value = int(strategy)
+        if value not in options.values():
+            allowed = ", ".join(str(v) for v in sorted(set(options.values())))
+            raise ValueError(
+                f"Unknown {name} {strategy!r}. Expected one of: {allowed}."
+            )
+        return value
+
+    raise TypeError(
+        f"Invalid {name} type {type(strategy)!r}. Expected str or int-like value."
+    )
+
+
 def hera_bottleneck_distances(left_diagrams, right_diagrams, *, delta: float = 0.01):
     """
     Compute Hera bottleneck distances for aligned batches of persistence diagrams.
@@ -703,10 +727,16 @@ def matching_distance(
             delta=float(hera_delta),
             max_depth=int(hera_max_depth),
             initialization_depth=int(hera_initialization_depth),
-            bound_strategy=_MATCHING_DISTANCE_BOUND_STRATEGIES[hera_bound_strategy],
-            traverse_strategy=_MATCHING_DISTANCE_TRAVERSE_STRATEGIES[
-                hera_traverse_strategy
-            ],
+            bound_strategy=_normalize_hera_strategy(
+                hera_bound_strategy,
+                _MATCHING_DISTANCE_BOUND_STRATEGIES,
+                "Hera bound strategy",
+            ),
+            traverse_strategy=_normalize_hera_strategy(
+                hera_traverse_strategy,
+                _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
+                "Hera traverse strategy",
+            ),
             tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
             stop_asap=bool(hera_stop_asap),
             return_stats=bool(return_stats),
