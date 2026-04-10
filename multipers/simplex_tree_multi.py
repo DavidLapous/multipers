@@ -663,12 +663,7 @@ def _grid_squeeze(
 def _unsqueeze(self, grid=None):
     grid = self.filtration_grid if grid is None else grid
     cgrid = sanitize_grid(grid, numpyfy=True)
-    new_st = SimplexTreeMulti(
-        return_type_only=True,
-        dtype=np.float64,
-        kcritical=self.is_kcritical,
-        ftype=self.filtration_container,
-    )()
+    new_st = type(self)()
     _unsqueeze_to_raw[type(self)](self, new_st, cgrid)
     return new_st
 

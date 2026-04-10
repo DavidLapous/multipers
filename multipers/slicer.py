@@ -166,13 +166,12 @@ def _compute_persistence(
         if one_filtration.ndim == 1:
             one_filtration = one_filtration[None]
             squeeze = True
-        one_filtration = api.asnumpy(one_filtration)
-        out = []
-        for row in one_filtration:
-            self.set_slice(np.asarray(row, dtype=self.dtype))
-            self.initialize_persistence_computation(ignore_infinite_filtration_values)
-            out.append(tuple(np.asarray(bc) for bc in self.get_barcode()))
-        return out[0] if squeeze else tuple(out)
+        one_filtration = np.ascontiguousarray(api.asnumpy(one_filtration), dtype=self.dtype)
+        out = self._compute_persistence_on_slices(
+            one_filtration,
+            ignore_infinite_filtration_values=ignore_infinite_filtration_values,
+        )
+        return out[0] if squeeze else out
     self.initialize_persistence_computation(ignore_infinite_filtration_values)
     return self.get_barcode()
 
@@ -547,12 +546,9 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         new_filtrations = evaluate_in_grid(filtrations, grid)
 
     real_dtype = np.asarray(grid[0]).dtype.type if len(grid) else self.dtype
-    if (
-        np.issubdtype(np.dtype(real_dtype), np.floating)
-        and np.dtype(real_dtype) not in {np.dtype(dtype) for dtype in available_dtype}
-        and np.dtype(np.float64) in {np.dtype(dtype) for dtype in available_dtype}
-    ):
-        real_dtype = np.float64
+    if not np.dtype(real_dtype) in {np.dtype(dtype) for dtype in available_dtype}:
+        float_dtypes = [np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)]
+        real_dtype = float_dtypes[0] if float_dtypes else self.dtype
 
     new_slicer = get_matrix_slicer(
         self.is_vine,
