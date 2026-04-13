@@ -1,8 +1,11 @@
 #pragma once
 
+#include "backend_log_flags.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -116,8 +119,18 @@ inline bool multi_critical_interface_available() { return MULTIPERS_HAS_MULTI_CR
 namespace multi_critical_detail {
 
 inline std::mutex& multi_critical_interface_mutex() {
+  // multi_critical and its mpfree/multi_chunk helpers still expose shared
+  // verbosity/timer globals when those features are compiled in.
   static std::mutex m;
   return m;
+}
+
+inline bool multi_critical_interface_needs_global_state_lock() {
+#if MULTI_CRITICAL_TIMERS || MULTI_CHUNK_TIMERS || MPFREE_TIMERS
+  return true;
+#else
+  return backend_log_flags::multi_critical || backend_log_flags::mpfree;
+#endif
 }
 
 using Graded_matrix = mpp_utils::Graded_matrix<phat::vector_vector>;
@@ -338,18 +351,30 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
     bool use_logpath,
     bool use_multi_chunk,
     bool verbose_output) {
+  const bool effective_verbose_output = backend_log_flags::multi_critical && verbose_output;
   if (input.filtration_values.empty()) {
     return std::vector<Graded_matrix>();
   }
 
   multi_critical_input_parser<index_type> parser(input);
 
-  multi_critical::verbose = verbose_output;
-  multi_critical::very_verbose = false;
-  multi_chunk::verbose = verbose_output;
+  const bool old_mc_verbose = multi_critical::verbose;
+  const bool old_mc_very_verbose = multi_critical::very_verbose;
+  const bool old_chunk_verbose = multi_chunk::verbose;
+  if (effective_verbose_output) {
+    multi_critical::verbose = true;
+    multi_critical::very_verbose = false;
+    multi_chunk::verbose = true;
+  }
 
   std::vector<Graded_matrix> matrices;
   multi_critical::free_resolution(parser, matrices, use_logpath);
+
+  if (effective_verbose_output) {
+    multi_critical::verbose = old_mc_verbose;
+    multi_critical::very_verbose = old_mc_very_verbose;
+    multi_chunk::verbose = old_chunk_verbose;
+  }
 
   for (std::size_t i = 0; i < matrices.size(); ++i) {
     Graded_matrix& mat = matrices[i];
@@ -412,7 +437,10 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
     bool use_logpath,
     bool use_multi_chunk,
     bool verbose_output) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   auto matrices =
       multi_critical_detail::compute_free_resolution_matrices(input, use_logpath, use_multi_chunk, verbose_output);
@@ -445,7 +473,10 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
     bool use_multi_chunk,
     bool verbose_output,
     bool /*swedish*/) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   if (degree < 0) {
     throw std::invalid_argument("multi_critical minimal presentation expects a non-negative degree.");
@@ -466,10 +497,15 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
   auto second = matrices[matrix_index];
   multi_critical_detail::Graded_matrix min_rep;
 
+  const bool effective_verbose_output = backend_log_flags::mpfree && backend_log_flags::multi_critical && verbose_output;
   const bool old_verbose = mpfree::verbose;
-  mpfree::verbose = verbose_output;
+  if (effective_verbose_output) {
+    mpfree::verbose = true;
+  }
   mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
-  mpfree::verbose = old_verbose;
+  if (effective_verbose_output) {
+    mpfree::verbose = old_verbose;
+  }
 
   return multi_critical_detail::convert_minpres<index_type>(min_rep, degree);
 }
@@ -481,7 +517,10 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
     bool use_multi_chunk,
     bool verbose_output,
     bool /*swedish*/) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   std::vector<multi_critical_interface_output<index_type> > out;
 
@@ -493,8 +532,11 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
 
   out.reserve(matrices.size() - 1);
 
+  const bool effective_verbose_output = backend_log_flags::mpfree && backend_log_flags::multi_critical && verbose_output;
   const bool old_verbose = mpfree::verbose;
-  mpfree::verbose = verbose_output;
+  if (effective_verbose_output) {
+    mpfree::verbose = true;
+  }
 
   for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
     auto first = matrices[i];
@@ -504,7 +546,9 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
     out.push_back(multi_critical_detail::convert_minpres<index_type>(min_rep, static_cast<int>(i)));
   }
 
-  mpfree::verbose = old_verbose;
+  if (effective_verbose_output) {
+    mpfree::verbose = old_verbose;
+  }
   return out;
 }
 

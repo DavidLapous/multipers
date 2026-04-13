@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -66,6 +67,7 @@ mpfree_minpres_with_generators_output<index_type> mpfree_minpres_with_generators
 #endif
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
+#include "backend_log_flags.hpp"
 #include "contiguous_slicer_bridge.hpp"
 
 namespace multipers {
@@ -109,6 +111,8 @@ inline bool mpfree_interface_available() { return MULTIPERS_HAS_MPFREE_INTERFACE
 namespace detail {
 
 inline std::mutex& mpfree_interface_mutex() {
+  // mpfree only needs serialization when the wrapper is allowed to touch
+  // backend-global verbose or timer state.
   static std::mutex m;
   return m;
 }
