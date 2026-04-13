@@ -138,5 +138,32 @@ def enable_ext_log(enabled: bool = True) -> None:
             setter(_EXT_LOG_ENABLED)
 
 
+def compiled_backend_log_flags() -> dict[str, bool | None]:
+    """Return the backend log flags compiled into the installed native modules."""
+
+    out: dict[str, bool | None] = {
+        "mpfree": None,
+        "2pac": None,
+        "multi_critical": None,
+        "function_delaunay": None,
+    }
+    for module_name in (
+        "multipers._mpfree_interface",
+        "multipers._2pac_interface",
+        "multipers._multi_critical_interface",
+        "multipers._function_delaunay_interface",
+    ):
+        try:
+            module = import_module(module_name)
+        except Exception:
+            continue
+        getter = getattr(module, "_compiled_log_flags", None)
+        if getter is None:
+            continue
+        for key, value in dict(getter()).items():
+            out[str(key)] = bool(value)
+    return out
+
+
 def ext_log_enabled() -> bool:
     return _EXT_LOG_ENABLED
