@@ -217,6 +217,15 @@ def dtype_default():
     return _jnp.array(0.0).dtype
 
 
+def inf_value(array):
+    dtype = array.dtype if hasattr(array, "dtype") else _jnp.dtype(array)
+    if _jnp.issubdtype(dtype, _jnp.inexact):
+        return _jnp.asarray(_jnp.inf, dtype=dtype)
+    if _jnp.issubdtype(dtype, _jnp.integer):
+        return _jnp.iinfo(dtype).max
+    raise ValueError(f"`dtype` must be integer or floating like (got {dtype=}).")
+
+
 def moveaxis(x, source, destination):
     return _jnp.moveaxis(x, source, destination)
 

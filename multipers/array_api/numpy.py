@@ -296,3 +296,15 @@ def dtype_is_float(dtype):
 
 def dtype_default():
     return _np.array(0.0).dtype
+
+
+def inf_value(array):
+    if isinstance(array, _np.ndarray):
+        dtype = _np.dtype(array.dtype)
+    else:
+        dtype = _np.dtype(array)
+    if _np.issubdtype(dtype, _np.inexact):
+        return _np.asarray(_np.inf, dtype=dtype)
+    if _np.issubdtype(dtype, _np.integer):
+        return _np.iinfo(dtype).max
+    raise ValueError(f"`dtype` must be integer or floating like (got {dtype=}).")

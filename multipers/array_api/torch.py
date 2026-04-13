@@ -274,3 +274,12 @@ def dtype_is_float(dtype):
 
 def dtype_default():
     return _torch.get_default_dtype()
+
+
+def inf_value(array):
+    dtype = array.dtype if isinstance(array, _torch.Tensor) else array
+    if not isinstance(dtype, _torch.dtype):
+        raise ValueError(f"Unsupported torch inf_value input: {array!r}")
+    if dtype.is_floating_point:
+        return _torch.tensor(float("inf"), dtype=dtype)
+    return _torch.iinfo(dtype).max
