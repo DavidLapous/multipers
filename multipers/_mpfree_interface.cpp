@@ -4,6 +4,7 @@
 
 #include <stdexcept>
 
+#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/mpfree_interface.hpp"
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
@@ -19,7 +20,13 @@ using namespace nb::literals;
 
 namespace mpmi {
 
-inline void set_backend_stdout(bool enabled) { mpfree::verbose = enabled; }
+inline void set_backend_stdout(bool enabled) {
+#if MPFREE_LOGS
+  mpfree::verbose = enabled;
+#else
+  (void)enabled;
+#endif
+}
 
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
@@ -65,6 +72,11 @@ NB_MODULE(_mpfree_interface, m) {
 #endif
 
   m.def("_is_available", []() { return multipers::mpfree_interface_available(); });
+  m.def("_compiled_log_flags", []() {
+    nb::dict out;
+    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
+    return out;
+  });
 
 #if MULTIPERS_DISABLE_MPFREE_INTERFACE
   m.def("_set_backend_stdout", [](bool) {}, "enabled"_a);

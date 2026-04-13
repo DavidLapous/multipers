@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/function_delaunay_interface.hpp"
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
@@ -77,6 +78,12 @@ nb::object function_delaunay_to_simplextree_for_target(nb::object target,
 
 NB_MODULE(_function_delaunay_interface, m) {
   m.def("_is_available", []() { return multipers::function_delaunay_interface_available(); });
+  m.def("_compiled_log_flags", []() {
+    nb::dict out;
+    out["function_delaunay"] = nb::bool_(multipers::backend_log_flags::function_delaunay);
+    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
+    return out;
+  });
 
   m.def(
       "function_delaunay_to_slicer",

@@ -4,6 +4,7 @@
 
 #include <stdexcept>
 
+#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/2pac_interface.hpp"
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
@@ -25,9 +26,10 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool use_clearing,
                                            bool use_chunk,
                                            bool verbose,
-                                           bool backend_stdout,
-                                           bool keep_generators) {
+                                            bool backend_stdout,
+                                            bool keep_generators) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
+  const bool effective_verbose_output = multipers::backend_log_flags::twopac && (backend_stdout || verbose);
   return multipers::nanobind_helpers::build_minpres_slicer_output_for_target(
       target,
       input_wrapper,
@@ -36,11 +38,11 @@ nb::object minimal_presentation_for_target(nb::object target,
       "2pac",
       [&] {
         return multipers::twopac_minpres_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout || verbose);
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, effective_verbose_output);
       },
       [&] {
         return multipers::twopac_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout || verbose);
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, effective_verbose_output);
       });
 }
 
@@ -49,6 +51,11 @@ nb::object minimal_presentation_for_target(nb::object target,
 
 NB_MODULE(_2pac_interface, m) {
   m.def("_is_available", []() { return multipers::twopac_interface_available(); });
+  m.def("_compiled_log_flags", []() {
+    nb::dict out;
+    out["2pac"] = nb::bool_(multipers::backend_log_flags::twopac);
+    return out;
+  });
 
   m.def(
       "minimal_presentation",

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend_log_flags.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <mutex>
@@ -120,6 +122,8 @@ struct twopac_raw_result {
 };
 
 inline std::mutex& twopac_interface_mutex() {
+  // 2pac still mutates process-global pivot caches and Timing::* state, so
+  // concurrent in-memory calls must stay serialized.
   static std::mutex m;
   return m;
 }
