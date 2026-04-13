@@ -35,6 +35,16 @@ if(MSVC)
   add_compile_options(/bigobj)
 endif()
 
+option(MPFREE_LOGS "Enable mpfree backend logs in Multipers interfaces" ON)
+option(TWOPAC_LOGS "Enable 2pac backend logs in Multipers interfaces" ON)
+option(MULTI_CRITICAL_LOGS "Enable multi_critical backend logs in Multipers interfaces" ON)
+option(FUNCTION_DELAUNAY_LOGS "Enable function_delaunay backend logs in Multipers interfaces" ON)
+
+message(STATUS "[logs] MPFREE_LOGS=${MPFREE_LOGS}")
+message(STATUS "[logs] TWOPAC_LOGS=${TWOPAC_LOGS}")
+message(STATUS "[logs] MULTI_CRITICAL_LOGS=${MULTI_CRITICAL_LOGS}")
+message(STATUS "[logs] FUNCTION_DELAUNAY_LOGS=${FUNCTION_DELAUNAY_LOGS}")
+
 include("${CMAKE_SOURCE_DIR}/cmake/MultipersDependencies.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/MultipersCodegen.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/MultipersBuild.cmake")
