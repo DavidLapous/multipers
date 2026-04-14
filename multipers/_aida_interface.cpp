@@ -92,19 +92,27 @@ nb::object summand_to_slicer(nb::object target,
 #endif
 
 NB_MODULE(_aida_interface, m) {
-  m.def("_is_available", []() {
+  auto available = []() {
 #if MULTIPERS_DISABLE_AIDA_INTERFACE
     return false;
 #else
     return true;
 #endif
+  };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [available]() {
+    if (!available()) {
+      throw std::runtime_error(
+          "AIDA interface is not available in this build. Rebuild multipers with AIDA support to enable this backend.");
+    }
   });
 
   m.def(
       "aida",
       [](nb::object s, bool sort, bool verbose, bool progress) {
 #if MULTIPERS_DISABLE_AIDA_INTERFACE
-        throw std::runtime_error("AIDA in-memory interface is disabled at compile time.");
+        throw std::runtime_error("AIDA interface is disabled at compile time.");
 #else
         nb::object target = mpaida::ensure_supported_target(s);
         if (sort) {

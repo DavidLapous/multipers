@@ -29,11 +29,7 @@ def _function_delaunay_presentation_to_slicer(
     del clear
     import multipers._function_delaunay_interface as _function_delaunay_interface
 
-    if not _function_delaunay_interface._is_available():
-        raise RuntimeError(
-            "function_delaunay interface is not available in this build. "
-            "Rebuild multipers with function_delaunay support to enable this backend."
-        )
+    _function_delaunay_interface.require()
 
     point_cloud = np.asarray(point_cloud, dtype=np.float64)
     function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
@@ -76,11 +72,7 @@ def _function_delaunay_presentation_to_simplextree(
     import multipers._function_delaunay_interface as _function_delaunay_interface
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
-    if not _function_delaunay_interface._is_available():
-        raise RuntimeError(
-            "function_delaunay interface is not available in this build. "
-            "Rebuild multipers with function_delaunay support to enable this backend."
-        )
+    _function_delaunay_interface.require()
 
     point_cloud = np.asarray(point_cloud, dtype=np.float64)
     function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
@@ -121,11 +113,7 @@ def _rhomboid_tiling_to_slicer(
     del clear
     import multipers._rhomboid_tiling_interface as _rhomboid_tiling_interface
 
-    if not _rhomboid_tiling_interface._is_available():
-        raise RuntimeError(
-            "rhomboid_tiling interface is not available in this build. "
-            "Rebuild multipers with rhomboid_tiling support to enable this backend."
-        )
+    _rhomboid_tiling_interface.require()
 
     point_cloud = np.asarray(point_cloud, dtype=np.float64)
     if point_cloud.ndim != 2 or point_cloud.shape[1] not in [2, 3]:

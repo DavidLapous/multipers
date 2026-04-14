@@ -138,14 +138,22 @@ def _sliced_wasserstein_distance_on_projections(meas1, meas2):
     B = api.sort(api.cat([meas2_plus, meas1_minus], 0), axis=0)
     target_rows = max(A.shape[0], B.shape[0])
     if target_rows == 0:
-        return api.astensor(0.0, dtype=weights.dtype)
+        return api.to_device(api.zeros((), dtype=weights.dtype), api.device(weights))
     if A.shape[0] != target_rows:
+        padding = api.to_device(
+            api.zeros((target_rows - A.shape[0], A.shape[1]), dtype=A.dtype),
+            api.device(A),
+        )
         A = api.cat(
-            [A, api.zeros((target_rows - A.shape[0], A.shape[1]), dtype=A.dtype)], 0
+            [A, padding], 0
         )
     if B.shape[0] != target_rows:
+        padding = api.to_device(
+            api.zeros((target_rows - B.shape[0], B.shape[1]), dtype=B.dtype),
+            api.device(B),
+        )
         B = api.cat(
-            [B, api.zeros((target_rows - B.shape[0], B.shape[1]), dtype=B.dtype)], 0
+            [B, padding], 0
         )
     L1 = api.sum(api.abs(A - B), axis=0)
     return api.mean(L1 * weights)
@@ -307,7 +315,7 @@ _MATCHING_DISTANCE_MONTE_CARLO_SOFTMAX_REDUCTION = re.compile(r"softmax(\d+(?:\.
 def _require_hera_backend():
     if importlib.util.find_spec("multipers._hera_interface") is None:
         raise RuntimeError(
-            "Hera in-memory interface is not available in this build. "
+            "Hera interface is not available in this build. "
             "Rebuild multipers with Hera headers to enable this backend."
         )
 
@@ -315,7 +323,7 @@ def _require_hera_backend():
 
     if not _hera_interface._is_available():
         raise RuntimeError(
-            "Hera in-memory interface is not available in this build. "
+            "Hera interface is not available in this build. "
             "Rebuild multipers with Hera headers to enable this backend."
         )
     return _hera_interface
@@ -345,18 +353,22 @@ def _normalize_hera_strategy(strategy, options, name: str) -> int:
     )
 
 
-def hera_bottleneck_distances(left_diagrams, right_diagrams, *, delta: float = 0.01):
+def hera_bottleneck_distances(
+    left_diagrams, right_diagrams, *, delta: float = 0.01, n_jobs: int = 0
+):
     """
     Compute Hera bottleneck distances for aligned batches of persistence diagrams.
 
-    The batch is evaluated in parallel inside the compiled Hera bridge with
-    `cython.prange`, so it is the preferred backend for many line slices.
+    The compiled Hera bridge drops diagonal points once, then evaluates the
+    batch with a native TBB loop when available. `n_jobs <= 0` keeps backend
+    default concurrency.
     """
     _hera_interface = _require_hera_backend()
     return _hera_interface.bottleneck_distances(
         left_diagrams,
         right_diagrams,
         delta=delta,
+        n_jobs=int(n_jobs),
     )
 
 

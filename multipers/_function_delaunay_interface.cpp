@@ -77,7 +77,15 @@ nb::object function_delaunay_to_simplextree_for_target(nb::object target,
 }  // namespace mpfd
 
 NB_MODULE(_function_delaunay_interface, m) {
-  m.def("_is_available", []() { return multipers::function_delaunay_interface_available(); });
+  auto available = []() { return multipers::function_delaunay_interface_available(); };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [available]() {
+    if (!available()) {
+      throw std::runtime_error(
+          "function_delaunay interface is not available in this build. Rebuild multipers with function_delaunay support to enable this backend.");
+    }
+  });
   m.def("_compiled_log_flags", []() {
     nb::dict out;
     out["function_delaunay"] = nb::bool_(multipers::backend_log_flags::function_delaunay);
@@ -95,7 +103,7 @@ NB_MODULE(_function_delaunay_interface, m) {
          bool recover_ids,
          bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
-        throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
+        throw std::runtime_error("function_delaunay interface is disabled at compile time.");
 #else
         auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
@@ -117,7 +125,7 @@ NB_MODULE(_function_delaunay_interface, m) {
       "function_delaunay_to_simplextree",
       [](nb::object simplextree, nb::handle point_cloud, nb::handle function_values, bool recover_ids, bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
-        throw std::runtime_error("function_delaunay in-memory interface is disabled at compile time.");
+        throw std::runtime_error("function_delaunay interface is disabled at compile time.");
 #else
         if (!mpfd::is_simplextree_object(simplextree)) {
           throw nb::type_error("function_delaunay_to_simplextree expects a SimplexTreeMulti target.");

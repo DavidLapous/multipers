@@ -71,7 +71,15 @@ NB_MODULE(_mpfree_interface, m) {
   (void)ext_log_enabled;
 #endif
 
-  m.def("_is_available", []() { return multipers::mpfree_interface_available(); });
+  auto available = []() { return multipers::mpfree_interface_available(); };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [available]() {
+    if (!available()) {
+      throw std::runtime_error(
+          "mpfree interface is not available in this build. Rebuild multipers with mpfree support to enable this backend.");
+    }
+  });
   m.def("_compiled_log_flags", []() {
     nb::dict out;
     out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
@@ -95,10 +103,10 @@ NB_MODULE(_mpfree_interface, m) {
          bool verbose,
          bool backend_stdout) {
 #if MULTIPERS_DISABLE_MPFREE_INTERFACE
-        throw std::runtime_error("mpfree in-memory interface is disabled at compile time.");
+        throw std::runtime_error("mpfree interface is disabled at compile time.");
 #else
         if (!multipers::mpfree_interface_available()) {
-          throw std::runtime_error("mpfree in-memory interface is not available.");
+          throw std::runtime_error("mpfree interface is not available.");
         }
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
             slicer,

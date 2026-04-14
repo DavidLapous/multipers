@@ -50,7 +50,15 @@ nb::object minimal_presentation_for_target(nb::object target,
 #endif
 
 NB_MODULE(_2pac_interface, m) {
-  m.def("_is_available", []() { return multipers::twopac_interface_available(); });
+  auto available = []() { return multipers::twopac_interface_available(); };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [available]() {
+    if (!available()) {
+      throw std::runtime_error(
+          "2pac interface is not available in this build. Rebuild multipers with 2pac support to enable this backend.");
+    }
+  });
   m.def("_compiled_log_flags", []() {
     nb::dict out;
     out["2pac"] = nb::bool_(multipers::backend_log_flags::twopac);
@@ -68,10 +76,10 @@ NB_MODULE(_2pac_interface, m) {
          bool verbose,
          bool backend_stdout) {
 #if MULTIPERS_DISABLE_2PAC_INTERFACE
-        throw std::runtime_error("2pac in-memory interface is disabled at compile time.");
+        throw std::runtime_error("2pac interface is disabled at compile time.");
 #else
         if (!multipers::twopac_interface_available()) {
-          throw std::runtime_error("2pac in-memory interface is not available.");
+          throw std::runtime_error("2pac interface is not available.");
         }
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
             slicer,

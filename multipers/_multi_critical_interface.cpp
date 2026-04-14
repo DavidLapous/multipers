@@ -464,11 +464,20 @@ nb::object output_to_slicer(int target_template_id,
 #endif
 
 NB_MODULE(_multi_critical_interface, m) {
+  auto require = [](bool available) {
+    if (!available) {
+      throw std::runtime_error(
+          "multi_critical interface is not available in this build. Rebuild multipers with multi_critical support to enable this backend.");
+    }
+  };
 #if MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
   auto unavailable = [](nb::args, nb::kwargs) {
-    throw std::runtime_error("multi_critical in-memory interface is disabled at compile time.");
+    throw std::runtime_error("multi_critical interface is disabled at compile time.");
   };
-  m.def("_is_available", []() { return false; });
+  auto available = []() { return false; };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [require, available]() { require(available()); });
   m.def("_compiled_log_flags", []() {
     nb::dict out;
     out["multi_critical"] = nb::bool_(multipers::backend_log_flags::multi_critical);
@@ -495,11 +504,14 @@ NB_MODULE(_multi_critical_interface, m) {
   }
   mpmc::set_backend_stdout(ext_log_enabled);
 
-  m.def("_is_available", []() {
+  auto available = []() {
     if (!multipers::multi_critical_interface_available()) return false;
     return multipers::nanobind_helpers::has_slicer_filtration_container(
         multipers::nanobind_helpers::SlicerDescriptorList{}, "Flat");
-  });
+  };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [require, available]() { require(available()); });
   m.def("_compiled_log_flags", []() {
     nb::dict out;
     out["multi_critical"] = nb::bool_(multipers::backend_log_flags::multi_critical);
@@ -521,7 +533,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool kcritical,
          std::string filtration_container) {
         if (!multipers::multi_critical_interface_available()) {
-          throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
+          throw std::runtime_error("multi_critical interface is not available in this build.");
         }
 
         bool use_logpath = algo != "path";
@@ -572,7 +584,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool verbose,
          bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
-          throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
+          throw std::runtime_error("multi_critical interface is not available in this build.");
         }
         auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
         multipers::multi_critical_interface_output<int> output;
@@ -607,7 +619,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool swedish,
          bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
-          throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
+          throw std::runtime_error("multi_critical interface is not available in this build.");
         }
         auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
         multipers::multi_critical_interface_output<int> output;
@@ -643,7 +655,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool swedish,
          bool backend_stdout) {
         if (!multipers::multi_critical_interface_available()) {
-          throw std::runtime_error("multi_critical in-memory interface is not available in this build.");
+          throw std::runtime_error("multi_critical interface is not available in this build.");
         }
         auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
