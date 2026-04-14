@@ -78,8 +78,8 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
         for (std::size_t j = 0; j < num_parameters; ++j) {
           const double direction_value = direction[j];
           if (direction_value) is_trivial = false;
-          if (direction_value < 0.0) {
-            throw std::invalid_argument("Direction should have positive entries.");
+          if (direction_value <= 0.0) {
+            throw std::invalid_argument("Direction should have strictly positive entries.");
           }
           line.base_point()[j] = basepoint[j];
           line.direction()[j] = direction_value;
@@ -113,8 +113,8 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
     for (std::size_t j = 0; j < num_parameters; ++j) {
       const double direction_value = direction[j];
       if (direction_value) is_trivial = false;
-      if (direction_value < 0.0) {
-        throw std::invalid_argument("Direction should have positive entries.");
+      if (direction_value <= 0.0) {
+        throw std::invalid_argument("Direction should have strictly positive entries.");
       }
       line.base_point()[j] = basepoint[j];
       line.direction()[j] = direction_value;
