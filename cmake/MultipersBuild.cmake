@@ -248,7 +248,31 @@ endif()
 
 find_program(MULTIPERS_PATCH_EXECUTABLE patch REQUIRED)
 
-function(multipers_add_generated_patch_overlay target_name library_name patch_file library_relative_root overlay_root_var)
+set(MULTIPERS_EXT_PATCH_DIR "${CMAKE_SOURCE_DIR}/ext/patches")
+set(MULTIPERS_EXT_PATCH_GENERATOR "${MULTIPERS_EXT_PATCH_DIR}/generate_log_patch.py")
+
+function(multipers_add_generated_patch_file target_name library_name patch_file output_var)
+  set(_patch_path "${MULTIPERS_EXT_PATCH_DIR}/${patch_file}")
+  add_custom_command(
+    OUTPUT "${_patch_path}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${MULTIPERS_EXT_PATCH_DIR}"
+    COMMAND
+      "${Python3_EXECUTABLE}"
+      "${MULTIPERS_EXT_PATCH_GENERATOR}"
+      "${library_name}"
+      --output
+      "${_patch_path}"
+    DEPENDS
+      "${MULTIPERS_EXT_PATCH_GENERATOR}"
+      ${ARGN}
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    VERBATIM
+  )
+  add_custom_target(${target_name} DEPENDS "${_patch_path}")
+  set(${output_var} "${_patch_path}" PARENT_SCOPE)
+endfunction()
+
+function(multipers_add_generated_patch_overlay target_name library_name patch_path library_relative_root overlay_root_var)
   set(_overlay_root "${CMAKE_BINARY_DIR}/patched_ext/${library_name}")
   set(_stamp_file "${_overlay_root}/${library_name}_runtime_logs.stamp")
   add_custom_command(
@@ -259,24 +283,67 @@ function(multipers_add_generated_patch_overlay target_name library_name patch_fi
             -DLIBRARY_NAME=${library_name}
             -DLIBRARY_RELATIVE_ROOT=${library_relative_root}
             "-DSUBDIRS=${ARGN}"
-            -DPATCH_FILE=${CMAKE_SOURCE_DIR}/ext/patches/${patch_file}
+            -DPATCH_FILE=${patch_path}
             -DPATCH_EXECUTABLE=${MULTIPERS_PATCH_EXECUTABLE}
             -DSTAMP_FILE=${_stamp_file}
             -P "${CMAKE_SOURCE_DIR}/cmake/ApplyExtPatchOverlay.cmake"
     DEPENDS
       "${CMAKE_SOURCE_DIR}/cmake/ApplyExtPatchOverlay.cmake"
-      "${CMAKE_SOURCE_DIR}/ext/patches/${patch_file}"
-      "${CMAKE_SOURCE_DIR}/ext/patches/generate_log_patch.py"
+      "${patch_path}"
+      "${MULTIPERS_EXT_PATCH_GENERATOR}"
     VERBATIM
   )
   add_custom_target(${target_name} DEPENDS "${_stamp_file}")
   set(${overlay_root_var} "${_overlay_root}" PARENT_SCOPE)
 endfunction()
 
+file(
+  GLOB MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_INPUTS
+  CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/*.h"
+)
+
+multipers_add_generated_patch_file(
+  multipers_generate_mpfree_log_patch
+  mpfree
+  mpfree_runtime_logs.patch
+  MULTIPERS_MPFREE_LOG_PATCH_FILE
+  "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/global.h"
+)
+
+multipers_add_generated_patch_file(
+  multipers_generate_function_delaunay_log_patch
+  function_delaunay
+  function_delaunay_runtime_logs.patch
+  MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE
+  ${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_INPUTS}
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpfree_mod/include/mpfree/global.h"
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/multi_chunk_mod/include/multi_chunk/basic.h"
+)
+
+multipers_add_generated_patch_file(
+  multipers_generate_multi_critical_log_patch
+  multi_critical
+  multi_critical_runtime_logs.patch
+  MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include/mpfree/global.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/multi_chunk_mod/include/multi_chunk/basic.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
+)
+
+add_custom_target(
+  multipers_generate_ext_patches
+  DEPENDS
+    "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
+    "${MULTIPERS_MPFREE_LOG_PATCH_FILE}"
+    "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
+)
+
 multipers_add_generated_patch_overlay(
   multipers_mpfree_log_overlay
   mpfree
-  mpfree_runtime_logs.patch
+  "${MULTIPERS_MPFREE_LOG_PATCH_FILE}"
   ext/mpfree
   MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT
   include
@@ -285,7 +352,7 @@ multipers_add_generated_patch_overlay(
 multipers_add_generated_patch_overlay(
   multipers_function_delaunay_log_overlay
   function_delaunay
-  function_delaunay_runtime_logs.patch
+  "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
   ext/function_delaunay
   MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
   include
@@ -296,7 +363,7 @@ multipers_add_generated_patch_overlay(
 multipers_add_generated_patch_overlay(
   multipers_multi_critical_log_overlay
   multi_critical
-  multi_critical_runtime_logs.patch
+  "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
   ext/multi_critical
   MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
   include
