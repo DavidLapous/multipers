@@ -2,7 +2,145 @@ import numpy as np
 from typing import Iterable, Literal, Optional
 
 import multipers.logs as _mp_logs
-from multipers._stdout_silence import call_silencing_stdout
+
+
+def _minimal_presentation_from_slicer(
+    slicer,
+    degree,
+    backend="mpfree",
+    auto_clean=True,
+    verbose=False,
+    full_resolution=True,
+    use_clearing=True,
+    use_chunk=True,
+    keep_generators=False,
+):
+    if backend == "mpfree":
+        from multipers import _mpfree_interface
+
+        if not _mpfree_interface._is_available():
+            raise RuntimeError(
+                "mpfree in-memory interface is not available in this build. "
+                "Rebuild multipers with mpfree support to enable this backend."
+            )
+        with _mp_logs.timings(
+            "minimal_presentation",
+            enabled=verbose,
+            details={"backend": "mpfree", "mode": "cpp_interface", "degree": degree},
+        ) as timing:
+            new_slicer = _mpfree_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                _backend_stdout=_mp_logs.ext_log_enabled(),
+                use_chunk=use_chunk,
+                use_clearing=use_clearing,
+                full_resolution=full_resolution,
+                keep_generators=keep_generators,
+            )
+            timing.substep("backend_call")
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
+    if backend == "2pac":
+        from multipers import _2pac_interface
+
+        if not _2pac_interface._is_available():
+            raise RuntimeError(
+                "2pac in-memory interface is not available in this build. "
+                "Rebuild multipers with 2pac support to enable this backend."
+            )
+        with _mp_logs.timings(
+            "minimal_presentation",
+            enabled=verbose,
+            details={
+                "backend": "2pac",
+                "mode": "cpp_interface",
+                "degree": degree,
+                "keep_generators": keep_generators,
+            },
+        ) as timing:
+            new_slicer = _2pac_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                _backend_stdout=_mp_logs.ext_log_enabled(),
+                use_chunk=use_chunk,
+                use_clearing=use_clearing,
+                full_resolution=full_resolution,
+                keep_generators=keep_generators,
+            )
+            timing.substep("backend_call")
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
+    raise ValueError(
+        f"Unsupported backend {backend!r}. Minimal presentation supports only in-memory `mpfree` and `2pac`."
+    )
+
+
+def _multi_critical_from_slicer(
+    slicer,
+    reduce=False,
+    algo: Literal["path", "tree"] = "path",
+    degree: Optional[int] = None,
+    clear=True,
+    swedish=None,
+    verbose=False,
+    kcritical=False,
+    filtration_container="contiguous",
+    **slicer_kwargs,
+):
+    del clear
+    from multipers import _multi_critical_interface
+
+    if not _multi_critical_interface._is_available():
+        raise RuntimeError(
+            "multi_critical in-memory interface is not available in this build. "
+            "Rebuild multipers with multi_critical support to enable this backend."
+        )
+
+    reduce = False if reduce is None else reduce
+    swedish = degree is not None if swedish is None else swedish
+    if reduce:
+        out_kcritical = kcritical
+        out_filtration_container = filtration_container
+    else:
+        out_kcritical = False
+        out_filtration_container = "contiguous"
+
+    with _mp_logs.timings(
+        "one_criticalify",
+        enabled=verbose,
+        details={
+            "backend": "multi_critical",
+            "mode": "cpp_interface",
+            "algo": algo,
+            "reduce": reduce,
+            "degree": degree,
+            "swedish": swedish,
+        },
+    ) as timing:
+        out = _multi_critical_interface.one_criticalify(
+            slicer,
+            reduce=reduce,
+            algo=algo,
+            degree=degree,
+            swedish=swedish,
+            verbose=verbose,
+            _backend_stdout=_mp_logs.ext_log_enabled(),
+            kcritical=out_kcritical,
+            filtration_container=out_filtration_container,
+            **slicer_kwargs,
+        )
+        timing.substep("backend_call")
+        return out
 
 
 def aida(s, sort=True, verbose=False, progress=False):
@@ -45,7 +183,6 @@ def one_criticalify(
     From [Fast free resolutions of bifiltered chain complexes](https://doi.org/10.48550/arXiv.2512.08652),
     whose code is available here: https://bitbucket.org/mkerber/multi_critical
     """
-    from multipers.io import _multi_critical_from_slicer
     from multipers.slicer import is_slicer
     from multipers.simplex_tree_multi import is_simplextree_multi
 
@@ -69,8 +206,7 @@ def one_criticalify(
         F = None
     if reduce is None and degree is not None:
         reduce = True
-    out = call_silencing_stdout(
-        _multi_critical_from_slicer,
+    out = _multi_critical_from_slicer(
         working_slicer,
         reduce=reduce,
         algo=algo,
@@ -80,7 +216,6 @@ def one_criticalify(
         verbose=verbose,
         kcritical=kcritical,
         filtration_container=filtration_container,
-        enabled=not _mp_logs.ext_log_enabled(),
     )
     if not reduce and is_slicer(out):
         out = out.astype(
@@ -128,7 +263,6 @@ def minimal_presentation(
 
     Available backends include `mpfree` and `2pac`.
     """
-    from multipers.io import _minimal_presentation_from_slicer
     from joblib import Parallel, delayed
     from multipers.slicer import is_slicer
 
@@ -164,8 +298,7 @@ def minimal_presentation(
     if idx >= dimensions.shape[0] or dimensions[idx] != degree:
         return type(slicer)()
 
-    return call_silencing_stdout(
-        _minimal_presentation_from_slicer,
+    return _minimal_presentation_from_slicer(
         slicer,
         degree=degree,
         backend=backend,
@@ -175,5 +308,4 @@ def minimal_presentation(
         use_chunk=use_chunk,
         use_clearing=use_clearing,
         keep_generators=keep_generators,
-        enabled=not _mp_logs.ext_log_enabled(),
     )
