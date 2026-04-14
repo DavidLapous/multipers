@@ -35,8 +35,6 @@ available_filtration_container = {
     cls().filtration_container for cls in available_slicers
 }
 
-_eq_raw = {}
-
 Slicer_type = reduce(or_, available_slicers) if available_slicers else Any
 _valid_dtype = Any
 _valid_pers_backend = str
@@ -138,16 +136,6 @@ def _get_filtrations(
     return evaluate_in_grid(
         np.asarray(out, dtype=np.int32).clip(None, grid_size - 1), grid
     )
-
-
-def _make_filtration_non_decreasing(self, safe=True):
-    return self._make_filtration_non_decreasing_raw(safe=safe)
-
-
-def _simplify_filtration(self):
-    return self._simplify_filtration_raw()
-
-
 def _compute_persistence(
     self, one_filtration=None, ignore_infinite_filtration_values=True, verbose=False
 ):
@@ -174,13 +162,6 @@ def _compute_persistence(
         return out[0] if squeeze else out
     self.initialize_persistence_computation(ignore_infinite_filtration_values)
     return self.get_barcode()
-
-
-def _sliced_filtration(self, basepoint, direction=None):
-    self.push_to_line(basepoint, direction)
-    return np.asarray(self.get_current_filtration())
-
-
 def _filtration_bounds(self):
     values = np.asarray(self.get_filtrations_values(), dtype=self.dtype)
     if values.size == 0:
@@ -194,7 +175,44 @@ def _get_filtration_grid(self, grid_strategy="exact", **infer_grid_kwargs):
     )
 
 
-def _persistence_on_line(
+def _bp_dir_to_2d(basepoints, directions, api):
+    basepoints = api.astensor(basepoints)
+    if basepoints.ndim == 1:
+        basepoints = basepoints.reshape(1,-1)
+
+    if basepoints.ndim != 2:
+        raise ValueError(
+            f"Expected a basepoint shape of the form (num_parameters,). Got {basepoints.shape=}"
+        )
+    if directions is not None:
+        directions = api.astensor(directions)
+        if directions.ndim == 1:
+            directions = directions[None]
+        if directions.ndim != 2:
+            raise ValueError(
+                f"Expected a direction shape of the form (num_parameters,). Got {directions.shape=}"
+            )
+
+    return basepoints, directions
+
+
+def _current_bc(
+    self, keep_inf=True, full=False, basepoint=None, direction=None
+):
+    bcs = tuple(np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode())
+    if not keep_inf:
+        inf_value = type(self)._inf_value()
+        bcs = tuple(
+            np.asarray(
+                [a for a in stuff if a[0] < inf_value],
+                dtype=np.dtype((self.dtype, 2)),
+            )
+            for stuff in bcs
+        )
+    if full:
+        bcs = _bc_to_full(bcs, basepoint, direction)
+    return bcs
+def _pers_on_line(
     self,
     basepoint,
     direction=None,
@@ -202,64 +220,82 @@ def _persistence_on_line(
     full=False,
     ignore_infinite_filtration_values=True,
 ):
-    if np.issubdtype(np.dtype(self.dtype), np.floating):
-        api = api_from_tensors(basepoint)
-        basepoint = api.asnumpy(basepoint)
-        direction = None if direction is None else api.asnumpy(direction)
-        if api.has_grad(basepoint) or (
-            direction is not None and api.has_grad(direction)
-        ):
-            _mp_logs.warn_autodiff(
-                "Ignored gradient from input. Use a squeezed slicer for autodiff."
-            )
-        self.push_to_line(basepoint, direction)
-        self.initialize_persistence_computation(ignore_infinite_filtration_values)
-        bcs = tuple(np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode())
-        if not keep_inf:
-            inf_value = type(self)._inf_value()
-            bcs = tuple(
-                np.asarray(
-                    [a for a in stuff if a[0] < inf_value],
-                    dtype=np.dtype((self.dtype, 2)),
-                )
-                for stuff in bcs
-            )
-        if full:
-            bcs = self._bc_to_full(bcs, basepoint, direction)
-        return bcs
+    self.push_to_line(basepoint, direction)
+    self.initialize_persistence_computation(ignore_infinite_filtration_values)
+    return _current_bc(
+        self,
+        keep_inf=keep_inf,
+        full=full,
+        basepoint=basepoint,
+        direction=direction,
+    )
 
-    if not self.is_squeezed:
-        raise ValueError(
-            "Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers."
+
+def _barcode_coordinates_to_values(
+    self, barcode, line_values, line_coordinates, api, keep_inf
+):
+    coord_values = api.set_at(line_values * 0, line_coordinates, line_values)
+    inf_coord = type(self)._inf_value()
+    out = []
+    for dim_barcode in barcode:
+        coords = np.asarray(dim_barcode, dtype=np.int64)
+        current = evaluate_in_grid(
+            coords,
+            (coord_values, coord_values),
+            input_inf_value=inf_coord,
+            output_inf_value=api.inf,
+            api=api,
         )
-    api = api_from_tensors(basepoint, *self.filtration_grid)
-    basepoint = api.astensor(basepoint)
-    fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
-    if basepoint.ndim == 0 or basepoint.ndim > 2:
-        raise ValueError(
-            f"Expected a basepoint shape of the form (num_parameters,). Got {basepoint.shape=}"
+        if not keep_inf:
+            current = current[current[:, 0] < api.inf]
+        out.append(current)
+    return tuple(out)
+
+
+def _coordinate_persistence_on_lines(
+    self,
+    filtration_points,
+    basepoints,
+    directions,
+    api,
+    keep_inf,
+    full,
+    ignore_infinite_filtration_values,
+): 
+    dims = np.asarray(self.get_dimensions(), dtype=np.int32)
+    dim_values = np.arange(dims[0], dims[-1] + 1, dtype=dims.dtype)
+    starts = np.searchsorted(dims, dim_values, side="left")
+    ends = np.searchsorted(dims, dim_values, side="right")
+    fil_blocks = []
+    coord_blocks = []
+    next_rank = 0
+    for start, end in zip(starts, ends):
+        fil_block, coord_block = _push_pts_to_lines(
+            filtration_points[start:end],
+            basepoints,
+            directions,
+            api=api,
+            return_coordinate=True,
         )
-    if basepoint.ndim == 1:
-        basepoint = basepoint[None]
-    if direction is not None:
-        direction = api.astensor(direction)
-        if direction.ndim == 0 or direction.ndim > 2:
-            raise ValueError(
-                f"Expected a direction shape of the form (num_parameters,). Got {direction.shape=}"
-            )
-        if direction.ndim == 1:
-            direction = direction[None]
-    projected_fil = _push_pts_to_lines(fil, basepoint, direction, api=api)
-    bcs = self.compute_persistence(
-        projected_fil,
+        fil_blocks.append(fil_block)
+        coord_blocks.append(coord_block + next_rank)
+        next_rank += end - start
+
+    fil = api.cat(fil_blocks, axis=1)
+    coords = api.cat(coord_blocks, axis=1)
+    coord_barcodes = self.compute_persistence(
+        coords,
         ignore_infinite_filtration_values=ignore_infinite_filtration_values,
     )
-    if full:
-        dirs = [None] * len(basepoint) if direction is None else direction
-        bcs = tuple(
-            self._bc_to_full(x, bp, dir_) for x, bp, dir_ in zip(bcs, basepoint, dirs)
+    out = tuple(
+        _barcode_coordinates_to_values(
+            self, barcode, line_values, line_coordinates, api, keep_inf
         )
-    return bcs
+        for barcode, line_values, line_coordinates in zip(coord_barcodes, fil, coords)
+    )
+    if full:
+        out = _bc_to_full(out, basepoints, directions)
+    return out
 
 
 def _persistence_on_lines(
@@ -269,15 +305,67 @@ def _persistence_on_lines(
     keep_inf=True,
     full=False,
     ignore_infinite_filtration_values=True,
+    api=None,
+    *,
+    _single_input=False,
 ):
-    api = api_from_tensors(basepoints)
+    if self.is_squeezed:
+        if api is None:
+            api = api_from_tensors(basepoints, *self.filtration_grid)
+        basepoints, directions = _bp_dir_to_2d(basepoints, directions, api)
+
+        fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
+        return _coordinate_persistence_on_lines(
+            self,
+            fil,
+            basepoints,
+            directions,
+            api,
+            keep_inf,
+            full,
+            ignore_infinite_filtration_values,
+        )
+
+    if npapi.is_float(self.dtype) and not self.is_kcritical:
+        if api is None:
+            api = api_from_tensors(basepoints)
+        basepoints, directions = _bp_dir_to_2d(basepoints, directions, api)
+        if api.has_grad(basepoints) or (
+            directions is not None and api.has_grad(directions)
+        ):
+            _mp_logs.warn_autodiff(
+                "Ignored gradient from input. Use a squeezed slicer for autodiff."
+            )
+
+        out = self.compute_persistence(
+            _push_pts_to_lines(
+                api.astensor(np.asarray(self.get_filtrations(), dtype=self.dtype)),
+                basepoints,
+                directions,
+                api=api,
+            ),
+            ignore_infinite_filtration_values=ignore_infinite_filtration_values,
+        )
+        if full:
+            out = _bc_to_full(out, basepoints, directions)
+        return out
+
+    if api is None:
+        api = api_from_tensors(basepoints)
     basepoints = api.asnumpy(basepoints)
     directions = None if directions is None else api.asnumpy(directions)
     if api.has_grad(basepoints) or (
         directions is not None and api.has_grad(directions)
     ):
         _mp_logs.warn_autodiff(
-            "Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines)."
+            "Ignored gradient from input. Use a squeezed slicer for autodiff."
+            if _single_input
+            else "Ignored gradient from input. Use `persistence_on_line` for autodiff (supports multilines)."
+        )
+
+    if npapi.is_int(self.dtype) and not self.is_squeezed:
+        raise ValueError(
+            "Unsqueeze tensor, or provide a filtration grid. Cannot slice lines with integers."
         )
 
     if basepoints.ndim == 1:
@@ -290,7 +378,8 @@ def _persistence_on_lines(
         direction = None if directions is None else directions[i]
         if i == 0 or not self.is_vine:
             out.append(
-                self.persistence_on_line(
+                _pers_on_line(
+                    self,
                     bp,
                     direction,
                     keep_inf=keep_inf,
@@ -301,22 +390,53 @@ def _persistence_on_lines(
         else:
             self.push_to_line(bp, direction)
             self.update_persistence_computation()
-            bcs = tuple(
-                np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode()
-            )
-            if not keep_inf:
-                inf_value = type(self)._inf_value()
-                bcs = tuple(
-                    np.asarray(
-                        [a for a in stuff if a[0] < inf_value],
-                        dtype=np.dtype((self.dtype, 2)),
-                    )
-                    for stuff in bcs
+            out.append(
+                _current_bc(
+                    self,
+                    keep_inf=keep_inf,
+                    full=full,
+                    basepoint=bp,
+                    direction=direction,
                 )
-            if full:
-                bcs = self._bc_to_full(bcs, bp, direction)
-            out.append(bcs)
+            )
     return tuple(out)
+
+
+def _persistence_on_line(
+    self,
+    basepoint,
+    direction=None,
+    keep_inf=True,
+    full=False,
+    ignore_infinite_filtration_values=True,
+    api=None,
+):
+    out = _persistence_on_lines(
+        self,
+        basepoint,
+        direction,
+        keep_inf=keep_inf,
+        full=full,
+        ignore_infinite_filtration_values=ignore_infinite_filtration_values,
+        api=api,
+        _single_input=True,
+    )
+    if api is None:
+        api = api_from_tensors(basepoint)
+    basepoint = api.astensor(basepoint)
+    if self.is_squeezed:
+        return out if basepoint.ndim != 1 else out[0]
+    if basepoint.ndim != 1:
+        raise ValueError(
+            f"Expected a basepoint shape of the form (num_parameters,). Got {basepoint.shape=}"
+        )
+    if direction is not None:
+        direction = api.astensor(direction)
+        if direction.ndim != 1:
+            raise ValueError(
+                f"Expected a direction shape of the form (num_parameters,). Got {direction.shape=}"
+            )
+    return out[0]
 
 
 def _getstate(self):
@@ -339,57 +459,22 @@ def _setstate(self, dump):
     else:
         generator_basis = None
         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
-        copy = type(self)(boundaries, dimensions, filtrations)
-        self._copy_from_any(copy)
+        self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
     self.minpres_degree = minpres_degree
     self.filtration_grid = filtration_grid
     self._generator_basis = generator_basis
 
 
-def _eq(self, other):
-    if other.is_squeezed:
-        return self == other.unsqueeze()
-    if self.is_squeezed:
-        return self.unsqueeze() == other
-    self_boundaries = self.get_boundaries(packed=True)
-    other_boundaries = other.get_boundaries(packed=True)
-    if not (
-        np.array_equal(self.get_dimensions(), other.get_dimensions())
-        and np.array_equal(self_boundaries[0], other_boundaries[0])
-        and np.array_equal(self_boundaries[1], other_boundaries[1])
-    ):
-        return False
-    if not self.is_kcritical:
-        return np.array_equal(
-            self.get_filtrations_values(), other.get_filtrations_values()
-        )
-
-    self_filtrations = self.get_filtrations()
-    other_filtrations = other.get_filtrations()
-    if len(self_filtrations) != len(other_filtrations):
-        return False
-    for current, reference in zip(self_filtrations, other_filtrations):
-        current_rows = sorted(
-            map(
-                tuple,
-                np.asarray(current, dtype=self.dtype).reshape(-1, self.num_parameters),
-            )
-        )
-        reference_rows = sorted(
-            map(
-                tuple,
-                np.asarray(reference, dtype=other.dtype).reshape(
-                    -1, other.num_parameters
-                ),
-            )
-        )
-        if current_rows != reference_rows:
-            return False
-    return True
-
-
 def _bc_to_full(bcs, basepoint, direction=None):
-    basepoint = np.asarray(basepoint)[None, None, :]
+    basepoint = np.asarray(basepoint)
+    if basepoint.ndim > 1:
+        directions = [None] * len(basepoint) if direction is None else direction
+        return tuple(
+            _bc_to_full(current, bp, dir_)
+            for current, bp, dir_ in zip(bcs, basepoint, directions)
+        )
+
+    basepoint = basepoint[None, None, :]
     direction = 1 if direction is None else np.asarray(direction)[None, None, :]
     return tuple(bc[:, :, None] * direction + basepoint for bc in bcs)
 
@@ -458,8 +543,6 @@ def _minpres(
     degree=-1,
     degrees=None,
     backend="mpfree",
-    vineyard=None,
-    dtype=None,
     force=True,
     auto_clean=True,
     full_resolution=True,
@@ -636,64 +719,16 @@ def get_matrix_slicer(
         ) from exc
 
 
-from multipers._slicer_algorithms import (  # noqa: E402
-    _hilbert_signed_measure,
-    _rank_from_slicer,
-    from_bitmap,
-)
-
-
-def from_function_delaunay(
-    points,
-    grades,
-    degree=-1,
-    backend: Optional[_valid_pers_backend] = None,
-    vineyard=None,
-    dtype=np.float64,
-    verbose=False,
-    clear=True,
-    recover_ids: bool = False,
-):
-    from multipers.io import (
-        function_delaunay_presentation_to_simplextree,
-        function_delaunay_presentation_to_slicer,
-    )
-
-    if degree < 0:
-        return function_delaunay_presentation_to_simplextree(
-            points,
-            grades,
-            verbose=verbose,
-            clear=clear,
-            dtype=dtype,
-            recover_ids=recover_ids,
-        )
-    slicer = multipers.Slicer(None, backend=backend, vineyard=vineyard, dtype=dtype)
-    slicer = function_delaunay_presentation_to_slicer(
-        slicer,
-        points,
-        grades,
-        degree=degree,
-        verbose=verbose,
-        clear=clear,
-        recover_ids=recover_ids,
-    )
-    slicer.minpres_degree = degree
-    return slicer
-
-
+from multipers._slicer_algorithms import _hilbert_signed_measure, _rank_from_slicer  # noqa: E402
 def _install_python_api():
     for cls in available_slicers:
-        _eq_raw.setdefault(cls, cls.__eq__)
         cls.__repr__ = _repr
         cls.__setstate__ = _setstate
-        cls.__eq__ = _eq_raw[cls]
         cls.astype = _astype
         cls.get_filtrations = _get_filtrations
         cls.compute_persistence = _compute_persistence
         cls.persistence_on_line = _persistence_on_line
         cls.persistence_on_lines = _persistence_on_lines
-        cls.sliced_filtration = _sliced_filtration
         cls.filtration_bounds = _filtration_bounds
         cls.get_filtration_grid = _get_filtration_grid
         cls.grid_squeeze = _grid_squeeze
@@ -701,13 +736,12 @@ def _install_python_api():
         cls.minpres = _minpres
         cls.to_scc = _to_scc
         cls.unsqueeze = _unsqueeze
-        cls._bc_to_full = staticmethod(_bc_to_full)
         cls.is_squeezed = property(_has_filtration_grid)
         cls.is_minpres = property(_is_minpres)
         cls.dimension = property(_dimension)
         cls.info = property(_info)
-        cls.make_filtration_non_decreasing = _make_filtration_non_decreasing
-        cls._simplify_filtration = _simplify_filtration
+        cls.make_filtration_non_decreasing = cls._make_filtration_non_decreasing_raw
+        cls._simplify_filtration = cls._simplify_filtration_raw
 
 
 _install_python_api()
@@ -721,8 +755,6 @@ __all__ = [
     "available_dtype",
     "available_pers_backend",
     "available_filtration_container",
-    "from_bitmap",
-    "from_function_delaunay",
     "to_simplextree",
     "_is_slicer",
     "is_slicer",
