@@ -8,7 +8,9 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from importlib import import_module
+from time import perf_counter
 from warnings import warn
 
 
@@ -97,6 +99,92 @@ def warn_fallback(message: str, *, stacklevel: int = 2) -> None:
 
 def warn_geometry(message: str, *, stacklevel: int = 2) -> None:
     _emit("geometry", message, stacklevel=stacklevel)
+
+
+def log_verbose(message: str, *, enabled: bool) -> None:
+    if enabled:
+        print(message, flush=True)
+
+
+class _Timings:
+    def __init__(
+        self,
+        name: str,
+        *,
+        enabled: bool,
+        details: Mapping[str, object] | None = None,
+        parent: "_Timings | None" = None,
+        label: str | None = None,
+    ):
+        self.parent = parent
+        self.label = name if label is None else label
+        self.name = name if parent is None else f"{parent.name}:{self.label}"
+        self.enabled = enabled
+        merged_details = {}
+        if parent is not None:
+            merged_details.update(parent.details)
+        if details is not None:
+            merged_details.update({str(key): value for key, value in details.items()})
+        self.details = merged_details
+        self._start = perf_counter()
+        self._prev = self._start
+        self._substeps: list[tuple[str, float]] = []
+        self._stats: dict[str, object] = {}
+
+    def _format_details(self) -> str:
+        if not self.details:
+            return ""
+        return " " + " ".join(f"{key}={value}" for key, value in self.details.items())
+
+    def _format_substeps(self) -> str:
+        if not self._substeps:
+            return ""
+        return " " + " ".join(f"{name}={seconds:.3f}s" for name, seconds in self._substeps)
+
+    def _format_stats(self) -> str:
+        if not self._stats:
+            return ""
+        return " " + " ".join(f"{key}={value}" for key, value in self._stats.items())
+
+    def __enter__(self):
+        if self.enabled:
+            print(f"[{self.name}]{self._format_details()}", flush=True)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        finished_at = perf_counter()
+        total = finished_at - self._start
+        if self.enabled:
+            print(
+                f"[{self.name}][Done ({total:.3f}s)]{self._format_substeps()}{self._format_stats()}",
+                flush=True,
+            )
+        if self.parent is not None:
+            self.parent._substeps.append((self.label, total))
+            self.parent._prev = finished_at
+        return False
+
+    def substep(self, label: str) -> None:
+        if not self.enabled:
+            return
+        now = perf_counter()
+        self._substeps.append((label, now - self._prev))
+        self._prev = now
+
+    def step(self, label: str, *, details: Mapping[str, object] | None = None) -> "_Timings":
+        return _Timings(label, enabled=self.enabled, details=details, parent=self, label=label)
+
+    def add_stats(self, stats: Mapping[str, object] | None) -> None:
+        if stats is None:
+            return
+        self._stats.update({str(key): value for key, value in stats.items()})
+
+    def total(self) -> float:
+        return perf_counter() - self._start
+
+
+def timings(name: str, *, enabled: bool, details: Mapping[str, object] | None = None) -> _Timings:
+    return _Timings(name, enabled=enabled, details=details)
 
 
 def set_level(level: int) -> None:
