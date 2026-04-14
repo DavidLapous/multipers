@@ -21,7 +21,9 @@
 #include <utility>
 #include <vector>
 
+#include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
 
 #include "Persistence_slices_interface.h"
 #include "ext_interface/nanobind_generator_basis.hpp"
@@ -269,25 +271,54 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
   });
 }
 
-template <typename Wrapper, typename Value>
+template <typename Desc, typename Wrapper, typename Value>
 nb::tuple compute_persistence_on_slices(
     Wrapper& self,
     const nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig>& values,
     bool ignore_infinite_filtration_values) {
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
+  using Concrete = std::remove_reference_t<decltype(self.truc)>;
   const size_t num_slices = values.shape(0);
   const size_t num_parameters = values.shape(1);
-  std::vector<Barcode> barcodes;
-  barcodes.reserve(num_slices);
-  std::vector<Value> slice(num_parameters);
+  std::vector<Barcode> barcodes(num_slices);
   const auto* data = values.data();
   {
     nb::gil_scoped_release release;
-    for (size_t i = 0; i < num_slices; ++i) {
-      std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
-      self.truc.set_slice(slice);
-      self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
-      barcodes.push_back(self.truc.template get_flat_barcode<true, Value, false>());
+    if constexpr (Desc::is_vine) {
+      std::vector<Value> slice(num_parameters);
+      for (size_t i = 0; i < num_slices; ++i) {
+        std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
+        self.truc.set_slice(slice);
+        if (i == 0) {
+          self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
+        } else {
+          self.truc.update_persistence_computation(ignore_infinite_filtration_values);
+        }
+        barcodes[i] = self.truc.template get_flat_barcode<true, Value, false>();
+      }
+    } else {
+#if defined(GUDHI_USE_TBB)
+      using ThreadSafe = typename Concrete::Thread_safe;
+      tbb::enumerable_thread_specific<ThreadSafe> thread_locals(self.truc.weak_copy());
+      tbb::parallel_for(size_t(0), num_slices, [&](size_t i) {
+        auto& slicer = thread_locals.local();
+        tbb::this_task_arena::isolate([&] {
+          std::vector<Value> slice(num_parameters);
+          std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
+          slicer.set_slice(slice);
+          slicer.initialize_persistence_computation(ignore_infinite_filtration_values);
+          barcodes[i] = slicer.template get_flat_barcode<true, Value, false>();
+        });
+      });
+#else
+      std::vector<Value> slice(num_parameters);
+      for (size_t i = 0; i < num_slices; ++i) {
+        std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
+        self.truc.set_slice(slice);
+        self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
+        barcodes[i] = self.truc.template get_flat_barcode<true, Value, false>();
+      }
+#endif
     }
   }
   return tuple_from_size(num_slices, [&](size_t i) -> nb::object {
@@ -1755,7 +1786,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           [](Wrapper& self,
              nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> values,
              bool ignore_infinite_filtration_values) -> nb::tuple {
-            return compute_persistence_on_slices(self, values, ignore_infinite_filtration_values);
+            return compute_persistence_on_slices<Desc>(self, values, ignore_infinite_filtration_values);
           },
           "values"_a,
           "ignore_infinite_filtration_values"_a = true)
@@ -1972,9 +2003,10 @@ void bind_bitmap_builder(nb::module_& m) {
     std::string name = std::string("_build_bitmap_") + std::string(Desc::short_value_type);
     m.def(
         name.c_str(),
-        [](nb::handle image_handle, nb::handle shape_handle) {
-          auto image = cast_matrix<Value>(image_handle);
-          auto shape = cast_vector<unsigned int>(shape_handle);
+        [](nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> image_handle,
+           nb::ndarray<nb::numpy, const uint32_t, nb::ndim<1>, nb::c_contig> shape_handle) {
+          auto image = matrix_from_array<Value>(image_handle);
+          auto shape = multipers::nanobind_dense_utils::cast_vector_from_array<unsigned int>(shape_handle);
           if (image.empty()) {
             return Wrapper();
           }

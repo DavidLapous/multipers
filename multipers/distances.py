@@ -1,5 +1,4 @@
 import importlib
-import importlib.util
 import re
 
 import numpy as np
@@ -312,23 +311,6 @@ _MATCHING_DISTANCE_MONTE_CARLO_LP_REDUCTION = re.compile(r"l(\d+)")
 _MATCHING_DISTANCE_MONTE_CARLO_SOFTMAX_REDUCTION = re.compile(r"softmax(\d+(?:\.\d+)?)")
 
 
-def _require_hera_backend():
-    if importlib.util.find_spec("multipers._hera_interface") is None:
-        raise RuntimeError(
-            "Hera interface is not available in this build. "
-            "Rebuild multipers with Hera headers to enable this backend."
-        )
-
-    from multipers import _hera_interface
-
-    if not _hera_interface._is_available():
-        raise RuntimeError(
-            "Hera interface is not available in this build. "
-            "Rebuild multipers with Hera headers to enable this backend."
-        )
-    return _hera_interface
-
-
 def _normalize_hera_strategy(strategy, options, name: str) -> int:
     if isinstance(strategy, str):
         try:
@@ -363,7 +345,9 @@ def hera_bottleneck_distances(
     batch with a native TBB loop when available. `n_jobs <= 0` keeps backend
     default concurrency.
     """
-    _hera_interface = _require_hera_backend()
+    from multipers import _hera_interface
+
+    _hera_interface.require()
     return _hera_interface.bottleneck_distances(
         left_diagrams,
         right_diagrams,
@@ -402,7 +386,7 @@ def _reduce_monte_carlo_line_distances(weighted_distances, *, line_reduction: st
     )
 
 
-def _validate_monte_carlo_line_reduction(line_reduction: str) -> None:
+def _get_monte_carlo_line_reduction(line_reduction: str) -> None:
     if line_reduction in ("max", "linf", "l1", "mean", "softmax"):
         return
     if _MATCHING_DISTANCE_MONTE_CARLO_SOFTMAX_REDUCTION.fullmatch(line_reduction):
@@ -413,6 +397,62 @@ def _validate_monte_carlo_line_reduction(line_reduction: str) -> None:
         "Unknown Monte Carlo line reduction "
         f"{line_reduction!r}. Expected one of: max, mean, softmax, `l<p>` for an Lp mean, or `softmax<d>` for scaled softmax."
     )
+
+
+def _can_use_native_monte_carlo_matching_distance(left, right) -> bool:
+    from multipers.slicer import is_slicer
+
+    if not is_slicer(left) or not is_slicer(right):
+        return False
+    if left.is_squeezed or right.is_squeezed:
+        return False
+    if not np.issubdtype(np.dtype(left.dtype), np.floating):
+        return False
+    if not np.issubdtype(np.dtype(right.dtype), np.floating):
+        return False
+    return True
+
+
+def _process_monte_carlo_raw_distances(
+    raw_distances,
+    *,
+    api,
+    directions,
+    line_reduction: str,
+    return_stats: bool,
+):
+    raw_distances = api.to_device(
+        api.astype(api.from_numpy(raw_distances), directions.dtype),
+        api.device(directions),
+    )
+    if directions.ndim == 1:
+        directions = api.reshape(directions, (1, directions.shape[0]))
+    weights = api.astype(api.minvalues(directions, axis=1), raw_distances.dtype)
+    weighted_distances = weights * raw_distances
+    reduced_distance = _reduce_monte_carlo_line_distances(
+        weighted_distances, line_reduction=line_reduction, api=api
+    )
+    weighted_distances_np = np.asarray(
+        api.asnumpy(weighted_distances), dtype=np.float64
+    )
+    raw_distances_np = np.asarray(api.asnumpy(raw_distances), dtype=np.float64)
+    weights_np = np.asarray(api.asnumpy(weights), dtype=np.float64)
+    num_lines = int(len(raw_distances_np))
+    distance = float(np.asarray(api.asnumpy(reduced_distance), dtype=np.float64))
+    if not return_stats:
+        return distance
+    best_index = (
+        int(np.argmax(weighted_distances_np)) if len(weighted_distances_np) else -1
+    )
+    return distance, {
+        "num_lines": int(num_lines),
+        "line_reduction": line_reduction,
+        "best_line_index": int(best_index),
+        "best_raw_bottleneck": float(raw_distances_np[best_index])
+        if best_index >= 0
+        else 0.0,
+        "best_weight": float(weights_np[best_index]) if best_index >= 0 else 0.0,
+    }
 
 
 def _sample_monte_carlo_lines(
@@ -482,13 +522,15 @@ def _matching_distance_monte_carlo(
     line_oversampling: int,
     fpsample_bucket_height: int,
     bottleneck_delta: float,
+    n_jobs: int,
     line_reduction: str,
     return_stats: bool,
     api=None,
     basepoints=None,
     directions=None,
 ):
-    _validate_monte_carlo_line_reduction(line_reduction)
+    _get_monte_carlo_line_reduction(line_reduction)
+
     if basepoints is None or directions is None:
         basepoints, directions = _sample_monte_carlo_lines(
             left,
@@ -498,6 +540,58 @@ def _matching_distance_monte_carlo(
             oversampling=line_oversampling,
             fpsample_bucket_height=fpsample_bucket_height,
         )
+
+    if _can_use_native_monte_carlo_matching_distance(left, right):
+        from multipers import _hera_interface
+
+        _hera_interface.require()
+        basepoints_np = np.asarray(basepoints, dtype=np.float64)
+        directions_np = np.asarray(directions, dtype=np.float64)
+        if basepoints_np.ndim == 1:
+            basepoints_np = basepoints_np[None]
+        if directions_np.ndim == 1:
+            directions_np = directions_np[None]
+        if basepoints_np.ndim == 0 or basepoints_np.ndim > 2:
+            raise ValueError(
+                "Expected a basepoint shape of the form (num_parameters,). "
+                f"Got {basepoints_np.shape=}"
+            )
+        if directions_np.ndim == 0 or directions_np.ndim > 2:
+            raise ValueError(
+                "Expected a direction shape of the form (num_parameters,). "
+                f"Got {directions_np.shape=}"
+            )
+        if basepoints_np.shape != directions_np.shape:
+            raise ValueError(
+                "Monte Carlo matching distance expects basepoints and directions "
+                f"with identical shapes. Got {basepoints_np.shape=} and {directions_np.shape=}."
+            )
+        basepoints_np = np.ascontiguousarray(basepoints_np, dtype=np.float64)
+        directions_np = np.ascontiguousarray(directions_np, dtype=np.float64)
+        raw_distances = _hera_interface.monte_carlo_bottleneck_distances(
+            left,
+            right,
+            basepoints_np,
+            directions_np,
+            degree=degree,
+            delta=bottleneck_delta,
+            n_jobs=int(n_jobs),
+        )
+        api = _infer_api([basepoints, directions], api=api)
+        directions = api.astensor(directions)
+        return _process_monte_carlo_raw_distances(
+            raw_distances,
+            api=api,
+            directions=directions,
+            line_reduction=line_reduction,
+            return_stats=return_stats,
+        )
+
+    # Python fallback slices lines directly on input slicers, so work on local
+    # copies when callers reuse same slicer across threads.
+    left = left.copy()
+    right = right.copy()
+
     api = _infer_api([basepoints, directions], api=api)
     basepoints = api.astensor(basepoints)
     directions = api.astensor(directions)
@@ -511,35 +605,15 @@ def _matching_distance_monte_carlo(
         for barcodes in right.persistence_on_lines(basepoints, directions)
     )
     raw_distances = hera_bottleneck_distances(
-        left_diagrams, right_diagrams, delta=bottleneck_delta
+        left_diagrams, right_diagrams, delta=bottleneck_delta, n_jobs=int(n_jobs)
     )
-    raw_distances = api.astype(api.from_numpy(raw_distances), directions.dtype)
-    weights = api.ones(raw_distances.shape, dtype=directions.dtype)
-    weighted_distances = weights * raw_distances
-    reduced_distance = _reduce_monte_carlo_line_distances(
-        weighted_distances, line_reduction=line_reduction, api=api
+    return _process_monte_carlo_raw_distances(
+        raw_distances,
+        api=api,
+        directions=directions,
+        line_reduction=line_reduction,
+        return_stats=return_stats,
     )
-    weighted_distances_np = np.asarray(
-        api.asnumpy(weighted_distances), dtype=np.float64
-    )
-    raw_distances_np = np.asarray(api.asnumpy(raw_distances), dtype=np.float64)
-    weights_np = np.asarray(api.asnumpy(weights), dtype=np.float64)
-    distance = float(np.asarray(api.asnumpy(reduced_distance), dtype=np.float64))
-    if not return_stats:
-        return distance
-    best_index = (
-        int(np.argmax(weighted_distances_np)) if len(weighted_distances_np) else -1
-    )
-
-    return distance, {
-        "num_lines": int(num_lines),
-        "line_reduction": line_reduction,
-        "best_line_index": int(best_index),
-        "best_raw_bottleneck": float(raw_distances_np[best_index])
-        if best_index >= 0
-        else 0.0,
-        "best_weight": float(weights_np[best_index]) if best_index >= 0 else 0.0,
-    }
 
 
 def matching_distance(
@@ -554,6 +628,7 @@ def matching_distance(
     mc_oversampling: int = 10,
     mc_fpsample_bucket_height: int = 2,
     mc_bottleneck_delta: float = 0.0,
+    mc_n_jobs: int = 0,
     mc_line_reduction: str = "max",
     hera_epsilon: float = 0.001,
     hera_delta: float = 0.1,
@@ -564,6 +639,7 @@ def matching_distance(
     hera_tolerate_max_iter_exceeded: bool = False,
     hera_stop_asap: bool = True,
     return_stats: bool = False,
+    verbose: bool = False,
     mc_basepoints=None,
     mc_directions=None,
 ):
@@ -577,15 +653,17 @@ def matching_distance(
     Parameters
     ----------
     left, right : multipers.Slicer or multipers.SimplexTreeMulti
-        The exact `"hera"` backend requires 2-parameter 1-critical slicers. The
-        Monte Carlo backend only requires both slicers to have the same number of
-        parameters.
+        Simplex trees are converted to slicers first. Both backends then require
+        slicer inputs. The exact `"hera"` backend additionally requires
+        2-parameter 1-critical slicers.
     api : multipers.array_api.available_interfaces, optional
         WIP for autodiff.
     strategy : {"monte_carlo", "hera"}, default="monte_carlo"
         Backend used to estimate the matching distance. `"monte_carlo"` samples
-        lines, computes line barcodes, and aggregates
-        according to `mc_line_reduction` across sampled lines.
+        lines, computes per-line bottleneck distances, and aggregates according
+        to `mc_line_reduction` across sampled lines. When both inputs are native
+        unsqueezed floating slicers, this path uses a fused compiled fast path;
+        otherwise it falls back to the Python batch implementation.
         `"hera"` runs Hera's 2-parameter matching-distance algorithm
         on the presentations.
     mc_nlines : int, default=128
@@ -601,13 +679,16 @@ def matching_distance(
         Relative error tolerance used by Hera's bottleneck solver on individual
         line diagrams in the Monte Carlo backend. Set to `0` for exact per-line
         bottleneck distances.
+    mc_n_jobs : int, default=0
+        Worker count used by the Monte Carlo backend for per-line bottleneck
+        computations. `mc_n_jobs <= 0` keeps backend default concurrency.
     mc_line_reduction : {"max", "mean", "softmax", "softmax<d>", "l<p>"}, default="max"
         Reduction applied to the sampled Monte Carlo line scores
-        `min(direction) * bottleneck_distance`. `"max"` is the `Linf`
-        reduction, `"mean"` is the `L1` mean across sampled line scores,
-        `"l<p>"` applies the corresponding `Lp` mean (for example, `"l3"`),
-        `"softmax"` uses unscaled softmax weights, and `"softmax<d>"`
-        rescales sampled line scores by `d` before applying softmax weights.
+        `bottleneck_distance`. `"max"` is the `Linf` reduction, `"mean"`
+        is the `L1` mean across sampled line scores, `"l<p>"` applies the
+        corresponding `Lp` mean (for example, `"l3"`), `"softmax"` uses
+        unscaled softmax weights, and `"softmax<d>"` rescales sampled line
+        scores by `d` before applying softmax weights.
         Ignored by the exact `"hera"` backend.
     hera_epsilon : float, default=0.001
         Relative error tolerance used by Hera when approximating bottleneck
@@ -647,6 +728,8 @@ def matching_distance(
         `actual_error`, `actual_max_depth`, and `n_hera_calls`. The Monte Carlo
         backend returns the number of sampled lines, the reduction, and the best
         sampled line.
+    verbose : bool, default=False
+        If `True`, print timing scopes for validation and backend work.
 
     Returns
     -------
@@ -658,103 +741,109 @@ def matching_distance(
     ----------
     Hera project: https://github.com/anigmetov/hera
     """
-    from multipers.simplex_tree_multi import is_simplextree_multi
-    from multipers.slicer import is_slicer
+    with _mp_logs.timings(
+        "matching_distance",
+        enabled=verbose,
+        details={"strategy": strategy, "degree": degree, "return_stats": return_stats},
+    ) as timing:
+        from multipers.simplex_tree_multi import is_simplextree_multi
+        from multipers.slicer import is_slicer
 
-    if is_simplextree_multi(left):
-        left = mp.Slicer(left)
-    if is_simplextree_multi(right):
-        right = mp.Slicer(right)
-    if strategy == "monte_carlo":
-
-        def _is_monte_carlo_compatible(obj):
-            return is_slicer(obj) or (
-                hasattr(obj, "num_parameters")
-                and hasattr(obj, "filtration_grid")
-                and hasattr(obj, "minpres_degree")
-                and hasattr(obj, "persistence_on_lines")
-            )
-
-        if not _is_monte_carlo_compatible(left) or not _is_monte_carlo_compatible(
-            right
-        ):
-            raise ValueError(f"Invalid input. Got {type(left)=} and {type(right)=}.")
-    elif not is_slicer(left) or not is_slicer(right):
-        raise ValueError(f"Invalid input. Got {type(left)=} and {type(right)=}.")
-    if api is None:
-        if left.filtration_grid is not None:
-            api = api_from_tensor(left.filtration_grid[0])
-        else:
-            api = api_from_tensor([])
-
-    if degree is None:
-        degree = left.minpres_degree
-        if degree < 0:
-            raise ValueError("`degree` has to be provided, unless inputs are minpres.")
-        if right.minpres_degree != degree:
+        if is_simplextree_multi(left):
+            left = mp.Slicer(left)
+        if is_simplextree_multi(right):
+            right = mp.Slicer(right)
+        if not is_slicer(left) or not is_slicer(right):
             raise ValueError(
-                "Matching distance expects inputs to be in the same homological degree. "
-                f"Got {left.minpres_degree=} and {right.minpres_degree=}."
+                "Invalid input. Expected slicers or simplex trees. "
+                f"Got {type(left)=} and {type(right)=}."
+            )
+        if api is None:
+            if left.filtration_grid is not None:
+                api = api_from_tensor(left.filtration_grid[0])
+            else:
+                api = api_from_tensor([])
+
+        if degree is None:
+            degree = left.minpres_degree
+            if degree < 0:
+                raise ValueError("`degree` has to be provided, unless inputs are minpres.")
+            if right.minpres_degree != degree:
+                raise ValueError(
+                    "Matching distance expects inputs to be in the same homological degree. "
+                    f"Got {left.minpres_degree=} and {right.minpres_degree=}."
+                )
+
+        if left.num_parameters != right.num_parameters:
+            raise ValueError(
+                "Matching distance expects slicers with the same number of parameters. "
+                f"Got {left.num_parameters=} and {right.num_parameters=}."
+            )
+        timing.substep("validated_inputs")
+
+        if strategy == "monte_carlo":
+            with timing.step("monte_carlo", details={"nlines": int(mc_nlines)}) as step:
+                out = _matching_distance_monte_carlo(
+                    left,
+                    right,
+                    degree,
+                    num_lines=int(mc_nlines),
+                    seed=int(mc_seed),
+                    line_oversampling=int(mc_oversampling),
+                    fpsample_bucket_height=int(mc_fpsample_bucket_height),
+                    bottleneck_delta=float(mc_bottleneck_delta),
+                    n_jobs=int(mc_n_jobs),
+                    line_reduction=mc_line_reduction,
+                    return_stats=bool(return_stats),
+                    api=api,
+                    basepoints=mc_basepoints,
+                    directions=mc_directions,
+                )
+                if return_stats:
+                    step.add_stats(out[1])
+                return out
+
+        if strategy != "hera":
+            raise ValueError(
+                "Unknown matching-distance strategy {!r}. Expected 'monte_carlo' or 'hera'.".format(
+                    strategy
+                )
             )
 
-    if left.num_parameters != right.num_parameters:
-        raise ValueError(
-            "Matching distance expects slicers with the same number of parameters. "
-            f"Got {left.num_parameters=} and {right.num_parameters=}."
-        )
-
-    if strategy == "monte_carlo":
-        return _matching_distance_monte_carlo(
-            left,
-            right,
-            degree,
-            num_lines=int(mc_nlines),
-            seed=int(mc_seed),
-            line_oversampling=int(mc_oversampling),
-            fpsample_bucket_height=int(mc_fpsample_bucket_height),
-            bottleneck_delta=float(mc_bottleneck_delta),
-            line_reduction=mc_line_reduction,
-            return_stats=bool(return_stats),
-            api=api,
-            basepoints=mc_basepoints,
-            directions=mc_directions,
-        )
-
-    if strategy == "hera":
         if left.num_parameters != 2 or right.num_parameters != 2:
-            raise ValueError(
-                "Hera matching distance only supports 2-parameter slicers."
+            raise ValueError("Hera matching distance only supports 2-parameter slicers.")
+        with timing.step("hera") as step:
+            if not left.is_minpres or not right.is_minpres:
+                mp.logs.warn_superfluous_computation(
+                    "Didn't get a presentation as an input (hera strategy), calling mpfree."
+                )
+                left = left.minpres(degree, full_resolution=False, force=False)
+                right = right.minpres(degree, full_resolution=False, force=False)
+                step.substep("computed_minpres")
+            from multipers import _hera_interface
+
+            _hera_interface.require()
+            out = _hera_interface.matching_distance(
+                left,
+                right,
+                hera_epsilon=float(hera_epsilon),
+                delta=float(hera_delta),
+                max_depth=int(hera_max_depth),
+                initialization_depth=int(hera_initialization_depth),
+                bound_strategy=_normalize_hera_strategy(
+                    hera_bound_strategy,
+                    _MATCHING_DISTANCE_BOUND_STRATEGIES,
+                    "Hera bound strategy",
+                ),
+                traverse_strategy=_normalize_hera_strategy(
+                    hera_traverse_strategy,
+                    _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
+                    "Hera traverse strategy",
+                ),
+                tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
+                stop_asap=bool(hera_stop_asap),
+                return_stats=bool(return_stats),
             )
-        if not left.is_minpres or not right.is_minpres:
-            mp.logs.warn_superfluous_computation(
-                "Didn't get a presentation as an input (hera strategy), calling mpfree."
-            )
-            left = left.minpres(degree, full_resolution=False, force=False)
-            right = right.minpres(degree, full_resolution=False, force=False)
-        _hera_interface = _require_hera_backend()
-        return _hera_interface.matching_distance(
-            left,
-            right,
-            hera_epsilon=float(hera_epsilon),
-            delta=float(hera_delta),
-            max_depth=int(hera_max_depth),
-            initialization_depth=int(hera_initialization_depth),
-            bound_strategy=_normalize_hera_strategy(
-                hera_bound_strategy,
-                _MATCHING_DISTANCE_BOUND_STRATEGIES,
-                "Hera bound strategy",
-            ),
-            traverse_strategy=_normalize_hera_strategy(
-                hera_traverse_strategy,
-                _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
-                "Hera traverse strategy",
-            ),
-            tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
-            stop_asap=bool(hera_stop_asap),
-            return_stats=bool(return_stats),
-        )
-    raise ValueError(
-        "Unknown matching-distance strategy {!r}. Expected 'monte_carlo' or 'hera'.".format(
-            strategy
-        )
-    )
+            if return_stats:
+                step.add_stats(out[1])
+            return out

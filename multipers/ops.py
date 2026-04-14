@@ -18,11 +18,7 @@ def _minimal_presentation_from_slicer(
     if backend == "mpfree":
         from multipers import _mpfree_interface
 
-        if not _mpfree_interface._is_available():
-            raise RuntimeError(
-                "mpfree interface is not available in this build. "
-                "Rebuild multipers with mpfree support to enable this backend."
-            )
+        _mpfree_interface.require()
         with _mp_logs.timings(
             "minimal_presentation",
             enabled=verbose,
@@ -48,11 +44,7 @@ def _minimal_presentation_from_slicer(
     if backend == "2pac":
         from multipers import _2pac_interface
 
-        if not _2pac_interface._is_available():
-            raise RuntimeError(
-                "2pac interface is not available in this build. "
-                "Rebuild multipers with 2pac support to enable this backend."
-            )
+        _2pac_interface.require()
         with _mp_logs.timings(
             "minimal_presentation",
             enabled=verbose,
@@ -100,11 +92,7 @@ def _multi_critical_from_slicer(
     del clear
     from multipers import _multi_critical_interface
 
-    if not _multi_critical_interface._is_available():
-        raise RuntimeError(
-            "multi_critical interface is not available in this build. "
-            "Rebuild multipers with multi_critical support to enable this backend."
-        )
+    _multi_critical_interface.require()
 
     reduce = False if reduce is None else reduce
     swedish = degree is not None if swedish is None else swedish
@@ -144,20 +132,9 @@ def _multi_critical_from_slicer(
 
 
 def aida(s, sort=True, verbose=False, progress=False):
-    import importlib.util
-
-    if importlib.util.find_spec("multipers._aida_interface") is None:
-        raise RuntimeError(
-            "AIDA interface is not available in this build. "
-            "Rebuild multipers with AIDA support to enable this backend."
-        )
     from multipers import _aida_interface
 
-    if not _aida_interface._is_available():
-        raise RuntimeError(
-            "AIDA interface is not available in this build. "
-            "Rebuild multipers with AIDA support to enable this backend."
-        )
+    _aida_interface.require()
     return _aida_interface.aida(s, sort=sort, verbose=verbose, progress=progress)
 
 

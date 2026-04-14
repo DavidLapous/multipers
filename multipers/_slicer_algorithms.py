@@ -114,9 +114,8 @@ def from_bitmap(img, **kwargs):
             f"Invalid dtype. Got {img.dtype=}, was expecting {mps.available_dtype=}."
         )
     flattened = np.ascontiguousarray(img.reshape(-1, img.shape[-1]))
-    base = getattr(_nb, builder_name)(
-        flattened.tolist(), np.asarray(img.shape[:-1], dtype=np.uint32).tolist()
-    )
+    shape = np.ascontiguousarray(img.shape[:-1], dtype=np.uint32)
+    base = getattr(_nb, builder_name)(flattened, shape)
     if type(base) is _Slicer:
         return base
     return _Slicer(base)
