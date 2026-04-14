@@ -26,6 +26,7 @@
 #include <tbb/task_arena.h>
 
 #include "Persistence_slices_interface.h"
+#include "ext_interface/backend_log_policy.hpp"
 #include "ext_interface/nanobind_generator_basis.hpp"
 #include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
@@ -2038,6 +2039,12 @@ void bind_bitmap_builders(type_list<Desc...>, nb::module_& m) {
 NB_MODULE(_slicer_nanobind, m) {
   m.doc() = "nanobind slicer bindings";
   nb::list available_slicers;
+
+  m.def("_get_backend_log_mask", []() { return multipers::backend_log_policy::get_backend_log_mask(); });
+  m.def(
+      "_set_backend_log_mask",
+      [](uint32_t mask) { multipers::backend_log_policy::set_backend_log_mask(mask); },
+      "mask"_a);
 
   mpnb::bind_generator_basis(m);
   mpnb::bind_all_slicers(mpnb::SlicerDescriptorList{}, m, available_slicers);

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "backend_log_flags.hpp"
-
 #include <algorithm>
 #include <cstddef>
 #include <mutex>

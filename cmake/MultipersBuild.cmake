@@ -167,6 +167,11 @@ function(multipers_add_nanobind_object_library target_name source_file)
 endfunction()
 
 multipers_add_core_object_library(
+  multipers_core_backend_log_policy_obj
+  "${CMAKE_SOURCE_DIR}/tools/core/backend_log_policy_core.cc"
+)
+
+multipers_add_core_object_library(
   multipers_core_filtrations_obj
   "${CMAKE_SOURCE_DIR}/tools/core/filtrations_core.cc"
 )
@@ -198,6 +203,7 @@ target_include_directories(
 add_library(
   multipers_core_shared
   SHARED
+  $<TARGET_OBJECTS:multipers_core_backend_log_policy_obj>
   $<TARGET_OBJECTS:multipers_core_filtrations_obj>
   $<TARGET_OBJECTS:multipers_core_simplextree_obj>
   $<TARGET_OBJECTS:multipers_core_slicer_obj>
@@ -240,6 +246,90 @@ if(APPLE)
   )
 endif()
 
+find_program(MULTIPERS_PATCH_EXECUTABLE patch REQUIRED)
+
+function(multipers_add_generated_patch_overlay target_name library_name patch_file library_relative_root overlay_root_var)
+  set(_overlay_root "${CMAKE_BINARY_DIR}/patched_ext/${library_name}")
+  set(_stamp_file "${_overlay_root}/${library_name}_runtime_logs.stamp")
+  add_custom_command(
+    OUTPUT "${_stamp_file}"
+    COMMAND "${CMAKE_COMMAND}"
+            -DREPO_ROOT=${CMAKE_SOURCE_DIR}
+            -DOVERLAY_ROOT=${_overlay_root}
+            -DLIBRARY_NAME=${library_name}
+            -DLIBRARY_RELATIVE_ROOT=${library_relative_root}
+            "-DSUBDIRS=${ARGN}"
+            -DPATCH_FILE=${CMAKE_SOURCE_DIR}/ext/patches/${patch_file}
+            -DPATCH_EXECUTABLE=${MULTIPERS_PATCH_EXECUTABLE}
+            -DSTAMP_FILE=${_stamp_file}
+            -P "${CMAKE_SOURCE_DIR}/cmake/ApplyExtPatchOverlay.cmake"
+    DEPENDS
+      "${CMAKE_SOURCE_DIR}/cmake/ApplyExtPatchOverlay.cmake"
+      "${CMAKE_SOURCE_DIR}/ext/patches/${patch_file}"
+      "${CMAKE_SOURCE_DIR}/ext/patches/generate_log_patch.py"
+    VERBATIM
+  )
+  add_custom_target(${target_name} DEPENDS "${_stamp_file}")
+  set(${overlay_root_var} "${_overlay_root}" PARENT_SCOPE)
+endfunction()
+
+multipers_add_generated_patch_overlay(
+  multipers_mpfree_log_overlay
+  mpfree
+  mpfree_runtime_logs.patch
+  ext/mpfree
+  MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT
+  include
+)
+
+multipers_add_generated_patch_overlay(
+  multipers_function_delaunay_log_overlay
+  function_delaunay
+  function_delaunay_runtime_logs.patch
+  ext/function_delaunay
+  MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
+  include
+  mpfree_mod/include
+  multi_chunk_mod/include
+)
+
+multipers_add_generated_patch_overlay(
+  multipers_multi_critical_log_overlay
+  multi_critical
+  multi_critical_runtime_logs.patch
+  ext/multi_critical
+  MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
+  include
+  mpfree_mod/include
+  multi_chunk_mod/include
+  scc_mod/include
+)
+
+set(MULTIPERS_MPFREE_INCLUDE_DIRS
+  "${MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT}/ext/mpfree/include"
+  "${CMAKE_SOURCE_DIR}/ext/mpfree/mpp_utils_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/mpfree/phat_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/mpfree/scc_mod/include"
+)
+
+set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
+  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/include"
+  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/mpfree_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpp_utils_mod/include"
+  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/multi_chunk_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/phat/include"
+  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
+)
+
+set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/include"
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpfree_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include"
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/multi_chunk_mod/include"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/phat_mod/include"
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/scc_mod/include"
+)
+
 function(multipers_link_shared_core target_name)
   target_link_libraries(${target_name} PRIVATE multipers_core_shared)
   if(MULTIPERS_LOCAL_RPATH)
@@ -269,6 +359,12 @@ target_include_directories(
 if(TARGET multipers_2pac_static)
   target_compile_definitions(multipers_nanobind_runtime_obj PRIVATE MULTIPERS_HAS_2PAC_INTERFACE=1)
 endif()
+add_dependencies(
+  multipers_nanobind_runtime_obj
+  multipers_mpfree_log_overlay
+  multipers_function_delaunay_log_overlay
+  multipers_multi_critical_log_overlay
+)
 
 function(multipers_link_nanobind_runtime target_name)
   add_dependencies(${target_name} multipers_nanobind_runtime_obj)
@@ -301,6 +397,7 @@ function(multipers_configure_module module_name target_name)
 
   elseif(module_name STREQUAL "_mpfree_interface")
     if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
+      add_dependencies(${target_name} multipers_mpfree_log_overlay)
       multipers_link_shared_core(${target_name})
       multipers_link_nanobind_runtime(${target_name})
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -308,12 +405,12 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
-      target_compile_definitions(${target_name} PRIVATE MPFREE_LOGS=$<IF:$<BOOL:${MPFREE_LOGS}>,1,0>)
     endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_function_delaunay_interface")
     if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
+      add_dependencies(${target_name} multipers_function_delaunay_log_overlay)
       multipers_link_shared_core(${target_name})
       multipers_link_nanobind_runtime(${target_name})
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -321,17 +418,12 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
-      target_compile_definitions(
-        ${target_name}
-        PRIVATE
-          MPFREE_LOGS=$<IF:$<BOOL:${MPFREE_LOGS}>,1,0>
-          FUNCTION_DELAUNAY_LOGS=$<IF:$<BOOL:${FUNCTION_DELAUNAY_LOGS}>,1,0>
-      )
     endif()
     set(_use_phat_includes FALSE)
 
   elseif(module_name STREQUAL "_multi_critical_interface")
     if(NOT MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
+      add_dependencies(${target_name} multipers_multi_critical_log_overlay)
       multipers_link_shared_core(${target_name})
       multipers_link_nanobind_runtime(${target_name})
       target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
@@ -339,12 +431,6 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS})
-      target_compile_definitions(
-        ${target_name}
-        PRIVATE
-          MPFREE_LOGS=$<IF:$<BOOL:${MPFREE_LOGS}>,1,0>
-          MULTI_CRITICAL_LOGS=$<IF:$<BOOL:${MULTI_CRITICAL_LOGS}>,1,0>
-      )
     endif()
     set(_use_phat_includes FALSE)
 
@@ -366,7 +452,6 @@ function(multipers_configure_module module_name target_name)
       target_link_libraries(${target_name} PRIVATE multipers_2pac_static)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_2PAC_INCLUDE_DIRS})
       multipers_link_openmp(${target_name})
-      target_compile_definitions(${target_name} PRIVATE TWOPAC_LOGS=$<IF:$<BOOL:${TWOPAC_LOGS}>,1,0>)
     endif()
 
   elseif(module_name STREQUAL "_aida_interface")

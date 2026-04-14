@@ -9,9 +9,10 @@ Usage:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from importlib import import_module
 from time import perf_counter
 from warnings import warn
+
+from . import _slicer_nanobind
 
 
 class MultipersWarning(UserWarning):
@@ -61,7 +62,20 @@ _DEFAULTS = {
 }
 
 _TOGGLE_HINT_SHOWN = {key: False for key in _WARNING_CLASSES}
-_EXT_LOG_ENABLED = False
+_BACKEND_LOG_BITS = {
+    "mpfree": 1 << 0,
+    "multi_critical": 1 << 1,
+    "function_delaunay": 1 << 2,
+    "2pac": 1 << 3,
+}
+
+
+def _get_backend_log_mask() -> int:
+    return int(_slicer_nanobind._get_backend_log_mask())
+
+
+def _set_backend_log_mask(mask: int) -> None:
+    _slicer_nanobind._set_backend_log_mask(int(mask))
 
 
 def _emit(kind: str, message: str, stacklevel: int = 2) -> None:
@@ -204,54 +218,62 @@ def set_level(level: int) -> None:
 
 
 def enable_ext_log(enabled: bool = True) -> None:
-    """Enable or disable raw stdout coming from external backends.
+    """Enable or disable raw stdout coming from all external backends.
 
-    This flag is global to the current Python process. It is intended for
+    This policy is global to the current Python process. It is intended for
     debugging only. Do not toggle it while threaded backend computations are
     already running.
     """
 
-    global _EXT_LOG_ENABLED
-    _EXT_LOG_ENABLED = bool(enabled)
-    for module_name in (
-        "multipers._multi_critical_interface",
-        "multipers._mpfree_interface",
-    ):
-        try:
-            module = import_module(module_name)
-        except Exception:
-            continue
-        setter = getattr(module, "_set_backend_stdout", None)
-        if setter is not None:
-            setter(_EXT_LOG_ENABLED)
+    set_ext_log_policy(
+        mpfree=enabled,
+        multi_critical=enabled,
+        function_delaunay=enabled,
+        twopac=enabled,
+    )
 
 
-def compiled_backend_log_flags() -> dict[str, bool | None]:
-    """Return the backend log flags compiled into the installed native modules."""
+def set_ext_log_policy(
+    *,
+    mpfree: bool | None = None,
+    multi_critical: bool | None = None,
+    function_delaunay: bool | None = None,
+    twopac: bool | None = None,
+) -> None:
+    """Set raw backend log policy for external backends.
 
-    out: dict[str, bool | None] = {
-        "mpfree": None,
-        "2pac": None,
-        "multi_critical": None,
-        "function_delaunay": None,
+    Each argument updates one backend when not ``None``. This policy is process-global.
+    It is intended for debugging only. Do not toggle it while threaded backend
+    computations are already running.
+    """
+
+    mask = _get_backend_log_mask()
+    updates = {
+        "mpfree": mpfree,
+        "multi_critical": multi_critical,
+        "function_delaunay": function_delaunay,
+        "2pac": twopac,
     }
-    for module_name in (
-        "multipers._mpfree_interface",
-        "multipers._2pac_interface",
-        "multipers._multi_critical_interface",
-        "multipers._function_delaunay_interface",
-    ):
-        try:
-            module = import_module(module_name)
-        except Exception:
+    for backend, enabled in updates.items():
+        if enabled is None:
             continue
-        getter = getattr(module, "_compiled_log_flags", None)
-        if getter is None:
-            continue
-        for key, value in dict(getter()).items():
-            out[str(key)] = bool(value)
-    return out
+        bit = _BACKEND_LOG_BITS[backend]
+        if enabled:
+            mask |= bit
+        else:
+            mask &= ~bit
+    _set_backend_log_mask(mask)
 
 
-def ext_log_enabled() -> bool:
-    return _EXT_LOG_ENABLED
+def ext_log_policy() -> dict[str, bool]:
+    mask = _get_backend_log_mask()
+    return {backend: bool(mask & bit) for backend, bit in _BACKEND_LOG_BITS.items()}
+
+
+def ext_log_enabled(backend: str | None = None) -> bool:
+    policy = ext_log_policy()
+    if backend is None:
+        return any(policy.values())
+    if backend not in policy:
+        raise KeyError(f"Unknown backend {backend!r}. Expected one of {tuple(policy)}.")
+    return policy[backend]

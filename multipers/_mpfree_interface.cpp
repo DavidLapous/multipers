@@ -4,7 +4,6 @@
 
 #include <stdexcept>
 
-#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/mpfree_interface.hpp"
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
@@ -20,14 +19,6 @@ using namespace nb::literals;
 
 namespace mpmi {
 
-inline void set_backend_stdout(bool enabled) {
-#if MPFREE_LOGS
-  mpfree::verbose = enabled;
-#else
-  (void)enabled;
-#endif
-}
-
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
 nb::object minimal_presentation_for_target(nb::object target,
@@ -35,7 +26,7 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool full_resolution,
                                            bool use_clearing,
                                            bool use_chunk,
-                                           bool backend_stdout,
+                                           bool verbose,
                                            bool keep_generators) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
   return multipers::nanobind_helpers::build_minpres_slicer_output_for_target(
@@ -46,11 +37,11 @@ nb::object minimal_presentation_for_target(nb::object target,
       "mpfree",
       [&] {
         return multipers::mpfree_minpres_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, verbose);
       },
       [&] {
         return multipers::mpfree_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, backend_stdout);
+            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, verbose);
       });
 }
 
@@ -58,19 +49,6 @@ nb::object minimal_presentation_for_target(nb::object target,
 #endif
 
 NB_MODULE(_mpfree_interface, m) {
-  bool ext_log_enabled = false;
-  try {
-    ext_log_enabled = nb::cast<bool>(nb::module_::import_("multipers.logs").attr("ext_log_enabled")());
-  } catch (...) {
-    ext_log_enabled = false;
-  }
-
-#if !MULTIPERS_DISABLE_MPFREE_INTERFACE
-  mpmi::set_backend_stdout(ext_log_enabled);
-#else
-  (void)ext_log_enabled;
-#endif
-
   auto available = []() { return multipers::mpfree_interface_available(); };
   m.def("_is_available", available);
   m.def("available", available);
@@ -80,18 +58,6 @@ NB_MODULE(_mpfree_interface, m) {
           "mpfree interface is not available in this build. Rebuild multipers with mpfree support to enable this backend.");
     }
   });
-  m.def("_compiled_log_flags", []() {
-    nb::dict out;
-    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
-    return out;
-  });
-
-#if MULTIPERS_DISABLE_MPFREE_INTERFACE
-  m.def("_set_backend_stdout", [](bool) {}, "enabled"_a);
-#else
-  m.def("_set_backend_stdout", [](bool enabled) { mpmi::set_backend_stdout(enabled); }, "enabled"_a);
-#endif
-
   m.def(
       "minimal_presentation",
       [](nb::object slicer,
@@ -100,8 +66,7 @@ NB_MODULE(_mpfree_interface, m) {
          bool use_clearing,
          bool use_chunk,
          bool keep_generators,
-         bool verbose,
-         bool backend_stdout) {
+         bool verbose) {
 #if MULTIPERS_DISABLE_MPFREE_INTERFACE
         throw std::runtime_error("mpfree interface is disabled at compile time.");
 #else
@@ -111,8 +76,7 @@ NB_MODULE(_mpfree_interface, m) {
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
             slicer,
             [&](const nb::object& target) {
-              return mpmi::minimal_presentation_for_target(
-                  target, degree, full_resolution, use_clearing, use_chunk, backend_stdout, keep_generators);
+              return mpmi::minimal_presentation_for_target(target, degree, full_resolution, use_clearing, use_chunk, verbose, keep_generators);
             });
 #endif
       },
@@ -122,6 +86,5 @@ NB_MODULE(_mpfree_interface, m) {
       "use_clearing"_a = true,
       "use_chunk"_a = true,
       "keep_generators"_a = false,
-      "verbose"_a = false,
-      "_backend_stdout"_a = false);
+      "verbose"_a = false);
 }

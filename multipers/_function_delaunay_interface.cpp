@@ -5,7 +5,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/function_delaunay_interface.hpp"
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
@@ -59,16 +58,24 @@ nb::object function_delaunay_to_slicer_for_target(nb::object target,
                                                   int degree,
                                                   bool multi_chunk,
                                                   bool verbose) {
-  auto complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
+  multipers::contiguous_f64_complex complex;
+  {
+    nb::gil_scoped_release release;
+    complex = multipers::function_delaunay_interface_contiguous_slicer<int>(input, degree, multi_chunk, verbose);
+  }
   return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
 }
 
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,
                                                        const multipers::function_delaunay_interface_input<int>& input,
                                                        bool verbose) {
+  multipers::function_delaunay_simplextree_interface_output output;
+  {
+    nb::gil_scoped_release release;
+    output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
+  }
   nb::object out = target.type()();
-  visit_simplextree_wrapper(
-      out, [&]<typename Desc>(auto& wrapper) { build_function_delaunay_simplextree(wrapper, input, verbose); });
+  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) { wrapper.tree.copy_from_interface_object(output); });
   return out;
 }
 
@@ -85,12 +92,6 @@ NB_MODULE(_function_delaunay_interface, m) {
       throw std::runtime_error(
           "function_delaunay interface is not available in this build. Rebuild multipers with function_delaunay support to enable this backend.");
     }
-  });
-  m.def("_compiled_log_flags", []() {
-    nb::dict out;
-    out["function_delaunay"] = nb::bool_(multipers::backend_log_flags::function_delaunay);
-    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
-    return out;
   });
 
   m.def(

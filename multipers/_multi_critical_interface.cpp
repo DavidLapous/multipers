@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "ext_interface/backend_log_flags.hpp"
 #include "ext_interface/multi_critical_interface.hpp"
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
@@ -100,29 +99,6 @@ nb::dict stats_to_dict(const ptr_bridge_stats& stats) {
       stats.convert_s + stats.free_resolution_s + stats.lex_sort_s + stats.multi_chunk_s +
       stats.matrix_select_s + stats.minpres_s + stats.output_pack_s);
   return out;
-}
-
-inline void set_backend_stdout(bool enabled) {
-#if MULTI_CRITICAL_LOGS
-  multi_critical::verbose = enabled;
-  multi_critical::very_verbose = enabled;
-  multi_chunk::verbose = enabled;
-  mpp_utils::verbose = enabled;
-  scc::verbose = enabled;
-#else
-  (void)enabled;
-#endif
-#if MPFREE_LOGS
-  mpfree::verbose = enabled;
-#endif
-}
-
-inline bool multi_critical_backend_logs_enabled(bool enabled) {
-  return multipers::backend_log_flags::multi_critical && enabled;
-}
-
-inline bool mpfree_backend_logs_enabled(bool enabled) {
-  return multipers::backend_log_flags::mpfree && enabled;
 }
 
 std::vector<std::vector<int>> boundaries_from_packed(
@@ -319,23 +295,10 @@ std::vector<multipers::multi_critical_detail::Graded_matrix> compute_free_resolu
   if (stats != nullptr) {
     stats->convert_s += elapsed_seconds(t_convert);
   }
-  const bool old_mc_verbose = multi_critical::verbose;
-  const bool old_mc_very_verbose = multi_critical::very_verbose;
-  const bool old_chunk_verbose = multi_chunk::verbose;
-  const bool effective_verbose_output = multi_critical_backend_logs_enabled(verbose_output);
-  if (effective_verbose_output) {
-    multi_critical::verbose = true;
-    multi_critical::very_verbose = false;
-    multi_chunk::verbose = true;
-  }
+  (void)verbose_output;
   auto t_free = Clock::now();
   std::vector<multipers::multi_critical_detail::Graded_matrix> matrices;
   multi_critical::free_resolution(parser, matrices, use_logpath);
-  if (effective_verbose_output) {
-    multi_critical::verbose = old_mc_verbose;
-    multi_critical::very_verbose = old_mc_very_verbose;
-    multi_chunk::verbose = old_chunk_verbose;
-  }
   if (stats != nullptr) {
     stats->free_resolution_s += elapsed_seconds(t_free);
   }
@@ -345,7 +308,9 @@ std::vector<multipers::multi_critical_detail::Graded_matrix> compute_free_resolu
 void postprocess_free_resolution_matrices_from_bridge(
     std::vector<multipers::multi_critical_detail::Graded_matrix>& matrices,
     bool use_multi_chunk,
+    bool verbose_output = false,
     ptr_bridge_stats* stats = nullptr) {
+  (void)verbose_output;
   auto t_lex = Clock::now();
   for (std::size_t i = 0; i < matrices.size(); ++i) {
     auto& mat = matrices[i];
@@ -357,28 +322,10 @@ void postprocess_free_resolution_matrices_from_bridge(
     stats->lex_sort_s += elapsed_seconds(t_lex);
   }
   if (use_multi_chunk) {
-    multi_chunk::compress_stats chunk_stats;
-    multi_chunk::compress(matrices, false, stats != nullptr ? &chunk_stats : nullptr);
+    auto t_multi_chunk = Clock::now();
+    multi_chunk::compress(matrices);
     if (stats != nullptr) {
-      stats->multi_chunk_local_reduction_s += chunk_stats.local_reduction_s;
-      stats->multi_chunk_sparsification_s += chunk_stats.sparsification_s;
-      stats->multi_chunk_sparsification_loop_s += chunk_stats.sparsification_loop_s;
-      stats->multi_chunk_final_compaction_s += chunk_stats.final_compaction_s;
-      stats->multi_chunk_loop_get_max_s += chunk_stats.loop_get_max_s;
-      stats->multi_chunk_loop_add_to_s += chunk_stats.loop_add_to_s;
-      stats->multi_chunk_loop_remove_max_s += chunk_stats.loop_remove_max_s;
-      stats->multi_chunk_loop_set_col_s += chunk_stats.loop_set_col_s;
-      stats->multi_chunk_compact_get_col_s += chunk_stats.compact_get_col_s;
-      stats->multi_chunk_compact_set_col_s += chunk_stats.compact_set_col_s;
-      stats->add_to_calls += chunk_stats.add_to_calls;
-      stats->add_to_source_empty_calls += chunk_stats.add_to_source_empty_calls;
-      stats->add_to_target_empty_calls += chunk_stats.add_to_target_empty_calls;
-      stats->add_to_disjoint_target_before_source_calls += chunk_stats.add_to_disjoint_target_before_source_calls;
-      stats->add_to_disjoint_source_before_target_calls += chunk_stats.add_to_disjoint_source_before_target_calls;
-      stats->add_to_overlap_calls += chunk_stats.add_to_overlap_calls;
-      stats->add_to_source_size_sum += chunk_stats.add_to_source_size_sum;
-      stats->add_to_target_size_sum += chunk_stats.add_to_target_size_sum;
-      stats->multi_chunk_s += chunk_stats.local_reduction_s + chunk_stats.sparsification_s;
+      stats->multi_chunk_s += elapsed_seconds(t_multi_chunk);
     }
   }
 }
@@ -478,13 +425,6 @@ NB_MODULE(_multi_critical_interface, m) {
   m.def("_is_available", available);
   m.def("available", available);
   m.def("require", [require, available]() { require(available()); });
-  m.def("_compiled_log_flags", []() {
-    nb::dict out;
-    out["multi_critical"] = nb::bool_(multipers::backend_log_flags::multi_critical);
-    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
-    return out;
-  });
-  m.def("_set_backend_stdout", [](bool) {}, "enabled"_a);
   m.def("one_criticalify", unavailable);
   m.def("resolution_from_packed", unavailable);
   m.def("minpres_from_packed", unavailable);
@@ -496,14 +436,6 @@ NB_MODULE(_multi_critical_interface, m) {
   m.def("minpres_all_from_ptr", unavailable);
   m.def("minpres_all_from_ptr_with_stats", unavailable);
 #else
-  bool ext_log_enabled = false;
-  try {
-    ext_log_enabled = nb::cast<bool>(nb::module_::import_("multipers.logs").attr("ext_log_enabled")());
-  } catch (...) {
-    ext_log_enabled = false;
-  }
-  mpmc::set_backend_stdout(ext_log_enabled);
-
   auto available = []() {
     if (!multipers::multi_critical_interface_available()) return false;
     return multipers::nanobind_helpers::has_slicer_filtration_container(
@@ -512,14 +444,6 @@ NB_MODULE(_multi_critical_interface, m) {
   m.def("_is_available", available);
   m.def("available", available);
   m.def("require", [require, available]() { require(available()); });
-  m.def("_compiled_log_flags", []() {
-    nb::dict out;
-    out["multi_critical"] = nb::bool_(multipers::backend_log_flags::multi_critical);
-    out["mpfree"] = nb::bool_(multipers::backend_log_flags::mpfree);
-    return out;
-  });
-
-  m.def("_set_backend_stdout", [](bool enabled) { mpmc::set_backend_stdout(enabled); }, "enabled"_a);
 
   m.def(
       "one_criticalify",
@@ -529,7 +453,6 @@ NB_MODULE(_multi_critical_interface, m) {
          nb::object degree_obj,
          nb::object swedish_obj,
          bool verbose,
-         bool backend_stdout,
          bool kcritical,
          std::string filtration_container) {
         if (!multipers::multi_critical_interface_available()) {
@@ -545,21 +468,33 @@ NB_MODULE(_multi_critical_interface, m) {
             multipers::nanobind_helpers::related_slicer_template_id(slicer, kcritical, filtration_container);
         nb::object input_slicer = multipers::nanobind_helpers::ensure_canonical_kcontiguous_f64_slicer_object(slicer);
         auto& input_wrapper = nb::cast<mpmc::CanonicalWrapper&>(input_slicer);
-        auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
         if (!reduce) {
-          auto out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, backend_stdout);
+          multipers::multi_critical_interface_output<int> out;
+          {
+            nb::gil_scoped_release release;
+            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
+          }
           return mpmc::output_to_slicer(target_template_id, out, false, -1);
         }
         if (degree_obj.is_none()) {
-          auto outs =
-              multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, backend_stdout, swedish);
+          std::vector<multipers::multi_critical_interface_output<int> > outs;
+          {
+            nb::gil_scoped_release release;
+            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
+          }
           return nb::object(mpmc::tuple_from_size(outs.size() > 0 ? outs.size() - 1 : 0, [&](size_t i) -> nb::object {
             return mpmc::output_to_slicer(target_template_id, outs[i + 1], true, (int)i);
           }));
         }
         int degree = nb::cast<int>(degree_obj);
-        auto out = multipers::multi_critical_minpres_interface<int>(
-            input, degree + 1, use_logpath, true, backend_stdout, swedish);
+        multipers::multi_critical_interface_output<int> out;
+        {
+          nb::gil_scoped_release release;
+          auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+          out = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
+        }
         return mpmc::output_to_slicer(target_template_id, out, true, degree);
       },
       "slicer"_a,
@@ -568,7 +503,6 @@ NB_MODULE(_multi_critical_interface, m) {
       "degree"_a = nb::none(),
       "swedish"_a = nb::none(),
       "verbose"_a = false,
-      "_backend_stdout"_a = false,
       "kcritical"_a = false,
       "filtration_container"_a = "contiguous");
 
@@ -581,8 +515,7 @@ NB_MODULE(_multi_critical_interface, m) {
          nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat,
          bool use_tree,
          bool use_multi_chunk,
-         bool verbose,
-         bool backend_stdout) {
+         bool verbose) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical interface is not available in this build.");
         }
@@ -590,8 +523,7 @@ NB_MODULE(_multi_critical_interface, m) {
         multipers::multi_critical_interface_output<int> output;
         {
           nb::gil_scoped_release release;
-          output =
-              multipers::multi_critical_resolution_interface<int>(input, use_tree, use_multi_chunk, backend_stdout);
+          output = multipers::multi_critical_resolution_interface<int>(input, use_tree, use_multi_chunk, verbose);
         }
         return mpmc::output_to_raw_arrays(output);
       },
@@ -602,8 +534,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "grades_flat"_a,
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
-      "verbose"_a = false,
-      "_backend_stdout"_a = false);
+      "verbose"_a = false);
 
   m.def(
       "minpres_from_packed",
@@ -616,8 +547,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish,
-         bool backend_stdout) {
+         bool swedish) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical interface is not available in this build.");
         }
@@ -625,8 +555,7 @@ NB_MODULE(_multi_critical_interface, m) {
         multipers::multi_critical_interface_output<int> output;
         {
           nb::gil_scoped_release release;
-          output = multipers::multi_critical_minpres_interface<int>(
-              input, degree + 1, use_tree, use_multi_chunk, backend_stdout, swedish);
+          output = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_tree, use_multi_chunk, verbose, swedish);
         }
         return mpmc::output_to_raw_arrays(output, true);
       },
@@ -639,8 +568,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "minpres_all_from_packed",
@@ -652,8 +580,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish,
-         bool backend_stdout) {
+         bool swedish) {
         if (!multipers::multi_critical_interface_available()) {
           throw std::runtime_error("multi_critical interface is not available in this build.");
         }
@@ -661,8 +588,7 @@ NB_MODULE(_multi_critical_interface, m) {
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
         {
           nb::gil_scoped_release release;
-          outputs = multipers::multi_critical_minpres_all_interface<int>(
-              input, use_tree, use_multi_chunk, backend_stdout, swedish);
+          outputs = multipers::multi_critical_minpres_all_interface<int>(input, use_tree, use_multi_chunk, verbose, swedish);
         }
         return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
           return mpmc::output_to_raw_arrays(outputs[i + 1], true);
@@ -676,12 +602,11 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "resolution_from_ptr",
-      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool backend_stdout) {
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         multipers::multi_critical_interface_output<int> output;
@@ -691,9 +616,8 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
           if (matrices.size() > 1) {
             matrices.pop_back();
             output = multipers::multi_critical_detail::convert_chain_complex<int>(matrices);
@@ -704,12 +628,11 @@ NB_MODULE(_multi_critical_interface, m) {
       "input_ptr"_a,
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
-      "verbose"_a = false,
-      "_backend_stdout"_a = false);
+      "verbose"_a = false);
 
   m.def(
       "resolution_from_ptr_with_stats",
-      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool backend_stdout) {
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         multipers::multi_critical_interface_output<int> output;
@@ -720,9 +643,8 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout, &stats);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, &stats);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
           if (matrices.size() > 1) {
             matrices.pop_back();
             output = multipers::multi_critical_detail::convert_chain_complex<int>(matrices);
@@ -736,8 +658,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "input_ptr"_a,
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
-      "verbose"_a = false,
-      "_backend_stdout"_a = false);
+      "verbose"_a = false);
 
   m.def(
       "minpres_from_ptr",
@@ -746,8 +667,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish,
-         bool backend_stdout) {
+         bool swedish) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         multipers::multi_critical_interface_output<int> output;
@@ -757,22 +677,13 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
           multipers::multi_critical_detail::Graded_matrix first;
           multipers::multi_critical_detail::Graded_matrix second;
           if (mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second)) {
             multipers::multi_critical_detail::Graded_matrix min_rep;
-            const bool effective_backend_stdout = mpmc::mpfree_backend_logs_enabled(backend_stdout);
-            const bool old_verbose = mpfree::verbose;
-            if (effective_backend_stdout) {
-              mpfree::verbose = true;
-            }
             mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
-            if (effective_backend_stdout) {
-              mpfree::verbose = old_verbose;
-            }
             output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
           }
         }
@@ -783,8 +694,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "minpres_from_ptr_with_stats",
@@ -793,8 +703,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish,
-         bool backend_stdout) {
+         bool swedish) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         multipers::multi_critical_interface_output<int> output;
@@ -805,24 +714,15 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout, &stats);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, &stats);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
           multipers::multi_critical_detail::Graded_matrix first;
           multipers::multi_critical_detail::Graded_matrix second;
           if (mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second, &stats)) {
             multipers::multi_critical_detail::Graded_matrix min_rep;
-            const bool effective_backend_stdout = mpmc::mpfree_backend_logs_enabled(backend_stdout);
-            const bool old_verbose = mpfree::verbose;
-            if (effective_backend_stdout) {
-              mpfree::verbose = true;
-            }
             auto t_minpres = mpmc::Clock::now();
             mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
             stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
-            if (effective_backend_stdout) {
-              mpfree::verbose = old_verbose;
-            }
             output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
           }
         }
@@ -836,8 +736,7 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "minpres_degrees_from_ptr_with_stats",
@@ -846,8 +745,7 @@ NB_MODULE(_multi_critical_interface, m) {
          bool use_tree,
          bool use_multi_chunk,
          bool verbose,
-         bool swedish,
-         bool backend_stdout) {
+         bool swedish) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
@@ -858,16 +756,10 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout, &stats);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, &stats);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
           if (matrices.size() >= 2) {
             outputs.reserve(degrees.size());
-            const bool effective_backend_stdout = mpmc::mpfree_backend_logs_enabled(backend_stdout);
-            const bool old_verbose = mpfree::verbose;
-            if (effective_backend_stdout) {
-              mpfree::verbose = true;
-            }
             auto t_minpres = mpmc::Clock::now();
             for (int degree : degrees) {
               multipers::multi_critical_interface_output<int> output;
@@ -882,9 +774,6 @@ NB_MODULE(_multi_critical_interface, m) {
               outputs.push_back(std::move(output));
             }
             stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
-            if (effective_backend_stdout) {
-              mpfree::verbose = old_verbose;
-            }
           }
         }
         auto t_output = mpmc::Clock::now();
@@ -898,12 +787,11 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "minpres_all_from_ptr",
-      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish, bool backend_stdout) {
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
@@ -913,25 +801,16 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
           if (matrices.size() >= 2) {
             outputs.reserve(matrices.size() - 1);
-            const bool effective_backend_stdout = mpmc::mpfree_backend_logs_enabled(backend_stdout);
-            const bool old_verbose = mpfree::verbose;
-            if (effective_backend_stdout) {
-              mpfree::verbose = true;
-            }
             for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
               auto first = matrices[i];
               auto second = matrices[i + 1];
               multipers::multi_critical_detail::Graded_matrix min_rep;
               mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
               outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
-            }
-            if (effective_backend_stdout) {
-              mpfree::verbose = old_verbose;
             }
           }
         }
@@ -943,12 +822,11 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 
   m.def(
       "minpres_all_from_ptr_with_stats",
-      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish, bool backend_stdout) {
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish) {
         std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
             reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
@@ -959,16 +837,10 @@ NB_MODULE(_multi_critical_interface, m) {
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
-          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(
-              *input_bridge, use_tree, backend_stdout, &stats);
-          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, &stats);
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
           if (matrices.size() >= 2) {
             outputs.reserve(matrices.size() - 1);
-            const bool effective_backend_stdout = mpmc::mpfree_backend_logs_enabled(backend_stdout);
-            const bool old_verbose = mpfree::verbose;
-            if (effective_backend_stdout) {
-              mpfree::verbose = true;
-            }
             auto t_minpres = mpmc::Clock::now();
             for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
               auto first = matrices[i];
@@ -978,9 +850,6 @@ NB_MODULE(_multi_critical_interface, m) {
               outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
             }
             stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
-            if (effective_backend_stdout) {
-              mpfree::verbose = old_verbose;
-            }
           }
         }
         auto t_output = mpmc::Clock::now();
@@ -994,7 +863,6 @@ NB_MODULE(_multi_critical_interface, m) {
       "use_tree"_a = false,
       "use_multi_chunk"_a = true,
       "verbose"_a = false,
-      "swedish"_a = true,
-      "_backend_stdout"_a = false);
+      "swedish"_a = true);
 #endif
 }

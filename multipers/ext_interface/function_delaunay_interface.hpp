@@ -1,12 +1,13 @@
 #pragma once
 
-#include "backend_log_flags.hpp"
+#include "backend_log_policy.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <limits>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -116,10 +117,21 @@ inline bool function_delaunay_interface_available() { return MULTIPERS_HAS_FUNCT
 namespace detail {
 
 inline std::mutex& function_delaunay_interface_mutex() {
-  // stream_silencer swaps the process-global std::cout/std::cerr buffers, so
-  // function_delaunay calls must serialize while that redirection is possible.
+  // Only timer globals still require process-global serialization.
   static std::mutex m;
   return m;
+}
+
+inline bool function_delaunay_wrapper_silences_backend_output() {
+  return false;
+}
+
+inline bool function_delaunay_interface_needs_global_state_lock() {
+#if FUNCTION_DELAUNAY_TIMERS || MULTI_CHUNK_TIMERS || MPFREE_TIMERS
+  return true;
+#else
+  return false;
+#endif
 }
 
 class null_streambuf : public std::streambuf {
@@ -357,7 +369,10 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
     int degree,
     bool use_multi_chunk,
     bool verbose_output) {
-  std::lock_guard<std::mutex> lock(detail::function_delaunay_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > global_state_lock;
+  if (detail::function_delaunay_interface_needs_global_state_lock()) {
+    global_state_lock.emplace(detail::function_delaunay_interface_mutex());
+  }
 
   if (input.points.size() != input.function_values.size()) {
     throw std::invalid_argument("function_delaunay interface expects as many function values as input points.");
@@ -390,14 +405,8 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
   }
   const auto sorted_to_original = detail::sorted_to_original_vertex_ids<index_type>(points);
 
-  const bool effective_verbose_output = backend_log_flags::function_delaunay && verbose_output;
-  multi_chunk::verbose = effective_verbose_output;
-  const bool old_mpfree_verbose = mpfree::verbose;
-  if (backend_log_flags::mpfree && effective_verbose_output) {
-    mpfree::verbose = true;
-  }
-
-  detail::stream_silencer silencer(!effective_verbose_output);
+  (void)verbose_output;
+  detail::stream_silencer silencer(false);
 
   std::vector<detail::Graded_matrix> matrices;
   function_delaunay::function_delaunay_with_meb<detail::Graded_matrix>(points, matrices, false);
@@ -408,35 +417,22 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
 
   if (degree >= 0) {
     if (matrices.size() < 2) {
-      if (backend_log_flags::mpfree && effective_verbose_output) {
-        mpfree::verbose = old_mpfree_verbose;
-      }
       return function_delaunay_interface_output<index_type>();
     }
     const int matrix_idx = static_cast<int>(matrices.size()) - degree - 2;
     if (matrix_idx < 0 || matrix_idx + 1 >= static_cast<int>(matrices.size())) {
-      if (backend_log_flags::mpfree && effective_verbose_output) {
-        mpfree::verbose = old_mpfree_verbose;
-      }
       throw std::invalid_argument("Invalid homological degree for function_delaunay minimal presentation.");
     }
     auto first_matrix = matrices[matrix_idx];
     auto second_matrix = matrices[matrix_idx + 1];
     detail::Graded_matrix min_rep;
     mpfree::compute_minimal_presentation(first_matrix, second_matrix, min_rep, false, false);
-    auto out = detail::convert_minpres<index_type>(min_rep, degree);
-    if (backend_log_flags::mpfree && effective_verbose_output) {
-      mpfree::verbose = old_mpfree_verbose;
-    }
-    return out;
+    return detail::convert_minpres<index_type>(min_rep, degree);
   }
 
   auto out = detail::convert_chain_complex<index_type>(matrices);
   if (input.recover_ids) {
     detail::recover_vertex_ids(out, sorted_to_original);
-  }
-  if (backend_log_flags::mpfree && effective_verbose_output) {
-    mpfree::verbose = old_mpfree_verbose;
   }
   return out;
 }
@@ -446,7 +442,10 @@ template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>& input,
     bool verbose_output) {
-  std::lock_guard<std::mutex> lock(detail::function_delaunay_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > global_state_lock;
+  if (detail::function_delaunay_interface_needs_global_state_lock()) {
+    global_state_lock.emplace(detail::function_delaunay_interface_mutex());
+  }
 
   if (input.points.size() != input.function_values.size()) {
     throw std::invalid_argument("function_delaunay interface expects as many function values as input points.");
@@ -476,8 +475,8 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
   std::sort(points.begin(), points.end(), function_delaunay::Lex_sort_by_density());
   const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
 
-  const bool effective_verbose_output = backend_log_flags::function_delaunay && verbose_output;
-  detail::stream_silencer silencer(!effective_verbose_output);
+  (void)verbose_output;
+  detail::stream_silencer silencer(false);
   Gudhi::Simplex_tree<> simplex_tree;
   function_delaunay::incremental_delaunay_complex(points, simplex_tree, false);
   if (input.recover_ids) {

@@ -67,7 +67,7 @@ mpfree_minpres_with_generators_output<index_type> mpfree_minpres_with_generators
 #endif
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
-#include "backend_log_flags.hpp"
+#include "backend_log_policy.hpp"
 #include "contiguous_slicer_bridge.hpp"
 
 namespace multipers {
@@ -111,8 +111,7 @@ inline bool mpfree_interface_available() { return MULTIPERS_HAS_MPFREE_INTERFACE
 namespace detail {
 
 inline std::mutex& mpfree_interface_mutex() {
-  // mpfree only needs serialization when the wrapper is allowed to touch
-  // backend-global verbose or timer state.
+  // mpfree only needs serialization when timer globals are compiled in.
   static std::mutex m;
   return m;
 }
@@ -620,11 +619,11 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
                                                     bool use_clearing,
                                                     bool verbose_output,
                                                     bool capture_generators) {
-  const bool effective_verbose_output = backend_log_flags::mpfree && verbose_output;
+  (void)verbose_output;
 #if MPFREE_TIMERS
   const bool need_global_state_lock = true;
 #else
-  const bool need_global_state_lock = effective_verbose_output;
+  const bool need_global_state_lock = false;
 #endif
   std::optional<std::lock_guard<std::mutex> > global_state_lock;
   if (need_global_state_lock) {
@@ -683,14 +682,7 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
 
   if (!capture_generators) {
     mpfree_raw_result out;
-    const bool old_verbose = mpfree::verbose;
-    if (effective_verbose_output) {
-      mpfree::verbose = true;
-    }
     mpfree::compute_minimal_presentation(gm_upper, gm_lower, out.min_rep, use_chunk, use_clearing);
-    if (effective_verbose_output) {
-      mpfree::verbose = old_verbose;
-    }
     return out;
   }
 
@@ -717,10 +709,6 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
   GM1.pq_row.resize(GM1.num_grades_y);
   GM2.pq_row.resize(GM2.num_grades_y);
 
-  const bool old_verbose = mpfree::verbose;
-  if (effective_verbose_output) {
-    mpfree::verbose = true;
-  }
   mpfree_raw_result out;
 
   if (use_chunk) {
@@ -751,9 +739,6 @@ inline mpfree_raw_result compute_mpfree_minpres_raw(const mpfree_interface_input
   out.kernel_basis = Ker_base;
   out.has_generators = true;
   minimize_with_kept_rows(semi_min_rep, out.min_rep, out.surviving_rows);
-  if (effective_verbose_output) {
-    mpfree::verbose = old_verbose;
-  }
   return out;
 }
 

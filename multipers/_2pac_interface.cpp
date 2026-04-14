@@ -4,7 +4,7 @@
 
 #include <stdexcept>
 
-#include "ext_interface/backend_log_flags.hpp"
+#include "ext_interface/backend_log_policy.hpp"
 #include "ext_interface/2pac_interface.hpp"
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
@@ -26,10 +26,11 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool use_clearing,
                                            bool use_chunk,
                                            bool verbose,
-                                            bool backend_stdout,
-                                            bool keep_generators) {
+                                           bool keep_generators) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
-  const bool effective_verbose_output = multipers::backend_log_flags::twopac && (backend_stdout || verbose);
+  (void)verbose;
+  const bool effective_verbose_output = multipers::backend_log_policy::backend_log_enabled(
+      multipers::backend_log_policy::backend_log_bit::twopac);
   return multipers::nanobind_helpers::build_minpres_slicer_output_for_target(
       target,
       input_wrapper,
@@ -59,11 +60,6 @@ NB_MODULE(_2pac_interface, m) {
           "2pac interface is not available in this build. Rebuild multipers with 2pac support to enable this backend.");
     }
   });
-  m.def("_compiled_log_flags", []() {
-    nb::dict out;
-    out["2pac"] = nb::bool_(multipers::backend_log_flags::twopac);
-    return out;
-  });
 
   m.def(
       "minimal_presentation",
@@ -73,8 +69,7 @@ NB_MODULE(_2pac_interface, m) {
          bool use_clearing,
          bool use_chunk,
          bool keep_generators,
-         bool verbose,
-         bool backend_stdout) {
+         bool verbose) {
 #if MULTIPERS_DISABLE_2PAC_INTERFACE
         throw std::runtime_error("2pac interface is disabled at compile time.");
 #else
@@ -84,8 +79,7 @@ NB_MODULE(_2pac_interface, m) {
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
             slicer,
             [&](const nb::object& target) {
-              return mtpi::minimal_presentation_for_target(
-                  target, degree, full_resolution, use_clearing, use_chunk, verbose, backend_stdout, keep_generators);
+              return mtpi::minimal_presentation_for_target(target, degree, full_resolution, use_clearing, use_chunk, verbose, keep_generators);
             });
 #endif
       },
@@ -95,6 +89,5 @@ NB_MODULE(_2pac_interface, m) {
       "use_clearing"_a = true,
       "use_chunk"_a = true,
       "keep_generators"_a = false,
-      "verbose"_a = false,
-      "_backend_stdout"_a = false);
+      "verbose"_a = false);
 }
