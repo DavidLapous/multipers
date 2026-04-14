@@ -356,6 +356,35 @@ def hera_bottleneck_distances(
     )
 
 
+def hera_wasserstein_distances(
+    left_diagrams,
+    right_diagrams,
+    *,
+    order: float = 1.0,
+    internal_p: float = np.inf,
+    delta: float = 0.01,
+    n_jobs: int = 0,
+):
+    """
+    Compute Hera Wasserstein distances for aligned batches of persistence diagrams.
+
+    The compiled Hera bridge drops diagonal points internally and evaluates the
+    batch with a native TBB loop when available. `n_jobs <= 0` keeps backend
+    default concurrency.
+    """
+    from multipers import _hera_interface
+
+    _hera_interface.require()
+    return _hera_interface.wasserstein_distances(
+        left_diagrams,
+        right_diagrams,
+        order=float(order),
+        internal_p=float(internal_p),
+        delta=delta,
+        n_jobs=int(n_jobs),
+    )
+
+
 def _reduce_monte_carlo_line_distances(weighted_distances, *, line_reduction: str, api):
     if line_reduction in ("max", "linf"):
         return api.max(weighted_distances)
@@ -419,6 +448,8 @@ def _process_monte_carlo_raw_distances(
     api,
     directions,
     line_reduction: str,
+    line_distance_kind: str,
+    line_distance_order: float,
     return_stats: bool,
 ):
     raw_distances = api.to_device(
@@ -447,8 +478,10 @@ def _process_monte_carlo_raw_distances(
     return distance, {
         "num_lines": int(num_lines),
         "line_reduction": line_reduction,
+        "line_distance_kind": line_distance_kind,
+        "line_distance_order": float(line_distance_order),
         "best_line_index": int(best_index),
-        "best_raw_bottleneck": float(raw_distances_np[best_index])
+        "best_raw_line_distance": float(raw_distances_np[best_index])
         if best_index >= 0
         else 0.0,
         "best_weight": float(weights_np[best_index]) if best_index >= 0 else 0.0,
@@ -499,8 +532,15 @@ def _sample_monte_carlo_lines(
 
     if num_candidates > nlines:
         if sampler is not None:
+            # Keep FPS subsampling reproducible for a fixed Monte Carlo seed.
+            fpsample_start_idx = int(rng.integers(0, num_candidates))
             indices = np.asarray(
-                sampler(directions, nlines, h=int(fpsample_bucket_height)),
+                sampler(
+                    directions,
+                    nlines,
+                    h=int(fpsample_bucket_height),
+                    start_idx=fpsample_start_idx,
+                ),
                 dtype=np.int64,
             )
         else:
@@ -521,8 +561,9 @@ def _matching_distance_monte_carlo(
     seed: int,
     line_oversampling: int,
     fpsample_bucket_height: int,
-    bottleneck_delta: float,
+    line_distance_delta: float,
     n_jobs: int,
+    wasserstein_order: float | None,
     line_reduction: str,
     return_stats: bool,
     api=None,
@@ -568,15 +609,28 @@ def _matching_distance_monte_carlo(
             )
         basepoints_np = np.ascontiguousarray(basepoints_np, dtype=np.float64)
         directions_np = np.ascontiguousarray(directions_np, dtype=np.float64)
-        raw_distances = _hera_interface.monte_carlo_bottleneck_distances(
-            left,
-            right,
-            basepoints_np,
-            directions_np,
-            degree=degree,
-            delta=bottleneck_delta,
-            n_jobs=int(n_jobs),
-        )
+        if wasserstein_order is None:
+            raw_distances = _hera_interface.monte_carlo_bottleneck_distances(
+                left,
+                right,
+                basepoints_np,
+                directions_np,
+                degree=degree,
+                delta=line_distance_delta,
+                n_jobs=int(n_jobs),
+            )
+        else:
+            raw_distances = _hera_interface.monte_carlo_wasserstein_distances(
+                left,
+                right,
+                basepoints_np,
+                directions_np,
+                degree=degree,
+                order=wasserstein_order,
+                internal_p=np.inf,
+                delta=line_distance_delta,
+                n_jobs=int(n_jobs),
+            )
         api = _infer_api([basepoints, directions], api=api)
         directions = api.astensor(directions)
         return _process_monte_carlo_raw_distances(
@@ -584,6 +638,12 @@ def _matching_distance_monte_carlo(
             api=api,
             directions=directions,
             line_reduction=line_reduction,
+            line_distance_kind="bottleneck"
+            if wasserstein_order is None
+            else "wasserstein",
+            line_distance_order=np.inf
+            if wasserstein_order is None
+            else wasserstein_order,
             return_stats=return_stats,
         )
 
@@ -604,14 +664,26 @@ def _matching_distance_monte_carlo(
         barcodes[degree]
         for barcodes in right.persistence_on_lines(basepoints, directions)
     )
-    raw_distances = hera_bottleneck_distances(
-        left_diagrams, right_diagrams, delta=bottleneck_delta, n_jobs=int(n_jobs)
-    )
+    if wasserstein_order is None:
+        raw_distances = hera_bottleneck_distances(
+            left_diagrams, right_diagrams, delta=line_distance_delta, n_jobs=int(n_jobs)
+        )
+    else:
+        raw_distances = hera_wasserstein_distances(
+            left_diagrams,
+            right_diagrams,
+            order=wasserstein_order,
+            internal_p=np.inf,
+            delta=line_distance_delta,
+            n_jobs=int(n_jobs),
+        )
     return _process_monte_carlo_raw_distances(
         raw_distances,
         api=api,
         directions=directions,
         line_reduction=line_reduction,
+        line_distance_kind="bottleneck" if wasserstein_order is None else "wasserstein",
+        line_distance_order=np.inf if wasserstein_order is None else wasserstein_order,
         return_stats=return_stats,
     )
 
@@ -623,15 +695,15 @@ def matching_distance(
     api=None,
     degree=None,
     strategy: str = "monte_carlo",
+    epsilon: float = 1e-5,
+    delta: float = 0.001,
     mc_nlines: int = 128,
     mc_seed: int = 42,
     mc_oversampling: int = 10,
     mc_fpsample_bucket_height: int = 2,
-    mc_bottleneck_delta: float = 0.0,
     mc_n_jobs: int = 0,
+    mc_wp: float | None = None,
     mc_line_reduction: str = "max",
-    hera_epsilon: float = 0.001,
-    hera_delta: float = 0.1,
     hera_max_depth: int = 8,
     hera_initialization_depth: int = 2,
     hera_bound_strategy: str = "local_combined",
@@ -660,12 +732,21 @@ def matching_distance(
         WIP for autodiff.
     strategy : {"monte_carlo", "hera"}, default="monte_carlo"
         Backend used to estimate the matching distance. `"monte_carlo"` samples
-        lines, computes per-line bottleneck distances, and aggregates according
-        to `mc_line_reduction` across sampled lines. When both inputs are native
-        unsqueezed floating slicers, this path uses a fused compiled fast path;
-        otherwise it falls back to the Python batch implementation.
+        lines, computes per-line bottleneck or Wasserstein distances according
+        to `mc_wp`, and aggregates according to `mc_line_reduction` across
+        sampled lines. When both inputs are native unsqueezed floating slicers,
+        this path uses a fused compiled fast path; otherwise it falls back to
+        the Python batch implementation.
         `"hera"` runs Hera's 2-parameter matching-distance algorithm
         on the presentations.
+    epsilon : float, default=1e-5
+        Hera slice-bottleneck approximation tolerance used by the exact
+        `"hera"` backend.
+    delta : float, default=0.1
+        Relative tolerance used by Hera-backed approximations. The exact
+        `"hera"` backend uses it for adaptive search over line directions. The
+        Monte Carlo backend uses it for per-line bottleneck or Wasserstein
+        computations.
     mc_nlines : int, default=128
         Number of sampled lines for the Monte Carlo backend.
     mc_seed : int, default=42
@@ -673,31 +754,24 @@ def matching_distance(
     mc_oversampling : int, default=10
         Monte Carlo direction oversampling factor before optional farthest-point
         subsampling with `fpsample`.
-    mc_fpsample_bucket_height : int, default=7
+    mc_fpsample_bucket_height : int, default=2
         Bucket height passed to `fpsample` when direction resampling is enabled.
-    mc_bottleneck_delta : float, default=0.0
-        Relative error tolerance used by Hera's bottleneck solver on individual
-        line diagrams in the Monte Carlo backend. Set to `0` for exact per-line
-        bottleneck distances.
     mc_n_jobs : int, default=0
-        Worker count used by the Monte Carlo backend for per-line bottleneck
-        computations. `mc_n_jobs <= 0` keeps backend default concurrency.
+        Worker count used by the Monte Carlo backend for per-line bottleneck or
+        Wasserstein computations. `mc_n_jobs <= 0` keeps backend default
+        concurrency.
+    mc_wp : float, optional
+        Per-line Wasserstein order used by the Monte Carlo backend. If `None`
+        or `np.inf`, use bottleneck distance on sampled lines. If finite,
+        compute Hera's `W_p` on sampled line diagrams with `internal_p=np.inf`.
     mc_line_reduction : {"max", "mean", "softmax", "softmax<d>", "l<p>"}, default="max"
         Reduction applied to the sampled Monte Carlo line scores
-        `bottleneck_distance`. `"max"` is the `Linf` reduction, `"mean"`
+        `line_distance`. `"max"` is the `Linf` reduction, `"mean"`
         is the `L1` mean across sampled line scores, `"l<p>"` applies the
         corresponding `Lp` mean (for example, `"l3"`), `"softmax"` uses
         unscaled softmax weights, and `"softmax<d>"` rescales sampled line
         scores by `d` before applying softmax weights.
         Ignored by the exact `"hera"` backend.
-    hera_epsilon : float, default=0.001
-        Relative error tolerance used by Hera when approximating bottleneck
-        distances on individual slices in the exact `"hera"` backend. Smaller
-        values are more accurate and can be slower.
-    hera_delta : float, default=0.1
-        Relative stopping tolerance for the adaptive search over slice directions
-        in the exact `"hera"` backend. Smaller values request a tighter
-        approximation of the matching distance.
     hera_max_depth : int, default=8
         Maximum quadtree refinement depth used by the exact `"hera"` backend.
         Larger values allow more refinement but increase runtime.
@@ -726,8 +800,8 @@ def matching_distance(
         If `False`, return only the matching distance. If `True`, also return a
         backend-specific diagnostics. The exact `"hera"` backend returns
         `actual_error`, `actual_max_depth`, and `n_hera_calls`. The Monte Carlo
-        backend returns the number of sampled lines, the reduction, and the best
-        sampled line.
+        backend returns the number of sampled lines, the reduction, the line
+        metric, the best sampled line, and its raw line distance.
     verbose : bool, default=False
         If `True`, print timing scopes for validation and backend work.
 
@@ -782,6 +856,13 @@ def matching_distance(
         timing.substep("validated_inputs")
 
         if strategy == "monte_carlo":
+            mc_wasserstein_order = None
+            if mc_wp is not None:
+                mc_wasserstein_order = float(mc_wp)
+                if np.isinf(mc_wasserstein_order):
+                    mc_wasserstein_order = None
+                elif not np.isfinite(mc_wasserstein_order) or mc_wasserstein_order < 1.0:
+                    raise ValueError("`mc_wp` must be >= 1, `np.inf`, or `None`.")
             with timing.step("monte_carlo", details={"nlines": int(mc_nlines)}) as step:
                 out = _matching_distance_monte_carlo(
                     left,
@@ -791,8 +872,9 @@ def matching_distance(
                     seed=int(mc_seed),
                     line_oversampling=int(mc_oversampling),
                     fpsample_bucket_height=int(mc_fpsample_bucket_height),
-                    bottleneck_delta=float(mc_bottleneck_delta),
+                    line_distance_delta=float(delta),
                     n_jobs=int(mc_n_jobs),
+                    wasserstein_order=mc_wasserstein_order,
                     line_reduction=mc_line_reduction,
                     return_stats=bool(return_stats),
                     api=api,
@@ -803,47 +885,47 @@ def matching_distance(
                     step.add_stats(out[1])
                 return out
 
-        if strategy != "hera":
-            raise ValueError(
-                "Unknown matching-distance strategy {!r}. Expected 'monte_carlo' or 'hera'.".format(
-                    strategy
-                )
-            )
+        if strategy == "hera":
+            if left.num_parameters != 2 or right.num_parameters != 2:
+                raise ValueError("Hera matching distance only supports 2-parameter slicers.")
+            with timing.step("hera") as step:
+                if not left.is_minpres or not right.is_minpres:
+                    mp.logs.warn_superfluous_computation(
+                        "Didn't get a presentation as an input (hera strategy), calling mpfree."
+                    )
+                    left = left.minpres(degree, full_resolution=False, force=False)
+                    right = right.minpres(degree, full_resolution=False, force=False)
+                    step.substep("computed_minpres")
+                from multipers import _hera_interface
 
-        if left.num_parameters != 2 or right.num_parameters != 2:
-            raise ValueError("Hera matching distance only supports 2-parameter slicers.")
-        with timing.step("hera") as step:
-            if not left.is_minpres or not right.is_minpres:
-                mp.logs.warn_superfluous_computation(
-                    "Didn't get a presentation as an input (hera strategy), calling mpfree."
+                _hera_interface.require()
+                out = _hera_interface.matching_distance(
+                    left,
+                    right,
+                    hera_epsilon=float(epsilon),
+                    delta=float(delta),
+                    max_depth=int(hera_max_depth),
+                    initialization_depth=int(hera_initialization_depth),
+                    bound_strategy=_normalize_hera_strategy(
+                        hera_bound_strategy,
+                        _MATCHING_DISTANCE_BOUND_STRATEGIES,
+                        "Hera bound strategy",
+                    ),
+                    traverse_strategy=_normalize_hera_strategy(
+                        hera_traverse_strategy,
+                        _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
+                        "Hera traverse strategy",
+                    ),
+                    tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
+                    stop_asap=bool(hera_stop_asap),
+                    return_stats=bool(return_stats),
                 )
-                left = left.minpres(degree, full_resolution=False, force=False)
-                right = right.minpres(degree, full_resolution=False, force=False)
-                step.substep("computed_minpres")
-            from multipers import _hera_interface
+                if return_stats:
+                    step.add_stats(out[1])
+                return out
 
-            _hera_interface.require()
-            out = _hera_interface.matching_distance(
-                left,
-                right,
-                hera_epsilon=float(hera_epsilon),
-                delta=float(hera_delta),
-                max_depth=int(hera_max_depth),
-                initialization_depth=int(hera_initialization_depth),
-                bound_strategy=_normalize_hera_strategy(
-                    hera_bound_strategy,
-                    _MATCHING_DISTANCE_BOUND_STRATEGIES,
-                    "Hera bound strategy",
-                ),
-                traverse_strategy=_normalize_hera_strategy(
-                    hera_traverse_strategy,
-                    _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
-                    "Hera traverse strategy",
-                ),
-                tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
-                stop_asap=bool(hera_stop_asap),
-                return_stats=bool(return_stats),
+        raise ValueError(
+            "Unknown matching-distance strategy {!r}. Expected 'monte_carlo' or 'hera'.".format(
+                strategy
             )
-            if return_stats:
-                step.add_stats(out[1])
-            return out
+        )
