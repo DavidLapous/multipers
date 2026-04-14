@@ -7,7 +7,6 @@ __version__ = _version("multipers")
 from . import (
     filtrations,
     grids,
-    io,
     logs,
     multiparameter_module_approximation,
     simplex_tree_multi,
@@ -28,7 +27,6 @@ __all__ = [
     "data",
     "filtrations",
     "grids",
-    "io",
     "logs",
     "multiparameter_module_approximation",
     "plots",
