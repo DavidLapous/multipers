@@ -20,7 +20,7 @@ def _minimal_presentation_from_slicer(
 
         if not _mpfree_interface._is_available():
             raise RuntimeError(
-                "mpfree in-memory interface is not available in this build. "
+                "mpfree interface is not available in this build. "
                 "Rebuild multipers with mpfree support to enable this backend."
             )
         with _mp_logs.timings(
@@ -50,7 +50,7 @@ def _minimal_presentation_from_slicer(
 
         if not _2pac_interface._is_available():
             raise RuntimeError(
-                "2pac in-memory interface is not available in this build. "
+                "2pac interface is not available in this build. "
                 "Rebuild multipers with 2pac support to enable this backend."
             )
         with _mp_logs.timings(
@@ -81,7 +81,7 @@ def _minimal_presentation_from_slicer(
         return new_slicer
 
     raise ValueError(
-        f"Unsupported backend {backend!r}. Minimal presentation supports only in-memory `mpfree` and `2pac`."
+        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree` and `2pac`."
     )
 
 
@@ -102,7 +102,7 @@ def _multi_critical_from_slicer(
 
     if not _multi_critical_interface._is_available():
         raise RuntimeError(
-            "multi_critical in-memory interface is not available in this build. "
+            "multi_critical interface is not available in this build. "
             "Rebuild multipers with multi_critical support to enable this backend."
         )
 
@@ -148,14 +148,14 @@ def aida(s, sort=True, verbose=False, progress=False):
 
     if importlib.util.find_spec("multipers._aida_interface") is None:
         raise RuntimeError(
-            "AIDA in-memory interface is not available in this build. "
+            "AIDA interface is not available in this build. "
             "Rebuild multipers with AIDA support to enable this backend."
         )
     from multipers import _aida_interface
 
     if not _aida_interface._is_available():
         raise RuntimeError(
-            "AIDA in-memory interface is not available in this build. "
+            "AIDA interface is not available in this build. "
             "Rebuild multipers with AIDA support to enable this backend."
         )
     return _aida_interface.aida(s, sort=sort, verbose=verbose, progress=progress)

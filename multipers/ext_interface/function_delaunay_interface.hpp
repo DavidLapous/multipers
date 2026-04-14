@@ -504,7 +504,7 @@ template <typename index_type>
 function_delaunay_interface_output<index_type>
 function_delaunay_interface(const function_delaunay_interface_input<index_type>&, int, bool, bool) {
   throw std::runtime_error(
-      "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "function_delaunay interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
@@ -512,7 +512,7 @@ template <typename index_type>
 contiguous_f64_complex
 function_delaunay_interface_contiguous_slicer(const function_delaunay_interface_input<index_type>&, int, bool, bool) {
   throw std::runtime_error(
-      "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "function_delaunay interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 template <typename index_type>
@@ -520,7 +520,7 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
     const function_delaunay_interface_input<index_type>&,
     bool) {
   throw std::runtime_error(
-      "function_delaunay in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "function_delaunay interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 #endif
 

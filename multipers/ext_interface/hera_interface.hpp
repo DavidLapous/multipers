@@ -233,19 +233,19 @@ hera_interface_result hera_matching_distance(const hera_module_presentation_inpu
                                              const hera_module_presentation_input<index_type>&,
                                              const hera_interface_params&) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
 inline double hera_bottleneck_distance(const std::vector<std::pair<double, double> >&, const std::vector<std::pair<double, double> >&, double) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
 inline double hera_wasserstein_distance(const std::vector<std::pair<double, double> >&,
                                         const std::vector<std::pair<double, double> >&,
                                         const hera_wasserstein_params&) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
 #endif

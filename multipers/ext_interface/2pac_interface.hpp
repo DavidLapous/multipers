@@ -123,7 +123,7 @@ struct twopac_raw_result {
 
 inline std::mutex& twopac_interface_mutex() {
   // 2pac still mutates process-global pivot caches and Timing::* state, so
-  // concurrent in-memory calls must stay serialized.
+  // concurrent calls must stay serialized.
   static std::mutex m;
   return m;
 }
@@ -586,7 +586,7 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool,
                                                              bool) {
   throw std::runtime_error(
-      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
 }
 
@@ -594,7 +594,7 @@ template <typename index_type>
 twopac_minpres_with_generators_output<index_type>
 twopac_minpres_with_generators_interface(const twopac_interface_input<index_type>&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
 }
 
@@ -607,7 +607,7 @@ inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_sli
                                                                   bool,
                                                                   bool) {
   throw std::runtime_error(
-      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
 }
 
@@ -615,7 +615,7 @@ template <typename contiguous_slicer_type>
 inline std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
 twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "2pac in-memory interface is not available at compile time. Initialize ext/2pac (or set "
+      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
       "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
 }
 #endif

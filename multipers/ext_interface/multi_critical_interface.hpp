@@ -558,7 +558,7 @@ template <typename index_type>
 multi_critical_interface_output<index_type>
 multi_critical_resolution_interface(const multi_critical_interface_input<index_type>&, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
@@ -568,7 +568,7 @@ inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kco
                                                                              bool,
                                                                              bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 #endif
 
@@ -576,14 +576,14 @@ template <typename index_type>
 multi_critical_interface_output<index_type>
 multi_critical_minpres_interface(const multi_critical_interface_input<index_type>&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 template <typename index_type>
 std::vector<multi_critical_interface_output<index_type> >
 multi_critical_minpres_all_interface(const multi_critical_interface_input<index_type>&, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 #endif

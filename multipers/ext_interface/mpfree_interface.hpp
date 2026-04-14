@@ -831,14 +831,14 @@ mpfree_interface_output<index_type> mpfree_minpres_interface(const mpfree_interf
                                                              bool,
                                                              bool) {
   throw std::runtime_error(
-      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+      "mpfree interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 
 template <typename index_type>
 mpfree_minpres_with_generators_output<index_type>
 mpfree_minpres_with_generators_interface(const mpfree_interface_input<index_type>&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+      "mpfree interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 
 #if !MULTIPERS_DISABLE_MPFREE_INTERFACE
@@ -850,14 +850,14 @@ inline contiguous_f64_complex mpfree_minpres_contiguous_interface(contiguous_sli
                                                                   bool,
                                                                   bool) {
   throw std::runtime_error(
-      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+      "mpfree interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 
 template <typename contiguous_slicer_type>
 inline std::pair<contiguous_f64_complex, mpfree_generator_matrix_output<int> >
 mpfree_minpres_with_generators_contiguous_interface(contiguous_slicer_type&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "mpfree in-memory interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
+      "mpfree interface is not available at compile time. Install/checkout mpfree headers and rebuild.");
 }
 #endif
 

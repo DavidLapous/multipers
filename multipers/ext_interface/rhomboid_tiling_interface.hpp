@@ -323,7 +323,7 @@ template <typename index_type>
 rhomboid_tiling_interface_output<index_type>
 rhomboid_tiling_to_slicer_interface(const rhomboid_tiling_interface_input<index_type>&, int, int, bool) {
   throw std::runtime_error(
-      "rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
+      "rhomboid_tiling interface is not available at compile time. Install/checkout "
       "rhomboidtiling + CGAL headers and rebuild.");
 }
 
@@ -332,7 +332,7 @@ template <typename index_type>
 contiguous_f64_complex
 rhomboid_tiling_to_contiguous_slicer_interface(const rhomboid_tiling_interface_input<index_type>&, int, int, bool) {
   throw std::runtime_error(
-      "rhomboid_tiling in-memory interface is not available at compile time. Install/checkout "
+      "rhomboid_tiling interface is not available at compile time. Install/checkout "
       "rhomboidtiling + CGAL headers and rebuild.");
 }
 #endif
