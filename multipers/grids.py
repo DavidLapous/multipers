@@ -1,10 +1,10 @@
-import numpy as np
 from typing import Iterable, Literal, Optional
-from itertools import product
 
+import numpy as np
+
+import multipers.logs as _mp_logs
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.array_api import numpy as npapi
-import multipers.logs as _mp_logs
 
 from . import _grid_helper_nanobind as _mg_nb
 
@@ -74,9 +74,9 @@ def get_exact_grid(
     """
     Computes an initial exact grid
     """
-    from multipers.slicer import is_slicer
-    from multipers.simplex_tree_multi import is_simplextree_multi
     from multipers.mma_structures import is_mma
+    from multipers.simplex_tree_multi import is_simplextree_multi
+    from multipers.slicer import is_slicer
 
     if (is_slicer(x) or is_simplextree_multi(x)) and x.is_squeezed:
         initial_grid = x.filtration_grid
@@ -446,53 +446,26 @@ def coarsen_points(points, strategy="exact", resolution=-1, coordinate=False):
 
 
 def _inf_value(array):
-    """Return a backend-appropriate representation of +inf for `array`'s dtype.
-
-    Accepts numpy dtype/ndarray and torch dtype/tensor when available.
-    """
-    # prefer numpy handling first
     if isinstance(array, np.dtype):
-        dtype = array
-    elif isinstance(array, np.ndarray):
-        dtype = np.dtype(array.dtype)
-    else:
-        # try numpy coercion first (handles python scalars/types)
-        try:
-            dtype = np.dtype(array)
-        except Exception:
-            # fall back to torch if available
-            try:
-                import torch
-            except Exception:
-                torch = None
-            if torch is not None and isinstance(array, torch.Tensor):
-                dtype = array.dtype
-            elif torch is not None and isinstance(array, torch.dtype):
-                dtype = array
-            else:
-                raise ValueError(f"unknown input of type {type(array)=} {array=}")
+        return npapi.inf_value(array)
 
-    if isinstance(dtype, np.dtype):
-        # https://numpy.org/doc/stable/reference/arrays.scalars.html
-        if np.issubdtype(dtype, np.inexact):
-            return np.asarray(np.inf, dtype=dtype)
-        if np.issubdtype(dtype, np.integer):
-            return np.iinfo(dtype).max
-        raise ValueError(f"`dtype` must be integer or floating like (got {dtype=}).")
-
-    # torch dtype path
     try:
-        import torch
+        api = api_from_tensor(array, strict=True)
     except Exception:
-        torch = None
+        try:
+            import torch
+        except Exception:
+            torch = None
+        if torch is not None and isinstance(array, torch.dtype):
+            import multipers.array_api.torch as torchapi
 
-    if torch is not None and isinstance(dtype, torch.dtype):
-        if dtype.is_floating_point:
-            return torch.tensor(float("inf"), dtype=dtype)
-        # integer-like
-        return torch.iinfo(dtype).max
+            return torchapi.inf_value(array)
+        try:
+            return npapi.inf_value(array)
+        except Exception as exc:
+            raise ValueError(f"Unsupported dtype object: {array!r}") from exc
 
-    raise ValueError(f"Unsupported dtype object: {dtype!r}")
+    return api.inf_value(array)
 
 
 def evaluate_in_grid(
@@ -631,7 +604,33 @@ def sms_in_grid(sms, grid, mass_default=None):
     return sms
 
 
-def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
+def _push_pts_to_line(pts, basepoint, direction=None, api=None, return_coordinate=False):
+    basepoint = api_from_tensors(basepoint).astensor(basepoint)
+    if basepoint.ndim != 1:
+        raise ValueError(
+            f"Expected a basepoint shape of the form (num_parameters,). Got {basepoint.shape=}"
+        )
+    if direction is not None:
+        direction = api_from_tensors(direction).astensor(direction)
+        if direction.ndim != 1:
+            raise ValueError(
+                f"Expected a direction shape of the form (num_parameters,). Got {direction.shape=}"
+            )
+        direction = direction[None]
+    out = _push_pts_to_lines(
+        pts,
+        basepoint[None],
+        directions=direction,
+        api=api,
+        return_coordinate=return_coordinate,
+    )
+    if not return_coordinate:
+        return out[0]
+    projected, coordinates = out
+    return projected[0], coordinates[0]
+
+
+def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordinate=False):
     if api is None:
         api = api_from_tensors(pts, basepoints, jit_promote=True)
 
@@ -640,16 +639,28 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None):
 
     if directions is None:
         kernel = _get_push_pts_to_lines_kernel(api, with_directions=False)
-        return kernel(pts, basepoints)
+        out = kernel(pts, basepoints)
+    else:
+        directions = api.astensor(directions)
+        invalid_rows = api.sum(directions > 0, axis=1) <= 0
+        if api.any(invalid_rows):
+            invalid_direction = directions[invalid_rows][0]
+            raise ValueError(f"Got invalid direction {invalid_direction}")
 
-    directions = api.astensor(directions)
-    invalid_rows = api.sum(directions > 0, axis=1) <= 0
-    if api.any(invalid_rows):
-        invalid_direction = directions[invalid_rows][0]
-        raise ValueError(f"Got invalid direction {invalid_direction}")
+        kernel = _get_push_pts_to_lines_kernel(api, with_directions=True)
+        out = kernel(pts, basepoints, directions)
 
-    kernel = _get_push_pts_to_lines_kernel(api, with_directions=True)
-    return kernel(pts, basepoints, directions)
+    if not return_coordinate:
+        return out
+
+    order = np.argsort(np.ascontiguousarray(api.asnumpy(out)), axis=1, kind="stable")
+    coordinates = np.empty_like(order)
+    coordinates[np.arange(order.shape[0])[:, None], order] = np.arange(
+        order.shape[1], dtype=order.dtype
+    )
+    coordinates = api.astensor(coordinates, dtype=api.int64)
+    coordinates = api.to_device(coordinates, api.device(out))
+    return out, coordinates
 
 
 def evaluate_mod_in_grid(mod, grid, box=None):

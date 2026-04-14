@@ -2,6 +2,7 @@ from functools import wraps
 from typing import Any, cast
 
 import torch as _torch
+import numpy as _np
 
 import multipers.array_api as _mpapi
 import multipers.logs as _mp_logs
@@ -268,8 +269,38 @@ def size(x):
     return x.numel()
 
 
+def _dtype_like(x):
+    return x.dtype if hasattr(x, "dtype") and not isinstance(x, type) else x
+
+
+def is_float(x):
+    dtype = _dtype_like(x)
+    if isinstance(dtype, _torch.dtype):
+        return dtype.is_floating_point
+    try:
+        return _np.issubdtype(_np.dtype(dtype), _np.floating)
+    except TypeError:
+        return False
+
+
+def is_int(x):
+    dtype = _dtype_like(x)
+    if isinstance(dtype, _torch.dtype):
+        return dtype in {
+            _torch.uint8,
+            _torch.int8,
+            _torch.int16,
+            _torch.int32,
+            _torch.int64,
+        }
+    try:
+        return _np.issubdtype(_np.dtype(dtype), _np.integer)
+    except TypeError:
+        return False
+
+
 def dtype_is_float(dtype):
-    return False if dtype is None else dtype.is_floating_point
+    return is_float(dtype)
 
 
 def dtype_default():

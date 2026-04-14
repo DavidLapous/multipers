@@ -209,8 +209,22 @@ def size(x):
     return x.size
 
 
-def dtype_is_float(dtype):
+def _dtype_like(x):
+    return x.dtype if hasattr(x, "dtype") and not isinstance(x, type) else x
+
+
+def is_float(x):
+    dtype = _dtype_like(x)
     return _jnp.issubdtype(dtype, _jnp.floating)
+
+
+def is_int(x):
+    dtype = _dtype_like(x)
+    return _jnp.issubdtype(dtype, _jnp.integer)
+
+
+def dtype_is_float(dtype):
+    return is_float(dtype)
 
 
 def dtype_default():
