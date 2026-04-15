@@ -375,14 +375,6 @@ def _todo_regular_left(f, r, unique, api):
     return f_regular_closest
 
 
-def _todo_regular_left_old(f, r, unique):
-    sorted_f = np.sort(f)
-    f_regular = np.linspace(sorted_f[0], sorted_f[-1], num=r, dtype=sorted_f.dtype)
-    f_regular_closest = sorted_f[np.searchsorted(sorted_f, f_regular)]
-    if unique:
-        f_regular_closest = np.unique(f_regular_closest)
-    return f_regular_closest
-
 
 def _todo_partition(x, resolution, unique, api):
     if api.has_grad(x):
