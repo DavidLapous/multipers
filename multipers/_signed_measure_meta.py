@@ -15,7 +15,6 @@ from multipers.slicer import (
     Slicer_type,
     _hilbert_signed_measure,
     _rank_from_slicer,
-    _signed_measure_from_scc,
     _signed_measure_from_slicer,
     is_slicer,
 )
@@ -61,8 +60,8 @@ def signed_measure(
      - expand_collapse: when the input is a simplextree,
        only expands the complex when computing 1-dimensional slices.
        Meant to reduce memory footprint at some computational expense.
-     - backend:str  reduces first the filtered complex using an external library `backend`,
-         see ``backend`` in :func:`multipers.io.reduce_complex`.
+     - backend:str  reduces first the filtered complex using some external backend `backend`,
+         see ``backend`` in :func:`multipers.ops.minimal_presentation`.
      - grid: If given, the computations will be done on the restriction of the filtered complex to this grid.
         It can also be used for auto-differentiation, i.e., if the grid is a list of pytorch tensors,
         then the output measure will be pytorch-differentiable.

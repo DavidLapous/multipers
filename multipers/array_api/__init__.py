@@ -21,10 +21,24 @@ def _looks_like_torch(x):
 
 def _looks_like_jax(x):
     module = _module_name(x)
-    return module.startswith("jax") or module.startswith("jaxlib")
+    return module.startswith("jax")
 
 
-def api_from_tensor(x, *, verbose: bool = False, strict=False):
+def _has_jit(api):
+    return getattr(api, "_has_jit", False)
+
+
+def is_jax_api(api):
+    from importlib.util import find_spec
+
+    if not find_spec("jax"):
+        return False
+    import multipers.array_api.jax as jaxapi
+
+    return api is jaxapi
+
+
+def api_from_tensor(x, *, verbose: bool = False, strict=False, jit_promote: bool = False):
     from importlib.util import find_spec
 
     if strict:
@@ -45,6 +59,13 @@ def api_from_tensor(x, *, verbose: bool = False, strict=False):
                 pass
         raise ValueError(f"Unsupported (strict) type {type(x)=}")
     if npapi.is_promotable(x):
+        if jit_promote and not _has_jit(npapi) and find_spec("jax"):
+            import multipers.array_api.jax as jaxapi
+
+            if _has_jit(jaxapi):
+                if verbose:
+                    print("using jax backend")
+                return jaxapi
         if verbose:
             print("using numpy backend")
         return npapi
@@ -70,7 +91,7 @@ def api_from_tensor(x, *, verbose: bool = False, strict=False):
     raise ValueError(f"Unsupported type {type(x)=}")
 
 
-def api_from_tensors(*args):
+def api_from_tensors(*args, jit_promote: bool = False):
     if len(args) == 0:
         raise ValueError("no tensor given")
     import multipers.array_api.numpy as npapi
@@ -81,6 +102,14 @@ def api_from_tensors(*args):
             is_numpy = False
             break
     if is_numpy:
+        if jit_promote and not _has_jit(npapi):
+            from importlib.util import find_spec
+
+            if find_spec("jax"):
+                import multipers.array_api.jax as jaxapi
+
+                if _has_jit(jaxapi):
+                    return jaxapi
         return npapi
 
     from importlib.util import find_spec
@@ -118,9 +147,9 @@ def api_from_tensors(*args):
     raise ValueError(f"Incompatible types got {[type(x) for x in args]=}.")
 
 
-def to_numpy(x):
+def to_numpy(x, dtype=None):
     api = api_from_tensor(x)
-    return api.asnumpy(x)
+    return api.asnumpy(x, dtype=dtype)
 
 
 def check_keops():

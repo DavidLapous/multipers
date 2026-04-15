@@ -70,7 +70,6 @@ def test_regular_closest_torch_backend():
     )
 
 
-
 def test_regular_left():
     x = np.asarray([0.0, 0.08, 0.1, 0.19, 0.21, 1.0]).astype(np.float32)
     (y,) = mpg.compute_grid([x], strategy="regular_left", resolution=11)
@@ -118,11 +117,6 @@ def test_sanity_torch():
         s = mp.filtrations.Cubical(img)
         for strat in mp.grids.available_strategies:
             with contextlib.ExitStack() as stack:
-                stack.enter_context(
-                    pytest.warns(
-                        UserWarning, match="Squeezing an already squeezed slicer"
-                    )
-                )
                 if strat in {"regular", "partition"}:
                     stack.enter_context(
                         pytest.warns(

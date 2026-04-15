@@ -1,0 +1,990 @@
+--- a/ext/function_delaunay/include/function_delaunay/Delaunay_triangulation_accessors.h
++++ b/ext/function_delaunay/include/function_delaunay/Delaunay_triangulation_accessors.h
+@@ -20,6 +20,8 @@
+ 
+ #pragma once
+ 
++#include <function_delaunay/log_utils.h>
++
+ //#define CGAL_EIGEN3_ENABLED
+ #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+ #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+@@ -97,23 +99,23 @@
+       }
+       
+       Vertex_handle insert(Point& p) {
+-	  //std::cout << "DEL inserting " << p.cartesian(0) << ", " << p.cartesian(1) << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "DEL inserting " << p.cartesian(0) << ", " << p.cartesian(1) << std::endl;
+ 	  return T.insert(p);
+       }
+ 
+       void remove(Vertex_handle vh) {
+-	  //std::cout << "DEL Removing" << vh->point().cartesian(0) << ", " << vh->point().cartesian(1) << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "DEL Removing" << vh->point().cartesian(0) << ", " << vh->point().cartesian(1) << std::endl;
+ 	  T.remove(vh);
+       }
+       
+       Vertex_handle insert(Point& p, Full_cell_handle c) {
+-	  //std::cout << "DEL inserting with cell" << p.cartesian(0) << ", " << p.cartesian(1) << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "DEL inserting with cell" << p.cartesian(0) << ", " << p.cartesian(1) << std::endl;
+ 	return T.insert(p,c);
+       }
+ 
+       template<typename InputIterator>
+       void insert(InputIterator begin, InputIterator end) {
+-	  //std::cout << "DEL inserting range" << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "DEL inserting range" << std::endl;
+ 	T.insert(begin,end);
+       }
+ 
+@@ -146,7 +148,7 @@
+             if (current_dimension() == 0)
+                 return;
+ 
+-            // std::cout << "Vertex handle with data " << data_of_vertex(vh).idx << '\n';
++            // FUNCTION_DELAUNAY_COUT << "Vertex handle with data " << data_of_vertex(vh).idx << '\n';
+ 
+             std::vector<typename Triangulation::Full_cell_handle> cells;
+             T.incident_full_cells(vh, std::back_inserter(cells));
+@@ -267,7 +269,7 @@
+ 	  if(current_dimension()==0) {
+ 	      return;
+ 	  }
+-	  // std::cout << "Vertex handle with data " << data_of_vertex(vh).idx << std::endl;
++	  // FUNCTION_DELAUNAY_COUT << "Vertex handle with data " << data_of_vertex(vh).idx << std::endl;
+ 	  typename Triangulation::Vertex_circulator circ_start=T.incident_vertices(vh),circ=circ_start;
+ 	  if(!is_infinite(circ)) {
+ 	      ids.push_back(data_of_vertex(circ).idx);
+--- a/ext/function_delaunay/include/function_delaunay/Meb_accessors.h
++++ b/ext/function_delaunay/include/function_delaunay/Meb_accessors.h
+@@ -20,6 +20,8 @@
+ 
+ #pragma once
+ 
++#include <function_delaunay/log_utils.h>
++
+ #include <function_delaunay/Miniball.hpp>
+ 
+ #include <CGAL/Min_sphere_of_spheres_d_traits_d.h>
+@@ -98,14 +100,14 @@
+ 	meb.set(spheres.begin(),spheres.end());
+ 	
+       }
+-	//std::cout << "Number of support points: " << std::distance(meb.support_begin(),meb.support_end()) << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Number of support points: " << std::distance(meb.support_begin(),meb.support_end()) << std::endl;
+ 	
+ 	/*
+ 	  for(auto it = meb.support_begin();it!=meb.support_end();it++) {
+ 	  for(int i =0;i<DIM;i++) {
+-	  std::cout << ((*it).first)[i] << " ";
+-	  }
+-	  std::cout << std::endl;
++	  FUNCTION_DELAUNAY_COUT << ((*it).first)[i] << " ";
++	  }
++	  FUNCTION_DELAUNAY_COUT << std::endl;
+ 	  }
+ 	*/
+ 
+@@ -151,14 +153,14 @@
+ 	}
+ 	Min_sphere meb(spheres.begin(),spheres.end());
+ 	
+-	//std::cout << "Number of support points: " << std::distance(meb.support_begin(),meb.support_end()) << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Number of support points: " << std::distance(meb.support_begin(),meb.support_end()) << std::endl;
+ 	
+ 	/*
+ 	  for(auto it = meb.support_begin();it!=meb.support_end();it++) {
+ 	  for(int i =0;i<DIM;i++) {
+-	  std::cout << ((*it).first)[i] << " ";
+-	  }
+-	  std::cout << std::endl;
++	  FUNCTION_DELAUNAY_COUT << ((*it).first)[i] << " ";
++	  }
++	  FUNCTION_DELAUNAY_COUT << std::endl;
+ 	  }
+ 	*/
+ 	
+@@ -192,7 +194,7 @@
+ 	for(int i=0;i<n;i++) {
+ 	  for(int j=i+1;j<n;j++) {
+ 	    FT new_dist = sq_dist(_data[i],_data[j]);
+-	    //std::cout << "Sq dist for " << i << " " << j << ": " << CGAL::to_double(new_dist) << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Sq dist for " << i << " " << j << ": " << CGAL::to_double(new_dist) << std::endl;
+ 	    if(new_dist > curr_max) {
+ 	      curr_max=new_dist;
+ 	      max_pair=std::make_pair(i,j);
+@@ -206,7 +208,7 @@
+       template<typename InputIterator>
+       bool contains_circumcenter(InputIterator begin,InputIterator end) {
+ 	
+-    //std::cout << "Circum: " << CGAL::to_double(circumcenter(begin,end)[0]) << " " << CGAL::to_double(circumcenter(begin,end)[1]) << " " << std::endl;
++    //FUNCTION_DELAUNAY_COUT << "Circum: " << CGAL::to_double(circumcenter(begin,end)[0]) << " " << CGAL::to_double(circumcenter(begin,end)[1]) << " " << std::endl;
+ 	
+ 	return is_in_simplex(begin,end,circumcenter(begin,end));
+       }
+@@ -226,16 +228,16 @@
+ 	/*
+ 	  for(Point p : points) {
+ 	  for(int i=0;i<dim;i++) {
+-	  std::cout << p[i] << " ";
+-	  }
+-	  std::cout << std::endl;
++	  FUNCTION_DELAUNAY_COUT << p[i] << " ";
++	  }
++	  FUNCTION_DELAUNAY_COUT << std::endl;
+ 	  }
+ 	  
+ 	  if(! contains_circumcenter(points.begin(),points.end()) ) {
+-	  std::cout << "Does not contain center" << std::endl;
++	  FUNCTION_DELAUNAY_COUT << "Does not contain center" << std::endl;
+ 	  }
+ 	  if(! is_enclosing(points.begin(),points.end())) {
+-	  std::cout << "not enclosing" << std::endl;
++	  FUNCTION_DELAUNAY_COUT << "not enclosing" << std::endl;
+ 	  }
+ 	*/
+ 	return contains_circumcenter(points.begin(),points.end()) && is_enclosing(points.begin(),points.end());
+@@ -243,7 +245,7 @@
+       
+       int update_at(std::vector<int>& indices,int pos,std::vector<Point>& points) {
+ 	if(pos==-1) {
+-	  std::cout << "SOMETHING IS WRONG, I SHOULD NOT BE HERE" << std::endl;
++	  FUNCTION_DELAUNAY_COUT << "SOMETHING IS WRONG, I SHOULD NOT BE HERE" << std::endl;
+ 	  return -1;
+ 	}
+ 	indices[pos]++;
+@@ -261,13 +263,13 @@
+ 	if(pos==-1) {
+ 	  return false;
+ 	}
+-	//std::cout << "update_at returned " << pos << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "update_at returned " << pos << std::endl;
+ 	if(points.size()<=dim-pos) {
+-	  //std::cout << "Resize point vector to " << dim-pos+1 << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "Resize point vector to " << dim-pos+1 << std::endl;
+ 	  points.resize(dim-pos+1);
+ 	}
+ 	for(int i=pos;i<=dim;i++) {
+-	  //std::cout << "i=" << i << " indices[i]=" << indices[i] << std::endl;
++	  //FUNCTION_DELAUNAY_COUT << "i=" << i << " indices[i]=" << indices[i] << std::endl;
+ 	  points[dim-i]=_data[indices[i]];
+ 	}
+ 	{
+@@ -303,7 +305,7 @@
+ 	  return 0.0;
+ 	}
+ 	std::pair<int,int> diam_pair = diametral_pair();
+-	//std::cout << "Diametral pair is " << diam_pair.first << " " << diam_pair.second << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Diametral pair is " << diam_pair.first << " " << diam_pair.second << std::endl;
+ 	
+ 	std::vector<Point> vec_diam;
+ 	vec_diam.push_back(_data[diam_pair.first]);
+@@ -327,11 +329,11 @@
+ 	double result;
+ 	while(true) {
+ 	  /*
+-	    std::cout << "At pos ";
++	    FUNCTION_DELAUNAY_COUT << "At pos ";
+ 	    for(int i=0;i<curr_indices.size();i++) {
+-	    std::cout << curr_indices[i] << " ";
++	    FUNCTION_DELAUNAY_COUT << curr_indices[i] << " ";
+ 	    }
+-	    std::cout << std::endl;
++	    FUNCTION_DELAUNAY_COUT << std::endl;
+ 	  */
+ 	  if(check(curr_points)) {
+ 	    return sqrt(CGAL::to_double(sq_radius(curr_points.begin(),curr_points.end())));
+--- a/ext/function_delaunay/include/function_delaunay/boost_timers.h
++++ b/ext/function_delaunay/include/function_delaunay/boost_timers.h
+@@ -19,6 +19,8 @@
+ 
+ 
+ #pragma once
++
++#include <function_delaunay/log_utils.h>
+ 
+ #include <iostream>
+ #include <boost/timer/timer.hpp>
+@@ -61,29 +63,29 @@
+ 
+ void pretty_print_timer(boost::timer::cpu_timer& timer,double total) {
+   if(double(timer.elapsed().wall)/std::pow(10,9)<0.0001) {
+-    std::cout << "0" << std::endl;
++    FUNCTION_DELAUNAY_COUT << "0" << std::endl;
+   } else{
+-    std::cout << double(timer.elapsed().wall)/std::pow(10,9) << "     ( "  <<  double(timer.elapsed().wall)/total*100 << "% )" << std::endl;
++    FUNCTION_DELAUNAY_COUT << double(timer.elapsed().wall)/std::pow(10,9) << "     ( "  <<  double(timer.elapsed().wall)/total*100 << "% )" << std::endl;
+   }
+ }
+ 
+ void print_timers(double total=double(overall_timer.elapsed().wall),bool print_overall=true) {
+   if(print_overall) {
+-    std::cout << "Overall timer: " << double(overall_timer.elapsed().wall)/std::pow(10,9) << std::endl;
++    FUNCTION_DELAUNAY_COUT << "Overall timer: " << double(overall_timer.elapsed().wall)/std::pow(10,9) << std::endl;
+   }
+-  std::cout << "Inital timer:           "; pretty_print_timer(initial_timer,total);
+-  std::cout << "Complex timer:          "; pretty_print_timer(complex_timer,total);
+-  std::cout << "Face timer:             "; pretty_print_timer(face_timer,total);
+-  std::cout << "Meb timer:              "; pretty_print_timer(meb_timer,total);
+-  std::cout << "Graded matrices timer:  "; pretty_print_timer(graded_matrices_timer,total);
+-  std::cout << "Multi chunk timer:      "; pretty_print_timer(multi_chunk_timer,total);
+-  std::cout << "Mpfree timer:           "; pretty_print_timer(mpfree_timer,total);
+-  std::cout << "File output timer:      "; pretty_print_timer(file_output_timer,total);
+-  std::cout << "Delaunay timer:         "; pretty_print_timer(delaunay_timer,total);
+-  std::cout << "Test timer 1:           "; pretty_print_timer(test_timer_1,total);
+-  std::cout << "Test timer 2:           "; pretty_print_timer(test_timer_2,total);
+-  std::cout << "Test timer 3:           "; pretty_print_timer(test_timer_3,total);
+-  std::cout << "Test timer 4:           "; pretty_print_timer(test_timer_4,total);
++  FUNCTION_DELAUNAY_COUT << "Inital timer:           "; pretty_print_timer(initial_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Complex timer:          "; pretty_print_timer(complex_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Face timer:             "; pretty_print_timer(face_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Meb timer:              "; pretty_print_timer(meb_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Graded matrices timer:  "; pretty_print_timer(graded_matrices_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Multi chunk timer:      "; pretty_print_timer(multi_chunk_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Mpfree timer:           "; pretty_print_timer(mpfree_timer,total);
++  FUNCTION_DELAUNAY_COUT << "File output timer:      "; pretty_print_timer(file_output_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Delaunay timer:         "; pretty_print_timer(delaunay_timer,total);
++  FUNCTION_DELAUNAY_COUT << "Test timer 1:           "; pretty_print_timer(test_timer_1,total);
++  FUNCTION_DELAUNAY_COUT << "Test timer 2:           "; pretty_print_timer(test_timer_2,total);
++  FUNCTION_DELAUNAY_COUT << "Test timer 3:           "; pretty_print_timer(test_timer_3,total);
++  FUNCTION_DELAUNAY_COUT << "Test timer 4:           "; pretty_print_timer(test_timer_4,total);
+ }
+ 
+   
+--- a/ext/function_delaunay/include/function_delaunay/compute_meb_radii_of_simplex_tree.h
++++ b/ext/function_delaunay/include/function_delaunay/compute_meb_radii_of_simplex_tree.h
+@@ -42,18 +42,18 @@
+ 												  std::vector<int> &lower,
+ 												  double meb_radius) {
+ 	/*
+-	  std::cout << "Start recursion: \n";
++	  FUNCTION_DELAUNAY_COUT << "Start recursion: \n";
+ 	  auto vertices = simplex_tree.simplex_vertex_range(upper);
+-	  std::cout << "Upper: ";
++	  FUNCTION_DELAUNAY_COUT << "Upper: ";
+ 	  for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-	  std::cout << *vit << " ";
++	  FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 	  }
+-	  std::cout << std::endl;
+-	  std::cout << "Lower: ";
++	  FUNCTION_DELAUNAY_COUT << std::endl;
++	  FUNCTION_DELAUNAY_COUT << "Lower: ";
+ 	  for(auto vit=lower.begin();vit!=lower.end();vit++) {
+-	  std::cout << *vit << " ";
++	  FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 	  }
+-	  std::cout << std::endl;
++	  FUNCTION_DELAUNAY_COUT << std::endl;
+ 	*/
+ 	auto bd = simplex_tree.boundary_opposite_vertex_simplex_range(upper);
+ 	for(auto bd_it=bd.begin();bd_it!=bd.end();bd_it++) {
+@@ -68,11 +68,11 @@
+ 	
+ 		auto vertices = simplex_tree.simplex_vertex_range(bd_simp);
+ 		/*
+-		  std::cout << "Assigningfilt val to: ";
++		  FUNCTION_DELAUNAY_COUT << "Assigningfilt val to: ";
+ 		  for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-		  std::cout << *vit << " ";
++		  FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 		  }
+-		  std::cout << std::endl;
++		  FUNCTION_DELAUNAY_COUT << std::endl;
+ 		*/
+ 		simplex_tree.assign_filtration(bd_simp,meb_radius);
+ 		_assign_filtration_values_in_interval(simplex_tree,bd_simp,lower,meb_radius);
+@@ -81,11 +81,11 @@
+     
+ 	/*
+ 	  auto vertices = simplex_tree.simplex_vertex_range(curr_pair.first);
+-	  std::cout << "Pair first: ";
++	  FUNCTION_DELAUNAY_COUT << "Pair first: ";
+ 	  for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-	  std::cout << *vit << " ";
++	  FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 	  }
+-	  std::cout << "\nPair second: " << curr_pair.second << std::endl;
++	  FUNCTION_DELAUNAY_COUT << "\nPair second: " << curr_pair.second << std::endl;
+ 	*/
+     
+     }
+@@ -114,10 +114,10 @@
+ 		    auto vertices = simplex_tree.simplex_vertex_range(*it);
+ 		    std::vector<std::vector<double>> points;
+       
+-		    //std::cout << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
+-		    //std::cout << "Simplex has key " << simplex_tree.key(*it) << std::endl;
++		    //FUNCTION_DELAUNAY_COUT << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
++		    //FUNCTION_DELAUNAY_COUT << "Simplex has key " << simplex_tree.key(*it) << std::endl;
+ 		    for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-			//std::cout << *vit << " ";
++			//FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 			points.push_back(input_points[*vit].x);
+ 		    }
+ 		    meb_accessor.new_meb(points.begin(), points.end());
+@@ -148,11 +148,11 @@
+ 		    } 
+ 		    /*
+ 		      else {
+-		      std::cout << "Radius already known, not taking the computed radius" << std::endl;
++		      FUNCTION_DELAUNAY_COUT << "Radius already known, not taking the computed radius" << std::endl;
+ 		      }
+ 		    */
+ 		    simplex_tree.assign_filtration(*it,meb_radius);
+-		    //std::cout << "Computed meb of " << points.size() << " points and received " << support.size() << " support points" << std::endl;
++		    //FUNCTION_DELAUNAY_COUT << "Computed meb of " << points.size() << " points and received " << support.size() << " support points" << std::endl;
+ 		    std::sort(lower.begin(),lower.end());	
+ 		    if(points.size()>lower.size()) {
+ 			_assign_filtration_values_in_interval<SimplexTree>(simplex_tree,*it,lower,meb_radius);
+@@ -172,16 +172,16 @@
+       
+ 	    std::vector<std::vector<double>> points;
+       
+-	    //std::cout << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
+-	    //std::cout << "Simplex has key " << simplex_tree.key(*it) << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
++	    //FUNCTION_DELAUNAY_COUT << "Simplex has key " << simplex_tree.key(*it) << std::endl;
+ 	    for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-		//std::cout << *vit << " ";
++		//FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 		points.push_back(input_points[*vit].x);
+ 	    }
+-	    //std::cout << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << std::endl;
+ 	    meb_accessor.new_meb(points.begin(), points.end());
+ 	    double meb_radius = meb_accessor.get_radius();
+-	    //std::cout << "Meb is " << meb_radius << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Meb is " << meb_radius << std::endl;
+ 	    simplex_tree.assign_filtration(*it,meb_radius);
+ 	}
+ #endif
+@@ -241,13 +241,13 @@
+       
+ 	    std::vector<std::vector<double>> points;
+       
+-	    //std::cout << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
+-	    //std::cout << "Simplex has key " << simplex_tree.key(*it) << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Simplex has dimension " << simplex_tree.dimension(*it) << std::endl;  
++	    //FUNCTION_DELAUNAY_COUT << "Simplex has key " << simplex_tree.key(*it) << std::endl;
+ 	    for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+-		//std::cout << *vit << " ";
++		//FUNCTION_DELAUNAY_COUT << *vit << " ";
+ 		points.push_back(input_points[*vit].x);
+ 	    }
+-	    //std::cout << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << std::endl;
+ 	    meb1.new_meb(points.begin(), points.end());
+ 	    double meb_radius1 = meb1.get_radius();
+ 	    meb2.new_meb(points.begin(), points.end());
+--- a/ext/function_delaunay/include/function_delaunay/count_size_of_delaunay_triangulation.h
++++ b/ext/function_delaunay/include/function_delaunay/count_size_of_delaunay_triangulation.h
+@@ -19,6 +19,8 @@
+ 
+ 
+ #pragma once
++
++#include <function_delaunay/log_utils.h>
+ 
+ #include <function_delaunay/Delaunay_triangulation_accessors.h>
+ 
+@@ -59,7 +61,7 @@
+ 	test_timer_1.stop();
+ #endif
+     
+-	std::cout  << "Delaunay computed, now counting simplices" << std::endl;
++	FUNCTION_DELAUNAY_COUT  << "Delaunay computed, now counting simplices" << std::endl;
+ 
+ 	// Compute the size of the Delaunay complex (via simplex tree, as the functionality is not in CGAL)
+ 	int counter=0;
+@@ -108,13 +110,13 @@
+ 
+ 	if(d==2) {
+ 	    // Delaunay_triangulation_2 seems faster than the general one
+-	    std::cout << "In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
+ 	    typedef Delaunay_triangulation_accessor_2 DT_accessor;
+ 	    DT_accessor T;
+ 	    number_of_simplices= _count_size_of_delaunay_triangulation(T,input_points,number_of_k_simplices);
+ 	} else if(d==3) {
+ 	    // Same for Delaunay triangulation_3
+-	    std::cout << "In space, using CGAL::Delaunay_triangulation_3" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "In space, using CGAL::Delaunay_triangulation_3" << std::endl;
+ 	    typedef Delaunay_triangulation_accessor_3 DT_accessor;
+ 	    DT_accessor T;
+ 	    number_of_simplices= _count_size_of_delaunay_triangulation(T,input_points,number_of_k_simplices);
+--- a/ext/function_delaunay/include/function_delaunay/get_simplices_from_triangulation.h
++++ b/ext/function_delaunay/include/function_delaunay/get_simplices_from_triangulation.h
+@@ -20,6 +20,8 @@
+ 
+ #pragma once
+ 
++#include <function_delaunay/log_utils.h>
++
+ #include <boost/container_hash/hash.hpp>
+ 
+ typedef std::unordered_set<
+@@ -50,12 +52,12 @@
+ #ifdef DBG_PRINT
+ #define PRINT_SIMPLICES(simplices)                                       \
+     do {                                                                 \
+-        std::cout << "Debug: List of simplices at the end of procedure:" << std::endl; \
++        FUNCTION_DELAUNAY_COUT << "Debug: List of simplices at the end of procedure:" << std::endl; \
+         for (const auto& s : simplices) {                                \
+-            for (int v : s) std::cout << v << " ";                       \
+-            std::cout << std::endl;                                      \
++            for (int v : s) FUNCTION_DELAUNAY_COUT << v << " ";                       \
++            FUNCTION_DELAUNAY_COUT << std::endl;                                      \
+         }                                                                \
+-        std::cout << "End of final list" << std::endl;                   \
++        FUNCTION_DELAUNAY_COUT << "End of final list" << std::endl;                   \
+     } while (0)
+ #else
+ #define PRINT_SIMPLICES(simplices) do {} while (0)
+@@ -92,8 +94,8 @@
+ 	int no_points_outside_convex_hull=0;
+ 
+ 	for(Point_with_densities& point : input_points) { 
+-	    //std::cout << "******************************" << std::endl;
+-	    //std::cout << "counter=" << counter << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "******************************" << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "counter=" << counter << std::endl;
+ 	    Point p=T.get_point(point);
+       
+ 	    Vertex_handle vh;
+@@ -119,11 +121,11 @@
+ 		    simplices.push_back(cell_idx);
+ 	  
+ 		    /*
+-		      std::cout << "Cell: ";
++		      FUNCTION_DELAUNAY_COUT << "Cell: ";
+ 		      for(int x: cell_idx) {
+-		      std::cout <<  x << " ";
++		      FUNCTION_DELAUNAY_COUT <<  x << " ";
+ 		      }
+-		      std::cout << std::endl;
++		      FUNCTION_DELAUNAY_COUT << std::endl;
+ 		    */
+ 		}
+ 		vh = T.insert(p,loc);
+@@ -137,7 +139,7 @@
+ 	    counter++;
+       
+ 	}
+-	std::cout << "Number of insertions outside convex hull " << no_points_outside_convex_hull << std::endl;
++	FUNCTION_DELAUNAY_COUT << "Number of insertions outside convex hull " << no_points_outside_convex_hull << std::endl;
+     }
+ 
+     void get_simplices_from_triangulation_one_function(std::vector<Point_with_densities> &input_points,
+@@ -150,13 +152,13 @@
+ 
+ 	if(d==2) {
+ 	    // Delaunay_triangulation_2 seems faster than the general one
+-	    std::cout << "In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
+ 	    typedef Delaunay_triangulation_accessor_2 DT_accessor;
+ 	    DT_accessor T;
+ 	    _get_simplices_from_triangulation_one_function(T,input_points,simplices);
+ 	} else if(d==3) {
+ 	    // Same for Delaunay triangulation_3
+-	    std::cout << "In space, using CGAL::Delaunay_triangulation_3" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "In space, using CGAL::Delaunay_triangulation_3" << std::endl;
+ 	    typedef Delaunay_triangulation_accessor_3 DT_accessor;
+ 	    DT_accessor T;
+ 	    _get_simplices_from_triangulation_one_function(T,input_points,simplices);
+@@ -201,10 +203,10 @@
+ 	typedef typename Delaunay_triangulation_accessor::Point Point;
+ 	Point p=T.get_point(point);
+ 
+-	//std::cout << "Point is " << p[0] << " " << p[1] << std::endl;
+-
+-	// std::cout << "Is full dimensional " << T.is_full_dimensional() << std::endl;
+-	// std::cout << "Dimension of T: " << T.current_dimension() << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Point is " << p[0] << " " << p[1] << std::endl;
++
++	// FUNCTION_DELAUNAY_COUT << "Is full dimensional " << T.is_full_dimensional() << std::endl;
++	// FUNCTION_DELAUNAY_COUT << "Dimension of T: " << T.current_dimension() << std::endl;
+ 
+ 	if(T.is_full_dimensional()) {
+ 	    int d = T.current_dimension();
+@@ -231,25 +233,25 @@
+ 
+ 	    }
+ 	    /*
+-	      std::cout << "Cell: ";
++	      FUNCTION_DELAUNAY_COUT << "Cell: ";
+ 	      for(int x: cell_idx) {
+-	      std::cout <<  x << " ";
++	      FUNCTION_DELAUNAY_COUT <<  x << " ";
+ 	      }
+-	      std::cout << std::endl;
++	      FUNCTION_DELAUNAY_COUT << std::endl;
+ 	    */
+ 	    vh_new = T.insert(p,loc);
+ 	    T.data_of_vertex(vh_new).idx = point.idx;
+ 	} else {
+ 	    outside_convex_hull=true;
+-	    //std::cout << "Inserting " << point.idx << ", coors " << point.x[0] << " " << point.x[1] << "..." << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Inserting " << point.idx << ", coors " << point.x[0] << " " << point.x[1] << "..." << std::endl;
+ 	    /*
+ 	      for(auto it = T.vertices_begin(); it!=T.vertices_end();it++) {
+-	      std::cout << "Present is vertex " << T.data_of_vertex(it).idx << std::endl;
++	      FUNCTION_DELAUNAY_COUT << "Present is vertex " << T.data_of_vertex(it).idx << std::endl;
+ 	      }
+ 	    */
+ 
+ 	    vh_new = T.insert(p);
+-	    //std::cout << "done inserting" << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "done inserting" << std::endl;
+ 	    T.data_of_vertex(vh_new).idx = point.idx;
+ 	    if(fill_simplex_vector && T.is_full_dimensional()) {
+ 		int d = T.current_dimension();
+@@ -260,12 +262,12 @@
+ 		}
+ 		std::sort(cell_idx.begin(),cell_idx.end());
+ 		//if(cell_idx.size()==4) {
+-		//    std::cout << "Happens here (2)" << std::endl;
++		//    FUNCTION_DELAUNAY_COUT << "Happens here (2)" << std::endl;
+ 		//}
+ 		simplices.insert(cell_idx);
+ 	    }
+ 	}
+-	//std::cout << "Procedure ends" << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Procedure ends" << std::endl;
+     }
+ 
+ 
+@@ -276,27 +278,27 @@
+ 			       std::vector<std::vector<int>> &conflicts2,
+ 			       Uset &simplices) {
+ 	
+-	//std::cout << "Double conflicts: " << idx1 << " " << idx2 << std::endl;
+-
+-	//std::cout << "Conflict sizes: "  << conflicts1.size() << " " << conflicts2.size() << std::endl;
++	//FUNCTION_DELAUNAY_COUT << "Double conflicts: " << idx1 << " " << idx2 << std::endl;
++
++	//FUNCTION_DELAUNAY_COUT << "Conflict sizes: "  << conflicts1.size() << " " << conflicts2.size() << std::endl;
+         
+ #ifdef DBG_PRINT
+-	std::cout << "Conflict1:" << std::endl;
++	FUNCTION_DELAUNAY_COUT << "Conflict1:" << std::endl;
+ 
+ 	for(auto v : conflicts1) {
+ 	    for (int x : v) {
+-		std::cout << x << " ";
++		FUNCTION_DELAUNAY_COUT << x << " ";
+ 	    }
+-	    std::cout << std::endl;
+-	}
+-
+-	std::cout << "Conflict2:" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << std::endl;
++	}
++
++	FUNCTION_DELAUNAY_COUT << "Conflict2:" << std::endl;
+ 
+ 	for(auto v : conflicts2) {
+ 	    for (int x : v) {
+-		std::cout << x << " ";
++		FUNCTION_DELAUNAY_COUT << x << " ";
+ 	    }
+-	    std::cout << std::endl;
++	    FUNCTION_DELAUNAY_COUT << std::endl;
+ 	}
+ #endif
+ 	// Quick and dirty solution: Create a std::set with the conflicts1, and just search each element in conflicts2:
+@@ -307,11 +309,11 @@
+ 	for(auto s : conflicts2) {
+ 	    if(conflict_map1.count(s)) {
+ 		/*
+-		std::cout << "FOUND DOUBLE CONFLICT: " << std::flush;
++		FUNCTION_DELAUNAY_COUT << "FOUND DOUBLE CONFLICT: " << std::flush;
+ 		for(int v : s) {
+-		    std::cout << v << " ";
++		    FUNCTION_DELAUNAY_COUT << v << " ";
+ 		}
+-		std::cout << std::endl;
++		FUNCTION_DELAUNAY_COUT << std::endl;
+ 		*/
+ 		std::vector<int> double_conflict_simplex;
+ 		std::copy(s.begin(),s.end(),std::back_inserter(double_conflict_simplex));
+@@ -331,7 +333,7 @@
+ 							 std::vector<Point_with_densities> &input_points,
+ 							 Uset &simplices) {
+ 
+-        std::cout << "Naive routine: \n";
++        FUNCTION_DELAUNAY_COUT << "Naive routine: \n";
+ 
+ 	int outside_convex_hull=0;
+ 
+@@ -353,11 +355,11 @@
+ 
+ 	// debug printout
+ 	//for(auto& p:input_points) {
+-	//    std::cout << "ID " << p.idx << ": " << std::flush;
++	//    FUNCTION_DELAUNAY_COUT << "ID " << p.idx << ": " << std::flush;
+ 	//    for(int i=0;i<p.x.size();i++) {
+-	//	std::cout << p.x[i] << " ";
++	//	FUNCTION_DELAUNAY_COUT << p.x[i] << " ";
+ 	//    }
+-	//    std::cout << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
++	//    FUNCTION_DELAUNAY_COUT << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
+ 	//}
+ 
+     
+@@ -374,11 +376,11 @@
+ 
+ 	for(auto& point:input_points)
+         {
+-            //std::cout << "ID " << point.idx << ": " << std::endl;
+-            //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
+-
+-	    //std::cout << "****** Handling point " << point.idx << ": " << point.x[0] << " " << point.x[1] << std::endl;
+-	    //std::cout << "Find position to insert..." << std::flush;
++            //FUNCTION_DELAUNAY_COUT << "ID " << point.idx << ": " << std::endl;
++            //FUNCTION_DELAUNAY_COUT << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
++
++	    //FUNCTION_DELAUNAY_COUT << "****** Handling point " << point.idx << ": " << point.x[0] << " " << point.x[1] << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Find position to insert..." << std::flush;
+ 	    // First, remove all points from curr_points from the back
+ 	    while(!curr_points.empty() && curr_points.back().densities[1] > point.densities[1]) {
+ 		Point_with_densities& curr = curr_points.back();
+@@ -388,21 +390,21 @@
+ 	    }
+ 	    curr_points.push_back(point);
+ 
+-	    //std::cout << "done, " << points_to_reinsert.size() << " points are above the new point" << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "done, " << points_to_reinsert.size() << " points are above the new point" << std::endl;
+ 
+ 	    Vertex_handle vh_new;
+ 	    
+ 	    bool outside_convex_hull;
+ 	    // Next, add the new point
+-	    //std::cout << "Adding point.." << std::flush;
+-	    //std::cout << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++	    //FUNCTION_DELAUNAY_COUT << "Adding point.." << std::flush;
++	    //FUNCTION_DELAUNAY_COUT << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+ 
+ 	    // array for conflicts not needed
+ 	    std::vector<std::vector<int>> conflicts_dummy;
+ 	    
+ 	    add_point_to_triangulation(T,point,vh_new,conflicts_dummy,simplices,outside_convex_hull,false,true);
+ 
+-	    // std::cout << "Done, number of simplices: " << simplices.size() << std::endl;
++	    // FUNCTION_DELAUNAY_COUT << "Done, number of simplices: " << simplices.size() << std::endl;
+ 	
+ 	    idx_to_vh[point.idx]=vh_new;
+ 	
+@@ -413,7 +415,7 @@
+ 
+ 
+ 		Point_with_densities left = points_to_reinsert.back();
+-		//std::cout << "Reinserting " << left.idx << " with coordinates " << left.densities[0] << " " << left.densities[1] << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Reinserting " << left.idx << " with coordinates " << left.densities[0] << " " << left.densities[1] << std::endl;
+ 		points_to_reinsert.pop_back();
+ 
+ 		Vertex_handle vh_left;
+@@ -422,18 +424,18 @@
+ 		// but in all next ones it seems necessary to get the right conflicts
+ 		T.remove(vh_new);
+ 
+-                //std::cout << "Square dance: right-then-up \n";
++                //FUNCTION_DELAUNAY_COUT << "Square dance: right-then-up \n";
+ 		std::vector<std::vector<int>> conflicts_up;
+ 		add_point_to_triangulation(T,point,vh_new,conflicts_up,simplices,outside_convex_hull,true,true);
+ 
+ 
+-		//std::cout << "Adding " << left.idx << "..." << std::flush;
++		//FUNCTION_DELAUNAY_COUT << "Adding " << left.idx << "..." << std::flush;
+ 		add_point_to_triangulation(T,left,vh_left,conflicts_dummy,simplices,outside_convex_hull,false,true);
+-		std::cout << "Simplices size at this step: " << simplices.size() << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Simplices size at this step: " << simplices.size() << std::endl;
+ 
+ 		// Now remove them and re-insert them in opposite order
+-		//std::cout << "Removing " << point.idx << std::endl;
+-		//std::cout << "Removing " << left.idx << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Removing " << point.idx << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Removing " << left.idx << std::endl;
+ 		T.remove(vh_left);
+ 		T.remove(vh_new);
+ 
+@@ -441,38 +443,38 @@
+ 		std::vector<std::vector<int>> conflicts_right;
+ 		// This step has already been done before, so no simplices need to be added. The crucial info here
+ 		// is the conflicts_right field, to detect double conflicts later
+-		//std::cout << "readding " << left.idx << std::flush;
+-
+-                // std::cout << "Square dance: up-then-right \n";
++		//FUNCTION_DELAUNAY_COUT << "readding " << left.idx << std::flush;
++
++                // FUNCTION_DELAUNAY_COUT << "Square dance: up-then-right \n";
+ 		add_point_to_triangulation(T,left,vh_left,conflicts_right,simplices,outside_convex_hull,true,false);
+-		//std::cout << "Simplices size: " << simplices.size() << std::endl;
+-		//std::cout << "Readding " << point.idx << std::flush;
++		//FUNCTION_DELAUNAY_COUT << "Simplices size: " << simplices.size() << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Readding " << point.idx << std::flush;
+ 		add_point_to_triangulation(T,point,vh_new,conflicts_dummy,simplices,outside_convex_hull,false,true);
+-		//std::cout << "Simplices size at this step: " << simplices.size() << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Simplices size at this step: " << simplices.size() << std::endl;
+ 		curr_points.push_back(left);
+ 		idx_to_vh[point.idx]=vh_new;
+ 		idx_to_vh[left.idx]=vh_left;
+ 
+-		//std::cout << "Finding double conflicts" << std::endl;
++		//FUNCTION_DELAUNAY_COUT << "Finding double conflicts" << std::endl;
+ 		test_timer_1.resume();
+ 		find_double_conflicts(T,point.idx,left.idx,conflicts_up,conflicts_right,simplices);
+ 		test_timer_1.stop();
+ 
+-                std::cout << "Simplices size at this step: " << simplices.size() << std::endl;
++                FUNCTION_DELAUNAY_COUT << "Simplices size at this step: " << simplices.size() << std::endl;
+ 		number_of_squares_visited++;
+ 		if(simplices.size()>old_number_of_simplices) {
+ 		    number_of_squares_needed++;
+ 		}
+ 
+ 	    }
+-	    // std::cout << "At the end of iteration, simplices size: " << simplices.size() << std::endl;
++	    // FUNCTION_DELAUNAY_COUT << "At the end of iteration, simplices size: " << simplices.size() << std::endl;
+ 
+ 	}
+ 
+         PRINT_SIMPLICES(simplices);
+-	std::cout << "Number of points: " << input_points.size() << std::endl;
+-	std::cout << "Squares visited:  " << number_of_squares_visited << std::endl;
+-	std::cout << "Squares needed:   " << number_of_squares_needed << std::endl;
++	FUNCTION_DELAUNAY_COUT << "Number of points: " << input_points.size() << std::endl;
++	FUNCTION_DELAUNAY_COUT << "Squares visited:  " << number_of_squares_visited << std::endl;
++	FUNCTION_DELAUNAY_COUT << "Squares needed:   " << number_of_squares_needed << std::endl;
+     }
+ 
+ 
+@@ -488,7 +490,7 @@
+         typedef typename DelaunayTriangulationAccessor::Vertex_handle Vertex_handle;
+         //typedef typename Delaunay_triangulation_accessor::Point Point;
+ 
+-        //std::cout << " >>>>> Start get_incomparable_vertices for point id = "
++        //FUNCTION_DELAUNAY_COUT << " >>>>> Start get_incomparable_vertices for point id = "
+         //          << point_idx << " densities[1] = " << input_points[point_idx].densities[1] << std::endl;
+ 
+         double base_y = input_points[point_idx].densities[1];
+@@ -501,12 +503,12 @@
+ 
+         // no null handle
+         if (vh == Vertex_handle()) {
+-            std::cerr << " idx_to_vh[" << point_idx << "] is nullptr.\n";
++            FUNCTION_DELAUNAY_CERR << " idx_to_vh[" << point_idx << "] is nullptr.\n";
+             return higher;
+         }
+ 
+         if (T.is_infinite(vh)) {
+-            std::cerr << " idx_to_vh[" << point_idx << "] is infinite.\n";
++            FUNCTION_DELAUNAY_CERR << " idx_to_vh[" << point_idx << "] is infinite.\n";
+             return higher;
+         }
+ 
+@@ -523,7 +525,7 @@
+         for (int v : neighbor_ids) {
+             if (input_points[v].densities[1] > base_y) {
+                 higher.insert(v);
+-        //        std::cout << v << " (" << input_points[v].densities[1] << ")\n";
++        //        FUNCTION_DELAUNAY_COUT << v << " (" << input_points[v].densities[1] << ")\n";
+             }
+         }
+         //T.remove(vh);
+@@ -547,7 +549,7 @@
+         							 std::vector<Point_with_densities> &input_points,
+         							 Uset &simplices) {
+ 
+-            std::cout << "Calling ALT routine \n";
++            FUNCTION_DELAUNAY_COUT << "Calling ALT routine \n";
+ 
+             typedef DelaunayTriangulationAccessor Delaunay_triangulation_accessor;
+             typedef typename Delaunay_triangulation_accessor::Vertex_handle Vertex_handle;
+@@ -601,23 +603,23 @@
+                 std::reverse(points_to_reinsert.begin(), points_to_reinsert.end());
+ 
+                 // Next, add the new point
+-                //std::cout << "Adding point.." << std::flush;
+-                //std::cout << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++                //FUNCTION_DELAUNAY_COUT << "Adding point.." << std::flush;
++                //FUNCTION_DELAUNAY_COUT << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+                 Vertex_handle vh_new;
+                 bool outside_convex_hull;
+ 
+                 std::vector<std::vector<int>> conflicts_dummy; // array for conflicts not needed
+                 add_point_to_triangulation(T,point,vh_new,conflicts_dummy,simplices,outside_convex_hull,false,true);
+ 
+-                // std::cout << "Done, number of simplices: " << simplices.size() << std::endl;
++                // FUNCTION_DELAUNAY_COUT << "Done, number of simplices: " << simplices.size() << std::endl;
+                 idx_to_vh[point.idx]=vh_new;
+ 
+-                //std::cout << "Size of points_to_reinsert " << points_to_reinsert.size() << std::endl;
++                //FUNCTION_DELAUNAY_COUT << "Size of points_to_reinsert " << points_to_reinsert.size() << std::endl;
+ 
+                 while(!points_to_reinsert.empty()) {
+                     long old_number_of_simplices=simplices.size();
+                     Point_with_densities left = points_to_reinsert.back();
+-                    //std::cout << "Reinserting " << left.idx << " with coordinates (" << left.densities[0] << " " << left.densities[1] << ")" << std::endl;
++                    //FUNCTION_DELAUNAY_COUT << "Reinserting " << left.idx << " with coordinates (" << left.densities[0] << " " << left.densities[1] << ")" << std::endl;
+                     points_to_reinsert.pop_back();
+ 
+                     Vertex_handle vh_left;
+@@ -633,15 +635,15 @@
+                     Uset simplices_dummy;
+                     std::vector<std::vector<int>> conflicts_up;
+                     //std::vector<std::vector<int>> conflicts_dummy;
+-                    //std::cout << "Square dance: right-then-up \n";
++                    //FUNCTION_DELAUNAY_COUT << "Square dance: right-then-up \n";
+                     add_point_to_triangulation(T,point,vh_new,conflicts_up,simplices,outside_convex_hull,true,true);
+ 
+-                    //std::cout << "Adding " << left.idx << "..." << std::flush;
++                    //FUNCTION_DELAUNAY_COUT << "Adding " << left.idx << "..." << std::flush;
+                     // >>>> FIX: replace simplices by simplices_dummy
+                     add_point_to_triangulation(T,left,vh_left,conflicts_dummy,simplices_dummy,outside_convex_hull,false,true);
+ 
+ 
+-                    //std::cout << "Debug: List of simplices dummy at the end of procedure:" << std::endl;
++                    //FUNCTION_DELAUNAY_COUT << "Debug: List of simplices dummy at the end of procedure:" << std::endl;
+                     for(auto cell : simplices_dummy) {
+                         if (std::binary_search(cell.begin(), cell.end(), point.idx)) { 
+                             simplices.insert(cell);
+@@ -661,7 +663,7 @@
+                     idx_to_vh[point.idx]=vh_new;
+                     idx_to_vh[left.idx]=vh_left;
+ 
+-                    //std::cout << "Finding double conflicts" << std::endl;
++                    //FUNCTION_DELAUNAY_COUT << "Finding double conflicts" << std::endl;
+                     test_timer_1.resume();
+                     find_double_conflicts(T,point.idx,left.idx,conflicts_up,conflicts_right,simplices);
+ 
+@@ -675,9 +677,9 @@
+ 
+             }
+             PRINT_SIMPLICES(simplices);
+-            std::cout << "Number of points: " << input_points.size() << std::endl;
+-            std::cout << "Squares visited:  " << number_of_squares_visited << std::endl;
+-            std::cout << "Squares needed:   " << number_of_squares_needed << std::endl;	
++            FUNCTION_DELAUNAY_COUT << "Number of points: " << input_points.size() << std::endl;
++            FUNCTION_DELAUNAY_COUT << "Squares visited:  " << number_of_squares_visited << std::endl;
++            FUNCTION_DELAUNAY_COUT << "Squares needed:   " << number_of_squares_needed << std::endl;	
+         }
+ 
+ 
+@@ -692,7 +694,7 @@
+ 	int d=input_points[0].dimension();
+ 
+ 	if(d==2) {
+-	    std::cout << "(two functions) In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "(two functions) In the plane, using CGAL::Delaunay_triangulation_2" << std::endl;
+ 	    typedef Delaunay_triangulation_accessor_2 Delaunay_triangulation_accessor;
+ 	    Delaunay_triangulation_accessor T;
+ #ifdef NAIVE
+@@ -701,7 +703,7 @@
+ 	    _get_simplices_from_triangulation_two_functions(T,input_points,simplices);
+ #endif 
+ 	} else if(d==3) {
+-	    std::cout << "(two functions) In space, using CGAL::Delaunay_triangulation_3" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "(two functions) In space, using CGAL::Delaunay_triangulation_3" << std::endl;
+       	    typedef Delaunay_triangulation_accessor_3 Delaunay_triangulation_accessor;
+ 	    Delaunay_triangulation_accessor T;
+ 	    //_get_simplices_from_triangulation_two_functions(T,input_points,simplices);
+@@ -711,7 +713,7 @@
+ 	    _get_simplices_from_triangulation_two_functions(T,input_points,simplices);
+ #endif 
+ 	} else {
+-	    std::cout << "(two functions) In high dim, using CGAL::Delaunay_triangulation_d" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "(two functions) In high dim, using CGAL::Delaunay_triangulation_d" << std::endl;
+ 	    typedef CGAL::Dynamic_dimension_tag Dim_tag;
+ 	    typedef Delaunay_triangulation_accessor_d<Dim_tag> Delaunay_triangulation_accessor;
+ 	    Delaunay_triangulation_accessor T(d);
+@@ -739,7 +741,7 @@
+ 
+ 	    std::copy(simplices_set.begin(),simplices_set.end(),std::back_inserter(simplices));
+ 	} else {
+-	    std::cout << "Complex creation currently not implemented for " << number_of_functions << " number of functions" << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "Complex creation currently not implemented for " << number_of_functions << " number of functions" << std::endl;
+ 	}
+ 	return;
+     }
+--- /dev/null
++++ b/ext/function_delaunay/include/function_delaunay/log_utils.h
+@@ -0,0 +1,37 @@
++#pragma once
++
++#include <iostream>
++
++#include "ext_interface/backend_log_policy.hpp"
++
++namespace function_delaunay {
++
++class null_streambuf : public std::streambuf {
++ protected:
++  int overflow(int c) override { return traits_type::not_eof(c); }
++};
++
++inline std::ostream& log_stream() {
++  if (multipers::backend_log_policy::backend_log_enabled(
++          multipers::backend_log_policy::backend_log_bit::function_delaunay)) {
++    return std::cout;
++  }
++  static null_streambuf buffer;
++  static std::ostream out(&buffer);
++  return out;
++}
++
++inline std::ostream& error_stream() {
++  if (multipers::backend_log_policy::backend_log_enabled(
++          multipers::backend_log_policy::backend_log_bit::function_delaunay)) {
++    return std::cerr;
++  }
++  static null_streambuf buffer;
++  static std::ostream out(&buffer);
++  return out;
++}
++
++}  // namespace function_delaunay
++
++#define FUNCTION_DELAUNAY_COUT ::function_delaunay::log_stream()
++#define FUNCTION_DELAUNAY_CERR ::function_delaunay::error_stream()
+--- a/ext/function_delaunay/mpfree_mod/include/mpfree/global.h
++++ b/ext/function_delaunay/mpfree_mod/include/mpfree/global.h
+@@ -20,9 +20,17 @@
+ 
+ #include<phat/helpers/misc.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace mpfree {
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::mpfree> verbose;
++#else
+   bool verbose = false;
++#endif
+ 
+   typedef phat::index index;
+   
+--- a/ext/function_delaunay/multi_chunk_mod/include/multi_chunk/basic.h
++++ b/ext/function_delaunay/multi_chunk_mod/include/multi_chunk/basic.h
+@@ -20,10 +20,18 @@
+ 
+ #include<mpp_utils/basic.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace multi_chunk {
+ 
+   typedef mpp_utils::index index;
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::function_delaunay> verbose;
++#else
+   bool verbose = true;
++#endif
+ }
+ 

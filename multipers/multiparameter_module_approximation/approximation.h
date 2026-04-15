@@ -23,24 +23,19 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <iostream>
-#include <iterator>
-#include <limits>
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/task_arena.h>
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <ranges>
 
 #include "../gudhi/Persistence_slices_interface.h"
-// #include "../gudhi/gudhi/Dynamic_multi_parameter_filtration.h"
-#include "../gudhi/gudhi/Multi_persistence/Line.h"
-#include "../gudhi/gudhi/Multi_persistence/Box.h"
-#include "../gudhi/gudhi/Multi_persistence/Module.h"
+// #include <gudhi/Dynamic_multi_parameter_filtration.h>
+#include <gudhi/Multi_persistence/Line.h>
+#include <gudhi/Multi_persistence/Box.h>
+#include <gudhi/Multi_persistence/Module.h>
 // #include "../tensor/tensor.h"
 // #include "gudhi/Multi_filtration/multi_filtration_utils.h"
 // #include "utilities.h"

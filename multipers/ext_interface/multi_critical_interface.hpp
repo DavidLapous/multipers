@@ -1,13 +1,14 @@
 #pragma once
 
+#include "backend_log_policy.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
-
-#include "contiguous_slicer_bridge.hpp"
 
 namespace multipers {
 
@@ -34,13 +35,6 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
     bool use_multi_chunk = true,
     bool verbose_output = false);
 
-template <typename kcontiguous_slicer_type>
-contiguous_f64_complex multi_critical_resolution_contiguous_interface(
-    kcontiguous_slicer_type& input,
-    bool use_logpath = true,
-    bool use_multi_chunk = true,
-    bool verbose_output = false);
-
 template <typename index_type>
 multi_critical_interface_output<index_type> multi_critical_minpres_interface(
     const multi_critical_interface_input<index_type>& input,
@@ -62,6 +56,20 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
 
 #ifndef MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 #define MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE 0
+#endif
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+#include "contiguous_slicer_bridge.hpp"
+
+namespace multipers {
+
+template <typename kcontiguous_slicer_type>
+contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type& input,
+                                                                      bool use_logpath = true,
+                                                                      bool use_multi_chunk = true,
+                                                                      bool verbose_output = false);
+
+}  // namespace multipers
 #endif
 
 #if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE && __has_include(<multi_critical/free_resolution.h>) && \
@@ -111,8 +119,17 @@ inline bool multi_critical_interface_available() { return MULTIPERS_HAS_MULTI_CR
 namespace multi_critical_detail {
 
 inline std::mutex& multi_critical_interface_mutex() {
+  // Only timer globals still require process-global serialization.
   static std::mutex m;
   return m;
+}
+
+inline bool multi_critical_interface_needs_global_state_lock() {
+#if MULTI_CRITICAL_TIMERS || MULTI_CHUNK_TIMERS || MPFREE_TIMERS
+  return true;
+#else
+  return false;
+#endif
 }
 
 using Graded_matrix = mpp_utils::Graded_matrix<phat::vector_vector>;
@@ -338,10 +355,7 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
   }
 
   multi_critical_input_parser<index_type> parser(input);
-
-  multi_critical::verbose = verbose_output;
-  multi_critical::very_verbose = false;
-  multi_chunk::verbose = verbose_output;
+  (void)verbose_output;
 
   std::vector<Graded_matrix> matrices;
   multi_critical::free_resolution(parser, matrices, use_logpath);
@@ -361,7 +375,8 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
 }
 
 template <typename kcontiguous_slicer_type>
-inline multi_critical_interface_input<int> multi_critical_input_from_kcontiguous_slicer(kcontiguous_slicer_type& slicer) {
+inline multi_critical_interface_input<int> multi_critical_input_from_kcontiguous_slicer(
+    kcontiguous_slicer_type& slicer) {
   multi_critical_interface_input<int> input;
 
   const auto dimensions = slicer.get_dimensions();
@@ -406,7 +421,10 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
     bool use_logpath,
     bool use_multi_chunk,
     bool verbose_output) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   auto matrices =
       multi_critical_detail::compute_free_resolution_matrices(input, use_logpath, use_multi_chunk, verbose_output);
@@ -419,17 +437,17 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
   return multi_critical_detail::convert_chain_complex<index_type>(shifted_matrices);
 }
 
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 template <typename kcontiguous_slicer_type>
-inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(
-    kcontiguous_slicer_type& input,
-    bool use_logpath,
-    bool use_multi_chunk,
-    bool verbose_output) {
+inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type& input,
+                                                                             bool use_logpath,
+                                                                             bool use_multi_chunk,
+                                                                             bool verbose_output) {
   auto converted_input = multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input);
-  auto out = multi_critical_resolution_interface<int>(
-      converted_input, use_logpath, use_multi_chunk, verbose_output);
+  auto out = multi_critical_resolution_interface<int>(converted_input, use_logpath, use_multi_chunk, verbose_output);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
 }
+#endif
 
 template <typename index_type>
 multi_critical_interface_output<index_type> multi_critical_minpres_interface(
@@ -439,7 +457,10 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
     bool use_multi_chunk,
     bool verbose_output,
     bool /*swedish*/) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   if (degree < 0) {
     throw std::invalid_argument("multi_critical minimal presentation expects a non-negative degree.");
@@ -460,10 +481,8 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
   auto second = matrices[matrix_index];
   multi_critical_detail::Graded_matrix min_rep;
 
-  const bool old_verbose = mpfree::verbose;
-  mpfree::verbose = verbose_output;
+  (void)verbose_output;
   mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
-  mpfree::verbose = old_verbose;
 
   return multi_critical_detail::convert_minpres<index_type>(min_rep, degree);
 }
@@ -475,7 +494,10 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
     bool use_multi_chunk,
     bool verbose_output,
     bool /*swedish*/) {
-  std::lock_guard<std::mutex> lock(multi_critical_detail::multi_critical_interface_mutex());
+  std::optional<std::lock_guard<std::mutex> > lock;
+  if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+    lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
+  }
 
   std::vector<multi_critical_interface_output<index_type> > out;
 
@@ -486,9 +508,7 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
   }
 
   out.reserve(matrices.size() - 1);
-
-  const bool old_verbose = mpfree::verbose;
-  mpfree::verbose = verbose_output;
+  (void)verbose_output;
 
   for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
     auto first = matrices[i];
@@ -497,8 +517,6 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
     mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
     out.push_back(multi_critical_detail::convert_minpres<index_type>(min_rep, static_cast<int>(i)));
   }
-
-  mpfree::verbose = old_verbose;
   return out;
 }
 
@@ -508,27 +526,32 @@ template <typename index_type>
 multi_critical_interface_output<index_type>
 multi_critical_resolution_interface(const multi_critical_interface_input<index_type>&, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
 template <typename kcontiguous_slicer_type>
-inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type&, bool, bool, bool) {
+inline contiguous_f64_complex multi_critical_resolution_contiguous_interface(kcontiguous_slicer_type&,
+                                                                             bool,
+                                                                             bool,
+                                                                             bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
+#endif
 
 template <typename index_type>
 multi_critical_interface_output<index_type>
 multi_critical_minpres_interface(const multi_critical_interface_input<index_type>&, int, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 template <typename index_type>
 std::vector<multi_critical_interface_output<index_type> >
 multi_critical_minpres_all_interface(const multi_critical_interface_input<index_type>&, bool, bool, bool, bool) {
   throw std::runtime_error(
-      "multi_critical in-memory interface is not available at compile time. Install/checkout headers and rebuild.");
+      "multi_critical interface is not available at compile time. Install/checkout headers and rebuild.");
 }
 
 #endif

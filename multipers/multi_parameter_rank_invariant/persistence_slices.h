@@ -1,11 +1,11 @@
 #pragma once
 
 #include <oneapi/tbb/task_arena.h>
-#include "../gudhi/gudhi/Flag_complex_edge_collapser.h"
-#include "../gudhi/gudhi/Persistent_cohomology.h"
-#include "../gudhi/gudhi/Multi_persistence/Box.h"
-#include "../gudhi/gudhi/Simplex_tree/simplex_tree_options.h"
-#include "../gudhi/gudhi/Simplex_tree.h"
+#include <gudhi/Flag_complex_edge_collapser.h>
+#include <gudhi/Persistent_cohomology.h>
+#include <gudhi/Multi_persistence/Box.h>
+#include <gudhi/Simplex_tree/simplex_tree_options.h>
+#include <gudhi/Simplex_tree.h>
 
 namespace Gudhi {
 namespace multiparameter {
@@ -46,55 +46,55 @@ inline std::vector<Barcode> compute_dgms(interface_std_like &st,
                                          const std::vector<degree_type> &degrees,
                                          int num_collapses,
                                          int expansion_dim) {
-    std::vector<Barcode> out(degrees.size());
-    // static_assert(!interface_std_like::Options::is_multi_parameter,
-    //               "Can only compute persistence for 1-parameter simplextrees.");
-    const bool verbose = false;
-    if (num_collapses > 0) {
-      auto collapsed_st = collapse_edges(st, num_collapses);
-      return compute_dgms(collapsed_st, degrees, 0, expansion_dim);
-    }
-    // if (expansion_dim == -1){
-    // 	int max_dim = *std::max_element(degrees.begin(), degrees.end()) +1;
-    // 	st.expansion(max_dim);
-    // }
-    if (expansion_dim > 0) {
-      st.prune_above_dimension(1);
-      st.expansion(expansion_dim);
-    }
-    tbb::this_task_arena::isolate([&]{st.initialize_filtration(true);});  // true is ignore_infinite_values
-    constexpr int coeff_field_characteristic = 11;
-    constexpr typename interface_std_like::Filtration_value min_persistence = 0;
+  std::vector<Barcode> out(degrees.size());
+  // static_assert(!interface_std_like::Options::is_multi_parameter,
+  //               "Can only compute persistence for 1-parameter simplextrees.");
+  const bool verbose = false;
+  if (num_collapses > 0) {
+    auto collapsed_st = collapse_edges(st, num_collapses);
+    return compute_dgms(collapsed_st, degrees, 0, expansion_dim);
+  }
+  // if (expansion_dim == -1){
+  // 	int max_dim = *std::max_element(degrees.begin(), degrees.end()) +1;
+  // 	st.expansion(max_dim);
+  // }
+  if (expansion_dim > 0) {
+    st.prune_above_dimension(1);
+    st.expansion(expansion_dim);
+  }
+  tbb::this_task_arena::isolate([&] { st.initialize_filtration(true); });  // true is ignore_infinite_values
+  constexpr int coeff_field_characteristic = 11;
+  constexpr typename interface_std_like::Filtration_value min_persistence = 0;
 
-    bool persistence_dim_max = false;
-    for (auto degree : degrees) {
-      if (st.dimension() == degree) {
-        persistence_dim_max = true;
-        break;
-      }
+  bool persistence_dim_max = false;
+  for (auto degree : degrees) {
+    if (st.dimension() == degree) {
+      persistence_dim_max = true;
+      break;
     }
-    //
-    if constexpr (verbose) {
-      std::cout << "Computing dgm of st:\n";
-      for (auto &sh : st.filtration_simplex_range()) {
-        std::cout << "dim: " << st.dimension(sh) << " vertices: ";
-        for (auto v : st.simplex_vertex_range(sh)) {
-          std::cout << v << " ";
-        }
-        std::cout << " filtration: ";
-        std::cout << st.filtration(sh) << "\n";
+  }
+  //
+  if constexpr (verbose) {
+    std::cout << "Computing dgm of st:\n";
+    for (auto &sh : st.filtration_simplex_range()) {
+      std::cout << "dim: " << st.dimension(sh) << " vertices: ";
+      for (auto v : st.simplex_vertex_range(sh)) {
+        std::cout << v << " ";
       }
-      return out;
-    }
-
-    Gudhi::persistent_cohomology::Persistent_cohomology<interface_std_like, Gudhi::persistent_cohomology::Field_Zp>
-        pcoh(st, persistence_dim_max);
-    pcoh.init_coefficients(coeff_field_characteristic);
-    pcoh.compute_persistent_cohomology(min_persistence);
-    for (auto i = 0u; i < degrees.size(); i++) {
-      out[i] = pcoh.intervals_in_dimension(degrees[i]);
+      std::cout << " filtration: ";
+      std::cout << st.filtration(sh) << "\n";
     }
     return out;
+  }
+
+  Gudhi::persistent_cohomology::Persistent_cohomology<interface_std_like, Gudhi::persistent_cohomology::Field_Zp> pcoh(
+      st, persistence_dim_max);
+  pcoh.init_coefficients(coeff_field_characteristic);
+  pcoh.compute_persistent_cohomology(min_persistence);
+  for (auto i = 0u; i < degrees.size(); i++) {
+    out[i] = pcoh.intervals_in_dimension(degrees[i]);
+  }
+  return out;
 }
 
 // small wrapper

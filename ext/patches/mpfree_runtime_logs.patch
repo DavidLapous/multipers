@@ -1,0 +1,20 @@
+--- a/ext/mpfree/include/mpfree/global.h
++++ b/ext/mpfree/include/mpfree/global.h
+@@ -20,9 +20,17 @@
+ 
+ #include<phat/helpers/misc.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace mpfree {
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::mpfree> verbose;
++#else
+   bool verbose = false;
++#endif
+ 
+   typedef phat::index index;
+   

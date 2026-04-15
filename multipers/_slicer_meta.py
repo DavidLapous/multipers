@@ -1,4 +1,4 @@
-from copy import deepcopy
+import os
 from typing import Optional
 
 import numpy as np
@@ -12,52 +12,6 @@ from multipers.slicer import (
     _valid_pers_backend,
     is_slicer,
 )
-
-
-## TODO : maybe optimize this with cython
-def _blocks2boundary_dimension_grades(
-    blocks,
-    filtration_type=np.float64,
-    num_parameters: int = -1,
-    inplace: bool = False,
-    is_kcritical: bool = False,
-):
-    """
-    Turns blocks, aka scc, into the input of non-simplicial slicers.
-    """
-    if num_parameters < 0:
-        for b in blocks:
-            if len(b[0]) > 0:
-                if is_kcritical:
-                    num_parameters = np.asarray(b[0][0]).shape[1]
-                else:
-                    num_parameters = np.asarray(b[0]).shape[1]
-                break
-        if num_parameters < 0:
-            raise ValueError("Empty Filtration")
-    rblocks = blocks if inplace else deepcopy(blocks)
-    rblocks.reverse()
-    block_sizes = [len(b[0]) for b in rblocks]
-    S = np.cumsum([0, 0] + block_sizes)
-    if is_kcritical:
-        multifiltration = tuple(
-            stuff
-            for b in rblocks
-            for stuff in (b[0] if len(b[0]) > 0 else [np.empty((0, num_parameters))])
-        )
-
-    else:
-        multifiltration = np.concatenate(
-            tuple(
-                b[0] if len(b[0]) > 0 else np.empty((0, num_parameters))
-                for b in rblocks
-            ),
-        ).astype(filtration_type)
-    boundary = tuple(x + S[i] for i, b in enumerate(rblocks) for x in b[1])
-    dimensions = np.fromiter(
-        (i for i, b in enumerate(rblocks) for _ in range(len(b[0]))), dtype=int
-    )
-    return boundary, dimensions, multifiltration
 
 
 def _slicer_from_simplextree(st, backend, vineyard):
@@ -83,31 +37,6 @@ def _slicer_from_simplextree(st, backend, vineyard):
     return slicer
 
 
-def _slicer_from_blocks(
-    blocks,
-    pers_backend: _valid_pers_backend,
-    vineyard: bool,
-    is_kcritical: bool,
-    dtype: _valid_dtype,
-    col: _column_type,
-    filtration_container: _filtration_container_type,
-):
-    boundary, dimensions, multifiltrations = _blocks2boundary_dimension_grades(
-        blocks,
-        inplace=False,
-        is_kcritical=is_kcritical,
-    )
-    slicer = mps.get_matrix_slicer(
-        vineyard,
-        is_kcritical,
-        dtype,
-        col,
-        pers_backend,
-        filtration_container,
-    )(boundary, dimensions, multifiltrations)
-    return slicer
-
-
 def Slicer(
     st=None,
     vineyard: Optional[bool] = None,
@@ -123,7 +52,7 @@ def Slicer(
     _shift_dimension: int = 0,
 ) -> mps.Slicer_type:
     """
-    Given a simplextree or blocks (a.k.a scc for python),
+    Given a simplextree, slicer, or SCC file path,
     returns a structure that can compute persistence on line (or more)
     slices, eventually vineyard update, etc.
 
@@ -134,7 +63,7 @@ def Slicer(
 
     Input
     -----
-     - st : SimplexTreeMulti or scc-like blocks or path to scc file
+     - st : SimplexTreeMulti, slicer, or path to an SCC file
      - backend: slicer backend, e.g, "matrix", "clement", "graph"
      - vineyard: vineyard capable (may slow down computations if true)
     Output
@@ -194,12 +123,10 @@ def Slicer(
         if st.is_squeezed:
             slicer.filtration_grid = st.filtration_grid
 
-    elif isinstance(st, str):
-        slicer = _Slicer()._build_from_scc_file(st, shift_dimension=_shift_dimension)
+    elif isinstance(st, str) or isinstance(st, os.PathLike):
+        slicer = _Slicer(os.fspath(st), _shift_dimension)
     elif is_simplextree_multi(st):
-        slicer = _Slicer().build_from_simplex_tree(st)
-        if st.is_squeezed:
-            slicer.filtration_grid = st.filtration_grid
+        slicer = _Slicer(st)
     elif backend == "Graph":
         raise ValueError(
             """
@@ -207,15 +134,10 @@ Graph is simplicial, incompatible with minpres.
 You can try using `multipers.slicer.to_simplextree`."""
         )
     else:
-        blocks = st
-        slicer = _slicer_from_blocks(
-            blocks,
-            backend,
-            vineyard,
-            is_kcritical,
-            dtype,
-            column_type,
-            filtration_container,
+        raise TypeError(
+            "Slicer construction from Python SCC/block iterables has been removed. "
+            "Construct from a SimplexTreeMulti, an existing slicer, an SCC file path, "
+            "or explicit (generator_maps, generator_dimensions, filtration_values) data."
         )
     if reduce:
         from multipers.ops import minimal_presentation

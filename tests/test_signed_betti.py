@@ -1,6 +1,13 @@
 import numpy as np
+import pytest
 
-from multipers.point_measure import rank_decomposition_by_rectangles, signed_betti
+import multipers.logs as _mp_logs
+
+from multipers.point_measure import (
+    integrate_measure,
+    rank_decomposition_by_rectangles,
+    signed_betti,
+)
 
 
 # only tests rank functions with 1 and 2 parameters

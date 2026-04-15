@@ -1,11 +1,21 @@
 from contextlib import nullcontext
 from functools import wraps
+from importlib.util import find_spec
 
 import numpy as _np
-from scipy.spatial.distance import cdist as _sp_cdist, pdist as _sp_pdist
+from scipy.special import logsumexp as _sp_logsumexp
 import multipers.logs as _mp_logs
 
+if find_spec("numba"):
+    import numba as _numba
+    from numba.core.errors import NumbaError as _NumbaError
+else:
+    _numba = None
+    _NumbaError = None
+
 backend = _np
+name = "numpy"
+_has_jit = _numba is not None
 int64 = _np.int64
 cat = _np.concatenate
 det = _np.linalg.det
@@ -23,7 +33,6 @@ arange = _np.arange
 moveaxis = _np.moveaxis
 ones = _np.ones
 repeat_interleave = _np.repeat
-pdist = _sp_pdist  # type: ignore[no-redef]
 inf = _np.inf
 searchsorted = _np.searchsorted
 LazyTensor = None
@@ -32,16 +41,34 @@ exp = _np.exp
 log = _np.log
 sin = _np.sin
 cos = _np.cos
+sinc = _np.sinc
 sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum
 
 
 def jit(fn=None, **kwargs):
+    if _numba is None:
+        def decorator(func):
+            @wraps(func)
+            def wrapped(*args, **inner_kwargs):
+                return func(*args, **inner_kwargs)
+
+            return wrapped
+
+        if fn is None:
+            return decorator
+        return decorator(fn)
+
     def decorator(func):
+        compiled = _numba.njit(func)
+
         @wraps(func)
         def wrapped(*args, **inner_kwargs):
-            return func(*args, **inner_kwargs)
+            try:
+                return compiled(*args, **inner_kwargs)
+            except _NumbaError:
+                return func(*args, **inner_kwargs)
 
         return wrapped
 
@@ -61,11 +88,23 @@ def unique(x, assume_sorted=False, _mean=False):
 
 
 def cdist(x, y, p=2):
+    from scipy.spatial.distance import cdist as _sp_cdist
+
     if p == 1:
         return _sp_cdist(x, y, metric="cityblock")
     if p == 2:
         return _sp_cdist(x, y, metric="euclidean")
     return _sp_cdist(x, y, metric="minkowski", p=p)
+
+
+def pdist(x, p=2):
+    from scipy.spatial.distance import pdist as _sp_pdist
+
+    if p == 1:
+        return _sp_pdist(x, metric="cityblock")
+    if p == 2:
+        return _sp_pdist(x, metric="euclidean")
+    return _sp_pdist(x, metric="minkowski", p=p)
 
 
 def sum(x, axis=None, dim=None, **kwargs):
@@ -78,6 +117,20 @@ def mean(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
     return _np.mean(x, axis=axis, **kwargs)
+
+
+def any(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.any(x, axis=axis, **kwargs)
+
+
+def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    if axis is None:
+        axis = dim
+    if keepdim is None:
+        keepdim = keepdims
+    return _sp_logsumexp(x, axis=axis, keepdims=keepdim)
 
 
 def norm(x, axis=None, dim=None, **kwargs):
@@ -234,12 +287,39 @@ def size(x):
     return int(_np.size(x))
 
 
-def dtype_is_float(dtype):
+def _dtype_like(x):
+    return x.dtype if hasattr(x, "dtype") and not isinstance(x, type) else x
+
+
+def is_float(x):
     try:
-        return _np.issubdtype(_np.dtype(dtype), _np.floating)
+        return _np.issubdtype(_np.dtype(_dtype_like(x)), _np.floating)
     except TypeError:
         return False
 
 
+def is_int(x):
+    try:
+        return _np.issubdtype(_np.dtype(_dtype_like(x)), _np.integer)
+    except TypeError:
+        return False
+
+
+def dtype_is_float(dtype):
+    return is_float(dtype)
+
+
 def dtype_default():
     return _np.array(0.0).dtype
+
+
+def inf_value(array):
+    if isinstance(array, _np.ndarray):
+        dtype = _np.dtype(array.dtype)
+    else:
+        dtype = _np.dtype(array)
+    if _np.issubdtype(dtype, _np.inexact):
+        return _np.asarray(_np.inf, dtype=dtype)
+    if _np.issubdtype(dtype, _np.integer):
+        return _np.iinfo(dtype).max
+    raise ValueError(f"`dtype` must be integer or floating like (got {dtype=}).")

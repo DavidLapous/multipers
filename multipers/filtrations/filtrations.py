@@ -1,20 +1,140 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from importlib.util import find_spec
 from time import perf_counter
 from typing import Optional
 
-import gudhi as gd
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.spatial import KDTree
 
 from multipers.array_api import api_from_tensor, api_from_tensors, check_keops
-import multipers.array_api.numpy as npapi
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid, get_exact_grid
-from multipers.simplex_tree_multi import SimplexTreeMulti, SimplexTreeMulti_type
-import multipers as _mp
+
+from multipers.simplex_tree_multi import SimplexTreeMulti_type
+
+
+def _function_delaunay_presentation_to_slicer(
+    slicer,
+    point_cloud: np.ndarray,
+    function_values: np.ndarray,
+    clear: bool = True,
+    verbose: bool = False,
+    degree=-1,
+    multi_chunk=False,
+    recover_ids: bool = False,
+):
+    del clear
+    import multipers._function_delaunay_interface as _function_delaunay_interface
+
+    _function_delaunay_interface.require()
+
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
+    if point_cloud.ndim != 2:
+        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
+    if function_values.ndim != 1:
+        raise ValueError(
+            f"function_values should be a 1d array. Got {function_values.shape=}"
+        )
+    if point_cloud.shape[0] != function_values.shape[0]:
+        raise ValueError(
+            f"point_cloud and function_values should have same number of points. "
+            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
+        )
+    if verbose:
+        _mp_logs.log_verbose(
+            f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk} recover_ids={recover_ids}",
+            enabled=verbose,
+        )
+    return _function_delaunay_interface.function_delaunay_to_slicer(
+        slicer,
+        point_cloud,
+        function_values,
+        degree,
+        multi_chunk,
+        recover_ids,
+        verbose,
+    )
+
+
+def _function_delaunay_presentation_to_simplextree(
+    point_cloud: np.ndarray,
+    function_values: np.ndarray,
+    clear: bool = True,
+    verbose: bool = False,
+    dtype=np.float64,
+    recover_ids: bool = False,
+):
+    del clear
+    import multipers._function_delaunay_interface as _function_delaunay_interface
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
+    _function_delaunay_interface.require()
+
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
+    if point_cloud.ndim != 2:
+        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
+    if function_values.ndim != 1:
+        raise ValueError(
+            f"function_values should be a 1d array. Got {function_values.shape=}"
+        )
+    if point_cloud.shape[0] != function_values.shape[0]:
+        raise ValueError(
+            f"point_cloud and function_values should have same number of points. "
+            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
+        )
+    st = SimplexTreeMulti(num_parameters=2, dtype=dtype)
+    if verbose:
+        _mp_logs.log_verbose(
+            f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids}",
+            enabled=verbose,
+        )
+    return _function_delaunay_interface.function_delaunay_to_simplextree(
+        st,
+        point_cloud,
+        function_values,
+        recover_ids,
+        verbose,
+    )
+
+
+def _rhomboid_tiling_to_slicer(
+    slicer,
+    point_cloud: np.ndarray,
+    k_max,
+    degree=-1,
+    clear: bool = True,
+    verbose=False,
+):
+    del clear
+    import multipers._rhomboid_tiling_interface as _rhomboid_tiling_interface
+
+    _rhomboid_tiling_interface.require()
+
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    if point_cloud.ndim != 2 or point_cloud.shape[1] not in [2, 3]:
+        raise ValueError(
+            f"point_cloud should be a 2d array of shape (-,2) or (-,3). Got {point_cloud.shape=}"
+        )
+
+    with _mp_logs.timings(
+        "rhomboid_tiling",
+        enabled=verbose,
+        details={"backend": "rhomboid_tiling", "mode": "cpp_interface", "degree": degree, "k_max": k_max},
+    ) as timing:
+        out = _rhomboid_tiling_interface.rhomboid_tiling_to_slicer(
+            slicer,
+            point_cloud,
+            k_max,
+            degree,
+            verbose,
+        )
+        timing.substep("cpp_call")
+        return out
 
 
 def KDE(bandwidth, kernel, return_log):
@@ -37,7 +157,8 @@ def RipsLowerstar(
     distance_matrix: Optional[ArrayLike] = None,
     function: Optional[ArrayLike] = None,
     threshold_radius: Optional[float] = None,
-    sparse: float = None,
+    sparse: Optional[float] = None,
+    verbose: bool = False,
 ):
     """
     Computes the Rips complex, with the usual rips filtration as a first parameter,
@@ -48,54 +169,71 @@ def RipsLowerstar(
      - function : ArrayLike of shape (num_data, num_parameters -1)
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    if points is None and distance_matrix is None:
-        raise ValueError("`points` or `distance_matrix` has to be given.")
+    with _mp_logs.timings(
+        "RipsLowerstar",
+        enabled=verbose,
+        details={
+            "backend": "gudhi",
+            "mode": "python",
+            "input": "distance_matrix" if distance_matrix is not None else "points",
+            "sparse": bool(sparse),
+        },
+    ) as timing:
+        if points is None and distance_matrix is None:
+            raise ValueError("`points` or `distance_matrix` has to be given.")
 
-    if distance_matrix is not None:
-        api = api_from_tensor(distance_matrix)
-        D = api.astensor(distance_matrix)
-    else:
-        api = api_from_tensor(points)
-        points = api.astensor(points)
-        D = api.cdist(points, points)  # this may be slow...
+        import gudhi as gd
+        from multipers.simplex_tree_multi import SimplexTreeMulti
 
-    if threshold_radius is None:
-        threshold_radius = api.min(api.maxvalues(D, axis=1))
-    if sparse:
-        _mp_logs.ExperimentalWarning("Sparse-RipsLowerstar has no known good property.")
-        st = gd.RipsComplex(
-            distance_matrix=api.asnumpy(D),
-            max_edge_length=threshold_radius,
-            sparse=sparse,
-        ).create_simplex_tree()
-    else:
-        st = gd.SimplexTree.create_from_array(
-            api.asnumpy(D), max_filtration=threshold_radius
-        )
-    if function is None:
-        return SimplexTreeMulti(st, num_parameters=1)
+        if distance_matrix is not None:
+            api = api_from_tensor(distance_matrix)
+            D = api.astensor(distance_matrix)
+        else:
+            api = api_from_tensor(points)
+            points = api.astensor(points)
+            D = api.cdist(points, points)  # this may be slow...
+        timing.substep("resolved_distance_matrix")
 
-    function = api.astensor(function)
-    if function.ndim == 1:
-        function = function[:, None]
-    if function.ndim != 2:
-        raise ValueError(
-            f"""
-            `function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}
-            """
-        )
-    num_parameters = function.shape[1] + 1
-    st = SimplexTreeMulti(st, num_parameters=num_parameters)
-    for i in range(function.shape[1]):
-        st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
-    if api.has_grad(D) or api.has_grad(function):
-        from multipers.grids import compute_grid
+        if threshold_radius is None:
+            threshold_radius = api.min(api.maxvalues(D, axis=1))
+        if sparse:
+            _mp_logs.ExperimentalWarning("Sparse-RipsLowerstar has no known good property.")
+            st = gd.RipsComplex(
+                distance_matrix=api.asnumpy(D),
+                max_edge_length=threshold_radius,
+                sparse=sparse,
+            ).create_simplex_tree()
+        else:
+            st = gd.SimplexTree.create_from_array(
+                api.asnumpy(D), max_filtration=threshold_radius
+            )
+        timing.substep("built_rips")
+        if function is None:
+            return SimplexTreeMulti(st, num_parameters=1)
 
-        filtration_values = [D.ravel(), *[f for f in function.T]]
-        grid = compute_grid(filtration_values)
-        st = st.grid_squeeze(grid)
-        st._clean_filtration_grid()
-    return st
+        function = api.astensor(function)
+        if function.ndim == 1:
+            function = function[:, None]
+        if function.ndim != 2:
+            raise ValueError(
+                f"""
+                `function.ndim` should be 0 or 1 . Got {function.ndim=}.{function=}
+                """
+            )
+        num_parameters = function.shape[1] + 1
+        st = SimplexTreeMulti(st, num_parameters=num_parameters)
+        for i in range(function.shape[1]):
+            st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
+        timing.substep("applied_lowerstar")
+        if api.has_grad(D) or api.has_grad(function):
+            from multipers.grids import compute_grid
+
+            filtration_values = [D.ravel(), *[f for f in function.T]]
+            grid = compute_grid(filtration_values)
+            st = st.grid_squeeze(grid)
+            st._clean_filtration_grid()
+            timing.substep("squeezed_grad_grid")
+        return st
 
 
 def RipsCodensity(
@@ -137,6 +275,7 @@ def DelaunayLowerstar(
     verbose: bool = False,
     clear: bool = True,
     flagify: bool = False,
+    recover_ids: bool = False,
 ):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
@@ -147,87 +286,100 @@ def DelaunayLowerstar(
      - function : ArrayLike of shape (num_data, )
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
-    from multipers.slicer import from_function_delaunay
+    import multipers
 
-    t0 = perf_counter()
-    t_prev = t0
-
-    def _log_step(label: str):
-        nonlocal t_prev
-        if verbose:
-            now = perf_counter()
-            print(f"[DelaunayLowerstar] {label}: {now - t_prev:.3f}s")
-            t_prev = now
-
-    if distance_matrix is not None:
-        raise ValueError("Delaunay cannot be built from distance matrices")
-    if threshold_radius is not None:
-        raise NotImplementedError("Delaunay with threshold not implemented yet.")
-    api = api_from_tensors(points, function)
-    _log_step("resolved backend")
-    if not flagify and (api.has_grad(points) or api.has_grad(function)):
-        _mp_logs.warn_autodiff(
-            "Cannot keep points gradient unless using `flagify=True`."
-        )
-    points = api.astensor(points)
-    function = api.astensor(function).squeeze()
-    _log_step("converted inputs")
-    if function.ndim != 1:
-        raise ValueError(
-            "Delaunay Lowerstar is only compatible with 1 additional parameter."
-        )
-    slicer = from_function_delaunay(
-        api.asnumpy(points),
-        api.asnumpy(function),
-        degree=-1 if flagify else reduce_degree,
-        vineyard=vineyard,
-        dtype=dtype,
-        verbose=verbose,
-        clear=clear,
-    )
-    _log_step("built function-delaunay")
-    if flagify:
-        from multipers.simplex_tree_multi import is_simplextree_multi
-        from multipers.slicer import to_simplextree
-
-        max_dim = -1 if reduce_degree == -1 else reduce_degree + 1
-        if is_simplextree_multi(slicer):
-            slicer = slicer.copy()
-            if max_dim >= 0:
-                slicer.prune_above_dimension(max_dim)
-            _log_step("copied/pruned simplextree")
+    with _mp_logs.timings(
+        "DelaunayLowerstar",
+        enabled=verbose,
+        details={
+            "backend": "function_delaunay",
+            "mode": "cpp_interface",
+            "reduce_degree": reduce_degree,
+            "flagify": flagify,
+        },
+    ) as timing:
+        if distance_matrix is not None:
+            raise ValueError("Delaunay cannot be built from distance matrices")
+        if threshold_radius is not None:
+            raise NotImplementedError("Delaunay with threshold not implemented yet.")
+        api = api_from_tensors(points, function)
+        timing.substep("resolved_backend")
+        if not flagify and (api.has_grad(points) or api.has_grad(function)):
+            _mp_logs.warn_autodiff(
+                "Cannot keep points gradient unless using `flagify=True`."
+            )
+        points = api.astensor(points)
+        function = api.astensor(function).squeeze()
+        timing.substep("converted_inputs")
+        if function.ndim != 1:
+            raise ValueError(
+                "Delaunay Lowerstar is only compatible with 1 additional parameter."
+            )
+        points_np = api.asnumpy(points)
+        function_np = api.asnumpy(function)
+        degree = -1 if flagify else reduce_degree
+        if degree < 0:
+            slicer = _function_delaunay_presentation_to_simplextree(
+                points_np,
+                function_np,
+                verbose=verbose,
+                clear=clear,
+                dtype=dtype,
+                recover_ids=recover_ids,
+            )
         else:
-            slicer = to_simplextree(slicer, max_dim=max_dim)
-            _log_step("converted slicer to simplextree")
-        slicer.flagify(2)
-        _log_step("flagified")
+            slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
+            slicer = _function_delaunay_presentation_to_slicer(
+                slicer,
+                points_np,
+                function_np,
+                degree=degree,
+                verbose=verbose,
+                clear=clear,
+                recover_ids=recover_ids,
+            )
+            slicer.minpres_degree = degree
+        timing.substep("built_function_delaunay")
+        if flagify:
+            from multipers.simplex_tree_multi import is_simplextree_multi
+            from multipers.slicer import to_simplextree
 
-        if api.has_grad(points) or api.has_grad(function):
-            distances = api.pdist(points) / 2
-            zero = api.zeros(1, dtype=distances.dtype)
-            zero = api.to_device(zero, api.device(distances))
-            distance_values = api.cat([distances, zero])
-            grid = get_exact_grid([distance_values, function])
-            _log_step("computed exact grid")
-            slicer = slicer.grid_squeeze(grid)
-            _log_step("grid-squeezed")
-            slicer = slicer._clean_filtration_grid()
-            _log_step("cleaned grid")
+            max_dim = -1 if reduce_degree == -1 else reduce_degree + 1
+            with timing.step("flagify") as flagify_timing:
+                if is_simplextree_multi(slicer):
+                    slicer = slicer.copy()
+                    if max_dim >= 0:
+                        slicer.prune_above_dimension(max_dim)
+                    flagify_timing.substep("copied_pruned_simplextree")
+                else:
+                    slicer = to_simplextree(slicer, max_dim=max_dim)
+                    flagify_timing.substep("converted_slicer_to_simplextree")
+                slicer.flagify(2)
+                flagify_timing.substep("flagify")
+
+                if api.has_grad(points) or api.has_grad(function):
+                    distances = api.pdist(points) / 2
+                    zero = api.zeros(1, dtype=distances.dtype)
+                    zero = api.to_device(zero, api.device(distances))
+                    distance_values = api.cat([distances, zero])
+                    grid = get_exact_grid([distance_values, function], api=api)
+                    flagify_timing.substep("computed_exact_grid")
+                    slicer = slicer.grid_squeeze(grid)
+                    flagify_timing.substep("grid_squeezed")
+                    slicer = slicer._clean_filtration_grid()
+                    flagify_timing.substep("cleaned_grid")
+                if reduce_degree >= 0:
+                    from multipers import Slicer
+
+                    slicer = Slicer(slicer)
+                    flagify_timing.substep("converted_back_to_slicer")
+
         if reduce_degree >= 0:
-            slicer = _mp.Slicer(slicer)
-            _log_step("converted back to slicer")
+            # Force resolution to avoid confusion with hilbert.
+            slicer = slicer.minpres(degree=reduce_degree, force=True)
+            timing.substep("computed_minpres")
 
-    if reduce_degree >= 0:
-        # Force resolution to avoid confusion with hilbert.
-        slicer = slicer.minpres(degree=reduce_degree, force=True)
-        _log_step("computed minpres")
-
-    if verbose:
-        print(f"[DelaunayLowerstar] total: {perf_counter() - t0:.3f}s")
-
-    return slicer
-
-
+        return slicer
 def _AlphaLowerstar(
     points: ArrayLike,
     function: ArrayLike,
@@ -240,6 +392,9 @@ def _AlphaLowerstar(
     """
 
     _mp_logs.ExperimentalWarning("Alpha-Lowerstar has no known good property.")
+    import gudhi as gd
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
     api = api_from_tensor(points)
     points = api.astensor(points)
     function = api.astensor(function)
@@ -342,7 +497,7 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
      - image: ArrayLike of shape (*image_resolution, num_parameters)
      - ** args : specify non-default slicer parameters
     """
-    from multipers.slicer import from_bitmap
+    from multipers._slicer_algorithms import from_bitmap
 
     api = api_from_tensor(image)
     image = api.astensor(image)
@@ -375,70 +530,106 @@ def DegreeRips(
     squeeze_strategy="exact",
     squeeze_resolution=None,
     squeeze: bool = True,
+    verbose: bool = False,
 ):
     """
     The DegreeRips filtration.
     """
 
-    if simplex_tree is None:
-        if distance_matrix is None:
-            if points is None:
-                raise ValueError(
-                    "A simplextree, a distance matrix or a point cloud has to be given."
-                )
-            api = api_from_tensor(points)
-            points = api.astensor(points)
-            D = api.cdist(points, points)
+    with _mp_logs.timings(
+        "DegreeRips",
+        enabled=verbose,
+        details={
+            "backend": "gudhi",
+            "mode": "python",
+            "input": "simplex_tree" if simplex_tree is not None else (
+                "distance_matrix" if distance_matrix is not None else "points"
+            ),
+            "squeeze": squeeze,
+        },
+    ) as timing:
+        import gudhi as gd
+        from multipers.simplex_tree_multi import SimplexTreeMulti
+
+        if simplex_tree is None:
+            if distance_matrix is None:
+                if points is None:
+                    raise ValueError(
+                        "A simplextree, a distance matrix or a point cloud has to be given."
+                    )
+                api = api_from_tensor(points)
+                points = api.astensor(points)
+                D = api.cdist(points, points)
+            else:
+                api = api_from_tensor(distance_matrix)
+                D = api.astensor(distance_matrix)
+
+            if threshold_radius is None:
+                threshold_radius = api.min(api.maxvalues(D, axis=1))
+            st = gd.SimplexTree.create_from_array(
+                api.asnumpy(D), max_filtration=threshold_radius
+            )
+            rips_filtration = api.unique(D.ravel())
         else:
-            api = api_from_tensor(distance_matrix)
-            D = api.astensor(distance_matrix)
+            import multipers.array_api.numpy as npapi
 
-        if threshold_radius is None:
-            threshold_radius = api.min(api.maxvalues(D, axis=1))
-        st = gd.SimplexTree.create_from_array(
-            api.asnumpy(D), max_filtration=threshold_radius
-        )
-        rips_filtration = api.unique(D.ravel())
-    else:
-        if not isinstance(simplex_tree, gd.SimplexTree):
+            if not isinstance(simplex_tree, gd.SimplexTree):
+                raise ValueError(
+                    f"`simplex_tree` has to be a gudhi SimplexTree. Got {simplex_tree=}."
+                )
+            st = simplex_tree
+            api = npapi
+            rips_filtration = None
+        timing.substep("built_rips")
+
+        if ks is None or rips_filtration is None:
+            _mp_logs.warn_copy(
+                "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
+            )
+            _temp_st = SimplexTreeMulti(
+                st, num_parameters=1
+            )  # Gudhi is missing some functionality
+            if ks is None:
+                max_degree = (
+                    np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
+                )
+                ks = (
+                    np.arange(1, max_degree + 1)
+                    if num is None
+                    else np.unique(np.linspace(1, max_degree, num, dtype=np.int32))
+                )
+                ks = api.copy(api.from_numpy(ks))
+            if rips_filtration is None:
+                rips_filtration = compute_grid(_temp_st)[0]
+            timing.substep("recovered_degree_axis")
+
+        ks_np = np.asarray(ks, dtype=np.int32)
+        if ks_np.ndim != 1:
             raise ValueError(
-                f"`simplex_tree` has to be a gudhi SimplexTree. Got {simplex_tree=}."
+                f"`ks` must be a 1D sequence of positive sorted integers. Got shape {ks_np.shape}."
             )
-        st = simplex_tree
-        api = npapi
-        rips_filtration = None
-
-    if ks is None or rips_filtration is None:
-        _mp_logs.warn_copy(
-            "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
-        )
-        _temp_st = _mp.SimplexTreeMulti(
-            st, num_parameters=1
-        )  # Gudhi is missing some functionality
-        if ks is None:
-            max_degree = (
-                np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
+        if ks_np.size == 0:
+            raise ValueError("`ks` must contain at least one value.")
+        if np.any(ks_np <= 0):
+            raise ValueError(
+                "`ks` must contain strictly positive degree indices. "
+                "DegreeRips uses 1-based degree indexing."
             )
-            ks = (
-                np.arange(1, max_degree + 1)
-                if num is None
-                else np.unique(np.linspace(1, max_degree, num, dtype=np.int32))
-            )
-            ks = api.copy(api.from_numpy(ks))
-        if rips_filtration is None:
-            rips_filtration = _mp.grids.compute_grid(_temp_st)[0]
+        if np.any(ks_np[1:] < ks_np[:-1]):
+            raise ValueError("`ks` must be sorted in nondecreasing order.")
 
-    from multipers.function_rips import get_degree_rips
+        from multipers.function_rips import get_degree_rips
 
-    st_multi = get_degree_rips(st, degrees=ks)
-    if squeeze:
-        F = [rips_filtration, api.astype(ks, rips_filtration.dtype)]
-        F = _mp.grids.compute_grid(
-            F, strategy=squeeze_strategy, resolution=squeeze_resolution
-        )
-        st_multi = st_multi.grid_squeeze(F)
-        st_multi.filtration_grid = (F[0], F[1] - F[1][-1])  # degrees are negative
-    return st_multi
+        st_multi = get_degree_rips(st, degrees=ks_np)
+        timing.substep("built_degree_rips")
+        if squeeze:
+            ks_grid = api.copy(api.from_numpy(ks_np))
+            F = [rips_filtration, api.astype(ks_grid, rips_filtration.dtype)]
+            F = compute_grid(F, strategy=squeeze_strategy, resolution=squeeze_resolution)
+            st_multi = st_multi.grid_squeeze(F)
+            st_multi.filtration_grid = (F[0], F[1] - F[1][-1])  # degrees are negative
+            timing.substep("squeezed_grid")
+        return st_multi
 
 
 def CoreDelaunay(
@@ -462,6 +653,10 @@ def CoreDelaunay(
      - verbose: Whether to print progress messages (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
+    import gudhi as gd
+    from scipy.spatial import KDTree
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
     points = np.asarray(points)
     if ks is None:
         ks = np.arange(1, len(points) + 1)
@@ -577,7 +772,6 @@ def RhomboidBifiltration(
      - degree: dimension to consider
      - verbose:bool
     """
-    from multipers.io import _rhomboid_tiling_to_slicer
     from multipers import Slicer
 
     api = api_from_tensor(x)
@@ -589,7 +783,7 @@ def RhomboidBifiltration(
     if x.ndim not in (2, 3):
         raise ValueError("Only 2-3D dimensional point cloud are supported.")
     out = Slicer()
-    _rhomboid_tiling_to_slicer(
+    out = _rhomboid_tiling_to_slicer(
         slicer=out,
         point_cloud=x,
         k_max=k_max,

@@ -4,15 +4,104 @@ if(DEFINED ENV{CONDA_PREFIX})
   list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
 endif()
 
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
+
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -m nanobind --cmake_dir
+  RESULT_VARIABLE MULTIPERS_NANOBIND_CMAKE_DIR_RESULT
+  OUTPUT_VARIABLE MULTIPERS_NANOBIND_CMAKE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_VARIABLE MULTIPERS_NANOBIND_CMAKE_DIR_ERROR
+)
+
+if(NOT MULTIPERS_NANOBIND_CMAKE_DIR_RESULT EQUAL 0)
+  message(
+    FATAL_ERROR
+      "Failed to locate nanobind CMake files: ${MULTIPERS_NANOBIND_CMAKE_DIR_ERROR}"
+  )
+endif()
+
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -m nanobind --include_dir
+  RESULT_VARIABLE MULTIPERS_NANOBIND_INCLUDE_DIR_RESULT
+  OUTPUT_VARIABLE MULTIPERS_NANOBIND_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_VARIABLE MULTIPERS_NANOBIND_INCLUDE_DIR_ERROR
+)
+
+if(NOT MULTIPERS_NANOBIND_INCLUDE_DIR_RESULT EQUAL 0)
+  message(
+    FATAL_ERROR
+      "Failed to locate nanobind headers: ${MULTIPERS_NANOBIND_INCLUDE_DIR_ERROR}"
+  )
+endif()
+
+get_filename_component(MULTIPERS_NANOBIND_PACKAGE_DIR "${MULTIPERS_NANOBIND_INCLUDE_DIR}" DIRECTORY)
+set(MULTIPERS_NANOBIND_ROBIN_MAP_INCLUDE_DIR "${MULTIPERS_NANOBIND_PACKAGE_DIR}/ext/robin_map/include")
+
+list(PREPEND CMAKE_PREFIX_PATH "${MULTIPERS_NANOBIND_CMAKE_DIR}")
+find_package(nanobind CONFIG REQUIRED)
+
 find_package(Boost REQUIRED COMPONENTS system timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+if(POLICY CMP0167)
+  set(CMAKE_POLICY_DEFAULT_CMP0167 NEW)
+endif()
 find_package(CGAL QUIET COMPONENTS Core)
+if(POLICY CMP0167)
+  unset(CMAKE_POLICY_DEFAULT_CMP0167)
+endif()
 
 find_library(MULTIPERS_GMP_LIBRARY REQUIRED NAMES gmp)
 
+if(NOT DEFINED MULTIPERS_DISABLE_2PAC_INTERFACE)
+  set(MULTIPERS_DISABLE_2PAC_INTERFACE OFF)
+  message(STATUS "[2pac] Defaulted MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE}")
+else()
+  message(STATUS "[2pac] Preset MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE}")
+endif()
+if(NOT DEFINED MULTIPERS_DISABLE_AIDA_INTERFACE)
+  set(MULTIPERS_DISABLE_AIDA_INTERFACE OFF)
+  message(STATUS "[aida] Defaulted MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
+else()
+  message(STATUS "[aida] Preset MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
+endif()
+
+if(WIN32)
+  set(MULTIPERS_DISABLE_2PAC_INTERFACE ON)
+  message(STATUS "[2pac] Forced MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_AIDA_INTERFACE ON)
+  message(STATUS "[aida] Forced MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE} on WIN32")
+endif()
+
+set(
+  MULTIPERS_GUDHI_SOURCE_DIR
+  "${CMAKE_SOURCE_DIR}/ext/gudhi-devel"
+  CACHE PATH
+  "Path to a Gudhi source checkout"
+)
+
+set(MULTIPERS_GUDHI_INCLUDE_DIRS "")
+file(GLOB _multipers_gudhi_module_include_dirs LIST_DIRECTORIES TRUE
+  "${MULTIPERS_GUDHI_SOURCE_DIR}/src/*/include"
+)
+foreach(_gudhi_include_dir IN LISTS _multipers_gudhi_module_include_dirs)
+  if(IS_DIRECTORY "${_gudhi_include_dir}")
+    list(APPEND MULTIPERS_GUDHI_INCLUDE_DIRS "${_gudhi_include_dir}")
+  endif()
+endforeach()
+
+if(NOT EXISTS "${MULTIPERS_GUDHI_SOURCE_DIR}/src/Simplex_tree/include/gudhi/Simplex_tree.h")
+  message(
+    FATAL_ERROR
+      "Missing Gudhi headers under ${MULTIPERS_GUDHI_SOURCE_DIR}. Run git submodule update --init ext/gudhi-devel"
+  )
+endif()
+
 set(MULTIPERS_BASE_INCLUDE_DIRS
+  ${MULTIPERS_GUDHI_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/multipers/gudhi"
   "${CMAKE_SOURCE_DIR}/multipers"
 )
@@ -86,6 +175,43 @@ if(CGAL_FOUND)
   list(APPEND MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS ${CGAL_INCLUDE_DIRS})
 endif()
 
+set(MULTIPERS_2PAC_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/2pac" CACHE PATH "Path to a 2pac source tree")
+message(STATUS "[2pac] Set MULTIPERS_2PAC_SOURCE_DIR=${MULTIPERS_2PAC_SOURCE_DIR}")
+set(MULTIPERS_2PAC_INCLUDE_DIRS "")
+message(STATUS "[2pac] Set MULTIPERS_2PAC_INCLUDE_DIRS=${MULTIPERS_2PAC_INCLUDE_DIRS}")
+if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.hpp" AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp")
+  set(MULTIPERS_2PAC_INCLUDE_DIRS "${MULTIPERS_2PAC_SOURCE_DIR}")
+  message(STATUS "[2pac] Set MULTIPERS_2PAC_INCLUDE_DIRS=${MULTIPERS_2PAC_INCLUDE_DIRS}")
+  add_library(
+    multipers_2pac_static
+    STATIC
+    "${MULTIPERS_2PAC_SOURCE_DIR}/minimize.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/factor.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/chunk.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/ArrayColumn.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/HeapColumn.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/time_measurement.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/block_column_matrix.cpp"
+  )
+  target_include_directories(multipers_2pac_static PUBLIC ${MULTIPERS_2PAC_INCLUDE_DIRS})
+  target_link_libraries(multipers_2pac_static PUBLIC OpenMP::OpenMP_CXX)
+  target_compile_definitions(multipers_2pac_static PUBLIC MULTIPERS_HAS_2PAC_INTERFACE=1)
+  message(STATUS "[2pac] Created multipers_2pac_static with MULTIPERS_HAS_2PAC_INTERFACE=1")
+  set_target_properties(
+    multipers_2pac_static
+    PROPERTIES
+      CXX_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN ON
+  )
+else()
+  message(
+    STATUS
+      "[2pac] Skipped multipers_2pac_static creation: disable=${MULTIPERS_DISABLE_2PAC_INTERFACE}, source_dir=${MULTIPERS_2PAC_SOURCE_DIR}"
+  )
+endif()
+
 if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
   add_library(
     multipers_rhomboid_tiling_static
@@ -98,9 +224,12 @@ if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_vers
   if(TARGET CGAL::CGAL_Core)
     target_link_libraries(multipers_rhomboid_tiling_static PUBLIC CGAL::CGAL_Core)
   endif()
+  message(STATUS "[rhomboid] Created multipers_rhomboid_tiling_static")
+else()
+  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: CGAL_FOUND=${CGAL_FOUND}")
 endif()
 
-if(NOT WIN32)
+if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
   add_library(
     multipers_aida_static
     STATIC
@@ -114,5 +243,16 @@ if(NOT WIN32)
   )
   target_include_directories(multipers_aida_static PUBLIC ${MULTIPERS_AIDA_INCLUDE_DIRS})
   target_link_libraries(multipers_aida_static PUBLIC Boost::timer Boost::chrono)
-  set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
+  set_target_properties(
+    multipers_aida_static
+    PROPERTIES
+      CXX_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN ON
+  )
+  if(NOT MSVC)
+    set_target_properties(multipers_aida_static PROPERTIES COMPILE_FLAGS "--no-warnings")
+  endif()
+  message(STATUS "[aida] Created multipers_aida_static")
+else()
+  message(STATUS "[aida] Skipped multipers_aida_static creation: disable=${MULTIPERS_DISABLE_AIDA_INTERFACE}")
 endif()

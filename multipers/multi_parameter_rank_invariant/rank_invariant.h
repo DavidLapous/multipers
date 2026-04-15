@@ -8,14 +8,14 @@
 #include <utility>  // std::pair
 #include <vector>
 
-#include "../gudhi/gudhi/multi_simplex_tree_helpers.h"
-#include "../gudhi/gudhi/Slicer.h"
+#include <gudhi/multi_simplex_tree_helpers.h>
+#include <gudhi/Slicer.h>
 #include "../tensor/tensor.h"
 #include "persistence_slices.h"
 
 namespace Gudhi {
 namespace multiparameter {
-namespace rank_invariant { 
+namespace rank_invariant {
 // using Index = truc_interface::index_type;
 
 // using Elbow = std::vector<std::pair<>>;grid
@@ -76,7 +76,7 @@ inline void compute_2d_rank_invariant_of_elbow(
   for (; sh_standard != _end; ++sh_multi, ++sh_standard) {
     const Filtration &multi_filtration = st_multi.filtration(*sh_multi);
     value_type filtration_in_slice = inf;
-    for (unsigned int g = 0; g < multi_filtration.num_generators(); ++g){
+    for (unsigned int g = 0; g < multi_filtration.num_generators(); ++g) {
       value_type x = multi_filtration(g, 0);
       value_type y = multi_filtration(g, 1);
       filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
@@ -120,7 +120,8 @@ inline void compute_2d_rank_invariant(
   if (degrees.size() == 0) return;
   assert(st_multi.num_parameters() == 2);
   // copies the st_multi to a standard 1-pers simplextree
-  Simplex_tree_std st_ = Gudhi::multi_persistence::make_one_dimensional<Gudhi::multiparameter::Simplex_tree_float>(st_multi, 0);
+  Simplex_tree_std st_ =
+      Gudhi::multi_persistence::make_one_dimensional<Gudhi::multiparameter::Simplex_tree_float>(st_multi, 0);
   const int max_dim = expand_collapse ? *std::max_element(degrees.begin(), degrees.end()) + 1 : 0;
   index_type X = grid_shape[1];
   index_type Y = grid_shape[2];                                                // First axis is degree
@@ -154,13 +155,10 @@ void compute_rank_invariant_python(
   return;
 }
 
-template <class PersBackend,
-          class MultiFiltration,
-          typename dtype,
-          typename index_type>
+template <class PersBackend, class MultiFiltration, typename dtype, typename index_type>
 inline void compute_2d_rank_invariant_of_elbow(
     typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe &slicer,  // truc slicer
-    const tensor::static_tensor_view<dtype, index_type> &out,                               // assumes its a zero tensor
+    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const index_type I,
     const index_type J,
     const std::vector<index_type> &grid_shape,
@@ -181,8 +179,8 @@ inline void compute_2d_rank_invariant_of_elbow(
     const auto &f = filtrations_values[i];
     value_type filtration_in_slice = MultiFiltration::T_inf;
     for (unsigned int g = 0; g < f.num_generators(); ++g) {
-      value_type x = f(g,0);
-      value_type y = f(g,1);
+      value_type x = f(g, 0);
+      value_type y = f(g, 1);
 
       filtration_in_slice = std::min(filtration_in_slice, get_slice_rank_filtration(x, y, I, J));
     }
@@ -197,7 +195,8 @@ inline void compute_2d_rank_invariant_of_elbow(
   // TODO : use slicer::Thread_safe instead of maintaining one_pers & order
   // BUG : This will break as soon as slicer interface change
 
-  using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::template Multi_dimensional_flat_barcode<>;
+  using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration,
+                                                            PersBackend>::template Multi_dimensional_flat_barcode<>;
   if constexpr (PersBackend::is_vine) {
     // slicer.set_one_filtration(one_persistence);
     if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
@@ -254,10 +253,7 @@ inline void compute_2d_rank_invariant_of_elbow(
   }
 };
 
-template <class PersBackend,
-          class MultiFiltration,
-          typename dtype,
-          typename index_type>
+template <class PersBackend, class MultiFiltration, typename dtype, typename index_type>
 inline void compute_2d_rank_invariant(
     Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
     const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
@@ -287,11 +283,8 @@ inline void compute_2d_rank_invariant(
   });
 }
 
-template <class PersBackend,
-          class MultiFiltration,
-          typename dtype,
-          typename indices_type>
-void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>& slicer,
+template <class PersBackend, class MultiFiltration, typename dtype, typename indices_type>
+void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
                                    dtype *data_ptr,
                                    const std::vector<indices_type> grid_shape,
                                    const std::vector<indices_type> degrees,
@@ -299,8 +292,8 @@ void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltrat
                                    const bool ignore_inf) {
   if (degrees.size() == 0) return;
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  if constexpr (false){
-    std::cout  << "ignore_inf " << ignore_inf << std::endl;
+  if constexpr (false) {
+    std::cout << "ignore_inf " << ignore_inf << std::endl;
   }
 
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
@@ -309,12 +302,9 @@ void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltrat
   return;
 }
 
-template <typename PersBackend,
-          typename MultiFiltration,
-          typename dtype = int,
-          typename indices_type = int>
+template <typename PersBackend, typename MultiFiltration, typename dtype = int, typename indices_type = int>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_rank_signed_measure(
-    Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>& slicer,
+    Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
     dtype *data_ptr,
     const std::vector<indices_type> grid_shape,
     const std::vector<indices_type> degrees,
@@ -347,4 +337,6 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
   return raw_signed_measure;
 }
 
-}}}  // namespace Gudhi::multiparameter::rank_invariant
+}  // namespace rank_invariant
+}  // namespace multiparameter
+}  // namespace Gudhi

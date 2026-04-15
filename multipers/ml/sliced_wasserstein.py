@@ -8,6 +8,7 @@ from multipers.array_api import api_from_tensor
 from multipers.distances import (
     _compute_signed_measure_projections,
     _infer_api,
+    _require_balanced_effective_mass,
     _repeat_signed_points,
     _sliced_wasserstein_distance_on_projections,
     sm_distance,
@@ -24,6 +25,11 @@ def _build_transport_pair(meas1, meas2, api):
 def _ot_distance(meas1, meas2, ground_norm=1, epsilon=1.0):
     api = api_from_tensor(meas1[0])
     meas_t1, meas_t2 = _build_transport_pair(meas1, meas2, api)
+    _require_balanced_effective_mass(
+        int(meas_t1.shape[0]),
+        int(meas_t2.shape[0]),
+        metric="Wasserstein distance",
+    )
     num_pts = len(meas_t1)
     import ot
 
@@ -68,6 +74,10 @@ def pairwise_signed_measure_distances(
         metric: distance to use. It can be either a string ("sliced_wasserstein", "wasserstein") or a function taking two tuples as inputs. If it is a function, make sure that it is symmetric and that it outputs 0 if called on the same two tuples.
         n_jobs (int): number of jobs to use for the computation. This uses joblib.Parallel(prefer="threads"), so metrics that do not release the GIL may not scale unless run inside a `joblib.parallel_backend <https://joblib.readthedocs.io/en/latest/parallel.html#joblib.parallel_backend>`_ block.
         **kwargs: optional keyword parameters. Any further parameters are passed directly to the distance function. See the docs of the various distance classes in this module.
+
+        The built-in `"sliced_wasserstein"` and `"wasserstein"` metrics are
+        balanced distances and require signed measures with equal effective mass
+        under the current repeated-point model.
 
     Returns:
         numpy array of shape (nxm): distance matrix
@@ -132,6 +142,9 @@ def _wasserstein_distance(meas1, meas2, epsilon, ground_norm):
 class SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
     """
     This is a class for computing the sliced Wasserstein distance matrix from a list of signed measures. The Sliced Wasserstein distance is computed by projecting the signed measures onto lines, comparing the projections with the 1-norm, and finally integrating over all possible lines. See http://proceedings.mlr.press/v70/carriere17a.html for more details.
+
+    This balanced distance requires equal effective mass under the current
+    repeated-point model.
     """
 
     def __init__(self, num_directions=10, scales=None, n_jobs=None, seed: int = 42):
@@ -206,6 +219,9 @@ class SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
 class WassersteinDistance(BaseEstimator, TransformerMixin):
     """
     This is a class for computing the Wasserstein distance matrix from a list of signed measures.
+
+    This balanced distance requires equal effective mass under the current
+    repeated-point model.
     """
 
     def __init__(self, epsilon=1.0, ground_norm=1, n_jobs=None):

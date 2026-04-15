@@ -1,12 +1,33 @@
+import platform
+import os
+import threading
+import warnings
+
 import numpy as np
 import pytest
 from joblib import Parallel, delayed
+import multipers.distances as mpdist
+from multipers.distances import matching_distance
+from threadpoolctl import threadpool_limits
 
 import multipers as mp
-import multipers.io as mio
+from multipers.data import three_annulus
+from multipers.filtrations import CoreDelaunay
 from multipers.tests import assert_sm_pair
 
+from multipers import (
+    _mpfree_interface,
+    _multi_critical_interface,
+    _function_delaunay_interface,
+)
+
 np.random.seed(0)
+
+
+_is_macos_intel = platform.system() == "Darwin" and platform.machine() in {
+    "x86_64",
+    "i386",
+}
 
 
 def io_fd_mpfree(x):
@@ -21,8 +42,13 @@ def io_fd_mpfree2(x):
 
 
 @pytest.mark.skipif(
-    not (mio._check_available("mpfree") and mio._check_available("function_delaunay")),
-    reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
+    _is_macos_intel,
+    reason="Skipped on macOS Intel because the PyKeOps-backed io parallel test segfaults there in CI (see getkeops/keops#323).",
+)
+@pytest.mark.skipif(
+    not _mpfree_interface.available()
+    or not _function_delaunay_interface.available(),
+    reason="Skipped bridge pipeline test because the mpfree or function_delaunay backend is unavailable.",
 )
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
@@ -51,7 +77,7 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
 
-@pytest.mark.parametrize("backend", ["loky", "threading"])
+@pytest.mark.parametrize("backend", ["threading", "loky"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])

@@ -194,6 +194,161 @@ jobs:
           pip install dist/*.whl
         fi
 
+    - name: Verify core template ownership (unix)
+      if: ${{ env.SKIP_PYTEST != '1' && matrix.os != 'windows-latest' }}
+      shell: bash -el {0}
+      run: |
+        micromamba activate test
+        cd "$(mktemp -d)"
+        python - <<'PY'
+        import re
+        import shutil
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        import multipers
+
+
+        def parse_nm_output(out: str):
+          rows = []
+          for line in out.splitlines():
+            m = re.match(r"^\s*([0-9A-Fa-f]+)?\s*([A-Za-z])\s+(.+)$", line)
+            if m:
+              rows.append((m.group(2), m.group(3)))
+          return rows
+
+
+        def parse_readelf_output(out: str):
+          rows = []
+          for line in out.splitlines():
+            parts = line.split()
+            if len(parts) < 8 or not parts[0].rstrip(":").isdigit():
+              continue
+            ndx = parts[6]
+            name = parts[7]
+            rows.append(("U" if ndx == "UND" else "T", name))
+          return rows
+
+
+        def parse_symbols(path: Path):
+          commands = []
+          if sys.platform.startswith("linux"):
+            commands = [
+              (["nm", "-D", str(path)], parse_nm_output),
+              (["readelf", "-Ws", str(path)], parse_readelf_output),
+            ]
+          else:
+            commands = [(["nm", "-g", str(path)], parse_nm_output)]
+
+          errors = []
+          for command, parser in commands:
+            if shutil.which(command[0]) is None:
+              errors.append(f"{command[0]} not available")
+              continue
+            proc = subprocess.run(command, text=True, capture_output=True)
+            parsed = parser(proc.stdout)
+            if parsed:
+              return parsed
+            stderr = proc.stderr.strip()
+            if stderr:
+              errors.append(f"{' '.join(command)} -> {stderr}")
+            else:
+              errors.append(f"{' '.join(command)} -> no parseable symbols")
+
+          raise RuntimeError(
+            f"Unable to inspect symbols in {path}: " + " ; ".join(errors)
+          )
+
+
+        if not any(shutil.which(tool) is not None for tool in ("nm", "readelf")):
+          raise RuntimeError("nm or readelf is required for symbol ownership checks")
+
+        pkg = Path(multipers.__file__).resolve().parent
+        core_candidates = sorted(pkg.glob("libmultipers_core*.so"))
+        if not core_candidates:
+          raise RuntimeError(f"Missing libmultipers_core shared library in {pkg}")
+        core = core_candidates[0]
+        core_defs = {sym for typ, sym in parse_symbols(core) if typ != "U"}
+        if not core_defs:
+          raise RuntimeError("libmultipers_core exports no global symbols")
+
+        module_prefixes = {
+          "slicer": {
+            "pattern": "_slicer_nanobind*.so",
+            "prefixes": (
+              "_ZN5Gudhi17multi_persistence6Slicer",
+              "__ZN5Gudhi17multi_persistence6Slicer",
+            ),
+          },
+          "simplex_tree_multi": {
+            "pattern": "_simplex_tree_multi_nanobind*.so",
+            "prefixes": (
+              "_ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
+              "__ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
+            ),
+          },
+        }
+
+        dep_command = None
+        if sys.platform == "darwin":
+          dep_command = ["otool", "-L"]
+        elif sys.platform.startswith("linux"):
+          dep_command = ["ldd"]
+
+        for module_name, module_info in module_prefixes.items():
+          prefixes = module_info["prefixes"]
+          matches = sorted(pkg.glob(module_info["pattern"]))
+          if not matches:
+            raise RuntimeError(f"Missing compiled module for {module_name}")
+          module_path = matches[0]
+
+          module_rows = parse_symbols(module_path)
+          undef = {
+            sym
+            for typ, sym in module_rows
+            if typ == "U" and any(sym.startswith(prefix) for prefix in prefixes)
+          }
+          if not undef:
+            raise RuntimeError(f"No unresolved owned templates found in {module_path.name}")
+
+          missing = sorted(undef - core_defs)
+          if missing:
+            preview = "\n".join(missing[:5])
+            raise RuntimeError(
+              f"{module_path.name} has unresolved templates not provided by {core.name}:\n{preview}"
+            )
+
+          if dep_command is not None:
+            dep_output = subprocess.check_output(dep_command + [str(module_path)], text=True)
+            if "multipers_core" not in dep_output:
+              raise RuntimeError(f"{module_path.name} does not link against multipers core libraries")
+
+        print("core template ownership checks passed")
+        PY
+
+    - name: Verify core template ownership (windows)
+      if: ${{ env.SKIP_PYTEST != '1' && matrix.os == 'windows-latest' }}
+      shell: bash -el {0}
+      run: |
+        micromamba activate test
+        cd "$(mktemp -d)"
+        python - <<'PY'
+        from importlib import import_module
+        from pathlib import Path
+
+        import multipers
+
+        pkg = Path(multipers.__file__).resolve().parent
+        core_dlls = sorted(pkg.glob("*multipers_core*.dll"))
+        if not core_dlls:
+          raise RuntimeError(f"Missing multipers core DLL in {pkg}")
+
+        import_module("multipers.slicer")
+        import_module("multipers.simplex_tree_multi")
+        print("windows core ownership checks passed")
+        PY
+
     - name: Run pytest
       shell: bash -el {0}
       run: |
@@ -210,4 +365,3 @@ jobs:
           cd repo/tests
           pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
         fi
-

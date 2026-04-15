@@ -47,12 +47,14 @@ hera_interface_result hera_matching_distance(const hera_module_presentation_inpu
                                              const hera_module_presentation_input<index_type>& right,
                                              const hera_interface_params& params = hera_interface_params());
 
-double hera_bottleneck_distance(const std::vector<std::pair<double, double> >& left,
-                                const std::vector<std::pair<double, double> >& right,
+template <typename PairContainer>
+double hera_bottleneck_distance(const PairContainer& left,
+                                const PairContainer& right,
                                 double delta = 0.01);
 
-double hera_wasserstein_distance(const std::vector<std::pair<double, double> >& left,
-                                 const std::vector<std::pair<double, double> >& right,
+template <typename PairContainer>
+double hera_wasserstein_distance(const PairContainer& left,
+                                 const PairContainer& right,
                                  const hera_wasserstein_params& params = hera_wasserstein_params());
 
 }  // namespace multipers
@@ -117,12 +119,13 @@ inline md::TraverseStrategy hera_traverse_strategy_from_int(int code) {
   }
 }
 
-inline std::vector<std::pair<double, double> > filter_diagonal_points(
-    const std::vector<std::pair<double, double> >& input) {
-  std::vector<std::pair<double, double> > out;
+template <typename PairContainer>
+inline PairContainer filter_diagonal_points(const PairContainer& input) {
+  using Traits = hera::DiagramTraits<PairContainer>;
+  PairContainer out;
   out.reserve(input.size());
   for (const auto& point : input) {
-    if (point.first != point.second) {
+    if (Traits::get_x(point) != Traits::get_y(point)) {
       out.push_back(point);
     }
   }
@@ -200,8 +203,9 @@ hera_interface_result hera_matching_distance(const hera_module_presentation_inpu
   return out;
 }
 
-inline double hera_bottleneck_distance(const std::vector<std::pair<double, double> >& left,
-                                       const std::vector<std::pair<double, double> >& right,
+template <typename PairContainer>
+inline double hera_bottleneck_distance(const PairContainer& left,
+                                       const PairContainer& right,
                                        double delta) {
   if (delta < 0.0) {
     throw std::invalid_argument("Hera bottleneck distance expects delta >= 0.");
@@ -214,8 +218,9 @@ inline double hera_bottleneck_distance(const std::vector<std::pair<double, doubl
   return hera::bottleneckDistApprox(filtered_left, filtered_right, delta);
 }
 
-inline double hera_wasserstein_distance(const std::vector<std::pair<double, double> >& left,
-                                        const std::vector<std::pair<double, double> >& right,
+template <typename PairContainer>
+inline double hera_wasserstein_distance(const PairContainer& left,
+                                        const PairContainer& right,
                                         const hera_wasserstein_params& params) {
   hera::AuctionParams<double> auction_params;
   auction_params.wasserstein_power = params.wasserstein_power;
@@ -233,19 +238,21 @@ hera_interface_result hera_matching_distance(const hera_module_presentation_inpu
                                              const hera_module_presentation_input<index_type>&,
                                              const hera_interface_params&) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
-inline double hera_bottleneck_distance(const std::vector<std::pair<double, double> >&, const std::vector<std::pair<double, double> >&, double) {
+template <typename PairContainer>
+inline double hera_bottleneck_distance(const PairContainer&, const PairContainer&, double) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
-inline double hera_wasserstein_distance(const std::vector<std::pair<double, double> >&,
-                                        const std::vector<std::pair<double, double> >&,
+template <typename PairContainer>
+inline double hera_wasserstein_distance(const PairContainer&,
+                                        const PairContainer&,
                                         const hera_wasserstein_params&) {
   throw std::runtime_error(
-      "Hera in-memory interface is not available at compile time. Provide Hera headers and rebuild multipers.");
+      "Hera interface is not available at compile time. Provide Hera headers and rebuild multipers.");
 }
 
 #endif

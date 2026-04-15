@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "../gudhi/Simplex_tree_multi_interface.h"
-#include "../gudhi/gudhi/Slicer.h"
+#include <gudhi/Slicer.h>
 #include "../tensor/tensor.h"
 #include "persistence_slices.h"
 

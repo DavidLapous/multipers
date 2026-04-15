@@ -258,15 +258,45 @@ inline void compute_2d_function_rips(
 
 // python interface
 
+template <typename simplex_tree_type>
+inline void get_degree_rips_st_python(const char *buffer_start,
+                                      const std::size_t buffer_size,
+                                      simplex_tree_type &st_multi_python_container,
+                                      const std::vector<int> &degrees) {
+  python_interface::interface_std st_std;
+  st_std.deserialize(buffer_start, buffer_size);
+  auto st_multi = get_degree_filtrations(st_std, degrees);
+  st_multi_python_container = std::move(st_multi);
+}
+
 inline void get_degree_rips_st_python(const char *buffer_start,
                                       const std::size_t buffer_size,
                                       const intptr_t st_multi_ptr,
                                       const std::vector<int> &degrees) {
-  python_interface::interface_std st_std;
-  st_std.deserialize(buffer_start, buffer_size);
   auto &st_multi_python_container = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
-  auto st_multi = get_degree_filtrations(st_std, degrees);
-  st_multi_python_container = std::move(st_multi);
+  get_degree_rips_st_python(buffer_start, buffer_size, st_multi_python_container, degrees);
+}
+
+template <typename dtype, typename indices_type>
+void compute_function_rips_surface_python(interface_multi &st_multi,
+                                          dtype *data_ptr,
+                                          const std::vector<indices_type> degrees,
+                                          indices_type I,
+                                          indices_type J,
+                                          const bool mobius_inversion = false,
+                                          const bool zero_pad = false,
+                                          indices_type n_jobs = 0) {
+  if (degrees.size() == 0) return;
+  tensor::static_tensor_view<dtype, indices_type> container(data_ptr,
+                                                            {static_cast<indices_type>(degrees.size()), I, J});
+  if (zero_pad) {
+    I--;
+    J--;
+  }
+
+  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
+  arena.execute([&] { compute_2d_function_rips(st_multi, container, degrees, I, J, mobius_inversion, zero_pad); });
+  if (mobius_inversion) container.differentiate(2);  // degree,x axis (already inversed), y axis
 }
 
 template <typename dtype, typename indices_type>
@@ -278,9 +308,21 @@ void compute_function_rips_surface_python(const intptr_t st_multi_ptr,
                                           const bool mobius_inversion = false,
                                           const bool zero_pad = false,
                                           indices_type n_jobs = 0) {
-  if (degrees.size() == 0) return;
-  // const bool verbose = false;
   auto &st_multi = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
+  compute_function_rips_surface_python(st_multi, data_ptr, degrees, I, J, mobius_inversion, zero_pad, n_jobs);
+}
+
+template <typename dtype, typename indices_type>
+std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_function_rips_signed_measure_python(
+    interface_multi &st_multi,
+    dtype *data_ptr,
+    const std::vector<indices_type> degrees,
+    indices_type I,
+    indices_type J,
+    const bool mobius_inversion = false,
+    const bool zero_pad = false,
+    indices_type n_jobs = 0) {
+  if (degrees.size() == 0) return {{}, {}};
   tensor::static_tensor_view<dtype, indices_type> container(data_ptr,
                                                             {static_cast<indices_type>(degrees.size()), I, J});
   if (zero_pad) {
@@ -291,6 +333,7 @@ void compute_function_rips_surface_python(const intptr_t st_multi_ptr,
   oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
   arena.execute([&] { compute_2d_function_rips(st_multi, container, degrees, I, J, mobius_inversion, zero_pad); });
   if (mobius_inversion) container.differentiate(2);  // degree,x axis (already inversed), y axis
+  return container.sparsify();
 }
 
 template <typename dtype, typename indices_type>
@@ -303,20 +346,9 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_fu
     const bool mobius_inversion = false,
     const bool zero_pad = false,
     indices_type n_jobs = 0) {
-  if (degrees.size() == 0) return {{}, {}};
-  // const bool verbose = false;
   auto &st_multi = python_interface::get_simplextree_from_pointer<interface_multi>(st_multi_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr,
-                                                            {static_cast<indices_type>(degrees.size()), I, J});
-  if (zero_pad) {
-    I--;
-    J--;
-  }
-
-  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
-  arena.execute([&] { compute_2d_function_rips(st_multi, container, degrees, I, J, mobius_inversion, zero_pad); });
-  if (mobius_inversion) container.differentiate(2);  // degree,x axis (already inversed), y axis
-  return container.sparsify();
+  return compute_function_rips_signed_measure_python(
+      st_multi, data_ptr, degrees, I, J, mobius_inversion, zero_pad, n_jobs);
 }
 
 }  // namespace function_rips

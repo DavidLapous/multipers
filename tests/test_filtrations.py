@@ -5,6 +5,8 @@ import pytest
 import multipers as mp
 import multipers.filtrations as mpf
 
+import multipers._function_delaunay_interface as _function_delaunay_interface
+
 nptss = [50]
 ress = [1, 10]
 dims = [1, 2, 4]
@@ -51,8 +53,8 @@ def test_ripscodensity(npts, dim):
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
 @pytest.mark.skipif(
-    not mp.io._check_available("function_delaunay"),
-    reason="Skipped external test as `function_delaunay` was not found.",
+    not _function_delaunay_interface.available(),
+    reason="Skipped test because the function_delaunay backend is unavailable.",
 )
 def test_delaunaylowerstar(npts, dim):
     np.random.seed(0)
@@ -86,8 +88,8 @@ def test_delaunaylowerstar(npts, dim):
 @pytest.mark.parametrize("npts", nptss)
 @pytest.mark.parametrize("dim", dims)
 @pytest.mark.skipif(
-    not mp.io._check_available("function_delaunay"),
-    reason="Skipped external test as `function_delaunay` was not found.",
+    not _function_delaunay_interface.available(),
+    reason="Skipped test because the function_delaunay backend is unavailable.",
 )
 def test_delaunaycodensity(npts, dim):
     np.random.seed(0)

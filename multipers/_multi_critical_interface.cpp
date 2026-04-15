@@ -1,0 +1,868 @@
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+
+#include <chrono>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+#include "ext_interface/multi_critical_interface.hpp"
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+#include "ext_interface/packed_multi_critical_bridge.hpp"
+#include "ext_interface/nanobind_registry_helpers.hpp"
+#include "ext_interface/nanobind_registry_runtime.hpp"
+#include "nanobind_array_utils.hpp"
+#include "multi_critical/basic.h"
+#include "multi_chunk/basic.h"
+#include "mpp_utils/basic.h"
+#include "mpfree/global.h"
+#include "scc/basic.h"
+#endif
+
+namespace nb = nanobind;
+using namespace nb::literals;
+
+#if !MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+namespace mpmc {
+
+using Clock = std::chrono::steady_clock;
+using CanonicalWrapper = multipers::nanobind_helpers::canonical_kcontiguous_f64_slicer_wrapper;
+using multipers::nanobind_utils::owned_array;
+using multipers::nanobind_utils::tuple_from_size;
+
+double elapsed_seconds(const Clock::time_point& start) {
+  return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+struct ptr_bridge_stats {
+  double convert_s = 0.0;
+  double free_resolution_s = 0.0;
+  double lex_sort_s = 0.0;
+  double multi_chunk_s = 0.0;
+  double multi_chunk_local_reduction_s = 0.0;
+  double multi_chunk_sparsification_s = 0.0;
+  double multi_chunk_sparsification_loop_s = 0.0;
+  double multi_chunk_final_compaction_s = 0.0;
+  double multi_chunk_loop_get_max_s = 0.0;
+  double multi_chunk_loop_add_to_s = 0.0;
+  double multi_chunk_loop_remove_max_s = 0.0;
+  double multi_chunk_loop_set_col_s = 0.0;
+  double multi_chunk_compact_get_col_s = 0.0;
+  double multi_chunk_compact_set_col_s = 0.0;
+  uint64_t add_to_calls = 0;
+  uint64_t add_to_source_empty_calls = 0;
+  uint64_t add_to_target_empty_calls = 0;
+  uint64_t add_to_disjoint_target_before_source_calls = 0;
+  uint64_t add_to_disjoint_source_before_target_calls = 0;
+  uint64_t add_to_overlap_calls = 0;
+  uint64_t add_to_source_size_sum = 0;
+  uint64_t add_to_target_size_sum = 0;
+  double matrix_select_s = 0.0;
+  double minpres_s = 0.0;
+  double output_pack_s = 0.0;
+};
+
+nb::dict stats_to_dict(const ptr_bridge_stats& stats) {
+  nb::dict out;
+  out["convert_s"] = nb::float_(stats.convert_s);
+  out["free_resolution_s"] = nb::float_(stats.free_resolution_s);
+  out["lex_sort_s"] = nb::float_(stats.lex_sort_s);
+  out["multi_chunk_s"] = nb::float_(stats.multi_chunk_s);
+  out["multi_chunk_local_reduction_s"] = nb::float_(stats.multi_chunk_local_reduction_s);
+  out["multi_chunk_sparsification_s"] = nb::float_(stats.multi_chunk_sparsification_s);
+  out["multi_chunk_sparsification_loop_s"] = nb::float_(stats.multi_chunk_sparsification_loop_s);
+  out["multi_chunk_final_compaction_s"] = nb::float_(stats.multi_chunk_final_compaction_s);
+  out["multi_chunk_loop_get_max_s"] = nb::float_(stats.multi_chunk_loop_get_max_s);
+  out["multi_chunk_loop_add_to_s"] = nb::float_(stats.multi_chunk_loop_add_to_s);
+  out["multi_chunk_loop_remove_max_s"] = nb::float_(stats.multi_chunk_loop_remove_max_s);
+  out["multi_chunk_loop_set_col_s"] = nb::float_(stats.multi_chunk_loop_set_col_s);
+  out["multi_chunk_compact_get_col_s"] = nb::float_(stats.multi_chunk_compact_get_col_s);
+  out["multi_chunk_compact_set_col_s"] = nb::float_(stats.multi_chunk_compact_set_col_s);
+  out["add_to_calls"] = nb::int_(stats.add_to_calls);
+  out["add_to_source_empty_calls"] = nb::int_(stats.add_to_source_empty_calls);
+  out["add_to_target_empty_calls"] = nb::int_(stats.add_to_target_empty_calls);
+  out["add_to_disjoint_target_before_source_calls"] = nb::int_(stats.add_to_disjoint_target_before_source_calls);
+  out["add_to_disjoint_source_before_target_calls"] = nb::int_(stats.add_to_disjoint_source_before_target_calls);
+  out["add_to_overlap_calls"] = nb::int_(stats.add_to_overlap_calls);
+  out["add_to_source_size_sum"] = nb::int_(stats.add_to_source_size_sum);
+  out["add_to_target_size_sum"] = nb::int_(stats.add_to_target_size_sum);
+  out["matrix_select_s"] = nb::float_(stats.matrix_select_s);
+  out["minpres_s"] = nb::float_(stats.minpres_s);
+  out["output_pack_s"] = nb::float_(stats.output_pack_s);
+  out["total_s"] = nb::float_(
+      stats.convert_s + stats.free_resolution_s + stats.lex_sort_s + stats.multi_chunk_s +
+      stats.matrix_select_s + stats.minpres_s + stats.output_pack_s);
+  return out;
+}
+
+std::vector<std::vector<int>> boundaries_from_packed(
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat) {
+  if (boundary_indptr.shape(0) == 0) {
+    return {};
+  }
+  std::vector<std::vector<int>> boundaries((size_t)boundary_indptr.shape(0) - 1);
+  const int64_t* indptr = boundary_indptr.data();
+  const int32_t* flat = boundary_flat.data();
+  for (size_t cell = 0; cell + 1 < (size_t)boundary_indptr.shape(0); ++cell) {
+    const int64_t begin = indptr[cell];
+    const int64_t end = indptr[cell + 1];
+    auto& boundary = boundaries[cell];
+    boundary.reserve((size_t)std::max<int64_t>(end - begin, 0));
+    for (int64_t idx = begin; idx < end; ++idx) {
+      boundary.push_back((int)flat[idx]);
+    }
+  }
+  return boundaries;
+}
+
+multipers::multi_critical_interface_input<int> input_from_packed(
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> dimensions,
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+    nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+  auto boundaries = boundaries_from_packed(boundary_indptr, boundary_flat);
+  multipers::multi_critical_interface_input<int> input;
+  input.dimensions.reserve((size_t)dimensions.shape(0));
+  input.boundaries = std::move(boundaries);
+  input.filtration_values.resize(input.boundaries.size());
+  for (size_t i = 0; i < (size_t)dimensions.shape(0); ++i) {
+    input.dimensions.push_back((int)dimensions(i));
+  }
+  const int64_t* indptr = grade_indptr.data();
+  for (size_t cell = 0; cell < input.boundaries.size(); ++cell) {
+    auto& out = input.filtration_values[cell];
+    const int64_t begin = indptr[cell];
+    const int64_t end = indptr[cell + 1];
+    out.reserve((size_t)std::max<int64_t>(end - begin, 0));
+    for (int64_t row = begin; row < end; ++row) {
+      out.emplace_back(grades_flat((size_t)row, 0), grades_flat((size_t)row, 1));
+    }
+  }
+  return input;
+}
+
+multipers::multi_critical_interface_input<int> input_from_bridge_ptr(
+    const multipers::packed_multi_critical_bridge_input& input_bridge) {
+  multipers::multi_critical_interface_input<int> input;
+  const size_t num_cells = input_bridge.dimensions.size();
+  input.dimensions.reserve(num_cells);
+  input.boundaries.resize(num_cells);
+  input.filtration_values.resize(num_cells);
+  for (size_t i = 0; i < num_cells; ++i) {
+    input.dimensions.push_back((int)input_bridge.dimensions[i]);
+    auto& out_boundary = input.boundaries[i];
+    out_boundary.reserve(input_bridge.boundaries[i].size());
+    for (uint32_t face : input_bridge.boundaries[i]) {
+      out_boundary.push_back((int)face);
+    }
+    auto& out = input.filtration_values[i];
+    const int64_t begin = input_bridge.grade_indptr[i];
+    const int64_t end = input_bridge.grade_indptr[i + 1];
+    out.reserve((size_t)std::max<int64_t>(end - begin, 0));
+    for (int64_t row = begin; row < end; ++row) {
+      out.emplace_back(input_bridge.grade_values[2 * (size_t)row], input_bridge.grade_values[2 * (size_t)row + 1]);
+    }
+  }
+  return input;
+}
+
+class packed_bridge_parser {
+ public:
+  explicit packed_bridge_parser(const multipers::packed_multi_critical_bridge_input& input) : input_(input) {
+    const std::size_t num_generators = input_.dimensions.size();
+    if (input_.boundaries.size() != num_generators || input_.grade_indptr.size() != num_generators + 1) {
+      throw std::invalid_argument("Invalid packed bridge input: sizes of grades, boundaries and dimensions differ.");
+    }
+    if (num_generators == 0) return;
+    if (!std::is_sorted(input_.dimensions.begin(), input_.dimensions.end())) {
+      throw std::invalid_argument("Dimensions are expected to be sorted in non-decreasing order.");
+    }
+    const int max_dim = input_.dimensions.back();
+    if (max_dim < 0) {
+      throw std::invalid_argument("Dimensions must be non-negative.");
+    }
+    indices_by_level_.resize((std::size_t)max_dim + 1);
+    shifted_indices_.assign(num_generators, -1);
+    for (std::size_t i = 0; i < num_generators; ++i) {
+      const int dim = input_.dimensions[i];
+      const std::size_t level_idx = static_cast<std::size_t>(max_dim - dim);
+      shifted_indices_[i] = static_cast<long>(indices_by_level_[level_idx].size());
+      indices_by_level_[level_idx].push_back(i);
+    }
+    offsets_.assign(indices_by_level_.size(), 0);
+  }
+
+  int number_of_parameters() { return 2; }
+
+  int number_of_levels() { return static_cast<int>(indices_by_level_.size() + 1); }
+
+  bool has_next_column(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return false;
+    }
+    return offsets_[level - 1] < indices_by_level_[level - 1].size();
+  }
+
+  bool has_grades_on_last_level() { return false; }
+
+  template <typename OutputIterator1, typename OutputIterator2>
+  void next_column(int level, OutputIterator1 out1, OutputIterator2 out2) {
+    validate_level(level);
+    if (!has_next_column(level)) {
+      throw std::out_of_range("No more columns on requested level.");
+    }
+    const std::size_t global_idx = indices_by_level_[level - 1][offsets_[level - 1]++];
+    const int64_t begin = input_.grade_indptr[global_idx];
+    const int64_t end = input_.grade_indptr[global_idx + 1];
+    if (begin >= end) {
+      throw std::invalid_argument("Each generator must have at least one filtration grade.");
+    }
+    for (int64_t row = begin; row < end; ++row) {
+      *out1++ = input_.grade_values[2 * (std::size_t)row];
+      *out1++ = input_.grade_values[2 * (std::size_t)row + 1];
+    }
+    const int simplex_dim = input_.dimensions[global_idx];
+    const auto& boundary = input_.boundaries[global_idx];
+    if (simplex_dim == 0 && !boundary.empty()) {
+      throw std::invalid_argument("Dimension-0 generators must have empty boundaries.");
+    }
+    for (uint32_t bd_idx_typed : boundary) {
+      const std::size_t bd_idx = static_cast<std::size_t>(bd_idx_typed);
+      if (bd_idx >= input_.dimensions.size()) {
+        throw std::invalid_argument("Boundary index out of range.");
+      }
+      if (simplex_dim > 0 && input_.dimensions[bd_idx] != simplex_dim - 1) {
+        throw std::invalid_argument("Boundary index does not point to previous dimension.");
+      }
+      const long shifted = shifted_indices_[bd_idx];
+      if (shifted < 0) {
+        throw std::invalid_argument("Internal index conversion failed.");
+      }
+      *out2++ = std::make_pair(shifted, 1);
+    }
+  }
+
+  int number_of_generators(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return 0;
+    }
+    return static_cast<int>(indices_by_level_[level - 1].size());
+  }
+
+  void reset(int level) {
+    validate_level(level);
+    if (static_cast<std::size_t>(level - 1) >= indices_by_level_.size()) {
+      return;
+    }
+    offsets_[level - 1] = 0;
+  }
+
+  void reset_all() { std::fill(offsets_.begin(), offsets_.end(), 0); }
+
+ private:
+  const multipers::packed_multi_critical_bridge_input& input_;
+  std::vector<std::vector<std::size_t>> indices_by_level_;
+  std::vector<std::size_t> offsets_;
+  std::vector<long> shifted_indices_;
+
+  void validate_level(int level) const {
+    if (level < 1 || static_cast<std::size_t>(level) > indices_by_level_.size() + 1) {
+      throw std::out_of_range("Requested level is out of parser range.");
+    }
+  }
+};
+
+std::vector<multipers::multi_critical_detail::Graded_matrix> compute_free_resolution_raw_matrices_from_bridge(
+    const multipers::packed_multi_critical_bridge_input& input,
+    bool use_logpath,
+    bool verbose_output,
+    ptr_bridge_stats* stats = nullptr) {
+  if (input.dimensions.empty()) {
+    return {};
+  }
+  auto t_convert = Clock::now();
+  packed_bridge_parser parser(input);
+  if (stats != nullptr) {
+    stats->convert_s += elapsed_seconds(t_convert);
+  }
+  (void)verbose_output;
+  auto t_free = Clock::now();
+  std::vector<multipers::multi_critical_detail::Graded_matrix> matrices;
+  multi_critical::free_resolution(parser, matrices, use_logpath);
+  if (stats != nullptr) {
+    stats->free_resolution_s += elapsed_seconds(t_free);
+  }
+  return matrices;
+}
+
+void postprocess_free_resolution_matrices_from_bridge(
+    std::vector<multipers::multi_critical_detail::Graded_matrix>& matrices,
+    bool use_multi_chunk,
+    bool verbose_output = false,
+    ptr_bridge_stats* stats = nullptr) {
+  (void)verbose_output;
+  auto t_lex = Clock::now();
+  for (std::size_t i = 0; i < matrices.size(); ++i) {
+    auto& mat = matrices[i];
+    if (!mpp_utils::is_lex_sorted(mat)) {
+      mpp_utils::to_lex_order(mat, i + 1 < matrices.size(), false);
+    }
+  }
+  if (stats != nullptr) {
+    stats->lex_sort_s += elapsed_seconds(t_lex);
+  }
+  if (use_multi_chunk) {
+    auto t_multi_chunk = Clock::now();
+    multi_chunk::compress(matrices);
+    if (stats != nullptr) {
+      stats->multi_chunk_s += elapsed_seconds(t_multi_chunk);
+    }
+  }
+}
+
+bool extract_matrix_pair_from_bridge(
+    std::vector<multipers::multi_critical_detail::Graded_matrix>& matrices,
+    int degree,
+    multipers::multi_critical_detail::Graded_matrix& first,
+    multipers::multi_critical_detail::Graded_matrix& second,
+    ptr_bridge_stats* stats = nullptr) {
+  if (matrices.size() < 2) {
+    return false;
+  }
+  const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+  if (matrix_index < 1 || matrix_index >= static_cast<int>(matrices.size())) {
+    return false;
+  }
+  auto t_select = Clock::now();
+  std::vector<multipers::multi_critical_detail::Graded_matrix> pair;
+  pair.reserve(2);
+  pair.push_back(std::move(matrices[(size_t)matrix_index - 1]));
+  pair.push_back(std::move(matrices[(size_t)matrix_index]));
+  if (stats != nullptr) {
+    stats->matrix_select_s += elapsed_seconds(t_select);
+  }
+  first = std::move(pair[0]);
+  second = std::move(pair[1]);
+  return true;
+}
+
+nb::tuple output_to_raw_arrays(const multipers::multi_critical_interface_output<int>& output,
+                               bool mark_minpres = false) {
+  std::vector<int64_t> boundary_indptr(output.boundaries.size() + 1, 0);
+  size_t boundary_nnz = 0;
+  for (size_t i = 0; i < output.boundaries.size(); ++i) {
+    boundary_nnz += output.boundaries[i].size();
+    boundary_indptr[i + 1] = (int64_t)boundary_nnz;
+  }
+  std::vector<int32_t> boundary_flat;
+  boundary_flat.reserve(boundary_nnz);
+  for (const auto& row : output.boundaries) {
+    for (int value : row) {
+      boundary_flat.push_back((int32_t)value);
+    }
+  }
+  std::vector<int32_t> dimensions(output.dimensions.begin(), output.dimensions.end());
+  if (mark_minpres) {
+    for (auto& d : dimensions) {
+      d -= 1;
+    }
+  }
+  std::vector<double> grades;
+  grades.reserve(2 * output.filtration_values.size());
+  for (const auto& grade : output.filtration_values) {
+    grades.push_back(grade.first);
+    grades.push_back(grade.second);
+  }
+  return nb::make_tuple(owned_array<int64_t>(std::move(boundary_indptr), {output.boundaries.size() + 1}),
+                        owned_array<int32_t>(std::move(boundary_flat), {boundary_nnz}),
+                        owned_array<int32_t>(std::move(dimensions), {output.dimensions.size()}),
+                        owned_array<double>(std::move(grades), {output.filtration_values.size(), size_t(2)}));
+}
+
+nb::object output_to_slicer(int target_template_id,
+                            const multipers::multi_critical_interface_output<int>& output,
+                            bool mark_minpres = false,
+                            int degree = -1) {
+  std::vector<int> dims(output.dimensions.begin(), output.dimensions.end());
+  if (mark_minpres) {
+    for (auto& d : dims) d -= 1;
+  }
+  auto complex = multipers::build_contiguous_f64_slicer_from_output(output.filtration_values, output.boundaries, dims);
+  nb::object canonical_out = nb::borrow<nb::object>(nb::type<CanonicalWrapper>())();
+  auto& canonical_wrapper = nb::cast<CanonicalWrapper&>(canonical_out);
+  multipers::build_slicer_from_complex(canonical_wrapper.truc, complex);
+  if (mark_minpres) {
+    canonical_wrapper.minpres_degree = degree;
+  }
+  return multipers::nanobind_helpers::astype_slicer_to_template_id(canonical_out, target_template_id);
+}
+
+}  // namespace mpmc
+#endif
+
+NB_MODULE(_multi_critical_interface, m) {
+  auto require = [](bool available) {
+    if (!available) {
+      throw std::runtime_error(
+          "multi_critical interface is not available in this build. Rebuild multipers with multi_critical support to enable this backend.");
+    }
+  };
+#if MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+  auto unavailable = [](nb::args, nb::kwargs) {
+    throw std::runtime_error("multi_critical interface is disabled at compile time.");
+  };
+  auto available = []() { return false; };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [require, available]() { require(available()); });
+  m.def("one_criticalify", unavailable);
+  m.def("resolution_from_packed", unavailable);
+  m.def("minpres_from_packed", unavailable);
+  m.def("minpres_all_from_packed", unavailable);
+  m.def("resolution_from_ptr", unavailable);
+  m.def("resolution_from_ptr_with_stats", unavailable);
+  m.def("minpres_from_ptr", unavailable);
+  m.def("minpres_from_ptr_with_stats", unavailable);
+  m.def("minpres_all_from_ptr", unavailable);
+  m.def("minpres_all_from_ptr_with_stats", unavailable);
+#else
+  auto available = []() {
+    if (!multipers::multi_critical_interface_available()) return false;
+    return multipers::nanobind_helpers::has_slicer_filtration_container(
+        multipers::nanobind_helpers::SlicerDescriptorList{}, "Flat");
+  };
+  m.def("_is_available", available);
+  m.def("available", available);
+  m.def("require", [require, available]() { require(available()); });
+
+  m.def(
+      "one_criticalify",
+      [](nb::object slicer,
+         bool reduce,
+         std::string algo,
+         nb::object degree_obj,
+         nb::object swedish_obj,
+         bool verbose,
+         bool kcritical,
+         std::string filtration_container) {
+        if (!multipers::multi_critical_interface_available()) {
+          throw std::runtime_error("multi_critical interface is not available in this build.");
+        }
+
+        bool use_logpath = algo != "path";
+        if (use_logpath && algo != "tree") {
+          throw std::runtime_error("Algo should be path or tree.");
+        }
+        bool swedish = swedish_obj.is_none() ? !degree_obj.is_none() : nb::cast<bool>(swedish_obj);
+        int target_template_id =
+            multipers::nanobind_helpers::related_slicer_template_id(slicer, kcritical, filtration_container);
+        nb::object input_slicer = multipers::nanobind_helpers::ensure_canonical_kcontiguous_f64_slicer_object(slicer);
+        auto& input_wrapper = nb::cast<mpmc::CanonicalWrapper&>(input_slicer);
+        if (!reduce) {
+          multipers::multi_critical_interface_output<int> out;
+          {
+            nb::gil_scoped_release release;
+            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
+          }
+          return mpmc::output_to_slicer(target_template_id, out, false, -1);
+        }
+        if (degree_obj.is_none()) {
+          std::vector<multipers::multi_critical_interface_output<int> > outs;
+          {
+            nb::gil_scoped_release release;
+            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
+          }
+          return nb::object(mpmc::tuple_from_size(outs.size() > 0 ? outs.size() - 1 : 0, [&](size_t i) -> nb::object {
+            return mpmc::output_to_slicer(target_template_id, outs[i + 1], true, (int)i);
+          }));
+        }
+        int degree = nb::cast<int>(degree_obj);
+        multipers::multi_critical_interface_output<int> out;
+        {
+          nb::gil_scoped_release release;
+          auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+          out = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
+        }
+        return mpmc::output_to_slicer(target_template_id, out, true, degree);
+      },
+      "slicer"_a,
+      "reduce"_a = false,
+      "algo"_a = "path",
+      "degree"_a = nb::none(),
+      "swedish"_a = nb::none(),
+      "verbose"_a = false,
+      "kcritical"_a = false,
+      "filtration_container"_a = "contiguous");
+
+  m.def(
+      "resolution_from_packed",
+      [](nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> dimensions,
+         nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose) {
+        if (!multipers::multi_critical_interface_available()) {
+          throw std::runtime_error("multi_critical interface is not available in this build.");
+        }
+        auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          output = multipers::multi_critical_resolution_interface<int>(input, use_tree, use_multi_chunk, verbose);
+        }
+        return mpmc::output_to_raw_arrays(output);
+      },
+      "boundary_indptr"_a,
+      "boundary_flat"_a,
+      "dimensions"_a,
+      "grade_indptr"_a,
+      "grades_flat"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false);
+
+  m.def(
+      "minpres_from_packed",
+      [](nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> dimensions,
+         nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat,
+         int degree,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish) {
+        if (!multipers::multi_critical_interface_available()) {
+          throw std::runtime_error("multi_critical interface is not available in this build.");
+        }
+        auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          output = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_tree, use_multi_chunk, verbose, swedish);
+        }
+        return mpmc::output_to_raw_arrays(output, true);
+      },
+      "boundary_indptr"_a,
+      "boundary_flat"_a,
+      "dimensions"_a,
+      "grade_indptr"_a,
+      "grades_flat"_a,
+      "degree"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "minpres_all_from_packed",
+      [](nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> dimensions,
+         nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish) {
+        if (!multipers::multi_critical_interface_available()) {
+          throw std::runtime_error("multi_critical interface is not available in this build.");
+        }
+        auto input = mpmc::input_from_packed(boundary_indptr, boundary_flat, dimensions, grade_indptr, grades_flat);
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        {
+          nb::gil_scoped_release release;
+          outputs = multipers::multi_critical_minpres_all_interface<int>(input, use_tree, use_multi_chunk, verbose, swedish);
+        }
+        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
+          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
+        });
+      },
+      "boundary_indptr"_a,
+      "boundary_flat"_a,
+      "dimensions"_a,
+      "grade_indptr"_a,
+      "grades_flat"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "resolution_from_ptr",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
+          if (matrices.size() > 1) {
+            matrices.pop_back();
+            output = multipers::multi_critical_detail::convert_chain_complex<int>(matrices);
+          }
+        }
+        return mpmc::output_to_raw_arrays(output);
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false);
+
+  m.def(
+      "resolution_from_ptr_with_stats",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
+          if (matrices.size() > 1) {
+            matrices.pop_back();
+            output = multipers::multi_critical_detail::convert_chain_complex<int>(matrices);
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple raw = mpmc::output_to_raw_arrays(output);
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(raw), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false);
+
+  m.def(
+      "minpres_from_ptr",
+      [](intptr_t input_ptr,
+         int degree,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
+          multipers::multi_critical_detail::Graded_matrix first;
+          multipers::multi_critical_detail::Graded_matrix second;
+          if (mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second)) {
+            multipers::multi_critical_detail::Graded_matrix min_rep;
+            mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+            output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+          }
+        }
+        return mpmc::output_to_raw_arrays(output, true);
+      },
+      "input_ptr"_a,
+      "degree"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "minpres_from_ptr_with_stats",
+      [](intptr_t input_ptr,
+         int degree,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        multipers::multi_critical_interface_output<int> output;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
+          multipers::multi_critical_detail::Graded_matrix first;
+          multipers::multi_critical_detail::Graded_matrix second;
+          if (mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second, &stats)) {
+            multipers::multi_critical_detail::Graded_matrix min_rep;
+            auto t_minpres = mpmc::Clock::now();
+            mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+            stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+            output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple raw = mpmc::output_to_raw_arrays(output, true);
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(raw), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "degree"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "minpres_degrees_from_ptr_with_stats",
+      [](intptr_t input_ptr,
+         std::vector<int> degrees,
+         bool use_tree,
+         bool use_multi_chunk,
+         bool verbose,
+         bool swedish) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
+          if (matrices.size() >= 2) {
+            outputs.reserve(degrees.size());
+            auto t_minpres = mpmc::Clock::now();
+            for (int degree : degrees) {
+              multipers::multi_critical_interface_output<int> output;
+              const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+              if (matrix_index >= 1 && matrix_index < static_cast<int>(matrices.size())) {
+                auto first = matrices[(size_t)matrix_index - 1];
+                auto second = matrices[(size_t)matrix_index];
+                multipers::multi_critical_detail::Graded_matrix min_rep;
+                mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+                output = multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree);
+              }
+              outputs.push_back(std::move(output));
+            }
+            stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple result = mpmc::tuple_from_size(
+            outputs.size(), [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i], true); });
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(result), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "degrees"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "minpres_all_from_ptr",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
+          if (matrices.size() >= 2) {
+            outputs.reserve(matrices.size() - 1);
+            for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
+              auto first = matrices[i];
+              auto second = matrices[i + 1];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
+            }
+          }
+        }
+        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
+          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
+        });
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+
+  m.def(
+      "minpres_all_from_ptr_with_stats",
+      [](intptr_t input_ptr, bool use_tree, bool use_multi_chunk, bool verbose, bool swedish) {
+        std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
+            reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
+        std::vector<multipers::multi_critical_interface_output<int>> outputs;
+        mpmc::ptr_bridge_stats stats;
+        {
+          nb::gil_scoped_release release;
+          std::optional<std::lock_guard<std::mutex> > lock;
+          if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
+            lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
+          }
+          auto matrices = mpmc::compute_free_resolution_raw_matrices_from_bridge(*input_bridge, use_tree, verbose, &stats);
+          mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose, &stats);
+          if (matrices.size() >= 2) {
+            outputs.reserve(matrices.size() - 1);
+            auto t_minpres = mpmc::Clock::now();
+            for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
+              auto first = matrices[i];
+              auto second = matrices[i + 1];
+              multipers::multi_critical_detail::Graded_matrix min_rep;
+              mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
+              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
+            }
+            stats.minpres_s += mpmc::elapsed_seconds(t_minpres);
+          }
+        }
+        auto t_output = mpmc::Clock::now();
+        nb::tuple result = mpmc::tuple_from_size(
+            outputs.size() > 0 ? outputs.size() - 1 : 0,
+            [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i + 1], true); });
+        stats.output_pack_s += mpmc::elapsed_seconds(t_output);
+        return nb::make_tuple(std::move(result), mpmc::stats_to_dict(stats));
+      },
+      "input_ptr"_a,
+      "use_tree"_a = false,
+      "use_multi_chunk"_a = true,
+      "verbose"_a = false,
+      "swedish"_a = true);
+#endif
+}

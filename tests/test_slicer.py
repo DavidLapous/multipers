@@ -6,11 +6,19 @@ import pytest
 from numpy import array
 
 import multipers as mp
+import multipers.array_api.numpy as npapi
 import multipers.slicer as mps
-from multipers.tests import assert_sm
+from multipers.filtrations.filtrations import (
+    _function_delaunay_presentation_to_simplextree,
+    _function_delaunay_presentation_to_slicer,
+)
+from multipers.tests import assert_sm, random_st
+import multipers._2pac_interface as _2pac_interface
+import multipers._function_delaunay_interface as _function_delaunay_interface
+import multipers._mpfree_interface as _mpfree_interface
 
-mpfree_flag = mp.io._check_available("mpfree")
-fd_flag = mp.io._check_available("function_delaunay")
+mpfree_flag = _mpfree_interface.available()
+fd_flag = _function_delaunay_interface.available()
 
 
 def test_1():
@@ -18,6 +26,9 @@ def test_1():
     st.insert([0], [0, 1])
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
+    generator_maps = [[], [], [0, 1]]
+    generator_dimensions = np.asarray([0, 0, 1], dtype=np.int32)
+    filtration_values = np.asarray([[0, 1], [1, 0], [1, 1]], dtype=np.float64)
     for S in mps.available_slicers:
         # TODO : investigate gudhi ??
         if (
@@ -26,14 +37,6 @@ def test_1():
             or not np.issubdtype(S().dtype, np.floating)
         ):
             continue
-        from multipers._slicer_meta import _blocks2boundary_dimension_grades
-
-        generator_maps, generator_dimensions, filtration_values = (
-            _blocks2boundary_dimension_grades(
-                st._to_scc(),
-                inplace=False,
-            )
-        )
         s = S(generator_maps, generator_dimensions, filtration_values)
         print(type(s), s.col_type, s.pers_backend)
 
@@ -57,7 +60,9 @@ def test_2():
     st.insert([1], [1, 0])
     st.insert([0, 1], [1, 1])
     st.insert([0, 1, 2], [2, 2])
-    assert mp.slicer.to_simplextree(mp.Slicer(st, dtype=st.dtype)) == st
+    slicer = mp.Slicer(st, dtype=st.dtype)
+    assert mp.slicer.to_simplextree(slicer) == st
+    assert mp.SimplexTreeMulti(slicer, dtype=st.dtype, kcritical=st.is_kcritical) == st
 
 
 def test_3():
@@ -92,6 +97,19 @@ def test_3():
     assert_sm(sm3, it)
 
 
+def test_make_filtration_non_decreasing_propagates_transitively():
+    slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64)
+    slicer = slicer_type(
+        [[], [], [0, 1], [2]],
+        np.asarray([0, 0, 1, 2], dtype=np.int32),
+        np.asarray([[0, 0], [0, 0], [1, 1], [5, 5]], dtype=np.float64),
+    )
+
+    slicer.make_filtration_non_decreasing()
+
+    got = np.asarray(slicer.get_filtrations(), dtype=np.float64)
+    expected = np.asarray([[5, 5], [5, 5], [5, 5], [5, 5]], dtype=np.float64)
+    assert np.array_equal(got, expected)
 def test_rank_custom():
     B = [[], [0], [0], [0], [0]]
     F = [[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]]
@@ -187,8 +205,6 @@ def test_scc():
 
     import multipers as mp
     from multipers.distances import sm_distance
-    import multipers._mpfree_interface as _mpfree_interface
-    from multipers.io import _check_available
     from multipers.tests import random_st
 
     st = random_st(npts=500, num_parameters=2)
@@ -201,7 +217,7 @@ def test_scc():
 
     st = random_st(npts=500)
     s = mp.Slicer(st).grid_squeeze(inplace=True)
-    s.filtration_grid = []
+    s.filtration_grid = None
     s.to_scc("truc.scc", degree=1)
     s2 = mp.Slicer("truc.scc", dtype=np.float64)
     (a,) = mp.signed_measure(s)
@@ -210,44 +226,23 @@ def test_scc():
 
     st = random_st(npts=200)
     s = mp.Slicer(st).grid_squeeze(inplace=True)
-    s.filtration_grid = []
+    s.filtration_grid = None
     s.to_scc(
         "truc.scc",
     )
-    if _check_available("mpfree"):
+    if _mpfree_interface.available():
         s2 = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
         (a,) = mp.signed_measure(s, degree=1)
         (b,) = mp.signed_measure(s2, degree=1)
         assert sm_distance(a, b) == 0
-
-        if _mpfree_interface._is_available():
-            np.random.seed(3)
-            st = random_st(npts=200)
-            s = mp.Slicer(st).grid_squeeze(inplace=True)
-            s.filtration_grid = []
-            s.to_scc("truc.scc")
-
-            previous_is_available = _mpfree_interface._is_available
-            try:
-                _mpfree_interface._is_available = lambda: True
-                s_in_memory = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
-
-                _mpfree_interface._is_available = lambda: False
-                s_external = mp.Slicer("truc.scc", dtype=np.float64).minpres(1)
-            finally:
-                _mpfree_interface._is_available = previous_is_available
-
-            (m,) = mp.signed_measure(s_in_memory, degree=1)
-            (e,) = mp.signed_measure(s_external, degree=1)
-            assert sm_distance(m, e) == 0
     else:
-        pytest.skip("Skipped a test bc `mpfree` was not found.")
+        pytest.skip("Skipped a test because the mpfree backend is unavailable.")
 
 
 def test_bitmap():
     img = np.random.uniform(size=(12, 10, 11, 2))
     num_parameters = img.shape[-1]
-    s = mp.slicer.from_bitmap(img)
+    s = mp.filtrations.Cubical(img)
     num_vertices = np.searchsorted(s.get_dimensions(), 1)
     assert num_vertices == np.prod(img.shape[:-1])
     assert s.num_parameters == num_parameters
@@ -420,7 +415,7 @@ def test_get_filtrations_unsqueeze_multicritical():
 
 @pytest.mark.skipif(
     not fd_flag or not mpfree_flag,
-    reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
+    reason="Skipped function_delaunay/minpres test because the backend is unavailable.",
 )
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])
 @pytest.mark.parametrize("degree", [1, 2, 3])
@@ -429,13 +424,13 @@ def test_external(dim, degree):
         return
     X = np.random.uniform(size=(100, dim))
     f = np.random.uniform(size=(X.shape[0]))
-    fd = mps.from_function_delaunay(X, f)
+    fd = mp.filtrations.DelaunayLowerstar(X, f)
     assert mp.simplex_tree_multi.is_simplextree_multi(fd)
     assert np.array_equal(np.unique(mp.Slicer(fd).get_dimensions()), np.arange(dim + 2))
-    fd_ = mps.from_function_delaunay(X, f, degree=degree)
+    fd_ = mp.filtrations.DelaunayLowerstar(X, f, reduce_degree=degree)
     assert mps.is_slicer(fd_)
     assert np.array_equal(
-        np.unique(fd_.get_dimensions()), [degree, degree + 1]
+        np.unique(fd_.get_dimensions()), [degree, degree + 1, degree + 2]
     )  ## only does presentations
     fd_ = mp.Slicer(fd).minpres(degree=degree)
     assert np.array_equal(
@@ -448,8 +443,8 @@ def test_pkl():
         img = np.random.uniform(size=(20, 20, num_params))
         img2 = np.array(img)
         img2[0, 0, 0] += 1
-        s = mp.slicer.from_bitmap(img)
-        s2 = mp.slicer.from_bitmap(img2)
+        s = mp.filtrations.Cubical(img)
+        s2 = mp.filtrations.Cubical(img2)
         s3 = type(s)(
             s.get_boundaries()[:-1], s.get_dimensions()[:-1], s.get_filtrations()[:-1]
         )
@@ -459,7 +454,9 @@ def test_pkl():
         assert s != s2
         assert s != s3
         assert s != s4
-        assert s == pkl.loads(pkl.dumps(s))
+        restored = pkl.loads(pkl.dumps(s))
+        assert s == restored
+        assert restored.minpres_degree == s.minpres_degree
 
 
 def test_colexical():
@@ -535,7 +532,10 @@ def test_slicer_grid_squeeze_roundtrip_on_gudhi_and_multipers_simplextree():
         st_sq = st_.grid_squeeze(grid)
 
         assert mp.Slicer(st_sq) == mp.Slicer(st_).grid_squeeze()
-        assert mp.Slicer(st_) == mp.Slicer(st_sq).unsqueeze()
+        assert (
+            mp.Slicer(st_)._simplify_filtration()
+            == mp.Slicer(st_sq).unsqueeze()._simplify_filtration()
+        )
 
 
 def test_astypes():

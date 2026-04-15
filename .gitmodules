@@ -33,3 +33,11 @@
 	path = ext/hera
 	url = https://github.com/DavidLapous/hera.git
 	branch = little_fix
+[submodule "ext/2pac"]
+	path = ext/2pac
+	url = https://gitlab.com/flenzen/2pac
+	branch = main
+[submodule "ext/gudhi-devel"]
+	path = ext/gudhi-devel
+	url = https://github.com/hschreiber/gudhi-devel
+	branch = multi_persistence
