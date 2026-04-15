@@ -65,6 +65,13 @@ def _replace_streams(text: str) -> str:
     return text
 
 
+def _ensure_function_delaunay_log_include(text: str, rel_path: Path) -> str:
+    include = "#include <function_delaunay/log_utils.h>"
+    if rel_path.name == "log_utils.h" or include in text:
+        return text
+    return _replace_once(text, "#pragma once\n", f"#pragma once\n\n{include}\n", rel_path)
+
+
 def _patch_mpfree_global(text: str, rel_path: Path) -> str:
     return _replace_once(
         text,
@@ -210,6 +217,7 @@ def _function_delaunay_targets() -> dict[Path, str]:
         original = path.read_text()
         patched = _replace_streams(original)
         if patched != original:
+            patched = _ensure_function_delaunay_log_include(patched, rel)
             out[rel] = patched
     out[Path("ext/function_delaunay/include/function_delaunay/log_utils.h")] = FUNCTION_DELAUNAY_LOG_UTILS
     out.update(

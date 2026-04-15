@@ -1,0 +1,87 @@
+--- a/ext/multi_critical/include/multi_critical/basic.h
++++ b/ext/multi_critical/include/multi_critical/basic.h
+@@ -20,11 +20,20 @@
+ 
+ #include<mpp_utils/basic.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace multi_critical {
+ 
+     typedef mpp_utils::index index;
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++    inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::multi_critical> verbose;
++    inline multipers::backend_log_policy::constant_flag<false> very_verbose;
++#else
+     bool verbose = false;
+     bool very_verbose=false;
++#endif
+ 
+ } // of namespace multi-critical
+--- a/ext/multi_critical/mpfree_mod/include/mpfree/global.h
++++ b/ext/multi_critical/mpfree_mod/include/mpfree/global.h
+@@ -20,9 +20,17 @@
+ 
+ #include<phat/helpers/misc.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace mpfree {
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::mpfree> verbose;
++#else
+   bool verbose = false;
++#endif
+ 
+   typedef phat::index index;
+   
+--- a/ext/multi_critical/multi_chunk_mod/include/multi_chunk/basic.h
++++ b/ext/multi_critical/multi_chunk_mod/include/multi_chunk/basic.h
+@@ -20,10 +20,18 @@
+ 
+ #include<mpp_utils/basic.h>
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
++
+ namespace multi_chunk {
+ 
+   typedef mpp_utils::index index;
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::multi_critical> verbose;
++#else
+   bool verbose = true;
++#endif
+ }
+ 
+--- a/ext/multi_critical/scc_mod/include/scc/basic.h
++++ b/ext/multi_critical/scc_mod/include/scc/basic.h
+@@ -1,12 +1,20 @@
+ #pragma once
+ 
+ #include <stdint.h>
++
++#if __has_include("ext_interface/backend_log_flag.hpp")
++#include "ext_interface/backend_log_flag.hpp"
++#endif
+ 
+ namespace scc {
+ 
+   typedef int64_t index;
+ 
++#if __has_include("ext_interface/backend_log_flag.hpp")
++  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::multi_critical> verbose;
++#else
+   bool verbose = false;
++#endif
+ 
+   class ParseError {
+   public:
