@@ -24,6 +24,12 @@ from multipers import (
 np.random.seed(0)
 
 
+_is_macos_intel = platform.system() == "Darwin" and platform.machine() in {
+    "x86_64",
+    "i386",
+}
+
+
 def io_fd_mpfree(x):
     s = mp.filtrations.DelaunayCodensity(points=x, bandwidth=0.2)
     s = mp.Slicer(s).minpres(1).to_colexical()
@@ -35,6 +41,10 @@ def io_fd_mpfree2(x):
     return mp.signed_measure(s, degree=1, invariant="hilbert")[0]
 
 
+@pytest.mark.skipif(
+    _is_macos_intel,
+    reason="Skipped on macOS Intel because the PyKeOps-backed io parallel test segfaults there in CI (see getkeops/keops#323).",
+)
 @pytest.mark.skipif(
     not _mpfree_interface.available()
     or not _function_delaunay_interface.available(),
@@ -67,20 +77,11 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
 
-_is_macos_non_arm = platform.system() == "Darwin" and platform.machine() not in {
-    "arm64",
-    "aarch64",
-}
-
-
 @pytest.mark.parametrize("backend", ["threading", "loky"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
 def test_st_sm_parallel(backend, slicer, invariant, n_jobs):
-    if _is_macos_non_arm:
-        pytest.skip("Skipping parallel signed-measure test on macOS non-arm.")
-        return
     ground_truth = get_sm_st(n_jobs=1, to_slicer=slicer, invariant=invariant)
     ground_truth2 = get_sm_st(n_jobs=1, to_slicer=not slicer, invariant=invariant)
     assert_sm_pair(ground_truth, ground_truth2, reg=0, exact=False, max_error=1e-12)
