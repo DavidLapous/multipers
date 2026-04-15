@@ -128,6 +128,14 @@ def _compute_signed_measure_projections(
     return projections
 
 
+def _require_balanced_effective_mass(left_size: int, right_size: int, *, metric: str):
+    if left_size != right_size:
+        raise ValueError(
+            f"Signed-measure {metric} requires equal effective mass under the current repeated-point model. "
+            f"Got transformed transport sizes {left_size} and {right_size}."
+        )
+
+
 def _sliced_wasserstein_distance_on_projections(meas1, meas2):
     api = api_from_tensor(meas1[0])
     weights = meas1[2]
@@ -135,25 +143,13 @@ def _sliced_wasserstein_distance_on_projections(meas1, meas2):
     meas2_plus, meas2_minus = meas2[0], meas2[1]
     A = api.sort(api.cat([meas1_plus, meas2_minus], 0), axis=0)
     B = api.sort(api.cat([meas2_plus, meas1_minus], 0), axis=0)
-    target_rows = max(A.shape[0], B.shape[0])
-    if target_rows == 0:
+    if A.shape[0] == 0 and B.shape[0] == 0:
         return api.to_device(api.zeros((), dtype=weights.dtype), api.device(weights))
-    if A.shape[0] != target_rows:
-        padding = api.to_device(
-            api.zeros((target_rows - A.shape[0], A.shape[1]), dtype=A.dtype),
-            api.device(A),
-        )
-        A = api.cat(
-            [A, padding], 0
-        )
-    if B.shape[0] != target_rows:
-        padding = api.to_device(
-            api.zeros((target_rows - B.shape[0], B.shape[1]), dtype=B.dtype),
-            api.device(B),
-        )
-        B = api.cat(
-            [B, padding], 0
-        )
+    _require_balanced_effective_mass(
+        int(A.shape[0]),
+        int(B.shape[0]),
+        metric="sliced Wasserstein distance",
+    )
     L1 = api.sum(api.abs(A - B), axis=0)
     return api.mean(L1 * weights)
 
@@ -254,11 +250,23 @@ def sm_distance(
       - sinkhorn if reg != 0
       - sinkhorn unbalanced if reg_m != 0
 
+    Balanced sliced Wasserstein, exact EMD, and balanced Sinkhorn paths require
+    equal effective mass under the current repeated-point model. Unequal masses
+    are only supported by the unbalanced Sinkhorn path (`reg != 0` and
+    `reg_m != 0`).
+
     """
     if api is None:
         api = api_from_tensor(sm1[0])
     x, y = sm2diff(sm1, sm2, threshold=threshold, api=api)
+    x_size = int(x.shape[0])
+    y_size = int(y.shape[0])
     if sliced:
+        _require_balanced_effective_mass(
+            x_size,
+            y_size,
+            metric="sliced Wasserstein distance",
+        )
         dist = ot.sliced.sliced_wasserstein_distance(
             x,
             y,
@@ -270,6 +278,12 @@ def sm_distance(
 
     if p < 1:
         raise ValueError("Only lp metrics with p >= 1 are supported.")
+    if reg == 0 or reg_m == 0:
+        _require_balanced_effective_mass(
+            x_size,
+            y_size,
+            metric="Wasserstein distance",
+        )
     loss = api.cdist(x, y, p=p)
     empty_tensor = api.to_device(api.astensor([]), api.device(x))
 
@@ -488,6 +502,44 @@ def _process_monte_carlo_raw_distances(
     }
 
 
+def _validate_monte_carlo_lines(basepoints, directions, *, api=None):
+    if api is None:
+        api = _infer_api([basepoints, directions], api=api)
+
+    basepoints = api.astensor(basepoints)
+    directions = api.astensor(directions)
+    if basepoints.ndim == 1:
+        basepoints = api.reshape(basepoints, (1, basepoints.shape[0]))
+    if directions.ndim == 1:
+        directions = api.reshape(directions, (1, directions.shape[0]))
+    if basepoints.ndim == 0 or basepoints.ndim > 2:
+        raise ValueError(
+            "Expected a basepoint shape of the form (num_parameters,). "
+            f"Got {basepoints.shape=}"
+        )
+    if directions.ndim == 0 or directions.ndim > 2:
+        raise ValueError(
+            "Expected a direction shape of the form (num_parameters,). "
+            f"Got {directions.shape=}"
+        )
+    if basepoints.shape != directions.shape:
+        raise ValueError(
+            "Monte Carlo matching distance expects basepoints and directions "
+            f"with identical shapes. Got {basepoints.shape=} and {directions.shape=}."
+        )
+
+    directions_np = np.asarray(api.asnumpy(directions), dtype=np.float64)
+    invalid_rows = np.any(directions_np <= 0.0, axis=1)
+    if np.any(invalid_rows):
+        invalid_direction = directions_np[invalid_rows][0]
+        raise ValueError(
+            "Monte Carlo matching distance expects strictly positive directions. "
+            f"Got invalid direction {invalid_direction}."
+        )
+
+    return basepoints, directions
+
+
 def _sample_monte_carlo_lines(
     left,
     right,
@@ -581,34 +633,18 @@ def _matching_distance_monte_carlo(
             oversampling=line_oversampling,
             fpsample_bucket_height=fpsample_bucket_height,
         )
+    basepoints, directions = _validate_monte_carlo_lines(
+        basepoints,
+        directions,
+        api=api,
+    )
 
     if _can_use_native_monte_carlo_matching_distance(left, right):
         from multipers import _hera_interface
 
         _hera_interface.require()
-        basepoints_np = np.asarray(basepoints, dtype=np.float64)
-        directions_np = np.asarray(directions, dtype=np.float64)
-        if basepoints_np.ndim == 1:
-            basepoints_np = basepoints_np[None]
-        if directions_np.ndim == 1:
-            directions_np = directions_np[None]
-        if basepoints_np.ndim == 0 or basepoints_np.ndim > 2:
-            raise ValueError(
-                "Expected a basepoint shape of the form (num_parameters,). "
-                f"Got {basepoints_np.shape=}"
-            )
-        if directions_np.ndim == 0 or directions_np.ndim > 2:
-            raise ValueError(
-                "Expected a direction shape of the form (num_parameters,). "
-                f"Got {directions_np.shape=}"
-            )
-        if basepoints_np.shape != directions_np.shape:
-            raise ValueError(
-                "Monte Carlo matching distance expects basepoints and directions "
-                f"with identical shapes. Got {basepoints_np.shape=} and {directions_np.shape=}."
-            )
-        basepoints_np = np.ascontiguousarray(basepoints_np, dtype=np.float64)
-        directions_np = np.ascontiguousarray(directions_np, dtype=np.float64)
+        basepoints_np = np.ascontiguousarray(api.asnumpy(basepoints), dtype=np.float64)
+        directions_np = np.ascontiguousarray(api.asnumpy(directions), dtype=np.float64)
         if wasserstein_order is None:
             raw_distances = _hera_interface.monte_carlo_bottleneck_distances(
                 left,
@@ -631,8 +667,6 @@ def _matching_distance_monte_carlo(
                 delta=line_distance_delta,
                 n_jobs=int(n_jobs),
             )
-        api = _infer_api([basepoints, directions], api=api)
-        directions = api.astensor(directions)
         return _process_monte_carlo_raw_distances(
             raw_distances,
             api=api,
@@ -651,10 +685,6 @@ def _matching_distance_monte_carlo(
     # copies when callers reuse same slicer across threads.
     left = left.copy()
     right = right.copy()
-
-    api = _infer_api([basepoints, directions], api=api)
-    basepoints = api.astensor(basepoints)
-    directions = api.astensor(directions)
 
     left_diagrams = tuple(
         barcodes[degree]
@@ -742,7 +772,7 @@ def matching_distance(
     epsilon : float, default=1e-5
         Hera slice-bottleneck approximation tolerance used by the exact
         `"hera"` backend.
-    delta : float, default=0.1
+    delta : float, default=0.001
         Relative tolerance used by Hera-backed approximations. The exact
         `"hera"` backend uses it for adaptive search over line directions. The
         Monte Carlo backend uses it for per-line bottleneck or Wasserstein
@@ -804,6 +834,10 @@ def matching_distance(
         metric, the best sampled line, and its raw line distance.
     verbose : bool, default=False
         If `True`, print timing scopes for validation and backend work.
+    mc_basepoints, mc_directions : array-like, optional
+        Optional pre-sampled Monte Carlo lines. When provided, both must share
+        the same shape `(nlines, num_parameters)` or `(num_parameters,)`, and
+        every direction coordinate must be strictly positive.
 
     Returns
     -------
