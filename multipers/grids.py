@@ -252,7 +252,6 @@ def _compute_grid(
     ------
     Iterable[array[float, ndim=1]] : the 1d-grid for each parameter.
     """
-    num_parameters = len(filtrations_values)
     if api is None:
         api = api_from_tensors(*filtrations_values)
     try:

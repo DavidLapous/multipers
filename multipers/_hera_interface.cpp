@@ -12,15 +12,14 @@
 #include <utility>
 #include <vector>
 
+#include "ext_interface/hera_interface.hpp"
+
+#if !MULTIPERS_DISABLE_HERA_INTERFACE
 #if defined(GUDHI_USE_TBB)
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 #endif
-
 #include "hera_monte_carlo_core.hpp"
-#include "ext_interface/hera_interface.hpp"
-
-#if !MULTIPERS_DISABLE_HERA_INTERFACE
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
@@ -29,6 +28,13 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mphera {
+
+[[noreturn]] inline void throw_hera_unavailable() {
+  throw std::runtime_error(
+      "Hera interface is not available in this build. Rebuild multipers with Hera headers to enable this backend.");
+}
+
+#if !MULTIPERS_DISABLE_HERA_INTERFACE
 
 using diagram_t = std::vector<std::pair<double, double>>;
 using diagram_array_t = nb::ndarray<nb::numpy, const double, nb::ndim<2>>;
@@ -133,7 +139,6 @@ std::vector<double> wasserstein_distances_from_native_batches(const std::vector<
   return out;
 }
 
-#if !MULTIPERS_DISABLE_HERA_INTERFACE
 template <bool IsKcritical>
 using native_f64_slicer_t = std::conditional_t<IsKcritical, multipers::kcontiguous_f64_slicer, multipers::contiguous_f64_slicer>;
 
@@ -178,7 +183,7 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
       });
 #else
   static_cast<void>(slicer);
-  throw std::runtime_error("Hera interface is disabled at compile time.");
+  throw_hera_unavailable();
 #endif
 }
 
@@ -390,8 +395,6 @@ inline nb::object monte_carlo_wasserstein_distances_on_lines(
       left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
 }
 
-#endif
-
 inline nb::object matching_distance_binding(nb::object left,
                                             nb::object right,
                                             double hera_epsilon,
@@ -415,8 +418,11 @@ inline nb::object matching_distance_binding(nb::object left,
   static_cast<void>(tolerate_max_iter_exceeded);
   static_cast<void>(stop_asap);
   static_cast<void>(return_stats);
-  throw std::runtime_error("Hera interface is disabled at compile time.");
+  throw_hera_unavailable();
 #else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
   auto left_input = module_input_from_slicer(left);
   auto right_input = module_input_from_slicer(right);
   multipers::hera_interface_params params;
@@ -456,8 +462,11 @@ inline nb::object monte_carlo_bottleneck_distances_binding(
   static_cast<void>(degree);
   static_cast<void>(delta);
   static_cast<void>(n_jobs);
-  throw std::runtime_error("Hera interface is disabled at compile time.");
+  throw_hera_unavailable();
 #else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
   return monte_carlo_bottleneck_distances_on_lines(left, right, basepoints, directions, degree, delta, n_jobs);
 #endif
 }
@@ -482,12 +491,119 @@ inline nb::object monte_carlo_wasserstein_distances_binding(
   static_cast<void>(internal_p);
   static_cast<void>(delta);
   static_cast<void>(n_jobs);
-  throw std::runtime_error("Hera interface is disabled at compile time.");
+  throw_hera_unavailable();
 #else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
   return monte_carlo_wasserstein_distances_on_lines(
       left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
 #endif
 }
+
+inline double bottleneck_distance_binding(nb::handle left, nb::handle right, double delta) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(left);
+  static_cast<void>(right);
+  static_cast<void>(delta);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  return multipers::hera_bottleneck_distance(diagram_from_handle(left), diagram_from_handle(right), delta);
+#endif
+}
+
+inline std::vector<double> bottleneck_distances_binding(
+    nb::handle left_diagrams,
+    nb::handle right_diagrams,
+    double delta,
+    int n_jobs) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(left_diagrams);
+  static_cast<void>(right_diagrams);
+  static_cast<void>(delta);
+  static_cast<void>(n_jobs);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  auto left_batch = nb::cast<std::vector<nb::object>>(left_diagrams);
+  auto right_batch = nb::cast<std::vector<nb::object>>(right_diagrams);
+  if (left_batch.size() != right_batch.size()) {
+    throw std::runtime_error("Left and right diagram batches must contain the same number of diagrams.");
+  }
+
+  std::vector<diagram_t> left_native(left_batch.size());
+  std::vector<diagram_t> right_native(right_batch.size());
+  for (size_t i = 0; i < left_batch.size(); ++i) {
+    left_native[i] = diagram_from_handle(left_batch[i], true);
+    right_native[i] = diagram_from_handle(right_batch[i], true);
+  }
+  return bottleneck_distances_from_native_batches(left_native, right_native, delta, n_jobs);
+#endif
+}
+
+inline std::vector<double> wasserstein_distances_binding(
+    nb::handle left_diagrams,
+    nb::handle right_diagrams,
+    double order,
+    double internal_p,
+    double delta,
+    int n_jobs) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(left_diagrams);
+  static_cast<void>(right_diagrams);
+  static_cast<void>(order);
+  static_cast<void>(internal_p);
+  static_cast<void>(delta);
+  static_cast<void>(n_jobs);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  auto left_batch = nb::cast<std::vector<nb::object>>(left_diagrams);
+  auto right_batch = nb::cast<std::vector<nb::object>>(right_diagrams);
+  if (left_batch.size() != right_batch.size()) {
+    throw std::runtime_error("Left and right diagram batches must contain the same number of diagrams.");
+  }
+
+  std::vector<diagram_t> left_native(left_batch.size());
+  std::vector<diagram_t> right_native(right_batch.size());
+  for (size_t i = 0; i < left_batch.size(); ++i) {
+    left_native[i] = diagram_from_handle(left_batch[i]);
+    right_native[i] = diagram_from_handle(right_batch[i]);
+  }
+  return wasserstein_distances_from_native_batches(left_native, right_native, order, internal_p, delta, n_jobs);
+#endif
+}
+
+inline double wasserstein_distance_binding(
+    nb::handle left,
+    nb::handle right,
+    double order,
+    double internal_p,
+    double delta) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(left);
+  static_cast<void>(right);
+  static_cast<void>(order);
+  static_cast<void>(internal_p);
+  static_cast<void>(delta);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  const auto params = make_wasserstein_params(order, internal_p, delta);
+  return multipers::hera_wasserstein_distance(diagram_from_handle(left), diagram_from_handle(right), params);
+#endif
+}
+
+#endif
 
 }  // namespace mphera
 
@@ -497,8 +613,7 @@ NB_MODULE(_hera_interface, m) {
   m.def("available", available);
   m.def("require", [available]() {
     if (!available()) {
-      throw std::runtime_error(
-          "Hera interface is not available in this build. Rebuild multipers with Hera headers to enable this backend.");
+      mphera::throw_hera_unavailable();
     }
   });
 
@@ -542,8 +657,7 @@ NB_MODULE(_hera_interface, m) {
   m.def(
       "bottleneck_distance",
       [](nb::handle left, nb::handle right, double delta) {
-        return multipers::hera_bottleneck_distance(
-            mphera::diagram_from_handle(left), mphera::diagram_from_handle(right), delta);
+        return mphera::bottleneck_distance_binding(left, right, delta);
       },
       "left"_a,
       "right"_a,
@@ -552,19 +666,7 @@ NB_MODULE(_hera_interface, m) {
   m.def(
       "bottleneck_distances",
       [](nb::handle left_diagrams, nb::handle right_diagrams, double delta, int n_jobs) {
-        auto left_batch = nb::cast<std::vector<nb::object>>(left_diagrams);
-        auto right_batch = nb::cast<std::vector<nb::object>>(right_diagrams);
-        if (left_batch.size() != right_batch.size()) {
-          throw std::runtime_error("Left and right diagram batches must contain the same number of diagrams.");
-        }
-
-        std::vector<mphera::diagram_t> left_native(left_batch.size());
-        std::vector<mphera::diagram_t> right_native(right_batch.size());
-        for (size_t i = 0; i < left_batch.size(); ++i) {
-          left_native[i] = mphera::diagram_from_handle(left_batch[i], true);
-          right_native[i] = mphera::diagram_from_handle(right_batch[i], true);
-        }
-        return mphera::bottleneck_distances_from_native_batches(left_native, right_native, delta, n_jobs);
+        return mphera::bottleneck_distances_binding(left_diagrams, right_diagrams, delta, n_jobs);
       },
       "left_diagrams"_a,
       "right_diagrams"_a,
@@ -579,20 +681,8 @@ NB_MODULE(_hera_interface, m) {
          double internal_p,
          double delta,
          int n_jobs) {
-        auto left_batch = nb::cast<std::vector<nb::object>>(left_diagrams);
-        auto right_batch = nb::cast<std::vector<nb::object>>(right_diagrams);
-        if (left_batch.size() != right_batch.size()) {
-          throw std::runtime_error("Left and right diagram batches must contain the same number of diagrams.");
-        }
-
-        std::vector<mphera::diagram_t> left_native(left_batch.size());
-        std::vector<mphera::diagram_t> right_native(right_batch.size());
-        for (size_t i = 0; i < left_batch.size(); ++i) {
-          left_native[i] = mphera::diagram_from_handle(left_batch[i]);
-          right_native[i] = mphera::diagram_from_handle(right_batch[i]);
-        }
-        return mphera::wasserstein_distances_from_native_batches(
-            left_native, right_native, order, internal_p, delta, n_jobs);
+        return mphera::wasserstein_distances_binding(
+            left_diagrams, right_diagrams, order, internal_p, delta, n_jobs);
       },
       "left_diagrams"_a,
       "right_diagrams"_a,
@@ -647,9 +737,7 @@ NB_MODULE(_hera_interface, m) {
   m.def(
       "wasserstein_distance",
       [](nb::handle left, nb::handle right, double order, double internal_p, double delta) {
-        const auto params = mphera::make_wasserstein_params(order, internal_p, delta);
-        return multipers::hera_wasserstein_distance(
-            mphera::diagram_from_handle(left), mphera::diagram_from_handle(right), params);
+        return mphera::wasserstein_distance_binding(left, right, order, internal_p, delta);
       },
       "left"_a,
       "right"_a,
