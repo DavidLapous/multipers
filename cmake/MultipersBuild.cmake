@@ -249,27 +249,45 @@ endif()
 find_program(MULTIPERS_PATCH_EXECUTABLE patch REQUIRED)
 
 set(MULTIPERS_EXT_PATCH_DIR "${CMAKE_SOURCE_DIR}/ext/patches")
+set(MULTIPERS_GENERATED_EXT_PATCH_DIR "${CMAKE_BINARY_DIR}/generated_ext_patches")
 set(MULTIPERS_EXT_PATCH_GENERATOR "${MULTIPERS_EXT_PATCH_DIR}/generate_log_patch.py")
 
-function(multipers_add_generated_patch_file target_name library_name patch_file output_var)
-  set(_patch_path "${MULTIPERS_EXT_PATCH_DIR}/${patch_file}")
+function(multipers_add_generated_patch_file target_name library_name output_path output_var)
+  get_filename_component(_patch_dir "${output_path}" DIRECTORY)
   add_custom_command(
-    OUTPUT "${_patch_path}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${MULTIPERS_EXT_PATCH_DIR}"
+    OUTPUT "${output_path}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_patch_dir}"
     COMMAND
       "${Python3_EXECUTABLE}"
       "${MULTIPERS_EXT_PATCH_GENERATOR}"
       "${library_name}"
       --output
-      "${_patch_path}"
+      "${output_path}"
     DEPENDS
       "${MULTIPERS_EXT_PATCH_GENERATOR}"
       ${ARGN}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     VERBATIM
   )
-  add_custom_target(${target_name} DEPENDS "${_patch_path}")
-  set(${output_var} "${_patch_path}" PARENT_SCOPE)
+  add_custom_target(${target_name} DEPENDS "${output_path}")
+  set(${output_var} "${output_path}" PARENT_SCOPE)
+endfunction()
+
+function(multipers_add_refresh_patch_target target_name library_name output_path)
+  get_filename_component(_patch_dir "${output_path}" DIRECTORY)
+  add_custom_target(
+    ${target_name}
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_patch_dir}"
+    COMMAND
+      "${Python3_EXECUTABLE}"
+      "${MULTIPERS_EXT_PATCH_GENERATOR}"
+      "${library_name}"
+      --output
+      "${output_path}"
+    BYPRODUCTS "${output_path}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    VERBATIM
+  )
 endfunction()
 
 function(multipers_add_generated_patch_overlay target_name library_name patch_path library_relative_root overlay_root_var)
@@ -306,7 +324,7 @@ file(
 multipers_add_generated_patch_file(
   multipers_generate_mpfree_log_patch
   mpfree
-  mpfree_runtime_logs.patch
+  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/mpfree_runtime_logs.patch"
   MULTIPERS_MPFREE_LOG_PATCH_FILE
   "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/global.h"
 )
@@ -314,7 +332,7 @@ multipers_add_generated_patch_file(
 multipers_add_generated_patch_file(
   multipers_generate_function_delaunay_log_patch
   function_delaunay
-  function_delaunay_runtime_logs.patch
+  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch"
   MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE
   ${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_INPUTS}
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpfree_mod/include/mpfree/global.h"
@@ -324,7 +342,7 @@ multipers_add_generated_patch_file(
 multipers_add_generated_patch_file(
   multipers_generate_multi_critical_log_patch
   multi_critical
-  multi_critical_runtime_logs.patch
+  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch"
   MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include/mpfree/global.h"
@@ -332,12 +350,51 @@ multipers_add_generated_patch_file(
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
 )
 
+set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
+set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
+set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
+
+multipers_add_refresh_patch_target(
+  multipers_refresh_mpfree_log_patch
+  mpfree
+  "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
+)
+
+multipers_add_refresh_patch_target(
+  multipers_refresh_function_delaunay_log_patch
+  function_delaunay
+  "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
+)
+
+multipers_add_refresh_patch_target(
+  multipers_refresh_multi_critical_log_patch
+  multi_critical
+  "${MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE}"
+)
+
+add_custom_target(multipers_refresh_ext_patches)
+add_dependencies(
+  multipers_refresh_ext_patches
+  multipers_refresh_mpfree_log_patch
+  multipers_refresh_function_delaunay_log_patch
+  multipers_refresh_multi_critical_log_patch
+)
+
+add_custom_target(multipers_generate_ext_patches)
+add_dependencies(multipers_generate_ext_patches multipers_refresh_ext_patches)
+
 add_custom_target(
-  multipers_generate_ext_patches
-  DEPENDS
-    "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
-    "${MULTIPERS_MPFREE_LOG_PATCH_FILE}"
-    "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
+  multipers_check_ext_patches
+  COMMAND "${CMAKE_COMMAND}" -E compare_files "${MULTIPERS_MPFREE_LOG_PATCH_FILE}" "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
+  COMMAND "${CMAKE_COMMAND}" -E compare_files "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}" "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
+  COMMAND "${CMAKE_COMMAND}" -E compare_files "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}" "${MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE}"
+  VERBATIM
+)
+add_dependencies(
+  multipers_check_ext_patches
+  multipers_generate_mpfree_log_patch
+  multipers_generate_function_delaunay_log_patch
+  multipers_generate_multi_critical_log_patch
 )
 
 multipers_add_generated_patch_overlay(
