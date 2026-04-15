@@ -171,7 +171,7 @@ def compute_grid(
     except TypeError:
         pass
 
-    grid = _compute_grid_numpy(
+    grid = _compute_grid(
         initial_grid,
         resolution=resolution,
         strategy=strategy,
@@ -228,7 +228,7 @@ def todense(grid, api=None):
     return api.cartesian_product(*grid)
 
 
-def _compute_grid_numpy(
+def _compute_grid(
     filtrations_values,
     resolution=None,
     strategy: Lstrategies = "exact",
@@ -324,7 +324,7 @@ def _compute_grid_numpy(
         if unique:
             F = tuple(api.unique(f) for f in F)
             if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
-                return _compute_grid_numpy(
+                return _compute_grid(
                     filtrations_values=filtrations_values,
                     resolution=resolution,
                     strategy="quantile",
@@ -431,7 +431,7 @@ def push_to_grid(points, grid, return_coordinate=False):
 
 
 def coarsen_points(points, strategy="exact", resolution=-1, coordinate=False):
-    grid = _compute_grid_numpy(points.T, strategy=strategy, resolution=resolution)
+    grid = _compute_grid(points.T, strategy=strategy, resolution=resolution)
     if coordinate:
         return push_to_grid(points, grid, coordinate), grid
     return push_to_grid(points, grid, coordinate)
