@@ -395,6 +395,8 @@ inline nb::object monte_carlo_wasserstein_distances_on_lines(
       left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
 }
 
+#endif
+
 inline nb::object matching_distance_binding(nb::object left,
                                             nb::object right,
                                             double hera_epsilon,
@@ -602,8 +604,6 @@ inline double wasserstein_distance_binding(
   return multipers::hera_wasserstein_distance(diagram_from_handle(left), diagram_from_handle(right), params);
 #endif
 }
-
-#endif
 
 }  // namespace mphera
 
