@@ -4,7 +4,7 @@ from gudhi.wasserstein import wasserstein_distance
 from multipers.point_measure import clean_sms
 
 import multipers as mp
-import multipers.io as mio
+import multipers._mpfree_interface as _mpfree_interface
 from multipers.tests import assert_sm, random_st
 
 np.random.seed(0)
@@ -16,7 +16,7 @@ degrees = [0, 1]
 mass_defaults = [None, "auto", "inf"]
 strats = [("regular_closest", 20), ("quantile", 20), ("regular", 17)]
 
-mpfree_flag = mio._check_available("mpfree")
+mpfree_flag = _mpfree_interface.available()
 
 
 @pytest.mark.parametrize("invariant", invariants)

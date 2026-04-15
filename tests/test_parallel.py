@@ -1,12 +1,25 @@
 import platform
+import os
+import threading
+import warnings
 
 import numpy as np
 import pytest
 from joblib import Parallel, delayed
+import multipers.distances as mpdist
+from multipers.distances import matching_distance
+from threadpoolctl import threadpool_limits
 
 import multipers as mp
-import multipers.io as mio
+from multipers.data import three_annulus
+from multipers.filtrations import CoreDelaunay
 from multipers.tests import assert_sm_pair
+
+from multipers import (
+    _mpfree_interface,
+    _multi_critical_interface,
+    _function_delaunay_interface,
+)
 
 np.random.seed(0)
 
@@ -23,8 +36,9 @@ def io_fd_mpfree2(x):
 
 
 @pytest.mark.skipif(
-    not (mio._check_available("mpfree") and mio._check_available("function_delaunay")),
-    reason="Skipped external test as `function_delaunay`, `mpfree` were not found.",
+    not _mpfree_interface.available()
+    or not _function_delaunay_interface.available(),
+    reason="Skipped bridge pipeline test because the mpfree or function_delaunay backend is unavailable.",
 )
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])

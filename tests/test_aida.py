@@ -1,4 +1,5 @@
 import multipers as mp
+import multipers._mpfree_interface as _mpfree_interface
 from joblib import Parallel, delayed
 from multipers.point_measure import add_sms
 from multipers.tests import random_st
@@ -7,7 +8,7 @@ import pytest
 import sys
 from typing import Any
 
-mpfree_flag = mp.io._check_available("mpfree")
+mpfree_flag = _mpfree_interface.available()
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
     reason="AIDA tests are skipped on Windows.",
@@ -36,7 +37,7 @@ def test_indecomposable():
 
 @pytest.mark.skipif(
     not mpfree_flag,
-    reason="Skipped external test as  `mpfree` was not found.",
+    reason="Skipped test because the mpfree backend is unavailable.",
 )
 def test_equality():
     st = random_st()

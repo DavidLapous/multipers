@@ -19,7 +19,7 @@ def _skip_if_fallback_was_used(caught):
         "Falling back to external multi_critical binary" in str(w.message)
         for w in caught
     ):
-        pytest.skip("multi_critical in-memory interface unavailable in this build")
+        pytest.skip("multi_critical interface unavailable in this build")
 
 
 def _run_or_skip(callable_):
