@@ -23,6 +23,40 @@ def _repo_root() -> Path:
     return root
 
 
+def _config_only_ext_files(root: Path) -> set[str]:
+    required = {
+        # CMake validates this vanilla PHAT header at configure time even though
+        # the active Ninja dependency closure does not consume it directly.
+        "ext/phat/include/phat/representations/bit_tree_pivot_column.h",
+        # Source builds generate build-local log-control patch overlays from
+        # these tracked inputs before compiling vendored backends.
+        "ext/patches/generate_log_patch.py",
+        "ext/patches/function_delaunay_runtime_logs.patch",
+        "ext/patches/mpfree_runtime_logs.patch",
+        "ext/patches/multi_critical_runtime_logs.patch",
+    }
+
+    overlay_source_dirs = (
+        "ext/mpfree/include",
+        "ext/function_delaunay/include",
+        "ext/function_delaunay/mpfree_mod/include",
+        "ext/function_delaunay/multi_chunk_mod/include",
+        "ext/multi_critical/include",
+        "ext/multi_critical/mpfree_mod/include",
+        "ext/multi_critical/multi_chunk_mod/include",
+        "ext/multi_critical/scc_mod/include",
+    )
+    for rel_dir in overlay_source_dirs:
+        base = root / rel_dir
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if path.is_file():
+                required.add(path.relative_to(root).as_posix())
+
+    return {path for path in required if (root / path).is_file()}
+
+
 def _required_ext_files(root: Path) -> set[str]:
     build_dir = root / "build"
     if not (build_dir / ".ninja_deps").is_file():
@@ -59,6 +93,8 @@ def _required_ext_files(root: Path) -> set[str]:
         if candidate.is_file() and ext_root in candidate.parents:
             required.add(candidate.relative_to(root).as_posix())
 
+    required.update(_config_only_ext_files(root))
+
     return required
 
 
@@ -85,7 +121,7 @@ def _generated_block(
 ) -> str:
     lines = [
         BEGIN_MARKER,
-        "  # Generated from `ninja -C build -t deps`; update with",
+        "  # Generated from `ninja -C build -t deps` plus config-only ext checks; update with",
         "  # `python tools/update_sdist_ext_whitelist.py --write`.",
     ]
     for path in sorted(required_ext_files):
