@@ -30,6 +30,11 @@ _is_macos_intel = platform.system() == "Darwin" and platform.machine() in {
 }
 
 
+def _skip_bugged_loky_on_macos_intel(backend: str) -> None:
+    if _is_macos_intel and backend == "loky":
+        pytest.skip("Skipped on macOS Intel bc loky bugged.")
+
+
 def io_fd_mpfree(x):
     s = mp.filtrations.DelaunayCodensity(points=x, bandwidth=0.2)
     s = mp.Slicer(s).minpres(1).to_colexical()
@@ -42,10 +47,6 @@ def io_fd_mpfree2(x):
 
 
 @pytest.mark.skipif(
-    _is_macos_intel,
-    reason="Skipped on macOS Intel because the PyKeOps-backed io parallel test segfaults there in CI (see getkeops/keops#323).",
-)
-@pytest.mark.skipif(
     not _mpfree_interface.available()
     or not _function_delaunay_interface.available(),
     reason="Skipped bridge pipeline test because the mpfree or function_delaunay backend is unavailable.",
@@ -53,6 +54,7 @@ def io_fd_mpfree2(x):
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
 def test_io_parallel(backend, n_jobs):
+    _skip_bugged_loky_on_macos_intel(backend)
     x = mp.data.three_annulus(100, 50)
     X = [x] * 15
     ground_truth = io_fd_mpfree(x)
@@ -76,12 +78,12 @@ def get_sm_st(n_jobs=1, to_slicer=False, invariant="hilbert"):
         )[0]
     return mp.signed_measure(st, degree=1, n_jobs=n_jobs, invariant=invariant)[0]
 
-
 @pytest.mark.parametrize("backend", ["threading", "loky"])
 @pytest.mark.parametrize("slicer", [False, True])
 @pytest.mark.parametrize("invariant", ["hilbert"])
 @pytest.mark.parametrize("n_jobs", [1, 2, -1])
 def test_st_sm_parallel(backend, slicer, invariant, n_jobs):
+    _skip_bugged_loky_on_macos_intel(backend)
     ground_truth = get_sm_st(n_jobs=1, to_slicer=slicer, invariant=invariant)
     ground_truth2 = get_sm_st(n_jobs=1, to_slicer=not slicer, invariant=invariant)
     assert_sm_pair(ground_truth, ground_truth2, reg=0, exact=False, max_error=1e-12)
