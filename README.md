@@ -59,8 +59,8 @@ This library features a bunch of different functions and helpers. See below for 
  - [x] [[Computing the Multicover Bifiltration, SOCG2021]](https://doi.org/10.4230/LIPIcs.SoCG.2021.27) Rhomboid Tiling bifiltration. Equivalent to the multicover bifiltration, using [rhomboidtiling](https://github.com/geoo89/rhomboidtiling).
  - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
  - [x] [[Kernel Operations on the GPU, with Autodiff, without Memory Overflows, JMLR]](http://jmlr.org/papers/v22/20-275.html) Although not linked, at first glance, to persistence in any way, this library allows computing blazingly fast signed measures convolutions (and more!) with custom kernels. 
- - [ ] [Backend only] [[Projected distances for multi-parameter persistence modules]](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
- - [ ] [Partial, and experimental] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
+ - [x] [[Projected distances for multi-parameter persistence modules]](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
+ - [x] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
 
 If I missed something, or you want to add something, feel free to open an issue.
 
