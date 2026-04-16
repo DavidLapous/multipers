@@ -86,7 +86,7 @@ This is due to linked GPL/LGPL third-party components used by the build, notably
 See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.
 
 ## Citation
-Please cite this library when using it in scientific publications;
+Please cite this library and its dependencies (see above) when using it in scientific publications;
 you can use the following journal bibtex entry
 ```bib
 @article{multipers,
