@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from functools import partial
 from typing import Any, cast
 import jax as _jax
 import jax.numpy as _jnp
@@ -163,7 +164,7 @@ def maxvalues(x, **kwargs):
     return _jnp.max(x, **kwargs)
 
 
-@jit(static_argnames=("p",))
+@partial(jit, static_argnames=("p",))
 def cdist(x, y, p=2):
     diff = _jnp.abs(x[:, None, :] - y[None, :, :])
     if p == 1:
@@ -173,7 +174,7 @@ def cdist(x, y, p=2):
     return _jnp.sum(diff**p, axis=-1) ** (1.0 / p)
 
 
-@jit(static_argnames=("p",))
+@partial(jit, static_argnames=("p",))
 def pdist(x, p=2):
     distances = cdist(x, x, p=p)
     row_idx, col_idx = _jnp.triu_indices(x.shape[0], k=1)
