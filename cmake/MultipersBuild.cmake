@@ -199,6 +199,7 @@ target_include_directories(
     ${MULTIPERS_HERA_PHAT_INCLUDE_DIRS}
     ${MULTIPERS_HERA_INCLUDE_DIRS}
 )
+multipers_link_openmp(multipers_core_hera_obj)
 
 add_library(
   multipers_core_shared
