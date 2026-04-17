@@ -513,6 +513,8 @@ function(multipers_configure_module module_name target_name)
   elseif(module_name STREQUAL "_slicer_nanobind")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
+    # Build slicer templates in-module so import does not depend on ELF shared-core exports.
+    target_compile_definitions(${target_name} PRIVATE MULTIPERS_BUILD_CORE_TEMPLATES=1)
 
   elseif(module_name STREQUAL "_mma_nanobind")
     multipers_link_tbb(${target_name})
