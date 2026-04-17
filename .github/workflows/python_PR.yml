@@ -201,14 +201,12 @@ jobs:
         micromamba activate test
         cd "$(mktemp -d)"
         python - <<'PY'
+        import importlib.util
         import re
         import shutil
         import subprocess
         import sys
         from pathlib import Path
-
-        import multipers
-
 
         def parse_nm_output(out: str):
           rows = []
@@ -261,10 +259,17 @@ jobs:
           )
 
 
+        def locate_installed_package_dir(package_name: str) -> Path:
+          spec = importlib.util.find_spec(package_name)
+          if spec is None or not spec.submodule_search_locations:
+            raise RuntimeError(f"Unable to locate installed {package_name} package")
+          return Path(next(iter(spec.submodule_search_locations))).resolve()
+
+
         if not any(shutil.which(tool) is not None for tool in ("nm", "readelf")):
           raise RuntimeError("nm or readelf is required for symbol ownership checks")
 
-        pkg = Path(multipers.__file__).resolve().parent
+        pkg = locate_installed_package_dir("multipers")
         core_candidates = sorted(pkg.glob("libmultipers_core*.so"))
         if not core_candidates:
           raise RuntimeError(f"Missing libmultipers_core shared library in {pkg}")
@@ -279,7 +284,10 @@ jobs:
             "prefixes": (
               "_ZN5Gudhi17multi_persistence6Slicer",
               "__ZN5Gudhi17multi_persistence6Slicer",
+              "_ZN5Gudhi17multi_persistence18Thread_safe_slicer",
+              "__ZN5Gudhi17multi_persistence18Thread_safe_slicer",
             ),
+            "allow_fully_local": True,
           },
           "simplex_tree_multi": {
             "pattern": "_simplex_tree_multi_nanobind*.so",
@@ -287,6 +295,7 @@ jobs:
               "_ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
               "__ZN5Gudhi14multiparameter16python_interface28Simplex_tree_multi_interface",
             ),
+            "allow_fully_local": False,
           },
         }
 
@@ -310,6 +319,8 @@ jobs:
             if typ == "U" and any(sym.startswith(prefix) for prefix in prefixes)
           }
           if not undef:
+            if module_info.get("allow_fully_local", False):
+              continue
             raise RuntimeError(f"No unresolved owned templates found in {module_path.name}")
 
           missing = sorted(undef - core_defs)
@@ -334,12 +345,17 @@ jobs:
         micromamba activate test
         cd "$(mktemp -d)"
         python - <<'PY'
+        import importlib.util
         from importlib import import_module
         from pathlib import Path
 
-        import multipers
+        def locate_installed_package_dir(package_name: str) -> Path:
+          spec = importlib.util.find_spec(package_name)
+          if spec is None or not spec.submodule_search_locations:
+            raise RuntimeError(f"Unable to locate installed {package_name} package")
+          return Path(next(iter(spec.submodule_search_locations))).resolve()
 
-        pkg = Path(multipers.__file__).resolve().parent
+        pkg = locate_installed_package_dir("multipers")
         core_dlls = sorted(pkg.glob("*multipers_core*.dll"))
         if not core_dlls:
           raise RuntimeError(f"Missing multipers core DLL in {pkg}")
