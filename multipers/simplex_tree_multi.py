@@ -17,7 +17,6 @@ from multipers.point_measure import sparsify
 import multipers.logs as _mp_logs
 
 
-SAFE_CONVERSION = False
 _available_strategies = Lstrategies
 
 available_simplextrees = tuple(_nb.available_simplextrees)
@@ -85,49 +84,6 @@ def _values_from_coords(filtration, grid, dtype=np.float64):
     return out[0] if original_ndim == 1 else out
 
 
-def _rebuild_from_current_simplices(self, target_cls, transform):
-    out = target_cls()
-    out.set_num_parameter(self.num_parameters)
-    simplices = list(self.get_simplices())
-    max_dim = max((len(simplex) - 1 for simplex, _ in simplices), default=-1)
-    for dim in range(max_dim + 1):
-        simplices_dim = [
-            np.asarray(simplex, dtype=np.int32)
-            for simplex, _ in simplices
-            if len(simplex) - 1 == dim
-        ]
-        if not simplices_dim:
-            continue
-        vertex_array = np.asarray(simplices_dim, dtype=np.int32).T
-        if self.is_kcritical:
-            filtration_values = [
-                transform(filtration)
-                for simplex, filtration in simplices
-                if len(simplex) - 1 == dim
-            ]
-            max_crit = max(np.asarray(f).shape[0] for f in filtration_values)
-            packed = np.empty(
-                (len(filtration_values), max_crit, self.num_parameters),
-                dtype=np.asarray(filtration_values[0]).dtype,
-            )
-            for i, filtration in enumerate(filtration_values):
-                arr = np.asarray(filtration)
-                packed[i, : arr.shape[0], :] = arr
-                if arr.shape[0] < max_crit:
-                    packed[i, arr.shape[0] :, :] = arr[-1]
-            out.insert_batch(vertex_array, packed)
-        else:
-            filtrations = np.asarray(
-                [
-                    transform(filtration)
-                    for simplex, filtration in simplices
-                    if len(simplex) - 1 == dim
-                ]
-            )
-            out.insert_batch(vertex_array, filtrations)
-    return out
-
-
 def _get_class(dtype, kcritical=False, ftype="Contiguous"):
     try:
         return _nb._get_simplextree_class(np.dtype(dtype).type, kcritical, str(ftype))
@@ -143,39 +99,6 @@ def is_simplextree_multi(input) -> bool:
     return _nb.is_simplextree_multi(input)
 
 
-def _safe_simplextree_multify(
-    simplextree: gd.SimplexTree, cls, num_parameters=2, default_values=None
-):
-    simplices = [[] for _ in range(simplextree.dimension() + 1)]
-    filtration_values = [[] for _ in range(simplextree.dimension() + 1)]
-    st_multi = cls()
-    st_multi.set_num_parameter(num_parameters)
-    if default_values is None:
-        default_values = np.zeros(num_parameters - 1, dtype=cls().dtype) + _t_minus_inf(
-            cls().dtype
-        )
-    default_values = np.asarray(default_values, dtype=cls().dtype)
-    if default_values.squeeze().ndim == 0:
-        default_values = (
-            np.zeros(num_parameters - 1, dtype=cls().dtype) + default_values
-        )
-    for simplex, filtration in simplextree.get_simplices():
-        filtration_values[len(simplex) - 1].append(
-            np.concatenate([[filtration], default_values]).astype(
-                cls().dtype, copy=False
-            )
-        )
-        simplices[len(simplex) - 1].append(simplex)
-    for batch_simplices, batch_filtrations in zip(simplices, filtration_values):
-        if not batch_simplices:
-            continue
-        st_multi.insert_batch(
-            np.asarray(batch_simplices, dtype=np.int32).T,
-            np.asarray(batch_filtrations, dtype=cls().dtype),
-        )
-    return st_multi
-
-
 def SimplexTreeMulti(
     input=None,
     num_parameters: int = -1,
@@ -183,7 +106,6 @@ def SimplexTreeMulti(
     kcritical: bool = False,
     ftype="Contiguous",
     default_values=None,
-    safe_conversion: bool = False,
     max_dim: int = -1,
     return_type_only: bool = False,
     **kwargs,
@@ -233,24 +155,9 @@ def SimplexTreeMulti(
                 )
                 default_values = np.concatenate((padding, default_values))
 
-        if safe_conversion or SAFE_CONVERSION:
-            return _safe_simplextree_multify(
-                input,
-                cls,
-                num_parameters=num_parameters,
-                default_values=default_values[1:],
-            )
         out = cls()
-        try:
-            out._from_gudhi_state(input.__getstate__(), num_parameters, default_values)
-            return out
-        except Exception:
-            return _safe_simplextree_multify(
-                input,
-                cls,
-                num_parameters=num_parameters,
-                default_values=default_values[1:],
-            )
+        out._from_gudhi_state(input.__getstate__(), num_parameters, default_values)
+        return out
 
     raise TypeError(
         "`input` requires to be of type `SimplexTree`, `SimplexTreeMulti`, `Slicer`, or `None`."
@@ -914,7 +821,6 @@ from multipers._simplextree_algorithms import (  # noqa: E402
 
 __all__ = [
     *(cls.__name__ for cls in available_simplextrees),
-    "SAFE_CONVERSION",
     "available_simplextrees",
     "available_dtype",
     "SimplexTreeMulti_type",
