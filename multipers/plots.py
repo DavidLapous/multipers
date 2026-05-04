@@ -21,6 +21,11 @@ _cmap_ = ListedColormap(_custom_colors)
 _cmap = mcolors.LinearSegmentedColormap.from_list(
     "continuous_cmap", _cmap_.colors, N=256
 )
+_bordeaux = np.array([0.70567316, 0.01555616, 0.15023281, 1])
+_bleu = np.array([0.2298057, 0.29871797, 0.75368315, 1])
+_signed_cmap = mcolors.LinearSegmentedColormap.from_list(
+    "signed_cmap", [_bordeaux, "white", _bleu], N=256
+)
 
 
 def _plot_rectangle(rectangle: np.ndarray, weight, **plt_kwargs):
@@ -57,19 +62,19 @@ def _plot_signed_measure_2(
     else:
         max_weight = 1
 
-    bordeaux = np.array([0.70567316, 0.01555616, 0.15023281, 1])
-    light_bordeaux = np.array([0.70567316, 0.01555616, 0.15023281, temp_alpha])
-    bleu = np.array([0.2298057, 0.29871797, 0.75368315, 1])
-    light_bleu = np.array([0.2298057, 0.29871797, 0.75368315, temp_alpha])
+    light_bordeaux = _bordeaux.copy()
+    light_bordeaux[-1] = temp_alpha
+    light_bleu = _bleu.copy()
+    light_bleu[-1] = temp_alpha
     norm = plt.Normalize(-2, 2)
     cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-        "", [bordeaux, light_bordeaux, "white", light_bleu, bleu]
+        "", [_bordeaux, light_bordeaux, "white", light_bleu, _bleu]
     )
     plt.scatter(
         pts[:, 0], pts[:, 1], c=color_weights, cmap=cmap, norm=norm, **plt_kwargs
     )
-    plt.scatter([], [], color=bleu, label="positive mass", **plt_kwargs)
-    plt.scatter([], [], color=bordeaux, label="negative mass", **plt_kwargs)
+    plt.scatter([], [], color=_bleu, label="positive mass", **plt_kwargs)
+    plt.scatter([], [], color=_bordeaux, label="negative mass", **plt_kwargs)
     plt.legend()
 
 
@@ -218,7 +223,7 @@ def plot_surface(
         elif discrete_surface:
             if has_negative_values is None:
                 has_negative_values = np.any(hf.ravel() < 0)
-            cmap = matplotlib.colormaps["gray_r"]
+            cmap = _signed_cmap if has_negative_values else matplotlib.colormaps["gray_r"]
         else:
             cmap = _cmap
 
@@ -255,7 +260,12 @@ def plot_surface(
                     "resampled", cmap(np.linspace(0, 1, n_bins))
                 )
 
-        norm = mcolors.BoundaryNorm(bounds, cmap.N, extend="max")
+        if has_negative_values:
+            norm = mcolors.TwoSlopeNorm(
+                vmin=min(t_min, -1), vcenter=0, vmax=max(t_max, 1)
+            )
+        else:
+            norm = mcolors.BoundaryNorm(bounds, cmap.N, extend="max")
 
         im = ax.pcolormesh(
             grid[0], grid[1], hf.T, cmap=cmap, norm=norm, shading="flat", **plt_args
