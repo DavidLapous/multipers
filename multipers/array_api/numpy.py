@@ -3,7 +3,6 @@ from functools import wraps
 from importlib.util import find_spec
 
 import numpy as _np
-from scipy.special import logsumexp as _sp_logsumexp
 import multipers.logs as _mp_logs
 
 if find_spec("numba"):
@@ -126,6 +125,8 @@ def any(x, axis=None, dim=None, **kwargs):
 
 
 def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
+    from scipy.special import logsumexp as _sp_logsumexp
+
     if axis is None:
         axis = dim
     if keepdim is None:
