@@ -11,95 +11,9 @@ from numpy.typing import ArrayLike
 from multipers.array_api import api_from_tensor, api_from_tensors, check_keops
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
-from multipers.grids import compute_grid, get_exact_grid
+from multipers.grids import compute_grid, get_exact_grid, push_to_grid
 
 from multipers.simplex_tree_multi import SimplexTreeMulti_type
-
-
-def _function_delaunay_presentation_to_slicer(
-    slicer,
-    point_cloud: np.ndarray,
-    function_values: np.ndarray,
-    clear: bool = True,
-    verbose: bool = False,
-    degree=-1,
-    multi_chunk=False,
-    recover_ids: bool = False,
-):
-    del clear
-    import multipers._function_delaunay_interface as _function_delaunay_interface
-
-    _function_delaunay_interface.require()
-
-    point_cloud = np.asarray(point_cloud, dtype=np.float64)
-    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
-    if point_cloud.ndim != 2:
-        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
-    if function_values.ndim != 1:
-        raise ValueError(
-            f"function_values should be a 1d array. Got {function_values.shape=}"
-        )
-    if point_cloud.shape[0] != function_values.shape[0]:
-        raise ValueError(
-            f"point_cloud and function_values should have same number of points. "
-            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
-        )
-    if verbose:
-        _mp_logs.log_verbose(
-            f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk={multi_chunk} recover_ids={recover_ids}",
-            enabled=verbose,
-        )
-    return _function_delaunay_interface.function_delaunay_to_slicer(
-        slicer,
-        point_cloud,
-        function_values,
-        degree,
-        multi_chunk,
-        recover_ids,
-        verbose,
-    )
-
-
-def _function_delaunay_presentation_to_simplextree(
-    point_cloud: np.ndarray,
-    function_values: np.ndarray,
-    clear: bool = True,
-    verbose: bool = False,
-    dtype=np.float64,
-    recover_ids: bool = False,
-):
-    del clear
-    import multipers._function_delaunay_interface as _function_delaunay_interface
-    from multipers.simplex_tree_multi import SimplexTreeMulti
-
-    _function_delaunay_interface.require()
-
-    point_cloud = np.asarray(point_cloud, dtype=np.float64)
-    function_values = np.asarray(function_values, dtype=np.float64).reshape(-1)
-    if point_cloud.ndim != 2:
-        raise ValueError(f"point_cloud should be a 2d array. Got {point_cloud.shape=}")
-    if function_values.ndim != 1:
-        raise ValueError(
-            f"function_values should be a 1d array. Got {function_values.shape=}"
-        )
-    if point_cloud.shape[0] != function_values.shape[0]:
-        raise ValueError(
-            f"point_cloud and function_values should have same number of points. "
-            f"Got {point_cloud.shape[0]} and {function_values.shape[0]}."
-        )
-    st = SimplexTreeMulti(num_parameters=2, dtype=dtype)
-    if verbose:
-        _mp_logs.log_verbose(
-            f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids}",
-            enabled=verbose,
-        )
-    return _function_delaunay_interface.function_delaunay_to_simplextree(
-        st,
-        point_cloud,
-        function_values,
-        recover_ids,
-        verbose,
-    )
 
 
 def _rhomboid_tiling_to_slicer(
@@ -287,6 +201,7 @@ def DelaunayLowerstar(
      - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
     """
     import multipers
+    import multipers._function_delaunay_interface as _function_delaunay_interface
 
     with _mp_logs.timings(
         "DelaunayLowerstar",
@@ -315,28 +230,47 @@ def DelaunayLowerstar(
             raise ValueError(
                 "Delaunay Lowerstar is only compatible with 1 additional parameter."
             )
-        points_np = api.asnumpy(points)
-        function_np = api.asnumpy(function)
+        points_np = api.asnumpy(points).astype(np.float64, copy=False)
+        function_np = api.asnumpy(function).astype(np.float64, copy=False).reshape(-1)
+        if points_np.ndim != 2:
+            raise ValueError(f"point_cloud should be a 2d array. Got {points_np.shape=}")
+        if points_np.shape[0] != function_np.shape[0]:
+            raise ValueError(
+                f"point_cloud and function_values should have same number of points. "
+                f"Got {points_np.shape[0]} and {function_np.shape[0]}."
+            )
+        _function_delaunay_interface.require()
         degree = -1 if flagify else reduce_degree
         if degree < 0:
-            slicer = _function_delaunay_presentation_to_simplextree(
+            from multipers.simplex_tree_multi import SimplexTreeMulti
+
+            if verbose:
+                _mp_logs.log_verbose(
+                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids}",
+                    enabled=verbose,
+                )
+            slicer = _function_delaunay_interface.function_delaunay_to_simplextree(
+                SimplexTreeMulti(num_parameters=2, dtype=dtype),
                 points_np,
                 function_np,
-                verbose=verbose,
-                clear=clear,
-                dtype=dtype,
-                recover_ids=recover_ids,
+                recover_ids,
+                verbose,
             )
         else:
             slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
-            slicer = _function_delaunay_presentation_to_slicer(
+            if verbose:
+                _mp_logs.log_verbose(
+                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk=False recover_ids={recover_ids}",
+                    enabled=verbose,
+                )
+            slicer = _function_delaunay_interface.function_delaunay_to_slicer(
                 slicer,
                 points_np,
                 function_np,
-                degree=degree,
-                verbose=verbose,
-                clear=clear,
-                recover_ids=recover_ids,
+                degree,
+                False,
+                recover_ids,
+                verbose,
             )
             slicer.minpres_degree = degree
         timing.substep("built_function_delaunay")
@@ -350,10 +284,10 @@ def DelaunayLowerstar(
                     slicer = slicer.copy()
                     if max_dim >= 0:
                         slicer.prune_above_dimension(max_dim)
-                    flagify_timing.substep("copied_pruned_simplextree")
+                    flagify_timing.substep("copy+pruned")
                 else:
                     slicer = to_simplextree(slicer, max_dim=max_dim)
-                    flagify_timing.substep("converted_slicer_to_simplextree")
+                    flagify_timing.substep("converted back to a simplextree")
                 slicer.flagify(2)
                 flagify_timing.substep("flagify")
 
@@ -363,16 +297,16 @@ def DelaunayLowerstar(
                     zero = api.to_device(zero, api.device(distances))
                     distance_values = api.cat([distances, zero])
                     grid = get_exact_grid([distance_values, function], api=api)
-                    flagify_timing.substep("computed_exact_grid")
+                    flagify_timing.substep("recomputed pairwise dists")
                     slicer = slicer.grid_squeeze(grid)
-                    flagify_timing.substep("grid_squeezed")
+                    flagify_timing.substep("stored cdist gradients")
                     slicer = slicer._clean_filtration_grid()
-                    flagify_timing.substep("cleaned_grid")
+                    flagify_timing.substep("cleaned slicer")
                 if reduce_degree >= 0:
                     from multipers import Slicer
 
                     slicer = Slicer(slicer)
-                    flagify_timing.substep("converted_back_to_slicer")
+                    flagify_timing.substep("converted to slicer for minpres")
 
         if reduce_degree >= 0:
             # Force resolution to avoid confusion with hilbert.
@@ -380,6 +314,8 @@ def DelaunayLowerstar(
             timing.substep("computed_minpres")
 
         return slicer
+
+
 def _AlphaLowerstar(
     points: ArrayLike,
     function: ArrayLike,
@@ -413,7 +349,7 @@ def _AlphaLowerstar(
         st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
 
     if api.has_grad(points) or api.has_grad(function):
-        D = api.cdist(points, points) ** 2
+        D = api.pdist(points, points) ** 2
 
         grid = compute_grid([D.ravel(), *filtrations.T])
         st = st.grid_squeeze(grid)
@@ -497,26 +433,62 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
      - image: ArrayLike of shape (*image_resolution, num_parameters)
      - ** args : specify non-default slicer parameters
     """
-    from multipers._slicer_algorithms import from_bitmap
+    from multipers import Slicer, _slicer_nanobind as mps
+    from multipers.slicer import available_dtype
 
+    verbose = bool(slicer_kwargs.pop("verbose", False))
     api = api_from_tensor(image)
     image = api.astensor(image)
-    if api.has_grad(image):
-        img2 = image.reshape(-1, image.shape[-1]).T
-        grid = compute_grid(img2)
-        coord_img = np.empty(image.shape, dtype=np.int32)
-        slice_shape = image.shape[:-1]
-        for i in range(image.shape[-1]):
-            coord_img[..., i] = np.searchsorted(
-                api.asnumpy(grid[i]),
-                api.asnumpy(image[..., i]).reshape(-1),
-            ).reshape(slice_shape)
-        slicer = from_bitmap(coord_img, **slicer_kwargs)
-        slicer.filtration_grid = grid
-        slicer._clean_filtration_grid()
-        return slicer
+    has_grad = api.has_grad(image)
 
-    return from_bitmap(image, **slicer_kwargs)
+    with _mp_logs.timings(
+        "Cubical",
+        enabled=verbose,
+        details={
+            "backend": "bitmap",
+            "mode": "python",
+            "has_grad": has_grad,
+        },
+    ) as timing:
+        grid = None
+        bitmap = image
+        if has_grad:
+            img2 = image.reshape(-1, image.shape[-1]).T
+            grid = compute_grid(img2)
+            timing.substep("computed_autodiff_grid")
+            bitmap = push_to_grid(
+                image.reshape(-1, image.shape[-1]),
+                grid,
+                return_coordinate=True,
+            ).reshape(image.shape).astype(np.int32, copy=False)
+            timing.substep("pushed_to_grid")
+
+        bitmap = np.asarray(bitmap) if isinstance(bitmap, np.ndarray) else api.asnumpy(bitmap)
+        dtype = slicer_kwargs.get("dtype", bitmap.dtype)
+        slicer_kwargs["dtype"] = dtype
+        if bitmap.dtype != dtype:
+            raise ValueError(f"Invalid type matching. Got {dtype=} and {bitmap.dtype=}.")
+
+        _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
+        builder_name = f"_build_bitmap_{np.dtype(dtype).name.replace('float64', 'f64').replace('int32', 'i32')}"
+        if not hasattr(mps, builder_name):
+            raise ValueError(
+                f"Invalid dtype. Got {bitmap.dtype=}, was expecting {available_dtype=}."
+            )
+        timing.substep("resolved_builder")
+
+        flattened = np.ascontiguousarray(bitmap.reshape(-1, bitmap.shape[-1]))
+        shape = np.ascontiguousarray(bitmap.shape[:-1], dtype=np.uint32)
+        timing.substep("prepared_bitmap")
+        base = getattr(mps, builder_name)(flattened, shape)
+        slicer = base if type(base) is _Slicer else _Slicer(base)
+        timing.substep("built_bitmap")
+
+        if grid is not None:
+            slicer.filtration_grid = grid
+            slicer._clean_filtration_grid()
+            timing.substep("attached_grid")
+        return slicer
 
 
 def DegreeRips(
@@ -650,14 +622,17 @@ def CoreDelaunay(
      - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
      - ks: The list of k-values to include in the bifiltration (default None). If None, the k-values are set to [1, 2, ..., n] where n is the number of points in the point cloud. For large point clouds, it is recommended to set ks to a smaller list of k-values to reduce computation time. The values in ks must all be integers, positive, and less than or equal to the number of points in the point cloud.
      - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
-     - verbose: Whether to print progress messages (default False).
+     - verbose: Whether to emit timing logs (default False).
      - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
     """
-    import gudhi as gd
-    from scipy.spatial import KDTree
+    from multipers._core_delaunay_nanobind import build_core_delaunay_simplextree
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
     points = np.asarray(points)
+    if len(points) == 0:
+        return SimplexTreeMulti(num_parameters=2)
+    if points.ndim != 2:
+        raise ValueError(f"The point cloud must be a 2D array, got {points.ndim}D.")
     if ks is None:
         ks = np.arange(1, len(points) + 1)
     else:
@@ -672,10 +647,6 @@ def CoreDelaunay(
         raise ValueError(
             "All values in ks must be less than or equal to the number of points in the point cloud."
         )
-    if len(points) == 0:
-        raise ValueError("The point cloud must contain at least one point.")
-    if points.ndim != 2:
-        raise ValueError(f"The point cloud must be a 2D array, got {points.ndim}D.")
     if beta < 0:
         raise ValueError(f"The parameter beta must be positive, got {beta}.")
     if precision not in ["safe", "exact", "fast"]:
@@ -683,75 +654,34 @@ def CoreDelaunay(
             "The parameter precision must be one of ['safe', 'exact', 'fast'], "
             f"got {precision}."
         )
+    points = np.ascontiguousarray(points, dtype=np.float64)
+    ks = np.ascontiguousarray(ks, dtype=np.int64)
 
-    if verbose:
-        print(
-            f"""Computing the Delaunay Core Bifiltration
-            of {len(points)} points in dimension {points.shape[1]}
-            with parameters:
-            """
+    with _mp_logs.timings(
+        "CoreDelaunay",
+        enabled=verbose,
+        details={
+            "backend": "gudhi",
+            "mode": "cpp_interface",
+            "num_points": len(points),
+            "dim": points.shape[1],
+            "beta": beta,
+            "ks_count": len(ks),
+            "precision": precision,
+            "positive_degree": positive_degree,
+        },
+    ) as timing:
+        simplex_tree_multi = build_core_delaunay_simplextree(
+            SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64),
+            points,
+            ks,
+            float(beta),
+            precision,
+            float(max_alpha_square),
+            positive_degree,
         )
-        print(f"\tbeta = {beta}")
-        print(f"\tks = {ks}")
-
-    if verbose:
-        print("Building the alpha complex...")
-    alpha_complex = gd.AlphaComplex(
-        points=points, precision=precision
-    ).create_simplex_tree(max_alpha_square=max_alpha_square)
-
-    if verbose:
-        print("Computing the k-nearest neighbor distances...")
-    knn_distances = KDTree(points).query(points, k=ks)[0]
-
-    max_dim = alpha_complex.dimension()
-    vertex_arrays_in_dimension = [[] for _ in range(max_dim + 1)]
-    squared_alphas_in_dimension = [[] for _ in range(max_dim + 1)]
-    for simplex, alpha_squared in alpha_complex.get_simplices():
-        dim = len(simplex) - 1
-        squared_alphas_in_dimension[dim].append(alpha_squared)
-        vertex_arrays_in_dimension[dim].append(simplex)
-
-    alphas_in_dimension = [
-        np.sqrt(np.array(alpha_squared, dtype=np.float64))
-        for alpha_squared in squared_alphas_in_dimension
-    ]
-    vertex_arrays_in_dimension = [
-        np.array(vertex_array, dtype=np.int32)
-        for vertex_array in vertex_arrays_in_dimension
-    ]
-
-    simplex_tree_multi = SimplexTreeMulti(
-        num_parameters=2, kcritical=True, dtype=np.float64
-    )
-
-    for dim, (vertex_array, alphas) in enumerate(
-        zip(vertex_arrays_in_dimension, alphas_in_dimension)
-    ):
-        num_simplices = len(vertex_array)
-        if verbose:
-            print(
-                f"""
-                Inserting {num_simplices} simplices of dimension {dim}
-                ({num_simplices * len(ks)} birth values)...
-                """
-            )
-        max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
-        critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
-        filtrations = np.stack(
-            (
-                critical_radii,
-                (ks[-1] - ks if positive_degree else -ks)
-                * np.ones_like(critical_radii),
-            ),
-            axis=-1,
-        )
-        simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
-
-    if verbose:
-        print("Done computing the Delaunay Core Bifiltration.")
-
-    return simplex_tree_multi
+        timing.substep("built_native_core_delaunay")
+        return simplex_tree_multi
 
 
 def RhomboidBifiltration(
