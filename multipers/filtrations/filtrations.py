@@ -189,7 +189,7 @@ def DelaunayLowerstar(
     verbose: bool = False,
     clear: bool = True,
     flagify: bool = False,
-    recover_ids: bool = False,
+    recover_ids: bool = True,
 ):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
