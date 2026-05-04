@@ -79,6 +79,34 @@ def test_kcritical_insert_without_filtration_uses_first_possible_time():
     not has_kcritical,
     reason="kcritical simplextree not compiled, skipping this test",
 )
+def test_kcritical_reinsert_uses_native_unification():
+    st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
+
+    st.insert([0, 1], [1, 2])
+    st.insert([0, 1], [2, 3])
+    assert np.array_equal(np.asarray(st[[0, 1]]), np.array([[1.0, 2.0]]))
+    assert np.array_equal(np.asarray(st[[0]]), np.array([[1.0, 2.0]]))
+    assert np.array_equal(np.asarray(st[[1]]), np.array([[1.0, 2.0]]))
+
+    st.insert([0, 1], [3, 1])
+    assert np.array_equal(
+        np.asarray(st[[0, 1]]),
+        np.array([[1.0, 2.0], [3.0, 1.0]]),
+    )
+    assert np.array_equal(
+        np.asarray(st[[0]]),
+        np.array([[1.0, 2.0], [3.0, 1.0]]),
+    )
+    assert np.array_equal(
+        np.asarray(st[[1]]),
+        np.array([[1.0, 2.0], [3.0, 1.0]]),
+    )
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
 def test_4():
     st = mp.SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64)
     st.insert([0, 1, 2], [0, 1])
@@ -90,7 +118,7 @@ def test_4():
     st.insert([0, 1, 2], [2.5, 0.5])
     st.insert([0, 1, 2], [0.5, 2.5])
 
-    expected_edge_filtration = array([[0.0, 1.0]])
+    expected_edge_filtration = array([[0.0, 1.0], [1.0, 0.0]])
     for simplex in ([0], [1], [2], [0, 1], [0, 2], [1, 2]):
         assert np.array_equal(np.asarray(st[simplex]), expected_edge_filtration), (
             f"Unexpected filtration update on lower-dimensional simplex {simplex}"
@@ -103,11 +131,17 @@ def test_4():
         array(
             [
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.0, 1.0],
+                [1.0, 0.0],
                 [0.5, 2.5],
                 [1.0, 2.0],
                 [1.5, 1.5],
@@ -129,6 +163,8 @@ def test_4():
                 [1.0, 2.5],
                 [1.5, 2.0],
                 [2.0, 1.5],
+                [2.5, 1.0],
+                [np.inf, 0.5],
             ]
         ),
     )
@@ -391,7 +427,7 @@ def test_kcritical_batch_insert():
         (array([0]), [array([-1.0, -2.0])]),
         (array([1, 2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
         (array([1]), [array([-2.0, -1.0])]),
-        (array([2]), [array([0.0, 1.0]), array([1.0, 0.0])]),
+        (array([2]), [array([-1.0, 3.0]), array([0.0, 1.0]), array([1.0, 0.0])]),
     ]
     assert_st_simplices(st, goal)
 

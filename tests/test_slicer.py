@@ -8,10 +8,6 @@ from numpy import array
 import multipers as mp
 import multipers.array_api.numpy as npapi
 import multipers.slicer as mps
-from multipers.filtrations.filtrations import (
-    _function_delaunay_presentation_to_simplextree,
-    _function_delaunay_presentation_to_slicer,
-)
 from multipers.tests import assert_sm, random_st
 import multipers._2pac_interface as _2pac_interface
 import multipers._function_delaunay_interface as _function_delaunay_interface
