@@ -189,7 +189,7 @@ def DelaunayLowerstar(
     verbose: bool = False,
     clear: bool = True,
     flagify: bool = False,
-    recover_ids: bool = True,
+    recover_ids: Optional[bool] = None,
 ):
     """
     Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
@@ -202,6 +202,9 @@ def DelaunayLowerstar(
     """
     import multipers
     import multipers._function_delaunay_interface as _function_delaunay_interface
+
+    if recover_ids is None:
+        recover_ids = reduce_degree >= 0
 
     with _mp_logs.timings(
         "DelaunayLowerstar",
