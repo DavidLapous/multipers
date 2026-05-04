@@ -17,6 +17,10 @@ def test_1():
     st.insert([0, 1], [1, 1])
     it = [([0, 1], [1.0, 1.0]), ([0], [0.0, 1.0]), ([1], [1.0, 0.0])]
     assert_st_simplices(st, it)
+    edges = st.get_edge_list()
+    assert edges.shape == (1, 4)
+    assert set(edges[0, :2]) == {0.0, 1.0}
+    assert np.array_equal(edges[0, 2:], [1.0, 1.0])
 
 
 def test_2():

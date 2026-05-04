@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import multipers as mp
+from multipers._mma_nanobind import PyBox_f64
 import multipers.ml.mma as mma
 from multipers.tests import random_st
 
@@ -14,6 +15,9 @@ def test_1():
     mma_pymodule = mp.module_approximation(st)
     assert np.array_equal(mma_pymodule[0].get_birth_list(), [[0.0, 1.0], [1.0, 0.0]])
     assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf, np.inf]])
+    assert np.asarray(mma_pymodule[0].get_bounds()).shape[0] == 2
+    assert np.asarray(mma_pymodule.get_bounds()).shape[0] == 2
+    assert np.array_equal(PyBox_f64([0.0, 1.0], [2.0, 3.0]).get(), [[0.0, 1.0], [2.0, 3.0]])
 
 
 def test_img():
