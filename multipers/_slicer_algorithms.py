@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 
-import multipers.slicer as mps
 from multipers import _slicer_nanobind as _nb
 from multipers.point_measure import rank_decomposition_by_rectangles, sparsify
 
@@ -96,26 +95,3 @@ def _rank_from_slicer(
         return coords, weights
 
     return [clean_rank(rank_of_degree) for rank_of_degree in rank]
-
-
-def from_bitmap(img, **kwargs):
-    img = np.asarray(img)
-    from multipers import Slicer
-
-    dtype = kwargs.get("dtype", img.dtype)
-    kwargs["dtype"] = dtype
-    if img.dtype != dtype:
-        raise ValueError(f"Invalid type matching. Got {dtype=} and {img.dtype=}.")
-
-    _Slicer = Slicer(return_type_only=True, **kwargs)
-    builder_name = f"_build_bitmap_{np.dtype(dtype).name.replace('float64', 'f64').replace('int32', 'i32')}"
-    if not hasattr(_nb, builder_name):
-        raise ValueError(
-            f"Invalid dtype. Got {img.dtype=}, was expecting {mps.available_dtype=}."
-        )
-    flattened = np.ascontiguousarray(img.reshape(-1, img.shape[-1]))
-    shape = np.ascontiguousarray(img.shape[:-1], dtype=np.uint32)
-    base = getattr(_nb, builder_name)(flattened, shape)
-    if type(base) is _Slicer:
-        return base
-    return _Slicer(base)
