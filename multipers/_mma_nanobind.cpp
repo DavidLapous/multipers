@@ -39,14 +39,10 @@ using multipers::nanobind_dense_utils::vector_from_array;
 using multipers::nanobind_mma_helpers::dispatch_mma_by_template_id;
 using multipers::nanobind_mma_helpers::is_mma_module_object;
 using multipers::nanobind_mma_helpers::MMADescriptorList;
-using multipers::nanobind_mma_helpers::module_wrapper_t;
-using multipers::nanobind_mma_helpers::PyModule;
 using multipers::nanobind_mma_helpers::type_list;
-using multipers::nanobind_utils::has_template_id;
 using multipers::nanobind_utils::matrix_from_handle;
 using multipers::nanobind_utils::numpy_dtype_type;
 using multipers::nanobind_utils::owned_array;
-using multipers::nanobind_utils::template_id_of;
 using multipers::nanobind_utils::tuple_from_size;
 using multipers::nanobind_utils::vector_from_handle;
 
@@ -131,8 +127,8 @@ Gudhi::multi_persistence::Box<T> box_from_rows(const std::vector<std::vector<T>>
 }
 
 template <typename T>
-Gudhi::multi_persistence::Box<T> box_from_handle(nb::handle h) {
-  return box_from_rows<T>(matrix_from_handle<T>(h));
+Gudhi::multi_persistence::Box<T> box_from_array(nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) {
+  return box_from_rows<T>(matrix_from_array(box));
 }
 
 template <typename T>
@@ -142,112 +138,138 @@ Gudhi::multi_persistence::Line<T> line_from_vectors(const std::vector<T>& basepo
 }
 
 template <typename T>
-nb::tuple barcode_from_line_impl(PyModule<T>& self,
+nb::tuple barcode_from_line_impl(Gudhi::multi_persistence::Module<T>& self,
                                  const std::vector<T>& basepoint,
                                  const std::vector<T>* direction,
                                  int degree) {
   auto line = line_from_vectors(basepoint, direction);
-  decltype(self.mod.get_barcode_from_line(line, degree)) barcode;
+  decltype(self.get_barcode_from_line(line, degree)) barcode;
   {
     nb::gil_scoped_release release;
-    barcode = self.mod.get_barcode_from_line(line, degree);
+    barcode = self.get_barcode_from_line(line, degree);
   }
   return barcode_to_python<T>(barcode);
 }
 
 template <typename T>
-PyModule<T>& evaluate_in_grid_impl(PyModule<T>& self, const std::vector<std::vector<T>>& grid) {
+Gudhi::multi_persistence::Module<T>& evaluate_in_grid_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                           const std::vector<std::vector<T>>& grid) {
   {
     nb::gil_scoped_release release;
-    self.mod.evaluate_in_grid(grid);
+    self.evaluate_in_grid(grid);
   }
   return self;
 }
 
 template <typename T>
-nb::object compute_landscapes_box_impl(PyModule<T>& self,
-                                       int degree,
-                                       const std::vector<unsigned int>& ks,
-                                       const Gudhi::multi_persistence::Box<T>& box,
-                                       const std::vector<unsigned int>& resolution,
-                                       int n_jobs) {
-  decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(
-      self.mod, degree, ks, box, resolution, n_jobs)) out;
+nb::ndarray<nb::numpy, T> compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                      int degree,
+                                                      const std::vector<unsigned int>& ks,
+                                                      const Gudhi::multi_persistence::Box<T>& box,
+                                                      const std::vector<unsigned int>& resolution,
+                                                      int n_jobs) {
+  std::vector<std::vector<std::vector<T>>> out;
   {
     nb::gil_scoped_release release;
-    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, box, resolution, n_jobs);
+    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self, degree, ks, box, resolution, n_jobs);
   }
-  return nb::cast(out);
+  const size_t ny = resolution.size() > 1 ? resolution[1] : size_t(0);
+  std::vector<T> flat;
+  flat.reserve(ks.size() * (resolution.empty() ? size_t(0) : resolution[0]) * ny);
+  for (auto& image : out) {
+    for (auto& row : image) {
+      flat.insert(flat.end(), row.begin(), row.end());
+    }
+  }
+  return owned_array<T>(std::move(flat), {ks.size(), resolution.empty() ? size_t(0) : resolution[0], ny});
 }
 
 template <typename T>
-nb::object compute_landscapes_grid_impl(PyModule<T>& self,
-                                        int degree,
-                                        const std::vector<unsigned int>& ks,
-                                        const std::vector<std::vector<T>>& grid,
-                                        int n_jobs) {
-  decltype(Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs)) out;
+nb::ndarray<nb::numpy, T> compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                       int degree,
+                                                       const std::vector<unsigned int>& ks,
+                                                       const std::vector<std::vector<T>>& grid,
+                                                       int n_jobs) {
+  std::vector<std::vector<std::vector<T>>> out;
   {
     nb::gil_scoped_release release;
-    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self.mod, degree, ks, grid, n_jobs);
+    out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self, degree, ks, grid, n_jobs);
   }
-  return nb::cast(out);
+  const size_t nx = grid.empty() ? size_t(0) : grid[0].size();
+  const size_t ny = grid.size() > 1 ? grid[1].size() : size_t(0);
+  std::vector<T> flat;
+  flat.reserve(ks.size() * nx * ny);
+  for (auto& image : out) {
+    for (auto& row : image) {
+      flat.insert(flat.end(), row.begin(), row.end());
+    }
+  }
+  return owned_array<T>(std::move(flat), {ks.size(), nx, ny});
 }
 
 template <typename T>
-nb::object compute_pixels_impl(PyModule<T>& self,
-                               const std::vector<std::vector<T>>& coordinates,
-                               const std::vector<int>& degrees,
-                               const Gudhi::multi_persistence::Box<T>& box,
-                               T delta,
-                               T p,
-                               bool normalize,
-                               int n_jobs) {
+nb::ndarray<nb::numpy, T> compute_pixels_impl(Gudhi::multi_persistence::Module<T>& self,
+                                              const std::vector<std::vector<T>>& coordinates,
+                                              const std::vector<int>& degrees,
+                                              const Gudhi::multi_persistence::Box<T>& box,
+                                              T delta,
+                                              T p,
+                                              bool normalize,
+                                              int n_jobs) {
   std::vector<std::vector<T>> out;
   {
     nb::gil_scoped_release release;
-    out = Gudhi::multi_persistence::compute_module_pixels(
-        self.mod, coordinates, degrees, box, delta, p, normalize, n_jobs);
+    out = Gudhi::multi_persistence::compute_module_pixels(self, coordinates, degrees, box, delta, p, normalize, n_jobs);
   }
-  return nb::cast(out);
+  std::vector<T> flat;
+  flat.reserve(degrees.size() * coordinates.size());
+  for (auto& row : out) {
+    flat.insert(flat.end(), row.begin(), row.end());
+  }
+  return owned_array<T>(std::move(flat), {degrees.size(), coordinates.size()});
 }
 
 template <typename T>
-nb::object distance_to_impl(PyModule<T>& self,
-                            const std::vector<std::vector<T>>& pts,
-                            bool signed_distance,
-                            int n_jobs) {
-  std::vector<T> out(pts.size() * self.mod.size());
+nb::ndarray<nb::numpy, T> distance_to_impl(Gudhi::multi_persistence::Module<T>& self,
+                                           const std::vector<std::vector<T>>& pts,
+                                           bool signed_distance,
+                                           int n_jobs) {
+  std::vector<T> out(pts.size() * self.size());
   {
     nb::gil_scoped_release release;
-    Gudhi::multi_persistence::compute_module_distances_to(self.mod, out.data(), pts, signed_distance, n_jobs);
+    Gudhi::multi_persistence::compute_module_distances_to(self, out.data(), pts, signed_distance, n_jobs);
   }
-  return nb::cast(owned_array<T>(std::move(out), {pts.size(), self.mod.size()}));
+  return owned_array<T>(std::move(out), {pts.size(), self.size()});
 }
 
 template <typename T>
-PyModule<T>& set_box_impl(PyModule<T>& self, const Gudhi::multi_persistence::Box<T>& box) {
+Gudhi::multi_persistence::Module<T>& set_box_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                  const Gudhi::multi_persistence::Box<T>& box) {
   {
     nb::gil_scoped_release release;
-    self.mod.set_box(box);
-  }
-  return self;
-}
-
-template <typename T>
-PyModule<T>& rescale_impl(PyModule<T>& self, const std::vector<T>& factors, int degree) {
-  {
-    nb::gil_scoped_release release;
-    self.mod.rescale(factors, degree);
+    self.set_box(box);
   }
   return self;
 }
 
 template <typename T>
-PyModule<T>& translate_impl(PyModule<T>& self, const std::vector<T>& factors, int degree) {
+Gudhi::multi_persistence::Module<T>& rescale_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                  const std::vector<T>& factors,
+                                                  int degree) {
   {
     nb::gil_scoped_release release;
-    self.mod.translate(factors, degree);
+    self.rescale(factors, degree);
+  }
+  return self;
+}
+
+template <typename T>
+Gudhi::multi_persistence::Module<T>& translate_impl(Gudhi::multi_persistence::Module<T>& self,
+                                                    const std::vector<T>& factors,
+                                                    int degree) {
+  {
+    nb::gil_scoped_release release;
+    self.translate(factors, degree);
   }
   return self;
 }
@@ -312,37 +334,15 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
 }
 
 template <typename T>
-std::vector<T> module_dimensions(const Gudhi::multi_persistence::Module<T>& module) {
-  std::vector<T> dims;
-  dims.reserve(module.size());
-  for (size_t i = 0; i < module.size(); ++i) dims.push_back((T)module.get_summand((unsigned int)i).get_dimension());
-  return dims;
-}
-
-template <typename T>
-struct PySummand {
-  Gudhi::multi_persistence::Summand<T> sum;
-};
-
-template <typename T>
-struct PyBox {
-  Gudhi::multi_persistence::Box<T> box;
-};
-
-template <typename T>
 struct ModuleSummandIterator {
   using iterator_category = std::input_iterator_tag;
-  using value_type = PySummand<T>;
+  using value_type = Gudhi::multi_persistence::Summand<T>;
   using difference_type = std::ptrdiff_t;
 
   Gudhi::multi_persistence::Module<T>* module = nullptr;
   size_t index = 0;
 
-  value_type operator*() const {
-    value_type out;
-    out.sum = module->get_summand((unsigned int)index);
-    return out;
-  }
+  value_type operator*() const { return module->get_summand((unsigned int)index); }
 
   ModuleSummandIterator& operator++() {
     ++index;
@@ -364,72 +364,40 @@ void bind_float_module_methods(Class& cls) {
   if constexpr (Desc::is_float) {
     using T = typename Desc::value_type;
     using Box = Gudhi::multi_persistence::Box<T>;
-    using WrapperMod = PyModule<T>;
+    using Module = Gudhi::multi_persistence::Module<T>;
 
     cls.def(
            "_get_barcode_from_line",
-           [](WrapperMod& self, nb::handle basepoint_handle, nb::handle direction_handle, int degree) -> nb::tuple {
-             auto basepoint = vector_from_handle<T>(basepoint_handle);
-             auto direction = direction_handle.is_none()
-                                  ? std::optional<std::vector<T>>{}
-                                  : std::optional<std::vector<T>>(vector_from_handle<T>(direction_handle));
-             return barcode_from_line_impl<T>(self, basepoint, direction ? &*direction : nullptr, degree);
+           [](Module& self,
+              nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> basepoint,
+              nb::object direction,
+              int degree) -> nb::tuple {
+             auto basepoint_values = vector_from_array(basepoint);
+             if (direction.is_none()) {
+               return barcode_from_line_impl<T>(self, basepoint_values, nullptr, degree);
+             }
+             auto direction_array = nb::cast<nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig>>(direction);
+             auto direction_values = vector_from_array(direction_array);
+             return barcode_from_line_impl<T>(self, basepoint_values, &direction_values, degree);
            },
            "basepoint"_a,
            "direction"_a = nb::none(),
            "degree"_a = -1)
         .def(
-            "_get_barcode_from_line",
-            [](WrapperMod& self,
-               nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> basepoint,
-               nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> direction,
-               int degree) -> nb::tuple {
-              auto basepoint_values = vector_from_array(basepoint);
-              auto direction_values = vector_from_array(direction);
-              return barcode_from_line_impl<T>(self, basepoint_values, &direction_values, degree);
-            },
-            "basepoint"_a,
-            "direction"_a,
-            "degree"_a = -1)
-        .def(
             "evaluate_in_grid",
-            [](WrapperMod& self, nb::handle grid_handle) -> WrapperMod& {
+            [](Module& self, nb::handle grid_handle) -> Module& {
               return evaluate_in_grid_impl<T>(self, matrix_from_handle<T>(grid_handle));
             },
             nb::rv_policy::reference_internal)
         .def(
             "evaluate_in_grid",
-            [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid) -> WrapperMod& {
+            [](Module& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid) -> Module& {
               return evaluate_in_grid_impl<T>(self, matrix_from_array(grid));
             },
             nb::rv_policy::reference_internal)
         .def(
             "_compute_landscapes_box",
-            [](WrapperMod& self,
-               int degree,
-               nb::handle ks_handle,
-               nb::handle box_handle,
-               nb::handle resolution_handle,
-               int n_jobs) {
-              auto ks_in = vector_from_handle<int>(ks_handle);
-              std::vector<unsigned int> ks;
-              ks.reserve(ks_in.size());
-              for (int k : ks_in) ks.push_back((unsigned int)k);
-              auto resolution_in = vector_from_handle<int>(resolution_handle);
-              std::vector<unsigned int> resolution;
-              resolution.reserve(resolution_in.size());
-              for (int r : resolution_in) resolution.push_back((unsigned int)r);
-              return compute_landscapes_box_impl<T>(
-                  self, degree, ks, box_from_handle<T>(box_handle), resolution, n_jobs);
-            },
-            "degree"_a,
-            "ks"_a,
-            "box"_a,
-            "resolution"_a,
-            "n_jobs"_a = 0)
-        .def(
-            "_compute_landscapes_box",
-            [](WrapperMod& self,
+            [](Module& self,
                int degree,
                nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> ks,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
@@ -438,7 +406,7 @@ void bind_float_module_methods(Class& cls) {
               return compute_landscapes_box_impl<T>(self,
                                                     degree,
                                                     cast_vector_from_array<unsigned int>(ks),
-                                                    box_from_rows<T>(matrix_from_array(box)),
+                                                    box_from_array<T>(box),
                                                     cast_vector_from_array<unsigned int>(resolution),
                                                     n_jobs);
             },
@@ -449,7 +417,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_landscapes_box",
-            [](WrapperMod& self,
+            [](Module& self,
                int degree,
                nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> ks,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
@@ -458,7 +426,7 @@ void bind_float_module_methods(Class& cls) {
               return compute_landscapes_box_impl<T>(self,
                                                     degree,
                                                     cast_vector_from_array<unsigned int>(ks),
-                                                    box_from_rows<T>(matrix_from_array(box)),
+                                                    box_from_array<T>(box),
                                                     cast_vector_from_array<unsigned int>(resolution),
                                                     n_jobs);
             },
@@ -469,7 +437,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_landscapes_grid",
-            [](WrapperMod& self, int degree, nb::handle ks_handle, nb::handle grid_handle, int n_jobs) {
+            [](Module& self, int degree, nb::handle ks_handle, nb::handle grid_handle, int n_jobs) {
               auto ks_in = vector_from_handle<int>(ks_handle);
               std::vector<unsigned int> ks;
               ks.reserve(ks_in.size());
@@ -482,7 +450,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_landscapes_grid",
-            [](WrapperMod& self,
+            [](Module& self,
                int degree,
                nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> ks,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
@@ -496,7 +464,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_landscapes_grid",
-            [](WrapperMod& self,
+            [](Module& self,
                int degree,
                nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> ks,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
@@ -510,7 +478,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_pixels",
-            [](WrapperMod& self,
+            [](Module& self,
                nb::handle coordinates_handle,
                nb::handle degrees_handle,
                nb::handle box_handle,
@@ -521,7 +489,7 @@ void bind_float_module_methods(Class& cls) {
               return compute_pixels_impl<T>(self,
                                             matrix_from_handle<T>(coordinates_handle),
                                             vector_from_handle<int>(degrees_handle),
-                                            box_from_handle<T>(box_handle),
+                                            box_from_rows<T>(matrix_from_handle<T>(box_handle)),
                                             delta,
                                             p,
                                             normalize,
@@ -536,7 +504,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_pixels",
-            [](WrapperMod& self,
+            [](Module& self,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
                nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
@@ -547,7 +515,7 @@ void bind_float_module_methods(Class& cls) {
               return compute_pixels_impl<T>(self,
                                             matrix_from_array(coordinates),
                                             cast_vector_from_array<int>(degrees),
-                                            box_from_rows<T>(matrix_from_array(box)),
+                                            box_from_array<T>(box),
                                             delta,
                                             p,
                                             normalize,
@@ -562,7 +530,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "_compute_pixels",
-            [](WrapperMod& self,
+            [](Module& self,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
                nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> degrees,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
@@ -573,7 +541,7 @@ void bind_float_module_methods(Class& cls) {
               return compute_pixels_impl<T>(self,
                                             matrix_from_array(coordinates),
                                             cast_vector_from_array<int>(degrees),
-                                            box_from_rows<T>(matrix_from_array(box)),
+                                            box_from_array<T>(box),
                                             delta,
                                             p,
                                             normalize,
@@ -588,7 +556,7 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "distance_to",
-            [](WrapperMod& self, nb::handle pts_handle, bool signed_distance, int n_jobs) {
+            [](Module& self, nb::handle pts_handle, bool signed_distance, int n_jobs) {
               return distance_to_impl<T>(self, matrix_from_handle<T>(pts_handle), signed_distance, n_jobs);
             },
             "pts"_a,
@@ -596,86 +564,73 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "distance_to",
-            [](WrapperMod& self,
+            [](Module& self,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> pts,
                bool signed_distance,
                int n_jobs) { return distance_to_impl<T>(self, matrix_from_array(pts), signed_distance, n_jobs); },
             "pts"_a,
             "signed"_a = false,
             "n_jobs"_a = 0)
+        .def("get_interleavings",
+             [](Module& self) -> nb::ndarray<nb::numpy, T> {
+               std::vector<T> interleavings;
+               {
+                 nb::gil_scoped_release release;
+                 interleavings = Gudhi::multi_persistence::compute_module_interleavings(self, self.get_box());
+               }
+               return owned_array<T>(std::move(interleavings), {interleavings.size()});
+             })
         .def(
             "get_interleavings",
-            [](WrapperMod& self, nb::handle box_handle) {
-              Box box;
-              if (box_handle.is_none()) {
-                box = self.mod.get_box();
-              } else {
-                box = box_from_handle<T>(box_handle);
-              }
+            [](Module& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) -> nb::ndarray<nb::numpy, T> {
               std::vector<T> interleavings;
               {
                 nb::gil_scoped_release release;
-                interleavings = Gudhi::multi_persistence::compute_module_interleavings(self.mod, box);
+                interleavings = Gudhi::multi_persistence::compute_module_interleavings(self, box_from_array<T>(box));
               }
-              return nb::cast(owned_array<T>(std::move(interleavings), {interleavings.size()}));
-            },
-            "box"_a = nb::none())
-        .def(
-            "get_interleavings",
-            [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) {
-              std::vector<T> interleavings;
-              {
-                nb::gil_scoped_release release;
-                interleavings = Gudhi::multi_persistence::compute_module_interleavings(
-                    self.mod, box_from_rows<T>(matrix_from_array(box)));
-              }
-              return nb::cast(owned_array<T>(std::move(interleavings), {interleavings.size()}));
+              return owned_array<T>(std::move(interleavings), {interleavings.size()});
             },
             "box"_a);
   }
 }
 
 template <typename Desc>
-void bind_mma_type(nb::module_& m) {
+void bind_summand_class(nb::module_& m) {
   using T = typename Desc::value_type;
   using Summand = Gudhi::multi_persistence::Summand<T>;
-  using Module = Gudhi::multi_persistence::Module<T>;
-  using Box = Gudhi::multi_persistence::Box<T>;
-  using WrapperSum = PySummand<T>;
-  using WrapperBox = PyBox<T>;
-  using WrapperMod = PyModule<T>;
 
-  nb::class_<WrapperSum>(m, Desc::summand_name.data())
+  nb::class_<Summand>(m, Desc::summand_name.data())
       .def(nb::init<>())
       .def("get_birth_list",
-           [](WrapperSum& self) -> nb::object {
+           [](Summand& self) -> nb::object {
              std::vector<T> births;
-             const size_t num_parameters = static_cast<size_t>(self.sum.get_number_of_parameters());
-             const size_t num_birth_corners = static_cast<size_t>(self.sum.get_number_of_birth_corners());
+             const size_t num_parameters = static_cast<size_t>(self.get_number_of_parameters());
+             const size_t num_birth_corners = static_cast<size_t>(self.get_number_of_birth_corners());
              {
                nb::gil_scoped_release release;
-               births = self.sum.compute_birth_list();
+               births = self.compute_birth_list();
              }
              return corner_matrix_to_python<T>(std::move(births), num_birth_corners, num_parameters);
            })
       .def("get_death_list",
-           [](WrapperSum& self) -> nb::object {
+           [](Summand& self) -> nb::object {
              std::vector<T> deaths;
-             const size_t num_parameters = static_cast<size_t>(self.sum.get_number_of_parameters());
-             const size_t num_death_corners = static_cast<size_t>(self.sum.get_number_of_death_corners());
+             const size_t num_parameters = static_cast<size_t>(self.get_number_of_parameters());
+             const size_t num_death_corners = static_cast<size_t>(self.get_number_of_death_corners());
              {
                nb::gil_scoped_release release;
-               deaths = self.sum.compute_death_list();
+               deaths = self.compute_death_list();
              }
              return corner_matrix_to_python<T>(std::move(deaths), num_death_corners, num_parameters);
            })
-      .def_prop_ro("degree", [](const WrapperSum& self) -> int { return self.sum.get_dimension(); })
+      .def_prop_ro("degree", [](const Summand& self) -> int { return self.get_dimension(); })
       .def("get_bounds",
-           [](WrapperSum& self) -> nb::tuple {
+           [](Summand& self) -> nb::tuple {
              std::pair<std::vector<T>, std::vector<T>> cbounds;
              {
                nb::gil_scoped_release release;
-               auto cpp_bounds = self.sum.compute_bounds().get_bounding_corners();
+               auto cpp_bounds = self.compute_bounds().get_bounding_corners();
                cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
                cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
              }
@@ -684,50 +639,52 @@ void bind_mma_type(nb::module_& m) {
                                    nb::cast(owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()),
                                                            {cbounds.second.size()})));
            })
-      .def("num_parameters", [](WrapperSum& self) -> int { return self.sum.get_number_of_parameters(); })
-      .def_prop_ro("_template_id", [](const WrapperSum&) -> int { return Desc::template_id; })
-      .def_prop_ro("dtype", [](const WrapperSum&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
-      .def("__eq__", [](WrapperSum& self, WrapperSum& other) { return self.sum == other.sum; });
+      .def("num_parameters", [](Summand& self) -> int { return self.get_number_of_parameters(); })
+      .def_prop_ro("_template_id", [](const Summand&) -> int { return Desc::template_id; })
+      .def_prop_ro("dtype", [](const Summand&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
+      .def("__eq__", [](Summand& self, Summand& other) { return self == other; });
+}
 
-  nb::class_<WrapperBox>(m, Desc::box_name.data())
+template <typename Desc>
+void bind_box_class(nb::module_& m) {
+  using T = typename Desc::value_type;
+  using Box = Gudhi::multi_persistence::Box<T>;
+
+  nb::class_<Box>(m, Desc::box_name.data())
       .def(nb::new_([](nb::handle bottom, nb::handle top) {
-             WrapperBox out;
              auto lower = vector_from_handle<T>(bottom);
              auto upper = vector_from_handle<T>(top);
-             out.box = Box(lower, upper);
-             return out;
+             return Box(lower, upper);
            }),
            "bottomCorner"_a,
            "topCorner"_a)
       .def(nb::new_([](nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> bottom,
                        nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> top) {
-             WrapperBox out;
-             out.box = Box(vector_from_array(bottom), vector_from_array(top));
-             return out;
+             return Box(vector_from_array(bottom), vector_from_array(top));
            }),
            "bottomCorner"_a,
            "topCorner"_a)
-      .def_prop_ro("num_parameters", [](const WrapperBox& self) -> int { return self.box.get_lower_corner().size(); })
+      .def_prop_ro("num_parameters", [](const Box& self) -> int { return self.get_lower_corner().size(); })
       .def("contains",
-           [](WrapperBox& self, nb::handle x) {
+           [](Box& self, nb::handle x) {
              auto values = vector_from_handle<T>(x);
-             return self.box.contains(values);
+             return self.contains(values);
            })
       .def("contains",
-           [](WrapperBox& self, nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> x) {
-             return self.box.contains(vector_from_array(x));
+           [](Box& self, nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> x) {
+             return self.contains(vector_from_array(x));
            })
       .def("get",
-           [](WrapperBox& self) -> nb::tuple {
-             auto lower = std::vector<T>(self.box.get_lower_corner().begin(), self.box.get_lower_corner().end());
-             auto upper = std::vector<T>(self.box.get_upper_corner().begin(), self.box.get_upper_corner().end());
-             return nb::make_tuple(nb::cast(owned_array<T>(std::move(lower), {self.box.get_lower_corner().size()})),
-                                   nb::cast(owned_array<T>(std::move(upper), {self.box.get_upper_corner().size()})));
+           [](Box& self) -> nb::tuple {
+             auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
+             auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
+             return nb::make_tuple(nb::cast(owned_array<T>(std::move(lower), {self.get_lower_corner().size()})),
+                                   nb::cast(owned_array<T>(std::move(upper), {self.get_upper_corner().size()})));
            })
       .def("to_multipers",
-           [](WrapperBox& self) -> nb::object {
-             auto lower = std::vector<T>(self.box.get_lower_corner().begin(), self.box.get_lower_corner().end());
-             auto upper = std::vector<T>(self.box.get_upper_corner().begin(), self.box.get_upper_corner().end());
+           [](Box& self) -> nb::object {
+             auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
+             auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
              std::vector<T> flat;
              flat.reserve(lower.size() * 2);
              for (size_t i = 0; i < lower.size(); ++i) {
@@ -736,38 +693,44 @@ void bind_mma_type(nb::module_& m) {
              }
              return nb::cast(owned_array<T>(std::move(flat), {size_t(2), lower.size()}));
            })
-      .def_prop_ro("_template_id", [](const WrapperBox&) -> int { return Desc::template_id; })
-      .def_prop_ro("dtype", [](const WrapperBox&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
+      .def_prop_ro("_template_id", [](const Box&) -> int { return Desc::template_id; })
+      .def_prop_ro("dtype", [](const Box&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
+}
+
+template <typename Desc>
+void bind_module_class(nb::module_& m) {
+  using T = typename Desc::value_type;
+  using Module = Gudhi::multi_persistence::Module<T>;
 
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
 
   auto module_cls =
-      nb::class_<WrapperMod>(m, Desc::module_name.data())
+      nb::class_<Module>(m, Desc::module_name.data())
           .def(nb::init<>())
           .def(
               "_from_ptr",
-              [](WrapperMod& self, intptr_t ptr) -> WrapperMod& {
+              [](Module& self, intptr_t ptr) -> Module& {
                 auto* other = reinterpret_cast<Module*>(ptr);
-                self.mod = std::move(*other);
+                self = std::move(*other);
                 delete other;
                 return self;
               },
               nb::rv_policy::reference_internal)
-          .def("__len__", [](WrapperMod& self) -> int { return self.mod.size(); })
-          .def("__eq__", [](WrapperMod& self, WrapperMod& other) { return self.mod == other.mod; })
-          .def_prop_ro("_template_id", [](const WrapperMod&) -> int { return Desc::template_id; })
+          .def("__len__", [](Module& self) -> int { return self.size(); })
+          .def("__eq__", [](Module& self, Module& other) { return self == other; })
+          .def_prop_ro("_template_id", [](const Module&) -> int { return Desc::template_id; })
           .def("__getitem__",
-               [](WrapperMod& self, nb::object key) -> nb::object {
+               [](Module& self, nb::object key) -> nb::object {
                  if (nb::isinstance<nb::slice>(key)) {
-                   auto [start, stop, step, length] = nb::cast<nb::slice>(key).compute(self.mod.size());
-                   if (start == 0 && stop == static_cast<Py_ssize_t>(self.mod.size()) && step == 1 &&
-                       length == self.mod.size()) {
+                   auto [start, stop, step, length] = nb::cast<nb::slice>(key).compute(self.size());
+                   if (start == 0 && stop == static_cast<Py_ssize_t>(self.size()) && step == 1 &&
+                       length == self.size()) {
                      return self_handle(self);
                    }
                    throw nb::index_error("Only [:] slices are supported.");
                  }
                  int index = nb::cast<int>(key);
-                 size_t size = self.mod.size();
+                 size_t size = self.size();
                  if (size == 0) {
                    throw nb::index_error("Module is empty.");
                  }
@@ -777,26 +740,24 @@ void bind_mma_type(nb::module_& m) {
                  if (index < 0 || index >= (int)size) {
                    throw nb::index_error("Summand index out of range.");
                  }
-                 WrapperSum out;
-                 out.sum = self.mod.get_summand((unsigned int)index);
-                 return nb::cast(out);
+                 return nb::cast(self.get_summand((unsigned int)index));
                })
           .def(
               "__iter__",
-              [iterator_name](WrapperMod& self) {
-                return nb::make_iterator(nb::type<WrapperMod>(),
+              [iterator_name](Module& self) {
+                return nb::make_iterator(nb::type<Module>(),
                                          iterator_name.c_str(),
-                                         ModuleSummandIterator<T>{&self.mod, 0},
-                                         ModuleSummandIterator<T>{&self.mod, self.mod.size()});
+                                         ModuleSummandIterator<T>{&self, 0},
+                                         ModuleSummandIterator<T>{&self, self.size()});
               },
               nb::keep_alive<0, 1>())
           .def(
               "merge",
-              [](WrapperMod& self, WrapperMod& other, int dim) -> WrapperMod& {
-                Module c_other = other.mod;
+              [](Module& self, Module& other, int dim) -> Module& {
+                Module c_other = other;
                 {
                   nb::gil_scoped_release release;
-                  for (auto summand : c_other) self.mod.add_summand(summand, dim);
+                  for (auto summand : c_other) self.add_summand(summand, dim);
                 }
                 return self;
               },
@@ -804,49 +765,49 @@ void bind_mma_type(nb::module_& m) {
               "dim"_a = -1,
               nb::rv_policy::reference_internal)
           .def("permute_summands",
-               [](WrapperMod& self, nb::handle permutation) {
-                 WrapperMod out;
+               [](Module& self, nb::handle permutation) {
+                 Module out;
                  auto c_permutation = vector_from_handle<int>(permutation);
                  {
                    nb::gil_scoped_release release;
-                   out.mod = Gudhi::multi_persistence::build_permuted_module(self.mod, c_permutation);
+                   out = Gudhi::multi_persistence::build_permuted_module(self, c_permutation);
                  }
                  return out;
                })
           .def(
               "set_box",
-              [](WrapperMod& self, nb::handle box_handle) -> WrapperMod& {
-                return set_box_impl<T>(self, box_from_handle<T>(box_handle));
+              [](Module& self, nb::handle box_handle) -> Module& {
+                return set_box_impl<T>(self, box_from_rows<T>(matrix_from_handle<T>(box_handle)));
               },
               nb::rv_policy::reference_internal)
           .def(
               "set_box",
-              [](WrapperMod& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) -> WrapperMod& {
-                return set_box_impl<T>(self, box_from_rows<T>(matrix_from_array(box)));
+              [](Module& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) -> Module& {
+                return set_box_impl<T>(self, box_from_array<T>(box));
               },
               nb::rv_policy::reference_internal)
           .def("get_module_of_degree",
-               [](WrapperMod& self, int degree) {
-                 WrapperMod out;
+               [](Module& self, int degree) {
+                 Module out;
                  {
                    nb::gil_scoped_release release;
-                   out.mod.set_box(self.mod.get_box());
-                   for (auto summand : self.mod)
-                     if (summand.get_dimension() == degree) out.mod.add_summand(summand);
+                   out.set_box(self.get_box());
+                   for (auto summand : self)
+                     if (summand.get_dimension() == degree) out.add_summand(summand);
                  }
                  return out;
                })
           .def("get_module_of_degrees",
-               [](WrapperMod& self, nb::handle degrees_handle) {
+               [](Module& self, nb::handle degrees_handle) {
                  auto degrees = vector_from_handle<int>(degrees_handle);
-                 WrapperMod out;
+                 Module out;
                  {
                    nb::gil_scoped_release release;
-                   out.mod.set_box(self.mod.get_box());
-                   for (auto summand : self.mod) {
+                   out.set_box(self.get_box());
+                   for (auto summand : self) {
                      for (int degree : degrees) {
                        if (degree == summand.get_dimension()) {
-                         out.mod.add_summand(summand);
+                         out.add_summand(summand);
                          break;
                        }
                      }
@@ -854,11 +815,11 @@ void bind_mma_type(nb::module_& m) {
                  }
                  return out;
                })
-          .def("_get_dump", [](WrapperMod& self) -> nb::tuple { return dump_module<T>(self.mod); })
+          .def("_get_dump", [](Module& self) -> nb::tuple { return dump_module<T>(self); })
           .def(
               "dump",
-              [](WrapperMod& self, nb::object path) -> nb::tuple {
-                nb::tuple dump = dump_module<T>(self.mod);
+              [](Module& self, nb::object path) -> nb::tuple {
+                nb::tuple dump = dump_module<T>(self);
                 if (!path.is_none()) {
                   nb::object builtins = nb::module_::import_("builtins");
                   nb::object pickle = nb::module_::import_("pickle");
@@ -876,68 +837,60 @@ void bind_mma_type(nb::module_& m) {
               "path"_a = nb::none())
           .def(
               "_load_dump",
-              [](WrapperMod& self, nb::handle dump) -> WrapperMod& {
-                self.mod = module_from_dump<T>(dump);
+              [](Module& self, nb::handle dump) -> Module& {
+                self = module_from_dump<T>(dump);
                 return self;
               },
               nb::rv_policy::reference_internal)
-          .def("__getstate__", [](WrapperMod& self) -> nb::tuple { return dump_module<T>(self.mod); })
-          .def("__setstate__",
-               [](WrapperMod& self, nb::handle state) { new (&self) WrapperMod{module_from_dump<T>(state)}; })
+          .def("__getstate__", [](Module& self) -> nb::tuple { return dump_module<T>(self); })
+          .def("__setstate__", [](Module& self, nb::handle state) { new (&self) Module(module_from_dump<T>(state)); })
           .def(
               "_add_mmas",
-              [](WrapperMod& self, nb::iterable mmas) -> WrapperMod& {
+              [](Module& self, nb::iterable mmas) -> Module& {
                 for (nb::handle item : mmas) {
-                  Module c_other = nb::cast<WrapperMod&>(item).mod;
+                  Module c_other = nb::cast<Module&>(item);
                   {
                     nb::gil_scoped_release release;
-                    for (auto summand : c_other) self.mod.add_summand(summand);
+                    for (auto summand : c_other) self.add_summand(summand);
                   }
                 }
                 return self;
               },
               nb::rv_policy::reference_internal)
-          .def("_get_summand",
-               [](WrapperMod& self, int index) {
-                 WrapperSum out;
-                 size_t size = self.mod.size();
-                 out.sum = self.mod.get_summand((unsigned int)(index % (int)size));
-                 return out;
-               })
           .def("get_bottom",
-               [](WrapperMod& self) -> nb::object {
-                 return nb::cast(owned_array<T>(std::vector<T>(self.mod.get_box().get_lower_corner().begin(),
-                                                               self.mod.get_box().get_lower_corner().end()),
-                                                {self.mod.get_box().get_lower_corner().size()}));
+               [](Module& self) -> nb::object {
+                 return nb::cast(owned_array<T>(
+                     std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end()),
+                     {self.get_box().get_lower_corner().size()}));
                })
           .def("get_top",
-               [](WrapperMod& self) -> nb::object {
-                 return nb::cast(owned_array<T>(std::vector<T>(self.mod.get_box().get_upper_corner().begin(),
-                                                               self.mod.get_box().get_upper_corner().end()),
-                                                {self.mod.get_box().get_upper_corner().size()}));
+               [](Module& self) -> nb::object {
+                 return nb::cast(owned_array<T>(
+                     std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end()),
+                     {self.get_box().get_upper_corner().size()}));
                })
           .def("get_box",
-               [](WrapperMod& self) -> nb::object {
-                 auto lower = std::vector<T>(self.mod.get_box().get_lower_corner().begin(),
-                                             self.mod.get_box().get_lower_corner().end());
-                 auto upper = std::vector<T>(self.mod.get_box().get_upper_corner().begin(),
-                                             self.mod.get_box().get_upper_corner().end());
+               [](Module& self) -> nb::object {
+                 auto lower =
+                     std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end());
+                 auto upper =
+                     std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end());
                  std::vector<T> flat_box;
                  flat_box.reserve(lower.size() + upper.size());
                  flat_box.insert(flat_box.end(), lower.begin(), lower.end());
                  flat_box.insert(flat_box.end(), upper.begin(), upper.end());
                  return nb::cast(
-                     owned_array<T>(std::move(flat_box), {size_t(2), self.mod.get_box().get_lower_corner().size()}));
+                     owned_array<T>(std::move(flat_box), {size_t(2), self.get_box().get_lower_corner().size()}));
                })
-          .def_prop_ro("max_degree", [](const WrapperMod& self) -> int { return self.mod.get_max_dimension(); })
+          .def_prop_ro("max_degree", [](const Module& self) -> int { return self.get_max_dimension(); })
           .def_prop_ro("num_parameters",
-                       [](const WrapperMod& self) -> int { return self.mod.get_box().get_lower_corner().size(); })
+                       [](const Module& self) -> int { return self.get_box().get_lower_corner().size(); })
           .def("get_bounds",
-               [](WrapperMod& self) -> nb::tuple {
+               [](Module& self) -> nb::tuple {
                  std::pair<std::vector<T>, std::vector<T>> cbounds;
                  {
                    nb::gil_scoped_release release;
-                   auto cpp_bounds = self.mod.compute_bounds().get_bounding_corners();
+                   auto cpp_bounds = self.compute_bounds().get_bounding_corners();
                    cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
                    cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
                  }
@@ -949,7 +902,7 @@ void bind_mma_type(nb::module_& m) {
                })
           .def(
               "rescale",
-              [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
+              [](Module& self, nb::handle factors, int degree) -> Module& {
                 return rescale_impl<T>(self, vector_from_handle<T>(factors), degree);
               },
               "rescale_factors"_a,
@@ -957,15 +910,15 @@ void bind_mma_type(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def(
               "rescale",
-              [](WrapperMod& self,
+              [](Module& self,
                  nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> factors,
-                 int degree) -> WrapperMod& { return rescale_impl<T>(self, vector_from_array(factors), degree); },
+                 int degree) -> Module& { return rescale_impl<T>(self, vector_from_array(factors), degree); },
               "rescale_factors"_a,
               "degree"_a = -1,
               nb::rv_policy::reference_internal)
           .def(
               "translate",
-              [](WrapperMod& self, nb::handle factors, int degree) -> WrapperMod& {
+              [](Module& self, nb::handle factors, int degree) -> Module& {
                 return translate_impl<T>(self, vector_from_handle<T>(factors), degree);
               },
               "translation"_a,
@@ -973,50 +926,51 @@ void bind_mma_type(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def(
               "translate",
-              [](WrapperMod& self,
+              [](Module& self,
                  nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> factors,
-                 int degree) -> WrapperMod& { return translate_impl<T>(self, vector_from_array(factors), degree); },
+                 int degree) -> Module& { return translate_impl<T>(self, vector_from_array(factors), degree); },
               "translation"_a,
               "degree"_a = -1,
               nb::rv_policy::reference_internal)
           .def(
               "get_filtration_values",
-              [](WrapperMod& self, bool unique) -> std::vector<std::vector<T>> {
-                return filtration_values_from_module<T>(self.mod, unique);
+              [](Module& self, bool unique) -> std::vector<std::vector<T>> {
+                return filtration_values_from_module<T>(self, unique);
               },
               "unique"_a = true)
-          .def("get_dimensions", [](WrapperMod& self) -> nb::object {
+          .def("get_dimensions", [](Module& self) -> nb::ndarray<nb::numpy, int32_t> {
             std::vector<int32_t> dims;
-            dims.reserve(self.mod.size());
-            for (size_t i = 0; i < self.mod.size(); ++i)
-              dims.push_back((int32_t)self.mod.get_summand((unsigned int)i).get_dimension());
-            return nb::cast(owned_array<int32_t>(std::move(dims), {self.mod.size()}));
+            dims.reserve(self.size());
+            for (size_t i = 0; i < self.size(); ++i)
+              dims.push_back((int32_t)self.get_summand((unsigned int)i).get_dimension());
+            return owned_array<int32_t>(std::move(dims), {self.size()});
           });
 
   bind_float_module_methods<Desc>(module_cls);
 
-  module_cls.def_prop_ro("dtype", [](const WrapperMod&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
+  module_cls.def_prop_ro("dtype", [](const Module&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
 
   std::string from_dump_name = std::string(Desc::from_dump_name);
   m.def(
       from_dump_name.c_str(),
       [](nb::handle dump) {
-        WrapperMod out;
-        out.mod = module_from_dump<T>(dump);
+        Module out;
+        out = module_from_dump<T>(dump);
         return out;
       },
       "dump"_a);
 }
 
+template <typename Desc>
+void bind_mma_type(nb::module_& m) {
+  bind_summand_class<Desc>(m);
+  bind_box_class<Desc>(m);
+  bind_module_class<Desc>(m);
+}
+
 template <typename... Desc>
 void bind_all_mma(type_list<Desc...>, nb::module_& m) {
   (bind_mma_type<Desc>(m), ...);
-}
-
-template <typename Desc>
-bool is_mma_desc(nb::handle stuff) {
-  using WrapperMod = module_wrapper_t<Desc>;
-  return nb::isinstance<WrapperMod>(stuff);
 }
 
 inline bool is_mma(nb::handle stuff) { return is_mma_module_object(stuff); }

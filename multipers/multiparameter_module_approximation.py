@@ -214,9 +214,9 @@ def _module_landscapes(
     out = np.asarray(
         self._compute_landscapes_box(
             int(degree),
-            ks.tolist(),
-            np.asarray(box, dtype=self.dtype).tolist(),
-            [int(r) for r in resolution],
+            ks,
+            np.ascontiguousarray(box, dtype=self.dtype),
+            np.ascontiguousarray(resolution, dtype=np.int32),
             int(n_jobs),
         )
     )

@@ -12,14 +12,8 @@
 
 namespace multipers::nanobind_mma_helpers {
 
-using multipers::nanobind_utils::has_template_id;
 using multipers::nanobind_utils::maybe_template_id_of;
 using multipers::nanobind_utils::template_id_of;
-
-template <typename T>
-struct PyModule {
-  Gudhi::multi_persistence::Module<T> mod;
-};
 
 template <typename... Types>
 struct type_list {};
@@ -51,9 +45,6 @@ inline bool is_known_mma_template_id(int template_id) {
   }
 }
 
-template <typename Desc>
-using module_wrapper_t = PyModule<typename Desc::value_type>;
-
 template <typename List>
 struct mma_desc_for_double_impl;
 
@@ -79,7 +70,7 @@ static_assert(mma_desc_for_double_impl<MMADescriptorList>::matches == 1,
 template <typename Func>
 decltype(auto) visit_mma_module_wrapper(const nanobind::handle& input, Func&& func) {
   return dispatch_mma_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    auto& wrapper = nanobind::cast<module_wrapper_t<Desc>&>(input);
+    auto& wrapper = nanobind::cast<Gudhi::multi_persistence::Module<typename Desc::value_type>&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -87,7 +78,7 @@ decltype(auto) visit_mma_module_wrapper(const nanobind::handle& input, Func&& fu
 template <typename Func>
 decltype(auto) visit_const_mma_module_wrapper(const nanobind::handle& input, Func&& func) {
   return dispatch_mma_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    const auto& wrapper = nanobind::cast<const module_wrapper_t<Desc>&>(input);
+    const auto& wrapper = nanobind::cast<const Gudhi::multi_persistence::Module<typename Desc::value_type>&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -97,8 +88,9 @@ inline bool is_mma_module_object(const nanobind::handle& input) {
   if (!template_id || !is_known_mma_template_id(*template_id)) {
     return false;
   }
-  return dispatch_mma_by_template_id(
-      *template_id, [&]<typename Desc>() -> bool { return nanobind::isinstance<module_wrapper_t<Desc>>(input); });
+  return dispatch_mma_by_template_id(*template_id, [&]<typename Desc>() -> bool {
+    return nanobind::isinstance<Gudhi::multi_persistence::Module<typename Desc::value_type>>(input);
+  });
 }
 
 }  // namespace multipers::nanobind_mma_helpers

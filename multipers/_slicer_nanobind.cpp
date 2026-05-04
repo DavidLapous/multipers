@@ -74,8 +74,6 @@ using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_helpers::visit_const_slicer_wrapper;
 using multipers::nanobind_helpers::visit_simplextree_wrapper;
-using multipers::nanobind_mma_helpers::canonical_double_mma_desc;
-using multipers::nanobind_mma_helpers::module_wrapper_t;
 using multipers::nanobind_utils::cast_matrix;
 using multipers::nanobind_utils::cast_vector;
 using multipers::nanobind_utils::lowercase_copy;
@@ -2056,9 +2054,7 @@ nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
       mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
           wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
     }
-    module_wrapper_t<canonical_double_mma_desc> out;
-    out.mod = std::move(mod);
-    return nb::cast(out);
+    return nb::cast(std::move(mod));
   }
 }
 
