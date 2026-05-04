@@ -113,6 +113,63 @@ has_kcritical = np.any(
 )
 
 
+def _python_coredelaunay_reference(
+    points,
+    *,
+    beta,
+    ks,
+    precision="safe",
+    max_alpha_square=float("inf"),
+    positive_degree=False,
+):
+    from scipy.spatial import KDTree
+
+    points = np.asarray(points, dtype=np.float64)
+    ks = np.asarray(ks, dtype=np.int64)
+    alpha_complex = gd.AlphaComplex(points=points, precision=precision).create_simplex_tree(
+        max_alpha_square=max_alpha_square
+    )
+    knn_distances = KDTree(points).query(points, k=ks)[0]
+
+    simplex_tree_multi = mp.SimplexTreeMulti(
+        num_parameters=2, kcritical=True, dtype=np.float64
+    )
+    vertex_arrays_in_dimension = [[] for _ in range(alpha_complex.dimension() + 1)]
+    squared_alphas_in_dimension = [[] for _ in range(alpha_complex.dimension() + 1)]
+    for simplex, alpha_squared in alpha_complex.get_simplices():
+        dim = len(simplex) - 1
+        squared_alphas_in_dimension[dim].append(alpha_squared)
+        vertex_arrays_in_dimension[dim].append(simplex)
+
+    for vertex_array, alpha_squared in zip(
+        vertex_arrays_in_dimension, squared_alphas_in_dimension
+    ):
+        if not vertex_array:
+            continue
+        vertex_array = np.asarray(vertex_array, dtype=np.int32)
+        alphas = np.sqrt(np.asarray(alpha_squared, dtype=np.float64))
+        max_knn_distances = np.max(knn_distances[vertex_array], axis=1)
+        critical_radii = np.maximum(alphas[:, None], beta * max_knn_distances)
+        filtrations = np.stack(
+            (
+                critical_radii,
+                (ks[-1] - ks if positive_degree else -ks) * np.ones_like(critical_radii),
+            ),
+            axis=-1,
+        )
+        simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
+
+    return simplex_tree_multi
+
+
+def _normalized_kcritical_filtration(filtration):
+    rows = np.asarray([np.asarray(row, dtype=np.float64) for row in filtration])
+    if rows.size == 0:
+        return rows.reshape(0, 2)
+    order = np.lexsort((rows[:, 1], rows[:, 0]))
+    return rows[order]
+
+
 @pytest.mark.skipif(
     not has_kcritical,
     reason="kcritical simplextree not compiled, skipping this test",
@@ -135,3 +192,39 @@ def test_coredelaunay(npts, dim, beta, ks):
     assert set(tuple(spx) for spx, _ in s.get_simplices()) == set(
         tuple(spx) for spx, _ in ac.get_simplices()
     ), "Simplices differs from the Delaunay Complex"
+
+
+@pytest.mark.skipif(
+    not has_kcritical,
+    reason="kcritical simplextree not compiled, skipping this test",
+)
+@pytest.mark.parametrize("positive_degree", [False, True])
+def test_coredelaunay_matches_python_reference(positive_degree):
+    np.random.seed(0)
+    points = np.random.uniform(size=(12, 3))
+    ks = np.asarray([1, 2, 4, 6], dtype=np.int64)
+    got = mpf.CoreDelaunay(
+        points=points,
+        beta=1.3,
+        ks=ks,
+        positive_degree=positive_degree,
+    )
+    ref = _python_coredelaunay_reference(
+        points,
+        beta=1.3,
+        ks=ks,
+        positive_degree=positive_degree,
+    )
+
+    got_filtrations = {
+        tuple(simplex): _normalized_kcritical_filtration(filtration)
+        for simplex, filtration in got.get_simplices()
+    }
+    ref_filtrations = {
+        tuple(simplex): _normalized_kcritical_filtration(filtration)
+        for simplex, filtration in ref.get_simplices()
+    }
+
+    assert got_filtrations.keys() == ref_filtrations.keys()
+    for simplex in got_filtrations:
+        assert np.allclose(got_filtrations[simplex], ref_filtrations[simplex])
