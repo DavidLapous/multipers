@@ -79,7 +79,7 @@ function(multipers_apply_common_build_flags target_name)
   )
 
   if(MSVC)
-    target_compile_options(${target_name} PRIVATE /O2 /DNDEBUG /W1 /WX- /openmp)
+    target_compile_options(${target_name} PRIVATE /O2 /DNDEBUG /W1 /WX-)
   else()
     target_compile_options(
       ${target_name}
