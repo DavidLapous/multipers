@@ -338,14 +338,6 @@ def _insert(self, simplex, filtration=None):
             [_t_minus_inf(self.dtype)] * num_parameters, dtype=self.dtype
         )
     filtration = np.asarray(filtration, dtype=self.dtype)
-    if self.is_kcritical and filtration.ndim == 1:
-        if simplex in self:
-            simplex = list(simplex)
-            current = [np.asarray(row, dtype=self.dtype) for row in self[simplex]]
-            current.append(filtration)
-            self._assign_filtration(simplex, np.asarray(current, dtype=self.dtype))
-            return True
-        filtration = filtration[None, :]
     return self._insert_simplex(np.asarray(simplex, dtype=np.int32), filtration, False)
 
 
@@ -354,46 +346,6 @@ def _assign_filtration(self, simplex, filtration):
     if self.is_kcritical and filtration.ndim == 1:
         filtration = filtration[None, :]
     self._assign_filtration(np.asarray(simplex, dtype=np.int32), filtration)
-    return self
-
-
-def _insert_batch(self, vertex_array, filtrations=np.empty((0, 0))):
-    vertex_array = np.asarray(vertex_array, dtype=np.int32)
-    if vertex_array.size == 0:
-        return self
-    n = vertex_array.shape[1]
-    empty_filtration = np.size(filtrations) == 0
-    if not self.is_kcritical:
-        filtrations = (
-            np.asarray(filtrations, dtype=self.dtype)
-            if not empty_filtration
-            else filtrations
-        )
-        for i in range(n):
-            filtration = None if empty_filtration else filtrations[i]
-            self._insert_simplex(
-                vertex_array[:, i],
-                None if filtration is None else filtration,
-                False,
-            )
-        if empty_filtration:
-            self.make_filtration_non_decreasing()
-        return self
-
-    filtrations = (
-        np.asarray(filtrations, dtype=self.dtype)
-        if not empty_filtration
-        else filtrations
-    )
-    for i in range(n):
-        filtration = None if empty_filtration else filtrations[i]
-        self._insert_simplex(
-            vertex_array[:, i],
-            None if filtration is None else filtration,
-            True,
-        )
-    if empty_filtration:
-        self.make_filtration_non_decreasing()
     return self
 
 
