@@ -244,7 +244,7 @@ def DelaunayLowerstar(
             )
         _function_delaunay_interface.require()
         degree = -1 if flagify else reduce_degree
-        if degree < 0:
+        if degree < 0 or recover_ids:
             from multipers.simplex_tree_multi import SimplexTreeMulti
 
             if verbose:
@@ -259,6 +259,8 @@ def DelaunayLowerstar(
                 recover_ids,
                 verbose,
             )
+            if degree >= 0:
+                slicer = multipers.Slicer(slicer, vineyard=vineyard, dtype=dtype)
         else:
             slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
             if verbose:
