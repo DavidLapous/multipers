@@ -29,7 +29,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         n_jobs: Optional[int] = None,
         fit_fraction: float = 1,
         verbose: bool = False,
-        safe_conversion: bool = False,
     ) -> None:
         """
         (Rips or Alpha or Delaunay) + (Density Estimation or DTM) 1-critical 2-filtration.
@@ -66,7 +65,6 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.sparse = sparse
         self._get_sts = lambda x: Exception("Fit first")
         self._api = None
-        self.safe_conversion = safe_conversion
         return
 
     def _get_distance_quantiles_and_threshold(self, X, qs):
@@ -265,7 +263,6 @@ class PointCloud2SimplexTree(PointCloud2FilteredComplex):
         n_jobs: Optional[int] = None,
         fit_fraction: float = 1,
         verbose: bool = False,
-        safe_conversion: bool = False,
     ) -> None:
         stuff = locals()
         stuff.pop("self")
