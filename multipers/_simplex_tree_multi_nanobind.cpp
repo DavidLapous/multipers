@@ -854,7 +854,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           .def(
               "_from_gudhi_state",
               [](Wrapper& self, nb::handle state, int num_parameters, nb::handle default_values) -> Wrapper& {
-                auto buffer = vector_from_handle<uint8_t>(state);
+                auto buffer = vector_from_handle<int8_t>(state);
                 auto default_filtration =
                     default_filtration_from_handle<Filtration, Value>(default_values, num_parameters);
                 {
