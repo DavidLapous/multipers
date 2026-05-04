@@ -92,6 +92,39 @@ inline constexpr bool is_kcritical_contiguous_f64_matrix_slicer_v =
     !Desc::is_degree_rips && Desc::column_type == std::string_view("UNORDERED_SET") &&
     Desc::backend_type == std::string_view("Matrix") && Desc::filtration_container == std::string_view("Contiguous");
 
+template <typename Desc>
+inline constexpr bool is_contiguous_f64_matrix_slicer_v =
+    std::is_same_v<typename Desc::value_type, double> && !Desc::is_vine && !Desc::is_kcritical &&
+    !Desc::is_degree_rips && Desc::column_type == std::string_view("UNORDERED_SET") &&
+    Desc::backend_type == std::string_view("Matrix") && Desc::filtration_container == std::string_view("Contiguous");
+
+template <typename List>
+struct contiguous_f64_matrix_slicer_desc_impl;
+
+template <>
+struct contiguous_f64_matrix_slicer_desc_impl<type_list<>> {
+  using type = void;
+  static constexpr bool found = false;
+  static constexpr int matches = 0;
+};
+
+template <typename Head, typename... Tail>
+struct contiguous_f64_matrix_slicer_desc_impl<type_list<Head, Tail...>> {
+  using tail = contiguous_f64_matrix_slicer_desc_impl<type_list<Tail...>>;
+  static constexpr bool is_match = is_contiguous_f64_matrix_slicer_v<Head>;
+  static constexpr bool found = is_match || tail::found;
+  static constexpr int matches = tail::matches + (is_match ? 1 : 0);
+  using type = std::conditional_t<is_match, Head, typename tail::type>;
+};
+
+using ContiguousF64MatrixSlicerDesc =
+    typename contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::type;
+
+static_assert(!std::is_void_v<ContiguousF64MatrixSlicerDesc>,
+              "Expected exactly one one-critical contiguous float64 matrix slicer template.");
+static_assert(contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::matches == 1,
+              "One-critical contiguous float64 matrix slicer template must be unique.");
+
 template <typename List>
 struct kcritical_contiguous_f64_matrix_slicer_desc_impl;
 
@@ -1082,8 +1115,8 @@ Wrapper construct_from_generator_data(nb::object generator_maps,
   }
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
-      boundaries, dims, c_filtrations);
-  out.truc = Concrete(cpx);
+      std::move(boundaries), std::move(dims), std::move(c_filtrations));
+  out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
 }
@@ -1131,8 +1164,8 @@ Wrapper construct_from_dense_generator_data(nb::iterable generator_maps,
   }
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
-      boundaries, dims, c_filtrations);
-  out.truc = Concrete(cpx);
+      std::move(boundaries), std::move(dims), std::move(c_filtrations));
+  out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
 }
@@ -1209,8 +1242,62 @@ Wrapper construct_kcritical_from_packed(
   }
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
-      boundaries, dims, filtrations);
-  out.truc = Concrete(cpx);
+      std::move(boundaries), std::move(dims), std::move(filtrations));
+  out.truc = Concrete(std::move(cpx));
+  reset_slicer_python_state(out);
+  return out;
+}
+
+template <typename Wrapper, typename Concrete, typename Value>
+Wrapper construct_contiguous_from_packed(
+    nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+    nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
+    nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+  Wrapper out;
+  if (boundary_indptr.shape(0) == 0) {
+    return out;
+  }
+
+  const size_t num_generators = static_cast<size_t>(boundary_indptr.shape(0) - 1);
+  if (static_cast<size_t>(generator_dimensions.shape(0)) != num_generators ||
+      static_cast<size_t>(grades_flat.shape(0)) != num_generators) {
+    throw std::runtime_error("Invalid packed input, shape do not coincide.");
+  }
+
+  std::vector<std::vector<uint32_t>> boundaries(num_generators);
+  const int64_t* boundary_ptr = boundary_indptr.data();
+  const int32_t* boundary_vals = boundary_flat.data();
+  for (size_t i = 0; i < num_generators; ++i) {
+    const int64_t begin = boundary_ptr[i];
+    const int64_t end = boundary_ptr[i + 1];
+    auto& row = boundaries[i];
+    row.reserve(static_cast<size_t>(std::max<int64_t>(end - begin, 0)));
+    for (int64_t idx = begin; idx < end; ++idx) {
+      row.push_back(static_cast<uint32_t>(boundary_vals[idx]));
+    }
+  }
+
+  std::vector<int> dims;
+  dims.reserve(num_generators);
+  for (size_t i = 0; i < num_generators; ++i) {
+    dims.push_back(static_cast<int>(generator_dimensions(i)));
+  }
+
+  std::vector<typename Concrete::Filtration_value> filtrations;
+  filtrations.reserve(num_generators);
+  const size_t num_parameters = grades_flat.shape(1);
+  for (size_t i = 0; i < num_generators; ++i) {
+    std::vector<Value> row(num_parameters);
+    for (size_t p = 0; p < num_parameters; ++p) {
+      row[p] = static_cast<Value>(grades_flat(i, p));
+    }
+    filtrations.emplace_back(std::move(row));
+  }
+
+  Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
+      std::move(boundaries), std::move(dims), std::move(filtrations));
+  out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
 }
@@ -1281,8 +1368,8 @@ Wrapper construct_kcritical_from_ptr(intptr_t input_ptr) {
     }
 
     Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
-        input_bridge->boundaries, dims, filtrations);
-    out.truc = Concrete(cpx);
+        std::move(input_bridge->boundaries), std::move(dims), std::move(filtrations));
+    out.truc = Concrete(std::move(cpx));
   }
 
   reset_slicer_python_state(out);
@@ -2048,6 +2135,24 @@ NB_MODULE(_slicer_nanobind, m) {
 
   mpnb::bind_generator_basis(m);
   mpnb::bind_all_slicers(mpnb::SlicerDescriptorList{}, m, available_slicers);
+
+  m.def(
+      "build_contiguous_f64_slicer_from_packed_f64",
+      [](nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
+         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
+         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+        return mpnb::construct_contiguous_from_packed<mpnb::ContiguousF64MatrixSlicerDesc::wrapper,
+                                                      mpnb::ContiguousF64MatrixSlicerDesc::concrete,
+                                                      double>(boundary_indptr,
+                                                               boundary_flat,
+                                                               generator_dimensions,
+                                                               grades_flat);
+      },
+      "boundary_indptr"_a,
+      "boundary_flat"_a,
+      "generator_dimensions"_a,
+      "grades_flat"_a);
 
   m.def(
       "build_kcritical_contiguous_slicer_from_packed_f64",
