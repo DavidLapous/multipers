@@ -201,6 +201,7 @@ def one_criticalify(
             filtration_container=filtration_container,
         )
     if not reduce:
+        out.filtration_grid = F
         return out
 
     def _todo(x, i):
