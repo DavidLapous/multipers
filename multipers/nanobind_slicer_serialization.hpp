@@ -271,7 +271,7 @@ void load_state_v1(Wrapper& self, const uint8_t* data, size_t buffer_size) {
 }
 
 template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
-nb::object serialized_state(Wrapper& self) {
+nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
   std::vector<uint8_t> buffer;
   {
     nb::gil_scoped_release release;
@@ -369,7 +369,7 @@ nb::object serialized_state(Wrapper& self) {
       }
     }
   }
-  return nb::cast(multipers::nanobind_utils::owned_array<uint8_t>(std::move(buffer), {buffer.size()}));
+  return multipers::nanobind_utils::owned_array<uint8_t>(std::move(buffer), {buffer.size()});
 }
 
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical, bool IsDegreeRips>

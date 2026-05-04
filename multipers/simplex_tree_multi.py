@@ -645,30 +645,27 @@ def _get_edge_list(self):
     return _get_edge_list_raw[type(self)](self)
 
 
+def _edge_array_to_nested_list(edges):
+    edges = np.asarray(edges)
+    return [((int(e[0]), int(e[1])), (float(e[2]), float(e[3]))) for e in edges]
+
+
+def _edge_list_to_array(edges, dtype):
+    return np.asarray(
+        [(e[0][0], e[0][1], e[1][0], e[1][1]) for e in edges], dtype=dtype
+    )
+
+
 def _reconstruct_from_edge_list(self, edges, swap=True, expand_dimension=0):
-    reduced_tree = type(self)()
-    reduced_tree.set_num_parameter(self.num_parameters)
-    reduced_tree.filtration_grid = self.filtration_grid
-    if self.num_vertices > 0:
-        vertices = np.fromiter(
-            (splx[0] for splx, _ in self.get_skeleton(0)), dtype=np.int32
-        )[None, :]
-        vertices_filtration = np.asarray(
-            [f for _, f in self.get_skeleton(0)], dtype=self.dtype
-        )
-        reduced_tree.insert_batch(vertices, vertices_filtration)
-    if self.num_simplices - self.num_vertices > 0:
-        edges_filtration = np.asarray(
-            [(e[1][0], e[1][1]) for e in edges], dtype=self.dtype
-        )
-        edges_idx = np.asarray([(e[0][0], e[0][1]) for e in edges], dtype=np.int32).T
-        reduced_tree.insert_batch(edges_idx, edges_filtration)
+    if isinstance(edges, list):
+        edges = _edge_list_to_array(edges, self.dtype)
+    else:
+        edges = np.asarray(edges, dtype=self.dtype)
+    reduced_tree = self._reconstruct_from_edge_array(edges, expand_dimension)
     if swap:
         filtration_grid = self.filtration_grid
         self._copy_from_any(reduced_tree)
         self.filtration_grid = filtration_grid
-    if expand_dimension > 0:
-        self.expansion(expand_dimension)
     return self if swap else reduced_tree
 
 
@@ -697,7 +694,7 @@ def _collapse_edges(
     from multipers.multiparameter_edge_collapse import _collapse_edge_list
 
     edges = _collapse_edge_list(
-        self.get_edge_list(), num=num, full=full, strong=strong, progress=progress
+        _edge_array_to_nested_list(self.get_edge_list()), num=num, full=full, strong=strong, progress=progress
     )
     self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
     if self.is_squeezed and auto_clean:

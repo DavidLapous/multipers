@@ -186,7 +186,7 @@ nb::object normalized_filtration_to_python(const Filtration& filtration, nb::han
     }
     nb::list out;
     for (auto& row : rows) {
-      out.append(nb::cast(owned_array<T>(std::move(row), {static_cast<size_t>(filtration.num_parameters())})));
+      out.append(owned_array<T>(std::move(row), {static_cast<size_t>(filtration.num_parameters())}));
     }
     return out;
   }
@@ -569,7 +569,7 @@ nb::object filtration_to_python(const Filtration& filtration, nb::handle owner) 
       for (int j = 0; j < p; ++j) {
         row[j] = filtration(i, j);
       }
-      out.append(nb::cast(owned_array<T>(std::move(row), {static_cast<size_t>(p)})));
+      out.append(owned_array<T>(std::move(row), {static_cast<size_t>(p)}));
     }
     return out;
   } else {
@@ -750,7 +750,7 @@ nb::list boundaries_to_python(Wrapper& self, const std::vector<int>& simplex) {
 }
 
 template <typename Wrapper>
-nb::object serialized_state(Wrapper& self) {
+nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
   size_t buffer_size = 0;
   {
     nb::gil_scoped_release release;
@@ -761,7 +761,7 @@ nb::object serialized_state(Wrapper& self) {
     nb::gil_scoped_release release;
     self.tree.serialize(reinterpret_cast<char*>(buffer.data()), buffer_size);
   }
-  return nb::cast(owned_array<uint8_t>(std::move(buffer), {buffer_size}));
+  return owned_array<uint8_t>(std::move(buffer), {buffer_size});
 }
 
 template <typename Wrapper>
@@ -785,12 +785,75 @@ void load_state(Wrapper& self, nb::handle state) {
 }
 
 template <typename T>
-nb::object edge_list_to_python(const std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>>& edges) {
-  nb::list out;
+nb::ndarray<nb::numpy, T> edge_list_to_python(
+    const std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>>& edges) {
+  std::vector<T> out;
+  out.reserve(edges.size() * 4);
   for (const auto& edge : edges) {
-    out.append(nb::make_tuple(nb::make_tuple(edge.first.first, edge.first.second),
-                              nb::make_tuple(edge.second.first, edge.second.second)));
+    out.push_back(static_cast<T>(edge.first.first));
+    out.push_back(static_cast<T>(edge.first.second));
+    out.push_back(static_cast<T>(edge.second.first));
+    out.push_back(static_cast<T>(edge.second.second));
   }
+  return owned_array<T>(std::move(out), {edges.size(), size_t(4)});
+}
+
+template <typename Filtration, typename Value, bool IsKCritical>
+Filtration edge_filtration_from_values(Value first, Value second, int num_parameters) {
+  std::vector<Value> values{first, second};
+  if constexpr (IsKCritical) {
+    return Filtration(values.begin(), values.end(), num_parameters);
+  } else {
+    return Filtration(values.begin(), values.end());
+  }
+}
+
+template <typename Wrapper, typename Filtration, typename Value, bool IsKCritical>
+Wrapper reconstruct_from_edge_array(
+    Wrapper& self,
+    nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> edges,
+    int expand_dimension) {
+  if (edges.shape(1) != 4) {
+    throw std::runtime_error("Expected edge array with shape (n_edges, 4).");
+  }
+
+  Wrapper out;
+  const int num_parameters = self.tree.num_parameters();
+  out.tree.resize_all_filtrations(num_parameters);
+  out.tree.set_num_parameters(num_parameters);
+  out.filtration_grid = self.filtration_grid;
+
+  {
+    nb::gil_scoped_release release;
+    for (auto sh : self.tree.skeleton_simplex_range(0)) {
+      auto pair = self.tree.get_simplex_and_filtration(sh);
+      std::vector<int> simplex(pair.first.begin(), pair.first.end());
+      if constexpr (IsKCritical) {
+        insert_kcritical_simplex(out.tree, simplex, pair.second);
+      } else {
+        out.tree.insert(simplex, *pair.second);
+      }
+    }
+
+    std::vector<int> edge_simplex(2);
+    for (size_t i = 0; i < edges.shape(0); ++i) {
+      edge_simplex[0] = static_cast<int>(edges(i, 0));
+      edge_simplex[1] = static_cast<int>(edges(i, 1));
+      auto filtration = edge_filtration_from_values<Filtration, Value, IsKCritical>(
+          edges(i, 2), edges(i, 3), num_parameters);
+      if constexpr (IsKCritical) {
+        insert_kcritical_simplex(out.tree, edge_simplex, &filtration);
+      } else {
+        out.tree.insert(edge_simplex, filtration);
+      }
+    }
+
+    if (expand_dimension > 0) {
+      out.tree.expansion(expand_dimension);
+    }
+    out.tree.make_filtration_non_decreasing();
+  }
+
   return out;
 }
 
@@ -882,7 +945,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                                        nb::make_tuple(),
                                        nb::make_tuple(serialized_state(self), self.filtration_grid));
                })
-          .def("_serialize_state", [](Wrapper& self) -> nb::object { return serialized_state(self); })
+          .def("_serialize_state", [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> { return serialized_state(self); })
           .def(
               "_deserialize_state",
               [](Wrapper& self, nb::handle state) -> Wrapper& {
@@ -1048,7 +1111,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                nb::gil_scoped_release release;
                serialized = self.tree.get_to_std_state(line, parameter);
              }
-             return nb::cast(owned_array<char>(std::move(serialized), {serialized.size()}));
+             return owned_array<char>(std::move(serialized), {serialized.size()});
            })
       .def("_get_to_std_linear_projection_state",
            [](Wrapper& self, nb::handle linear_form_handle) {
@@ -1058,7 +1121,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                nb::gil_scoped_release release;
                serialized = self.tree.get_to_std_linear_projection_state(linear_form);
              }
-             return nb::cast(owned_array<char>(std::move(serialized), {serialized.size()}));
+             return owned_array<char>(std::move(serialized), {serialized.size()});
            })
       .def(
           "_squeeze_inplace",
@@ -1187,11 +1250,11 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                out = self.tree.get_simplices_of_dimension(dim);
              }
              std::vector<int32_t> values(out.begin(), out.end());
-             return nb::cast(owned_array<int32_t>(
-                 std::move(values), {out.size() / static_cast<size_t>(dim + 1), static_cast<size_t>(dim + 1)}));
+             return owned_array<int32_t>(
+                 std::move(values), {out.size() / static_cast<size_t>(dim + 1), static_cast<size_t>(dim + 1)});
            })
       .def("get_edge_list",
-           [](Wrapper& self) -> nb::object {
+           [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
              decltype(self.tree.get_edge_list()) edges;
              {
                nb::gil_scoped_release release;
@@ -1199,6 +1262,14 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
              }
              return edge_list_to_python<Value>(edges);
            })
+      .def("_reconstruct_from_edge_array",
+           [](Wrapper& self,
+              nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> edges,
+              int expand_dimension) -> Wrapper {
+             return reconstruct_from_edge_array<Wrapper, Filtration, Value, k_is_kcritical>(self, edges, expand_dimension);
+           },
+           "edges"_a,
+           "expand_dimension"_a = 0)
       .def("pts_to_indices",
            [](Wrapper& self, nb::handle pts_handle, nb::handle dims_handle) {
              auto pts = matrix_from_handle<Value>(pts_handle);

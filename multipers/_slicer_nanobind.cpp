@@ -359,14 +359,14 @@ nb::tuple compute_persistence_on_slices(
 }
 
 template <typename Wrapper>
-nb::object dimensions_array(Wrapper& self) {
+nb::ndarray<nb::numpy, int32_t> dimensions_array(Wrapper& self) {
   std::vector<int> dims;
   {
     nb::gil_scoped_release release;
     dims = self.truc.get_dimensions();
   }
   std::vector<int32_t> out(dims.begin(), dims.end());
-  return nb::cast(owned_array<int32_t>(std::move(out), {dims.size()}));
+  return owned_array<int32_t>(std::move(out), {dims.size()});
 }
 
 template <typename Wrapper>
@@ -630,7 +630,7 @@ nb::object copy_filtrations(Wrapper& self, bool raw) {
 }
 
 template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
-nb::object filtration_values_array(Wrapper& self) {
+nb::ndarray<nb::numpy, Value> filtration_values_array(Wrapper& self) {
   auto& filtrations = self.truc.get_filtration_values();
   size_t num_parameters = self.truc.get_number_of_parameters();
   size_t total = 0;
@@ -655,7 +655,7 @@ nb::object filtration_values_array(Wrapper& self) {
         offset += filtrations[i].num_generators();
       }
     }
-    return nb::cast(owned_array<Value>(std::move(out), {total, size_t(2)}));
+    return owned_array<Value>(std::move(out), {total, size_t(2)});
   } else {
     out.resize(total * num_parameters);
     {
@@ -670,7 +670,7 @@ nb::object filtration_values_array(Wrapper& self) {
         offset += filtrations[i].num_generators();
       }
     }
-    return nb::cast(owned_array<Value>(std::move(out), {total, num_parameters}));
+    return owned_array<Value>(std::move(out), {total, num_parameters});
   }
 }
 
@@ -1528,7 +1528,7 @@ void bind_vine_methods(Class& cls) {
                   nb::list cycle;
                   for (size_t k = 0; k < out_cpp[i][j].size(); ++k) {
                     auto boundary = std::move(out_cpp[i][j][k]);
-                    cycle.append(nb::cast(owned_array<uint32_t>(std::move(boundary), {boundary.size()})));
+                    cycle.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
                   }
                   dim_cycles.append(cycle);
                 }
@@ -1541,7 +1541,7 @@ void bind_vine_methods(Class& cls) {
             "intersect_points"_a = nb::none())
         .def(
             "get_most_persistent_cycle",
-            [](Wrapper& self, int dim, bool update, bool idx) {
+            [](Wrapper& self, int dim, bool update, bool idx) -> nb::object {
               std::vector<uint32_t> cycle_idx;
               std::vector<std::vector<uint32_t>> out_cpp;
               {
@@ -1564,20 +1564,20 @@ void bind_vine_methods(Class& cls) {
               nb::list out;
               for (size_t k = 0; k < out_cpp.size(); ++k) {
                 auto boundary = std::move(out_cpp[k]);
-                out.append(nb::cast(owned_array<uint32_t>(std::move(boundary), {boundary.size()})));
+                out.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
               }
               return nb::object(out);
             },
             "dim"_a = 1,
             "update"_a = true,
             "idx"_a = false)
-        .def("get_permutation", [](Wrapper& self) -> nb::object {
+        .def("get_permutation", [](Wrapper& self) -> nb::ndarray<nb::numpy, uint32_t> {
           std::vector<uint32_t> order;
           {
             nb::gil_scoped_release release;
             order = self.truc.get_current_order();
           }
-          return nb::cast(owned_array<uint32_t>(std::move(order), {order.size()}));
+          return owned_array<uint32_t>(std::move(order), {order.size()});
         });
   }
 }
@@ -1698,9 +1698,9 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                                 self.minpres_degree));
            })
       .def("_serialize_state",
-           [](Wrapper& self) -> nb::object {
-             return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
-           })
+            [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
+              return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
+            })
       .def(
           "_deserialize_state",
           [](Wrapper& self, nb::handle state) -> Wrapper& {
@@ -1733,7 +1733,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                     }
                     return nb::cast(std::numeric_limits<Value>::max());
                   })
-      .def("get_dimensions", [](Wrapper& self) -> nb::object { return dimensions_array(self); })
+      .def("get_dimensions", [](Wrapper& self) -> nb::ndarray<nb::numpy, int32_t> { return dimensions_array(self); })
       .def(
           "get_boundaries",
           [](Wrapper& self, bool packed) -> nb::object { return boundaries_object(self, packed); },
@@ -1775,7 +1775,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           "view"_a = false,
           "packed"_a = false)
       .def("get_filtrations_values",
-           [](Wrapper& self) -> nb::object {
+           [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
              return filtration_values_array<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
            })
       .def(
@@ -1908,14 +1908,14 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
              return dim_barcode_to_tuple<Barcode, int>(barcode);
            })
       .def("get_current_filtration",
-           [](Wrapper& self) -> nb::object {
-             std::vector<Value> current;
+            [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
+              std::vector<Value> current;
              {
                nb::gil_scoped_release release;
                current = self.truc.get_slice();
              }
-             return nb::cast(owned_array<Value>(std::move(current), {current.size()}));
-           })
+              return owned_array<Value>(std::move(current), {current.size()});
+            })
       .def(
           "prune_above_dimension",
           [](Wrapper& self, int max_dimension) -> Wrapper& {

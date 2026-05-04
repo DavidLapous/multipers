@@ -47,13 +47,22 @@ using multipers::nanobind_utils::tuple_from_size;
 using multipers::nanobind_utils::vector_from_handle;
 
 template <typename T>
-nb::object corner_matrix_to_python(std::vector<T>&& flat, size_t rows, size_t cols) {
-  return nb::cast(owned_array<T>(std::move(flat), {rows, cols}));
+nb::ndarray<nb::numpy, T> corner_matrix_to_python(std::vector<T>&& flat, size_t rows, size_t cols) {
+  return owned_array<T>(std::move(flat), {rows, cols});
 }
 
 template <typename T>
-nb::object corner_matrix_to_python(const std::vector<T>& flat, size_t rows, size_t cols) {
-  return nb::cast(owned_array<T>(std::vector<T>(flat.begin(), flat.end()), {rows, cols}));
+nb::ndarray<nb::numpy, T> corner_matrix_to_python(const std::vector<T>& flat, size_t rows, size_t cols) {
+  return owned_array<T>(std::vector<T>(flat.begin(), flat.end()), {rows, cols});
+}
+
+template <typename T>
+nb::ndarray<nb::numpy, T> corner_pair_to_python(const std::vector<T>& lower, const std::vector<T>& upper) {
+  std::vector<T> flat;
+  flat.reserve(lower.size() + upper.size());
+  flat.insert(flat.end(), lower.begin(), lower.end());
+  flat.insert(flat.end(), upper.begin(), upper.end());
+  return owned_array<T>(std::move(flat), {size_t(2), lower.size()});
 }
 
 template <typename T>
@@ -603,7 +612,7 @@ void bind_summand_class(nb::module_& m) {
   nb::class_<Summand>(m, Desc::summand_name.data())
       .def(nb::init<>())
       .def("get_birth_list",
-           [](Summand& self) -> nb::object {
+           [](Summand& self) -> nb::ndarray<nb::numpy, T> {
              std::vector<T> births;
              const size_t num_parameters = static_cast<size_t>(self.get_number_of_parameters());
              const size_t num_birth_corners = static_cast<size_t>(self.get_number_of_birth_corners());
@@ -614,7 +623,7 @@ void bind_summand_class(nb::module_& m) {
              return corner_matrix_to_python<T>(std::move(births), num_birth_corners, num_parameters);
            })
       .def("get_death_list",
-           [](Summand& self) -> nb::object {
+           [](Summand& self) -> nb::ndarray<nb::numpy, T> {
              std::vector<T> deaths;
              const size_t num_parameters = static_cast<size_t>(self.get_number_of_parameters());
              const size_t num_death_corners = static_cast<size_t>(self.get_number_of_death_corners());
@@ -626,7 +635,7 @@ void bind_summand_class(nb::module_& m) {
            })
       .def_prop_ro("degree", [](const Summand& self) -> int { return self.get_dimension(); })
       .def("get_bounds",
-           [](Summand& self) -> nb::tuple {
+           [](Summand& self) -> nb::ndarray<nb::numpy, T> {
              std::pair<std::vector<T>, std::vector<T>> cbounds;
              {
                nb::gil_scoped_release release;
@@ -634,10 +643,7 @@ void bind_summand_class(nb::module_& m) {
                cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
                cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
              }
-             return nb::make_tuple(nb::cast(owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()),
-                                                           {cbounds.first.size()})),
-                                   nb::cast(owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()),
-                                                           {cbounds.second.size()})));
+             return corner_pair_to_python<T>(cbounds.first, cbounds.second);
            })
       .def("num_parameters", [](Summand& self) -> int { return self.get_number_of_parameters(); })
       .def_prop_ro("_template_id", [](const Summand&) -> int { return Desc::template_id; })
@@ -675,14 +681,13 @@ void bind_box_class(nb::module_& m) {
              return self.contains(vector_from_array(x));
            })
       .def("get",
-           [](Box& self) -> nb::tuple {
+           [](Box& self) -> nb::ndarray<nb::numpy, T> {
              auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
              auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
-             return nb::make_tuple(nb::cast(owned_array<T>(std::move(lower), {self.get_lower_corner().size()})),
-                                   nb::cast(owned_array<T>(std::move(upper), {self.get_upper_corner().size()})));
-           })
-      .def("to_multipers",
-           [](Box& self) -> nb::object {
+             return corner_pair_to_python<T>(lower, upper);
+            })
+       .def("to_multipers",
+            [](Box& self) -> nb::ndarray<nb::numpy, T> {
              auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
              auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
              std::vector<T> flat;
@@ -691,7 +696,7 @@ void bind_box_class(nb::module_& m) {
                flat.push_back(lower[i]);
                flat.push_back(upper[i]);
              }
-             return nb::cast(owned_array<T>(std::move(flat), {size_t(2), lower.size()}));
+              return owned_array<T>(std::move(flat), {size_t(2), lower.size()});
            })
       .def_prop_ro("_template_id", [](const Box&) -> int { return Desc::template_id; })
       .def_prop_ro("dtype", [](const Box&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
@@ -857,20 +862,20 @@ void bind_module_class(nb::module_& m) {
                 return self;
               },
               nb::rv_policy::reference_internal)
-          .def("get_bottom",
-               [](Module& self) -> nb::object {
-                 return nb::cast(owned_array<T>(
-                     std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end()),
-                     {self.get_box().get_lower_corner().size()}));
-               })
-          .def("get_top",
-               [](Module& self) -> nb::object {
-                 return nb::cast(owned_array<T>(
-                     std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end()),
-                     {self.get_box().get_upper_corner().size()}));
-               })
-          .def("get_box",
-               [](Module& self) -> nb::object {
+           .def("get_bottom",
+                [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                  return owned_array<T>(
+                      std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end()),
+                      {self.get_box().get_lower_corner().size()});
+                })
+           .def("get_top",
+                [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                  return owned_array<T>(
+                      std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end()),
+                      {self.get_box().get_upper_corner().size()});
+                })
+           .def("get_box",
+                [](Module& self) -> nb::ndarray<nb::numpy, T> {
                  auto lower =
                      std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end());
                  auto upper =
@@ -879,27 +884,22 @@ void bind_module_class(nb::module_& m) {
                  flat_box.reserve(lower.size() + upper.size());
                  flat_box.insert(flat_box.end(), lower.begin(), lower.end());
                  flat_box.insert(flat_box.end(), upper.begin(), upper.end());
-                 return nb::cast(
-                     owned_array<T>(std::move(flat_box), {size_t(2), self.get_box().get_lower_corner().size()}));
+                  return owned_array<T>(std::move(flat_box), {size_t(2), self.get_box().get_lower_corner().size()});
                })
           .def_prop_ro("max_degree", [](const Module& self) -> int { return self.get_max_dimension(); })
           .def_prop_ro("num_parameters",
                        [](const Module& self) -> int { return self.get_box().get_lower_corner().size(); })
-          .def("get_bounds",
-               [](Module& self) -> nb::tuple {
-                 std::pair<std::vector<T>, std::vector<T>> cbounds;
-                 {
-                   nb::gil_scoped_release release;
-                   auto cpp_bounds = self.compute_bounds().get_bounding_corners();
-                   cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
-                   cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
-                 }
-                 return nb::make_tuple(
-                     nb::cast(owned_array<T>(std::vector<T>(cbounds.first.begin(), cbounds.first.end()),
-                                             {cbounds.first.size()})),
-                     nb::cast(owned_array<T>(std::vector<T>(cbounds.second.begin(), cbounds.second.end()),
-                                             {cbounds.second.size()})));
-               })
+           .def("get_bounds",
+                [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                  std::pair<std::vector<T>, std::vector<T>> cbounds;
+                  {
+                    nb::gil_scoped_release release;
+                    auto cpp_bounds = self.compute_bounds().get_bounding_corners();
+                    cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
+                    cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
+                  }
+                  return corner_pair_to_python<T>(cbounds.first, cbounds.second);
+                })
           .def(
               "rescale",
               [](Module& self, nb::handle factors, int degree) -> Module& {
