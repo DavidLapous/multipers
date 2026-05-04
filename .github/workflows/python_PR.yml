@@ -93,6 +93,8 @@ jobs:
       run: |
         micromamba activate build
         cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
+        cp "$env:CONDA_PREFIX\Library\bin\libgmp*.dll" multipers
+        cp "$env:CONDA_PREFIX\Library\bin\libmpfr*.dll" multipers
         dir multipers
     - name: Build package
       shell: bash -el {0}
