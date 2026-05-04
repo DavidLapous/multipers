@@ -242,6 +242,8 @@ include = [
   "ext/function_delaunay/scc_mod/include/scc/Column_data.h",
   "ext/function_delaunay/scc_mod/include/scc/Scc.h",
   "ext/function_delaunay/scc_mod/include/scc/basic.h",
+  "ext/gudhi-devel/src/Alpha_complex/include/gudhi/Alpha_complex.h",
+  "ext/gudhi-devel/src/Alpha_complex/include/gudhi/Alpha_complex/Alpha_kernel_d.h",
   "ext/gudhi-devel/src/Bitmap_cubical_complex/include/gudhi/Bitmap_cubical_complex.h",
   "ext/gudhi-devel/src/Bitmap_cubical_complex/include/gudhi/Bitmap_cubical_complex_base.h",
   "ext/gudhi-devel/src/Bitmap_cubical_complex/include/gudhi/Bitmap_cubical_complex_periodic_boundary_conditions_base.h",
