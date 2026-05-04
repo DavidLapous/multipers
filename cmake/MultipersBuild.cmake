@@ -522,6 +522,10 @@ function(multipers_configure_module module_name target_name)
   elseif(module_name STREQUAL "_function_rips_nanobind")
     multipers_link_tbb(${target_name})
 
+  elseif(module_name STREQUAL "_core_delaunay_nanobind")
+    multipers_link_tbb(${target_name})
+    multipers_link_cgal(${target_name})
+
   elseif(module_name STREQUAL "_mpfree_interface")
     if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
       add_dependencies(${target_name} multipers_mpfree_log_overlay)
@@ -683,6 +687,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _mma_nanobind
   _simplex_tree_multi_nanobind
   _function_rips_nanobind
+  _core_delaunay_nanobind
   _grid_helper_nanobind
   _mpfree_interface
   _function_delaunay_interface
