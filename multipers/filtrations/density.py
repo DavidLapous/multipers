@@ -15,6 +15,23 @@ available_kernels = Union[
     Callable,
 ]
 
+_KNNMEAN_DENSE_SCORE_SAMPLES_JIT = {}
+
+
+def _knnmean_dense_score_samples(y, x, k: int, api):
+    distances = api.cdist(api.astype(y, x.dtype), x, p=2)
+    knn_distances = api.sort(distances, axis=1)[:, :k]
+    return api.mean(knn_distances, axis=1)
+
+
+def _get_knnmean_dense_score_samples(api):
+    if api not in _KNNMEAN_DENSE_SCORE_SAMPLES_JIT:
+        _KNNMEAN_DENSE_SCORE_SAMPLES_JIT[api] = api.jit(
+            _knnmean_dense_score_samples,
+            static_argnames=("k", "api"),
+        )
+    return _KNNMEAN_DENSE_SCORE_SAMPLES_JIT[api]
+
 
 def convolution_signed_measures(
     iterable_of_signed_measures,
@@ -648,8 +665,14 @@ class KNNmean:
             else self.api
         )
         self._x = self._api.astensor(x)
+        if self.k < 1:
+            raise ValueError("KNNmean parameter k should be a positive integer.")
+        if self.k > len(self._x):
+            raise ValueError("KNNmean parameter k should be at most the sample size.")
         self._dense_score_samples = None
-        self._implementation = "pykeops" if self._api.check_keops() else "dense"
+        self._implementation = (
+            "pykeops" if self._api is _npapi and self._api.check_keops() else "dense"
+        )
 
         if self._implementation == "dense":
             self._KNN_fun = None
@@ -678,19 +701,11 @@ class KNNmean:
 
     def _make_dense_score_samples(self):
         assert self._api is not None and self._x is not None
-        api = self._api
-        x = self._x
         if self.metric != "euclidean":
             raise NotImplementedError(
-                "Dense JAX KNNmean currently only supports the euclidean metric."
+                "Dense KNNmean currently only supports the euclidean metric."
             )
-
-        def score_chunk(y):
-            distances = api.cdist(api.astype(y, x.dtype), x, p=2)
-            knn_distances = api.sort(distances, axis=1)[:, : self.k]
-            return api.mean(knn_distances, axis=1)
-
-        return api.jit(score_chunk)
+        return _get_knnmean_dense_score_samples(self._api)
 
     def score_samples(self, x):
         from sklearn.exceptions import NotFittedError
@@ -707,4 +722,9 @@ class KNNmean:
             return self._KNN_fun(x, self._x).sum(axis=1) / self.k
         if self._dense_score_samples is None:
             self._dense_score_samples = self._make_dense_score_samples()
-        return self._dense_score_samples(self._api.astensor(x))
+        return self._dense_score_samples(
+            self._api.astensor(x),
+            self._x,
+            self.k,
+            self._api,
+        )
