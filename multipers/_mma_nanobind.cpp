@@ -639,7 +639,8 @@ void bind_summand_class(nb::module_& m) {
              std::pair<std::vector<T>, std::vector<T>> cbounds;
              {
                nb::gil_scoped_release release;
-               auto cpp_bounds = self.compute_bounds().get_bounding_corners();
+               auto bounds = self.compute_bounds();
+               auto cpp_bounds = bounds.get_bounding_corners();
                cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
                cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
              }
@@ -894,7 +895,8 @@ void bind_module_class(nb::module_& m) {
                   std::pair<std::vector<T>, std::vector<T>> cbounds;
                   {
                     nb::gil_scoped_release release;
-                    auto cpp_bounds = self.compute_bounds().get_bounding_corners();
+                    auto bounds = self.compute_bounds();
+                    auto cpp_bounds = bounds.get_bounding_corners();
                     cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
                     cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
                   }
