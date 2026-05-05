@@ -95,6 +95,8 @@ jobs:
         cp "$env:CONDA_PREFIX\Library\bin\tbb*.dll" multipers
         cp "$env:CONDA_PREFIX\Library\bin\libgmp*.dll" multipers
         cp "$env:CONDA_PREFIX\Library\bin\libmpfr*.dll" multipers
+        cp "$env:CONDA_PREFIX\Library\bin\libgcc_s_seh-1.dll" multipers
+        cp "$env:CONDA_PREFIX\Library\bin\hwloc*.dll" multipers
         dir multipers
     - name: Build package
       shell: bash -el {0}
@@ -135,6 +137,62 @@ jobs:
             if bad:
                 raise RuntimeError(f"Found forbidden source files in {wheel}: {bad[:10]}")
             print(f"{wheel.name}: OK")
+        PY
+    - name: Check Windows wheel DLL dependencies
+      if: ${{ matrix.os == 'windows-latest' }}
+      shell: bash -el {0}
+      run: |
+        micromamba activate build
+        python - <<'PY'
+        import re
+        import subprocess
+        import zipfile
+        from pathlib import Path
+
+        system_dlls = {
+            "kernel32.dll",
+            "msvcp140.dll",
+            "python" + "${{ matrix.python-version }}".replace(".", "") + ".dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll",
+        }
+
+        for wheel in Path("dist").glob("*.whl"):
+            with zipfile.ZipFile(wheel) as zf:
+                binaries = [
+                    name
+                    for name in zf.namelist()
+                    if name.startswith("multipers/")
+                    and name.lower().endswith((".pyd", ".dll"))
+                ]
+                present = {Path(name).name.lower() for name in binaries}
+                missing = {}
+                for name in binaries:
+                    with zf.open(name) as src:
+                        path = Path(src.name).name
+                        Path(path).write_bytes(src.read())
+                    out = subprocess.check_output(
+                        ["llvm-objdump", "-p", path], text=True, errors="ignore"
+                    )
+                    deps = set(re.findall(r"DLL Name: ([^\s]+)", out))
+                    unresolved = sorted(
+                        dep
+                        for dep in deps
+                        if dep.lower() not in present
+                        and dep.lower() not in system_dlls
+                        and not dep.lower().startswith("api-ms-win-")
+                    )
+                    if unresolved:
+                        missing[name] = unresolved
+                    Path(path).unlink()
+
+                if missing:
+                    detail = "\n".join(
+                        f"{binary}: {', '.join(deps)}"
+                        for binary, deps in sorted(missing.items())
+                    )
+                    raise RuntimeError(f"Missing Windows DLL dependencies in {wheel}:\n{detail}")
+                print(f"{wheel.name}: Windows DLL dependencies OK")
         PY
 
     - name: Fix wheels on Linux and Macos
