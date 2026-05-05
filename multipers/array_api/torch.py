@@ -165,6 +165,14 @@ def sort(x, axis=-1):
     return _torch.sort(x, dim=axis).values
 
 
+def top_k(x, k, axis=-1):
+    return _torch.topk(x, k, dim=axis).values
+
+
+def min_k(x, k, axis=-1):
+    return -top_k(-x, k, axis=axis)
+
+
 def set_at(x, idx, y):
     x[idx] = y
     return x

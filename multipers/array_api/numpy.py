@@ -211,6 +211,14 @@ def sort(x, axis=-1):
     return _np.sort(x, axis=axis)
 
 
+def min_k(x, k, axis=-1):
+    return _np.partition(x, k - 1, axis=axis).take(_np.arange(k), axis=axis)
+
+
+def top_k(x, k, axis=-1):
+    return -min_k(-x, k, axis=axis)
+
+
 def set_at(x, idx, y):
     x[idx] = y
     return x

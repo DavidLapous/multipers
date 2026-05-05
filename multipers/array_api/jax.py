@@ -112,6 +112,19 @@ def sort(x, axis=-1):
     return _jnp.sort(x, axis=axis)
 
 
+def top_k(x, k, axis=-1):
+    if axis != -1 and axis != x.ndim - 1:
+        x = _jnp.moveaxis(x, axis, -1)
+        values, _ = _jax.lax.top_k(x, k)
+        return _jnp.moveaxis(values, -1, axis)
+    values, _ = _jax.lax.top_k(x, k)
+    return values
+
+
+def min_k(x, k, axis=-1):
+    return -top_k(-x, k, axis=axis)
+
+
 def set_at(x, idx, y):
     return x.at[idx].set(y)
 

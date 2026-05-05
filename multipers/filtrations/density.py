@@ -20,7 +20,7 @@ _KNNMEAN_DENSE_SCORE_SAMPLES_JIT = {}
 
 def _knnmean_dense_score_samples(y, x, k: int, api):
     distances = api.cdist(api.astype(y, x.dtype), x, p=2)
-    knn_distances = api.sort(distances, axis=1)[:, :k]
+    knn_distances = api.min_k(distances, k, axis=1)
     return api.mean(knn_distances, axis=1)
 
 
@@ -659,11 +659,7 @@ class KNNmean:
         self._dense_score_samples = None
 
     def fit(self, x):
-        self._api = (
-            api_from_tensor(x, jit_promote=not _npapi.check_keops())
-            if self.api is None
-            else self.api
-        )
+        self._api = api_from_tensor(x) if self.api is None else self.api
         self._x = self._api.astensor(x)
         if self.k < 1:
             raise ValueError("KNNmean parameter k should be a positive integer.")
