@@ -655,6 +655,8 @@ class KNNmean:
             self._KNN_fun = None
             return self
 
+        from pykeops.numpy import Vi, Vj
+
         D = self._x.shape[1]
         X_i = Vi(0, D)
         X_j = Vj(1, D)

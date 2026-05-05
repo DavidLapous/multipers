@@ -5,23 +5,44 @@ import gudhi as gd
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, TransformerMixin
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist
 from tqdm import tqdm
 
 import multipers as mp
 import multipers.slicer as mps
 from multipers.filtrations.density import available_kernels
-from multipers.filtrations import RipsCodensity, _AlphaCodensity, DelaunayCodensity
+from multipers.filtrations import (
+    CoreDelaunay,
+    DegreeRips,
+    DelaunayLowerstar,
+    RhomboidBifiltration,
+    RipsLowerstar,
+    _AlphaLowerstar,
+)
 from multipers.array_api import api_from_tensor
 
 
 class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        bandwidths=[],
-        masses=[],
-        threshold: float = -np.inf,
-        complex: Literal["alpha", "rips", "delaunay"] = "rips",
+        bandwidths=None,
+        masses=None,
+        knns=None,
+        threshold: Optional[float] = None,
+        complex: Optional[
+            Literal[
+                "alpha",
+                "rips",
+                "delaunay",
+                "degree-rips",
+                "core-delaunay",
+                "multicover",
+            ]
+        ] = None,
+        node_degrees: Optional[Iterable[int]] = None,
+        core_degrees: Optional[Iterable[int]] = None,
+        multicover_k_max: Optional[int] = None,
+        multicover_degree: Optional[int] = None,
         sparse: Optional[float] = None,
         kernel: available_kernels = "gaussian",
         log_density: bool = True,
@@ -31,12 +52,20 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         verbose: bool = False,
     ) -> None:
         """
-        (Rips or Alpha or Delaunay) + (Density Estimation or DTM) 1-critical 2-filtration.
+        Bulk computation of: 
+         1. (Rips or Alpha or Delaunay) + (Density Estimation, DTM, or kNN) 1-critical 2-filtration.
+         2. (Scale) + (multicover-like) multi-critical 2-filtration.
 
         Parameters
         ----------
          - bandwidth : real : The kernel density estimation bandwidth, or the DTM mass. If negative, it replaced by abs(bandwidth)*(radius of the dataset)
-         - threshold : real,  max edge lenfth of the rips or max alpha square of the alpha
+         - knns : integer list : k values for k-nearest-neighbor codensity.
+         - threshold : real or None, max edge length of the rips or max alpha square of the alpha. None uses the dataset diameter.
+         - complex : "alpha", "rips", "delaunay", "degree-rips", "core-delaunay", "multicover", or None. None uses Delaunay for point clouds of dimension <= 4 and Rips otherwise.
+         - node_degrees : integer list : degree thresholds for degree-rips.
+         - core_degrees : integer list : k-values for core-delaunay.
+         - multicover_k_max : integer : maximum cover count for multicover.
+         - multicover_degree : integer : homology degree for multicover.
          - sparse : real, sparse rips (c.f. rips doc) WARNING : ONLY FOR RIPS
          - kernel : the kernel used for density estimation. Available ones are, e.g., "dtm", "gaussian", "exponential".
          - progress : bool, shows the calculus status
@@ -49,8 +78,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         A list of filtered complexes whose first parameter is a rips and the second is the codensity.
         """
         super().__init__()
-        self.bandwidths = bandwidths
-        self.masses = masses
+        self.bandwidths = [] if bandwidths is None else bandwidths
+        self.masses = [] if masses is None else masses
+        self.knns = [] if knns is None else knns
         self.kernel = kernel
         self.log_density = log_density
         self.progress = progress
@@ -61,6 +91,11 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         self.fit_fraction = fit_fraction
         self.verbose = verbose
         self.complex = complex
+        self._complex = complex
+        self.node_degrees = node_degrees
+        self.core_degrees = core_degrees
+        self.multicover_k_max = multicover_k_max
+        self.multicover_degree = multicover_degree
         self.threshold = threshold
         self.sparse = sparse
         self._get_sts = lambda x: Exception("Fit first")
@@ -69,7 +104,13 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 
     def _get_distance_quantiles_and_threshold(self, X, qs):
         ## if we dont need to compute a distance matrix
-        if len(qs) == 0 and self.threshold >= 0:
+        if self._complex == "delaunay" and self.threshold in (None, -np.inf):
+            self._threshold = None
+            if len(qs) == 0:
+                self._scale = []
+                return []
+
+        if len(qs) == 0 and self.threshold is not None and self.threshold >= 0:
             self._scale = []
             return []
         if self.progress:
@@ -79,110 +120,113 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
             len(X), min(len(X), int(self.fit_fraction * len(X)) + 1), replace=False
         )
 
-        def compute_max_scale(x):
+        try:
             from pykeops.numpy import LazyTensor
+        except ImportError:
+            LazyTensor = None
 
+        def compute_max_scale(x):
             x_np = self._api.asnumpy(x)
+            if LazyTensor is None:
+                distances = pdist(x_np)
+                return distances.max() if len(distances) > 0 else 0
+
             a = LazyTensor(x_np[None, :, :])
             b = LazyTensor(x_np[:, None, :])
-            # Use 1000 as a batch size for max reduction to avoid memory issues
-            return np.sqrt(((a - b) ** 2).sum(2).max(1).min(0)[0])
+            return np.sqrt(((a - b) ** 2).sum(2).max(1).max(0)[0])
 
         diameter = np.max([compute_max_scale(x) for x in (X[i] for i in indices)])
         self._scale = diameter * np.array(qs)
 
-        if self.threshold == -np.inf:
+        if self._complex == "delaunay" and self.threshold in (None, -np.inf):
+            self._threshold = None
+        elif self.threshold is None or self.threshold == -np.inf:
             self._threshold = diameter
         elif self.threshold > 0:
             self._threshold = self.threshold
         else:
             self._threshold = -diameter * self.threshold
 
-        if self.threshold > 0 and len(self._scale) > 0:
+        if self.threshold is not None and self.threshold > 0 and len(self._scale) > 0:
             self._scale[self._scale > self.threshold] = self.threshold
 
         if self.progress:
             print(f"Done. Chosen scales {qs} are {self._scale}", flush=True)
         return self._scale
 
+    def _is_structural_complex(self):
+        return self._complex in {"degree-rips", "core-delaunay", "multicover"}
+
+    def _get_structural_complex(self, x):
+        if self._complex == "degree-rips":
+            return DegreeRips(
+                points=x,
+                ks=self.node_degrees,
+                threshold_radius=self._threshold,
+                verbose=self.verbose,
+            )
+        if self._complex == "core-delaunay":
+            return CoreDelaunay(
+                points=x,
+                ks=self.core_degrees,
+                max_alpha_square=(
+                    self._threshold if self.threshold not in (None, -np.inf) else np.inf
+                ),
+                verbose=self.verbose,
+            )
+        if self._complex == "multicover":
+            return RhomboidBifiltration(
+                x=x,
+                k_max=self.multicover_k_max,
+                degree=self.multicover_degree,
+                verbose=self.verbose,
+            )
+        raise ValueError(f"Invalid structural complex {self._complex}")
+
+    def _get_codensity_complex(self, x, codensity):
+        match self._complex:
+            case "rips":
+                return RipsLowerstar(
+                    points=x,
+                    function=codensity,
+                    threshold_radius=self._threshold,
+                    sparse=self.sparse,
+                )
+            case "alpha":
+                return _AlphaLowerstar(
+                    points=x,
+                    function=codensity,
+                    threshold_radius=self._threshold,
+                )
+            case "delaunay":
+                return DelaunayLowerstar(
+                    points=x,
+                    function=codensity,
+                    threshold_radius=self._threshold,
+                    verbose=self.verbose,
+                )
+            case _:
+                raise ValueError(f"Invalid complex {self._complex}")
+
     def _get_sts_all(self, x):
-        res = []
-        for bandwidth in self._bandwidths:
-            if self.complex == "rips":
-                st = RipsCodensity(
-                    points=x,
-                    bandwidth=bandwidth,
-                    kernel=self.kernel,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                    sparse=self.sparse,
-                )
-            elif self.complex == "alpha":
-                st = _AlphaCodensity(
-                    points=x,
-                    bandwidth=bandwidth,
-                    kernel=self.kernel,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                )
-            elif self.complex == "delaunay":
-                st = DelaunayCodensity(
-                    points=x,
-                    bandwidth=bandwidth,
-                    kernel=self.kernel,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                    verbose=self.verbose,
-                )
-            else:
-                raise ValueError(f"Invalid complex {self.complex}")
-            res.append(st)
+        if self._is_structural_complex():
+            return [self._get_structural_complex(x)]
+        codensities = self._get_codensities(x, x)
+        return [self._get_codensity_complex(x, codensity) for codensity in codensities]
 
-        for dtm_mass in self.masses:
-            if self.complex == "rips":
-                st = RipsCodensity(
-                    points=x,
-                    dtm_mass=dtm_mass,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                    sparse=self.sparse,
-                )
-            elif self.complex == "alpha":
-                st = _AlphaCodensity(
-                    points=x,
-                    dtm_mass=dtm_mass,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                )
-            elif self.complex == "delaunay":
-                st = DelaunayCodensity(
-                    points=x,
-                    dtm_mass=dtm_mass,
-                    return_log=self.log_density,
-                    threshold_radius=self._threshold,
-                    verbose=self.verbose,
-                )
-            else:
-                raise ValueError(f"Invalid complex {self.complex}")
-            res.append(st)
-        return res
-
-    def _get_sts_rips(self, x):
-        return self._get_sts_all(x)
-
-    def _get_sts_alpha(self, x):
-        return self._get_sts_all(x)
-
-    def _get_sts_delaunay(self, x):
-        return self._get_sts_all(x)
+    def _precompile_codensities(self, X):
+        if self._is_structural_complex():
+            return
+        x_precompile = self._precompile_sample(X)
+        self._get_codensities(x_precompile, x_precompile)
 
     def _get_codensities(self, x_fit, x_sample):
-        from multipers.filtrations.density import DTM, KDE
+        from multipers.filtrations.density import DTM, KDE, KNNmean
 
         x_fit = self._api.astensor(x_fit)
         x_sample = self._api.astensor(x_sample, dtype=x_fit.dtype)
         if len(self.bandwidths) == 0:
-            codensities_kde=self._api.empty((0, len(x_sample)))
+            codensities_kde = self._api.empty((0, len(x_sample)))
         else:
             codensities_kde = self._api.stack(
                 [
@@ -203,21 +247,38 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 .score_samples(x_sample)
                 .reshape(len(self.masses), len(x_sample))
             )
-        return self._api.cat([codensities_kde, codensities_dtm])
+        if len(self.knns) == 0:
+            codensities_knn = self._api.empty((0, len(x_sample)))
+        else:
+            codensities_knn = self._api.stack(
+                [
+                    KNNmean(k=knn, api=self._api).fit(x_fit).score_samples(x_sample)
+                    for knn in self.knns
+                ]
+            )
+        return self._api.cat([codensities_kde, codensities_dtm, codensities_knn])
+
+    def _precompile_sample(self, X):
+        size = 2
+        if len(self.knns) > 0:
+            size = max(size, max(self.knns))
+        return X[0][: min(len(X[0]), size)]
 
     def _define_sts(self):
-        match self.complex:
-            case "rips":
-                self._get_sts = self._get_sts_rips
-            case "alpha":
-                self._get_sts = self._get_sts_alpha
-            case "delaunay":
-                self._get_sts = self._get_sts_delaunay
-            case _:
-                raise ValueError(
-                    f"Invalid complex \
-                {self.complex}. Possible choises are rips, delaunay, or alpha."
-                )
+        valid_complexes = {
+            "rips",
+            "alpha",
+            "delaunay",
+            "degree-rips",
+            "core-delaunay",
+            "multicover",
+        }
+        if self._complex not in valid_complexes:
+            raise ValueError(
+                f"Invalid complex {self._complex}. "
+                f"Possible choices are {sorted(valid_complexes)}."
+            )
+        self._get_sts = self._get_sts_all
 
     def _define_bandwidths(self, X):
         qs = [q for q in [*-np.asarray(self.bandwidths)] if 0 <= q <= 1]
@@ -229,17 +290,49 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
                 self._bandwidths[i] = self._scale[count]
                 count += 1
 
+    def _validate_complex_parameters(self):
+        has_codensity = (
+            len(self.bandwidths) > 0 or len(self.masses) > 0 or len(self.knns) > 0
+        )
+        if self._complex in {"degree-rips", "core-delaunay", "multicover"} and has_codensity:
+            raise ValueError(
+                f"`{self._complex}` is already a bifiltration and cannot be combined "
+                "with `bandwidths`, `masses`, or `knns`."
+            )
+        if self._complex == "degree-rips" and self.node_degrees is None:
+            raise ValueError("`node_degrees` is required for complex='degree-rips'.")
+        if self._complex == "core-delaunay" and self.core_degrees is None:
+            raise ValueError("`core_degrees` is required for complex='core-delaunay'.")
+        if self._complex == "multicover":
+            if self.multicover_k_max is None:
+                raise ValueError("`multicover_k_max` is required for complex='multicover'.")
+            if self.multicover_degree is None:
+                raise ValueError("`multicover_degree` is required for complex='multicover'.")
+
+    def _validate_knns(self, X):
+        if len(self.knns) == 0:
+            return
+        knns = np.asarray(self.knns, dtype=int)
+        if np.any(knns < 1):
+            raise ValueError("All kNN parameters should be positive integers.")
+        max_size = min(len(x) for x in X)
+        if np.max(knns) > max_size:
+            raise ValueError("All kNN parameters should be at most the sample size.")
+
     def fit(self, X: np.ndarray | list, y=None):
         # self.bandwidth = "silverman" ## not good, as is can make bandwidth not constant
         self._api = api_from_tensor(X[0])
+        self._complex = self.complex or ("delaunay" if X[0].shape[1] <= 4 else "rips")
+        self._validate_complex_parameters()
+        self._validate_knns(X)
         self._define_sts()
         self._define_bandwidths(X)
-        # PRECOMPILE FIRST
-        self._get_codensities(X[0][:2], X[0][:2])
+        self._precompile_codensities(X)
         return self
 
     def transform(self, X):
-        self._get_codensities(X[0][:2], X[0][:2])
+        self._validate_knns(X)
+        self._precompile_codensities(X)
         with tqdm(
             X, desc="Filling simplextrees", disable=not self.progress, total=len(X)
         ) as data:
@@ -252,10 +345,24 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
 class PointCloud2SimplexTree(PointCloud2FilteredComplex):
     def __init__(
         self,
-        bandwidths=[],
-        masses=[],
+        bandwidths=None,
+        masses=None,
+        knns=None,
         threshold: float = np.inf,
-        complex: Literal["alpha", "rips", "delaunay"] = "rips",
+        complex: Optional[
+            Literal[
+                "alpha",
+                "rips",
+                "delaunay",
+                "degree-rips",
+                "core-delaunay",
+                "multicover",
+            ]
+        ] = None,
+        node_degrees: Optional[Iterable[int]] = None,
+        core_degrees: Optional[Iterable[int]] = None,
+        multicover_k_max: Optional[int] = None,
+        multicover_degree: Optional[int] = None,
         sparse: float | None = None,
         kernel: available_kernels = "gaussian",
         log_density: bool = True,

@@ -51,18 +51,41 @@ def _rhomboid_tiling_to_slicer(
         return out
 
 
-def KDE(bandwidth, kernel, return_log):
-    if find_spec("pykeops") is not None and check_keops():
-        from multipers.filtrations.density import KDE as _KDE
+def _compute_codensity(
+    points: ArrayLike,
+    *,
+    bandwidth: Optional[float] = None,
+    dtm_mass: Optional[float] = None,
+    knn: Optional[int] = None,
+    kernel: available_kernels = "gaussian",
+    return_log: bool = True,
+):
+    if sum(x is not None for x in (bandwidth, dtm_mass, knn)) != 1:
+        raise ValueError("Density estimation is either via kernels, dtm, or knn.")
+    if bandwidth is not None:
+        if find_spec("pykeops") is not None and check_keops():
+            from multipers.filtrations.density import KDE
 
-        return _KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+            kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
+        else:
+            from sklearn.neighbors import KernelDensity
 
-    from sklearn.neighbors import KernelDensity
+            _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
+            if not return_log:
+                raise ValueError("Sklearn returns log-density.")
+            kde = KernelDensity(bandwidth=bandwidth, kernel=kernel)
+        return -kde.fit(points).score_samples(points)
+    if dtm_mass is not None:
+        return DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
 
-    _mp_logs.warn_fallback("pykeops not found. Falling back to sklearn.")
-    if not return_log:
-        raise ValueError("Sklearn returns log-density.")
-    return KernelDensity(bandwidth=bandwidth, kernel=kernel)
+    if knn < 1:
+        raise ValueError("kNN parameter should be a positive integer.")
+    if knn > len(points):
+        raise ValueError("kNN parameter should be at most the sample size.")
+
+    from multipers.filtrations.density import KNNmean
+
+    return KNNmean(k=knn).fit(points).score_samples(points)
 
 
 def RipsLowerstar(
@@ -156,6 +179,7 @@ def RipsCodensity(
     *,
     return_log: bool = True,
     dtm_mass: Optional[float] = None,
+    knn: Optional[int] = None,
     kernel: available_kernels = "gaussian",
     threshold_radius: Optional[float] = None,
     sparse: Optional[float] = None,
@@ -163,15 +187,14 @@ def RipsCodensity(
     """
     Computes the Rips density filtration.
     """
-    if bandwidth is not None and dtm_mass is not None:
-        raise ValueError("Density estimation is either via kernels or dtm.")
-    if bandwidth is not None:
-        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
-        f = -kde.fit(points).score_samples(points)
-    elif dtm_mass is not None:
-        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
-    else:
-        raise ValueError("Bandwidth or DTM mass has to be given.")
+    f = _compute_codensity(
+        points,
+        bandwidth=bandwidth,
+        dtm_mass=dtm_mass,
+        knn=knn,
+        kernel=kernel,
+        return_log=return_log,
+    )
     return RipsLowerstar(
         points=points, function=f, threshold_radius=threshold_radius, sparse=sparse
     )
@@ -368,6 +391,7 @@ def _AlphaCodensity(
     *,
     return_log: bool = True,
     dtm_mass: Optional[float] = None,
+    knn: Optional[int] = None,
     kernel: available_kernels = "gaussian",
     threshold_radius: Optional[float] = None,
 ):
@@ -377,15 +401,14 @@ def _AlphaCodensity(
         - first parameter is alpha
         - the second is given by a density estimation
     """
-    if bandwidth is not None and dtm_mass is not None:
-        raise ValueError("Density estimation is either via kernels or dtm.")
-    if bandwidth is not None:
-        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
-        f = -kde.fit(points).score_samples(points)
-    elif dtm_mass is not None:
-        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
-    else:
-        raise ValueError("Bandwidth or DTM mass has to be given.")
+    f = _compute_codensity(
+        points,
+        bandwidth=bandwidth,
+        dtm_mass=dtm_mass,
+        knn=knn,
+        kernel=kernel,
+        return_log=return_log,
+    )
     return _AlphaLowerstar(points=points, function=f, threshold_radius=threshold_radius)
 
 
@@ -395,6 +418,7 @@ def DelaunayCodensity(
     *,
     return_log: bool = True,
     dtm_mass: Optional[float] = None,
+    knn: Optional[int] = None,
     kernel: available_kernels = "gaussian",
     threshold_radius: Optional[float] = None,
     reduce_degree: int = -1,
@@ -407,15 +431,14 @@ def DelaunayCodensity(
     """
     TODO
     """
-    if bandwidth is not None and dtm_mass is not None:
-        raise ValueError("Density estimation is either via kernels or dtm.")
-    if bandwidth is not None:
-        kde = KDE(bandwidth=bandwidth, kernel=kernel, return_log=return_log)
-        f = -kde.fit(points).score_samples(points)
-    elif dtm_mass is not None:
-        f = DTM(masses=[dtm_mass]).fit(points).score_samples(points)[0]
-    else:
-        raise ValueError("Bandwidth or DTM mass has to be given.")
+    f = _compute_codensity(
+        points,
+        bandwidth=bandwidth,
+        dtm_mass=dtm_mass,
+        knn=knn,
+        kernel=kernel,
+        return_log=return_log,
+    )
     return DelaunayLowerstar(
         points=points,
         function=f,
