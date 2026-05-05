@@ -1,6 +1,6 @@
 [project]
 name = "multipers"
-version = "2.6.0b1"
+version = "2.6.0"
 description = "Multiparameter Topological Persistence for Machine Learning"
 readme = "README.md"
 authors = [
@@ -58,7 +58,7 @@ build-backend = "scikit_build_core.build"
 minimum-version = "build-system.requires"
 cmake.version = ">=3.27"
 ninja.version = ">=1.11"
-cmake.build-type = "Release"
+# cmake.build-type = "Release"
 build-dir = "build"
 
 [tool.scikit-build.cmake.define]
@@ -87,6 +87,10 @@ exclude = [
   "build",
   "build*/**",
   "dist",
+  "TODOs/**",
+  "chatty_tests/**",
+  "math/**",
+  "run_tests/**",
   "**/__pycache__/**",
   "multipers/__pycache__/**",
   "**/*.ipynb",
@@ -100,6 +104,9 @@ exclude = [
   "multipers.egg-info",
   "tmp",
   "error_log.txt",
+  "AGENTS.md",
+  "multipers_old.py",
+  "test.py",
   "*.sh",
   "**/.DS_Store",
   # scikit-build-core manual sdist mode is exclude-driven, not allowlist-driven.
@@ -523,3 +530,6 @@ source = "https://github.com/DavidLapous/multipers"
 download = "https://pypi.org/project/multipers/#files"
 tracker = "https://github.com/DavidLapous/multipers/issues"
 "release notes" = "https://github.com/DavidLapous/multipers/releases"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "chatty_tests"]
