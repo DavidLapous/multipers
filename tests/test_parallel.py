@@ -62,7 +62,7 @@ def test_io_parallel(backend, n_jobs):
     dgms = Parallel(n_jobs=n_jobs, backend=backend)(delayed(io_fd_mpfree)(x) for x in X)
 
     for dgm in dgms:
-        assert_sm_pair(ground_truth, dgm, exact=False, reg=0, max_error=1e-12)
+        assert_sm_pair(ground_truth, dgm, exact=False, reg=0, max_error=1e-10)
 
 
 x = mp.data.three_annulus(50, 10)

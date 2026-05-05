@@ -7,7 +7,11 @@ from numpy import array
 
 import multipers as mp
 from multipers.tests import assert_st_simplices, random_st
-from multipers.simplex_tree_multi import available_dtype, available_simplextrees
+from multipers.simplex_tree_multi import (
+    _gudhi_state_array,
+    available_dtype,
+    available_simplextrees,
+)
 
 
 def test_1():
@@ -56,6 +60,12 @@ def test_3():
             (array([1]), array([0.0, minf, minf, minf])),
         ]
         assert_st_simplices(st_multi, it)
+
+
+def test_gudhi_state_array_accepts_bytes_like_state():
+    state = _gudhi_state_array(bytes([1, 2, 255]))
+    assert state.dtype == np.int8
+    assert state.tolist() == [1, 2, -1]
 
 
 has_kcritical = np.any(

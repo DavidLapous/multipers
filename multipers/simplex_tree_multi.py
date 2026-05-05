@@ -37,10 +37,16 @@ def _t_minus_inf(dtype):
 
 
 def _reconstruct_gudhi_simplextree(state):
-    np_state = np.asarray(state, dtype=np.int8)
+    np_state = _gudhi_state_array(state)
     simplex_tree = _GudhiSimplexTree.__new__(_GudhiSimplexTree)
     simplex_tree.__setstate__(np_state)
     return simplex_tree
+
+
+def _gudhi_state_array(state):
+    if isinstance(state, (bytes, bytearray, memoryview)):
+        return np.frombuffer(state, dtype=np.int8)
+    return np.ascontiguousarray(state, dtype=np.int8).reshape(-1)
 
 
 def _normalize_filtration_value(self, filtration, *, copy=False):
@@ -156,7 +162,9 @@ def SimplexTreeMulti(
                 default_values = np.concatenate((padding, default_values))
 
         out = cls()
-        out._from_gudhi_state(input.__getstate__(), num_parameters, default_values)
+        out._from_gudhi_state(
+            _gudhi_state_array(input.__getstate__()), num_parameters, default_values
+        )
         return out
 
     raise TypeError(
