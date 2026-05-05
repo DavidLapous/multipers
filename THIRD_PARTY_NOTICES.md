@@ -30,6 +30,10 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Commit used in this workspace: `c414cdc60f30196ffd3ce5cda1817368655905f0`
   - License: MIT (see `ext/rhomboidtiling_newer_cgal_version/LICENSE.md`)
 
+- `CGAL Spatial_searching`
+  - Upstream: https://www.cgal.org/
+  - License: GPL-3.0-or-later OR commercial (see SPDX headers in installed CGAL Spatial_searching package)
+
 - `mpfree`
   - Upstream: https://bitbucket.org/mkerber/mpfree/
   - Header source path used at build time: `ext/mpfree`

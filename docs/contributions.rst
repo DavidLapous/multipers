@@ -27,15 +27,17 @@ of the :code:`docs/index.rst` file
     :caption: Example zoo:
 
 
-Then, the following commands build the documentation of multipers, in the :code:`_build/html` folder.
+Then, the following command builds the documentation of multipers, in the
+:code:`_build/html` folder.
 
 
 .. code-block:: sh
 
-  sphinx-apidoc -f -o source ..
-  make html
-  # or 
   sh build_doc.sh
+
+The script runs :code:`sphinx-apidoc` and then calls Sphinx directly with
+:code:`sphinx-build -M html . _build`, so it does not require a docs
+:code:`Makefile`.
 
 Feature additions
 *****************
@@ -60,5 +62,4 @@ Discussions
 
 Other matters can be discussed in the 
 `discussion tab of GitHub <https://github.com/DavidLapous/multipers/discussions>`_.
-
 
