@@ -61,7 +61,7 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
          - bandwidth : real : The kernel density estimation bandwidth, or the DTM mass. If negative, it replaced by abs(bandwidth)*(radius of the dataset)
          - knns : integer list : k values for k-nearest-neighbor codensity.
          - threshold : real or None, max edge length of the rips or max alpha square of the alpha. None uses the dataset diameter.
-         - complex : "alpha", "rips", "delaunay", "degree-rips", "core-delaunay", "multicover", or None. None uses Delaunay for point clouds of dimension <= 4 and Rips otherwise.
+         - complex : "alpha", "rips", "delaunay", "degree-rips", "core-delaunay", "multicover", or None. None uses Delaunay for non-degenerate point clouds of dimension <= 4 and Rips otherwise.
          - node_degrees : integer list : degree thresholds for degree-rips.
          - core_degrees : integer list : k-values for core-delaunay.
          - multicover_k_max : integer : maximum cover count for multicover.
@@ -319,10 +319,20 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         if np.max(knns) > max_size:
             raise ValueError("All kNN parameters should be at most the sample size.")
 
+    def _auto_complex(self, x):
+        if x.shape[1] > 4:
+            return "rips"
+        x_np = self._api.asnumpy(x)
+        if len(x_np) <= x_np.shape[1]:
+            return "rips"
+        if np.linalg.matrix_rank(x_np - x_np[0]) < x_np.shape[1]:
+            return "rips"
+        return "delaunay"
+
     def fit(self, X: np.ndarray | list, y=None):
         # self.bandwidth = "silverman" ## not good, as is can make bandwidth not constant
         self._api = api_from_tensor(X[0])
-        self._complex = self.complex or ("delaunay" if X[0].shape[1] <= 4 else "rips")
+        self._complex = self.complex or self._auto_complex(X[0])
         self._validate_complex_parameters()
         self._validate_knns(X)
         self._define_sts()

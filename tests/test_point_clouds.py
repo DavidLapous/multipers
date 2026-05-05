@@ -1,4 +1,5 @@
 import platform
+import builtins
 
 import numpy as np
 import pytest
@@ -16,11 +17,19 @@ def test_throw_test():
     import multipers.ml.filtered_complex as mmp
 
     pts = np.array([[1, 1], [2, 2]], dtype=np.float32)
-    st = mmp.PointCloud2FilteredComplex(masses=[0.1]).fit_transform([pts])[0][0]
+    st = mmp.PointCloud2FilteredComplex(masses=[0.1], complex="rips").fit_transform(
+        [pts]
+    )[0][0]
     assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
     st = mmp.PointCloud2FilteredComplex(
         bandwidths=[-0.1], complex="alpha"
     ).fit_transform([pts])[0][0]
+    assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
+
+    pts_delaunay = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.float32)
+    st = mmp.PointCloud2FilteredComplex(
+        bandwidths=[-0.1], complex="delaunay", threshold=None
+    ).fit_transform([pts_delaunay])[0][0]
     assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
 
     st = mmp.PointCloud2FilteredComplex(masses=[0.1], complex="alpha").fit_transform(
@@ -42,10 +51,15 @@ def test_throw_test():
     assert st.is_vine
 
     st1, st2 = mmp.PointCloud2FilteredComplex(
-        bandwidths=[0.1], masses=[0.1]
+        bandwidths=[0.1], masses=[0.1], complex="rips"
     ).fit_transform([pts])[0]
     assert isinstance(st1, mp.simplex_tree_multi.SimplexTreeMulti_type)
     assert isinstance(st2, mp.simplex_tree_multi.SimplexTreeMulti_type)
+
+    pts_knn = np.array([[0, 0], [1, 0], [0, 1]], dtype=np.float32)
+    st = mmp.PointCloud2FilteredComplex(knns=[1]).fit_transform([pts_knn])[0][0]
+    assert isinstance(st, mp.simplex_tree_multi.SimplexTreeMulti_type)
+
     ## ensures it doesn't throw
     assert isinstance(
         mp.module_approximation(st),
