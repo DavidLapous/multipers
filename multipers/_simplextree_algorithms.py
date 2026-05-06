@@ -99,6 +99,7 @@ def _rank_signed_measure(
         deaths = coords[:, num_parameters:]
         correct_indices = np.all(births <= deaths, axis=1)
         coords = coords[correct_indices]
+        coords[:, num_parameters:] += 1
         weights = weights[correct_indices]
         if len(correct_indices) == 0:
             coords, weights = np.empty((0, 2 * num_parameters)), np.empty((0))
