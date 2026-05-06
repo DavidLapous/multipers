@@ -1,16 +1,20 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <ostream>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>  // std::pair
 #include <vector>
 
 #include <gudhi/multi_simplex_tree_helpers.h>
+#include <gudhi/simple_mdspan.h>
 #include <gudhi/Slicer.h>
-#include "../tensor/tensor.h"
+#include "mobius_inversion.h"
 #include "persistence_slices.h"
 
 namespace Gudhi {
@@ -52,14 +56,56 @@ inline std::pair<index_type, index_type> get_coordinates(index_type in_slice_val
   return {I, in_slice_value - I};
 }
 
-template <typename dtype, typename index_type, typename Filtration>
+template <typename Output, typename... Indices>
+inline void increment_output(const Output &out, Indices... coordinates) {
+  using index_type = std::common_type_t<Indices...>;
+  const std::array<index_type, sizeof...(Indices)> coordinates_array{coordinates...};
+  out[coordinates_array]++;
+}
+
+template <typename T, class Extents, class LayoutPolicy, typename... Indices>
+inline void increment_output(const Gudhi::Simple_mdspan<T, Extents, LayoutPolicy> &out, Indices... coordinates) {
+  using index_type = typename Gudhi::Simple_mdspan<T, Extents, LayoutPolicy>::index_type;
+  out(static_cast<index_type>(coordinates)...)++;
+}
+
+template <typename index_type, typename Output>
+inline void add_bar_contribution(const Output &out,
+                                 index_type degree_index,
+                                 index_type birth,
+                                 index_type death,
+                                 index_type I,
+                                 index_type J,
+                                 bool flip_death) {
+  const index_type corner = I + J;
+  if (birth > corner || death <= corner) return;
+
+  const index_type last_birth = std::min(death, corner + 1);
+  if (flip_death) {
+    for (index_type intermediate_birth = birth; intermediate_birth < last_birth; ++intermediate_birth) {
+      const auto [i, j] = get_coordinates(intermediate_birth, I, J);
+      for (index_type l = J; l < death - I; ++l) {
+        increment_output(out, degree_index, i, j, I - 1 - I, J - 1 - l);
+      }
+    }
+  } else {
+    for (index_type intermediate_birth = birth; intermediate_birth < last_birth; ++intermediate_birth) {
+      const auto [i, j] = get_coordinates(intermediate_birth, I, J);
+      for (index_type l = J; l < death - I; ++l) {
+        increment_output(out, degree_index, i, j, I, l);
+      }
+    }
+  }
+}
+
+template <typename index_type, typename Filtration, typename Output>
 inline void compute_2d_rank_invariant_of_elbow(
     Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>> &st_multi,
-    Simplex_tree_std &_st_container,                           // copy of st_multi
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+    Simplex_tree_std &_st_container,  // copy of st_multi
+    const Output &out,                // assumes its a zero tensor
     const index_type I,
     const index_type J,
-    const std::vector<index_type> &grid_shape,
+    const std::array<index_type, 5> &grid_shape,
     const std::vector<index_type> &degrees,
     const int expand_collapse_max_dim = 0) {
   // const bool verbose = false; // verbose
@@ -92,29 +138,17 @@ inline void compute_2d_rank_invariant_of_elbow(
           std::min(bar.second,
                    static_cast<typename Simplex_tree_std::Filtration_value>(Y + I)));  // I,J atteints, pas X ni Y
 
-      // todo : optimize
-      // auto [a,b] = get_coordinates(birth, I,J);
-      for (auto intermediate_birth = birth; intermediate_birth < death; intermediate_birth++) {
-        for (auto intermediate_death = intermediate_birth; intermediate_death < death; intermediate_death++) {
-          auto [i, j] = get_coordinates(intermediate_birth, I, J);
-          auto [k, l] = get_coordinates(intermediate_death, I, J);
-          if (((i < k || j == J) && (j < l || k == I))) {
-            // std::vector<index_type> coordinates_to_remove =
-            // {degree_index,i,j,k,l}; out[coordinates_to_remove]++;
-            out[{degree_index, i, j, k, l}]++;
-          }
-        }
-      }
+      add_bar_contribution(out, degree_index, birth, death, I, J, false);
     }
     degree_index++;
   }
 }
 
-template <typename dtype, typename index_type, typename Filtration>
+template <typename index_type, typename Filtration, typename Output>
 inline void compute_2d_rank_invariant(
     Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>> &st_multi,
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
-    const std::vector<index_type> &grid_shape,
+    const Output &out,  // assumes its a zero tensor
+    const std::array<index_type, 5> &grid_shape,
     const std::vector<index_type> &degrees,
     bool expand_collapse) {
   if (degrees.size() == 0) return;
@@ -129,8 +163,7 @@ inline void compute_2d_rank_invariant(
   tbb::parallel_for(0, X, [&](index_type I) {
     tbb::parallel_for(0, Y, [&](index_type J) {
       auto &st_container = thread_simplex_tree.local();
-      compute_2d_rank_invariant_of_elbow<dtype, index_type, Filtration>(
-          st_multi, st_container, out, I, J, grid_shape, degrees, max_dim);
+      compute_2d_rank_invariant_of_elbow(st_multi, st_container, out, I, J, grid_shape, degrees, max_dim);
     });
   });
 }
@@ -139,29 +172,35 @@ template <typename Filtration, typename dtype, typename indices_type, typename..
 void compute_rank_invariant_python(
     Simplex_tree<Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<Filtration>> &st_multi,
     dtype *data_ptr,
-    const std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees,
+    const std::vector<indices_type> &grid_shape,
+    const std::vector<indices_type> &degrees,
     indices_type n_jobs,
     bool expand_collapse) {
   if (degrees.size() == 0) return;
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  if (grid_shape.size() != 5) [[unlikely]] {
+    throw std::runtime_error("Internal error: rank invariant expects a 5-dimensional grid shape.");
+  }
+  const std::array<indices_type, 5> shape = {grid_shape[0], grid_shape[1], grid_shape[2], grid_shape[3], grid_shape[4]};
+  auto container = Gudhi::Simple_mdspan(data_ptr,
+                                        static_cast<std::size_t>(shape[0]),
+                                        static_cast<std::size_t>(shape[1]),
+                                        static_cast<std::size_t>(shape[2]),
+                                        static_cast<std::size_t>(shape[3]),
+                                        static_cast<std::size_t>(shape[4]));  // assumes its a zero tensor
 
   oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
-  arena.execute([&] {
-    compute_2d_rank_invariant<dtype, indices_type, Filtration>(
-        st_multi, container, grid_shape, degrees, expand_collapse);
-  });
+  arena.execute([&] { compute_2d_rank_invariant(st_multi, container, shape, degrees, expand_collapse); });
 
   return;
 }
 
-template <class PersBackend, class MultiFiltration, typename dtype, typename index_type>
+template <class PersBackend, class MultiFiltration, typename index_type, typename Output>
 inline void compute_2d_rank_invariant_of_elbow(
     typename Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend>::Thread_safe &slicer,  // truc slicer
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+    const Output &out,  // assumes its a zero tensor
     const index_type I,
     const index_type J,
-    const std::vector<index_type> &grid_shape,
+    const std::array<index_type, 5> &grid_shape,
     const std::vector<index_type> &degrees,
     // std::vector<Index> &order_container,                                 // constant size
     // std::vector<typename MultiFiltration::value_type> &one_persistence,  // constant size
@@ -197,24 +236,10 @@ inline void compute_2d_rank_invariant_of_elbow(
 
   using bc_type = typename Gudhi::multi_persistence::Slicer<MultiFiltration,
                                                             PersBackend>::template Multi_dimensional_flat_barcode<>;
-  if constexpr (PersBackend::is_vine) {
-    // slicer.set_one_filtration(one_persistence);
-    if (I == 0 && J == 0) [[unlikely]]  // this is dangerous, assumes it starts at 0 0
-    {
-      // TODO : This is a good optimization but needs a patch on
-      // PersistenceMatrix std::vector<bool>
-      // degrees_index(slicer.get_dimensions().back()+1, false); for (const auto
-      // &degree : degrees) {
-      //   if (degree <= slicer.get_dimensions())
-      //     degrees_index[degree] = true;
-      // }
-      // slicer.compute_persistence(degrees_index);
-      slicer.initialize_persistence_computation();
-    } else {
-      slicer.update_persistence_computation();
-    }
-  } else {
+  if (!slicer.persistence_computation_is_initialized()) [[unlikely]] {
     slicer.initialize_persistence_computation(ignore_inf);
+  } else {
+    slicer.update_persistence_computation(ignore_inf);
   }
   bc_type barcodes = slicer.template get_flat_barcode<true>();
 
@@ -235,32 +260,19 @@ inline void compute_2d_rank_invariant_of_elbow(
           std::min(bar[1],
                    static_cast<typename MultiFiltration::value_type>(Y + I)));  // I,J atteints, pas X ni Y
       if constexpr (false) std::cout << "Birth " << birth << " Death " << death << std::endl;
-      for (auto intermediate_birth = birth; intermediate_birth < death; intermediate_birth++) {
-        for (auto intermediate_death = intermediate_birth; intermediate_death < death; intermediate_death++) {
-          auto [i, j] = get_coordinates(intermediate_birth, I, J);
-          auto [k, l] = get_coordinates(intermediate_death, I, J);
-          if (((i < k || j == J) && (j < l || k == I))) {
-            if (flip_death)
-              out[{degree_index, i, j, I - 1 - k, J - 1 - l}]++;
-            else
-              out[{degree_index, i, j, k, l}]++;
-          }
-          if constexpr (false) std::cout << degree_index << " " << i << " " << j << " " << k << " " << l << std::endl;
-        }
-      }
+      add_bar_contribution(out, degree_index, birth, death, I, J, flip_death);
     }
     degree_index++;
   }
 };
 
-template <class PersBackend, class MultiFiltration, typename dtype, typename index_type>
-inline void compute_2d_rank_invariant(
-    Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
-    const std::vector<index_type> &grid_shape,
-    const std::vector<index_type> &degrees,
-    const bool flip_death,
-    const bool ignore_inf) {
+template <class PersBackend, class MultiFiltration, typename index_type, typename Output>
+inline void compute_2d_rank_invariant(Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
+                                      const Output &out,  // assumes its a zero tensor
+                                      const std::array<index_type, 5> &grid_shape,
+                                      const std::vector<index_type> &degrees,
+                                      const bool flip_death,
+                                      const bool ignore_inf) {
   if (degrees.size() == 0) return;
   index_type X = grid_shape[1];
   index_type Y = grid_shape[2];  // First axis is degree
@@ -276,7 +288,7 @@ inline void compute_2d_rank_invariant(
     tbb::parallel_for(0, Y, [&](index_type J) {
       if constexpr (verbose) std::cout << "Computing elbow " << I << " " << J << "...";
       ThreadSafe &slicer = thread_locals.local();
-      compute_2d_rank_invariant_of_elbow<PersBackend, MultiFiltration, dtype, index_type>(
+      compute_2d_rank_invariant_of_elbow<PersBackend, MultiFiltration, index_type>(
           slicer, out, I, J, grid_shape, degrees, flip_death, ignore_inf);
       if constexpr (verbose) std::cout << "Done!" << std::endl;
     });
@@ -286,18 +298,27 @@ inline void compute_2d_rank_invariant(
 template <class PersBackend, class MultiFiltration, typename dtype, typename indices_type>
 void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
                                    dtype *data_ptr,
-                                   const std::vector<indices_type> grid_shape,
-                                   const std::vector<indices_type> degrees,
+                                   const std::vector<indices_type> &grid_shape,
+                                   const std::vector<indices_type> &degrees,
                                    indices_type n_jobs,
                                    const bool ignore_inf) {
   if (degrees.size() == 0) return;
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  if (grid_shape.size() != 5) [[unlikely]] {
+    throw std::runtime_error("Internal error: rank invariant expects a 5-dimensional grid shape.");
+  }
+  const std::array<indices_type, 5> shape = {grid_shape[0], grid_shape[1], grid_shape[2], grid_shape[3], grid_shape[4]};
+  auto container = Gudhi::Simple_mdspan(data_ptr,
+                                        static_cast<std::size_t>(shape[0]),
+                                        static_cast<std::size_t>(shape[1]),
+                                        static_cast<std::size_t>(shape[2]),
+                                        static_cast<std::size_t>(shape[3]),
+                                        static_cast<std::size_t>(shape[4]));  // assumes its a zero tensor
   if constexpr (false) {
     std::cout << "ignore_inf " << ignore_inf << std::endl;
   }
 
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);  // limits the number of threads
-  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, false, ignore_inf); });
+  arena.execute([&] { compute_2d_rank_invariant(slicer, container, shape, degrees, false, ignore_inf); });
 
   return;
 }
@@ -306,16 +327,20 @@ template <typename PersBackend, typename MultiFiltration, typename dtype = int, 
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_rank_signed_measure(
     Gudhi::multi_persistence::Slicer<MultiFiltration, PersBackend> &slicer,
     dtype *data_ptr,
-    const std::vector<indices_type> grid_shape,
-    const std::vector<indices_type> degrees,
+    const std::vector<indices_type> &grid_shape,
+    const std::vector<indices_type> &degrees,
     indices_type n_jobs,
     bool verbose,
     const bool ignore_inf) {
   if (degrees.size() == 0) return {{}, {}};
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
-  oneapi::tbb::task_arena arena(n_jobs);                                            // limits the number of threads
+  if (grid_shape.size() != 5) [[unlikely]] {
+    throw std::runtime_error("Internal error: rank signed measure expects a 5-dimensional grid shape.");
+  }
+  const std::array<indices_type, 5> shape = {grid_shape[0], grid_shape[1], grid_shape[2], grid_shape[3], grid_shape[4]};
+  mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
+  oneapi::tbb::task_arena arena(n_jobs);  // limits the number of threads
   constexpr bool flip_death = true;
-  arena.execute([&] { compute_2d_rank_invariant(slicer, container, grid_shape, degrees, flip_death, ignore_inf); });
+  arena.execute([&] { compute_2d_rank_invariant(slicer, container, shape, degrees, flip_death, ignore_inf); });
 
   if (verbose) {
     std::cout << "Done.\n";
@@ -325,12 +350,13 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
   // for (indices_type axis :
   // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (std::size_t axis = 0u; axis < slicer.get_number_of_parameters() + 1; axis++) container.differentiate(axis);
+  for (std::size_t axis = 0u; axis < slicer.get_number_of_parameters() + 1; axis++)
+    mobius_inversion::differentiate(data_ptr, grid_shape, static_cast<indices_type>(axis));
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
   }
-  auto raw_signed_measure = container.sparsify({false, false, true, true});
+  auto raw_signed_measure = mobius_inversion::sparsify(container, {false, false, true, true});
   if (verbose) {
     std::cout << "Done.\n";
   }
