@@ -5,7 +5,6 @@
 #if defined(GUDHI_USE_TBB)
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
-#include <tbb/task_arena.h>
 #endif
 
 #include <tuple>
@@ -28,7 +27,7 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
     std::size_t num_parameters,
     int degree,
     bool ignore_infinite_filtration_values,
-    int n_jobs,
+    bool parallel_lines,
     DistanceFn&& distance_fn) {
   if (num_lines == 0) return {};
 
@@ -51,6 +50,32 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
     }
   };
 
+  auto compute_one_line = [&](auto& left_local,
+                              auto& right_local,
+                              auto& line,
+                              auto& left_diagram,
+                              auto& right_diagram,
+                              std::size_t i) {
+    const double* basepoint = basepoints + i * num_parameters;
+    const double* direction = directions + i * num_parameters;
+    bool is_trivial = true;
+    for (std::size_t j = 0; j < num_parameters; ++j) {
+      const double direction_value = direction[j];
+      if (direction_value) is_trivial = false;
+      if (direction_value <= 0.0) {
+        throw std::invalid_argument("Direction should have strictly positive entries.");
+      }
+      line.base_point()[j] = basepoint[j];
+      line.direction()[j] = direction_value;
+    }
+    if (num_parameters != 0 && is_trivial) {
+      throw std::invalid_argument("Direction should not be trivial.");
+    }
+    dgm_on_line(left_local, line, left_diagram);
+    dgm_on_line(right_local, line, right_diagram);
+    return distance_fn(left_diagram, right_diagram);
+  };
+
 #if defined(GUDHI_USE_TBB)
   using LeftThreadSafe = typename LeftSlicer::Thread_safe;
   using RightThreadSafe = typename RightSlicer::Thread_safe;
@@ -61,41 +86,30 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
   tbb::enumerable_thread_specific<ThreadLocalState> thread_locals(ThreadLocalState(
       left.weak_copy(), right.weak_copy(), Line(Point(num_parameters), Point(num_parameters, 1.0)), Diagram(), Diagram()));
   std::vector<double> out(num_lines);
-  const int max_concurrency = n_jobs <= 0 ? tbb::task_arena::automatic : n_jobs;
-  tbb::task_arena arena(max_concurrency);
-  arena.execute([&] {
-    tbb::parallel_for(std::size_t(0), num_lines, [&](std::size_t i) {
-      auto& thread_local_state = thread_locals.local();
-      auto& left_local = std::get<0>(thread_local_state);
-      auto& right_local = std::get<1>(thread_local_state);
-      auto& line = std::get<2>(thread_local_state);
-      auto& left_diagram = std::get<3>(thread_local_state);
-      auto& right_diagram = std::get<4>(thread_local_state);
-      tbb::this_task_arena::isolate([&] {
-        const double* basepoint = basepoints + i * num_parameters;
-        const double* direction = directions + i * num_parameters;
-        bool is_trivial = true;
-        for (std::size_t j = 0; j < num_parameters; ++j) {
-          const double direction_value = direction[j];
-          if (direction_value) is_trivial = false;
-          if (direction_value <= 0.0) {
-            throw std::invalid_argument("Direction should have strictly positive entries.");
-          }
-          line.base_point()[j] = basepoint[j];
-          line.direction()[j] = direction_value;
-        }
-        if (num_parameters != 0 && is_trivial) {
-          throw std::invalid_argument("Direction should not be trivial.");
-        }
-        dgm_on_line(left_local, line, left_diagram);
-        dgm_on_line(right_local, line, right_diagram);
-        out[i] = distance_fn(left_diagram, right_diagram);
-      });
+  if (!parallel_lines) {
+    auto left_local = left.weak_copy();
+    auto right_local = right.weak_copy();
+    Line line(Point(num_parameters), Point(num_parameters, 1.0));
+    Diagram left_diagram;
+    Diagram right_diagram;
+    for (std::size_t i = 0; i < num_lines; ++i) {
+      out[i] = compute_one_line(left_local, right_local, line, left_diagram, right_diagram, i);
+    }
+    return out;
+  }
+  tbb::parallel_for(std::size_t(0), num_lines, [&](std::size_t i) {
+    auto& thread_local_state = thread_locals.local();
+    auto& left_local = std::get<0>(thread_local_state);
+    auto& right_local = std::get<1>(thread_local_state);
+    auto& line = std::get<2>(thread_local_state);
+    auto& left_diagram = std::get<3>(thread_local_state);
+    auto& right_diagram = std::get<4>(thread_local_state);
+    tbb::this_task_arena::isolate([&] {
+      out[i] = compute_one_line(left_local, right_local, line, left_diagram, right_diagram, i);
     });
   });
   return out;
 #else
-  static_cast<void>(n_jobs);
   using Line = Gudhi::multi_persistence::Line<double>;
   using Point = typename Line::Point_t;
   using Diagram = std::vector<std::pair<double, double> >;
@@ -149,7 +163,7 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
       int degree,                                                                                      \
       double delta,                                                                                    \
       bool ignore_infinite_filtration_values,                                                          \
-      int n_jobs) {                                                                                    \
+      bool parallel_lines) {                                                                           \
     return run_monte_carlo_line_distances_on_lines_impl(                                               \
         left,                                                                                          \
         right,                                                                                         \
@@ -159,7 +173,7 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
         num_parameters,                                                                                \
         degree,                                                                                        \
         ignore_infinite_filtration_values,                                                             \
-        n_jobs,                                                                                        \
+        parallel_lines,                                                                                \
         [delta](const auto& left_diagram, const auto& right_diagram) {                                \
           return multipers::hera_bottleneck_distance(left_diagram, right_diagram, delta);             \
         });                                                                                            \
@@ -176,7 +190,7 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
       double internal_p,                                                                               \
       double delta,                                                                                    \
       bool ignore_infinite_filtration_values,                                                          \
-      int n_jobs) {                                                                                    \
+      bool parallel_lines) {                                                                           \
     multipers::hera_wasserstein_params params;                                                         \
     params.wasserstein_power = order;                                                                  \
     params.internal_p = internal_p;                                                                    \
@@ -190,7 +204,7 @@ std::vector<double> run_monte_carlo_line_distances_on_lines_impl(
         num_parameters,                                                                                \
         degree,                                                                                        \
         ignore_infinite_filtration_values,                                                             \
-        n_jobs,                                                                                        \
+        parallel_lines,                                                                                \
         [params](const auto& left_diagram, const auto& right_diagram) {                               \
           return multipers::hera_wasserstein_distance(left_diagram, right_diagram, params);           \
         });                                                                                            \

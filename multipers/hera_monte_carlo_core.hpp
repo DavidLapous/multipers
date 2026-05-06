@@ -18,7 +18,7 @@ std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     int degree,
     double delta,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     const contiguous_f64_slicer& left,
@@ -30,7 +30,7 @@ std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     int degree,
     double delta,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     const kcontiguous_f64_slicer& left,
@@ -42,7 +42,7 @@ std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     int degree,
     double delta,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     const kcontiguous_f64_slicer& left,
@@ -54,7 +54,7 @@ std::vector<double> monte_carlo_bottleneck_distances_on_lines(
     int degree,
     double delta,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     const contiguous_f64_slicer& left,
@@ -68,7 +68,7 @@ std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     double internal_p = std::numeric_limits<double>::infinity(),
     double delta = 0.01,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     const contiguous_f64_slicer& left,
@@ -82,7 +82,7 @@ std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     double internal_p = std::numeric_limits<double>::infinity(),
     double delta = 0.01,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     const kcontiguous_f64_slicer& left,
@@ -96,7 +96,7 @@ std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     double internal_p = std::numeric_limits<double>::infinity(),
     double delta = 0.01,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     const kcontiguous_f64_slicer& left,
@@ -110,6 +110,6 @@ std::vector<double> monte_carlo_wasserstein_distances_on_lines(
     double internal_p = std::numeric_limits<double>::infinity(),
     double delta = 0.01,
     bool ignore_infinite_filtration_values = true,
-    int n_jobs = 0);
+    bool parallel_lines = true);
 
 }  // namespace multipers::core
