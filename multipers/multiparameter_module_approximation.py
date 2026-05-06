@@ -573,7 +573,7 @@ def _module_approximation_single_input(
     if np.size(box) == 0:
         if verbose:
             print("No box given. Using filtration bounds to infer it.", flush=True)
-        box = input.filtration_bounds()
+        box = input.filtration_bounds(finite=True)
         if verbose:
             print("Using inferred box.", flush=True)
 

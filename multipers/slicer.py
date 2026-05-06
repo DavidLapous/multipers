@@ -162,10 +162,13 @@ def _compute_persistence(
         return out[0] if squeeze else out
     self.initialize_persistence_computation(ignore_infinite_filtration_values)
     return self.get_barcode()
-def _filtration_bounds(self):
+def _filtration_bounds(self, finite=False):
     values = np.asarray(self.get_filtrations_values(), dtype=self.dtype)
     if values.size == 0:
         return np.empty((2, 0), dtype=self.dtype)
+    if finite:
+        values = np.where(np.isfinite(values), values, np.nan)
+        return np.asarray([np.nanmin(values, axis=0), np.nanmax(values, axis=0)], dtype=self.dtype)
     return np.asarray([values.min(axis=0), values.max(axis=0)], dtype=self.dtype)
 
 
