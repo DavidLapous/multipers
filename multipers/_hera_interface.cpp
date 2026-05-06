@@ -36,12 +36,13 @@ namespace mphera {
       "Hera interface is not available in this build. Rebuild multipers with Hera headers to enable this backend.");
 }
 
+using distance_array_t = nb::ndarray<nb::numpy, double, nb::ndim<1>, nb::c_contig>;
+using distance_matrix_t = nb::ndarray<nb::numpy, double, nb::ndim<2>, nb::c_contig>;
+
 #if !MULTIPERS_DISABLE_HERA_INTERFACE
 
 using diagram_t = std::vector<std::pair<double, double>>;
 using diagram_array_t = nb::ndarray<nb::numpy, const double, nb::ndim<2>>;
-using distance_array_t = nb::ndarray<nb::numpy, double, nb::ndim<1>, nb::c_contig>;
-using distance_matrix_t = nb::ndarray<nb::numpy, double, nb::ndim<2>, nb::c_contig>;
 
 inline distance_array_t distances_to_numpy(std::vector<double>&& values) {
   const auto size = values.size();
