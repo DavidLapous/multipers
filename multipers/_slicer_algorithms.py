@@ -91,6 +91,7 @@ def _rank_from_slicer(
         deaths = coords[:, num_parameters:]
         correct_indices = np.all(births <= deaths, axis=1)
         coords = coords[correct_indices]
+        coords[:, num_parameters:] += 1
         weights = weights[correct_indices]
         return coords, weights
 

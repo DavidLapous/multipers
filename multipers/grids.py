@@ -561,7 +561,7 @@ def sm_in_grid(pts, weights, grid, mass_default=None):
         _grid += [
             api.cat(
                 [
-                    (gt := api.astensor(g))[1:],
+                    gt := api.astensor(g),
                     api.astensor(_inf_value(api.asnumpy(gt))).reshape(1),
                 ]
             )
