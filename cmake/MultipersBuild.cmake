@@ -346,7 +346,10 @@ multipers_add_generated_patch_file(
   "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch"
   MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/free_resolution.h"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include/mpfree/global.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/multi_chunk_mod/include/multi_chunk/basic.h"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
 )
@@ -426,6 +429,7 @@ multipers_add_generated_patch_overlay(
   MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
   include
   mpfree_mod/include
+  mpp_utils_mod/include
   multi_chunk_mod/include
   scc_mod/include
 )
@@ -449,7 +453,7 @@ set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
 set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpfree_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include"
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpp_utils_mod/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/multi_chunk_mod/include"
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/phat_mod/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/scc_mod/include"
