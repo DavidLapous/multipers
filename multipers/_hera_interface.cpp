@@ -4,6 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "ext_interface/hera_interface.hpp"
+#include "nanobind_array_utils.hpp"
 
 #if !MULTIPERS_DISABLE_HERA_INTERFACE
 #if defined(GUDHI_USE_TBB)
@@ -38,6 +40,43 @@ namespace mphera {
 
 using diagram_t = std::vector<std::pair<double, double>>;
 using diagram_array_t = nb::ndarray<nb::numpy, const double, nb::ndim<2>>;
+using distance_array_t = nb::ndarray<nb::numpy, double, nb::ndim<1>, nb::c_contig>;
+using distance_matrix_t = nb::ndarray<nb::numpy, double, nb::ndim<2>, nb::c_contig>;
+
+inline distance_array_t distances_to_numpy(std::vector<double>&& values) {
+  const auto size = values.size();
+  auto array = multipers::nanobind_utils::owned_array<double>(std::move(values), {size});
+  return distance_array_t(array);
+}
+
+inline distance_matrix_t distance_matrix_to_numpy(std::vector<double>&& values, std::size_t rows, std::size_t cols) {
+  auto array = multipers::nanobind_utils::owned_array<double>(std::move(values), {rows, cols});
+  return distance_matrix_t(array);
+}
+
+inline distance_array_t first_row_to_numpy(const distance_matrix_t& matrix) {
+  const auto num_cols = static_cast<std::size_t>(matrix.shape(1));
+  std::vector<double> values(num_cols);
+  std::copy(matrix.data(), matrix.data() + num_cols, values.data());
+  return distances_to_numpy(std::move(values));
+}
+
+inline void copy_row_to_batch_row(
+    std::vector<double>& flat,
+    const distance_array_t& row,
+    std::size_t target_row,
+    std::size_t num_lines) {
+  std::copy(row.data(), row.data() + num_lines, flat.data() + target_row * num_lines);
+}
+
+inline bool prefer_line_parallel_pairs(
+    std::size_t num_pairs,
+    std::size_t num_lines,
+    std::size_t max_concurrency) {
+  if (num_pairs <= 1) return true;
+  if (num_lines >= 64) return num_pairs <= 2 * std::max<std::size_t>(max_concurrency, 1);
+  return num_pairs <= std::max<std::size_t>(max_concurrency / 2, 1);
+}
 
 struct monte_carlo_slicer_metadata {
   bool is_kcritical = false;
@@ -225,85 +264,204 @@ inline void validate_monte_carlo_native_inputs(
   }
 }
 
-template <typename LeftSlicer, typename RightSlicer>
-nb::object run_monte_carlo_on_native_slicers(
-    const LeftSlicer& left,
-    const RightSlicer& right,
+template <typename Func>
+distance_array_t run_native_monte_carlo(Func&& func) {
+  nb::gil_scoped_release release;
+  return distances_to_numpy(std::forward<Func>(func)());
+}
+
+template <bool LeftKcritical, bool RightKcritical, typename Func>
+distance_array_t dispatch_native_monte_carlo_slicer_types(
+    nb::handle left,
+    nb::handle right,
+    Func&& func) {
+  using LeftSlicer = native_f64_slicer_t<LeftKcritical>;
+  using RightSlicer = native_f64_slicer_t<RightKcritical>;
+
+  return with_native_f64_slicer<LeftKcritical>(left, [&](const LeftSlicer& left_native) -> distance_array_t {
+    return with_native_f64_slicer<RightKcritical>(
+        right, [&](const RightSlicer& right_native) -> distance_array_t {
+          return func(left_native, right_native);
+        });
+  });
+}
+
+template <typename Func>
+distance_array_t dispatch_native_monte_carlo_slicers(
+    nb::handle left,
+    nb::handle right,
+    const monte_carlo_slicer_metadata& left_meta,
+    const monte_carlo_slicer_metadata& right_meta,
+    Func&& func) {
+  if (left_meta.is_kcritical) {
+    if (right_meta.is_kcritical) {
+      return dispatch_native_monte_carlo_slicer_types<true, true>(left, right, std::forward<Func>(func));
+    }
+    return dispatch_native_monte_carlo_slicer_types<true, false>(left, right, std::forward<Func>(func));
+  }
+  if (right_meta.is_kcritical) {
+    return dispatch_native_monte_carlo_slicer_types<false, true>(left, right, std::forward<Func>(func));
+  }
+  return dispatch_native_monte_carlo_slicer_types<false, false>(left, right, std::forward<Func>(func));
+}
+
+inline distance_array_t monte_carlo_bottleneck_distances_on_lines(
+    nb::handle left,
+    nb::handle right,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
     int degree,
     double delta,
-    int n_jobs) {
-  auto raw_distances = [&] {
-    nb::gil_scoped_release release;
-    return multipers::core::monte_carlo_bottleneck_distances_on_lines(left,
-                                                                       right,
-                                                                       basepoints.data(),
-                                                                       directions.data(),
-                                                                       static_cast<std::size_t>(basepoints.shape(0)),
-                                                                       static_cast<std::size_t>(basepoints.shape(1)),
-                                                                       degree,
-                                                                       delta,
-                                                                       true,
-                                                                       n_jobs);
-  }();
-  return nb::cast(raw_distances);
+    bool parallel_lines) {
+  validate_monte_carlo_native_inputs(left, right, basepoints, directions, degree, delta);
+  const auto left_meta = metadata_from_slicer(left);
+  const auto right_meta = metadata_from_slicer(right);
+  if (left_meta.is_squeezed || right_meta.is_squeezed) {
+    throw std::runtime_error("Native Monte Carlo matching-distance fast path does not support squeezed slicers.");
+  }
+  if (left_meta.num_parameters != right_meta.num_parameters) {
+    throw std::runtime_error("Matching distance expects slicers with the same number of parameters.");
+  }
+  if (left_meta.num_parameters != static_cast<std::size_t>(basepoints.shape(1))) {
+    throw std::runtime_error("Basepoints and directions must match the slicer parameter dimension.");
+  }
+
+  return dispatch_native_monte_carlo_slicers(
+      left, right, left_meta, right_meta, [&](const auto& left_native, const auto& right_native) -> distance_array_t {
+        return run_native_monte_carlo([&] {
+          return multipers::core::monte_carlo_bottleneck_distances_on_lines(left_native,
+                                                                            right_native,
+                                                                            basepoints.data(),
+                                                                            directions.data(),
+                                                                            static_cast<std::size_t>(basepoints.shape(0)),
+                                                                            static_cast<std::size_t>(basepoints.shape(1)),
+                                                                            degree,
+                                                                            delta,
+                                                                            true,
+                                                                            parallel_lines);
+        });
+      });
 }
 
-template <typename LeftSlicer, typename RightSlicer>
-nb::object run_monte_carlo_wasserstein_on_native_slicers(
-    const LeftSlicer& left,
-    const RightSlicer& right,
+inline distance_array_t monte_carlo_wasserstein_distances_on_lines(
+    nb::handle left,
+    nb::handle right,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
     int degree,
     double order,
     double internal_p,
     double delta,
-    int n_jobs) {
+    bool parallel_lines) {
+  validate_monte_carlo_native_inputs(left, right, basepoints, directions, degree, delta);
+  const auto left_meta = metadata_from_slicer(left);
+  const auto right_meta = metadata_from_slicer(right);
+  if (left_meta.is_squeezed || right_meta.is_squeezed) {
+    throw std::runtime_error("Native Monte Carlo matching-distance fast path does not support squeezed slicers.");
+  }
+  if (left_meta.num_parameters != right_meta.num_parameters) {
+    throw std::runtime_error("Matching distance expects slicers with the same number of parameters.");
+  }
+  if (left_meta.num_parameters != static_cast<std::size_t>(basepoints.shape(1))) {
+    throw std::runtime_error("Basepoints and directions must match the slicer parameter dimension.");
+  }
+
   const auto params = make_wasserstein_params(order, internal_p, delta);
-  auto raw_distances = [&] {
+  return dispatch_native_monte_carlo_slicers(
+      left, right, left_meta, right_meta, [&](const auto& left_native, const auto& right_native) -> distance_array_t {
+        return run_native_monte_carlo([&] {
+          return multipers::core::monte_carlo_wasserstein_distances_on_lines(left_native,
+                                                                             right_native,
+                                                                             basepoints.data(),
+                                                                             directions.data(),
+                                                                             static_cast<std::size_t>(basepoints.shape(0)),
+                                                                             static_cast<std::size_t>(basepoints.shape(1)),
+                                                                             degree,
+                                                                             params.wasserstein_power,
+                                                                             params.internal_p,
+                                                                             params.delta,
+                                                                             true,
+                                                                             parallel_lines);
+        });
+      });
+}
+
+template <typename ComputeRow>
+distance_matrix_t run_monte_carlo_distances_batch(
+    nb::handle lefts,
+    nb::handle rights,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
+    int n_jobs,
+    ComputeRow&& compute_row) {
+  auto left_batch = nb::cast<std::vector<nb::object>>(lefts);
+  auto right_batch = nb::cast<std::vector<nb::object>>(rights);
+  if (left_batch.size() != right_batch.size()) {
+    throw std::runtime_error("Left and right slicer batches must contain the same number of slicers.");
+  }
+  const auto num_pairs = left_batch.size();
+  const auto num_lines = static_cast<std::size_t>(basepoints.shape(0));
+  std::vector<double> flat(num_pairs * num_lines);
+  if (num_pairs == 0) return distance_matrix_to_numpy(std::move(flat), num_pairs, num_lines);
+#if defined(GUDHI_USE_TBB)
+  const int max_concurrency = n_jobs <= 0 ? tbb::task_arena::automatic : n_jobs;
+  tbb::task_arena arena(max_concurrency);
+  if (num_pairs == 1) {
+    arena.execute([&] {
+      auto distances = compute_row(left_batch[0], right_batch[0], true);
+      copy_row_to_batch_row(flat, distances, 0, num_lines);
+    });
+    return distance_matrix_to_numpy(std::move(flat), num_pairs, num_lines);
+  }
+  std::size_t arena_concurrency = n_jobs > 0 ? static_cast<std::size_t>(n_jobs) : 1;
+  if (n_jobs <= 0) {
+    arena.execute([&] { arena_concurrency = static_cast<std::size_t>(tbb::this_task_arena::max_concurrency()); });
+  }
+  if (prefer_line_parallel_pairs(num_pairs, num_lines, arena_concurrency)) {
+    arena.execute([&] {
+      for (std::size_t row = 0; row < num_pairs; ++row) {
+        auto distances = compute_row(left_batch[row], right_batch[row], true);
+        copy_row_to_batch_row(flat, distances, row, num_lines);
+      }
+    });
+    return distance_matrix_to_numpy(std::move(flat), num_pairs, num_lines);
+  }
+  {
     nb::gil_scoped_release release;
-    return multipers::core::monte_carlo_wasserstein_distances_on_lines(left,
-                                                                       right,
-                                                                       basepoints.data(),
-                                                                       directions.data(),
-                                                                       static_cast<std::size_t>(basepoints.shape(0)),
-                                                                       static_cast<std::size_t>(basepoints.shape(1)),
-                                                                       degree,
-                                                                       params.wasserstein_power,
-                                                                       params.internal_p,
-                                                                       params.delta,
-                                                                       true,
-                                                                       n_jobs);
-  }();
-  return nb::cast(raw_distances);
+    arena.execute([&] {
+      tbb::parallel_for(std::size_t(0), num_pairs, [&](std::size_t row) {
+        nb::gil_scoped_acquire acquire;
+        auto distances = compute_row(left_batch[row], right_batch[row], false);
+        copy_row_to_batch_row(flat, distances, row, num_lines);
+      });
+    });
+  }
+#else
+  static_cast<void>(n_jobs);
+  const bool parallel_lines = num_pairs == 1;
+  for (std::size_t row = 0; row < num_pairs; ++row) {
+    auto distances = compute_row(left_batch[row], right_batch[row], parallel_lines);
+    copy_row_to_batch_row(flat, distances, row, num_lines);
+  }
+#endif
+  return distance_matrix_to_numpy(std::move(flat), num_pairs, num_lines);
 }
 
-template <bool LeftKcritical, bool RightKcritical>
-nb::object run_monte_carlo_on_native_slicer_types(
-    nb::handle left,
-    nb::handle right,
+inline distance_matrix_t monte_carlo_bottleneck_distances_batch_on_lines(
+    nb::handle lefts,
+    nb::handle rights,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
     int degree,
     double delta,
     int n_jobs) {
-  using LeftSlicer = native_f64_slicer_t<LeftKcritical>;
-  using RightSlicer = native_f64_slicer_t<RightKcritical>;
-
-  return with_native_f64_slicer<LeftKcritical>(left, [&](const LeftSlicer& left_native) -> nb::object {
-    return with_native_f64_slicer<RightKcritical>(
-        right, [&](const RightSlicer& right_native) -> nb::object {
-          return run_monte_carlo_on_native_slicers(left_native, right_native, basepoints, directions, degree, delta, n_jobs);
-        });
+  return run_monte_carlo_distances_batch(lefts, rights, basepoints, n_jobs, [&](nb::handle left, nb::handle right, bool parallel_lines) {
+    return monte_carlo_bottleneck_distances_on_lines(left, right, basepoints, directions, degree, delta, parallel_lines);
   });
 }
 
-template <bool LeftKcritical, bool RightKcritical>
-nb::object run_monte_carlo_wasserstein_on_native_slicer_types(
-    nb::handle left,
-    nb::handle right,
+inline distance_matrix_t monte_carlo_wasserstein_distances_batch_on_lines(
+    nb::handle lefts,
+    nb::handle rights,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
     int degree,
@@ -311,88 +469,10 @@ nb::object run_monte_carlo_wasserstein_on_native_slicer_types(
     double internal_p,
     double delta,
     int n_jobs) {
-  using LeftSlicer = native_f64_slicer_t<LeftKcritical>;
-  using RightSlicer = native_f64_slicer_t<RightKcritical>;
-
-  return with_native_f64_slicer<LeftKcritical>(left, [&](const LeftSlicer& left_native) -> nb::object {
-    return with_native_f64_slicer<RightKcritical>(
-        right, [&](const RightSlicer& right_native) -> nb::object {
-          return run_monte_carlo_wasserstein_on_native_slicers(
-              left_native, right_native, basepoints, directions, degree, order, internal_p, delta, n_jobs);
-        });
+  return run_monte_carlo_distances_batch(lefts, rights, basepoints, n_jobs, [&](nb::handle left, nb::handle right, bool parallel_lines) {
+    return monte_carlo_wasserstein_distances_on_lines(
+        left, right, basepoints, directions, degree, order, internal_p, delta, parallel_lines);
   });
-}
-
-inline nb::object monte_carlo_bottleneck_distances_on_lines(
-    nb::handle left,
-    nb::handle right,
-    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
-    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
-    int degree,
-    double delta,
-    int n_jobs) {
-  validate_monte_carlo_native_inputs(left, right, basepoints, directions, degree, delta);
-  const auto left_meta = metadata_from_slicer(left);
-  const auto right_meta = metadata_from_slicer(right);
-  if (left_meta.is_squeezed || right_meta.is_squeezed) {
-    throw std::runtime_error("Native Monte Carlo matching-distance fast path does not support squeezed slicers.");
-  }
-  if (left_meta.num_parameters != right_meta.num_parameters) {
-    throw std::runtime_error("Matching distance expects slicers with the same number of parameters.");
-  }
-  if (left_meta.num_parameters != static_cast<std::size_t>(basepoints.shape(1))) {
-    throw std::runtime_error("Basepoints and directions must match the slicer parameter dimension.");
-  }
-
-  if (left_meta.is_kcritical) {
-    if (right_meta.is_kcritical) {
-      return run_monte_carlo_on_native_slicer_types<true, true>(left, right, basepoints, directions, degree, delta, n_jobs);
-    }
-    return run_monte_carlo_on_native_slicer_types<true, false>(left, right, basepoints, directions, degree, delta, n_jobs);
-  }
-  if (right_meta.is_kcritical) {
-    return run_monte_carlo_on_native_slicer_types<false, true>(left, right, basepoints, directions, degree, delta, n_jobs);
-  }
-  return run_monte_carlo_on_native_slicer_types<false, false>(left, right, basepoints, directions, degree, delta, n_jobs);
-}
-
-inline nb::object monte_carlo_wasserstein_distances_on_lines(
-    nb::handle left,
-    nb::handle right,
-    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
-    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
-    int degree,
-    double order,
-    double internal_p,
-    double delta,
-    int n_jobs) {
-  validate_monte_carlo_native_inputs(left, right, basepoints, directions, degree, delta);
-  const auto left_meta = metadata_from_slicer(left);
-  const auto right_meta = metadata_from_slicer(right);
-  if (left_meta.is_squeezed || right_meta.is_squeezed) {
-    throw std::runtime_error("Native Monte Carlo matching-distance fast path does not support squeezed slicers.");
-  }
-  if (left_meta.num_parameters != right_meta.num_parameters) {
-    throw std::runtime_error("Matching distance expects slicers with the same number of parameters.");
-  }
-  if (left_meta.num_parameters != static_cast<std::size_t>(basepoints.shape(1))) {
-    throw std::runtime_error("Basepoints and directions must match the slicer parameter dimension.");
-  }
-
-  if (left_meta.is_kcritical) {
-    if (right_meta.is_kcritical) {
-      return run_monte_carlo_wasserstein_on_native_slicer_types<true, true>(
-          left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
-    }
-    return run_monte_carlo_wasserstein_on_native_slicer_types<true, false>(
-        left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
-  }
-  if (right_meta.is_kcritical) {
-    return run_monte_carlo_wasserstein_on_native_slicer_types<false, true>(
-        left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
-  }
-  return run_monte_carlo_wasserstein_on_native_slicer_types<false, false>(
-      left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
 }
 
 #endif
@@ -448,7 +528,7 @@ inline nb::object matching_distance_binding(nb::object left,
 #endif
 }
 
-inline nb::object monte_carlo_bottleneck_distances_binding(
+inline distance_array_t monte_carlo_bottleneck_distances_binding(
     nb::handle left,
     nb::handle right,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
@@ -469,11 +549,19 @@ inline nb::object monte_carlo_bottleneck_distances_binding(
   if (!multipers::hera_interface_available()) {
     throw_hera_unavailable();
   }
-  return monte_carlo_bottleneck_distances_on_lines(left, right, basepoints, directions, degree, delta, n_jobs);
+  auto matrix = monte_carlo_bottleneck_distances_batch_on_lines(
+      nb::make_tuple(nb::borrow<nb::object>(left)),
+      nb::make_tuple(nb::borrow<nb::object>(right)),
+      basepoints,
+      directions,
+      degree,
+      delta,
+      n_jobs);
+  return first_row_to_numpy(matrix);
 #endif
 }
 
-inline nb::object monte_carlo_wasserstein_distances_binding(
+inline distance_array_t monte_carlo_wasserstein_distances_binding(
     nb::handle left,
     nb::handle right,
     const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
@@ -498,8 +586,72 @@ inline nb::object monte_carlo_wasserstein_distances_binding(
   if (!multipers::hera_interface_available()) {
     throw_hera_unavailable();
   }
-  return monte_carlo_wasserstein_distances_on_lines(
-      left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
+  auto matrix = monte_carlo_wasserstein_distances_batch_on_lines(
+      nb::make_tuple(nb::borrow<nb::object>(left)),
+      nb::make_tuple(nb::borrow<nb::object>(right)),
+      basepoints,
+      directions,
+      degree,
+      order,
+      internal_p,
+      delta,
+      n_jobs);
+  return first_row_to_numpy(matrix);
+#endif
+}
+
+inline distance_matrix_t monte_carlo_bottleneck_distances_batch_binding(
+    nb::handle lefts,
+    nb::handle rights,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
+    int degree,
+    double delta,
+    int n_jobs) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(lefts);
+  static_cast<void>(rights);
+  static_cast<void>(basepoints);
+  static_cast<void>(directions);
+  static_cast<void>(degree);
+  static_cast<void>(delta);
+  static_cast<void>(n_jobs);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  return monte_carlo_bottleneck_distances_batch_on_lines(lefts, rights, basepoints, directions, degree, delta, n_jobs);
+#endif
+}
+
+inline distance_matrix_t monte_carlo_wasserstein_distances_batch_binding(
+    nb::handle lefts,
+    nb::handle rights,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
+    int degree,
+    double order,
+    double internal_p,
+    double delta,
+    int n_jobs) {
+#if MULTIPERS_DISABLE_HERA_INTERFACE
+  static_cast<void>(lefts);
+  static_cast<void>(rights);
+  static_cast<void>(basepoints);
+  static_cast<void>(directions);
+  static_cast<void>(degree);
+  static_cast<void>(order);
+  static_cast<void>(internal_p);
+  static_cast<void>(delta);
+  static_cast<void>(n_jobs);
+  throw_hera_unavailable();
+#else
+  if (!multipers::hera_interface_available()) {
+    throw_hera_unavailable();
+  }
+  return monte_carlo_wasserstein_distances_batch_on_lines(
+      lefts, rights, basepoints, directions, degree, order, internal_p, delta, n_jobs);
 #endif
 }
 
@@ -517,7 +669,7 @@ inline double bottleneck_distance_binding(nb::handle left, nb::handle right, dou
 #endif
 }
 
-inline std::vector<double> bottleneck_distances_binding(
+inline distance_array_t bottleneck_distances_binding(
     nb::handle left_diagrams,
     nb::handle right_diagrams,
     double delta,
@@ -544,11 +696,11 @@ inline std::vector<double> bottleneck_distances_binding(
     left_native[i] = diagram_from_handle(left_batch[i], true);
     right_native[i] = diagram_from_handle(right_batch[i], true);
   }
-  return bottleneck_distances_from_native_batches(left_native, right_native, delta, n_jobs);
+  return distances_to_numpy(bottleneck_distances_from_native_batches(left_native, right_native, delta, n_jobs));
 #endif
 }
 
-inline std::vector<double> wasserstein_distances_binding(
+inline distance_array_t wasserstein_distances_binding(
     nb::handle left_diagrams,
     nb::handle right_diagrams,
     double order,
@@ -579,7 +731,8 @@ inline std::vector<double> wasserstein_distances_binding(
     left_native[i] = diagram_from_handle(left_batch[i]);
     right_native[i] = diagram_from_handle(right_batch[i]);
   }
-  return wasserstein_distances_from_native_batches(left_native, right_native, order, internal_p, delta, n_jobs);
+  return distances_to_numpy(
+      wasserstein_distances_from_native_batches(left_native, right_native, order, internal_p, delta, n_jobs));
 #endif
 }
 
@@ -699,7 +852,7 @@ NB_MODULE(_hera_interface, m) {
          const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
          int degree,
          double delta,
-         int n_jobs) -> nb::object {
+         int n_jobs) -> mphera::distance_array_t {
         return mphera::monte_carlo_bottleneck_distances_binding(left, right, basepoints, directions, degree, delta, n_jobs);
       },
       "left"_a,
@@ -720,12 +873,56 @@ NB_MODULE(_hera_interface, m) {
          double order,
          double internal_p,
          double delta,
-         int n_jobs) -> nb::object {
+         int n_jobs) -> mphera::distance_array_t {
         return mphera::monte_carlo_wasserstein_distances_binding(
             left, right, basepoints, directions, degree, order, internal_p, delta, n_jobs);
       },
       "left"_a,
       "right"_a,
+      "basepoints"_a,
+      "directions"_a,
+      "degree"_a,
+      "order"_a = 1.0,
+      "internal_p"_a = std::numeric_limits<double>::infinity(),
+      "delta"_a = 0.01,
+      "n_jobs"_a = 0);
+
+  m.def(
+      "monte_carlo_bottleneck_distances_batch",
+      [](nb::handle lefts,
+         nb::handle rights,
+         const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
+         const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
+         int degree,
+         double delta,
+         int n_jobs) -> mphera::distance_matrix_t {
+        return mphera::monte_carlo_bottleneck_distances_batch_binding(
+            lefts, rights, basepoints, directions, degree, delta, n_jobs);
+      },
+      "lefts"_a,
+      "rights"_a,
+      "basepoints"_a,
+      "directions"_a,
+      "degree"_a,
+      "delta"_a = 0.01,
+      "n_jobs"_a = 0);
+
+  m.def(
+      "monte_carlo_wasserstein_distances_batch",
+      [](nb::handle lefts,
+         nb::handle rights,
+         const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& basepoints,
+         const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& directions,
+         int degree,
+         double order,
+         double internal_p,
+         double delta,
+         int n_jobs) -> mphera::distance_matrix_t {
+        return mphera::monte_carlo_wasserstein_distances_batch_binding(
+            lefts, rights, basepoints, directions, degree, order, internal_p, delta, n_jobs);
+      },
+      "lefts"_a,
+      "rights"_a,
       "basepoints"_a,
       "directions"_a,
       "degree"_a,
