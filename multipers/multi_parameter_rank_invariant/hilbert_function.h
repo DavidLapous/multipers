@@ -11,7 +11,7 @@
 
 #include "../gudhi/Simplex_tree_multi_interface.h"
 #include <gudhi/Slicer.h>
-#include "../tensor/tensor.h"
+#include "mobius_inversion.h"
 #include "persistence_slices.h"
 
 namespace Gudhi {
@@ -45,7 +45,7 @@ inline void compute_2d_hilbert_surface(
     python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
     // Simplex_tree_std &_st,
     hilbert_thread_data<index_type> &thread_simplex_tree,
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+    const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
     const std::vector<index_type> degrees,
     index_type i,
@@ -108,7 +108,7 @@ inline void compute_2d_hilbert_surface(
         for (const auto &bar : barcode) {
           auto birth = bar.first;  // float
           auto death = bar.second;
-          if (birth > I)  // some birth can be infinite
+          if (birth >= I)  // some births are the squeezed infinity sentinel
             continue;
 
           if (!mobius_inverion) {
@@ -164,7 +164,7 @@ template <typename Filtration, typename dtype, typename index_type>
 void _rec_get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
                               // Simplex_tree_std &_st,
                               hilbert_thread_data<index_type> &thread_simplex_tree,
-                              const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                              const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes zero tensor
                               const std::vector<index_type> grid_shape,
                               const std::vector<index_type> degrees,
                               std::vector<index_type> coordinates_to_compute,
@@ -224,7 +224,7 @@ void _rec_get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Fil
 
 template <typename Filtration, typename dtype, typename index_type>
 void get_hilbert_surface(python_interface::Simplex_tree_multi_interface<Filtration> &st_multi,
-                         const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                         const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes zero tensor
                          const std::vector<index_type> &grid_shape,
                          const std::vector<index_type> &degrees,
                          std::vector<index_type> coordinates_to_compute,
@@ -275,7 +275,7 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
   std::vector<indices_type> coordinates_to_compute(st_multi.num_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
@@ -318,12 +318,13 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // for (indices_type axis :
   // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
-  for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++) container.differentiate(axis);
+  for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++)
+    mobius_inversion::differentiate(data_ptr, container.get_resolution(), axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
   }
-  auto raw_signed_measure = container.sparsify();
+  auto raw_signed_measure = mobius_inversion::sparsify(container);
   if (verbose) {
     std::cout << "Done.\n";
   }
@@ -344,7 +345,7 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
   std::vector<indices_type> coordinates_to_compute(st_multi.num_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
@@ -380,7 +381,8 @@ void get_hilbert_surface_python(python_interface::Simplex_tree_multi_interface<F
   });
 
   if (mobius_inversion)
-    for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++) container.differentiate(axis);
+    for (indices_type axis = 2u; axis < st_multi.num_parameters() + 1; axis++)
+      mobius_inversion::differentiate(data_ptr, container.get_resolution(), axis);
   return;
 }
 
@@ -393,7 +395,7 @@ inline void compute_2d_hilbert_surface(
     tbb::enumerable_thread_specific<
         std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe,
                   std::vector<index_type>>> &thread_stuff,
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+    const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
     const std::vector<index_type> grid_shape,
     const std::vector<index_type> degrees,
     index_type i,
@@ -449,7 +451,7 @@ inline void compute_2d_hilbert_surface(
       for (const auto &bar : barcode) {
         auto birth = bar[0];  // float
         auto death = bar[1];
-        if (birth > I)  // some birth can be infinite
+        if (birth >= I)  // some births are the squeezed infinity sentinel
           continue;
 
         if (!mobius_inverion) {
@@ -505,7 +507,7 @@ void _rec_get_hilbert_surface(
     tbb::enumerable_thread_specific<
         std::pair<typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe,
                   std::vector<index_type>>> &thread_stuff,
-    const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+    const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes zero tensor
     const std::vector<index_type> grid_shape,
     const std::vector<index_type> degrees,
     std::vector<index_type> coordinates_to_compute,
@@ -562,7 +564,7 @@ void _rec_get_hilbert_surface(
 
 template <typename PersBackend, typename Filtration, typename dtype, typename index_type>
 void get_hilbert_surface(Gudhi::multi_persistence::Slicer<Filtration, PersBackend> &slicer,
-                         const tensor::static_tensor_view<dtype, index_type> &out,  // assumes its a zero tensor
+                         const mobius_inversion::dense_tensor_view<dtype, index_type> &out,  // assumes zero tensor
                          const std::vector<index_type> &grid_shape,
                          const std::vector<index_type> &degrees,
                          std::vector<index_type> coordinates_to_compute,
@@ -609,7 +611,7 @@ void get_hilbert_surface_python(Gudhi::multi_persistence::Slicer<Filtration, Per
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
   int num_parameters = slicer.get_number_of_parameters();
   std::vector<indices_type> coordinates_to_compute(num_parameters);
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
@@ -646,7 +648,8 @@ void get_hilbert_surface_python(Gudhi::multi_persistence::Slicer<Filtration, Per
   });
 
   if (mobius_inversion)
-    for (indices_type axis = 2u; axis < num_parameters + 1; axis++) container.differentiate(axis);
+    for (indices_type axis = 2u; axis < num_parameters + 1; axis++)
+      mobius_inversion::differentiate(data_ptr, container.get_resolution(), axis);
   return;
 }
 
@@ -664,7 +667,7 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // const bool verbose = false;
   // auto &st_multi =
   //     get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-  tensor::static_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes its a zero tensor
+  mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
   std::vector<indices_type> coordinates_to_compute(slicer.get_number_of_parameters());
   for (auto i = 0u; i < coordinates_to_compute.size(); i++) coordinates_to_compute[i] = i;
   // for (auto [c,i] : std::views::zip(coordinates_to_compute,
@@ -701,12 +704,12 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_hilber
   // std::views::iota(2,st_multi.num_parameters()+1)) // +1 for the
   // degree in axis 0
   for (indices_type axis = 2; axis < static_cast<indices_type>(slicer.get_number_of_parameters() + 1); axis++)
-    container.differentiate(axis);
+    mobius_inversion::differentiate(data_ptr, container.get_resolution(), axis);
   if (verbose) {
     std::cout << "Done.\n";
     std::cout << "Sparsifying the measure ..." << std::flush;
   }
-  auto raw_signed_measure = container.sparsify();
+  auto raw_signed_measure = mobius_inversion::sparsify(container);
   if (verbose) {
     std::cout << "Done." << std::endl;
   }
