@@ -58,6 +58,17 @@ inline int64_t normalized_squeezed_index(int64_t raw_index, int64_t row_size, si
   return normalized;
 }
 
+inline int64_t normalized_squeezed_index_or_sentinel(int64_t raw_index, int64_t row_size, size_t parameter) {
+  int64_t normalized = raw_index;
+  if (normalized < 0) {
+    normalized += row_size;
+  }
+  if (normalized == row_size) {
+    return normalized;
+  }
+  return normalized_squeezed_index(raw_index, row_size, parameter);
+}
+
 inline CompactedSqueezedFiltrationGrid compact_squeezed_filtration_grid(
     const nanobind::object& filtration_grid,
     std::vector<std::vector<int64_t>> used_coordinates) {
@@ -82,9 +93,11 @@ inline CompactedSqueezedFiltrationGrid compact_squeezed_filtration_grid(
     auto& remap = out.remap[parameter];
     for (size_t i = 0; i < current_coordinates.size(); ++i) {
       const int64_t raw_index = current_coordinates[i];
-      (void)normalized_squeezed_index(raw_index, row_size, parameter);
+      const int64_t normalized = normalized_squeezed_index_or_sentinel(raw_index, row_size, parameter);
       remap.emplace(raw_index, static_cast<int64_t>(i));
-      selection.append(nanobind::int_(raw_index));
+      if (normalized != row_size) {
+        selection.append(nanobind::int_(raw_index));
+      }
     }
 
     nanobind::object compact_row = row.attr("__getitem__")(selection);
