@@ -166,6 +166,211 @@ namespace multi_critical {
     )
 
 
+def _patch_multi_critical_free_resolution(text: str, rel_path: Path) -> str:
+    text = _replace_once(
+        text,
+        r"""    struct Grade_sorter {
+
+	std::vector<Output_simplex>& data;
+
+	Grade_sorter(std::vector<Output_simplex>& data) : data(data) {}
+
+	bool operator() (int i, int j) {
+	    Grade& g1 = data[i].grade;
+	    Grade& g2 = data[j].grade;
+	    if(g1.x<g2.x) {
+		return true;
+	    }
+	    if(g1.x>g2.x) {
+		return false;
+	    }
+	    return g1.y<g2.y;
+	}
+    };
+""",
+        r"""    struct Grade_sorter {
+
+	std::vector<Output_simplex>& data;
+
+	Grade_sorter(std::vector<Output_simplex>& data) : data(data) {}
+
+	bool operator() (int i, int j) {
+	    Grade& g1 = data[i].grade;
+	    Grade& g2 = data[j].grade;
+	    if(g1.x<g2.x) {
+		return true;
+	    }
+	    if(g1.x>g2.x) {
+		return false;
+	    }
+	    if(g1.y<g2.y) {
+		return true;
+	    }
+	    if(g1.y>g2.y) {
+		return false;
+	    }
+	    return i<j;
+	}
+    };
+""",
+        rel_path,
+    )
+    text = _replace_once(
+        text,
+        r"""std::vector<std::vector<std::pair<index,index>>> relations;
+	// Syzygy with relation idx as upper boundary is saved with key idx
+""",
+        r"""std::vector<std::vector<std::pair<index,index>>> relations;
+	// path mode only creates adjacent relations, so direct lookup avoids repeated scans
+	bool path_uses_only_adjacent_relations=false;
+	std::vector<index> adjacent_relations;
+	// Syzygy with relation idx as upper boundary is saved with key idx
+""",
+        rel_path,
+    )
+    text, count = re.subn(
+        r"\s*void get_path_of_relations\(int i,int j, std::vector<index>& rels\) \{\n"
+        r"\s*assert\(i<=j\);\n"
+        r"\s*if\(i==j\) \{\n"
+        r"\s*return;\n"
+        r"\s*\}\n"
+        r"\s*int next_copy=0;\n"
+        r"\s*int next_rel=0;\n"
+        r"\s*for\(auto pair : relations\[i\]\) \{\n"
+        r"\s*if\(pair.first>j\) \{\n"
+        r"\s*break;\n"
+        r"\s*\}\n"
+        r"\s*next_copy=pair.first;\n"
+        r"\s*next_rel=pair.second;\n"
+        r"\s*\}\n"
+        r"\s*rels.push_back\(next_rel\);\n"
+        r"\s*get_path_of_relations\(next_copy,j,rels\);\n"
+        r"\s*\}\n",
+        r"""
+	void get_path_of_relations(int i,int j, std::vector<index>& rels) {
+	    assert(i<=j);
+	    if(i==j) {
+		return;
+	    }
+	    if(path_uses_only_adjacent_relations) {
+		assert(j<=adjacent_relations.size());
+		for(int k=i;k<j;k++) {
+		    assert(adjacent_relations[k]>=0);
+		    rels.push_back(adjacent_relations[k]);
+		}
+		return;
+	    }
+	    int next_copy=0;
+	    int next_rel=0;
+	    for(auto pair : relations[i]) {
+		if(pair.first>j) {
+		    break;
+		}
+		next_copy=pair.first;
+		next_rel=pair.second;
+	    }
+	    rels.push_back(next_rel);
+	    get_path_of_relations(next_copy,j,rels);
+	}
+""",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise ValueError(f"Expected get_path_of_relations snippet not found in {rel_path.as_posix()}")
+    text = _replace_once(
+        text,
+        r"""		int width=1;
+		input_simplex.relations.resize(input_simplex.copies.size());
+""",
+        r"""		int width=1;
+		input_simplex.path_uses_only_adjacent_relations=!use_logpath;
+		input_simplex.relations.resize(input_simplex.copies.size());
+		if(input_simplex.path_uses_only_adjacent_relations && input_simplex.copies.size()>1) {
+		    input_simplex.adjacent_relations.assign(input_simplex.copies.size()-1,-1);
+		}
+""",
+        rel_path,
+    )
+    text = _replace_once(
+        text,
+        r"""			output_complex[ell+1].push_back(new_output_simplex_for_relation);
+			input_simplex.relations[j-width].push_back(std::make_pair(j,idx_of_new_output_relation));
+			
+""",
+        r"""			output_complex[ell+1].push_back(new_output_simplex_for_relation);
+			input_simplex.relations[j-width].push_back(std::make_pair(j,idx_of_new_output_relation));
+			if(input_simplex.path_uses_only_adjacent_relations) {
+			    assert(width==1);
+			    input_simplex.adjacent_relations[j-width]=idx_of_new_output_relation;
+			}
+			
+""",
+        rel_path,
+    )
+    return _replace_once(
+        text,
+        r"""#if 1
+	    Grade_sorter sorter(output_complex[i]);
+	    std::stable_sort(permutations[i].begin(),permutations[i].end(),sorter);
+#endif
+""",
+        r"""#if 1
+	    Grade_sorter sorter(output_complex[i]);
+	    std::sort(permutations[i].begin(),permutations[i].end(),sorter);
+#endif
+""",
+        rel_path,
+    )
+
+
+def _patch_multi_critical_graded_matrix(text: str, rel_path: Path) -> str:
+    text = _replace_once(
+        text,
+        r"""M1.row_grades.clear();
+	    for(index j=0;j<M1.num_rows;j++) {
+		M1.row_grades.push_back(M2.grades[j]);
+	    }
+""",
+        r"""M1.row_grades.assign(M2.grades.begin(),M2.grades.begin()+M1.num_rows);
+""",
+        rel_path,
+    )
+    return _replace_once(
+        text,
+        r"""	M1.row_grades.clear();
+	for(int i=0;i<n2;i++) {
+	    M1.row_grades.push_back(M2.grades[i]);
+	}
+""",
+        r"""	M1.row_grades.assign(M2.grades.begin(),M2.grades.begin()+n2);
+""",
+        rel_path,
+    )
+
+
+def _patch_multi_critical_pre_column_struct(text: str, rel_path: Path) -> str:
+    text = _replace_once(text, "#include<cstring>\n", "#include<cstring>\n#include<utility>\n", rel_path)
+    text, count = re.subn(
+        r"(\s*void get_boundary\(int i, int j,std::vector<index>& result\) \{\n)"
+        r"\s*result=pre_columns\[i\]\[j\]\.boundary;\n"
+        r"(\s*\}\n)",
+        r"\1\t  result=std::move(pre_columns[i][j].boundary);\n\2",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise ValueError(f"Expected pre-column get_boundary snippet not found in {rel_path.as_posix()}")
+    return _replace_once(
+        text,
+        r"""matrix.set_col(j,bd);
+""",
+        r"""matrix.set_col(j,std::move(bd));
+""",
+        rel_path,
+    )
+
+
 def _patch_scc_basic(text: str, rel_path: Path, *, bit: str) -> str:
     return _replace_once(
         text,
@@ -250,7 +455,10 @@ def _multi_critical_targets() -> dict[Path, str]:
     return _build_explicit_targets(
         {
             Path("ext/multi_critical/include/multi_critical/basic.h"): _patch_multi_critical_basic,
+            Path("ext/multi_critical/include/multi_critical/free_resolution.h"): _patch_multi_critical_free_resolution,
             Path("ext/multi_critical/mpfree_mod/include/mpfree/global.h"): _patch_mpfree_global,
+            Path("ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h"): _patch_multi_critical_graded_matrix,
+            Path("ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"): _patch_multi_critical_pre_column_struct,
             Path("ext/multi_critical/multi_chunk_mod/include/multi_chunk/basic.h"): (
                 lambda text, rel: _patch_multi_chunk_basic(
                     text,
