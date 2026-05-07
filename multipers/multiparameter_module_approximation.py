@@ -356,7 +356,7 @@ def _module_plot(self, degree: int = -1, **kwargs):
     for summand in mod:
         birth_corners.append(np.asarray(summand.get_birth_list()))
         death_corners.append(np.asarray(summand.get_death_list()))
-    interleavings = mod.get_interleavings(box)
+    interleavings = mod.get_interleavings(np.asarray(box))
     plot2d_PyModule(
         birth_corners,
         death_corners,
