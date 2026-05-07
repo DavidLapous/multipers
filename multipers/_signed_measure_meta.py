@@ -39,6 +39,7 @@ def signed_measure(
     vineyard: bool = False,
     grid_conversion: Optional[Iterable] = None,
     ignore_infinite_filtration_values: bool = True,
+    mobius: str = "auto",
     **infer_grid_kwargs,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     r"""
@@ -57,9 +58,8 @@ def signed_measure(
      - plot:bool, plots the computed measures if true.
      - n_jobs:int, number of jobs. Defaults to #cpu.
      - verbose:bool, prints c++ logs.
-     - expand_collapse: when the input is a simplextree,
-       only expands the complex when computing 1-dimensional slices.
-       Meant to reduce memory footprint at some computational expense.
+      - expand_collapse: when computing Hilbert from a simplextree, expand the
+        copied complex up to max(degrees) + 1 before conversion to a slicer.
      - backend:str  reduces first the filtered complex using some external backend `backend`,
          see ``backend`` in :func:`multipers.ops.minimal_presentation`.
      - grid: If given, the computations will be done on the restriction of the filtered complex to this grid.
@@ -71,6 +71,11 @@ def signed_measure(
      - num_collapses: int, if `filtered_complex` is a simplextree, does some collapses if possible.
      - clean: if True, reduces the measure. It is not necessary in general.
      - ignore_infinite_filtration_values: Backend optimization.
+       - mobius: "auto", "sparse" or "dense" for rank and Hilbert signed
+        measures. "auto" keeps sparse rank and chooses sparse Hilbert only when
+        the grid shape predicts fewer slice computations. "sparse" applies
+        Möbius inversion online and avoids materializing the dense tensor when
+        supported. "dense" uses the previous dense path.
 
     Output
     ------
@@ -87,9 +92,8 @@ def signed_measure(
      - Hilbert: is computed by computing persistence on slices, and a Möbius inversion,
        unless the detected input is a minimal presentation (i.e., `filtered_complex.is_minpres`),
        which in that case, doesn't need any computation.
-       - If the input is a simplextree, this is done via a the standard Gudhi implementation,
-         with parallel (TBB) computations of slices.
-       - If the input is a slicer then
+       - If the input is a simplextree, it is converted to a slicer first.
+        - If the input is a slicer then
          - If the input is vineyard-capable, then slices are computed via vineyards updates.
            It is slower in general, but faster if single threaded.
            In particular, it is usually faster to use this backend if you want to compute the
@@ -101,6 +105,10 @@ def signed_measure(
     if backend is not None:
         raise ValueError(
             "backend is deprecated. reduce the complex before this function."
+        )
+    if mobius not in {"auto", "sparse", "dense"}:
+        raise ValueError(
+            f"Invalid mobius={mobius!r}. Expected 'auto', 'sparse', or 'dense'."
         )
     if num_collapses > 0:
         raise ValueError(
@@ -242,6 +250,7 @@ def signed_measure(
                     # grid_shape=tuple(len(g) for g in grid),
                     ignore_inf=ignore_infinite_filtration_values,
                     verbose=verbose,
+                    mobius=mobius,
                 )
                 fix_mass_default = False
                 if verbose:
@@ -288,6 +297,7 @@ def signed_measure(
                     n_jobs=n_jobs,
                     verbose=verbose,
                     ignore_inf=ignore_infinite_filtration_values,
+                    mobius=mobius,
                 )
                 fix_mass_default = mass_default is not None
                 if verbose:
@@ -302,20 +312,19 @@ def signed_measure(
                 print("Computing rank invariant...", end="", flush=True)
                 t0 = time.time()
 
-            if num_parameters != 2:
-                raise NotImplementedError(
-                    "Rank invariant only implemented for 2-parameter modules."
-                )
             if coordinate_measure:
                 raise NotImplementedError("coordinate_measure is not implemented")
-            from multipers.simplex_tree_multi import _rank_signed_measure as smri
+            from multipers import Slicer
 
-            sms = smri(
-                filtered_complex_,
-                mass_default=mass_default,
-                degrees=degrees,
-                expand_collapse=expand_collapse,
+            slicer = Slicer(filtered_complex_, dtype=filtered_complex_.dtype)
+            sms = _rank_from_slicer(
+                slicer,
+                degrees=np.asarray(degrees, dtype=int),
                 n_jobs=n_jobs,
+                zero_pad=fix_mass_default,
+                ignore_inf=ignore_infinite_filtration_values,
+                verbose=verbose,
+                mobius=mobius,
             )
             fix_mass_default = False
             if verbose:
@@ -351,17 +360,19 @@ def signed_measure(
                 "hilbert_function",
             ]:
                 raise ValueError("Found homological degrees for euler computation.")
-            from multipers.simplex_tree_multi import (
-                _hilbert_signed_measure as hilbert_signed_measure,
-            )
 
-            sms = hilbert_signed_measure(
-                filtered_complex_,
+            if expand_collapse:
+                filtered_complex_.expansion(int(np.max(degrees)) + 1)
+            from multipers import Slicer
+
+            sms = _hilbert_signed_measure(
+                Slicer(filtered_complex_, dtype=filtered_complex_.dtype),
                 degrees=degrees,
-                mass_default=None,
+                zero_pad=False,
                 verbose=verbose,
                 n_jobs=n_jobs,
-                expand_collapse=expand_collapse,
+                ignore_inf=ignore_infinite_filtration_values,
+                mobius=mobius,
             )
             fix_mass_default = mass_default is not None
             if verbose:

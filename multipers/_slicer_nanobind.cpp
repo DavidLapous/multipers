@@ -2014,6 +2014,30 @@ nb::tuple compute_hilbert_signed_measure(type_list<Ds...>,
 }
 
 template <typename... Ds>
+nb::tuple compute_hilbert_signed_measure_sparse(type_list<Ds...>,
+                                                nb::handle slicer,
+                                                const std::vector<indices_type>& grid_shape,
+                                                const std::vector<indices_type>& degrees,
+                                                size_t width,
+                                                bool zero_pad,
+                                                indices_type n_jobs,
+                                                bool ignore_inf) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
+    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+    signed_measure_type sm;
+    {
+      nb::gil_scoped_release release;
+      sm = Gudhi::multiparameter::hilbert_function::compute_hilbert_signed_measure_sparse_python(
+          wrapper.truc, grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
+    }
+    return signed_measure_to_python(sm, width);
+  });
+}
+
+template <typename... Ds>
 nb::tuple compute_rank_tensor(type_list<Ds...>,
                               nb::handle slicer,
                               std::vector<tensor_dtype>& container,
@@ -2033,6 +2057,30 @@ nb::tuple compute_rank_tensor(type_list<Ds...>,
           wrapper.truc, container.data(), full_shape, degrees, n_jobs, ignore_inf);
     }
     return nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
+  });
+}
+
+template <typename... Ds>
+nb::tuple compute_rank_signed_measure_sparse(type_list<Ds...>,
+                                             nb::handle slicer,
+                                             const std::vector<indices_type>& grid_shape,
+                                             const std::vector<indices_type>& degrees,
+                                             size_t width,
+                                             bool zero_pad,
+                                             indices_type n_jobs,
+                                             bool ignore_inf) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
+    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+    signed_measure_type sm;
+    {
+      nb::gil_scoped_release release;
+      sm = Gudhi::multiparameter::rank_invariant::compute_rank_signed_measure_sparse_python(
+          wrapper.truc, grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
+    }
+    return signed_measure_to_python(sm, width);
   });
 }
 
@@ -2218,6 +2266,27 @@ NB_MODULE(_slicer_nanobind, m) {
       "ignore_inf"_a = true);
 
   m.def(
+      "_compute_hilbert_signed_measure_sparse",
+      [](nb::handle slicer,
+         nb::handle grid_shape_handle,
+         nb::handle degrees_handle,
+         bool zero_pad,
+         mpnb::indices_type n_jobs,
+         bool ignore_inf) {
+        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
+        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
+        const size_t width = grid_shape.size() + 1;
+        return mpnb::compute_hilbert_signed_measure_sparse(
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, width, zero_pad, n_jobs, ignore_inf);
+      },
+      "slicer"_a,
+      "grid_shape"_a,
+      "degrees"_a,
+      "zero_pad"_a = false,
+      "n_jobs"_a = 0,
+      "ignore_inf"_a = true);
+
+  m.def(
       "_compute_rank_tensor",
       [](nb::handle slicer,
          nb::handle grid_shape_handle,
@@ -2242,6 +2311,27 @@ NB_MODULE(_slicer_nanobind, m) {
       "slicer"_a,
       "grid_shape"_a,
       "degrees"_a,
+      "n_jobs"_a = 0,
+      "ignore_inf"_a = true);
+
+  m.def(
+      "_compute_rank_signed_measure_sparse",
+      [](nb::handle slicer,
+         nb::handle grid_shape_handle,
+         nb::handle degrees_handle,
+         bool zero_pad,
+         mpnb::indices_type n_jobs,
+         bool ignore_inf) {
+        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
+        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
+        const size_t width = 1 + 2 * grid_shape.size();
+        return mpnb::compute_rank_signed_measure_sparse(
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, width, zero_pad, n_jobs, ignore_inf);
+      },
+      "slicer"_a,
+      "grid_shape"_a,
+      "degrees"_a,
+      "zero_pad"_a = false,
       "n_jobs"_a = 0,
       "ignore_inf"_a = true);
 

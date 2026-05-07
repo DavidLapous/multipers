@@ -25,8 +25,6 @@
 #include "nanobind_object_utils.hpp"
 #include "nanobind_simplextree_utils.hpp"
 #include "multi_parameter_rank_invariant/euler_characteristic.h"
-#include "multi_parameter_rank_invariant/hilbert_function.h"
-#include "multi_parameter_rank_invariant/rank_invariant.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -1342,33 +1340,6 @@ void bind_all_simplextrees(type_list<Desc...>, nb::module_& m, nb::list& availab
 }
 
 template <typename... Desc>
-nb::tuple compute_hilbert_signed_measure(type_list<Desc...>,
-                                         nb::handle simplextree,
-                                         std::vector<indices_type>& container,
-                                         const std::vector<indices_type>& full_shape,
-                                         const std::vector<indices_type>& degrees,
-                                         size_t width,
-                                         bool zero_pad,
-                                         indices_type n_jobs,
-                                         bool verbose,
-                                         bool expand_collapse) {
-  if (!is_simplextree_multi(simplextree)) {
-    throw std::runtime_error("Unsupported SimplexTreeMulti type.");
-  }
-  return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
-    using Wrapper = PySimplexTree<typename D::interface_type, typename D::value_type>;
-    auto& st = nb::cast<Wrapper&>(simplextree).tree;
-    signed_measure_type sm;
-    {
-      nb::gil_scoped_release release;
-      sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
-          st, container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, expand_collapse);
-    }
-    return signed_measure_to_python(sm, width);
-  });
-}
-
-template <typename... Desc>
 nb::tuple compute_euler_signed_measure(type_list<Desc...>,
                                        nb::handle simplextree,
                                        std::vector<tensor_dtype>& container,
@@ -1396,30 +1367,6 @@ nb::tuple compute_euler_signed_measure(type_list<Desc...>,
   });
 }
 
-template <typename... Desc>
-nb::tuple compute_rank_tensor(type_list<Desc...>,
-                              nb::handle simplextree,
-                              std::vector<tensor_dtype>& container,
-                              const std::vector<indices_type>& full_shape,
-                              const std::vector<indices_type>& degrees,
-                              size_t total,
-                              indices_type n_jobs,
-                              bool expand_collapse) {
-  if (!is_simplextree_multi(simplextree)) {
-    throw std::runtime_error("Unsupported SimplexTreeMulti type.");
-  }
-  return dispatch_simplextree_by_template_id(template_id_of(simplextree), [&]<typename D>() -> nb::tuple {
-    using Wrapper = PySimplexTree<typename D::interface_type, typename D::value_type>;
-    auto& st = nb::cast<Wrapper&>(simplextree).tree;
-    {
-      nb::gil_scoped_release release;
-      Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
-          st, container.data(), full_shape, degrees, n_jobs, expand_collapse);
-    }
-    return nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
-  });
-}
-
 }  // namespace mpst
 
 NB_MODULE(_simplex_tree_multi_nanobind, m) {
@@ -1440,46 +1387,6 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
   m.def("is_simplextree_multi", [](nb::object input) { return mpst::is_simplextree_multi(input); });
 
   m.def(
-      "_compute_hilbert_signed_measure",
-      [](nb::handle simplextree,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         bool zero_pad,
-         mpst::indices_type n_jobs,
-         bool verbose,
-         bool expand_collapse) {
-        auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
-        auto degrees = mpst::vector_from_handle<mpst::indices_type>(degrees_handle);
-        std::vector<mpst::indices_type> full_shape;
-        full_shape.reserve(grid_shape.size() + 1);
-        full_shape.push_back(static_cast<mpst::indices_type>(degrees.size()));
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        size_t width = grid_shape.size() + 1;
-        size_t total = 1;
-        for (mpst::indices_type value : full_shape) {
-          total *= static_cast<size_t>(value);
-        }
-        std::vector<mpst::tensor_dtype> container(total, 0);
-        return mpst::compute_hilbert_signed_measure(mpst::SimplexTreeDescriptorList{},
-                                                    simplextree,
-                                                    container,
-                                                    full_shape,
-                                                    degrees,
-                                                    width,
-                                                    zero_pad,
-                                                    n_jobs,
-                                                    verbose,
-                                                    expand_collapse);
-      },
-      "simplextree"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0,
-      "verbose"_a = false,
-      "expand_collapse"_a = false);
-
-  m.def(
       "_compute_euler_signed_measure",
       [](nb::handle simplextree, nb::handle grid_shape_handle, bool zero_pad, bool verbose) {
         auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
@@ -1496,40 +1403,6 @@ NB_MODULE(_simplex_tree_multi_nanobind, m) {
       "grid_shape"_a,
       "zero_pad"_a = false,
       "verbose"_a = false);
-
-  m.def(
-      "_compute_rank_tensor",
-      [](nb::handle simplextree,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         mpst::indices_type n_jobs,
-         bool expand_collapse) {
-        auto grid_shape = mpst::vector_from_handle<mpst::indices_type>(grid_shape_handle);
-        auto degrees = mpst::vector_from_handle<mpst::indices_type>(degrees_handle);
-        std::vector<mpst::indices_type> full_shape;
-        full_shape.reserve(1 + 2 * grid_shape.size());
-        full_shape.push_back(static_cast<mpst::indices_type>(degrees.size()));
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        size_t total = 1;
-        for (mpst::indices_type value : full_shape) {
-          total *= static_cast<size_t>(value);
-        }
-        std::vector<mpst::tensor_dtype> container(total, 0);
-        return mpst::compute_rank_tensor(mpst::SimplexTreeDescriptorList{},
-                                         simplextree,
-                                         container,
-                                         full_shape,
-                                         degrees,
-                                         total,
-                                         n_jobs,
-                                         expand_collapse);
-      },
-      "simplextree"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "n_jobs"_a = 0,
-      "expand_collapse"_a = false);
 
   m.attr("available_simplextrees") = available_simplextrees;
 }
