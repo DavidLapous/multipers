@@ -34,6 +34,7 @@
 #include "gudhi/Multi_parameter_filtered_complex.h"
 #include "gudhi/slicer_conversion_core.hpp"
 #include "gudhi/slicer_helpers.h"
+#include "gudhi/simple_mdspan.h"
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
 #include "multiparameter_module_approximation/approximation.h"
@@ -311,16 +312,17 @@ nb::tuple compute_persistence_on_slices(
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
   const size_t num_slices = values.shape(0);
-  const size_t num_parameters = values.shape(1);
+  const size_t slice_size = values.shape(1);
+  if (slice_size != self.truc.get_slice().size()) {
+    throw nb::value_error("Expected one filtration value per generator.");
+  }
   std::vector<Barcode> barcodes(num_slices);
   const auto* data = values.data();
   {
     nb::gil_scoped_release release;
     if constexpr (Desc::is_vine) {
-      std::vector<Value> slice(num_parameters);
       for (size_t i = 0; i < num_slices; ++i) {
-        std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
-        self.truc.set_slice(slice);
+        self.truc.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
         if (i == 0) {
           self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
         } else {
@@ -335,18 +337,14 @@ nb::tuple compute_persistence_on_slices(
       tbb::parallel_for(size_t(0), num_slices, [&](size_t i) {
         auto& slicer = thread_locals.local();
         tbb::this_task_arena::isolate([&] {
-          std::vector<Value> slice(num_parameters);
-          std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
-          slicer.set_slice(slice);
+          slicer.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
           slicer.initialize_persistence_computation(ignore_infinite_filtration_values);
           barcodes[i] = slicer.template get_flat_barcode<true, Value, false>();
         });
       });
 #else
-      std::vector<Value> slice(num_parameters);
       for (size_t i = 0; i < num_slices; ++i) {
-        std::copy_n(data + i * num_parameters, num_parameters, slice.begin());
-        self.truc.set_slice(slice);
+        self.truc.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
         barcodes[i] = self.truc.template get_flat_barcode<true, Value, false>();
       }
