@@ -313,7 +313,7 @@ nb::tuple compute_persistence_on_slices(
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
   const size_t num_slices = values.shape(0);
   const size_t slice_size = values.shape(1);
-  if (slice_size != self.truc.get_slice().size()) {
+  if (slice_size != self.truc.get_number_of_cycle_generators()) {
     throw nb::value_error("Expected one filtration value per generator.");
   }
   std::vector<Barcode> barcodes(num_slices);
