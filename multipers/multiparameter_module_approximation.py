@@ -405,9 +405,7 @@ def module_approximation_from_slicer(
             _mp_logs.warn_copy(
                 r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy."
             )
-        from multipers._slicer_meta import Slicer
-
-        slicer = Slicer(slicer, vineyard=True, backend="matrix")
+        slicer = slicer.astype(vineyard=True, pers_backend="Matrix")
 
     direction_ = np.ascontiguousarray(direction, dtype=slicer.dtype)
     if box is None:

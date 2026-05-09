@@ -37,6 +37,10 @@ def _slicer_from_simplextree(st, backend, vineyard):
     return slicer
 
 
+def _default_pers_backend(vineyard: bool) -> str:
+    return "Matrix" if vineyard else "GudhiCohomology"
+
+
 def Slicer(
     st=None,
     vineyard: Optional[bool] = None,
@@ -95,13 +99,19 @@ def Slicer(
         )
 
     if is_slicer(st, allow_minpres=False):
-        vineyard = st.is_vine if vineyard is None else vineyard
+        requested_vineyard = st.is_vine if vineyard is None else vineyard
+        vineyard = requested_vineyard
         column_type = st.col_type if column_type is None else column_type
-        backend = st.pers_backend if backend is None else backend
+        if backend is None:
+            backend = (
+                st.pers_backend
+                if requested_vineyard == st.is_vine
+                else _default_pers_backend(requested_vineyard)
+            )
     else:
         vineyard = False if vineyard is None else vineyard
         column_type = mps.default_column_type if column_type is None else column_type
-        backend = "matrix" if backend is None else backend
+        backend = _default_pers_backend(vineyard) if backend is None else backend
 
     _Slicer = mps.get_matrix_slicer(
         is_vineyard=vineyard,
