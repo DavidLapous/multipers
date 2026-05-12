@@ -354,8 +354,8 @@ def _module_plot(self, degree: int = -1, **kwargs):
     birth_corners = []
     death_corners = []
     for summand in mod:
-        birth_corners.append(np.asarray(summand.get_birth_list()))
-        death_corners.append(np.asarray(summand.get_death_list()))
+        birth_corners.append(summand.get_birth_list())
+        death_corners.append((summand.get_death_list()))
     interleavings = mod.get_interleavings(np.asarray(box))
     plot2d_PyModule(
         birth_corners,
@@ -630,6 +630,8 @@ def module_approximation(
             return (
                 constructor() if constructor is not None else available_pymodules[0]()
             )
+        # Tuple inputs already parallelize over modules; avoid joblib x TBB oversubscription.
+        inner_n_jobs = n_jobs if len(input) == 1 else 1
         modules = tuple(
             Parallel(n_jobs=n_jobs, prefer="threads")(
                 delayed(module_approximation)(
@@ -644,7 +646,7 @@ def module_approximation(
                     ignore_warnings=ignore_warnings,
                     direction=direction,
                     swap_box_coords=swap_box_coords,
-                    n_jobs=n_jobs,
+                    n_jobs=inner_n_jobs,
                 )
                 for slicer in input
             )

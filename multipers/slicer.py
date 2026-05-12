@@ -611,20 +611,15 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
     grid = self.filtration_grid if grid is None else grid
     grid = sanitize_grid(grid, numpyfy=True, add_inf=inf_overflow)
 
-    num_generators = len(self)
     grid_size = np.array([len(g) for g in grid], dtype=np.int32)
 
     if self.is_kcritical:
-        current_filtration = self.get_filtrations()
-        new_filtrations = tuple(
-            evaluate_in_grid(
-                np.asarray(current_filtration[i], dtype=np.int32).clip(
-                    None, grid_size - 1
-                ),
-                grid,
-            )
-            for i in range(num_generators)
+        indptr, grades_flat = self.get_filtrations(packed=True, raw=True)
+        grades_flat = np.asarray(grades_flat, dtype=np.int32).clip(
+            None, grid_size - 1
         )
+        evaluated_flat = evaluate_in_grid(grades_flat, grid)
+        new_filtrations = np.split(evaluated_flat, indptr[1:-1])
     else:
         filtrations = np.asarray(self.get_filtrations(), dtype=np.int32).clip(
             None, grid_size - 1
