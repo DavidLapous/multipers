@@ -38,12 +38,20 @@ def _config_only_ext_files(root: Path) -> set[str]:
 
     overlay_source_dirs = (
         "ext/mpfree/include",
+        "ext/mpfree/mpp_utils_mod/include",
+        "ext/mpfree/phat_mod/include",
+        "ext/mpfree/scc_mod/include",
         "ext/function_delaunay/include",
         "ext/function_delaunay/mpfree_mod/include",
+        "ext/function_delaunay/mpp_utils_mod/include",
         "ext/function_delaunay/multi_chunk_mod/include",
+        "ext/function_delaunay/phat/include",
+        "ext/function_delaunay/scc_mod/include",
         "ext/multi_critical/include",
         "ext/multi_critical/mpfree_mod/include",
+        "ext/multi_critical/mpp_utils_mod/include",
         "ext/multi_critical/multi_chunk_mod/include",
+        "ext/multi_critical/phat_mod/include",
         "ext/multi_critical/scc_mod/include",
     )
     for rel_dir in overlay_source_dirs:
