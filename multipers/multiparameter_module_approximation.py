@@ -354,9 +354,9 @@ def _module_plot(self, degree: int = -1, **kwargs):
     birth_corners = []
     death_corners = []
     for summand in mod:
-        birth_corners.append(np.asarray(summand.get_birth_list()))
-        death_corners.append(np.asarray(summand.get_death_list()))
-    interleavings = mod.get_interleavings(box)
+        birth_corners.append(summand.get_birth_list())
+        death_corners.append((summand.get_death_list()))
+    interleavings = mod.get_interleavings(np.asarray(box))
     plot2d_PyModule(
         birth_corners,
         death_corners,
@@ -405,9 +405,7 @@ def module_approximation_from_slicer(
             _mp_logs.warn_copy(
                 r"Got a non-vine slicer as an input. Use `vineyard=True` to remove this copy."
             )
-        from multipers._slicer_meta import Slicer
-
-        slicer = Slicer(slicer, vineyard=True, backend="matrix")
+        slicer = slicer.astype(vineyard=True, pers_backend="Matrix")
 
     direction_ = np.ascontiguousarray(direction, dtype=slicer.dtype)
     if box is None:
@@ -573,7 +571,7 @@ def _module_approximation_single_input(
     if np.size(box) == 0:
         if verbose:
             print("No box given. Using filtration bounds to infer it.", flush=True)
-        box = input.filtration_bounds()
+        box = input.filtration_bounds(finite=True)
         if verbose:
             print("Using inferred box.", flush=True)
 
@@ -632,6 +630,8 @@ def module_approximation(
             return (
                 constructor() if constructor is not None else available_pymodules[0]()
             )
+        # Tuple inputs already parallelize over modules; avoid joblib x TBB oversubscription.
+        inner_n_jobs = n_jobs if len(input) == 1 else 1
         modules = tuple(
             Parallel(n_jobs=n_jobs, prefer="threads")(
                 delayed(module_approximation)(
@@ -646,7 +646,7 @@ def module_approximation(
                     ignore_warnings=ignore_warnings,
                     direction=direction,
                     swap_box_coords=swap_box_coords,
-                    n_jobs=n_jobs,
+                    n_jobs=inner_n_jobs,
                 )
                 for slicer in input
             )

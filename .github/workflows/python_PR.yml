@@ -231,6 +231,10 @@ jobs:
           mv wheelhouse/*.whl . # retrieves repaired wheels
         fi
 
+        if [[ "${{ matrix.os }}" == macos-* ]]; then
+          python ../tools/repair_macos_libomp_wheel.py multipers*macosx*.whl
+        fi
+
         cd ..
     - name: Upload sources and wheel
       uses: actions/upload-artifact@v6

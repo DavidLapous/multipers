@@ -59,8 +59,12 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
 
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
+  std::vector<value_type> vertex_filtration(st.num_vertices(), 0);
   for (auto sh : st.complex_simplex_range()) {
-    if (st.dimension(sh) == 0) continue;
+    if (st.dimension(sh) == 0) {
+      vertex_filtration[*st.simplex_vertex_range(sh).begin()] = st.filtration(sh);
+      continue;
+    }
     value_type filtration = st.filtration(sh);
     for (auto node : st.simplex_vertex_range(sh)) {
       edge_filtration_of_nodes[node].push_back(filtration);
@@ -71,19 +75,21 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
     auto &filtrations = edge_filtration_of_nodes[i];
     tbb::parallel_sort(filtrations.begin(), filtrations.end());
     unsigned int node_degree = filtrations.size();
-    filtrations.resize(std::max(num_degrees, node_degree));
+    std::vector<value_type> requested_filtrations(num_degrees);
     for (unsigned int degree_index = 0; degree_index < num_degrees; degree_index++) {
       const int requested_degree = degrees[degree_index];
-      // `degrees` is interpreted as 1-based neighbor degree: degree=1 means
-      // first incident edge, degree=2 means second incident edge, etc.
-      if (requested_degree > 0 && requested_degree <= static_cast<int>(node_degree)) {
-        filtrations[degree_index] = filtrations[requested_degree - 1];
+      // `degrees` is interpreted as the vertex-degree threshold: degree=0
+      // keeps all vertices, degree=1 needs one incident edge, etc.
+      if (requested_degree == 0) {
+        requested_filtrations[degree_index] = vertex_filtration[i];
+      } else if (requested_degree > 0 && requested_degree <= static_cast<int>(node_degree)) {
+        requested_filtrations[degree_index] = filtrations[requested_degree - 1];
       } else {
-        filtrations[degree_index] = std::numeric_limits<value_type>::infinity();
+        requested_filtrations[degree_index] = std::numeric_limits<value_type>::infinity();
       }
-      if constexpr (verbose) std::cout << filtrations[degree_index] << " ";
+      if constexpr (verbose) std::cout << requested_filtrations[degree_index] << " ";
     }
-    filtrations.resize(num_degrees);
+    filtrations = std::move(requested_filtrations);
     std::reverse(filtrations.begin(),
                  filtrations.end());  // degree is in opposite direction
   });
@@ -100,8 +106,6 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
     value_type edge_filtration = st.filtration(*sh_standard);
     // the filtration vector to fill
 
-    std::vector<value_type> edge_degree_rips_filtration(num_degrees, std::numeric_limits<value_type>::infinity());
-
     if constexpr (verbose) {
       std::cout << "\nSetting filtration of edge [";
       for (int node : st.simplex_vertex_range(*sh_standard)) {
@@ -109,31 +113,19 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
       }
       std::cout << "]  to : ";
     }
+    auto &to_update = st_multi.get_filtration_value(*sh_multi);
+    to_update.set_num_generators(num_degrees);
     for (auto degree_index = 0u; degree_index < num_degrees; degree_index++) {
       value_type edge_filtration_of_degree = edge_filtration;  // copy as we do the max with edges of degree index
       for (int node : st.simplex_vertex_range(*sh_standard)) {
         edge_filtration_of_degree = std::max(edge_filtration_of_degree, edge_filtration_of_nodes[node][degree_index]);
       }
 
-      edge_degree_rips_filtration[degree_index] = edge_filtration_of_degree;
-      if (edge_filtration_of_degree == std::numeric_limits<value_type>::infinity()) break;
+      to_update(degree_index, 0) = edge_filtration_of_degree;
     }
 
     if constexpr (verbose) {
-      for (auto k = 0u; k < num_degrees; k++) std::cout << " " << std::to_string(edge_degree_rips_filtration[k]);
-    }
-    // std::reverse(edge_degree_rips_filtration.begin(), edge_degree_rips_filtration.end());
-    auto &to_update = st_multi.get_filtration_value(*sh_multi);
-    if (edge_degree_rips_filtration.size() != num_degrees)
-      throw std::overflow_error("edge_degree_rips of invalid size");
-    to_update.set_num_generators(edge_degree_rips_filtration.size());
-    for (auto k = 0u; k < edge_degree_rips_filtration.size(); k++) {
-      // if (edge_degree_rips_filtration[k] == std::numeric_limits<value_type>::infinity()) {
-      //   to_update.set_num_generators(k);
-      //   break;
-      // }
-
-      to_update(k, 0) = edge_degree_rips_filtration[k];
+      for (auto k = 0u; k < num_degrees; k++) std::cout << " " << std::to_string(to_update(k, 0));
     }
     if constexpr (verbose) std::cout << "\n" << st_multi.get_filtration_value(*sh_multi) << std::endl;
   }
@@ -208,7 +200,7 @@ inline void compute_2d_function_rips(
       for (const auto &bar : barcode) {
         auto birth = bar.first;  // float
         auto death = bar.second;
-        if (birth > I)  // some birth can be infinite
+        if (birth >= I)  // some births are the squeezed infinity sentinel
           continue;
 
         if (!mobius_inverion) {

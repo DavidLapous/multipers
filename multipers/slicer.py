@@ -162,10 +162,13 @@ def _compute_persistence(
         return out[0] if squeeze else out
     self.initialize_persistence_computation(ignore_infinite_filtration_values)
     return self.get_barcode()
-def _filtration_bounds(self):
+def _filtration_bounds(self, finite=False):
     values = np.asarray(self.get_filtrations_values(), dtype=self.dtype)
     if values.size == 0:
         return np.empty((2, 0), dtype=self.dtype)
+    if finite:
+        values = np.where(np.isfinite(values), values, np.nan)
+        return np.asarray([np.nanmin(values, axis=0), np.nanmax(values, axis=0)], dtype=self.dtype)
     return np.asarray([values.min(axis=0), values.max(axis=0)], dtype=self.dtype)
 
 
@@ -608,20 +611,15 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
     grid = self.filtration_grid if grid is None else grid
     grid = sanitize_grid(grid, numpyfy=True, add_inf=inf_overflow)
 
-    num_generators = len(self)
     grid_size = np.array([len(g) for g in grid], dtype=np.int32)
 
     if self.is_kcritical:
-        current_filtration = self.get_filtrations()
-        new_filtrations = tuple(
-            evaluate_in_grid(
-                np.asarray(current_filtration[i], dtype=np.int32).clip(
-                    None, grid_size - 1
-                ),
-                grid,
-            )
-            for i in range(num_generators)
+        indptr, grades_flat = self.get_filtrations(packed=True, raw=True)
+        grades_flat = np.asarray(grades_flat, dtype=np.int32).clip(
+            None, grid_size - 1
         )
+        evaluated_flat = evaluate_in_grid(grades_flat, grid)
+        new_filtrations = np.split(evaluated_flat, indptr[1:-1])
     else:
         filtrations = np.asarray(self.get_filtrations(), dtype=np.int32).clip(
             None, grid_size - 1

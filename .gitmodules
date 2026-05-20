@@ -39,5 +39,5 @@
 	branch = main
 [submodule "ext/gudhi-devel"]
 	path = ext/gudhi-devel
-	url = https://github.com/hschreiber/gudhi-devel
-	branch = multi_persistence
+	url = https://github.com/DavidLapous/gudhi-devel-multi.git
+	branch = feat/optim

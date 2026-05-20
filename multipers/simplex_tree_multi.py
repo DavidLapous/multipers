@@ -818,11 +818,7 @@ def _install_python_api():
 
 _install_python_api()
 
-from multipers._simplextree_algorithms import (  # noqa: E402
-    _euler_signed_measure,
-    _hilbert_signed_measure,
-    _rank_signed_measure,
-)
+from multipers._simplextree_algorithms import _euler_signed_measure  # noqa: E402
 
 __all__ = [
     *(cls.__name__ for cls in available_simplextrees),
@@ -833,6 +829,4 @@ __all__ = [
     "is_simplextree_multi",
     "_available_strategies",
     "_euler_signed_measure",
-    "_hilbert_signed_measure",
-    "_rank_signed_measure",
 ]

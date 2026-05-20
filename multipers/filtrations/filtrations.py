@@ -530,6 +530,7 @@ def DegreeRips(
     squeeze_strategy="exact",
     squeeze_resolution=None,
     squeeze: bool = True,
+    normalize: bool = False,
     verbose: bool = False,
 ):
     """
@@ -546,6 +547,7 @@ def DegreeRips(
                 "distance_matrix" if distance_matrix is not None else "points"
             ),
             "squeeze": squeeze,
+            "normalize": normalize,
         },
     ) as timing:
         import gudhi as gd
@@ -570,6 +572,7 @@ def DegreeRips(
                 api.asnumpy(D), max_filtration=threshold_radius
             )
             rips_filtration = api.unique(D.ravel())
+            num_vertices = D.shape[0]
         else:
             import multipers.array_api.numpy as npapi
 
@@ -580,6 +583,7 @@ def DegreeRips(
             st = simplex_tree
             api = npapi
             rips_filtration = None
+            num_vertices = st.num_vertices()
         timing.substep("built_rips")
 
         if ks is None or rips_filtration is None:
@@ -594,9 +598,9 @@ def DegreeRips(
                     np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
                 )
                 ks = (
-                    np.arange(1, max_degree + 1)
+                    np.arange(0, max_degree + 1)
                     if num is None
-                    else np.unique(np.linspace(1, max_degree, num, dtype=np.int32))
+                    else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
                 )
                 ks = api.copy(api.from_numpy(ks))
             if rips_filtration is None:
@@ -610,10 +614,10 @@ def DegreeRips(
             )
         if ks_np.size == 0:
             raise ValueError("`ks` must contain at least one value.")
-        if np.any(ks_np <= 0):
+        if np.any(ks_np < 0):
             raise ValueError(
-                "`ks` must contain strictly positive degree indices. "
-                "DegreeRips uses 1-based degree indexing."
+                "`ks` must contain nonnegative vertex degree thresholds. "
+                "DegreeRips uses 0-based degree indexing."
             )
         if np.any(ks_np[1:] < ks_np[:-1]):
             raise ValueError("`ks` must be sorted in nondecreasing order.")
@@ -623,11 +627,32 @@ def DegreeRips(
         st_multi = get_degree_rips(st, degrees=ks_np)
         timing.substep("built_degree_rips")
         if squeeze:
-            ks_grid = api.copy(api.from_numpy(ks_np))
-            F = [rips_filtration, api.astype(ks_grid, rips_filtration.dtype)]
-            F = compute_grid(F, strategy=squeeze_strategy, resolution=squeeze_resolution)
-            st_multi = st_multi.grid_squeeze(F)
-            st_multi.filtration_grid = (F[0], F[1] - F[1][-1])  # degrees are negative
+            try:
+                radius_resolution = None if squeeze_resolution is None else squeeze_resolution[0]
+            except TypeError:
+                radius_resolution = squeeze_resolution
+            radius_grid = compute_grid(
+                [rips_filtration],
+                strategy=squeeze_strategy,
+                resolution=radius_resolution,
+            )[0]
+            # Degree_rips_bifiltration stores generators on a compact 0-based
+            # degree axis; requested k-values are only external grid labels.
+            compact_degree_grid = api.astype(
+                api.copy(api.from_numpy(np.arange(ks_np.size, dtype=np.int32))),
+                rips_filtration.dtype,
+            )
+            st_multi = st_multi.grid_squeeze((radius_grid, compact_degree_grid))
+            # Degree threshold axis has opposite order. Keep the exposed grid
+            # sorted from lower to upper, as all filtration grids assume.
+            degree_labels = -ks_np[::-1] / num_vertices if normalize else -ks_np[::-1]
+            st_multi.filtration_grid = (
+                radius_grid,
+                api.astype(
+                    api.copy(api.from_numpy(degree_labels)),
+                    rips_filtration.dtype,
+                ),
+            )
             timing.substep("squeezed_grid")
         return st_multi
 
