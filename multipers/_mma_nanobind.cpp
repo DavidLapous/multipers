@@ -68,8 +68,8 @@ nb::ndarray<nb::numpy, T> corner_pair_to_python(const std::vector<T>& lower, con
 
 template <typename T>
 nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
-  auto births = summand.compute_birth_list();
-  auto deaths = summand.compute_death_list();
+  auto births = summand.compute_flat_upset();
+  auto deaths = summand.compute_flat_downset();
   const size_t num_parameters = static_cast<size_t>(summand.get_number_of_parameters());
   return nb::make_tuple(
       corner_matrix_to_python<T>(
@@ -283,8 +283,8 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
   size_t num_parameters = module.get_box().get_lower_corner().size();
   values.resize(num_parameters);
   for (const auto& summand : module) {
-    auto births = summand.compute_birth_list();
-    auto deaths = summand.compute_death_list();
+    auto births = summand.compute_flat_upset();
+    auto deaths = summand.compute_flat_downset();
     const size_t birth_count = static_cast<size_t>(summand.get_number_of_birth_corners());
     const size_t death_count = static_cast<size_t>(summand.get_number_of_death_corners());
     for (size_t p = 0; p < num_parameters; ++p) {
@@ -605,7 +605,7 @@ void bind_summand_class(nb::module_& m) {
              const size_t num_birth_corners = static_cast<size_t>(self.get_number_of_birth_corners());
              {
                nb::gil_scoped_release release;
-               births = self.compute_birth_list();
+               births = self.compute_flat_upset();
              }
              return corner_matrix_to_python<T>(std::move(births), num_birth_corners, num_parameters);
            })
@@ -616,7 +616,7 @@ void bind_summand_class(nb::module_& m) {
              const size_t num_death_corners = static_cast<size_t>(self.get_number_of_death_corners());
              {
                nb::gil_scoped_release release;
-               deaths = self.compute_death_list();
+               deaths = self.compute_flat_downset();
              }
              return corner_matrix_to_python<T>(std::move(deaths), num_death_corners, num_parameters);
            })
