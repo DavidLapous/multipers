@@ -750,7 +750,7 @@ void bind_module_class(nb::module_& m) {
                 Module c_other = other;
                 {
                   nb::gil_scoped_release release;
-                  for (auto summand : c_other) self.add_summand(summand, dim);
+                  for (const auto& summand : c_other) self.add_summand(summand, dim);
                 }
                 return self;
               },
@@ -758,8 +758,7 @@ void bind_module_class(nb::module_& m) {
               "dim"_a = -1,
               nb::rv_policy::reference_internal)
           .def("permute_summands",
-               // auto cast to nb::ndarray has same effect than np.asarray() for all ArrayLike objects
-               [](Module& self, nb::ndarray<const T, nb::ndim<1>, nb::c_contig, nb::device::cpu> permutation) {
+               [](Module& self, nb::ndarray<const int, nb::ndim<1>, nb::c_contig, nb::device::cpu> permutation) {
                  Module out;
                  {
                    nb::gil_scoped_release release;
@@ -786,7 +785,7 @@ void bind_module_class(nb::module_& m) {
                  {
                    nb::gil_scoped_release release;
                    out.set_box(self.get_box());
-                   for (auto summand : self)
+                   for (const auto& summand : self)
                      if (summand.get_dimension() == degree) out.add_summand(summand);
                  }
                  return out;
@@ -798,7 +797,7 @@ void bind_module_class(nb::module_& m) {
                  {
                    nb::gil_scoped_release release;
                    out.set_box(self.get_box());
-                   for (auto summand : self) {
+                   for (const auto& summand : self) {
                      for (int degree : degrees) {
                        if (degree == summand.get_dimension()) {
                          out.add_summand(summand);
@@ -845,7 +844,7 @@ void bind_module_class(nb::module_& m) {
                   Module c_other = nb::cast<Module&>(item);
                   {
                     nb::gil_scoped_release release;
-                    for (auto summand : c_other) self.add_summand(summand);
+                    for (const auto& summand : c_other) self.add_summand(summand);
                   }
                 }
                 return self;
