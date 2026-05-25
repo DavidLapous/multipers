@@ -34,7 +34,7 @@
 #include "gudhi/Multi_parameter_filtered_complex.h"
 #include "gudhi/slicer_conversion_core.hpp"
 #include "gudhi/slicer_helpers.h"
-#include "gudhi/simple_mdspan.h"
+#include <python_interfaces/numpy_utils.h>
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
 #include "multiparameter_module_approximation/approximation.h"
@@ -307,7 +307,7 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
 template <typename Desc, typename Wrapper, typename Value>
 nb::tuple compute_persistence_on_slices(
     Wrapper& self,
-    const nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig>& values,
+    const nb::ndarray<const Value, nb::ndim<2>, nb::any_contig>& values,
     bool ignore_infinite_filtration_values) {
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
@@ -317,12 +317,12 @@ nb::tuple compute_persistence_on_slices(
     throw nb::value_error("Expected one filtration value per generator.");
   }
   std::vector<Barcode> barcodes(num_slices);
-  const auto* data = values.data();
+  Numpy_2d_span<Value> view(values);
   {
     nb::gil_scoped_release release;
     if constexpr (Desc::is_vine) {
       for (size_t i = 0; i < num_slices; ++i) {
-        self.truc.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
+        self.truc.set_slice(view[i]);
         if (i == 0) {
           self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
         } else {
@@ -337,14 +337,14 @@ nb::tuple compute_persistence_on_slices(
       tbb::parallel_for(size_t(0), num_slices, [&](size_t i) {
         auto& slicer = thread_locals.local();
         tbb::this_task_arena::isolate([&] {
-          slicer.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
+          slicer.set_slice(view[i]);
           slicer.initialize_persistence_computation(ignore_infinite_filtration_values);
           barcodes[i] = slicer.template get_flat_barcode<true, Value, false>();
         });
       });
 #else
       for (size_t i = 0; i < num_slices; ++i) {
-        self.truc.set_slice(Gudhi::Simple_mdspan(data + i * slice_size, slice_size));
+        self.truc.set_slice(view[i]);
         self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
         barcodes[i] = self.truc.template get_flat_barcode<true, Value, false>();
       }
@@ -1868,7 +1868,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def(
           "_compute_persistence_on_slices",
           [](Wrapper& self,
-             nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> values,
+             nb::ndarray<const Value, nb::ndim<2>, nb::any_contig> values,
              bool ignore_infinite_filtration_values) -> nb::tuple {
             return compute_persistence_on_slices<Desc>(self, values, ignore_infinite_filtration_values);
           },

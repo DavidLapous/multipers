@@ -654,6 +654,7 @@ function(multipers_add_nanobind_module module_name)
       ${MULTIPERS_BASE_INCLUDE_DIRS}
   )
   multipers_apply_common_build_flags(${target_name})
+  multipers_link_shared_core(${target_name})
   multipers_configure_module("${module_name}" ${target_name})
 
   set_target_properties(

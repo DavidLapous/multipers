@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <vector>
 
+#include <python_interfaces/numpy_utils.h>
+
 namespace multipers::nanobind_dense_utils {
 
 template <typename T>
@@ -33,6 +35,18 @@ std::vector<std::vector<T>> matrix_from_array(
     for (size_t j = 0; j < array.shape(1); ++j) {
       out[i][j] = view(i, j);
     }
+  }
+  return out;
+}
+
+template <typename T>
+auto non_regular_matrix_from_array(
+    const nanobind::ndarray<nanobind::numpy, const T, nanobind::ndim<2>, nanobind::c_contig>& array) {
+  const auto view = array.view();
+  std::vector<boost::iterator_range<Numpy_array_element_iterator<T> > > out;
+  out.reserve(array.shape(0));  // to avoid non existing constructor
+  for (size_t i = 0; i < array.shape(0); ++i) {
+    out.push_back(make_element_range(&view(i, 0), view));
   }
   return out;
 }
