@@ -4,6 +4,12 @@ set(MULTIPERS_DISABLE_MPFREE_INTERFACE OFF)
 message(STATUS "[mpfree] Set MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE}")
 set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE OFF)
 message(STATUS "[function_delaunay] Set MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE}")
+if(NOT DEFINED MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
+  set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE OFF)
+  message(STATUS "[deg_rips] Defaulted MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE}")
+else()
+  message(STATUS "[deg_rips] Preset MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE}")
+endif()
 set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE OFF)
 message(STATUS "[multi_critical] Set MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=${MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE}")
 set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE OFF)
@@ -16,6 +22,8 @@ if(WIN32)
   message(STATUS "[mpfree] Forced MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
   message(STATUS "[function_delaunay] Forced MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE ON)
+  message(STATUS "[deg_rips] Forced MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE ON)
   message(STATUS "[multi_critical] Forced MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=${MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
@@ -32,6 +40,11 @@ endif()
 if(NOT CGAL_FOUND)
   set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
   message(STATUS "[rhomboid] Set MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE} because CGAL_FOUND=${CGAL_FOUND}")
+endif()
+
+if(NOT EXISTS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include/deg_rips/build_complex.h")
+  set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE ON)
+  message(STATUS "[deg_rips] Set MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE} because deg_rips headers are missing")
 endif()
 
 if(NOT TARGET multipers_2pac_static)
@@ -51,6 +64,7 @@ endif()
 set(MULTIPERS_INTERFACE_DISABLE_FLAGS
   MULTIPERS_DISABLE_MPFREE_INTERFACE
   MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+  MULTIPERS_DISABLE_DEG_RIPS_INTERFACE
   MULTIPERS_DISABLE_2PAC_INTERFACE
   MULTIPERS_DISABLE_AIDA_INTERFACE
   MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
@@ -362,23 +376,30 @@ multipers_add_generated_patch_file(
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"
 )
 
+multipers_add_generated_patch_file(
+  multipers_generate_deg_rips_optimization_patch
+  deg_rips
+  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch"
+  MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE
+  "${CMAKE_SOURCE_DIR}/ext/deg_rips/include/deg_rips/Edge_domination_checker.h"
+)
+
 set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
 set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
 set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
 set(MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_features.patch")
+set(MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch")
 
 multipers_add_refresh_patch_target(
   multipers_refresh_mpfree_log_patch
   mpfree
   "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
 )
-
 multipers_add_refresh_patch_target(
   multipers_refresh_function_delaunay_log_patch
   function_delaunay
   "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
 )
-
 multipers_add_refresh_patch_target(
   multipers_refresh_multi_critical_log_patch
   multi_critical_logs
@@ -388,6 +409,11 @@ multipers_add_refresh_patch_target(
   multipers_refresh_multi_critical_features_patch
   multi_critical_features
   "${MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+)
+multipers_add_refresh_patch_target(
+  multipers_refresh_deg_rips_optimization_patch
+  deg_rips
+  "${MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE}"
 )
 
 add_custom_target(multipers_generate_ext_patches)
@@ -409,6 +435,10 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E compare_files
     "${MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
     "${MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E compare_files
+    "${MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE}"
+    "${MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE}"
   VERBATIM
 )
 add_dependencies(
@@ -417,6 +447,7 @@ add_dependencies(
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
   multipers_generate_multi_critical_features_patch
+  multipers_generate_deg_rips_optimization_patch
 )
 add_dependencies(
   multipers_check_ext_patches
@@ -424,6 +455,7 @@ add_dependencies(
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
   multipers_generate_multi_critical_features_patch
+  multipers_generate_deg_rips_optimization_patch
 )
 
 multipers_add_generated_patch_overlay(
@@ -463,6 +495,18 @@ multipers_add_generated_patch_overlay(
   phat_mod/include
   scc_mod/include
 )
+
+if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
+  multipers_add_generated_patch_overlay(
+    multipers_deg_rips_optimization_overlay
+    deg_rips
+    "${MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE}"
+    ext/deg_rips
+    MULTIPERS_DEG_RIPS_PATCH_OVERLAY_ROOT
+    include
+  )
+  set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "${MULTIPERS_DEG_RIPS_PATCH_OVERLAY_ROOT}/ext/deg_rips/include")
+endif()
 
 set(MULTIPERS_MPFREE_INCLUDE_DIRS
   "${MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT}/ext/mpfree/include"
@@ -512,6 +556,7 @@ target_include_directories(
     ${MULTIPERS_MPFREE_INCLUDE_DIRS}
     ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS}
     ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS}
+    ${MULTIPERS_DEG_RIPS_INCLUDE_DIRS}
     ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS}
     ${MULTIPERS_HERA_INCLUDE_DIRS}
 )
@@ -524,6 +569,9 @@ add_dependencies(
   multipers_function_delaunay_log_overlay
   multipers_multi_critical_log_overlay
 )
+if(TARGET multipers_deg_rips_optimization_overlay)
+  add_dependencies(multipers_nanobind_runtime_obj multipers_deg_rips_optimization_overlay)
+endif()
 
 function(multipers_link_nanobind_runtime target_name)
   add_dependencies(${target_name} multipers_nanobind_runtime_obj)
@@ -583,6 +631,17 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS})
+    endif()
+    set(_use_phat_includes FALSE)
+
+  elseif(module_name STREQUAL "_deg_rips_interface")
+    if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
+      add_dependencies(${target_name} multipers_deg_rips_optimization_overlay)
+      multipers_link_shared_core(${target_name})
+      multipers_link_nanobind_runtime(${target_name})
+      target_link_libraries(${target_name} PRIVATE Boost::system Boost::timer Boost::chrono)
+      multipers_link_tbb(${target_name})
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_DEG_RIPS_INCLUDE_DIRS})
     endif()
     set(_use_phat_includes FALSE)
 
@@ -725,6 +784,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _grid_helper_nanobind
   _mpfree_interface
   _function_delaunay_interface
+  _deg_rips_interface
   _2pac_interface
   _hera_interface
   _multi_critical_interface

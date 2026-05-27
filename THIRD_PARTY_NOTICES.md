@@ -24,6 +24,12 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Commit used in this workspace: `a481f8d90af7a97795c467d81fb3db2cf952a58e`
   - License: GPL-3.0-or-later (see upstream `COPYING`)
 
+- `deg_rips`
+  - Upstream: https://bitbucket.org/mkerber/deg_rips
+  - Header source path used at build time: `ext/deg_rips`
+  - Commit used in this workspace: `72bd1480da902221a862f935450c9a951c3fcf8d`
+  - License: LGPL-3.0-or-later (see upstream `COPYING.LESSER`)
+
 - `rhomboidtiling_newer_cgal_version`
   - Upstream: https://github.com/DavidLapous/rhomboidtiling_newer_cgal_version
   - Header/source path used at build time: `ext/rhomboidtiling_newer_cgal_version`

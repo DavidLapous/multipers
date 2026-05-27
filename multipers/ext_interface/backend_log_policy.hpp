@@ -9,6 +9,7 @@ enum class backend_log_bit : uint32_t {
   multi_critical = 1u << 1,
   function_delaunay = 1u << 2,
   twopac = 1u << 3,
+  deg_rips = 1u << 4,
 };
 
 using backend_log_mask = uint32_t;

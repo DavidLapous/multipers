@@ -41,3 +41,7 @@
 	path = ext/gudhi-devel
 	url = https://github.com/DavidLapous/gudhi-devel-multi.git
 	branch = feat/optim
+[submodule "ext/deg_rips"]
+	path = ext/deg_rips
+	url = https://bitbucket.org/mkerber/deg_rips
+	branch = main

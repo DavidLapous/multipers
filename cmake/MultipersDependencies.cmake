@@ -157,6 +157,12 @@ set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
 )
 
+set(MULTIPERS_DEG_RIPS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/deg_rips" CACHE PATH "Path to a deg_rips source checkout")
+set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "")
+if(EXISTS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include/deg_rips/build_complex.h")
+  set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include")
+endif()
+
 set(MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src"
 )

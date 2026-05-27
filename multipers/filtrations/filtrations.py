@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from importlib.util import find_spec
-from time import perf_counter
 from typing import Optional
 
 import numpy as np
@@ -687,6 +686,8 @@ def DegreeRips(
     distance_matrix=None,
     ks=None,
     threshold_radius=None,
+    backend: str = "multipers",
+    collapse: Optional[int] = None,
     num=None,
     squeeze_strategy="exact",
     squeeze_resolution=None,
@@ -695,20 +696,102 @@ def DegreeRips(
     verbose: bool = False,
 ):
     """
-    The DegreeRips filtration.
+    Build degree-Rips bifiltration of point cloud, distance matrix, or Rips graph.
+
+    This is 2-parameter filtration with:
+
+    - first coordinate = usual Rips scale / edge length threshold,
+    - second coordinate = graph-degree threshold.
+
+    We use convention
+
+    ```
+    D(T)_k = maximum subcomplex of T whose vertices have
+             degree at least k - 1 in the 1-skeleton of T.
+    ```
+
+    Applied to Rips filtration `R(X)`, degree-Rips bifiltration is `DR^u(X) = D(R(X))`.
+    In this API, `ks` uses 0-based degree indexing: `ks=0` keeps all vertices,
+    `ks=1` requires one incident edge, etc. So Python value `j` corresponds to
+    mathematical threshold `k = j + 1` above.
+
+    Returned object is k-critical bifiltered `SimplexTreeMulti` whose degree axis
+    is stored in opposite order internally, then exposed through a sorted
+    `filtration_grid` from lower to upper degree threshold. When `normalize=True`,
+    degree labels are divided by number of vertices.
+
+    Parameters
+    ----------
+    simplex_tree:
+        Optional 1-parameter Gudhi `SimplexTree` used as Rips input. Only
+        supported by backend=`"multipers"`.
+    points:
+        Point cloud. Used to build pairwise distances when `distance_matrix` and
+        `simplex_tree` are not provided.
+    distance_matrix:
+        Square pairwise distance matrix.
+    ks:
+        Sorted nonnegative degree thresholds. If omitted, thresholds are inferred
+        from input Rips graph for backend=`"multipers"`, or when `num` requests a
+        sampled subset.
+    threshold_radius:
+        Maximal Rips edge length. Defaults to `min_i max_j D[i,j]`, matching
+        other Rips constructors in this module.
+    backend:
+        `"multipers"` uses existing degree-Rips construction from
+        `multipers.function_rips`. `"deg_rips"` uses native deg_rips backend and
+        currently accepts only `points` or `distance_matrix` inputs.
+    collapse:
+        If set, force backend=`"deg_rips"` and run that many whole-edge and
+        edge-copy filtration-domination reduction passes before clique expansion.
+        This follows filtration-domination pruning from Alonso, Kerber, and
+        Pritam, "Filtration-Domination in Bifiltered Graphs" (ALENEX 2023,
+        doi:10.1137/1.9781611977561.ch3).
+    num:
+        When `ks` is omitted, sample `num` thresholds between `0` and maximal
+        graph degree instead of using full range.
+    squeeze_strategy, squeeze_resolution, squeeze:
+        Control optional grid squeezing of returned bifiltration.
+    normalize:
+        Rescale exposed degree-axis labels by number of vertices.
+    verbose:
+        Emit timing / backend logs.
+
+    Notes
+    -----
+    Degree-Rips is often much smaller than subdivision-based density-sensitive
+    bifiltrations. A fixed `m`-skeleton has size `O(|X|^{m + 2})`, and after
+    coarsening to a constant-size grid this becomes `O(|X|^{m + 1})`.
+
+    The `"deg_rips"` backend wraps upstream project:
+    https://bitbucket.org/mkerber/deg_rips
     """
+
+    if collapse is not None:
+        if collapse < 0:
+            raise ValueError("`collapse` must be nonnegative or None.")
+        backend = "deg_rips"
+
+    backend = str(backend).lower()
+    if backend not in {"multipers", "deg_rips"}:
+        raise ValueError(
+            f"Invalid DegreeRips backend {backend!r}. Expected 'multipers' or 'deg_rips'."
+        )
+    if backend == "deg_rips" and simplex_tree is not None:
+        raise ValueError("The 'deg_rips' DegreeRips backend only supports points= or distance_matrix= for now.")
 
     with _mp_logs.timings(
         "DegreeRips",
         enabled=verbose,
         details={
-            "backend": "gudhi",
+            "backend": backend,
             "mode": "python",
             "input": "simplex_tree" if simplex_tree is not None else (
                 "distance_matrix" if distance_matrix is not None else "points"
             ),
             "squeeze": squeeze,
             "normalize": normalize,
+            "collapse": collapse,
         },
     ) as timing:
         import gudhi as gd
@@ -730,7 +813,7 @@ def DegreeRips(
             if threshold_radius is None:
                 threshold_radius = api.min(api.maxvalues(D, axis=1))
             st = gd.SimplexTree.create_from_array(
-                api.asnumpy(D), max_filtration=threshold_radius
+                api.asnumpy(D), max_filtration=float(threshold_radius)
             )
             rips_filtration = api.unique(D.ravel())
             num_vertices = D.shape[0]
@@ -747,14 +830,16 @@ def DegreeRips(
             num_vertices = st.num_vertices()
         timing.substep("built_rips")
 
-        if ks is None or rips_filtration is None:
+        should_infer_ks = ks is None and (backend == "multipers" or num is not None)
+        should_recover_rips_filtration = rips_filtration is None
+        if should_infer_ks or should_recover_rips_filtration:
             _mp_logs.warn_copy(
                 "Had to copy the rips to infer the `degrees` or recover the 1st filtration parameter."
             )
             _temp_st = SimplexTreeMulti(
                 st, num_parameters=1
             )  # Gudhi is missing some functionality
-            if ks is None:
+            if should_infer_ks:
                 max_degree = (
                     np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
                 )
@@ -764,28 +849,57 @@ def DegreeRips(
                     else np.unique(np.linspace(0, max_degree, num, dtype=np.int32))
                 )
                 ks = api.copy(api.from_numpy(ks))
-            if rips_filtration is None:
+            if should_recover_rips_filtration:
                 rips_filtration = compute_grid(_temp_st)[0]
             timing.substep("recovered_degree_axis")
 
-        ks_np = np.asarray(ks, dtype=np.int32)
-        if ks_np.ndim != 1:
-            raise ValueError(
-                f"`ks` must be a 1D sequence of positive sorted integers. Got shape {ks_np.shape}."
-            )
-        if ks_np.size == 0:
-            raise ValueError("`ks` must contain at least one value.")
-        if np.any(ks_np < 0):
-            raise ValueError(
-                "`ks` must contain nonnegative vertex degree thresholds. "
-                "DegreeRips uses 0-based degree indexing."
-            )
-        if np.any(ks_np[1:] < ks_np[:-1]):
-            raise ValueError("`ks` must be sorted in nondecreasing order.")
+        if ks is None:
+            ks_np = None
+        else:
+            ks_np = np.asarray(ks, dtype=np.int32)
+            if ks_np.ndim != 1:
+                raise ValueError(
+                    f"`ks` must be a 1D sequence of positive sorted integers. Got shape {ks_np.shape}."
+                )
+            if ks_np.size == 0:
+                raise ValueError("`ks` must contain at least one value.")
+            if np.any(ks_np < 0):
+                raise ValueError(
+                    "`ks` must contain nonnegative vertex degree thresholds. "
+                    "DegreeRips uses 0-based degree indexing."
+                )
+            if np.any(ks_np[1:] < ks_np[:-1]):
+                raise ValueError("`ks` must be sorted in nondecreasing order.")
 
-        from multipers.function_rips import get_degree_rips
+        if backend == "multipers":
+            from multipers.function_rips import get_degree_rips
 
-        st_multi = get_degree_rips(st, degrees=ks_np)
+            assert ks_np is not None
+            st_multi = get_degree_rips(st, degrees=ks_np)
+        else:
+            import multipers._deg_rips_interface as _deg_rips_interface
+
+            _deg_rips_interface.require()
+            st_multi = SimplexTreeMulti(
+                num_parameters=2,
+                dtype=np.float64,
+                kcritical=True,
+                ftype="Contiguous",
+            )
+            _deg_rips_interface.degree_rips_to_simplextree(
+                st_multi,
+                np.ascontiguousarray(api.asnumpy(D), dtype=np.float64),
+                None if ks_np is None else np.ascontiguousarray(ks_np, dtype=np.int32),
+                threshold_radius=float(threshold_radius),
+                vanilla=collapse is None,
+                vertex_domination=collapse is not None,
+                whole_edge_iterations=0 if collapse is None else collapse,
+                edge_copy_iterations=0 if collapse is None else collapse,
+                use_domination_for_whole_edge_removal=collapse is not None,
+                use_domination_for_edge_copy_removal=collapse is not None,
+                min_scale=0.0,
+                verbose=verbose,
+            )
         timing.substep("built_degree_rips")
         if squeeze:
             try:
@@ -797,23 +911,53 @@ def DegreeRips(
                 strategy=squeeze_strategy,
                 resolution=radius_resolution,
             )[0]
-            # Degree_rips_bifiltration stores generators on a compact 0-based
-            # degree axis; requested k-values are only external grid labels.
-            compact_degree_grid = api.astype(
-                api.copy(api.from_numpy(np.arange(ks_np.size, dtype=np.int32))),
+            if backend == "multipers":
+                # Degree_rips_bifiltration stores generators on a compact 0-based
+                # degree axis; requested k-values are only external grid labels.
+                degree_grid = np.arange(ks_np.size, dtype=np.int32)
+                degree_labels = -ks_np[::-1] / num_vertices if normalize else -ks_np[::-1]
+            elif ks_np is None:
+                degree_values = []
+                for _, filtration in st_multi.get_skeleton(1):
+                    filtration = np.asarray(filtration, dtype=np.float64).reshape(-1, 2)
+                    if filtration.size:
+                        degree_values.append(filtration[:, 1])
+                degree_grid = (
+                    np.unique(np.concatenate(degree_values))
+                    if degree_values
+                    else np.asarray([], dtype=np.float64)
+                )
+                degree_labels = degree_grid / num_vertices if normalize else degree_grid
+            else:
+                degree_grid = -ks_np[::-1]
+                degree_labels = degree_grid / num_vertices if normalize else degree_grid
+            squeeze_degree_grid = api.astype(
+                api.copy(api.from_numpy(degree_grid)),
                 rips_filtration.dtype,
             )
-            st_multi = st_multi.grid_squeeze((radius_grid, compact_degree_grid))
+            st_multi = st_multi.grid_squeeze((radius_grid, squeeze_degree_grid))
             # Degree threshold axis has opposite order. Keep the exposed grid
             # sorted from lower to upper, as all filtration grids assume.
-            degree_labels = -ks_np[::-1] / num_vertices if normalize else -ks_np[::-1]
-            st_multi.filtration_grid = (
+            filtration_grid = (
                 radius_grid,
                 api.astype(
                     api.copy(api.from_numpy(degree_labels)),
                     rips_filtration.dtype,
                 ),
             )
+            st_multi.filtration_grid = filtration_grid
+            if backend == "deg_rips":
+                # Convert through native SimplexTreeMulti interface copy instead of
+                # replaying every simplex in Python. After `grid_squeeze`, degree
+                # axis already uses compact coordinates, so Flat storage matches.
+                st_multi = SimplexTreeMulti(
+                    st_multi,
+                    num_parameters=2,
+                    dtype=np.float64,
+                    kcritical=True,
+                    ftype="Flat",
+                )
+                st_multi.filtration_grid = filtration_grid
             timing.substep("squeezed_grid")
         return st_multi
 
