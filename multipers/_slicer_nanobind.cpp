@@ -1312,7 +1312,7 @@ Wrapper construct_kcritical_from_ptr(intptr_t input_ptr) {
   }
 
   const size_t num_generators = input_bridge->dimensions.size();
-  if (input_bridge->boundaries.size() != num_generators || input_bridge->grade_indptr.size() != num_generators + 1) {
+  if (input_bridge->boundary_size() != num_generators || input_bridge->grade_indptr.size() != num_generators + 1) {
     throw std::runtime_error("Invalid packed bridge input, shape do not coincide.");
   }
   if (input_bridge->grade_indptr.empty()) {
@@ -1363,6 +1363,14 @@ Wrapper construct_kcritical_from_ptr(intptr_t input_ptr) {
       filtrations.push_back(std::move(filtration));
     }
 
+    // Reconstruct jagged boundaries from CSR if CSR mode was used.
+    if (input_bridge->boundaries.empty() && !input_bridge->csr_boundaries_indptr.empty()) {
+      input_bridge->boundaries.resize(input_bridge->boundary_size());
+      for (std::size_t i = 0; i < input_bridge->boundary_size(); ++i) {
+        auto rv = input_bridge->boundary_row(i);
+        input_bridge->boundaries[i].assign(rv.data, rv.data + rv.size);
+      }
+    }
     Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
         std::move(input_bridge->boundaries), std::move(dims), std::move(filtrations));
     out.truc = Concrete(std::move(cpx));

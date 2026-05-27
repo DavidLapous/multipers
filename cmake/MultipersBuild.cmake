@@ -352,9 +352,20 @@ multipers_add_generated_patch_file(
   "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
 )
 
+multipers_add_generated_patch_file(
+  multipers_generate_multi_critical_features_patch
+  multi_critical_features
+  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_features.patch"
+  MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/free_resolution.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h"
+  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"
+)
+
 set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
 set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
 set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
+set(MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_features.patch")
 
 multipers_add_refresh_patch_target(
   multipers_refresh_mpfree_log_patch
@@ -373,6 +384,11 @@ multipers_add_refresh_patch_target(
   multi_critical_logs
   "${MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE}"
 )
+multipers_add_refresh_patch_target(
+  multipers_refresh_multi_critical_features_patch
+  multi_critical_features
+  "${MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+)
 
 add_custom_target(multipers_generate_ext_patches)
 add_custom_target(
@@ -389,6 +405,10 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E compare_files
     "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
     "${MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E compare_files
+    "${MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+    "${MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
   VERBATIM
 )
 add_dependencies(
@@ -396,12 +416,14 @@ add_dependencies(
   multipers_generate_mpfree_log_patch
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
+  multipers_generate_multi_critical_features_patch
 )
 add_dependencies(
   multipers_check_ext_patches
   multipers_generate_mpfree_log_patch
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
+  multipers_generate_multi_critical_features_patch
 )
 
 multipers_add_generated_patch_overlay(
@@ -424,16 +446,21 @@ multipers_add_generated_patch_overlay(
   multi_chunk_mod/include
 )
 
+set(_multi_critical_patches
+  "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
+  "${MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+)
 multipers_add_generated_patch_overlay(
   multipers_multi_critical_log_overlay
   multi_critical
-  "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
+  "${_multi_critical_patches}"
   ext/multi_critical
   MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
   include
   mpfree_mod/include
   mpp_utils_mod/include
   multi_chunk_mod/include
+  phat_mod/include
   scc_mod/include
 )
 
@@ -458,7 +485,7 @@ set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpfree_mod/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpp_utils_mod/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/multi_chunk_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/phat_mod/include"
+  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/phat_mod/include"
   "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/scc_mod/include"
 )
 
