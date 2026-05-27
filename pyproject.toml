@@ -481,7 +481,7 @@ include = [
   "ext/multi_critical/scc_mod/include/scc/Scc.h",
   "ext/multi_critical/scc_mod/include/scc/basic.h",
   "ext/patches/function_delaunay_runtime_logs.patch",
-  "ext/patches/generate_log_patch.py",
+  "ext/patches/generate_ext_patches.py",
   "ext/patches/mpfree_runtime_logs.patch",
   "ext/patches/multi_critical_runtime_logs.patch",
   "ext/phat/include/phat/representations/bit_tree_pivot_column.h",

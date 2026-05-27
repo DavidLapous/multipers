@@ -13,8 +13,13 @@ endif()
 if(NOT DEFINED SUBDIRS)
   message(FATAL_ERROR "ApplyExtPatchOverlay.cmake needs SUBDIRS")
 endif()
-if(NOT DEFINED PATCH_FILE)
-  message(FATAL_ERROR "ApplyExtPatchOverlay.cmake needs PATCH_FILE")
+if(NOT DEFINED PATCH_FILES)
+  message(FATAL_ERROR "ApplyExtPatchOverlay.cmake needs PATCH_FILES")
+endif()
+string(REPLACE "::" ";" PATCH_FILES "${PATCH_FILES}")
+list(LENGTH PATCH_FILES _num_patches)
+if(_num_patches EQUAL 0)
+  message(FATAL_ERROR "ApplyExtPatchOverlay.cmake needs at least one PATCH_FILE")
 endif()
 if(NOT DEFINED PATCH_EXECUTABLE)
   message(FATAL_ERROR "ApplyExtPatchOverlay.cmake needs PATCH_EXECUTABLE")
@@ -40,16 +45,18 @@ foreach(subdir IN LISTS SUBDIRS)
   file(COPY "${_src}" DESTINATION "${_dst_parent}")
 endforeach()
 
-execute_process(
-  COMMAND "${PATCH_EXECUTABLE}" -p1 -i "${PATCH_FILE}"
-  WORKING_DIRECTORY "${OVERLAY_ROOT}"
-  RESULT_VARIABLE patch_result
-  OUTPUT_VARIABLE patch_stdout
-  ERROR_VARIABLE patch_stderr
-)
-if(NOT patch_result EQUAL 0)
-  message(FATAL_ERROR
-    "Failed to apply ${LIBRARY_NAME} runtime log patch.\nstdout:\n${patch_stdout}\nstderr:\n${patch_stderr}")
-endif()
+foreach(patch_file IN LISTS PATCH_FILES)
+  execute_process(
+    COMMAND "${PATCH_EXECUTABLE}" -p1 -i "${patch_file}"
+    WORKING_DIRECTORY "${OVERLAY_ROOT}"
+    RESULT_VARIABLE patch_result
+    OUTPUT_VARIABLE patch_stdout
+    ERROR_VARIABLE patch_stderr
+  )
+  if(NOT patch_result EQUAL 0)
+    message(FATAL_ERROR
+      "Failed to apply ${LIBRARY_NAME} patch ${patch_file}.\nstdout:\n${patch_stdout}\nstderr:\n${patch_stderr}")
+  endif()
+endforeach()
 
-file(WRITE "${STAMP_FILE}" "${LIBRARY_NAME} runtime log overlay ready\n")
+file(WRITE "${STAMP_FILE}" "${LIBRARY_NAME} patch overlay ready\n")
