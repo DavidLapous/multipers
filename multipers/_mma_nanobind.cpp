@@ -422,8 +422,8 @@ nb::tuple to_flat_idx_impl(const Gudhi::multi_persistence::Module<T>& module, co
       birth_sizes.push_back(static_cast<int32_t>(summand.get_number_of_birth_corners()));
       death_sizes.push_back(static_cast<int32_t>(summand.get_number_of_death_corners()));
 
-      auto births = summand.compute_birth_list();
-      auto deaths = summand.compute_death_list();
+      auto births = summand.compute_flat_upset();
+      auto deaths = summand.compute_flat_downset();
       flat_births.insert(flat_births.end(), births.begin(), births.end());
       flat_deaths.insert(flat_deaths.end(), deaths.begin(), deaths.end());
     }
