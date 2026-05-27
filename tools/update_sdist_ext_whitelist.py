@@ -68,6 +68,21 @@ def _config_only_ext_files(root: Path) -> set[str]:
     return {path for path in required if (root / path).is_file()}
 
 
+def _ninja_dry_run_has_pending_work(output: str) -> bool:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or line == "ninja: no work to do.":
+            continue
+        if line.startswith("ninja: Entering directory"):
+            continue
+        if "Re-checking globbed directories" in line:
+            continue
+        if "Re-running CMake" in line:
+            continue
+        return True
+    return False
+
+
 def _required_ext_files(root: Path) -> set[str]:
     build_dir = root / "build"
     if not (build_dir / ".ninja_deps").is_file():
@@ -83,10 +98,10 @@ def _required_ext_files(root: Path) -> set[str]:
         raise RuntimeError("Could not find `ninja` on PATH") from exc
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(f"`ninja -C build -n` failed:\n{exc.output}") from exc
-    if "no work to do" not in dry_run_output.lower():
+    if _ninja_dry_run_has_pending_work(dry_run_output):
         raise RuntimeError(
             "Build tree is not up to date. Run a clean full build before updating "
-            "the sdist ext whitelist."
+            f"the sdist ext whitelist.\nPending dry-run output:\n{dry_run_output}"
         )
 
     try:
