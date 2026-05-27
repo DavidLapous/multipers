@@ -1,21 +1,26 @@
 include_guard(GLOBAL)
 
-set(MULTIPERS_DISABLE_MPFREE_INTERFACE OFF)
-message(STATUS "[mpfree] Set MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE}")
-set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE OFF)
-message(STATUS "[function_delaunay] Set MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE}")
+function(multipers_default_disable_flag backend_name flag_name)
+  if(NOT DEFINED ${flag_name})
+    set(${flag_name} OFF)
+    message(STATUS "[${backend_name}] Defaulted ${flag_name}=${${flag_name}}")
+  else()
+    message(STATUS "[${backend_name}] Preset ${flag_name}=${${flag_name}}")
+  endif()
+  set(${flag_name} "${${flag_name}}" PARENT_SCOPE)
+endfunction()
+
+multipers_default_disable_flag("mpfree" MULTIPERS_DISABLE_MPFREE_INTERFACE)
+multipers_default_disable_flag("function_delaunay" MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
 if(NOT DEFINED MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
   set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE OFF)
   message(STATUS "[deg_rips] Defaulted MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE}")
 else()
   message(STATUS "[deg_rips] Preset MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE}")
 endif()
-set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE OFF)
-message(STATUS "[multi_critical] Set MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=${MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE}")
-set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE OFF)
-message(STATUS "[rhomboid] Set MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE}")
-set(MULTIPERS_DISABLE_HERA_INTERFACE OFF)
-message(STATUS "[hera] Set MULTIPERS_DISABLE_HERA_INTERFACE=${MULTIPERS_DISABLE_HERA_INTERFACE}")
+multipers_default_disable_flag("multi_critical" MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
+multipers_default_disable_flag("rhomboid" MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE)
+multipers_default_disable_flag("hera" MULTIPERS_DISABLE_HERA_INTERFACE)
 
 if(WIN32)
   set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
@@ -47,6 +52,26 @@ if(NOT EXISTS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include/deg_rips/build_complex.h
   message(STATUS "[deg_rips] Set MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE} because deg_rips headers are missing")
 endif()
 
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/mpfree.h")
+  set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
+  message(STATUS "[mpfree] Set MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE} because mpfree headers are missing")
+endif()
+
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h")
+  set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
+  message(STATUS "[function_delaunay] Set MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE} because function_delaunay headers are missing")
+endif()
+
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h")
+  set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE ON)
+  message(STATUS "[multi_critical] Set MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE=${MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE} because multi_critical headers are missing")
+endif()
+
+if(NOT EXISTS "${MULTIPERS_HERA_SOURCE_DIR}/include/hera/matching_distance.h")
+  set(MULTIPERS_DISABLE_HERA_INTERFACE ON)
+  message(STATUS "[hera] Set MULTIPERS_DISABLE_HERA_INTERFACE=${MULTIPERS_DISABLE_HERA_INTERFACE} because Hera headers are missing")
+endif()
+
 if(NOT TARGET multipers_2pac_static)
   set(MULTIPERS_DISABLE_2PAC_INTERFACE ON)
   message(STATUS "[2pac] Set MULTIPERS_DISABLE_2PAC_INTERFACE=${MULTIPERS_DISABLE_2PAC_INTERFACE} because multipers_2pac_static is missing")
@@ -59,6 +84,13 @@ if(NOT TARGET multipers_aida_static)
   message(STATUS "[aida] Set MULTIPERS_DISABLE_AIDA_INTERFACE=${MULTIPERS_DISABLE_AIDA_INTERFACE} because multipers_aida_static is missing")
 else()
   message(STATUS "[aida] multipers_aida_static target is available")
+endif()
+
+if(NOT TARGET multipers_rhomboid_tiling_static)
+  set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
+  message(STATUS "[rhomboid] Set MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE} because multipers_rhomboid_tiling_static is missing")
+else()
+  message(STATUS "[rhomboid] multipers_rhomboid_tiling_static target is available")
 endif()
 
 set(MULTIPERS_INTERFACE_DISABLE_FLAGS
@@ -266,6 +298,11 @@ find_program(MULTIPERS_PATCH_EXECUTABLE patch REQUIRED)
 set(MULTIPERS_EXT_PATCH_DIR "${CMAKE_SOURCE_DIR}/ext/patches")
 set(MULTIPERS_GENERATED_EXT_PATCH_DIR "${CMAKE_BINARY_DIR}/generated_ext_patches")
 set(MULTIPERS_EXT_PATCH_GENERATOR "${MULTIPERS_EXT_PATCH_DIR}/generate_ext_patches.py")
+set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
+set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
+set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
+set(MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_features.patch")
+set(MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch")
 
 function(multipers_add_generated_patch_file target_name library_name output_path output_var)
   get_filename_component(_patch_dir "${output_path}" DIRECTORY)
@@ -285,6 +322,18 @@ function(multipers_add_generated_patch_file target_name library_name output_path
     VERBATIM
   )
   add_custom_target(${target_name} DEPENDS "${output_path}")
+  set(${output_var} "${output_path}" PARENT_SCOPE)
+endfunction()
+
+function(multipers_add_passthrough_patch_file target_name source_path output_path output_var)
+  get_filename_component(_patch_dir "${output_path}" DIRECTORY)
+  add_custom_target(
+    ${target_name}
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_patch_dir}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${source_path}" "${output_path}"
+    BYPRODUCTS "${output_path}"
+    VERBATIM
+  )
   set(${output_var} "${output_path}" PARENT_SCOPE)
 endfunction()
 
@@ -338,57 +387,92 @@ file(
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/*.h"
 )
 
-multipers_add_generated_patch_file(
-  multipers_generate_mpfree_log_patch
-  mpfree
-  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/mpfree_runtime_logs.patch"
-  MULTIPERS_MPFREE_LOG_PATCH_FILE
-  "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/global.h"
-)
+if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
+  multipers_add_generated_patch_file(
+    multipers_generate_mpfree_log_patch
+    mpfree
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/mpfree_runtime_logs.patch"
+    MULTIPERS_MPFREE_LOG_PATCH_FILE
+    "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/global.h"
+  )
+else()
+  multipers_add_passthrough_patch_file(
+    multipers_generate_mpfree_log_patch
+    "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/mpfree_runtime_logs.patch"
+    MULTIPERS_MPFREE_LOG_PATCH_FILE
+  )
+endif()
 
-multipers_add_generated_patch_file(
-  multipers_generate_function_delaunay_log_patch
-  function_delaunay
-  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch"
-  MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE
-  ${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_INPUTS}
-  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpfree_mod/include/mpfree/global.h"
-  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/multi_chunk_mod/include/multi_chunk/basic.h"
-)
+if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
+  multipers_add_generated_patch_file(
+    multipers_generate_function_delaunay_log_patch
+    function_delaunay
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch"
+    MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE
+    ${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_INPUTS}
+    "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpfree_mod/include/mpfree/global.h"
+    "${CMAKE_SOURCE_DIR}/ext/function_delaunay/multi_chunk_mod/include/multi_chunk/basic.h"
+  )
+else()
+  multipers_add_passthrough_patch_file(
+    multipers_generate_function_delaunay_log_patch
+    "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch"
+    MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE
+  )
+endif()
 
-multipers_add_generated_patch_file(
-  multipers_generate_multi_critical_log_patch
-  multi_critical_logs
-  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch"
-  MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include/mpfree/global.h"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
-)
+if(NOT MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
+  multipers_add_generated_patch_file(
+    multipers_generate_multi_critical_log_patch
+    multi_critical_logs
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch"
+    MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h"
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpfree_mod/include/mpfree/global.h"
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/scc_mod/include/scc/basic.h"
+  )
+  multipers_add_generated_patch_file(
+    multipers_generate_multi_critical_features_patch
+    multi_critical_features
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_features.patch"
+    MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/free_resolution.h"
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h"
+    "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"
+  )
+else()
+  multipers_add_passthrough_patch_file(
+    multipers_generate_multi_critical_log_patch
+    "${MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE}"
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch"
+    MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE
+  )
+  multipers_add_passthrough_patch_file(
+    multipers_generate_multi_critical_features_patch
+    "${MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_features.patch"
+    MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE
+  )
+endif()
 
-multipers_add_generated_patch_file(
-  multipers_generate_multi_critical_features_patch
-  multi_critical_features
-  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/multi_critical_features.patch"
-  MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/free_resolution.h"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h"
-  "${CMAKE_SOURCE_DIR}/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h"
-)
-
-multipers_add_generated_patch_file(
-  multipers_generate_deg_rips_optimization_patch
-  deg_rips
-  "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch"
-  MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE
-  "${CMAKE_SOURCE_DIR}/ext/deg_rips/include/deg_rips/Edge_domination_checker.h"
-)
-
-set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
-set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
-set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
-set(MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_features.patch")
-set(MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch")
+if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
+  multipers_add_generated_patch_file(
+    multipers_generate_deg_rips_optimization_patch
+    deg_rips
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch"
+    MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE
+    "${CMAKE_SOURCE_DIR}/ext/deg_rips/include/deg_rips/Edge_domination_checker.h"
+  )
+else()
+  multipers_add_passthrough_patch_file(
+    multipers_generate_deg_rips_optimization_patch
+    "${MULTIPERS_TRACKED_DEG_RIPS_OPTIMIZATION_PATCH_FILE}"
+    "${MULTIPERS_GENERATED_EXT_PATCH_DIR}/deg_rips_edge_copy_reducer.patch"
+    MULTIPERS_DEG_RIPS_OPTIMIZATION_PATCH_FILE
+  )
+endif()
 
 multipers_add_refresh_patch_target(
   multipers_refresh_mpfree_log_patch
@@ -458,43 +542,55 @@ add_dependencies(
   multipers_generate_deg_rips_optimization_patch
 )
 
-multipers_add_generated_patch_overlay(
-  multipers_mpfree_log_overlay
-  mpfree
-  "${MULTIPERS_MPFREE_LOG_PATCH_FILE}"
-  ext/mpfree
-  MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT
-  include
-)
+if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
+  multipers_add_generated_patch_overlay(
+    multipers_mpfree_log_overlay
+    mpfree
+    "${MULTIPERS_MPFREE_LOG_PATCH_FILE}"
+    ext/mpfree
+    MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT
+    include
+  )
+else()
+  add_custom_target(multipers_mpfree_log_overlay)
+endif()
 
-multipers_add_generated_patch_overlay(
-  multipers_function_delaunay_log_overlay
-  function_delaunay
-  "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
-  ext/function_delaunay
-  MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
-  include
-  mpfree_mod/include
-  multi_chunk_mod/include
-)
+if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
+  multipers_add_generated_patch_overlay(
+    multipers_function_delaunay_log_overlay
+    function_delaunay
+    "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
+    ext/function_delaunay
+    MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
+    include
+    mpfree_mod/include
+    multi_chunk_mod/include
+  )
+else()
+  add_custom_target(multipers_function_delaunay_log_overlay)
+endif()
 
-set(_multi_critical_patches
-  "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
-  "${MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
-)
-multipers_add_generated_patch_overlay(
-  multipers_multi_critical_log_overlay
-  multi_critical
-  "${_multi_critical_patches}"
-  ext/multi_critical
-  MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
-  include
-  mpfree_mod/include
-  mpp_utils_mod/include
-  multi_chunk_mod/include
-  phat_mod/include
-  scc_mod/include
-)
+if(NOT MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
+  set(_multi_critical_patches
+    "${MULTIPERS_MULTI_CRITICAL_LOG_PATCH_FILE}"
+    "${MULTIPERS_MULTI_CRITICAL_FEATURES_PATCH_FILE}"
+  )
+  multipers_add_generated_patch_overlay(
+    multipers_multi_critical_log_overlay
+    multi_critical
+    "${_multi_critical_patches}"
+    ext/multi_critical
+    MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT
+    include
+    mpfree_mod/include
+    mpp_utils_mod/include
+    multi_chunk_mod/include
+    phat_mod/include
+    scc_mod/include
+  )
+else()
+  add_custom_target(multipers_multi_critical_log_overlay)
+endif()
 
 if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
   multipers_add_generated_patch_overlay(
@@ -508,30 +604,39 @@ if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
   set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "${MULTIPERS_DEG_RIPS_PATCH_OVERLAY_ROOT}/ext/deg_rips/include")
 endif()
 
-set(MULTIPERS_MPFREE_INCLUDE_DIRS
-  "${MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT}/ext/mpfree/include"
-  "${CMAKE_SOURCE_DIR}/ext/mpfree/mpp_utils_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/mpfree/phat_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/mpfree/scc_mod/include"
-)
+set(MULTIPERS_MPFREE_INCLUDE_DIRS "")
+if(NOT MULTIPERS_DISABLE_MPFREE_INTERFACE)
+  set(MULTIPERS_MPFREE_INCLUDE_DIRS
+    "${MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT}/ext/mpfree/include"
+    "${CMAKE_SOURCE_DIR}/ext/mpfree/mpp_utils_mod/include"
+    "${CMAKE_SOURCE_DIR}/ext/mpfree/phat_mod/include"
+    "${CMAKE_SOURCE_DIR}/ext/mpfree/scc_mod/include"
+  )
+endif()
 
-set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
-  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/include"
-  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/mpfree_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpp_utils_mod/include"
-  "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/multi_chunk_mod/include"
-  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/phat/include"
-  "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
-)
+set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS "")
+if(NOT MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
+  set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
+    "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/include"
+    "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/mpfree_mod/include"
+    "${CMAKE_SOURCE_DIR}/ext/function_delaunay/mpp_utils_mod/include"
+    "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/multi_chunk_mod/include"
+    "${CMAKE_SOURCE_DIR}/ext/function_delaunay/phat/include"
+    "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
+  )
+endif()
 
-set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/include"
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpfree_mod/include"
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpp_utils_mod/include"
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/multi_chunk_mod/include"
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/phat_mod/include"
-  "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/scc_mod/include"
-)
+set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS "")
+if(NOT MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
+  set(MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/include"
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpfree_mod/include"
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/mpp_utils_mod/include"
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/multi_chunk_mod/include"
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/phat_mod/include"
+    "${MULTIPERS_MULTI_CRITICAL_PATCH_OVERLAY_ROOT}/ext/multi_critical/scc_mod/include"
+  )
+endif()
 
 function(multipers_link_shared_core target_name)
   target_link_libraries(${target_name} PRIVATE multipers_core_shared)

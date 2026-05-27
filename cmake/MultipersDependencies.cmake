@@ -224,7 +224,7 @@ else()
   )
 endif()
 
-if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
+if(NOT MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE AND CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
   add_library(
     multipers_rhomboid_tiling_static
     STATIC
@@ -238,10 +238,13 @@ if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_vers
   endif()
   message(STATUS "[rhomboid] Created multipers_rhomboid_tiling_static")
 else()
-  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: CGAL_FOUND=${CGAL_FOUND}")
+  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: disable=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE}, CGAL_FOUND=${CGAL_FOUND}")
 endif()
 
-if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
+if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/src/aida_decompose.cpp"
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/include/aida_interface.hpp"
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include/grlina/graded_matrix.hpp")
   add_library(
     multipers_aida_static
     STATIC
