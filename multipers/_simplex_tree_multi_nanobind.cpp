@@ -375,7 +375,7 @@ void bind_insert_batch_overloads(Class& cls) {
           auto simplices = simplices_from_vertex_array(vertex_array);
           const bool empty_filtration = filtrations.shape(0) == 0 || filtrations.shape(1) == 0;
           if (!empty_filtration && filtrations.shape(0) != simplices.num_simplices) {
-            throw std::runtime_error("Invalid filtration batch shape.");
+            throw std::runtime_error("Invalid filtration batch shape for 1-critical filtration. Got (" + std::to_string(filtrations.shape(0)) + ", " + std::to_string(filtrations.shape(1)) + "), expected (num_simplices=" + std::to_string(simplices.num_simplices) + ", num_parameters=*).");
           }
           auto dense_filtrations = empty_filtration
                                        ? std::vector<Filtration>{}
@@ -396,7 +396,7 @@ void bind_insert_batch_overloads(Class& cls) {
           const bool empty_filtration =
               filtrations.shape(0) == 0 || filtrations.shape(1) == 0 || filtrations.shape(2) == 0;
           if (!empty_filtration && filtrations.shape(0) != simplices.num_simplices) {
-            throw std::runtime_error("Invalid filtration batch shape.");
+            throw std::runtime_error("Invalid filtration batch shape for k-critical filtration. Got (" + std::to_string(filtrations.shape(0)) + ", " + std::to_string(filtrations.shape(1)) + ", " + std::to_string(filtrations.shape(2)) + "), expected (num_simplices=" + std::to_string(simplices.num_simplices) + ", num_kgenerators=*, num_parameters=*).");
           }
           auto packed_filtrations = empty_filtration ? std::vector<Filtration>{}
                                                      : kcritical_filtrations_from_array<Filtration, Value>(
@@ -810,7 +810,7 @@ Wrapper reconstruct_from_edge_array(
     nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> edges,
     int expand_dimension) {
   if (edges.shape(1) != 4) {
-    throw std::runtime_error("Expected edge array with shape (n_edges, 4).");
+    throw std::runtime_error("Expected edge array with shape (n_edges, 4). Got (" + std::to_string(edges.shape(0)) + ", " + std::to_string(edges.shape(1)) + ").");
   }
 
   Wrapper out;
@@ -894,7 +894,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               "_copy_from_any",
               [](Wrapper& self, nb::handle other) -> Wrapper& {
                 if (!try_copy_from_any<Wrapper, Interface>(self, other)) {
-                  throw std::runtime_error("Unsupported SimplexTreeMulti input type.");
+                  throw std::runtime_error("Unsupported SimplexTreeMulti input type. Got " + std::string(nb::inst_name(other).c_str()) + ".");
                 }
                 return self;
               },
@@ -903,7 +903,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               "_from_slicer",
               [](Wrapper& self, nb::handle slicer, int max_dim) -> Wrapper& {
                 if (!try_build_from_slicer<Wrapper, Interface>(self, slicer, max_dim)) {
-                  throw std::runtime_error("Unsupported slicer input type.");
+                  throw std::runtime_error("Unsupported slicer input type. Got " + std::string(nb::inst_name(slicer).c_str()) + ".");
                 }
                 return self;
               },
