@@ -25,6 +25,7 @@
 #include "Simplex_tree_interface.h"
 #include "Persistence_slices_interface.h"
 #include "gudhi/Multi_filtration/multi_filtration_utils.h"
+#include <gudhi/Multi_filtration/multi_filtration_products.h>
 #include "gudhi/multi_simplex_tree_helpers.h"
 
 namespace Gudhi {
@@ -55,7 +56,7 @@ void linear_projection(simplextree_std &st, simplextree_multi &st_multi, const s
   typename simplextree_multi::Options::Filtration_value multi_filtration;
   for (; sh != end; ++sh, ++sh_multi) {
     multi_filtration = st_multi.filtration(*sh_multi);
-    auto projected_filtration = compute_linear_projection(multi_filtration, linear_form);
+    auto projected_filtration = Gudhi::multi_filtration::compute_linear_projection(multi_filtration, linear_form);
     st.assign_filtration(*sh, projected_filtration);
   }
 }
@@ -441,7 +442,7 @@ class Simplex_tree_multi_interface
     Base::clear();
     Base::set_num_parameters(other.num_parameters());
     Base::copy_from(other,
-                    [](const auto &fil) { return fil.template as_type<typename Filtration_value::value_type>(); });
+                    [](const auto &fil) { return as_type<Filtration_value>(fil); });
   }
 
   template <typename OtherFiltrationValue>

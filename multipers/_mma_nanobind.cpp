@@ -23,6 +23,7 @@
 #include "gudhi/Multi_persistence/Module.h"
 #include "gudhi/Multi_persistence/Summand.h"
 #include "gudhi/Multi_persistence/module_helpers.h"
+#include <python_interfaces/numpy_utils.h>
 #include "nanobind_array_utils.hpp"
 #include "nanobind_dense_array_utils.hpp"
 #include "nanobind_mma_registry_helpers.hpp"
@@ -67,8 +68,8 @@ nb::ndarray<nb::numpy, T> corner_pair_to_python(const std::vector<T>& lower, con
 
 template <typename T>
 nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
-  auto births = summand.compute_birth_list();
-  auto deaths = summand.compute_death_list();
+  auto births = summand.compute_flat_upset();
+  auto deaths = summand.compute_flat_downset();
   const size_t num_parameters = static_cast<size_t>(summand.get_number_of_parameters());
   return nb::make_tuple(
       corner_matrix_to_python<T>(
@@ -160,9 +161,9 @@ nb::tuple barcode_from_line_impl(Gudhi::multi_persistence::Module<T>& self,
   return barcode_to_python<T>(barcode);
 }
 
-template <typename T>
+template <typename T, class GridRange>
 Gudhi::multi_persistence::Module<T>& evaluate_in_grid_impl(Gudhi::multi_persistence::Module<T>& self,
-                                                           const std::vector<std::vector<T>>& grid) {
+                                                           const GridRange& grid) {
   {
     nb::gil_scoped_release release;
     self.evaluate_in_grid(grid);
@@ -170,83 +171,61 @@ Gudhi::multi_persistence::Module<T>& evaluate_in_grid_impl(Gudhi::multi_persiste
   return self;
 }
 
-template <typename T>
-nb::ndarray<nb::numpy, T> compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
+template <typename T, class RandomAccessValueRange1, class RandomAccessValueRange2>
+auto compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
                                                       int degree,
-                                                      const std::vector<unsigned int>& ks,
+                                                      const RandomAccessValueRange1& ks,
                                                       const Gudhi::multi_persistence::Box<T>& box,
-                                                      const std::vector<unsigned int>& resolution,
+                                                      const RandomAccessValueRange2& resolution,
                                                       int n_jobs) {
-  std::vector<std::vector<std::vector<T>>> out;
+  std::vector<T> out;
   {
     nb::gil_scoped_release release;
     out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self, degree, ks, box, resolution, n_jobs);
   }
-  const size_t ny = resolution.size() > 1 ? resolution[1] : size_t(0);
-  std::vector<T> flat;
-  flat.reserve(ks.size() * (resolution.empty() ? size_t(0) : resolution[0]) * ny);
-  for (auto& image : out) {
-    for (auto& row : image) {
-      flat.insert(flat.end(), row.begin(), row.end());
-    }
-  }
-  return owned_array<T>(std::move(flat), {ks.size(), resolution.empty() ? size_t(0) : resolution[0], ny});
+  return _wrap_as_numpy_array(std::move(out), ks.size(), resolution[0], resolution[1]);
 }
 
-template <typename T>
-nb::ndarray<nb::numpy, T> compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
+template <typename T, class RandomAccessValueRange, class RandomAccessArray>
+auto compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
                                                        int degree,
-                                                       const std::vector<unsigned int>& ks,
-                                                       const std::vector<std::vector<T>>& grid,
+                                                       const RandomAccessValueRange& ks,
+                                                       const std::vector<RandomAccessArray>& grid,
                                                        int n_jobs) {
-  std::vector<std::vector<std::vector<T>>> out;
+  std::vector<T> out;
   {
     nb::gil_scoped_release release;
     out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self, degree, ks, grid, n_jobs);
   }
-  const size_t nx = grid.empty() ? size_t(0) : grid[0].size();
-  const size_t ny = grid.size() > 1 ? grid[1].size() : size_t(0);
-  std::vector<T> flat;
-  flat.reserve(ks.size() * nx * ny);
-  for (auto& image : out) {
-    for (auto& row : image) {
-      flat.insert(flat.end(), row.begin(), row.end());
-    }
-  }
-  return owned_array<T>(std::move(flat), {ks.size(), nx, ny});
+  return _wrap_as_numpy_array(std::move(out), ks.size(), grid[0].size(), grid[1].size());
 }
 
-template <typename T>
+template <typename T, class RandomAccessPointRange, class DimensionRange>
 nb::ndarray<nb::numpy, T> compute_pixels_impl(Gudhi::multi_persistence::Module<T>& self,
-                                              const std::vector<std::vector<T>>& coordinates,
-                                              const std::vector<int>& degrees,
+                                              const RandomAccessPointRange& coordinates,
+                                              const DimensionRange& degrees,
                                               const Gudhi::multi_persistence::Box<T>& box,
                                               T delta,
                                               T p,
                                               bool normalize,
                                               int n_jobs) {
-  std::vector<std::vector<T>> out;
+  std::vector<T> out;
   {
     nb::gil_scoped_release release;
     out = Gudhi::multi_persistence::compute_module_pixels(self, coordinates, degrees, box, delta, p, normalize, n_jobs);
   }
-  std::vector<T> flat;
-  flat.reserve(degrees.size() * coordinates.size());
-  for (auto& row : out) {
-    flat.insert(flat.end(), row.begin(), row.end());
-  }
-  return owned_array<T>(std::move(flat), {degrees.size(), coordinates.size()});
+  return owned_array<T>(std::move(out), {degrees.size(), coordinates.size()});
 }
 
-template <typename T>
+template <typename T, class RandomAccessPointRange>
 nb::ndarray<nb::numpy, T> distance_to_impl(Gudhi::multi_persistence::Module<T>& self,
-                                           const std::vector<std::vector<T>>& pts,
+                                           const RandomAccessPointRange& pts,
                                            bool signed_distance,
                                            int n_jobs) {
-  std::vector<T> out(pts.size() * self.size());
+  std::vector<T> out;
   {
     nb::gil_scoped_release release;
-    Gudhi::multi_persistence::compute_module_distances_to(self, out.data(), pts, signed_distance, n_jobs);
+    out = Gudhi::multi_persistence::compute_module_distances_to(self, pts, signed_distance, n_jobs);
   }
   return owned_array<T>(std::move(out), {pts.size(), self.size()});
 }
@@ -304,8 +283,8 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
   size_t num_parameters = module.get_box().get_lower_corner().size();
   values.resize(num_parameters);
   for (const auto& summand : module) {
-    auto births = summand.compute_birth_list();
-    auto deaths = summand.compute_death_list();
+    auto births = summand.compute_flat_upset();
+    auto deaths = summand.compute_flat_downset();
     const size_t birth_count = static_cast<size_t>(summand.get_number_of_birth_corners());
     const size_t death_count = static_cast<size_t>(summand.get_number_of_death_corners());
     for (size_t p = 0; p < num_parameters; ++p) {
@@ -522,8 +501,8 @@ void bind_float_module_methods(Class& cls) {
             nb::rv_policy::reference_internal)
         .def(
             "evaluate_in_grid",
-            [](Module& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid) -> Module& {
-              return evaluate_in_grid_impl<T>(self, matrix_from_array(grid));
+            [](Module& self, nb::ndarray<const T, nb::ndim<2>, nb::any_contig> grid) -> Module& {
+              return evaluate_in_grid_impl<T>(self, Numpy_2d_span<T>(grid));
             },
             nb::rv_policy::reference_internal)
         .def(
@@ -536,9 +515,9 @@ void bind_float_module_methods(Class& cls) {
                int n_jobs) {
               return compute_landscapes_box_impl<T>(self,
                                                     degree,
-                                                    cast_vector_from_array<unsigned int>(ks),
+                                                    make_element_range(ks.data(), ks.view(), false),
                                                     box_from_array<T>(box),
-                                                    cast_vector_from_array<unsigned int>(resolution),
+                                                    make_element_range(resolution.data(), resolution.view(), false),
                                                     n_jobs);
             },
             "degree"_a,
@@ -556,9 +535,9 @@ void bind_float_module_methods(Class& cls) {
                int n_jobs) {
               return compute_landscapes_box_impl<T>(self,
                                                     degree,
-                                                    cast_vector_from_array<unsigned int>(ks),
+                                                    make_element_range(ks.data(), ks.view(), false),
                                                     box_from_array<T>(box),
-                                                    cast_vector_from_array<unsigned int>(resolution),
+                                                    make_element_range(resolution.data(), resolution.view(), false),
                                                     n_jobs);
             },
             "degree"_a,
@@ -587,7 +566,11 @@ void bind_float_module_methods(Class& cls) {
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
                int n_jobs) {
               return compute_landscapes_grid_impl<T>(
-                  self, degree, cast_vector_from_array<unsigned int>(ks), matrix_from_array(grid), n_jobs);
+                  self,
+                  degree,
+                  make_element_range(ks.data(), ks.view(), false),
+                  multipers::nanobind_dense_utils::non_regular_matrix_from_array(grid),
+                  n_jobs);
             },
             "degree"_a,
             "ks"_a,
@@ -601,7 +584,11 @@ void bind_float_module_methods(Class& cls) {
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid,
                int n_jobs) {
               return compute_landscapes_grid_impl<T>(
-                  self, degree, cast_vector_from_array<unsigned int>(ks), matrix_from_array(grid), n_jobs);
+                  self,
+                  degree,
+                  make_element_range(ks.data(), ks.view(), false),
+                  multipers::nanobind_dense_utils::non_regular_matrix_from_array(grid),
+                  n_jobs);
             },
             "degree"_a,
             "ks"_a,
@@ -636,7 +623,7 @@ void bind_float_module_methods(Class& cls) {
         .def(
             "_compute_pixels",
             [](Module& self,
-               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
+               nb::ndarray<const T, nb::ndim<2>, nb::any_contig> coordinates,
                nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
                T delta,
@@ -644,8 +631,8 @@ void bind_float_module_methods(Class& cls) {
                bool normalize,
                int n_jobs) {
               return compute_pixels_impl<T>(self,
-                                            matrix_from_array(coordinates),
-                                            cast_vector_from_array<int>(degrees),
+                                            Numpy_2d_span<T>(coordinates),
+                                            make_element_range(degrees.data(), degrees.view(), false),
                                             box_from_array<T>(box),
                                             delta,
                                             p,
@@ -662,7 +649,7 @@ void bind_float_module_methods(Class& cls) {
         .def(
             "_compute_pixels",
             [](Module& self,
-               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> coordinates,
+               nb::ndarray<const T, nb::ndim<2>, nb::any_contig> coordinates,
                nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> degrees,
                nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box,
                T delta,
@@ -670,8 +657,8 @@ void bind_float_module_methods(Class& cls) {
                bool normalize,
                int n_jobs) {
               return compute_pixels_impl<T>(self,
-                                            matrix_from_array(coordinates),
-                                            cast_vector_from_array<int>(degrees),
+                                            Numpy_2d_span<T>(coordinates),
+                                            make_element_range(degrees.data(), degrees.view(), false),
                                             box_from_array<T>(box),
                                             delta,
                                             p,
@@ -696,9 +683,9 @@ void bind_float_module_methods(Class& cls) {
         .def(
             "distance_to",
             [](Module& self,
-               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> pts,
+               nb::ndarray<const T, nb::ndim<2>, nb::any_contig> pts,
                bool signed_distance,
-               int n_jobs) { return distance_to_impl<T>(self, matrix_from_array(pts), signed_distance, n_jobs); },
+               int n_jobs) { return distance_to_impl<T>(self, Numpy_2d_span<T>(pts), signed_distance, n_jobs); },
             "pts"_a,
             "signed"_a = false,
             "n_jobs"_a = 0)
@@ -740,7 +727,7 @@ void bind_summand_class(nb::module_& m) {
              const size_t num_birth_corners = static_cast<size_t>(self.get_number_of_birth_corners());
              {
                nb::gil_scoped_release release;
-               births = self.compute_birth_list();
+               births = self.compute_flat_upset();
              }
              return corner_matrix_to_python<T>(std::move(births), num_birth_corners, num_parameters);
            })
@@ -751,7 +738,7 @@ void bind_summand_class(nb::module_& m) {
              const size_t num_death_corners = static_cast<size_t>(self.get_number_of_death_corners());
              {
                nb::gil_scoped_release release;
-               deaths = self.compute_death_list();
+               deaths = self.compute_flat_downset();
              }
              return corner_matrix_to_python<T>(std::move(deaths), num_death_corners, num_parameters);
            })
@@ -885,7 +872,7 @@ void bind_module_class(nb::module_& m) {
                 Module c_other = other;
                 {
                   nb::gil_scoped_release release;
-                  for (auto summand : c_other) self.add_summand(summand, dim);
+                  for (const auto& summand : c_other) self.add_summand(summand, dim);
                 }
                 return self;
               },
@@ -893,12 +880,12 @@ void bind_module_class(nb::module_& m) {
               "dim"_a = -1,
               nb::rv_policy::reference_internal)
           .def("permute_summands",
-               [](Module& self, nb::handle permutation) {
+               [](Module& self, nb::ndarray<const int, nb::ndim<1>, nb::c_contig, nb::device::cpu> permutation) {
                  Module out;
-                 auto c_permutation = vector_from_handle<int>(permutation);
                  {
                    nb::gil_scoped_release release;
-                   out = Gudhi::multi_persistence::build_permuted_module(self, c_permutation);
+                   out = Gudhi::multi_persistence::build_permuted_module(
+                       self, make_element_range(permutation.data(), permutation.view(), false));
                  }
                  return out;
                })
@@ -920,7 +907,7 @@ void bind_module_class(nb::module_& m) {
                  {
                    nb::gil_scoped_release release;
                    out.set_box(self.get_box());
-                   for (auto summand : self)
+                   for (const auto& summand : self)
                      if (summand.get_dimension() == degree) out.add_summand(summand);
                  }
                  return out;
@@ -932,7 +919,7 @@ void bind_module_class(nb::module_& m) {
                  {
                    nb::gil_scoped_release release;
                    out.set_box(self.get_box());
-                   for (auto summand : self) {
+                   for (const auto& summand : self) {
                      for (int degree : degrees) {
                        if (degree == summand.get_dimension()) {
                          out.add_summand(summand);
@@ -979,7 +966,7 @@ void bind_module_class(nb::module_& m) {
                   Module c_other = nb::cast<Module&>(item);
                   {
                     nb::gil_scoped_release release;
-                    for (auto summand : c_other) self.add_summand(summand);
+                    for (const auto& summand : c_other) self.add_summand(summand);
                   }
                 }
                 return self;
