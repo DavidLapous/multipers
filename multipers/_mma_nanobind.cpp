@@ -343,6 +343,128 @@ std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_per
 }
 
 template <typename T>
+int32_t grid_coord_from_value(T value, const std::vector<T>& axis) {
+  if (axis.empty()) {
+    throw std::runtime_error("Grid axes must be non-empty.");
+  }
+  if constexpr (std::numeric_limits<T>::has_infinity) {
+    const T pos_inf = std::numeric_limits<T>::infinity();
+    const T neg_inf = -pos_inf;
+    if (std::isnan(static_cast<double>(value)) || value == pos_inf) {
+      return static_cast<int32_t>(axis.size() - 1);
+    }
+    if (value == neg_inf) {
+      return 0;
+    }
+  }
+  if (value >= axis.back()) {
+    return static_cast<int32_t>(axis.size() - 1);
+  }
+  if (value <= axis.front()) {
+    return 0;
+  }
+  return static_cast<int32_t>(std::distance(axis.begin(), std::lower_bound(axis.begin(), axis.end(), value)));
+}
+
+template <typename T>
+std::vector<int32_t> flat_idx_from_corners(const std::vector<T>& corners,
+                                           size_t num_parameters,
+                                           const std::vector<std::vector<T>>& grid) {
+  if (grid.size() != num_parameters) {
+    throw std::runtime_error("Grid dimension does not match module number of parameters.");
+  }
+  if (num_parameters == 0) {
+    return {};
+  }
+  if (corners.size() % num_parameters != 0) {
+    throw std::runtime_error("Corner array size is not divisible by number of parameters.");
+  }
+
+  const size_t num_rows = corners.size() / num_parameters;
+  std::vector<int32_t> out(corners.size());
+  for (size_t row = 0; row < num_rows; ++row) {
+    const size_t offset = row * num_parameters;
+    bool all_pos_inf_or_nan = true;
+    bool all_neg_inf = true;
+    if constexpr (std::numeric_limits<T>::has_infinity) {
+      const T pos_inf = std::numeric_limits<T>::infinity();
+      const T neg_inf = -pos_inf;
+      for (size_t p = 0; p < num_parameters; ++p) {
+        const T value = corners[offset + p];
+        all_pos_inf_or_nan &= std::isnan(static_cast<double>(value)) || value == pos_inf;
+        all_neg_inf &= value == neg_inf;
+      }
+    } else {
+      all_pos_inf_or_nan = false;
+      all_neg_inf = false;
+    }
+
+    if (all_pos_inf_or_nan) {
+      for (size_t p = 0; p < num_parameters; ++p) {
+        out[offset + p] = static_cast<int32_t>(grid[p].size() - 1);
+      }
+      continue;
+    }
+    if (all_neg_inf) {
+      for (size_t p = 0; p < num_parameters; ++p) {
+        out[offset + p] = 0;
+      }
+      continue;
+    }
+
+    for (size_t p = 0; p < num_parameters; ++p) {
+      out[offset + p] = grid_coord_from_value(corners[offset + p], grid[p]);
+    }
+  }
+  return out;
+}
+
+template <typename T>
+nb::tuple to_flat_idx_impl(const Gudhi::multi_persistence::Module<T>& module, const std::vector<std::vector<T>>& grid) {
+  const size_t num_parameters = module.get_box().get_lower_corner().size();
+  const size_t num_summands = module.size();
+
+  std::vector<int32_t> birth_sizes;
+  std::vector<int32_t> death_sizes;
+  std::vector<T> flat_births;
+  std::vector<T> flat_deaths;
+  std::vector<int32_t> size_matrix;
+  std::vector<int32_t> birth_coords;
+  std::vector<int32_t> death_coords;
+  size_t birth_rows = 0;
+  size_t death_rows = 0;
+
+  {
+    nb::gil_scoped_release release;
+    birth_sizes.reserve(num_summands);
+    death_sizes.reserve(num_summands);
+    for (size_t i = 0; i < num_summands; ++i) {
+      const auto summand = module.get_summand((unsigned int)i);
+      birth_sizes.push_back(static_cast<int32_t>(summand.get_number_of_birth_corners()));
+      death_sizes.push_back(static_cast<int32_t>(summand.get_number_of_death_corners()));
+
+      auto births = summand.compute_birth_list();
+      auto deaths = summand.compute_death_list();
+      flat_births.insert(flat_births.end(), births.begin(), births.end());
+      flat_deaths.insert(flat_deaths.end(), deaths.begin(), deaths.end());
+    }
+
+    size_matrix.reserve(2 * num_summands);
+    size_matrix.insert(size_matrix.end(), birth_sizes.begin(), birth_sizes.end());
+    size_matrix.insert(size_matrix.end(), death_sizes.begin(), death_sizes.end());
+
+    birth_rows = num_parameters == 0 ? size_t(0) : flat_births.size() / num_parameters;
+    death_rows = num_parameters == 0 ? size_t(0) : flat_deaths.size() / num_parameters;
+    birth_coords = flat_idx_from_corners(flat_births, num_parameters, grid);
+    death_coords = flat_idx_from_corners(flat_deaths, num_parameters, grid);
+  }
+
+  return nb::make_tuple(owned_array<int32_t>(std::move(size_matrix), {size_t(2), num_summands}),
+                        owned_array<int32_t>(std::move(birth_coords), {birth_rows, num_parameters}),
+                        owned_array<int32_t>(std::move(death_coords), {death_rows, num_parameters}));
+}
+
+template <typename T>
 struct ModuleSummandIterator {
   using iterator_category = std::input_iterator_tag;
   using value_type = Gudhi::multi_persistence::Summand<T>;
@@ -940,6 +1062,17 @@ void bind_module_class(nb::module_& m) {
                 return filtration_values_from_module<T>(self, unique);
               },
               "unique"_a = true)
+          .def(
+              "to_flat_idx",
+              [](const Module& self, nb::handle grid_handle)
+                  -> nb::tuple { return to_flat_idx_impl<T>(self, matrix_from_handle<T>(grid_handle)); },
+              "grid"_a)
+          .def(
+              "to_flat_idx",
+              [](const Module& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> grid) -> nb::tuple {
+                return to_flat_idx_impl<T>(self, matrix_from_array(grid));
+              },
+              "grid"_a)
           .def("get_dimensions", [](Module& self) -> nb::ndarray<nb::numpy, int32_t> {
             std::vector<int32_t> dims;
             dims.reserve(self.size());
