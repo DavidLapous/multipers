@@ -40,18 +40,20 @@ def _minimal_presentation_from_slicer(
             new_slicer = new_slicer._clean_filtration_grid()
         return new_slicer
 
-    if backend == "2pac":
+    if backend in {"2pac", "2pac-homology"}:
         from multipers import _2pac_interface
 
         _2pac_interface.require()
+        use_cohomology = backend == "2pac"
         with _mp_logs.timings(
             "minimal_presentation",
             enabled=verbose,
             details={
-                "backend": "2pac",
+                "backend": backend,
                 "mode": "cpp_interface",
                 "degree": degree,
                 "keep_generators": keep_generators,
+                "algorithm": "cohomology" if use_cohomology else "homology",
             },
         ) as timing:
             new_slicer = _2pac_interface.minimal_presentation(
@@ -62,6 +64,7 @@ def _minimal_presentation_from_slicer(
                 use_clearing=use_clearing,
                 full_resolution=full_resolution,
                 keep_generators=keep_generators,
+                use_cohomology=use_cohomology,
             )
             timing.substep("backend_call")
         new_slicer.minpres_degree = degree
@@ -71,7 +74,7 @@ def _minimal_presentation_from_slicer(
         return new_slicer
 
     raise ValueError(
-        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree` and `2pac`."
+        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `2pac`, and `2pac-homology`."
     )
 
 
@@ -220,7 +223,7 @@ def minimal_presentation(
     slicer,
     degree=-1,
     degrees: Iterable[int] = [],
-    backend: Literal["mpfree", "2pac", ""] = "mpfree",
+    backend: Literal["mpfree", "2pac", "2pac-homology", ""] = "mpfree",
     n_jobs=-1,
     force=False,
     auto_clean=True,
@@ -236,7 +239,9 @@ def minimal_presentation(
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
 
-    Available backends include `mpfree` and `2pac`.
+    Available backends include `mpfree`, `2pac` (2pac cohomology / dual
+    transpose route, with 2pac's bounded-support assumptions), and
+    `2pac-homology` (the original direct homology route).
     """
     from joblib import Parallel, delayed
     from multipers.slicer import is_slicer
