@@ -98,13 +98,46 @@ def RipsLowerstar(
     verbose: bool = False,
 ):
     """
-    Computes the Rips complex, with the usual rips filtration as a first parameter,
-    and the lower star multi filtration as other parameter.
+    Build Rips-lower-star bifiltration.
 
-    Input:
-     - points or distance_matrix: ArrayLike
-     - function : ArrayLike of shape (num_data, num_parameters -1)
-     - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
+    First parameter is usual Rips scale. Remaining parameter(s) are lower-star
+    coordinates induced by vertex values in `function`.
+
+    For scalar `f : X -> R`, intended continuum model is sublevel-offset family
+
+    ```
+    O_{r,s}(f) = union_{x in X, f(x) <= s} B(x, r).
+    ```
+
+    Its discrete Rips analogue is
+
+    ```
+    R_{r,s}(f) = R_r(X_s),
+    X_s = {x in X | f(x) <= s},
+    ```
+
+    where `R_r(X_s)` is the Rips complex at scale `r` on the sublevel vertex
+    set. This constructor implements that Rips proxy and then applies lower-star
+    extension along each extra function coordinate.
+
+    Parameters
+    ----------
+    points, distance_matrix:
+        Provide either point cloud or pairwise distance matrix.
+    function:
+        Vertex function values of shape `(n,)` or `(n, q)`. If omitted, this
+        returns ordinary 1-parameter Rips complex as `SimplexTreeMulti`.
+    threshold_radius:
+        Maximal Rips edge length. Defaults to `min_i max_j D[i,j]`.
+    sparse:
+        Optional Gudhi sparse-Rips parameter.
+    verbose:
+        Emit timing logs.
+
+    Notes
+    -----
+    If autodiff-tracked inputs are detected, output is grid-squeezed so the
+    filtration grid stores the exact differentiable coordinate values.
     """
     with _mp_logs.timings(
         "RipsLowerstar",
@@ -185,7 +218,37 @@ def RipsCodensity(
     sparse: Optional[float] = None,
 ):
     """
-    Computes the Rips density filtration.
+    Build Rips-codensity bifiltration.
+
+    This is `RipsLowerstar` where the extra coordinate is a codensity function
+    estimated on the input points. First parameter is Rips scale; second is the
+    estimated codensity value.
+
+    Exactly one codensity model must be selected:
+
+    - `bandwidth`: kernel density estimate, returned as negative log-density,
+    - `dtm_mass`: DTM-based codensity,
+    - `knn`: k-nearest-neighbor mean-distance score.
+
+    Parameters
+    ----------
+    points:
+        Point cloud.
+    bandwidth, dtm_mass, knn:
+        Mutually exclusive codensity estimators.
+    return_log:
+        For kernel density, keep log-density convention before negation.
+    kernel:
+        Kernel name for KDE.
+    threshold_radius:
+        Maximal Rips edge length.
+    sparse:
+        Optional Gudhi sparse-Rips parameter.
+
+    Notes
+    -----
+    This is often used as a geometry+density bifiltration: horizontal coordinate
+    controls scale, vertical coordinate favors dense regions before sparse ones.
     """
     f = _compute_codensity(
         points,
@@ -215,13 +278,56 @@ def DelaunayLowerstar(
     recover_ids: Optional[bool] = None,
 ):
     """
-    Computes the Function Delaunay bifiltration. Similar to RipsLowerstar, but most suited for low-dimensional euclidean data.
-    See [Delaunay bifiltrations of functions on point clouds, Alonso et al] https://doi.org/10.1137/1.9781611977912.173
+    Build Delaunay-lower-star bifiltration for low-dimensional Euclidean data.
 
-    Input:
-     - points or distance_matrix: ArrayLike
-     - function : ArrayLike of shape (num_data, )
-     - threshold_radius:  max edge length of the rips. Defaults at min(max(distance_matrix, axis=1)).
+    Reference: Alonso et al., "Delaunay bifiltrations of functions on point
+    clouds", https://doi.org/10.1137/1.9781611977912.173
+
+    For scalar `phi : X -> R`, intended continuum model is sublevel-offset family
+
+    ```
+    O_{r,s}(phi) = O_r(X_s),
+    X_s = {x in X | phi(x) <= s}.
+    ```
+
+    Instead of using full Rips complex, this constructor uses incremental
+    Delaunay structure and assigns each simplex a grade of the form
+    `(geometric_scale, max_vertex_value)`. This is typically much smaller than a
+    Rips-based model on low-dimensional Euclidean point clouds.
+
+    Parameters
+    ----------
+    points:
+        Euclidean point cloud of shape `(n, d)`.
+    function:
+        Scalar vertex values of shape `(n,)`. Only one extra parameter is
+        supported by this backend.
+    distance_matrix:
+        Not supported here; Delaunay construction requires coordinates.
+    threshold_radius:
+        Currently unsupported.
+    reduce_degree:
+        If nonnegative, compute minimal presentation in that homological degree.
+    vineyard:
+        Passed through when a `Slicer` output is built.
+    dtype:
+        Numeric dtype for returned simplicial object / slicer.
+    verbose:
+        Emit timing / backend logs.
+    clear:
+        Compatibility flag, currently unused.
+    flagify:
+        Convert output to a flag complex after native construction. Required to
+        preserve point gradients through geometric scale values.
+    recover_ids:
+        Recover original vertex ordering in native output. Defaults to `True`
+        when `reduce_degree >= 0`.
+
+    Notes
+    -----
+    When `reduce_degree` is left at its default value `-1`, this usually returns
+    a `SimplexTreeMulti`. When `reduce_degree >= 0`, it returns a
+    minimal-presentation `Slicer`.
     """
     import multipers
     import multipers._function_delaunay_interface as _function_delaunay_interface
@@ -429,7 +535,37 @@ def DelaunayCodensity(
     flagify: bool = False,
 ):
     """
-    TODO
+    Build Delaunay-codensity bifiltration.
+
+    This is `DelaunayLowerstar` where the scalar lower-star coordinate is a
+    codensity value estimated on the vertices. First parameter is Delaunay-based
+    geometric scale, second is codensity.
+
+    Exactly one codensity model must be selected:
+
+    - `bandwidth`: kernel density estimate, used through negative log-density,
+    - `dtm_mass`: DTM-based codensity,
+    - `knn`: k-nearest-neighbor mean-distance score.
+
+    Parameters
+    ----------
+    points:
+        Euclidean point cloud.
+    bandwidth, dtm_mass, knn:
+        Mutually exclusive codensity estimators.
+    return_log:
+        For kernel density, keep log-density convention before negation.
+    kernel:
+        Kernel name for KDE.
+    threshold_radius:
+        Currently unsupported by `DelaunayLowerstar` backend.
+    reduce_degree, vineyard, dtype, verbose, clear, flagify:
+        Forwarded to `DelaunayLowerstar`.
+
+    Notes
+    -----
+    Prefer this over `RipsCodensity` for low-dimensional Euclidean data when a
+    smaller geometric complex is desirable.
     """
     f = _compute_codensity(
         points,
@@ -454,12 +590,37 @@ def DelaunayCodensity(
 
 def Cubical(image: ArrayLike, **slicer_kwargs):
     """
-    Computes the cubical filtration of an image.
-    The last axis dimention is interpreted as the number of parameters.
+    Build lower-star cubical filtration from image / volume data.
 
-    Input:
-     - image: ArrayLike of shape (*image_resolution, num_parameters)
-     - ** args : specify non-default slicer parameters
+    The last axis is interpreted as the number of filtration parameters. For a
+    scalar image `phi`, vertices inherit their pixel/voxel values and each
+    higher-dimensional cubical cell is born at the maximum value of its
+    vertices:
+
+    ```
+    birth(sigma) = max_{v vertex of sigma} phi(v).
+    ```
+
+    The resulting sublevel filtration is
+
+    ```
+    K_a = {sigma | birth(sigma) <= a}.
+    ```
+
+    For multi-parameter input, same max-vertex rule is applied coordinatewise.
+
+    Parameters
+    ----------
+    image:
+        Array of shape `(*image_resolution, num_parameters)`.
+    **slicer_kwargs:
+        Extra keyword arguments forwarded to `multipers.Slicer(...)` when
+        constructing returned object.
+
+    Notes
+    -----
+    If autodiff-tracked input is detected, image values are first pushed to a
+    discrete filtration grid and that grid is attached to the returned object.
     """
     from multipers import Slicer, _slicer_nanobind as mps
     from multipers.slicer import available_dtype
@@ -744,16 +905,39 @@ def RhomboidBifiltration(
     verbose: bool = False,
 ):
     """
-    Rhomboid Tiling bifiltration.
-    This (1-critical) bifiltration is quasi-isomorphic to the (multi-critical) multicover bifiltration.
-    From [Computing the Multicover Bifiltration](https://doi.org/10.1007/s00454-022-00476-8), whose code
-    can be found here: https://github.com/geoo89/rhomboidtiling
+    Build rhomboid-tiling model for multicover bifiltration.
+
+    Reference: Kerber, Lesnick, Corbet, and Osang, "Computing the Multicover
+    Bifiltration" (Discrete & Computational Geometry, 2023),
+    https://doi.org/10.1007/s00454-022-00476-8
+
+    For a finite point cloud `X`, multicover bifiltration is indexed by scale
+    `r` and cover parameter `k`, with
+
+    ```
+    Cov_{r,k}(X) = {z | z lies within distance r of at least k points of X}.
+    ```
+
+    This constructor returns a 1-critical bifiltered model based on rhomboid
+    tilings, quasi-isomorphic to the multi-critical multicover bifiltration.
+    It is intended for 2D or 3D Euclidean data.
 
     Parameters
-     - x: 2d or 3d point cloud, of shape `(num_points,dimension)`.
-     - k_max(int): maximum number of cover to consider
-     - degree: dimension to consider
-     - verbose:bool
+    ----------
+    x:
+        2D or 3D point cloud of shape `(num_points, ambient_dimension)`.
+    k_max:
+        Largest cover parameter to include.
+    degree:
+        Homological degree / maximal simplex dimension requested from the native
+        rhomboid backend.
+    verbose:
+        Emit timing / backend logs.
+
+    Notes
+    -----
+    Backend code originates from the rhomboid tiling implementation at
+    https://github.com/geoo89/rhomboidtiling
     """
     from multipers import Slicer
 
