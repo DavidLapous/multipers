@@ -208,6 +208,13 @@ if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}
     "${MULTIPERS_2PAC_SOURCE_DIR}/block_column_matrix.cpp"
   )
   target_include_directories(multipers_2pac_static PUBLIC ${MULTIPERS_2PAC_INCLUDE_DIRS})
+  if(TARGET Boost::headers)
+    target_link_libraries(multipers_2pac_static PUBLIC Boost::headers)
+  elseif(TARGET Boost::boost)
+    target_link_libraries(multipers_2pac_static PUBLIC Boost::boost)
+  else()
+    target_include_directories(multipers_2pac_static PUBLIC ${Boost_INCLUDE_DIRS})
+  endif()
   target_link_libraries(multipers_2pac_static PUBLIC OpenMP::OpenMP_CXX)
   target_compile_definitions(multipers_2pac_static PUBLIC MULTIPERS_HAS_2PAC_INTERFACE=1)
   message(STATUS "[2pac] Created multipers_2pac_static with MULTIPERS_HAS_2PAC_INTERFACE=1")
