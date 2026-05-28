@@ -63,6 +63,30 @@ inline void threshold_filters_list(std::vector<filtration_type> &filtersList, co
   }
 }
 
+template <typename value_type>
+inline void add_barcode_to_module(Module<value_type> &module,
+                                  const Line<value_type> &line,
+                                  const std::vector<std::vector<std::array<value_type, 2>>> &barcode,
+                                  bool thresholdToBox) {
+  const auto& box = module.get_box();
+#ifdef GUDHI_USE_TBB
+  std::vector<std::size_t> shifts(barcode.size(), 0U);
+  for (std::size_t i = 1U; i < barcode.size(); i++) {
+    shifts[i] = shifts[i - 1] + barcode[i - 1].size();
+  }
+  tbb::parallel_for(size_t(0), barcode.size(), [&](size_t dim) {
+    tbb::parallel_for(size_t(0), barcode[dim].size(), [&](size_t j) {
+      module.get_summand(shifts[dim] + j).add_bar(line, barcode[dim][j][0], barcode[dim][j][1], box, thresholdToBox);
+    });
+  });
+#else
+  typename Module<value_type>::Index count = 0;
+  for (const auto &barDim : barcode) {
+    for (const auto &bar : barDim) module.get_summand(count++).add_bar(line, bar[0], bar[1], box, thresholdToBox);
+  }
+#endif
+}
+
 template <class Filtration_value, int axis = 0, bool sign = true>
 class LineIterator {
  public:
@@ -121,7 +145,7 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
 
     slicer.update_persistence_computation();
     if constexpr (verbose2) std::cout << slicer << std::endl;
-    module.add_barcode(new_line, slicer.template get_flat_barcode<true>(), threshold);
+    add_barcode_to_module(module, new_line, slicer.template get_flat_barcode<true>(), threshold);
   };
 };
 
@@ -307,7 +331,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
           ++i;
         }
       }
-      out.add_barcode(current_line, barcode, threshold);
+      add_barcode_to_module(out, current_line, barcode, threshold);
 
       if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
     }

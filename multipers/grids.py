@@ -654,28 +654,28 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordi
     return out, coordinates
 
 
-def evaluate_mod_in_grid(mod, grid, box=None):
-    """Given an MMA module, pushes it into the specified grid.
-    Useful for e.g., make it differentiable.
+# def evaluate_mod_in_grid(mod, grid, box=None):
+#     """Given an MMA module, pushes it into the specified grid.
+#     Useful for e.g., make it differentiable.
 
-    Input
-    -----
-     - mod: PyModule
-     - grid: Iterable of 1d array, for num_parameters
-    Ouput
-    -----
-    torch-compatible module in the format:
-    (num_degrees) x (num_interval of degree) x ((num_birth, num_parameter), (num_death, num_parameters))
+#     Input
+#     -----
+#      - mod: PyModule
+#      - grid: Iterable of 1d array, for num_parameters
+#     Ouput
+#     -----
+#     torch-compatible module in the format:
+#     (num_degrees) x (num_interval of degree) x ((num_birth, num_parameter), (num_death, num_parameters))
 
-    """
-    (birth_sizes, death_sizes), births, deaths = mod.to_flat_idx(grid)
-    births = evaluate_in_grid(births, grid)
-    deaths = evaluate_in_grid(deaths, grid)
-    api = api_from_tensors(births, deaths)
-    diff_mod = tuple(
-        zip(
-            api.split_with_sizes(births, birth_sizes.tolist()),
-            api.split_with_sizes(deaths, death_sizes.tolist()),
-        )
-    )
-    return diff_mod
+#     """
+#     (birth_sizes, death_sizes), births, deaths = mod.to_flat_idx(grid)
+#     births = evaluate_in_grid(births, grid)
+#     deaths = evaluate_in_grid(deaths, grid)
+#     api = api_from_tensors(births, deaths)
+#     diff_mod = tuple(
+#         zip(
+#             api.split_with_sizes(births, birth_sizes.tolist()),
+#             api.split_with_sizes(deaths, death_sizes.tolist()),
+#         )
+#     )
+#     return diff_mod
