@@ -323,6 +323,160 @@ def plot_surfaces(HF, size=4, **plt_args):
     plt.tight_layout()
 
 
+def _as_birth_curve_list(curves):
+    if isinstance(curves, np.ndarray):
+        if curves.ndim != 2 or curves.shape[1] != 2:
+            raise ValueError(f"Expected curve shape (k, 2). Got {curves.shape}.")
+        return [curves]
+    out = []
+    for curve in curves:
+        curve = np.asarray(curve, dtype=np.float64)
+        if curve.ndim != 2 or curve.shape[1] != 2:
+            raise ValueError(f"Expected each curve shape (k, 2). Got {curve.shape}.")
+        out.append(curve)
+    return out
+
+
+def _birth_curve_box(curves, box=None):
+    if box is not None:
+        box = np.asarray(box, dtype=np.float64)
+        if box.shape != (2, 2):
+            raise ValueError(f"Expected box shape (2, 2). Got {box.shape}.")
+        return box
+
+    mins = []
+    maxs = []
+    for axis in range(2):
+        values = [curve[:, axis] for curve in curves if curve.size]
+        values = np.concatenate(values) if values else np.empty(0)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            mins.append(0.0)
+            maxs.append(1.0)
+            continue
+        lo = float(np.min(values))
+        hi = float(np.max(values))
+        if lo == hi:
+            hi = lo + 1.0
+        mins.append(lo)
+        maxs.append(hi)
+    return np.asarray([mins, maxs], dtype=np.float64)
+
+
+def _birth_curve_length(curve):
+    if len(curve) <= 1:
+        return 0.0
+    if np.any(np.isinf(curve)):
+        return np.inf
+    return float(np.linalg.norm(np.diff(curve, axis=0), axis=1).sum())
+
+
+def _clip_birth_curve_to_box(curve, box):
+    clipped = np.asarray(curve, dtype=np.float64).copy()
+    for axis in range(2):
+        clipped[np.isneginf(clipped[:, axis]), axis] = box[0, axis]
+        clipped[np.isposinf(clipped[:, axis]), axis] = box[1, axis]
+    return np.clip(clipped, box[0], box[1])
+
+
+def _diagonal_intersection_parameters(curve, box):
+    lo = box[0]
+    diagonal = box[1] - box[0]
+    parameters = []
+    if np.allclose(diagonal, 0):
+        return parameters
+    for start, end in zip(curve[:-1], curve[1:]):
+        segment = end - start
+        matrix = np.column_stack((segment, -diagonal))
+        det = np.linalg.det(matrix)
+        if abs(det) < 1e-12:
+            continue
+        u, t = np.linalg.solve(matrix, lo - start)
+        if -1e-9 <= u <= 1 + 1e-9 and -1e-9 <= t <= 1 + 1e-9:
+            parameters.append(float(np.clip(t, 0, 1)))
+    return parameters
+
+
+def _diagonal_order_key(curve, box):
+    curve = _clip_birth_curve_to_box(curve, box)
+    hits = _diagonal_intersection_parameters(curve, box)
+    if hits:
+        return min(hits)
+    diagonal = box[1] - box[0]
+    denom = float(np.dot(diagonal, diagonal))
+    if denom == 0 or curve.size == 0:
+        return 0.0
+    projections = (curve - box[0]) @ diagonal / denom
+    return float(np.mean(np.clip(projections, 0, 1)))
+
+
+def plot_birth_curve(
+    curves,
+    *,
+    ax=None,
+    box=None,
+    cmap=None,
+    sort=True,
+    min_length=-1,
+    linewidth=2.0,
+    marker="o",
+    markersize=3.0,
+    alpha=0.95,
+    xlabel=None,
+    ylabel=None,
+    title="Birth curves",
+    **line_kwargs,
+):
+    """Plot 2-parameter birth-curves with MMA-compatible coloring.
+
+    ``box`` controls displayed coordinate extents. Figure size and aspect ratio
+    are left to the caller/axes. ``min_length`` filters plotted curves by
+    polyline length: only curves with length strictly larger than the threshold
+    are shown. The default ``-1`` keeps all curves; ``0`` drops point curves.
+    """
+    curves = _as_birth_curve_list(curves)
+    curves = [curve for curve in curves if _birth_curve_length(curve) > min_length]
+    box = _birth_curve_box(curves, box=box)
+    if sort:
+        curves = sorted(curves, key=lambda curve: _diagonal_order_key(curve, box))
+
+    if ax is None:
+        ax = plt.gca()
+    else:
+        plt.sca(ax)
+
+    cmap_instance = (
+        matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
+    )
+    n_curves = len(curves)
+    for i, curve in enumerate(curves):
+        if curve.size == 0:
+            continue
+        clipped = _clip_birth_curve_to_box(curve, box)
+        color = cmap_instance(i / max(n_curves, 1))
+        ax.plot(
+            clipped[:, 0],
+            clipped[:, 1],
+            color=color,
+            linewidth=linewidth,
+            marker=marker,
+            markersize=markersize,
+            alpha=alpha,
+            **line_kwargs,
+        )
+
+    ax.set_xlim(box[0, 0], box[1, 0])
+    ax.set_ylim(box[0, 1], box[1, 1])
+    ax.grid(True, alpha=0.18, linewidth=0.6)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+    if title is not None:
+        ax.set_title(title)
+    return ax
+
+
 def _rectangle(x, y, color, alpha):
     """
     Defines a rectangle patch in the format {z | x  ≤ z ≤ y} with color and alpha

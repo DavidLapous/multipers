@@ -131,8 +131,30 @@ def signed_measure(
                 """
         )
 
+    degrees = [] if degrees is None else list(degrees)
+    if (
+        degree is None
+        and len(degrees) == 0
+        and is_slicer(filtered_complex)
+        and filtered_complex.is_minpres
+        and invariant is not None
+        and ("hilbert" in invariant or "rank" in invariant)
+    ):
+        degree = filtered_complex.minpres_degree
     if degree is not None or len(degrees) == 0:
-        degrees = list(degrees) + [degree]
+        degrees.append(degree)
+    if (
+        is_slicer(filtered_complex)
+        and filtered_complex.is_minpres
+        and invariant is not None
+        and ("hilbert" in invariant or "rank" in invariant)
+        and None not in degrees
+        and not np.array_equal(
+            np.asarray(degrees, dtype=int).reshape(-1),
+            np.asarray([filtered_complex.minpres_degree], dtype=int),
+        )
+    ):
+        raise ValueError("Cannot change degree of an already minimal-presentation slicer.")
     if None in degrees:
         if len(degrees) != 1:
             raise ValueError(

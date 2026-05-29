@@ -94,7 +94,10 @@ nanobind::object build_canonical_contiguous_f64_slicer_object_from_complex(const
                                                                            Complex& complex) {
   nanobind::object out = target.type()();
   auto& out_wrapper = nanobind::cast<canonical_contiguous_f64_slicer_wrapper&>(out);
-  build_slicer_from_complex(out_wrapper.truc, complex);
+  {
+    nanobind::gil_scoped_release release;
+    build_slicer_from_complex(out_wrapper.truc, complex);
+  }
   return out;
 }
 
@@ -112,7 +115,7 @@ Wrapper colexical_slicer_copy(const Wrapper& source) {
 }
 
 template <typename Wrapper>
-std::pair<Wrapper, std::vector<uint32_t> > colexical_slicer_copy_with_permutation(const Wrapper& source) {
+std::pair<Wrapper, std::vector<uint32_t>> colexical_slicer_copy_with_permutation(const Wrapper& source) {
   decltype(build_permuted_slicer(source.truc)) stuff;
   {
     nanobind::gil_scoped_release release;

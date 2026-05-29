@@ -274,6 +274,7 @@ def DelaunayLowerstar(
     verbose: bool = False,
     clear: bool = True,
     flagify: bool = False,
+    interlevel: bool = False,
     recover_ids: Optional[bool] = None,
 ):
     """
@@ -281,6 +282,8 @@ def DelaunayLowerstar(
 
     Reference: Alonso et al., "Delaunay bifiltrations of functions on point
     clouds", https://doi.org/10.1137/1.9781611977912.173
+    Bifunction/interlevel support follows Alonso et al., "Bifunction and
+    Interlevel Delaunay Trifiltrations", https://doi.org/10.4230/LIPIcs.SoCG.2026.5
 
     For scalar `phi : X -> R`, intended continuum model is sublevel-offset family
 
@@ -289,18 +292,22 @@ def DelaunayLowerstar(
     X_s = {x in X | phi(x) <= s}.
     ```
 
+    For bifunction `phi : X -> R^2`, grades are `(geometric_scale, f1, f2)`.
+    For `interlevel=True`, scalar values `f` are encoded as bifunction
+    `(-f, f)`, so intervals `[a,b]` correspond to coordinates `(-a,b)`.
+
     Instead of using full Rips complex, this constructor uses incremental
     Delaunay structure and assigns each simplex a grade of the form
-    `(geometric_scale, max_vertex_value)`. This is typically much smaller than a
-    Rips-based model on low-dimensional Euclidean point clouds.
+    `(geometric_scale, max_vertex_value, ...)`. This is typically much smaller
+    than a Rips-based model on low-dimensional Euclidean point clouds.
 
     Parameters
     ----------
     points:
         Euclidean point cloud of shape `(n, d)`.
     function:
-        Scalar vertex values of shape `(n,)`. Only one extra parameter is
-        supported by this backend.
+        Vertex values of shape `(n,)`, `(n, 1)`, or `(n, 2)`. Two columns build
+        the bifunction Delaunay-Cech trifiltration.
     distance_matrix:
         Not supported here; Delaunay construction requires coordinates.
     threshold_radius:
@@ -318,6 +325,8 @@ def DelaunayLowerstar(
     flagify:
         Convert output to a flag complex after native construction. Required to
         preserve point gradients through geometric scale values.
+    interlevel:
+        If `True`, require scalar vertex values and encode them as `(-f, f)`.
     recover_ids:
         Recover original vertex ordering in native output. Defaults to `True`
         when `reduce_degree >= 0`.
@@ -342,6 +351,7 @@ def DelaunayLowerstar(
             "mode": "cpp_interface",
             "reduce_degree": reduce_degree,
             "flagify": flagify,
+            "interlevel": interlevel,
         },
     ) as timing:
         if distance_matrix is not None:
@@ -355,16 +365,46 @@ def DelaunayLowerstar(
                 "Cannot keep points gradient unless using `flagify=True`."
             )
         points = api.astensor(points)
-        function = api.astensor(function).squeeze()
+        function = api.astensor(function)
         timing.substep("converted_inputs")
-        if function.ndim != 1:
-            raise ValueError(
-                "Delaunay Lowerstar is only compatible with 1 additional parameter."
+        if function.ndim == 1:
+            scalar_function = api.reshape(function, (-1,))
+            function_matrix = (
+                api.cat([(-scalar_function)[:, None], scalar_function[:, None]], 1)
+                if interlevel
+                else scalar_function[:, None]
             )
-        points_np = api.asnumpy(points).astype(np.float64, copy=False)
-        function_np = api.asnumpy(function).astype(np.float64, copy=False).reshape(-1)
+        elif function.ndim == 2:
+            if function.shape[1] == 1:
+                scalar_function = api.reshape(function, (-1,))
+                function_matrix = (
+                    api.cat([(-scalar_function)[:, None], scalar_function[:, None]], 1)
+                    if interlevel
+                    else function
+                )
+            elif function.shape[1] == 2:
+                if interlevel:
+                    raise ValueError("interlevel=True expects scalar function values.")
+                function_matrix = function
+            else:
+                raise ValueError(
+                    "Delaunay Lowerstar supports one or two function parameters."
+                )
+        else:
+            raise ValueError("function should be a 1d or 2d array.")
+        num_function_parameters = int(function_matrix.shape[1])
+        if reduce_degree >= 0 and num_function_parameters > 1:
+            raise NotImplementedError(
+                "DelaunayLowerstar minimal presentations currently support only "
+                "scalar function values. Build the 3-parameter complex with "
+                "reduce_degree=-1 first."
+            )
+        points_np = np.ascontiguousarray(api.asnumpy(points), dtype=np.float64)
+        function_np = np.ascontiguousarray(api.asnumpy(function_matrix), dtype=np.float64)
         if points_np.ndim != 2:
             raise ValueError(f"point_cloud should be a 2d array. Got {points_np.shape=}")
+        if function_np.ndim != 2:
+            raise ValueError(f"function should be a 2d array after normalization. Got {function_np.shape=}")
         if points_np.shape[0] != function_np.shape[0]:
             raise ValueError(
                 f"point_cloud and function_values should have same number of points. "
@@ -377,11 +417,11 @@ def DelaunayLowerstar(
 
             if verbose:
                 _mp_logs.log_verbose(
-                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids}",
+                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids} function_parameters={num_function_parameters} interlevel={interlevel}",
                     enabled=verbose,
                 )
             slicer = _function_delaunay_interface.function_delaunay_to_simplextree(
-                SimplexTreeMulti(num_parameters=2, dtype=dtype),
+                SimplexTreeMulti(num_parameters=1 + num_function_parameters, dtype=dtype),
                 points_np,
                 function_np,
                 recover_ids,
@@ -393,7 +433,7 @@ def DelaunayLowerstar(
             slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
             if verbose:
                 _mp_logs.log_verbose(
-                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk=False recover_ids={recover_ids}",
+                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk=False recover_ids={recover_ids} function_parameters={num_function_parameters} interlevel={interlevel}",
                     enabled=verbose,
                 )
             slicer = _function_delaunay_interface.function_delaunay_to_slicer(
@@ -429,7 +469,11 @@ def DelaunayLowerstar(
                     zero = api.zeros(1, dtype=distances.dtype)
                     zero = api.to_device(zero, api.device(distances))
                     distance_values = api.cat([distances, zero])
-                    grid = get_exact_grid([distance_values, function], api=api)
+                    function_columns = [
+                        function_matrix[:, parameter]
+                        for parameter in range(num_function_parameters)
+                    ]
+                    grid = get_exact_grid([distance_values, *function_columns], api=api)
                     flagify_timing.substep("recomputed pairwise dists")
                     slicer = slicer.grid_squeeze(grid)
                     flagify_timing.substep("stored cdist gradients")

@@ -27,6 +27,7 @@ __all__ = [
     "data",
     "filtrations",
     "grids",
+    "invariants",
     "logs",
     "multiparameter_module_approximation",
     "plots",
@@ -43,7 +44,7 @@ if sys.platform != "win32":
 
 
 def __getattr__(name):
-    if name in {"data", "plots"}:
+    if name in {"data", "invariants", "plots"}:
         module = _import_module(f".{name}", __name__)
         globals()[name] = module
         return module

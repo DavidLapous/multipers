@@ -1,5 +1,5 @@
 #include <nanobind/nanobind.h>
-#include <nanobind/stl/vector.h>
+#include <nanobind/ndarray.h>
 
 #include <stdexcept>
 #include <type_traits>
@@ -10,7 +10,6 @@
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
-#include "nanobind_object_utils.hpp"
 #endif
 
 namespace nb = nanobind;
@@ -18,13 +17,13 @@ using namespace nb::literals;
 
 namespace mpfd {
 
+using F64Matrix = nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>;
+
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 using multipers::nanobind_helpers::is_simplextree_object;
 using multipers::nanobind_helpers::visit_simplextree_wrapper;
-using multipers::nanobind_utils::matrix_from_handle;
-using multipers::nanobind_utils::vector_from_handle;
 
 template <typename Wrapper>
 void build_function_delaunay_simplextree(Wrapper& wrapper,
@@ -38,17 +37,29 @@ void build_function_delaunay_simplextree(Wrapper& wrapper,
   }
 }
 
-inline multipers::function_delaunay_interface_input<int> build_input(nb::handle point_cloud,
-                                                                     nb::handle function_values,
+inline multipers::function_delaunay_interface_input<int> build_input(const F64Matrix& point_cloud,
+                                                                     const F64Matrix& function_values,
                                                                      bool recover_ids) {
-  auto points = matrix_from_handle<double>(point_cloud);
-  auto values = vector_from_handle<double>(function_values);
-  if (points.size() != values.size()) {
-    throw std::runtime_error("point_cloud and function_values sizes do not match.");
+  const std::size_t num_points = point_cloud.shape(0);
+  const std::size_t num_point_coordinates = point_cloud.shape(1);
+  const std::size_t num_rows = function_values.shape(0);
+  const std::size_t num_function_parameters = function_values.shape(1);
+  if (num_points != num_rows) {
+    throw std::runtime_error("point_cloud and function_values row counts do not match.");
+  }
+  std::vector<double> points;
+  std::vector<double> values;
+  {
+    nb::gil_scoped_release release;
+    points.assign(point_cloud.data(), point_cloud.data() + num_points * num_point_coordinates);
+    values.assign(function_values.data(), function_values.data() + num_rows * num_function_parameters);
   }
   multipers::function_delaunay_interface_input<int> input;
   input.points = std::move(points);
+  input.num_points = num_points;
+  input.num_point_coordinates = num_point_coordinates;
   input.function_values = std::move(values);
+  input.num_function_parameters = num_function_parameters;
   input.recover_ids = recover_ids;
   return input;
 }
@@ -75,7 +86,10 @@ nb::object function_delaunay_to_simplextree_for_target(nb::object target,
     output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
   }
   nb::object out = target.type()();
-  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) { wrapper.tree.copy_from_interface_object(output); });
+  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) {
+    nb::gil_scoped_release release;
+    wrapper.tree.copy_from_interface_object(output);
+  });
   return out;
 }
 
@@ -90,15 +104,16 @@ NB_MODULE(_function_delaunay_interface, m) {
   m.def("require", [available]() {
     if (!available()) {
       throw std::runtime_error(
-          "function_delaunay interface is not available in this build. Rebuild multipers with function_delaunay support to enable this backend.");
+          "function_delaunay interface is not available in this build. Rebuild multipers with function_delaunay "
+          "support to enable this backend.");
     }
   });
 
   m.def(
       "function_delaunay_to_slicer",
       [](nb::object slicer,
-         nb::handle point_cloud,
-         nb::handle function_values,
+         mpfd::F64Matrix point_cloud,
+         mpfd::F64Matrix function_values,
          int degree,
          bool multi_chunk,
          bool recover_ids,
@@ -108,8 +123,7 @@ NB_MODULE(_function_delaunay_interface, m) {
 #else
         auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
-            slicer,
-            [&](const nb::object& target) {
+            slicer, [&](const nb::object& target) {
               return mpfd::function_delaunay_to_slicer_for_target(target, input, degree, multi_chunk, verbose);
             });
 #endif
@@ -124,7 +138,11 @@ NB_MODULE(_function_delaunay_interface, m) {
 
   m.def(
       "function_delaunay_to_simplextree",
-      [](nb::object simplextree, nb::handle point_cloud, nb::handle function_values, bool recover_ids, bool verbose) {
+      [](nb::object simplextree,
+         mpfd::F64Matrix point_cloud,
+         mpfd::F64Matrix function_values,
+         bool recover_ids,
+         bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
         throw std::runtime_error("function_delaunay interface is disabled at compile time.");
 #else
