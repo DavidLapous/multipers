@@ -138,7 +138,6 @@ def signed_measure(
         and is_slicer(filtered_complex)
         and filtered_complex.is_minpres
         and invariant is not None
-        and ("hilbert" in invariant or "rank" in invariant)
     ):
         degree = filtered_complex.minpres_degree
     if degree is not None or len(degrees) == 0:
@@ -147,7 +146,6 @@ def signed_measure(
         is_slicer(filtered_complex)
         and filtered_complex.is_minpres
         and invariant is not None
-        and ("hilbert" in invariant or "rank" in invariant)
         and None not in degrees
         and not np.array_equal(
             np.asarray(degrees, dtype=int).reshape(-1),
