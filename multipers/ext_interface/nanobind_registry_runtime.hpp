@@ -15,6 +15,8 @@ namespace multipers::nanobind_helpers {
 
 using canonical_contiguous_f64_slicer = multipers::contiguous_f64_slicer;
 using canonical_contiguous_f64_slicer_wrapper = PySlicer<canonical_contiguous_f64_slicer>;
+using canonical_contiguous_i32_slicer = multipers::contiguous_i32_slicer;
+using canonical_contiguous_i32_slicer_wrapper = PySlicer<canonical_contiguous_i32_slicer>;
 using canonical_kcontiguous_f64_slicer = multipers::kcontiguous_f64_slicer;
 using canonical_kcontiguous_f64_slicer_wrapper = PySlicer<canonical_kcontiguous_f64_slicer>;
 
@@ -147,6 +149,8 @@ nanobind::object rewrap_slicer_output_to_original_type(const nanobind::object& o
                                                        const nanobind::object& output);
 void copy_into_canonical_contiguous_f64_slicer(const nanobind::handle& input, canonical_contiguous_f64_slicer& output);
 nanobind::object ensure_canonical_contiguous_f64_slicer_object(const nanobind::object& input);
+void copy_into_canonical_contiguous_i32_slicer(const nanobind::handle& input, canonical_contiguous_i32_slicer& output);
+nanobind::object ensure_canonical_contiguous_i32_slicer_object(const nanobind::object& input);
 void copy_into_canonical_kcontiguous_f64_slicer(const nanobind::handle& input,
                                                 canonical_kcontiguous_f64_slicer& output);
 nanobind::object ensure_canonical_kcontiguous_f64_slicer_object(const nanobind::object& input);
@@ -154,6 +158,13 @@ nanobind::object ensure_canonical_kcontiguous_f64_slicer_object(const nanobind::
 template <typename Func>
 nanobind::object run_with_canonical_contiguous_f64_slicer_output(const nanobind::object& original, Func&& func) {
   nanobind::object canonical_target = ensure_canonical_contiguous_f64_slicer_object(original);
+  nanobind::object output = std::forward<Func>(func)(canonical_target);
+  return rewrap_slicer_output_to_original_type(original, canonical_target, output);
+}
+
+template <typename Func>
+nanobind::object run_with_canonical_contiguous_i32_slicer_output(const nanobind::object& original, Func&& func) {
+  nanobind::object canonical_target = ensure_canonical_contiguous_i32_slicer_object(original);
   nanobind::object output = std::forward<Func>(func)(canonical_target);
   return rewrap_slicer_output_to_original_type(original, canonical_target, output);
 }

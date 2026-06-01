@@ -15,6 +15,37 @@ def _minimal_presentation_from_slicer(
     use_chunk=True,
     keep_generators=False,
 ):
+    if backend == "muphasa":
+        from multipers import _muphasa_interface
+
+        if full_resolution:
+            raise ValueError("Muphasa backend currently supports only full_resolution=False.")
+        if keep_generators:
+            raise ValueError("Muphasa backend does not support keep_generators yet.")
+        if slicer.num_parameters < 2:
+            raise ValueError("Muphasa backend expects at least 2-parameter slicers.")
+        _muphasa_interface.require()
+        if not slicer.is_squeezed:
+            slicer = slicer.grid_squeeze(slicer.get_filtration_grid("exact"))
+        with _mp_logs.timings(
+            "minimal_presentation",
+            enabled=verbose,
+            details={"backend": "muphasa", "mode": "cpp_interface", "degree": degree},
+        ) as timing:
+            new_slicer = _muphasa_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                full_resolution=False,
+                keep_generators=False,
+            )
+            timing.substep("backend_call")
+        new_slicer.minpres_degree = degree
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
     if backend == "mpfree":
         from multipers import _mpfree_interface
 
@@ -74,7 +105,7 @@ def _minimal_presentation_from_slicer(
         return new_slicer
 
     raise ValueError(
-        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `2pac`, and `2pac-homology`."
+        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `muphasa`, `2pac`, and `2pac-homology`."
     )
 
 
@@ -223,7 +254,7 @@ def minimal_presentation(
     slicer,
     degree=-1,
     degrees: Iterable[int] = [],
-    backend: Literal["mpfree", "2pac", "2pac-homology", ""] = "mpfree",
+    backend: Literal["mpfree", "muphasa", "2pac", "2pac-homology", ""] = "mpfree",
     n_jobs=-1,
     force=False,
     auto_clean=True,
@@ -239,7 +270,8 @@ def minimal_presentation(
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
 
-    Available backends include `mpfree`, `2pac` (2pac cohomology / dual
+    Available backends include `mpfree`, `muphasa` (Muphasa backend, currently
+    at least 2-parameter and full_resolution=False only), `2pac` (2pac cohomology / dual
     transpose route, with 2pac's bounded-support assumptions), and
     `2pac-homology` (the original direct homology route).
     """

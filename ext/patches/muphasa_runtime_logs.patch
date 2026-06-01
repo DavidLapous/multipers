@@ -1,0 +1,789 @@
+--- a/ext/muphasa/mph/IO.h
++++ b/ext/muphasa/mph/IO.h
+@@ -1,5 +1,7 @@
+ #ifndef MPH_IO_INCLUDED
+ #define MPH_IO_INCLUDED
++
++#include "muphasa_log_utils.h"
+ 
+ #include <iostream>
+ #include <vector>
+@@ -385,7 +387,7 @@
+             sort(high_vertices.begin(), high_vertices.end());
+             sort(low_vertices.begin(), low_vertices.end());
+             if( low_vertices != high_vertices){
+-                std::cout << "Finished computing boundary matrices." << std::endl;
++                MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+             }
+             column.push(column_entry_t(coeff, map[vertices]));
+             //coeff *= -1; //TODO: handle more types of coefficients than F_2.
+@@ -424,7 +426,7 @@
+             sort(high_vertices.begin(), high_vertices.end());
+             sort(low_vertices.begin(), low_vertices.end());
+             if( low_vertices != high_vertices){
+-                std::cout << "Finished computing boundary matrices." << std::endl;
++                MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+             }
+             size_t diff = 0;
+             while ( true ) {
+@@ -558,7 +560,7 @@
+      hom_dim {int} -- the dimension of the homology to be computed.
+      
+      */
+-    std::cout << "Starting to compute boundary matrices..." << std::endl;
++    MUPHASA_COUT << "Starting to compute boundary matrices..." << std::endl;
+     Matrix high_matrix;
+     Matrix low_matrix;
+     
+@@ -587,7 +589,7 @@
+         add_boundary_columns<input_t>(high_simplices, mid_simplices, high_matrix, grade_map);
+         add_boundary_columns<input_t>(mid_simplices, low_simplices, low_matrix, grade_map);
+     }
+-    std::cout << "Finished computing boundary matrices." << std::endl;
++    MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+     return std::pair<Matrix, Matrix>(high_matrix, low_matrix);
+ }
+ 
+@@ -739,7 +741,7 @@
+      hom_dim {int} -- the dimension of the homology to be computed.
+      
+      */
+-    std::cout << "Starting to compute boundary matrices..." << std::endl;
++    MUPHASA_COUT << "Starting to compute boundary matrices..." << std::endl;
+     Matrix high_matrix;
+     Matrix low_matrix;
+     
+@@ -751,13 +753,13 @@
+         std::vector<std::vector<std::vector<input_t>>> trajectory_dms = get_trajectory_dms(trajectories, metric);
+         
+       /*  for(size_t i=0; i<trajectory_dms.size(); i++){
+-            std::cout << "Trajectory dm " << i << ":" << std::endl;
++            MUPHASA_COUT << "Trajectory dm " << i << ":" << std::endl;
+             for (size_t j=0; j<trajectory_dms[i].size(); j++){
+-                std::cout << "Row " << j << ":" << std::endl;
++                MUPHASA_COUT << "Row " << j << ":" << std::endl;
+                 for (size_t k=0; k<trajectory_dms[i][j].size(); k++){
+-                    std::cout << trajectory_dms[i][j][k] << ", ";
+-                }
+-                std::cout << std::endl;
++                    MUPHASA_COUT << trajectory_dms[i][j][k] << ", ";
++                }
++                MUPHASA_COUT << std::endl;
+             }
+         } */
+         
+@@ -779,9 +781,9 @@
+         std::vector<hash_map<input_t, index_t>> grade_map = compute_grade_map<input_t>(high_simplices_extended, mid_simplices_extended, low_simplices);
+         add_boundary_columns_multicritical<input_t>(high_simplices_extended, mid_simplices_extended, high_matrix, grade_map);
+         add_boundary_columns<input_t>(mid_simplices_extended, low_simplices, low_matrix, grade_map);
+-        std::cout << "Finished computing boundary matrices." << std::endl;
+-    }
+-    std::cout << "Finished computing boundary matrices." << std::endl;
++        MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
++    }
++    MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+     return std::pair<Matrix, Matrix>(high_matrix, low_matrix);
+ }
+ 
+@@ -795,7 +797,7 @@
+      hom_dim {int} -- the dimension of the homology to be computed.
+      
+      */
+-    std::cout << "Starting to compute boundary matrices..." << std::endl;
++    MUPHASA_COUT << "Starting to compute boundary matrices..." << std::endl;
+     Matrix high_matrix;
+     Matrix low_matrix;
+     
+@@ -818,7 +820,7 @@
+         add_boundary_columns<index_t>(high_simplices, mid_simplices, high_matrix, grade_map);
+         add_boundary_columns<index_t>(mid_simplices, low_simplices, low_matrix, grade_map);
+     }
+-    std::cout << "Finished computing boundary matrices." << std::endl;
++    MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+     return std::pair<Matrix, Matrix>(high_matrix, low_matrix);
+ }
+ 
+@@ -831,7 +833,7 @@
+      hom_dim {int} -- the dimension of the homology to be computed.
+      
+      */
+-    std::cout << "Starting to compute boundary matrices..." << std::endl;
++    MUPHASA_COUT << "Starting to compute boundary matrices..." << std::endl;
+     Matrix high_matrix;
+     Matrix low_matrix;
+     
+@@ -860,13 +862,13 @@
+         add_boundary_columns<input_t>(high_simplices, mid_simplices, high_matrix, grade_map);
+         add_boundary_columns<input_t>(mid_simplices, low_simplices, low_matrix, grade_map);
+     }
+-    std::cout << "Finished computing boundary matrices." << std::endl;
++    MUPHASA_COUT << "Finished computing boundary matrices." << std::endl;
+     return std::pair<Matrix, Matrix>(high_matrix, low_matrix);
+ }
+ 
+ 
+ void verify_kernel(Matrix& kernel, Matrix& map){
+-    std::cout << "Starting to verify kernel of map...";
++    MUPHASA_COUT << "Starting to verify kernel of map...";
+     for(size_t i=0; i<kernel.size(); i++){
+         SignatureColumn working_column(kernel[i].grade, i, kernel[i]);
+         SignatureColumn result(kernel[i].grade, i);
+@@ -880,12 +882,12 @@
+         }
+         index_t pivot = result.get_pivot().get_index();
+         if(pivot!=-1){
+-            std::cerr << "Column is not in kernel of map";
++            MUPHASA_CERR << "Column is not in kernel of map";
+             throw "Kernel verification failed.";
+         }
+     }
+-    std::cout << "Finished verifying kernel of map.";
+-    std::cout << "Success.";
++    MUPHASA_COUT << "Finished verifying kernel of map.";
++    MUPHASA_COUT << "Success.";
+ }
+ 
+ std::vector<std::vector<input_t>> read_point_cloud(std::istream& input_stream, int precision) {
+@@ -901,7 +903,7 @@
+      Returns:
+             std::vector<std::vector<input_t>> -- a list of points represented as vectors with entries of type 'input_t'.
+      **/
+-    std::cout << "Starting to read point cloud...";
++    MUPHASA_COUT << "Starting to read point cloud...";
+     std::vector<std::vector<input_t>> points;
+     std::string line;
+     input_t value;
+@@ -916,7 +918,7 @@
+             points.push_back(point);
+         }
+     }
+-    std::cout << "Finished reading points: " << points.size();
++    MUPHASA_COUT << "Finished reading points: " << points.size();
+     return points;
+ }
+ 
+--- a/ext/muphasa/mph/column.h
++++ b/ext/muphasa/mph/column.h
+@@ -1,5 +1,7 @@
+ #ifndef MPH_COLUMN_INCLUDED
+ #define MPH_COLUMN_INCLUDED
++
++#include "muphasa_log_utils.h"
+ 
+ #include <queue>
+ #include <iostream>
+@@ -274,9 +276,9 @@
+ 
+ inline void Column::print(){
+   for(index_t entry : *this){
+-      std::cout << entry << ";";
++      MUPHASA_COUT << entry << ";";
+   }
+-  std::cout << std::endl;
++  MUPHASA_COUT << std::endl;
+   return;
+ }
+ 
+@@ -398,9 +400,9 @@
+ 
+ inline void VectorColumn::print(){
+   for(index_t entry : *this){
+-      std::cout << entry << ";";
++      MUPHASA_COUT << entry << ";";
+   }
+-  std::cout << std::endl;
++  MUPHASA_COUT << std::endl;
+   return;
+ }
+ 
+--- a/ext/muphasa/mph/grade.h
++++ b/ext/muphasa/mph/grade.h
+@@ -1,5 +1,7 @@
+ #ifndef MPH_GRADE_INCLUDED
+ #define MPH_GRADE_INCLUDED
++
++#include "muphasa_log_utils.h"
+ 
+ #include "utils.h"
+ #include <vector>
+@@ -81,7 +83,7 @@
+ {
+ /* Colexicographical order */
+     if(this->size()!=other_grade.size()){
+-        std::cout<<"error";
++        MUPHASA_COUT<<"error";
+     }
+     assert(this->size()==other_grade.size());
+     size_t i=other_grade.size()-1;
+@@ -143,15 +145,15 @@
+ 
+ inline void grade_t::print(){
+   if(this->size()>0){
+-    std::cout << "(" << this->at(0);
++    MUPHASA_COUT << "(" << this->at(0);
+     for(size_t i=1; i<this->size(); i++){
+-      std::cout << ", " << this->at(i);
+-    }
+-    std::cout << ")\n";
++      MUPHASA_COUT << ", " << this->at(i);
++    }
++    MUPHASA_COUT << ")\n";
+   } else{
+-    std::cout << "()\n";
+-  }
+-  std::cout << std::flush;
++    MUPHASA_COUT << "()\n";
++  }
++  MUPHASA_COUT << std::flush;
+ }
+ 
+ inline std::string grade_t::to_string(){
+--- a/ext/muphasa/mph/main.cpp
++++ b/ext/muphasa/mph/main.cpp
+@@ -29,6 +29,7 @@
+ #include "IO.h"
+ #include "examples.h"
+ #include "landscapes.h"
++#include "muphasa_log_utils.h"
+ 
+ 
+ double res_memory=0;
+@@ -48,7 +49,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -176,7 +177,7 @@
+             gb_columns_output.push_back(gb_columns[GB[i][j].get_index()]);
+         }
+     }
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return std::pair<Matrix, Matrix>(gb_columns_output, syzygies_output);
+ }
+ 
+@@ -192,7 +193,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -390,7 +391,7 @@
+             gb_columns_output.push_back(gb_columns[GB[i][j].get_index()]);
+         }
+     }
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return std::pair<Matrix, Matrix>(gb_columns_output, syzygies_output);
+ }
+ 
+@@ -406,7 +407,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -584,7 +585,7 @@
+     
+     get_mem_usage(virt_memory, res_memory);
+     
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return std::pair<Matrix, Matrix>(gb_columns, syzygies);
+ }
+ 
+@@ -600,7 +601,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -765,7 +766,7 @@
+             syzygies_output.push_back(SignatureColumn(Syz[i][j].get_grade(), syzygies_output.size(), syzygies[Syz[i][j].get_index()]));
+         }
+     }
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return syzygies_output;
+ }
+ 
+@@ -781,7 +782,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -943,7 +944,7 @@
+             }
+         }
+     }
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return gb_columns;
+ }
+ 
+@@ -960,7 +961,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -1163,7 +1164,7 @@
+             gb_columns_output.push_back(gb_columns[GB[i][j].get_index()]);
+         }
+     }
+-    std::cout << "Finished computing Groebner basis." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner basis." << std::endl;
+     return std::pair<Matrix, std::vector<std::pair<grade_t, std::vector<size_t>>>>(gb_columns_output, sig_basis);
+ }
+ 
+@@ -1179,7 +1180,7 @@
+      CompressedLandscape -- a compressed representation of a multiparameter persistence landscape.
+      */
+     
+-    std::cout << "Starting to compute persistence landscape..." << std::endl;
++    MUPHASA_COUT << "Starting to compute persistence landscape..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(presentation.begin(), presentation.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -1383,7 +1384,7 @@
+             }
+         }
+     }
+-    std::cout << "Finished computing compressed landscape." << std::endl;
++    MUPHASA_COUT << "Finished computing compressed landscape." << std::endl;
+     landscape.sort_colex();
+     return landscape;
+ }
+@@ -1448,7 +1449,7 @@
+ 
+ 
+ Matrix buchberger(Matrix& columns){
+-    std::cout << "Computing GB for the image using Buchbergers algorithm." << std::endl;
++    MUPHASA_COUT << "Computing GB for the image using Buchbergers algorithm." << std::endl;
+     size_t max_pivot = 0;
+     for(size_t i=0; i<columns.size(); i++){
+         if(columns[i].get_pivot_index() > max_pivot){
+@@ -1498,7 +1499,7 @@
+         }
+         
+     }
+-    std::cout << "Finished computing a GB of size: " << G.size() << std::endl;
++    MUPHASA_COUT << "Finished computing a GB of size: " << G.size() << std::endl;
+     return G;
+ }
+ 
+@@ -1514,7 +1515,7 @@
+      std::vector<SignatureColumn> -- a list of vectors describing a minimal Groebner basis for the kernel of the map.
+      */
+     
+-    std::cout << "Starting to compute Groebner bases..." << std::endl;
++    MUPHASA_COUT << "Starting to compute Groebner bases..." << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(columns.begin(), columns.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -1594,7 +1595,7 @@
+             syzygies_output.push_back(SignatureColumn(Syz[i][j].get_grade(), syzygies_output.size(), syzygies[Syz[i][j].get_index()]));
+         }
+     }
+-    std::cout << "Finished computing Groebner bases." << std::endl;
++    MUPHASA_COUT << "Finished computing Groebner bases." << std::endl;
+     return syzygies_output;
+ }
+ 
+@@ -1611,7 +1612,7 @@
+      hash_map<size_t, size_t> -- a map that sends a local positive row to a local negative column.
+      
+      */
+-    std::cout << "Starting to compute local pairs...";
++    MUPHASA_COUT << "Starting to compute local pairs...";
+     hash_map<size_t, size_t> pairs;
+     for(size_t column_index=0; column_index < columns.size(); column_index++){
+         if(columns[column_index].local != 1 && columns[column_index].get_pivot().get_index() != -1 && row_grades[columns[column_index].get_pivot().get_index()] == columns[column_index].grade){
+@@ -1640,7 +1641,7 @@
+             }
+         }
+     }
+-    std::cout << "Finished computing local pairs.";
++    MUPHASA_COUT << "Finished computing local pairs.";
+     return pairs;
+ }
+ 
+@@ -1656,7 +1657,7 @@
+      Matrix -- a minimized presentation matrix.
+      
+      */
+-    std::cout << "Starting to compute global columns...";
++    MUPHASA_COUT << "Starting to compute global columns...";
+     
+     Matrix global_columns;
+     for(size_t index_column_to_reduce = 0; index_column_to_reduce<columns.size();index_column_to_reduce++) {
+@@ -1683,7 +1684,7 @@
+             global_columns.push_back(global_column);
+         }
+     }
+-    std::cout << "Finished computing global columns of size: " << global_columns.size();
++    MUPHASA_COUT << "Finished computing global columns of size: " << global_columns.size();
+     return global_columns;
+ }
+ 
+@@ -1800,7 +1801,7 @@
+      */
+     
+     /* Vectors to store the columns of the GBs */
+-    std::cout << "Starting to compute minimal generating set for columns of size: " << generators.size() << std::endl;
++    MUPHASA_COUT << "Starting to compute minimal generating set for columns of size: " << generators.size() << std::endl;
+     
+     /* Sort columns colexicographically */
+     sort(generators.begin(), generators.end(), [ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -1946,7 +1947,7 @@
+      */
+     
+     /* Vectors to store the columns of the GBs */
+-    std::cout << "Starting to compute minimal generating set for columns of size: " << generators.size()  << std::endl;
++    MUPHASA_COUT << "Starting to compute minimal generating set for columns of size: " << generators.size()  << std::endl;
+     
+     for(size_t i=0; i<generators.size(); i++){
+         generators[i].signature_index = i;
+@@ -2108,7 +2109,7 @@
+              return lhs.signature_index < rhs.signature_index;
+          });
+     get_mem_usage(virt_memory, res_memory);
+-    std::cout << "Finished computing minimal generating set of size: " << minimal_generating_set.size();
++    MUPHASA_COUT << "Finished computing minimal generating set of size: " << minimal_generating_set.size();
+     return std::pair<Matrix, Matrix>(minimal_generating_set, change_of_basis_map);
+ }
+ 
+@@ -2140,7 +2141,7 @@
+      hash_map<size_t, grade_t> -- a map of the row grades.
+      */
+     
+-    std::cout << "Starting to presentation degree by degree..."  << std::endl;
++    MUPHASA_COUT << "Starting to presentation degree by degree..."  << std::endl;
+     
+     /* Sort columns colexicographically */
+     for(size_t i=0; i<columns.size(); i++){
+@@ -2533,7 +2534,7 @@
+             }
+         }
+     }
+-    std::cout << "Nonminimal presentation of size "<< syzygiesH.size() << std::endl;
++    MUPHASA_COUT << "Nonminimal presentation of size "<< syzygiesH.size() << std::endl;
+     
+     Matrix filtered_gb_columnsH;
+     size_t j = 0;
+@@ -2596,7 +2597,7 @@
+      hash_map<size_t, grade_t> -- a map of the row grades.
+      */
+     
+-    std::cout << "Starting to presentation degree by degree..."  << std::endl;
++    MUPHASA_COUT << "Starting to presentation degree by degree..."  << std::endl;
+     
+     /* Sort columns colexicographically */
+     for(size_t i=0; i<columns.size(); i++){
+@@ -3026,7 +3027,7 @@
+             }
+         }
+     }
+-    std::cout << "Nonminimal presentation of size "<< syzygiesH.size() << std::endl;
++    MUPHASA_COUT << "Nonminimal presentation of size "<< syzygiesH.size() << std::endl;
+     
+     Matrix filtered_gb_columnsH;
+     size_t j = 0;
+@@ -3084,7 +3085,7 @@
+      
+      */
+     
+-    std::cout << "Starting to compute presentation...";
++    MUPHASA_COUT << "Starting to compute presentation...";
+     Matrix generating_set_image = compute_minimal_generating_set(image_generators);
+     
+     //Sort image and kernel gens in colex and lex respectively
+@@ -3108,7 +3109,7 @@
+         generating_set_kernel[i].syzygy.push(column_entry_t(1, i));
+     }
+     
+-    std::cout << "Expressing the image columns in terms of the kernel...";
++    MUPHASA_COUT << "Expressing the image columns in terms of the kernel...";
+     
+     hash_map<size_t, size_t> index_map_low, index_map_high;
+     for(size_t i=0; i<generating_set_kernel.size(); i++){
+@@ -3164,7 +3165,7 @@
+             pivot = column.get_pivot().get_index();
+             if(pivot != -1){
+                 if(pivot_map[pivot] == -1){
+-                    std::cerr << "Cannot express image column in terms of kernel. Throwing exception...";
++                    MUPHASA_CERR << "Cannot express image column in terms of kernel. Throwing exception...";
+                     throw "Failed to express image column in terms of kernel generating set.";
+                 }
+                 column.plus(generating_set_kernel[pivot_map[pivot]]);
+@@ -3218,7 +3219,7 @@
+         minimized_presentation.push_back(column);
+     }
+     
+-    std::cout << "Finished computing presentation of size "<< minimized_presentation.size();
++    MUPHASA_COUT << "Finished computing presentation of size "<< minimized_presentation.size();
+     return std::pair<Matrix, hash_map<size_t, grade_t>>(minimized_presentation, row_grade_map);
+ }
+ 
+@@ -3226,7 +3227,7 @@
+     /** Input a minimal set of generators for the image and a Groebner basis for the kernel.
+      
+      */
+-    std::cout << "Starting to compute presentation using Schreyer's algorithm"<< std::endl;
++    MUPHASA_COUT << "Starting to compute presentation using Schreyer's algorithm"<< std::endl;
+     
+     sort(kernel_generators.begin(), kernel_generators.end(),[ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+          {
+@@ -3274,7 +3275,7 @@
+     }
+     
+     Matrix syzygy_module = compute_syzygy_module(kernel_generators);
+-    std::cout << "Computed Syzygy module of size: "<< syzygy_module.size()<< std::endl;
++    MUPHASA_COUT << "Computed Syzygy module of size: "<< syzygy_module.size()<< std::endl;
+     for(auto& column : translated_image_columns){
+         syzygy_module.push_back(column);
+     }
+@@ -3283,7 +3284,7 @@
+     Matrix& generating_set_kernel = m_pair.first;
+     Matrix& change_of_basis_map = m_pair.second;
+     
+-    std::cout << "Minimal generating set for kernel of size: "<< generating_set_kernel.size()<< std::endl;
++    MUPHASA_COUT << "Minimal generating set for kernel of size: "<< generating_set_kernel.size()<< std::endl;
+     
+     hash_map<size_t, grade_t> row_grade_map;
+     for(size_t j=0; j<generating_set_kernel.size(); j++){
+@@ -3313,9 +3314,9 @@
+             }
+             if(ker_column.get_pivot().get_index() != -1){
+                 copy.print();
+-                std::cout << "\n";
++                MUPHASA_COUT << "\n";
+                 column.print();
+-                std::cout << "\n";
++                MUPHASA_COUT << "\n";
+                 ker_column.print();
+                 throw "Column non-zero";
+             }
+@@ -3325,7 +3326,7 @@
+         }
+     }
+ 
+-    std::cout << "Computed non-minimal presentation of size: " << presentation.size()<< std::endl;
++    MUPHASA_COUT << "Computed non-minimal presentation of size: " << presentation.size()<< std::endl;
+     
+     // Compute minimal generating set from syz-module and image columns
+     sort(presentation.begin(), presentation.end(),[ ](  SignatureColumn& lhs,  SignatureColumn& rhs )
+@@ -3397,7 +3398,7 @@
+         grade_t v = grade_iterator.next();
+         size_t max_rank_index = 0;
+         if ( v == vv ) {
+-            std::cout << std::endl;
++            MUPHASA_COUT << std::endl;
+         }
+         for ( size_t k=0; k<=v[v.size()-1]; k++ ) {
+             // Calculate rank of map from v-i to v+i
+@@ -3953,7 +3954,7 @@
+     auto stop = std::chrono::high_resolution_clock::now();
+     auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+     
+-    std::cout << "Time elapsed: " << duration.count() << " seconds" << std::endl;
++    MUPHASA_COUT << "Time elapsed: " << duration.count() << " seconds" << std::endl;
+     GradedMatrix graded_matrix = translateOutputMatrix(presentation_output.first);
+     for(std::pair<size_t, grade_t> entry : presentation_output.second){
+         std::vector<int> row_grade;
+@@ -4105,7 +4106,7 @@
+     std::pair<Matrix, std::vector<grade_t>> minimal_presentation = computeMinimalPresentation_3p(image, input_matrix, debug);
+     auto stop = std::chrono::high_resolution_clock::now();
+     auto b_time = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+-    std::cout << " Presentation size: " << minimal_presentation.first.size() << std::endl;//gbs2.size() << std::endl;
++    MUPHASA_COUT << " Presentation size: " << minimal_presentation.first.size() << std::endl;//gbs2.size() << std::endl;
+     double time = b_time.count();
+     double size = minimal_presentation.first.size();
+     return std::vector<double>{time, res_memory, size};
+@@ -4117,7 +4118,7 @@
+     std::pair<Matrix, hash_map<size_t, grade_t>> presentation = compute_presentation_schreyer(image, kernel);
+     auto stop = std::chrono::high_resolution_clock::now();
+     auto b_time = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+-    std::cout << " Presentation size: " << presentation.first.size() << std::endl;//gbs2.size() << std::endl;
++    MUPHASA_COUT << " Presentation size: " << presentation.first.size() << std::endl;//gbs2.size() << std::endl;
+     double time = b_time.count();
+     double size = presentation.first.size();
+     return std::vector<double>{time, res_memory, size};
+@@ -4133,7 +4134,7 @@
+     std::vector<std::vector<double>> output_size;
+     std::vector<double> boundary_matrix_size;
+     while(n < 201){
+-        std::cout << "\n Iteration: " << n << std::endl;
++        MUPHASA_COUT << "\n Iteration: " << n << std::endl;
+         uint32_t seed = 1;
+         std::vector<std::vector<input_t>> points = time_varying_point_cloud(10, 10*n, 3, seed);//time_varying_point_cloud(60, 100, 3, 1);
+         std::vector<std::vector<input_t>> xpoints = points;
+@@ -4194,7 +4195,7 @@
+         Matrix boundary = boundaries.second;
+         Matrix image = compute_minimal_generating_set(boundaries.first);
+         
+-        std::cout << "Size of boundary matrix: " << boundary.size() << " Size of image matrix: " << image.size() << std::endl;
++        MUPHASA_COUT << "Size of boundary matrix: " << boundary.size() << " Size of image matrix: " << image.size() << std::endl;
+         
+         for(size_t i=0; i<boundary.size(); i++){
+             boundary[i].signature_index = i;
+@@ -4239,34 +4240,34 @@
+         output_size.push_back(std::vector<double>{gb_schreyer[2], gb_res[2]});
+         boundary_matrix_size.push_back(boundary.size());
+         
+-        std::cout << "$"<< metric_thresh << "$ & " << times[times.size()-1][0]/1000 << " & " << resident_memory[times.size()-1][0] << " & " << times[times.size()-1][1]/1000 << " & " << resident_memory[times.size()-1][1]  << "\n";
++        MUPHASA_COUT << "$"<< metric_thresh << "$ & " << times[times.size()-1][0]/1000 << " & " << resident_memory[times.size()-1][0] << " & " << times[times.size()-1][1]/1000 << " & " << resident_memory[times.size()-1][1]  << "\n";
+         
+         n+= 10;
+     }
+     for(size_t i=0; i<times.size(); i++){
+-        std::cout << "$"<< metric_thresh+i*0.05 << "$ & " << times[i][0]/1000 << " & " << resident_memory[i][0] << " & " << times[i][1]/1000 << " & " << resident_memory[i][1] << "\n";
+-    }
+-    std::cout << "\n";
+-    std::cout << "\n Times GBS+Schreyer \n";
++        MUPHASA_COUT << "$"<< metric_thresh+i*0.05 << "$ & " << times[i][0]/1000 << " & " << resident_memory[i][0] << " & " << times[i][1]/1000 << " & " << resident_memory[i][1] << "\n";
++    }
++    MUPHASA_COUT << "\n";
++    MUPHASA_COUT << "\n Times GBS+Schreyer \n";
+     for(auto& v : times){
+-        std::cout << v[0] << ", ";
+-    }
+-    std::cout << "\n Times PresentationPair \n";
++        MUPHASA_COUT << v[0] << ", ";
++    }
++    MUPHASA_COUT << "\n Times PresentationPair \n";
+     for(auto& v : times){
+-        std::cout << v[1] << ", ";
+-    }
+-    std::cout << "\n Resident memory GBS+Schreyer\n";
++        MUPHASA_COUT << v[1] << ", ";
++    }
++    MUPHASA_COUT << "\n Resident memory GBS+Schreyer\n";
+     for(auto& v : resident_memory){
+-        std::cout << v[0] << ", ";
+-    }
+-    std::cout << "\n Resident memory PresentationPair\n";
++        MUPHASA_COUT << v[0] << ", ";
++    }
++    MUPHASA_COUT << "\n Resident memory PresentationPair\n";
+     for(auto& v : resident_memory){
+-        std::cout << v[1] << ", ";
+-    }
+-    
+-    std::cout << "\n Input size \n";
++        MUPHASA_COUT << v[1] << ", ";
++    }
++    
++    MUPHASA_COUT << "\n Input size \n";
+     for(auto& v : boundary_matrix_size){
+-        std::cout << v << ", ";
++        MUPHASA_COUT << v << ", ";
+     }
+ }
+ 
+@@ -4274,7 +4275,7 @@
+ /* Input */
+ 
+ void print_usage_and_exit(int exit_code) {
+-    std::cerr
++    MUPHASA_CERR
+     << "Usage: "
+     << "mph "
+     << "[options] [filename]" << std::endl
+@@ -4322,7 +4323,7 @@
+         Matrix high_matrix, low_matrix;
+         std::ifstream file_stream(filename);
+         if (file_stream.fail()) {
+-            std::cerr << "couldn't open file " << filename << std::endl;
++            MUPHASA_CERR << "couldn't open file " << filename << std::endl;
+             exit(-1);
+         }
+         read_input_file<SyzColumn, SyzColumn>(file_stream, high_matrix, low_matrix);
+@@ -4330,7 +4331,7 @@
+     } else{
+         std::ifstream file_stream(filename);
+         if (filename && file_stream.fail()) {
+-            std::cerr << "couldn't open file " << filename << std::endl;
++            MUPHASA_CERR << "couldn't open file " << filename << std::endl;
+             exit(-1);
+         }
+         
+--- a/ext/muphasa/mph/matrix.h
++++ b/ext/muphasa/mph/matrix.h
+@@ -1,5 +1,7 @@
+ #ifndef MPH_MATRIX_INCLUDED
+ #define MPH_MATRIX_INCLUDED
++
++#include "muphasa_log_utils.h"
+ 
+ #include "signatureColumn.h"
+ 
+@@ -47,7 +49,7 @@
+     }
+     
+     void print(){
+-        std::cout << to_string();
++        MUPHASA_COUT << to_string();
+     }
+     
+ };
+--- /dev/null
++++ b/ext/muphasa/mph/muphasa_log_utils.h
+@@ -0,0 +1,37 @@
++#pragma once
++
++#include <iostream>
++
++#include "ext_interface/backend_log_policy.hpp"
++
++namespace muphasa {
++
++class null_streambuf : public std::streambuf {
++ protected:
++  int overflow(int c) override { return traits_type::not_eof(c); }
++};
++
++inline std::ostream& log_stream() {
++  if (multipers::backend_log_policy::backend_log_enabled(
++          multipers::backend_log_policy::backend_log_bit::muphasa)) {
++    return std::cout;
++  }
++  static null_streambuf buffer;
++  static std::ostream out(&buffer);
++  return out;
++}
++
++inline std::ostream& error_stream() {
++  if (multipers::backend_log_policy::backend_log_enabled(
++          multipers::backend_log_policy::backend_log_bit::muphasa)) {
++    return std::cerr;
++  }
++  static null_streambuf buffer;
++  static std::ostream out(&buffer);
++  return out;
++}
++
++}  // namespace muphasa
++
++#define MUPHASA_COUT ::muphasa::log_stream()
++#define MUPHASA_CERR ::muphasa::error_stream()

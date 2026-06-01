@@ -53,6 +53,46 @@ inline std::ostream& error_stream() {
 """
 
 
+MUPHASA_LOG_UTILS = r"""#pragma once
+
+#include <iostream>
+
+#include "ext_interface/backend_log_policy.hpp"
+
+namespace muphasa {
+
+class null_streambuf : public std::streambuf {
+ protected:
+  int overflow(int c) override { return traits_type::not_eof(c); }
+};
+
+inline std::ostream& log_stream() {
+  if (multipers::backend_log_policy::backend_log_enabled(
+          multipers::backend_log_policy::backend_log_bit::muphasa)) {
+    return std::cout;
+  }
+  static null_streambuf buffer;
+  static std::ostream out(&buffer);
+  return out;
+}
+
+inline std::ostream& error_stream() {
+  if (multipers::backend_log_policy::backend_log_enabled(
+          multipers::backend_log_policy::backend_log_bit::muphasa)) {
+    return std::cerr;
+  }
+  static null_streambuf buffer;
+  static std::ostream out(&buffer);
+  return out;
+}
+
+}  // namespace muphasa
+
+#define MUPHASA_COUT ::muphasa::log_stream()
+#define MUPHASA_CERR ::muphasa::error_stream()
+"""
+
+
 def _replace_once(text: str, old: str, new: str, rel_path: Path) -> str:
     if old not in text:
         raise ValueError(f"Expected snippet not found in {rel_path.as_posix()}")
@@ -74,11 +114,55 @@ def _replace_streams_active(text: str) -> str:
     return "".join(out)
 
 
+def _replace_muphasa_streams_active(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    out = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("//"):
+            out.append(line)
+            continue
+        line = re.sub(r"\bstd::cout\b", "MUPHASA_COUT", line)
+        line = re.sub(r"\bstd::cerr\b", "MUPHASA_CERR", line)
+        out.append(line)
+    return "".join(out)
+
+
+def _patch_muphasa_priority_queue_guards(text: str, rel_path: Path) -> str:
+    if rel_path.name != "main.cpp":
+        return text
+    lines = text.splitlines(keepends=True)
+    out = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(("//", "/*", "*")):
+            out.append(line)
+            continue
+        out.append(line.replace("while(v == grades.top()){", "while(!grades.empty() && v == grades.top()){"))
+    return "".join(out)
+
+
 def _ensure_function_delaunay_log_include(text: str, rel_path: Path) -> str:
     include = "#include <function_delaunay/log_utils.h>"
     if rel_path.name == "log_utils.h" or include in text:
         return text
     return _replace_once(text, "#pragma once\n", f"#pragma once\n\n{include}\n", rel_path)
+
+
+def _ensure_muphasa_log_include(text: str, rel_path: Path) -> str:
+    include = '#include "muphasa_log_utils.h"'
+    if rel_path.name == "muphasa_log_utils.h" or include in text:
+        return text
+    if rel_path.suffix == ".h":
+        guard_match = re.search(r"#define\s+[^\n]+\n", text)
+        if guard_match is None:
+            return include + "\n" + text
+        insert_at = guard_match.end()
+        return text[:insert_at] + "\n" + include + "\n" + text[insert_at:]
+    include_anchor = '#include "landscapes.h"\n'
+    if include_anchor in text:
+        return _replace_once(text, include_anchor, include_anchor + include + "\n", rel_path)
+    return include + "\n" + text
 
 
 def _patch_verbose_runtime_flag(text: str, rel_path: Path, *, ns: str, bit: str, default: str = "false", decls_before: str = "") -> str:
@@ -908,6 +992,23 @@ def _function_delaunay_targets() -> dict[Path, str]:
     return out
 
 
+def _muphasa_targets() -> dict[Path, str]:
+    base = REPO_ROOT / "ext" / "muphasa" / "mph"
+    out: dict[Path, str] = {}
+    for path in sorted(list(base.glob("*.cpp")) + list(base.glob("*.h"))):
+        if path.name == "muphasa_log_utils.h":
+            continue
+        rel = path.relative_to(REPO_ROOT)
+        original = path.read_text()
+        patched = _replace_muphasa_streams_active(original)
+        patched = _patch_muphasa_priority_queue_guards(patched, rel)
+        if patched != original:
+            patched = _ensure_muphasa_log_include(patched, rel)
+            out[rel] = patched
+    out[Path("ext/muphasa/mph/muphasa_log_utils.h")] = MUPHASA_LOG_UTILS
+    return out
+
+
 def _mpfree_targets() -> dict[Path, str]:
     return _build_explicit_targets(
         {
@@ -962,6 +1063,10 @@ GENERATORS = {
     "mpfree": (
         _mpfree_targets,
         PATCH_DIR / "mpfree_runtime_logs.patch",
+    ),
+    "muphasa": (
+        _muphasa_targets,
+        PATCH_DIR / "muphasa_runtime_logs.patch",
     ),
     "multi_critical_logs": (
         _multi_critical_logs_targets,

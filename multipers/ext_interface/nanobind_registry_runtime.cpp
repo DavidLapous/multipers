@@ -13,6 +13,10 @@ inline bool is_canonical_contiguous_f64_slicer_object(const nb::handle& input) {
   return nb::isinstance<canonical_contiguous_f64_slicer_wrapper>(input);
 }
 
+inline bool is_canonical_contiguous_i32_slicer_object(const nb::handle& input) {
+  return nb::isinstance<canonical_contiguous_i32_slicer_wrapper>(input);
+}
+
 inline bool is_canonical_kcontiguous_f64_slicer_object(const nb::handle& input) {
   return nb::isinstance<canonical_kcontiguous_f64_slicer_wrapper>(input);
 }
@@ -31,8 +35,10 @@ inline nb::object simplextree_class_from_template_id(int template_id) {
 
 template <typename CanonicalSlicer>
 void copy_into_canonical_slicer_impl(const nb::handle& input, CanonicalSlicer& output) {
-  visit_const_slicer_wrapper(
-      input, [&]<typename Desc>(const typename Desc::wrapper& source) { output = CanonicalSlicer(source.truc); });
+  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
+    nb::gil_scoped_release release;
+    output = CanonicalSlicer(source.truc);
+  });
 }
 
 template <typename CanonicalWrapper, typename CanonicalSlicer, typename IsCanonical>
@@ -107,6 +113,15 @@ void copy_into_canonical_contiguous_f64_slicer(const nb::handle& input, canonica
 nb::object ensure_canonical_contiguous_f64_slicer_object(const nb::object& input) {
   return ensure_canonical_slicer_object_impl<canonical_contiguous_f64_slicer_wrapper, canonical_contiguous_f64_slicer>(
       input, is_canonical_contiguous_f64_slicer_object);
+}
+
+void copy_into_canonical_contiguous_i32_slicer(const nb::handle& input, canonical_contiguous_i32_slicer& output) {
+  copy_into_canonical_slicer_impl(input, output);
+}
+
+nb::object ensure_canonical_contiguous_i32_slicer_object(const nb::object& input) {
+  return ensure_canonical_slicer_object_impl<canonical_contiguous_i32_slicer_wrapper, canonical_contiguous_i32_slicer>(
+      input, is_canonical_contiguous_i32_slicer_object);
 }
 
 void copy_into_canonical_kcontiguous_f64_slicer(const nb::handle& input, canonical_kcontiguous_f64_slicer& output) {

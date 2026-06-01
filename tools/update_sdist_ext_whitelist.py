@@ -34,6 +34,7 @@ def _config_only_ext_files(root: Path) -> set[str]:
         "ext/patches/function_delaunay_runtime_logs.patch",
         "ext/patches/deg_rips_edge_copy_reducer.patch",
         "ext/patches/mpfree_runtime_logs.patch",
+        "ext/patches/muphasa_runtime_logs.patch",
         "ext/patches/multi_critical_features.patch",
         "ext/patches/multi_critical_runtime_logs.patch",
     }
@@ -64,6 +65,13 @@ def _config_only_ext_files(root: Path) -> set[str]:
         for path in sorted(base.rglob("*")):
             if path.is_file() and path.name != ".DS_Store":
                 required.add(path.relative_to(root).as_posix())
+
+    muphasa_core = root / "ext/muphasa/mph"
+    if muphasa_core.is_dir():
+        for pattern in ("*.cpp", "*.h"):
+            for path in sorted(muphasa_core.glob(pattern)):
+                if path.is_file():
+                    required.add(path.relative_to(root).as_posix())
 
     return {path for path in required if (root / path).is_file()}
 

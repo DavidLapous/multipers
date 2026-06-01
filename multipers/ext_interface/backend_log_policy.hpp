@@ -10,6 +10,7 @@ enum class backend_log_bit : uint32_t {
   function_delaunay = 1u << 2,
   twopac = 1u << 3,
   deg_rips = 1u << 4,
+  muphasa = 1u << 5,
 };
 
 using backend_log_mask = uint32_t;

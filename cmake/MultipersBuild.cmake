@@ -11,6 +11,7 @@ function(multipers_default_disable_flag backend_name flag_name)
 endfunction()
 
 multipers_default_disable_flag("mpfree" MULTIPERS_DISABLE_MPFREE_INTERFACE)
+multipers_default_disable_flag("muphasa" MULTIPERS_DISABLE_MUPHASA_INTERFACE)
 multipers_default_disable_flag("function_delaunay" MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
 if(NOT DEFINED MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
   set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE OFF)
@@ -25,6 +26,8 @@ multipers_default_disable_flag("hera" MULTIPERS_DISABLE_HERA_INTERFACE)
 if(WIN32)
   set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
   message(STATUS "[mpfree] Forced MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_MUPHASA_INTERFACE ON)
+  message(STATUS "[muphasa] Forced MULTIPERS_DISABLE_MUPHASA_INTERFACE=${MULTIPERS_DISABLE_MUPHASA_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
   message(STATUS "[function_delaunay] Forced MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE ON)
@@ -55,6 +58,11 @@ endif()
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/mpfree.h")
   set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
   message(STATUS "[mpfree] Set MULTIPERS_DISABLE_MPFREE_INTERFACE=${MULTIPERS_DISABLE_MPFREE_INTERFACE} because mpfree headers are missing")
+endif()
+
+if(NOT EXISTS "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/main.cpp")
+  set(MULTIPERS_DISABLE_MUPHASA_INTERFACE ON)
+  message(STATUS "[muphasa] Set MULTIPERS_DISABLE_MUPHASA_INTERFACE=${MULTIPERS_DISABLE_MUPHASA_INTERFACE} because Muphasa sources are missing")
 endif()
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h")
@@ -95,6 +103,7 @@ endif()
 
 set(MULTIPERS_INTERFACE_DISABLE_FLAGS
   MULTIPERS_DISABLE_MPFREE_INTERFACE
+  MULTIPERS_DISABLE_MUPHASA_INTERFACE
   MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
   MULTIPERS_DISABLE_DEG_RIPS_INTERFACE
   MULTIPERS_DISABLE_2PAC_INTERFACE
@@ -299,6 +308,7 @@ set(MULTIPERS_EXT_PATCH_DIR "${CMAKE_SOURCE_DIR}/ext/patches")
 set(MULTIPERS_GENERATED_EXT_PATCH_DIR "${CMAKE_BINARY_DIR}/generated_ext_patches")
 set(MULTIPERS_EXT_PATCH_GENERATOR "${MULTIPERS_EXT_PATCH_DIR}/generate_ext_patches.py")
 set(MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/mpfree_runtime_logs.patch")
+set(MULTIPERS_TRACKED_MUPHASA_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/muphasa_runtime_logs.patch")
 set(MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_runtime_logs.patch")
 set(MULTIPERS_TRACKED_MULTI_CRITICAL_LOG_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_runtime_logs.patch")
 set(MULTIPERS_TRACKED_MULTI_CRITICAL_FEATURES_PATCH_FILE "${MULTIPERS_EXT_PATCH_DIR}/multi_critical_features.patch")
@@ -433,6 +443,13 @@ file(
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/*.h"
 )
 
+file(
+  GLOB MULTIPERS_MUPHASA_LOG_PATCH_INPUTS
+  CONFIGURE_DEPENDS
+  "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/*.cpp"
+  "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/*.h"
+)
+
 multipers_add_optional_generated_patch(
   MULTIPERS_DISABLE_MPFREE_INTERFACE
   multipers_generate_mpfree_log_patch
@@ -441,6 +458,16 @@ multipers_add_optional_generated_patch(
   MULTIPERS_MPFREE_LOG_PATCH_FILE
   "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
   "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/global.h"
+)
+
+multipers_add_optional_generated_patch(
+  MULTIPERS_DISABLE_MUPHASA_INTERFACE
+  multipers_generate_muphasa_log_patch
+  muphasa
+  muphasa_runtime_logs.patch
+  MULTIPERS_MUPHASA_LOG_PATCH_FILE
+  "${MULTIPERS_TRACKED_MUPHASA_LOG_PATCH_FILE}"
+  ${MULTIPERS_MUPHASA_LOG_PATCH_INPUTS}
 )
 
 multipers_add_optional_generated_patch(
@@ -495,6 +522,11 @@ multipers_add_refresh_patch_target(
   "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
 )
 multipers_add_refresh_patch_target(
+  multipers_refresh_muphasa_log_patch
+  muphasa
+  "${MULTIPERS_TRACKED_MUPHASA_LOG_PATCH_FILE}"
+)
+multipers_add_refresh_patch_target(
   multipers_refresh_function_delaunay_log_patch
   function_delaunay
   "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
@@ -524,6 +556,10 @@ add_custom_target(
     "${MULTIPERS_TRACKED_MPFREE_LOG_PATCH_FILE}"
   COMMAND
     "${CMAKE_COMMAND}" -E compare_files
+    "${MULTIPERS_MUPHASA_LOG_PATCH_FILE}"
+    "${MULTIPERS_TRACKED_MUPHASA_LOG_PATCH_FILE}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E compare_files
     "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
     "${MULTIPERS_TRACKED_FUNCTION_DELAUNAY_LOG_PATCH_FILE}"
   COMMAND
@@ -543,6 +579,7 @@ add_custom_target(
 add_dependencies(
   multipers_generate_ext_patches
   multipers_generate_mpfree_log_patch
+  multipers_generate_muphasa_log_patch
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
   multipers_generate_multi_critical_features_patch
@@ -551,6 +588,7 @@ add_dependencies(
 add_dependencies(
   multipers_check_ext_patches
   multipers_generate_mpfree_log_patch
+  multipers_generate_muphasa_log_patch
   multipers_generate_function_delaunay_log_patch
   multipers_generate_multi_critical_log_patch
   multipers_generate_multi_critical_features_patch
@@ -565,6 +603,16 @@ multipers_add_optional_patch_overlay(
   ext/mpfree
   MULTIPERS_MPFREE_PATCH_OVERLAY_ROOT
   include
+)
+
+multipers_add_optional_patch_overlay(
+  MULTIPERS_DISABLE_MUPHASA_INTERFACE
+  multipers_muphasa_log_overlay
+  muphasa
+  "${MULTIPERS_MUPHASA_LOG_PATCH_FILE}"
+  ext/muphasa
+  MULTIPERS_MUPHASA_PATCH_OVERLAY_ROOT
+  mph
 )
 
 multipers_add_optional_patch_overlay(
@@ -618,6 +666,12 @@ multipers_set_optional_include_dirs(
 )
 
 multipers_set_optional_include_dirs(
+  MULTIPERS_DISABLE_MUPHASA_INTERFACE
+  MULTIPERS_MUPHASA_INCLUDE_DIRS
+  "${MULTIPERS_MUPHASA_PATCH_OVERLAY_ROOT}/ext/muphasa/mph"
+)
+
+multipers_set_optional_include_dirs(
   MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
   MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
   "${MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT}/ext/function_delaunay/include"
@@ -666,6 +720,7 @@ target_include_directories(
     ${MULTIPERS_AIDA_INCLUDE_DIRS}
     ${MULTIPERS_2PAC_INCLUDE_DIRS}
     ${MULTIPERS_MPFREE_INCLUDE_DIRS}
+    ${MULTIPERS_MUPHASA_INCLUDE_DIRS}
     ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS}
     ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS}
     ${MULTIPERS_DEG_RIPS_INCLUDE_DIRS}
@@ -678,6 +733,7 @@ endif()
 add_dependencies(
   multipers_nanobind_runtime_obj
   multipers_mpfree_log_overlay
+  multipers_muphasa_log_overlay
   multipers_function_delaunay_log_overlay
   multipers_multi_critical_log_overlay
   multipers_deg_rips_optimization_overlay
@@ -728,6 +784,22 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_MPFREE_INCLUDE_DIRS})
+    endif()
+    set(_use_phat_includes FALSE)
+
+  elseif(module_name STREQUAL "_muphasa_interface")
+    if(NOT MULTIPERS_DISABLE_MUPHASA_INTERFACE)
+      add_dependencies(${target_name} multipers_muphasa_log_overlay)
+      multipers_link_shared_core(${target_name})
+      multipers_link_nanobind_runtime(${target_name})
+      if(TARGET Boost::headers)
+        target_link_libraries(${target_name} PRIVATE Boost::headers)
+      elseif(TARGET Boost::boost)
+        target_link_libraries(${target_name} PRIVATE Boost::boost)
+      else()
+        target_include_directories(${target_name} PRIVATE ${Boost_INCLUDE_DIRS})
+      endif()
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_MUPHASA_INCLUDE_DIRS})
     endif()
     set(_use_phat_includes FALSE)
 
@@ -894,6 +966,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _core_delaunay_nanobind
   _grid_helper_nanobind
   _mpfree_interface
+  _muphasa_interface
   _function_delaunay_interface
   _deg_rips_interface
   _2pac_interface

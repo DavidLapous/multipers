@@ -46,6 +46,12 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Commit used in this workspace: `8a423f7e7997b744d89405ee579b4e2f1679bbb2`
   - License: LGPL-3.0-or-later (see upstream `COPYING.LESSER`)
 
+- `muphasa`
+  - Upstream: https://github.com/olivergafvert/muphasa
+  - Header/source path used at build time: `ext/muphasa`
+  - Commit used in this workspace: `c89f7a3f958c7b8222f0d0e8cbc4e8ec8dc0ca42`
+  - License: MIT (see `ext/muphasa/LICENSE`)
+
 - `multi_critical`
   - Upstream: https://bitbucket.org/mkerber/multi_critical/
   - Header source path used at build time: `ext/multi_critical`
