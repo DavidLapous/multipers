@@ -556,7 +556,7 @@ inline mpfree_interface_output<index_type> convert_minpres_to_output(Graded_matr
   append_rows_as_generators(min_rep, degree, out);
   append_columns_as_generators(min_rep, degree + 1, 0, out);
 
-  if (!full_resolution) {
+  if (!full_resolution || min_rep.get_num_cols() == 0) {
     return out;
   }
 
