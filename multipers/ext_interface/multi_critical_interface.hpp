@@ -344,6 +344,22 @@ inline multi_critical_interface_output<index_type> convert_minpres(Graded_matrix
   return append_columns(min_rep, degree + 1, 0, std::move(out));
 }
 
+inline bool extract_minpres_pair_for_internal_degree(const std::vector<Graded_matrix>& matrices,
+                                                     int degree,
+                                                     Graded_matrix& first,
+                                                     Graded_matrix& second) {
+  if (matrices.size() < 2 || degree < 0) {
+    return false;
+  }
+  const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
+  if (matrix_index < 1 || matrix_index >= static_cast<int>(matrices.size())) {
+    return false;
+  }
+  first = matrices[(size_t)matrix_index - 1];
+  second = matrices[(size_t)matrix_index];
+  return true;
+}
+
 template <typename index_type>
 inline std::vector<Graded_matrix> compute_free_resolution_matrices(
     const multi_critical_interface_input<index_type>& input,
@@ -472,13 +488,12 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
     return multi_critical_interface_output<index_type>();
   }
 
-  const int matrix_index = static_cast<int>(matrices.size()) - 1 - degree;
-  if (matrix_index < 1 || matrix_index >= static_cast<int>(matrices.size())) {
+  multi_critical_detail::Graded_matrix first;
+  multi_critical_detail::Graded_matrix second;
+  if (!multi_critical_detail::extract_minpres_pair_for_internal_degree(matrices, degree, first, second)) {
     return multi_critical_interface_output<index_type>();
   }
 
-  auto first = matrices[matrix_index - 1];
-  auto second = matrices[matrix_index];
   multi_critical_detail::Graded_matrix min_rep;
 
   (void)verbose_output;
@@ -507,15 +522,19 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
     return out;
   }
 
-  out.reserve(matrices.size() - 1);
+  out.reserve(matrices.size() - 2);
   (void)verbose_output;
 
-  for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
-    auto first = matrices[i];
-    auto second = matrices[i + 1];
+  for (int degree = 0; degree < static_cast<int>(matrices.size()) - 2; ++degree) {
+    const int internal_degree = degree + 1;
+    multi_critical_detail::Graded_matrix first;
+    multi_critical_detail::Graded_matrix second;
+    if (!multi_critical_detail::extract_minpres_pair_for_internal_degree(matrices, internal_degree, first, second)) {
+      break;
+    }
     multi_critical_detail::Graded_matrix min_rep;
     mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
-    out.push_back(multi_critical_detail::convert_minpres<index_type>(min_rep, static_cast<int>(i)));
+    out.push_back(multi_critical_detail::convert_minpres<index_type>(min_rep, internal_degree));
   }
   return out;
 }

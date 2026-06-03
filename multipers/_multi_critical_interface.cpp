@@ -264,11 +264,10 @@ void postprocess_free_resolution_matrices_from_bridge(
   }
 }
 
-bool extract_matrix_pair_from_bridge(
-    std::vector<multipers::multi_critical_detail::Graded_matrix>& matrices,
-    int degree,
-    multipers::multi_critical_detail::Graded_matrix& first,
-    multipers::multi_critical_detail::Graded_matrix& second) {
+bool extract_matrix_pair_from_bridge(std::vector<multipers::multi_critical_detail::Graded_matrix>& matrices,
+                                     int degree,
+                                     multipers::multi_critical_detail::Graded_matrix& first,
+                                     multipers::multi_critical_detail::Graded_matrix& second) {
   if (matrices.size() < 2) {
     return false;
   }
@@ -343,7 +342,8 @@ NB_MODULE(_multi_critical_interface, m) {
   auto require = [](bool available) {
     if (!available) {
       throw std::runtime_error(
-          "multi_critical interface is not available in this build. Rebuild multipers with multi_critical support to enable this backend.");
+          "multi_critical interface is not available in this build. Rebuild multipers with multi_critical support to "
+          "enable this backend.");
     }
   };
 #if MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
@@ -398,28 +398,32 @@ NB_MODULE(_multi_critical_interface, m) {
           multipers::multi_critical_interface_output<int> out;
           {
             nb::gil_scoped_release release;
-            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            auto input =
+                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
             out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
           }
           return mpmc::output_to_slicer(target_template_id, out, false, -1);
         }
         if (degree_obj.is_none()) {
-          std::vector<multipers::multi_critical_interface_output<int> > outs;
+          std::vector<multipers::multi_critical_interface_output<int>> outs;
           {
             nb::gil_scoped_release release;
-            auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+            auto input =
+                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
             outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
           }
-          return nb::object(mpmc::tuple_from_size(outs.size() > 0 ? outs.size() - 1 : 0, [&](size_t i) -> nb::object {
-            return mpmc::output_to_slicer(target_template_id, outs[i + 1], true, (int)i);
+          return nb::object(mpmc::tuple_from_size(outs.size(), [&](size_t i) -> nb::object {
+            return mpmc::output_to_slicer(target_template_id, outs[i], true, (int)i);
           }));
         }
         int degree = nb::cast<int>(degree_obj);
         multipers::multi_critical_interface_output<int> out;
         {
           nb::gil_scoped_release release;
-          auto input = multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
-          out = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
+          auto input =
+              multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+          out =
+              multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
         }
         return mpmc::output_to_slicer(target_template_id, out, true, degree);
       },
@@ -481,7 +485,8 @@ NB_MODULE(_multi_critical_interface, m) {
         multipers::multi_critical_interface_output<int> output;
         {
           nb::gil_scoped_release release;
-          output = multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_tree, use_multi_chunk, verbose, swedish);
+          output = multipers::multi_critical_minpres_interface<int>(
+              input, degree + 1, use_tree, use_multi_chunk, verbose, swedish);
         }
         return mpmc::output_to_raw_arrays(output, true);
       },
@@ -514,11 +519,11 @@ NB_MODULE(_multi_critical_interface, m) {
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
         {
           nb::gil_scoped_release release;
-          outputs = multipers::multi_critical_minpres_all_interface<int>(input, use_tree, use_multi_chunk, verbose, swedish);
+          outputs =
+              multipers::multi_critical_minpres_all_interface<int>(input, use_tree, use_multi_chunk, verbose, swedish);
         }
-        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
-          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
-        });
+        return mpmc::tuple_from_size(
+            outputs.size(), [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i], true); });
       },
       "boundary_indptr"_a,
       "boundary_flat"_a,
@@ -538,7 +543,7 @@ NB_MODULE(_multi_critical_interface, m) {
         multipers::multi_critical_interface_output<int> output;
         {
           nb::gil_scoped_release release;
-          std::optional<std::lock_guard<std::mutex> > lock;
+          std::optional<std::lock_guard<std::mutex>> lock;
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
@@ -572,7 +577,7 @@ NB_MODULE(_multi_critical_interface, m) {
         multipers::multi_critical_interface_output<int> output;
         {
           nb::gil_scoped_release release;
-          std::optional<std::lock_guard<std::mutex> > lock;
+          std::optional<std::lock_guard<std::mutex>> lock;
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
@@ -584,9 +589,9 @@ NB_MODULE(_multi_critical_interface, m) {
           multipers::multi_critical_detail::Graded_matrix first;
           multipers::multi_critical_detail::Graded_matrix second;
           const std::size_t target_pair_offset = target_pair_only
-                                                   ? static_cast<std::size_t>(mpmc::target_pair_window_offset(
-                                                         *input_bridge, degree, target_window_radius))
-                                                   : 0;
+                                                     ? static_cast<std::size_t>(mpmc::target_pair_window_offset(
+                                                           *input_bridge, degree, target_window_radius))
+                                                     : 0;
           const bool has_pair = target_pair_only
                                     ? target_pair_offset + 1 < matrices.size()
                                     : mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second);
@@ -620,7 +625,7 @@ NB_MODULE(_multi_critical_interface, m) {
         std::vector<multipers::multi_critical_interface_output<int>> outputs;
         {
           nb::gil_scoped_release release;
-          std::optional<std::lock_guard<std::mutex> > lock;
+          std::optional<std::lock_guard<std::mutex>> lock;
           if (multipers::multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
             lock.emplace(multipers::multi_critical_detail::multi_critical_interface_mutex());
           }
@@ -628,18 +633,20 @@ NB_MODULE(_multi_critical_interface, m) {
           mpmc::postprocess_free_resolution_matrices_from_bridge(matrices, use_multi_chunk, verbose);
           if (matrices.size() >= 2) {
             outputs.reserve(matrices.size() - 1);
-            for (std::size_t i = 0; i + 1 < matrices.size(); ++i) {
-              auto first = matrices[i];
-              auto second = matrices[i + 1];
+            for (int degree = 0; degree < static_cast<int>(matrices.size()) - 1; ++degree) {
+              multipers::multi_critical_detail::Graded_matrix first;
+              multipers::multi_critical_detail::Graded_matrix second;
+              if (!mpmc::extract_matrix_pair_from_bridge(matrices, degree, first, second)) {
+                break;
+              }
               multipers::multi_critical_detail::Graded_matrix min_rep;
               mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
-              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, static_cast<int>(i)));
+              outputs.push_back(multipers::multi_critical_detail::convert_minpres<int>(min_rep, degree));
             }
           }
         }
-        return mpmc::tuple_from_size(outputs.size() > 0 ? outputs.size() - 1 : 0, [&](size_t i) -> nb::object {
-          return mpmc::output_to_raw_arrays(outputs[i + 1], true);
-        });
+        return mpmc::tuple_from_size(
+            outputs.size(), [&](size_t i) -> nb::object { return mpmc::output_to_raw_arrays(outputs[i], true); });
       },
       "input_ptr"_a,
       "use_tree"_a = false,
