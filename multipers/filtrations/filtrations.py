@@ -1017,15 +1017,45 @@ def CoreDelaunay(
     positive_degree: bool = False,
 ) -> SimplexTreeMulti_type:
     """
-    Computes the Delaunay core bifiltration of a point cloud presented in the paper "Core Bifiltration" https://arxiv.org/abs/2405.01214, and returns the (multi-critical) bifiltration as a SimplexTreeMulti. The Delaunay core bifiltration is an alpha complex version of the core bifiltration which is smaller in size. Moreover, along the horizontal line k=1, the Delaunay core bifiltration is identical to the alpha complex.
+    Build Delaunay core bifiltration of a Euclidean point cloud.
 
-    Input:
-     - points: The point cloud as an ArrayLike of shape (n, d) where n is the number of points and d is the dimension of the points.
-     - beta: The beta parameter for the Delaunay Core Bifiltration (default 1.0).
-     - ks: The list of k-values to include in the bifiltration (default None). If None, the k-values are set to [1, 2, ..., n] where n is the number of points in the point cloud. For large point clouds, it is recommended to set ks to a smaller list of k-values to reduce computation time. The values in ks must all be integers, positive, and less than or equal to the number of points in the point cloud.
-     - precision: The precision of the computation of the AlphaComplex, one of ['safe', 'exact', 'fast'] (default 'safe'). See the GUDHI documentation for more information.
-     - verbose: Whether to emit timing logs (default False).
-     - max_alpha_square: The maximum squared alpha value to consider when createing the alpha complex (default inf). See the GUDHI documentation for more information.
+    This is the Delaunay-size version of the core bifiltration from "Core
+    Bifiltration", https://doi.org/10.1007/s41468-025-00226-8.
+
+    The construction intersects the core-bifiltration balls with Voronoi cells,
+    then takes the nerve. It is contained in the Delaunay complex and is much
+    smaller than the full core Cech bifiltration, while remaining interleaved
+    with both the core and multicover bifiltrations. For each simplex and each
+    requested density value ``k``, the implementation adds the critical value
+    ``(max(alpha, beta * D_k), k)``, where ``alpha`` is the alpha-complex value
+    and ``D_k`` is the largest k-core distance over the simplex vertices.
+
+    Parameters
+    ----------
+    points:
+        Point cloud with shape ``(n_points, dimension)``.
+    beta:
+        Scale parameter balancing metric scale and k-core distance.
+    ks:
+        Positive density thresholds to include. If omitted, uses
+        ``1, ..., n_points``. For large point clouds, passing fewer k-values is
+        usually much faster.
+    precision:
+        GUDHI alpha-complex precision mode: ``"safe"``, ``"exact"``, or
+        ``"fast"``.
+    verbose:
+        Emit timing logs.
+    max_alpha_square:
+        Maximum squared alpha value passed to the alpha-complex construction.
+    positive_degree:
+        Store the density axis as ``max(ks) - k`` instead of the default ``-k``
+        opposite-order convention.
+
+    Returns
+    -------
+    SimplexTreeMulti_type
+        K-critical 2-parameter ``SimplexTreeMulti`` representing the Delaunay
+        core bifiltration.
     """
     from multipers._core_delaunay_nanobind import build_core_delaunay_simplextree
     from multipers.simplex_tree_multi import SimplexTreeMulti
