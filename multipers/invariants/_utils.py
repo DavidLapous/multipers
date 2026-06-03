@@ -8,7 +8,7 @@ def _as_slicer(filtered_complex):
     from multipers.slicer import is_slicer
     from multipers.simplex_tree_multi import is_simplextree_multi
 
-    if is_slicer(filtered_complex):
+    if is_slicer(filtered_complex, allow_minpres=False):
         return filtered_complex
     if is_simplextree_multi(filtered_complex):
         return Slicer(filtered_complex, dtype=filtered_complex.dtype)
