@@ -198,7 +198,7 @@ def clean_sms(sms):
 
 
 def zero_out_sm(pts, weights, mass_default):
-    """
+    r"""
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
     api = api_from_tensors(pts, weights, mass_default)
@@ -224,7 +224,7 @@ def zero_out_sm(pts, weights, mass_default):
 
 
 def zero_out_sms(sms, mass_default):
-    """
+    r"""
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
     return tuple(zero_out_sm(pts, weights, mass_default) for pts, weights in sms)
