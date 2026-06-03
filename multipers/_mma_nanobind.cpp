@@ -178,6 +178,9 @@ auto compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
                                                       const Gudhi::multi_persistence::Box<T>& box,
                                                       const RandomAccessValueRange2& resolution,
                                                       int n_jobs) {
+  if (resolution.size() != 2) {
+    throw std::invalid_argument("Module landscapes require a 2D resolution array.");
+  }
   std::vector<T> out;
   {
     nb::gil_scoped_release release;
@@ -188,10 +191,13 @@ auto compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
 
 template <typename T, class RandomAccessValueRange, class RandomAccessArray>
 auto compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
-                                                       int degree,
-                                                       const RandomAccessValueRange& ks,
-                                                       const std::vector<RandomAccessArray>& grid,
-                                                       int n_jobs) {
+                                                        int degree,
+                                                        const RandomAccessValueRange& ks,
+                                                        const std::vector<RandomAccessArray>& grid,
+                                                        int n_jobs) {
+  if (grid.size() != 2) {
+    throw std::invalid_argument("Module landscapes require a 2D grid.");
+  }
   std::vector<T> out;
   {
     nb::gil_scoped_release release;
