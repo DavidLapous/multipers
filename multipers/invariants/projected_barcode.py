@@ -4,6 +4,8 @@ from typing import Optional
 
 import numpy as np
 
+import multipers.logs as _mp_logs
+
 from ._utils import _as_slicer
 
 
@@ -14,6 +16,7 @@ def projected_barcode(
     degree: Optional[int] = None,
     minpres_kwargs: Optional[dict] = None,
     ignore_infinite_filtration_values: bool = True,
+    assume_full_resolution: bool = False,
 ):
     """Gamma-linear projected barcode of one homology module.
 
@@ -40,7 +43,28 @@ def projected_barcode(
             raise ValueError(
                 "Cannot change degree of an already minimal-presentation slicer."
             )
-        resolution = slicer
+        if degree is None or degree < 0:
+            raise ValueError("Minimal-presentation input has no valid `minpres_degree`.")
+        degree = int(degree)
+        dimensions = np.unique(slicer.get_dimensions())
+        if not assume_full_resolution and (
+            slicer.num_parameters != 2 or degree + 2 not in dimensions
+        ):
+            _mp_logs.warn_superfluous_computation(
+                "projected_barcode received a minimal-presentation input that "
+                "is not known to be a full free resolution. Recomputing "
+                "`minpres(full_resolution=True)`; this computation can be "
+                "avoided by passing a full-resolution minpres, or by setting "
+                "`assume_full_resolution=True` when the input is already one."
+            )
+            minpres_kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
+            if not minpres_kwargs.get("full_resolution", True):
+                raise ValueError("projected_barcode requires `full_resolution=True`.")
+            minpres_kwargs["full_resolution"] = True
+            minpres_kwargs["force"] = True
+            resolution = slicer.minpres(degree=degree, **minpres_kwargs)
+        else:
+            resolution = slicer
     else:
         if degree is None or degree < 0:
             raise ValueError("`degree` is inferred for minpres inputs, otherwise required.")
@@ -51,6 +75,10 @@ def projected_barcode(
         resolution = slicer.minpres(degree=int(degree), **minpres_kwargs)
 
     directions = np.asarray(direction, dtype=np.float64)
+    if not np.all(np.isfinite(directions)):
+        raise ValueError("`direction` must contain finite values.")
+    if np.any(directions <= 0):
+        raise ValueError("`direction` must be strictly positive in every coordinate.")
     grades = np.asarray(
         resolution.get_filtrations(unsqueeze=resolution.is_squeezed),
         dtype=np.float64,
