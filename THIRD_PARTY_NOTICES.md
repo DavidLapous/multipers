@@ -9,19 +9,19 @@ As a result, distributed `multipers` artifacts built with these components are l
 - `AIDA`
   - Upstream: https://github.com/JanJend/AIDA
   - Source in this repository: `ext/AIDA/`
-  - Commit used in this workspace: `d820f64984323f2886d0a997eb247dd7acfcd0c7`
+  - Commit used in this workspace: `4b5bb485a5738878783d1517ebd3b2bc0d19e13d`
   - License: GPL-3.0-or-later (see `ext/AIDA/LICENSE`)
 
 - `Persistence-Algebra`
   - Upstream: https://github.com/JanJend/Persistence-Algebra
   - Source in this repository: `ext/Persistence-Algebra/`
-  - Commit used in this workspace: `381ed521b9ea427a996da4d8d9b788a734cac628`
+  - Commit used in this workspace: `07e2c0d0bd7b6b48f6a584eee42d4c6ad583e078`
   - License: GPL-3.0-or-later (see `ext/Persistence-Algebra/LICENSE`)
 
 - `function_delaunay`
   - Upstream: https://bitbucket.org/mkerber/function_delaunay/
   - Header source path used at build time: `ext/function_delaunay`
-  - Commit used in this workspace: `a481f8d90af7a97795c467d81fb3db2cf952a58e`
+  - Commit used in this workspace: `f810320e4554abca7eceb25334c4940fb142f7d7`
   - License: GPL-3.0-or-later (see upstream `COPYING`)
 
 - `deg_rips`
@@ -40,6 +40,12 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Upstream: https://www.cgal.org/
   - License: GPL-3.0-or-later OR commercial (see SPDX headers in installed CGAL Spatial_searching package)
 
+- `gudhi-devel`
+  - Upstream: https://github.com/hschreiber/gudhi-devel
+  - Header/source path used at build time: `ext/gudhi-devel`
+  - Commit used in this workspace: `eeb0845c1253f66f8a54741abae6763fc1ff4245`
+  - License: MIT (see `ext/gudhi-devel/LICENSE`)
+
 - `mpfree`
   - Upstream: https://bitbucket.org/mkerber/mpfree/
   - Header source path used at build time: `ext/mpfree`
@@ -49,7 +55,7 @@ As a result, distributed `multipers` artifacts built with these components are l
 - `muphasa`
   - Upstream: https://github.com/olivergafvert/muphasa
   - Header/source path used at build time: `ext/muphasa`
-  - Commit used in this workspace: `c89f7a3f958c7b8222f0d0e8cbc4e8ec8dc0ca42`
+  - Commit used in this workspace: `2288e91d3c4fa0d8c0307785bf565daf0faba8ab`
   - License: MIT (see `ext/muphasa/LICENSE`)
 
 - `multi_critical`
