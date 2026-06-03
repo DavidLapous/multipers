@@ -445,7 +445,7 @@ def DelaunayLowerstar(
                 recover_ids,
                 verbose,
             )
-            slicer.minpres_degree = degree
+            slicer._mark_minpres(degree, is_minres=False)
         timing.substep("built_function_delaunay")
         if flagify:
             from multipers.simplex_tree_multi import is_simplextree_multi

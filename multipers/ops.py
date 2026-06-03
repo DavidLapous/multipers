@@ -40,7 +40,7 @@ def _minimal_presentation_from_slicer(
                 keep_generators=False,
             )
             timing.substep("backend_call")
-        new_slicer.minpres_degree = degree
+        new_slicer._mark_minpres(degree, is_minres=False)
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
@@ -65,7 +65,7 @@ def _minimal_presentation_from_slicer(
                 keep_generators=keep_generators,
             )
             timing.substep("backend_call")
-        new_slicer.minpres_degree = degree
+        new_slicer._mark_minpres(degree, is_minres=full_resolution)
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
@@ -98,7 +98,7 @@ def _minimal_presentation_from_slicer(
                 use_cohomology=use_cohomology,
             )
             timing.substep("backend_call")
-        new_slicer.minpres_degree = degree
+        new_slicer._mark_minpres(degree, is_minres=full_resolution)
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
@@ -240,7 +240,7 @@ def one_criticalify(
 
     def _todo(x, i):
         x.filtration_grid = F
-        x.minpres_degree = i
+        x._mark_minpres(i, is_minres=False)
         if reduce and force_resolution:
             x = minimal_presentation(x, degree=i, force=True)
         return x
@@ -278,7 +278,7 @@ def minimal_presentation(
     from joblib import Parallel, delayed
     from multipers.slicer import is_slicer
 
-    if is_slicer(slicer) and slicer.is_minpres and not force:
+    if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
         _mp_logs.warn_superfluous_computation(
             f"The slicer seems to be already reduced, "
             f"from homology of degree {slicer.minpres_degree}."

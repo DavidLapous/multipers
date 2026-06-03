@@ -16,7 +16,6 @@ def projected_barcode(
     degree: Optional[int] = None,
     minpres_kwargs: Optional[dict] = None,
     ignore_infinite_filtration_values: bool = True,
-    assume_full_resolution: bool = False,
 ):
     """Gamma-linear projected barcode of one homology module.
 
@@ -46,16 +45,13 @@ def projected_barcode(
         if degree is None or degree < 0:
             raise ValueError("Minimal-presentation input has no valid `minpres_degree`.")
         degree = int(degree)
-        dimensions = np.unique(slicer.get_dimensions())
-        if not assume_full_resolution and (
-            slicer.num_parameters != 2 or degree + 2 not in dimensions
-        ):
+        if not slicer.is_minres:
             _mp_logs.warn_superfluous_computation(
                 "projected_barcode received a minimal-presentation input that "
-                "is not known to be a full free resolution. Recomputing "
+                "is not marked as a full free resolution. Recomputing "
                 "`minpres(full_resolution=True)`; this computation can be "
-                "avoided by passing a full-resolution minpres, or by setting "
-                "`assume_full_resolution=True` when the input is already one."
+                "avoided by passing a full-resolution minpres, or by marking "
+                "the input as `is_minres` when it is already one."
             )
             minpres_kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
             if not minpres_kwargs.get("full_resolution", True):
