@@ -331,6 +331,7 @@ nb::object output_to_slicer(int target_template_id,
   multipers::build_slicer_from_complex(canonical_wrapper.truc, complex);
   if (mark_minpres) {
     canonical_wrapper.minpres_degree = degree;
+    canonical_wrapper.minpres_is_resolution = false;
   }
   return multipers::nanobind_helpers::astype_slicer_to_template_id(canonical_out, target_template_id);
 }

@@ -68,8 +68,8 @@ nb::object summand_to_slicer(nb::object target,
       used_coordinates[0].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.first, 0));
       used_coordinates[1].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.second, 1));
     }
-    auto compacted = multipers::nanobind_helpers::compact_squeezed_filtration_grid(
-        filtration_grid, std::move(used_coordinates));
+    auto compacted =
+        multipers::nanobind_helpers::compact_squeezed_filtration_grid(filtration_grid, std::move(used_coordinates));
     compact_grid = compacted.filtration_grid;
     for (auto& degree : filtration_values) {
       degree.first = multipers::nanobind_helpers::remap_squeezed_coordinate(degree.first, 0, compacted.remap);
@@ -79,9 +79,11 @@ nb::object summand_to_slicer(nb::object target,
 
   auto complex = multipers::build_contiguous_f64_slicer_from_output(filtration_values, boundaries, dimensions);
 
-  nb::object out = multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
+  nb::object out =
+      multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
   out_wrapper.minpres_degree = degree;
+  out_wrapper.minpres_is_resolution = false;
   if (is_squeezed) {
     out_wrapper.filtration_grid = compact_grid;
   }

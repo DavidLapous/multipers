@@ -56,22 +56,22 @@ using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, st
 using multipers::core::SlicerConversion;
 using multipers::nanobind_dense_utils::matrix_from_array;
 using multipers::nanobind_dense_utils::vector_from_array;
-using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
-using multipers::nanobind_helpers::is_simplextree_object;
-using multipers::nanobind_helpers::is_slicer_object;
-using multipers::nanobind_helpers::PySlicer;
-using multipers::nanobind_helpers::copy_slicer_python_state;
 using multipers::nanobind_helpers::cast_squeezed_coordinate_grid;
-using multipers::nanobind_helpers::compact_squeezed_filtration_grid;
 using multipers::nanobind_helpers::colexical_slicer_copy;
 using multipers::nanobind_helpers::colexical_slicer_copy_with_permutation;
+using multipers::nanobind_helpers::compact_squeezed_filtration_grid;
+using multipers::nanobind_helpers::copy_slicer_python_state;
+using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
 using multipers::nanobind_helpers::has_nonempty_filtration_grid;
+using multipers::nanobind_helpers::is_simplextree_object;
+using multipers::nanobind_helpers::is_slicer_object;
 using multipers::nanobind_helpers::permuted_slicer_copy;
+using multipers::nanobind_helpers::PySlicer;
 using multipers::nanobind_helpers::reset_slicer_python_state;
-using multipers::nanobind_helpers::squeezed_raw_index_from_value;
 using multipers::nanobind_helpers::simplextree_wrapper_t;
 using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::SlicerDescriptorList;
+using multipers::nanobind_helpers::squeezed_raw_index_from_value;
 using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_helpers::visit_const_slicer_wrapper;
 using multipers::nanobind_helpers::visit_simplextree_wrapper;
@@ -116,8 +116,7 @@ struct contiguous_f64_matrix_slicer_desc_impl<type_list<Head, Tail...>> {
   using type = std::conditional_t<is_match, Head, typename tail::type>;
 };
 
-using ContiguousF64MatrixSlicerDesc =
-    typename contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::type;
+using ContiguousF64MatrixSlicerDesc = typename contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::type;
 
 static_assert(!std::is_void_v<ContiguousF64MatrixSlicerDesc>,
               "Expected exactly one one-critical contiguous float64 matrix slicer template.");
@@ -275,6 +274,7 @@ void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& sou
   self.filtration_grid = source.filtration_grid;
   self.generator_basis = nb::none();
   self.minpres_degree = -1;
+  self.minpres_is_resolution = false;
 }
 
 template <typename Wrapper, typename Concrete>
@@ -305,10 +305,9 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
 }
 
 template <typename Desc, typename Wrapper, typename Value>
-nb::tuple compute_persistence_on_slices(
-    Wrapper& self,
-    const nb::ndarray<const Value, nb::ndim<2>, nb::any_contig>& values,
-    bool ignore_infinite_filtration_values) {
+nb::tuple compute_persistence_on_slices(Wrapper& self,
+                                        const nb::ndarray<const Value, nb::ndim<2>, nb::any_contig>& values,
+                                        bool ignore_infinite_filtration_values) {
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
   const size_t num_slices = values.shape(0);
@@ -351,9 +350,8 @@ nb::tuple compute_persistence_on_slices(
 #endif
     }
   }
-  return tuple_from_size(num_slices, [&](size_t i) -> nb::object {
-    return dim_barcode_to_tuple<Barcode, Value>(barcodes[i]);
-  });
+  return tuple_from_size(num_slices,
+                         [&](size_t i) -> nb::object { return dim_barcode_to_tuple<Barcode, Value>(barcodes[i]); });
 }
 
 template <typename Wrapper>
@@ -828,7 +826,8 @@ double logical_filtration_coordinate(const RawValue& raw_value,
 
 template <typename Filtration>
 std::vector<std::vector<double>> sorted_logical_generators(
-    const Filtration& filtration, const std::optional<std::vector<std::vector<double>>>& grid) {
+    const Filtration& filtration,
+    const std::optional<std::vector<std::vector<double>>>& grid) {
   std::vector<std::vector<double>> out(filtration.num_generators(), std::vector<double>(filtration.num_parameters()));
   for (size_t g = 0; g < filtration.num_generators(); ++g) {
     for (size_t p = 0; p < filtration.num_parameters(); ++p) {
@@ -849,7 +848,8 @@ bool equal_logical_filtration(const Filtration& lhs,
   }
   for (size_t g = 0; g < lhs.num_generators(); ++g) {
     for (size_t p = 0; p < lhs.num_parameters(); ++p) {
-      if (logical_filtration_coordinate(lhs(g, p), lhs_grid, p) != logical_filtration_coordinate(rhs(g, p), rhs_grid, p)) {
+      if (logical_filtration_coordinate(lhs(g, p), lhs_grid, p) !=
+          logical_filtration_coordinate(rhs(g, p), rhs_grid, p)) {
         return false;
       }
     }
@@ -1322,7 +1322,7 @@ Wrapper construct_kcritical_from_ptr(intptr_t input_ptr) {
   if (total_rows < 0) {
     throw std::runtime_error("Invalid packed bridge input, negative filtration row count.");
   }
-  if (input_bridge->grade_values.size() != 2 * (size_t) total_rows) {
+  if (input_bridge->grade_values.size() != 2 * (size_t)total_rows) {
     throw std::runtime_error("Invalid packed bridge input, grade values do not match grade indptr.");
   }
 
@@ -1658,6 +1658,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           },
           nb::arg("value").none())
       .def_rw("minpres_degree", &Wrapper::minpres_degree)
+      .def_rw("_minpres_is_resolution", &Wrapper::minpres_is_resolution)
       .def("get_ptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.truc); })
       .def(
           "_from_ptr",
@@ -1704,9 +1705,9 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                                 self.minpres_degree));
            })
       .def("_serialize_state",
-            [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
-              return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
-            })
+           [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
+             return serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self);
+           })
       .def(
           "_deserialize_state",
           [](Wrapper& self, nb::handle state) -> Wrapper& {
@@ -1870,9 +1871,9 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
               self.truc.initialize_persistence_computation(ignore_infinite_filtration_values);
             }
             return self;
-           },
-           "ignore_infinite_filtration_values"_a = true,
-           nb::rv_policy::reference_internal)
+          },
+          "ignore_infinite_filtration_values"_a = true,
+          nb::rv_policy::reference_internal)
       .def(
           "_compute_persistence_on_slices",
           [](Wrapper& self,
@@ -1914,14 +1915,14 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
              return dim_barcode_to_tuple<Barcode, int>(barcode);
            })
       .def("get_current_filtration",
-            [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
-              std::vector<Value> current;
+           [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
+             std::vector<Value> current;
              {
                nb::gil_scoped_release release;
                current = self.truc.get_slice();
              }
-              return owned_array<Value>(std::move(current), {current.size()});
-            })
+             return owned_array<Value>(std::move(current), {current.size()});
+           })
       .def(
           "prune_above_dimension",
           [](Wrapper& self, int max_dimension) -> Wrapper& {
@@ -1971,14 +1972,11 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
               return nb::object(nb::cast(colexical_slicer_copy(self)));
             }
             auto [out, perm] = colexical_slicer_copy_with_permutation(self);
-            return nb::object(
-                nb::make_tuple(nb::cast(out), owned_array<uint32_t>(std::move(perm), {perm.size()})));
+            return nb::object(nb::make_tuple(nb::cast(out), owned_array<uint32_t>(std::move(perm), {perm.size()})));
           },
           "return_permutation"_a = false)
       .def("permute_generators",
-            [](Wrapper& self, std::vector<uint32_t> permutation) {
-              return permuted_slicer_copy(self, permutation);
-            })
+           [](Wrapper& self, std::vector<uint32_t> permutation) { return permuted_slicer_copy(self, permutation); })
       .def("copy", [](Wrapper& self) -> Wrapper { return Wrapper(self); })
       .def("_info_string",
            [](Wrapper& self) -> std::string { return multipers::tmp_interface::slicer_to_str(self.truc); });
@@ -2194,10 +2192,8 @@ NB_MODULE(_slicer_nanobind, m) {
          nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
         return mpnb::construct_contiguous_from_packed<mpnb::ContiguousF64MatrixSlicerDesc::wrapper,
                                                       mpnb::ContiguousF64MatrixSlicerDesc::concrete,
-                                                      double>(boundary_indptr,
-                                                               boundary_flat,
-                                                               generator_dimensions,
-                                                               grades_flat);
+                                                      double>(
+            boundary_indptr, boundary_flat, generator_dimensions, grades_flat);
       },
       "boundary_indptr"_a,
       "boundary_flat"_a,

@@ -90,7 +90,7 @@ def signed_measure(
     Also note that if `backend` is given, then the input will be converted to a slicer.
      - Euler: is always computed by summing the weights of the simplices
      - Hilbert: is computed by computing persistence on slices, and a Möbius inversion,
-       unless the detected input is a minimal presentation (i.e., `filtered_complex.is_minpres`),
+       unless the detected input is a minimal free resolution (i.e., `filtered_complex.is_minres`),
        which in that case, doesn't need any computation.
        - If the input is a simplextree, it is converted to a slicer first.
         - If the input is a slicer then
@@ -236,7 +236,7 @@ def signed_measure(
 
     # assert filtered_complex_.is_squeezed
     if None not in degrees:
-        if is_slicer(filtered_complex_) and filtered_complex_.is_minpres:
+        if is_slicer(filtered_complex_) and filtered_complex_.is_minres:
             pass
         else:
             max_degree = np.max(degrees) + 1
@@ -275,10 +275,10 @@ def signed_measure(
                 fix_mass_default = False
                 if verbose:
                     print(f"Done. ({time.time() - t0:.3f}s)")
-            elif filtered_complex_.is_minpres:
+            elif filtered_complex_.is_minres:
                 if verbose:
                     print(
-                        "Reduced slicer. Retrieving measure from it...",
+                        "Minimal-resolution slicer. Retrieving measure from it...",
                         end="",
                         flush=True,
                     )
