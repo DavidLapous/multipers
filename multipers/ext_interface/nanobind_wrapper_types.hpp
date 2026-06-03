@@ -132,13 +132,10 @@ struct PySlicerPythonState {
   nanobind::object filtration_grid;
   nanobind::object generator_basis;
   int minpres_degree;
-  bool minpres_is_resolution;
+  bool is_minres;
 
   PySlicerPythonState()
-      : filtration_grid(nanobind::none()),
-        generator_basis(nanobind::none()),
-        minpres_degree(-1),
-        minpres_is_resolution(false) {}
+      : filtration_grid(nanobind::none()), generator_basis(nanobind::none()), minpres_degree(-1), is_minres(false) {}
 };
 
 template <typename TargetState, typename SourceState>
@@ -146,7 +143,7 @@ inline void copy_slicer_python_state(TargetState& target, const SourceState& sou
   target.filtration_grid = source.filtration_grid;
   target.generator_basis = source.generator_basis;
   target.minpres_degree = source.minpres_degree;
-  target.minpres_is_resolution = source.minpres_is_resolution;
+  target.is_minres = source.is_minres;
 }
 
 template <typename State>
@@ -154,7 +151,7 @@ inline void reset_slicer_python_state(State& state) {
   state.filtration_grid = nanobind::none();
   state.generator_basis = nanobind::none();
   state.minpres_degree = -1;
-  state.minpres_is_resolution = false;
+  state.is_minres = false;
 }
 
 template <typename Slicer>

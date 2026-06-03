@@ -50,19 +50,6 @@ def _has_filtration_grid(self) -> bool:
     )
 
 
-def _is_minpres(self) -> bool:
-    return self.minpres_degree >= 0
-
-
-def _is_minres(self) -> bool:
-    return self.is_minpres and bool(getattr(self, "_minpres_is_resolution", False))
-
-
-def _mark_minpres(self, degree: int, *, is_minres: bool = False):
-    self.minpres_degree = int(degree)
-    self._minpres_is_resolution = bool(is_minres)
-
-
 def _info(self):
     print(self._info_string())
 
@@ -468,23 +455,22 @@ def _setstate(self, dump):
     explicit_is_minres = None
     if isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
-        self._deserialize_state(serialized)
+        serialized_is_minres = bool(self._deserialize_state(serialized))
     elif isinstance(dump, tuple) and len(dump) == 4:
         serialized, filtration_grid, generator_basis, minpres_degree = dump
-        self._deserialize_state(serialized)
+        serialized_is_minres = bool(self._deserialize_state(serialized))
     elif isinstance(dump, tuple) and len(dump) == 3:
         serialized, filtration_grid, minpres_degree = dump
         generator_basis = None
-        self._deserialize_state(serialized)
+        serialized_is_minres = bool(self._deserialize_state(serialized))
     else:
         generator_basis = None
         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
         self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
-    serialized_is_minres = bool(getattr(self, "_minpres_is_resolution", False))
+        serialized_is_minres = False
     if explicit_is_minres is not None:
         serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
-    self.minpres_degree = minpres_degree
-    self._minpres_is_resolution = serialized_is_minres
+    self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
     self.filtration_grid = filtration_grid
     self._generator_basis = generator_basis
 
@@ -552,8 +538,7 @@ def _grid_squeeze(
     out = self.coarsen_on_grid_copy(c_grid)
     if coordinates:
         out.filtration_grid = sanitize_grid(filtration_grid, api=api)
-    out.minpres_degree = self.minpres_degree
-    out._minpres_is_resolution = self.is_minres
+    out._mark_minpres(self.minpres_degree, is_minres=self.is_minres)
     return out
 
 
@@ -665,8 +650,7 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         self.get_dimensions(),
         new_filtrations,
     )
-    new_slicer.minpres_degree = self.minpres_degree
-    new_slicer._minpres_is_resolution = self.is_minres
+    new_slicer._mark_minpres(self.minpres_degree, is_minres=self.is_minres)
     return new_slicer
 
 
@@ -757,10 +741,7 @@ def _install_python_api():
         cls.minpres = _minpres
         cls.to_scc = _to_scc
         cls.unsqueeze = _unsqueeze
-        cls._mark_minpres = _mark_minpres
         cls.is_squeezed = property(_has_filtration_grid)
-        cls.is_minpres = property(_is_minpres)
-        cls.is_minres = property(_is_minres)
         cls.info = property(_info)
         cls.make_filtration_non_decreasing = cls._make_filtration_non_decreasing_raw
         cls._simplify_filtration = cls._simplify_filtration_raw

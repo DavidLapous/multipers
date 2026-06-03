@@ -83,7 +83,7 @@ nb::object summand_to_slicer(nb::object target,
       multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
   out_wrapper.minpres_degree = degree;
-  out_wrapper.minpres_is_resolution = false;
+  out_wrapper.is_minres = false;
   if (is_squeezed) {
     out_wrapper.filtration_grid = compact_grid;
   }

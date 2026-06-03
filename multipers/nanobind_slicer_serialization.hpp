@@ -32,7 +32,7 @@ struct SlicerSerializationHeaderV1 {
   uint32_t magic;
   uint32_t version;
   uint32_t mode;
-  uint32_t minpres_is_resolution;
+  uint32_t is_minres;
   uint64_t num_generators;
   uint64_t boundary_flat_size;
   uint64_t num_parameters;
@@ -268,7 +268,7 @@ bool load_state_v1(Wrapper& self, const uint8_t* data, size_t buffer_size) {
 
   load_slicer_from_generator_data<Wrapper, Concrete>(
       self, std::move(boundaries), std::move(dimensions), std::move(c_filtrations));
-  return header.version >= 2 && header.minpres_is_resolution != 0;
+  return header.version >= 2 && header.is_minres != 0;
 }
 
 template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
@@ -308,7 +308,7 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
     SlicerSerializationHeaderV1 header{kSlicerSerializationMagic,
                                        kSlicerSerializationVersion,
                                        expected_slicer_serialization_mode<IsKCritical, IsDegreeRips>(),
-                                       self.minpres_is_resolution ? 1u : 0u,
+                                       (self.minpres_degree >= 0 && self.is_minres) ? 1u : 0u,
                                        static_cast<uint64_t>(num_generators),
                                        static_cast<uint64_t>(total_boundary_size),
                                        static_cast<uint64_t>(num_parameters),
@@ -374,16 +374,16 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
 }
 
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical, bool IsDegreeRips>
-void load_state(Wrapper& self, nb::handle state) {
+bool load_state(Wrapper& self, nb::handle state) {
   auto buffer = nb::cast<nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>, nb::c_contig>>(state);
-  bool minpres_is_resolution = false;
+  bool is_minres = false;
   {
     nb::gil_scoped_release release;
-    minpres_is_resolution =
-        load_state_v1<Wrapper, Concrete, Value, IsKCritical, IsDegreeRips>(self, buffer.data(), buffer.size());
+    is_minres = load_state_v1<Wrapper, Concrete, Value, IsKCritical, IsDegreeRips>(self, buffer.data(), buffer.size());
   }
   multipers::nanobind_helpers::reset_slicer_python_state(self);
-  self.minpres_is_resolution = minpres_is_resolution;
+  self.is_minres = is_minres;
+  return is_minres;
 }
 
 }  // namespace mpnb

@@ -274,7 +274,7 @@ void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& sou
   self.filtration_grid = source.filtration_grid;
   self.generator_basis = nb::none();
   self.minpres_degree = -1;
-  self.minpres_is_resolution = false;
+  self.is_minres = false;
 }
 
 template <typename Wrapper, typename Concrete>
@@ -1658,7 +1658,24 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           },
           nb::arg("value").none())
       .def_rw("minpres_degree", &Wrapper::minpres_degree)
-      .def_rw("_minpres_is_resolution", &Wrapper::minpres_is_resolution)
+      .def_prop_ro("is_minpres", [](const Wrapper& self) -> bool { return self.minpres_degree >= 0; })
+      .def_prop_rw(
+          "is_minres",
+          [](const Wrapper& self) -> bool { return self.minpres_degree >= 0 && self.is_minres; },
+          [](Wrapper& self, bool value) {
+            if (value && self.minpres_degree < 0) {
+              throw std::invalid_argument("Cannot mark a slicer as `is_minres` without a valid `minpres_degree`.");
+            }
+            self.is_minres = value;
+          })
+      .def(
+          "_mark_minpres",
+          [](Wrapper& self, int degree, bool is_minres) {
+            self.minpres_degree = degree;
+            self.is_minres = degree >= 0 && is_minres;
+          },
+          "degree"_a,
+          "is_minres"_a = false)
       .def("get_ptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.truc); })
       .def(
           "_from_ptr",
@@ -1710,12 +1727,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
            })
       .def(
           "_deserialize_state",
-          [](Wrapper& self, nb::handle state) -> Wrapper& {
-            load_state<Wrapper, Concrete, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, state);
-            return self;
+          [](Wrapper& self, nb::handle state) -> bool {
+            return load_state<Wrapper, Concrete, Value, Desc::is_kcritical, Desc::is_degree_rips>(self, state);
           },
-          "state"_a,
-          nb::rv_policy::reference_internal)
+          "state"_a)
       .def("__len__", [](Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_generators",
                    [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
