@@ -5,6 +5,7 @@ import multipers as mp
 import numpy as np
 import pytest
 from multipers.data import three_annulus
+from multipers.distances import matching_distance
 from multipers.filtrations import CoreDelaunay, DegreeRips
 from multipers.tests import assert_sm
 
@@ -27,6 +28,10 @@ def _run_or_skip(callable_):
         warnings.simplefilter("always")
         try:
             out = callable_()
+        except RuntimeError as e:
+            if "multi_critical interface is not available" in str(e):
+                pytest.skip("multi_critical backend unavailable in this build")
+            raise
         except ValueError as e:
             if "Did not find multi_critical" in str(e):
                 pytest.skip("multi_critical backend unavailable in this environment")
@@ -92,6 +97,8 @@ def test_one_criticalify_degree_force_resolution_profiles_small(small_slicer):
                 force_resolution=False,
             )
         )
+        assert out_degree.is_minpres
+        assert not out_degree.is_minres
         assert tuple(np.unique(out_degree.get_dimensions())) == (degree, degree + 1)
 
         out_degree_res = _run_or_skip(
@@ -101,6 +108,8 @@ def test_one_criticalify_degree_force_resolution_profiles_small(small_slicer):
                 force_resolution=True,
             )
         )
+        assert out_degree_res.is_minpres
+        assert out_degree_res.is_minres
         if degree == 0:
             assert tuple(np.unique(out_degree_res.get_dimensions())) == (0, 1, 2)
         elif kind == "core_delaunay":
@@ -135,7 +144,18 @@ def test_one_criticalify_reduce_outputs_profiles_small(small_slicer):
     )
     assert isinstance(out_all_res, tuple)
     assert len(out_all_res) > 1
-    assert np.array_equal(np.unique(out_all_res[1].get_dimensions()), [1, 2, 3])
+    for degree, block in enumerate(out_all_res):
+        out_degree_res = _run_or_skip(
+            lambda: mp.ops.one_criticalify(
+                slicer,
+                degree=degree,
+                force_resolution=True,
+            )
+        )
+        assert np.array_equal(
+            np.unique(block.get_dimensions()),
+            np.unique(out_degree_res.get_dimensions()),
+        )
 
 
 def test_one_criticalify_hilbert_consistency_force_resolution_small(small_slicer):
