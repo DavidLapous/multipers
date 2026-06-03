@@ -1719,6 +1719,14 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def("__len__", [](Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
       .def_prop_ro("num_generators",
                    [](const Wrapper& self) -> int { return self.truc.get_number_of_cycle_generators(); })
+      .def_prop_ro("dimension",
+                   [](const Wrapper& self) -> nb::object {
+                     const auto n = self.truc.get_number_of_cycle_generators();
+                     if (n == 0) {
+                       return nb::float_(-std::numeric_limits<double>::infinity());
+                     }
+                     return nb::int_(self.truc.get_dimension(n - 1));
+                   })
       .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.truc.get_number_of_parameters(); })
       .def_prop_ro("dtype", [](const Wrapper&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
       .def_prop_ro("_template_id", [](const Wrapper&) -> int { return Desc::template_id; })
