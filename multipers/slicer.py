@@ -146,7 +146,7 @@ def _compute_persistence(
         if one_filtration.ndim == 1:
             one_filtration = one_filtration[None]
             squeeze = True
-        one_filtration = np.ascontiguousarray(api.asnumpy(one_filtration), dtype=self.dtype)
+        one_filtration = api.asnumpy(one_filtration, dtype=self.dtype, contiguous=True)
         out = self._compute_persistence_on_slices(
             one_filtration,
             ignore_infinite_filtration_values=ignore_infinite_filtration_values,
@@ -527,9 +527,11 @@ def _grid_squeeze(
             threshold_max=threshold_max,
         )
     api = api_from_tensor(filtration_grid[0]) if len(filtration_grid) else None
-    c_grid = [
-        np.ascontiguousarray(api.asnumpy(g, dtype=self.dtype)) for g in filtration_grid
-    ]
+    c_grid = (
+        []
+        if api is None
+        else [api.asnumpy(g, dtype=self.dtype, contiguous=True) for g in filtration_grid]
+    )
     if inplace or not coordinates:
         self.coarsen_on_grid_inplace(c_grid, coordinates)
         if coordinates:

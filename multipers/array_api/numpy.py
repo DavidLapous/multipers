@@ -18,13 +18,17 @@ _has_jit = _numba is not None
 int64 = _np.int64
 cat = _np.concatenate
 det = _np.linalg.det
-asnumpy = _np.asarray
+def asnumpy(x, dtype=None, contiguous=False):
+    if contiguous:
+        return _np.ascontiguousarray(x, dtype=dtype)
+    return _np.asarray(x, dtype=dtype)
+
+
 tensor = _np.array
 stack = _np.stack
 empty = _np.empty
 where = _np.where
 no_grad = nullcontext
-zeros = _np.zeros
 min = _np.min
 max = _np.max
 reshape = _np.reshape
@@ -76,10 +80,14 @@ def jit(fn=None, **kwargs):
     return decorator(fn)
 
 
-def astensor(x, contiguous=False, dtype=None):
+def astensor(x, contiguous=False, dtype=None, device=None):
     if contiguous:
         return _np.ascontiguousarray(x, dtype=dtype)
     return _np.asarray(x, dtype=dtype)
+
+
+def zeros(shape, dtype=None, device=None):
+    return _np.zeros(shape, dtype=dtype)
 
 
 def unique(x, assume_sorted=False, _mean=False):

@@ -29,7 +29,6 @@ where = _torch.where
 no_grad = _torch.no_grad
 cdist = _torch.cdist
 pdist = _torch.pdist
-zeros = _torch.zeros
 min = _torch.min
 max = _torch.max
 repeat_interleave = _torch.repeat_interleave
@@ -107,11 +106,17 @@ def astype(x, dtype):
     return astensor(x).to(dtype=dtype)
 
 
-def astensor(x, contiguous=False, dtype=None):
+def astensor(x, contiguous=False, dtype=None, device=None):
     out = _torch.as_tensor(x, dtype=dtype)
+    if device is not None:
+        out = out.to(device=device)
     if contiguous:
         out = out.contiguous()
     return out
+
+
+def zeros(shape, dtype=None, device=None):
+    return _torch.zeros(shape, dtype=dtype, device=device)
 
 
 def clip(x, min=None, max=None):
@@ -248,8 +253,10 @@ def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _torch.max(x)
 
 
-def asnumpy(x, dtype=None):
+def asnumpy(x, dtype=None, contiguous=False):
     out = x.cpu().detach().numpy()
+    if contiguous:
+        return _np.ascontiguousarray(out, dtype=dtype)
     if dtype is not None:
         out = out.astype(dtype, copy=False)
     return out

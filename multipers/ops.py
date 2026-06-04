@@ -278,6 +278,8 @@ def minimal_presentation(
     from joblib import Parallel, delayed
     from multipers.slicer import is_slicer
 
+    full_resolution = bool(full_resolution)
+
     if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
         _mp_logs.warn_superfluous_computation(
             f"The slicer seems to be already reduced, "
