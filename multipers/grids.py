@@ -410,6 +410,19 @@ def compute_bounding_box(stuff, inflate=0.0):
         box[1] += inflate
     return box
 
+def compute_bounding_box_from_iterable(stuff, inflate=0.0):
+    r"""
+    Returns an array of shape (2, num_parameters) bounding all filtration values
+    appearing in the iterable ``stuff``.
+    """
+    grid = compute_grid_from_iterable(stuff, strategy="regular", resolution=2)
+    api = api_from_tensors(*grid)
+    box = api.moveaxis(api.stack(grid), 0, 1)
+    if inflate:
+        box[0] -= inflate
+        box[1] += inflate
+    return box
+
 
 def push_to_grid(points, grid, return_coordinate=False):
     """
