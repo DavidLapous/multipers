@@ -119,18 +119,44 @@ inline bool multi_critical_interface_available() { return MULTIPERS_HAS_MULTI_CR
 namespace multi_critical_detail {
 
 inline std::mutex& multi_critical_interface_mutex() {
-  // Only timer globals still require process-global serialization.
+  // The vendored backend exposes verbose flags as process-global variables.
+  // Serialize calls while the log guard mutates and restores them.
   static std::mutex m;
   return m;
 }
 
-inline bool multi_critical_interface_needs_global_state_lock() {
-#if MULTI_CRITICAL_TIMERS || MULTI_CHUNK_TIMERS || MPFREE_TIMERS
-  return true;
-#else
-  return false;
-#endif
-}
+inline bool multi_critical_interface_needs_global_state_lock() { return true; }
+
+struct multi_critical_log_guard {
+  explicit multi_critical_log_guard(bool verbose_output)
+      : old_multi_critical_verbose(multi_critical::verbose),
+        old_multi_critical_very_verbose(multi_critical::very_verbose),
+        old_multi_chunk_verbose(multi_chunk::verbose),
+        old_mpfree_verbose(mpfree::verbose),
+        old_mpp_utils_verbose(mpp_utils::verbose) {
+    const bool enabled =
+        verbose_output || backend_log_policy::backend_log_enabled(backend_log_policy::backend_log_bit::multi_critical);
+    multi_critical::verbose = enabled;
+    multi_critical::very_verbose = false;
+    multi_chunk::verbose = enabled;
+    mpfree::verbose = false;
+    mpp_utils::verbose = false;
+  }
+
+  ~multi_critical_log_guard() {
+    multi_critical::verbose = old_multi_critical_verbose;
+    multi_critical::very_verbose = old_multi_critical_very_verbose;
+    multi_chunk::verbose = old_multi_chunk_verbose;
+    mpfree::verbose = old_mpfree_verbose;
+    mpp_utils::verbose = old_mpp_utils_verbose;
+  }
+
+  bool old_multi_critical_verbose;
+  bool old_multi_critical_very_verbose;
+  bool old_multi_chunk_verbose;
+  bool old_mpfree_verbose;
+  bool old_mpp_utils_verbose;
+};
 
 using Graded_matrix = mpp_utils::Graded_matrix<phat::vector_vector>;
 
@@ -371,7 +397,6 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
   }
 
   multi_critical_input_parser<index_type> parser(input);
-  (void)verbose_output;
 
   std::vector<Graded_matrix> matrices;
   multi_critical::free_resolution(parser, matrices, use_logpath);
@@ -441,6 +466,7 @@ multi_critical_interface_output<index_type> multi_critical_resolution_interface(
   if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
     lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
   }
+  multi_critical_detail::multi_critical_log_guard log_guard(verbose_output);
 
   auto matrices =
       multi_critical_detail::compute_free_resolution_matrices(input, use_logpath, use_multi_chunk, verbose_output);
@@ -477,6 +503,7 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
   if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
     lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
   }
+  multi_critical_detail::multi_critical_log_guard log_guard(verbose_output);
 
   if (degree < 0) {
     throw std::invalid_argument("multi_critical minimal presentation expects a non-negative degree.");
@@ -496,7 +523,6 @@ multi_critical_interface_output<index_type> multi_critical_minpres_interface(
 
   multi_critical_detail::Graded_matrix min_rep;
 
-  (void)verbose_output;
   mpfree::compute_minimal_presentation(first, second, min_rep, false, false);
 
   return multi_critical_detail::convert_minpres<index_type>(min_rep, degree);
@@ -513,6 +539,7 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
   if (multi_critical_detail::multi_critical_interface_needs_global_state_lock()) {
     lock.emplace(multi_critical_detail::multi_critical_interface_mutex());
   }
+  multi_critical_detail::multi_critical_log_guard log_guard(verbose_output);
 
   std::vector<multi_critical_interface_output<index_type> > out;
 
@@ -523,7 +550,6 @@ std::vector<multi_critical_interface_output<index_type> > multi_critical_minpres
   }
 
   out.reserve(matrices.size() - 2);
-  (void)verbose_output;
 
   for (int degree = 0; degree < static_cast<int>(matrices.size()) - 2; ++degree) {
     const int internal_degree = degree + 1;
