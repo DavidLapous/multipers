@@ -21,7 +21,7 @@ def signed_betti(hilbert_function: np.ndarray, threshold=False):
         _mp_logs.warn_autodiff(
             "`signed_betti` converts its input to NumPy and loses autodiff information."
         )
-    hilbert_function = np.ascontiguousarray(api.asnumpy(hilbert_function))
+    hilbert_function = api.asnumpy(hilbert_function, contiguous=True)
     return _mg_nb.signed_betti_inplace(hilbert_function, threshold=threshold)
 
 
@@ -97,10 +97,10 @@ def integrate_measure(
             **get_fitration_kwargs,
         )
     filtration_grid = tuple(
-        np.ascontiguousarray(api_from_tensor(f).asnumpy(f)) for f in filtration_grid
+        api_from_tensor(f).asnumpy(f, contiguous=True) for f in filtration_grid
     )
     if api.size(pts) == 0:
-        weights_dtype = np.asarray(api.asnumpy(weights)).dtype
+        weights_dtype = api.asnumpy(weights).dtype
         out = np.zeros(tuple(len(axis) for axis in filtration_grid), dtype=weights_dtype)
         return (out, filtration_grid) if return_grid else out
     pts = api.asnumpy(pts, contiguous=True)
@@ -298,9 +298,9 @@ def barcode_from_rank_sm(
         ys = ya
     out = api.cat([xs, ys], axis=1)
 
-    out_np = np.ascontiguousarray(api.asnumpy(out, dtype=np.float64))
+    out_np = api.asnumpy(out, dtype=np.float64, contiguous=True)
     w_api = api_from_tensor(w)
-    w_np = np.ascontiguousarray(w_api.asnumpy(w), dtype=np.int64)
+    w_np = w_api.asnumpy(w, dtype=np.int64, contiguous=True)
     _, first_idx, inv = np.unique(
         out_np, return_index=True, return_inverse=True, axis=0
     )

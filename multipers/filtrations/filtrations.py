@@ -400,8 +400,8 @@ def DelaunayLowerstar(
                 "scalar function values. Build the 3-parameter complex with "
                 "reduce_degree=-1 first."
             )
-        points_np = np.ascontiguousarray(api.asnumpy(points), dtype=np.float64)
-        function_np = np.ascontiguousarray(api.asnumpy(function_matrix), dtype=np.float64)
+        points_np = api.asnumpy(points, dtype=np.float64, contiguous=True)
+        function_np = api.asnumpy(function_matrix, dtype=np.float64, contiguous=True)
         if points_np.ndim != 2:
             raise ValueError(f"point_cloud should be a 2d array. Got {points_np.shape=}")
         if function_np.ndim != 2:
@@ -933,7 +933,7 @@ def DegreeRips(
             )
             _deg_rips_interface.degree_rips_to_simplextree(
                 st_multi,
-                np.ascontiguousarray(api.asnumpy(D), dtype=np.float64),
+                api.asnumpy(D, dtype=np.float64, contiguous=True),
                 None if ks_np is None else np.ascontiguousarray(ks_np, dtype=np.int32),
                 threshold_radius=float(threshold_radius),
                 vanilla=collapse is None,
