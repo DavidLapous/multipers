@@ -615,6 +615,58 @@ def module_approximation(
     *,
     n_jobs: int = -1,
 ) -> PyModule_type:
+    """Approximate a multiparameter module by interval-decomposable modules.
+
+    The approximation is built from a filtered complex, slicer, or tuple of
+    minimal-presentation slicers. The returned module object can be vectorized
+    or queried through the MMA Python bindings.
+
+    Parameters
+    ----------
+    input : SimplexTreeMulti, Slicer, or tuple[Slicer, ...]
+        Object to approximate. Tuple inputs must contain minimal presentations
+        and are merged by homological degree.
+    box : numpy.ndarray, optional
+        Bounding box for the approximation. If omitted, one is inferred from the
+        input.
+    max_error : float, default=-1
+        Approximation error target passed to the backend.
+    nlines : int, default=557
+        Number of lines used by the approximation backend.
+    from_coordinates : bool, default=False
+        Whether input data is already expressed in coordinates expected by the
+        backend.
+    complete : bool, default=True
+        Whether to complete the approximation in the backend.
+    threshold : bool, default=False
+        Whether to threshold backend output.
+    verbose : bool, default=False
+        Whether to print backend progress information.
+    ignore_warnings : bool, default=False
+        Whether to suppress backend warnings.
+    direction : iterable of float, optional
+        Optional direction passed to the approximation backend.
+    swap_box_coords : iterable of int, optional
+        Coordinate swaps applied to the box before backend computation.
+    n_jobs : int, default=-1
+        Parallelism used for tuple inputs and backend computations.
+
+    Output
+    ------
+    PyModule
+        MMA module approximation object matching the input dtype.
+
+    References
+    ----------
+    Carrière, Blumberg, and Loiseaux, "Multi-parameter Module Approximation: an
+    efficient and interpretable invariant for multi-parameter persistence
+    modules with guarantees", Journal of Applied and Computational Topology,
+    2025. DOI: 10.1007/s41468-025-00222-y.
+
+    Loiseaux, Carrière, and Blumberg, "A Framework for Fast and Stable
+    Representations of Multiparameter Persistent Homology Decompositions",
+    Advances in Neural Information Processing Systems, 2023.
+    """
     if isinstance(input, tuple) or isinstance(input, list):
         dtype = next((np.dtype(s.dtype) for s in input if hasattr(s, "dtype")), None)
     else:

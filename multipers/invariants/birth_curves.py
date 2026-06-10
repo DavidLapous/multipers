@@ -281,12 +281,64 @@ def birth_curves(
 ) -> list[np.ndarray]:
     """Compute two-parameter birth-curves.
 
+    Birth-curves are the spread-curve indecomposable summands obtained from
+    the birth part of the end-curve construction for a two-parameter module.
     Returns one ``(k, 2)`` array per birth-curve. By default points are mapped
     back from squeezed grid indices to filtration coordinates, with one
     ``np.inf`` sentinel per axis for curves reaching infinity. If the input is
     a minimal-presentation slicer, ``degree`` is inferred from
     ``minpres_degree``. ``min_length`` only filters plotted curves when
     ``plot=True``; returned curves are not filtered.
+
+    Parameters
+    ----------
+    filtered_complex : Slicer or SimplexTreeMulti-like
+        Two-parameter filtered complex, module presentation, or object
+        convertible to a slicer.
+    degree : int, optional
+        Homological degree. Inferred from ``minpres_degree`` when
+        ``filtered_complex`` is already a minimal-presentation slicer.
+    grid : iterable of array-like, optional
+        Filtration grid used before squeezing. If omitted, ``compute_grid`` is
+        called with ``grid_strategy`` and ``infer_grid_kwargs``.
+    grid_strategy : str, default="exact"
+        Strategy passed to ``compute_grid`` when ``grid`` is omitted.
+    coordinates : bool, default=True
+        If true, convert squeezed grid indices back to filtration coordinates.
+        If false, return grid-index vertices.
+    include_infinite : bool, default=True
+        Whether to include vertices representing curves reaching infinity.
+    sort : bool, default=True
+        Whether to lexicographically sort vertices along each returned curve.
+    aida_sort : bool, default=True
+        Sort option forwarded to ``multipers.ops.aida``.
+    verbose : bool, default=False
+        Verbosity forwarded to ``multipers.ops.aida``.
+    progress : bool, default=False
+        Progress-bar option forwarded to ``multipers.ops.aida``.
+    minpres_kwargs : dict, optional
+        Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
+        is forced to ``False``.
+    plot : bool, default=False
+        If true, plot the curves with ``multipers.plots.plot_birth_curve``.
+    min_length : float, default=-1
+        Minimum plotted curve length. Does not filter returned curves.
+    plot_kwargs : dict, optional
+        Keyword arguments forwarded to ``plot_birth_curve``.
+    **infer_grid_kwargs : object
+        Additional keyword arguments forwarded to ``compute_grid``.
+
+    Output
+    ------
+    list[numpy.ndarray]
+        One ``(k, 2)`` array per birth-curve. Rows are curve vertices in
+        filtration coordinates when ``coordinates=True`` and squeezed grid
+        indices otherwise.
+
+    References
+    ----------
+    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
+    two-parameter persistence", arXiv:2505.13412, 2025.
     """
     slicer = _as_slicer(filtered_complex)
     if slicer.num_parameters != 2:

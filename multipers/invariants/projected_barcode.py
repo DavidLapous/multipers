@@ -28,11 +28,38 @@ def projected_barcode(
     barcode of the projected resolution; a 2D array of directions returns one
     such barcode per row.
 
-    References:
-    - Fernandes, Oudot, Petit, "Computation of gamma-linear projected barcodes
-      for multiparameter persistence", DOI: 10.1007/s41468-025-00209-9.
-    - "Projected distances for multi-parameter persistence modules", DOI:
-      10.5802/aif.3752.
+    Parameters
+    ----------
+    filtered_complex : Slicer or SimplexTreeMulti-like
+        Filtered complex, module presentation, full free resolution, or object
+        convertible to a slicer.
+    direction : array-like
+        Strictly positive projection direction with shape ``(num_parameters,)``
+        or one direction per row with shape ``(num_directions, num_parameters)``.
+    degree : int, optional
+        Homological degree. Inferred from ``minpres_degree`` for minimal-
+        presentation input.
+    minpres_kwargs : dict, optional
+        Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
+        is forced to ``True``.
+    ignore_infinite_filtration_values : bool, default=True
+        Whether ``compute_persistence`` should ignore infinite projected grades.
+
+    Output
+    ------
+    object
+        Barcode returned by ``resolution.compute_persistence`` for one
+        direction, or one such barcode per row when several directions are
+        supplied.
+
+    References
+    ----------
+    Fernandes, Oudot, and Petit, "Computation of gamma-linear projected
+    barcodes for multiparameter persistence", Journal of Applied and
+    Computational Topology, 2025. DOI: 10.1007/s41468-025-00209-9.
+
+    Berkouk and Petit, "Projected distances for multi-parameter persistence
+    modules", Annales de l'Institut Fourier, 2026. DOI: 10.5802/aif.3752.
     """
     slicer = _as_slicer(filtered_complex)
     if slicer.is_minpres:

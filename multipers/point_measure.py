@@ -258,6 +258,26 @@ def barcode_from_rank_sm(
     and returns the associated estimated barcode.
     If full is True, the barcode is given as coordinates in R^{`num_parameters`} instead
     of coordinates w.r.t. the line.
+
+    Parameters
+    ----------
+    sm : tuple[numpy.ndarray, numpy.ndarray]
+        Rank signed measure ``(points, weights)``. Points have birth coordinates
+        followed by death coordinates.
+    basepoint : numpy.ndarray
+        Basepoint of the affine line used for slicing.
+    direction : numpy.ndarray, optional
+        Direction of the affine line. Positive coordinates are used to project
+        birth and death endpoints.
+    full : bool, default=False
+        If true, return endpoints in ambient multiparameter coordinates instead
+        of line coordinates.
+
+    Output
+    ------
+    numpy.ndarray
+        Estimated barcode on the selected line. Shape is ``(n, 2)`` when
+        ``full=False`` and ``(n, 2, num_parameters)`` when ``full=True``.
     """
     x, w = sm
     api = (

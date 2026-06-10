@@ -30,6 +30,16 @@ def death_curves(*args, **kwargs):
     ------
     NotImplementedError
         Always raised until the invariant is implemented.
+
+    Output
+    ------
+    None
+        No value is returned because this invariant is not implemented yet.
+
+    References
+    ----------
+    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
+    two-parameter persistence", arXiv:2505.13412, 2025.
     """
     raise NotImplementedError("death_curves is not implemented yet.")
 
@@ -50,6 +60,16 @@ def end_curves(*args, **kwargs):
     ------
     NotImplementedError
         Always raised until the invariant is implemented.
+
+    Output
+    ------
+    None
+        No value is returned because this invariant is not implemented yet.
+
+    References
+    ----------
+    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
+    two-parameter persistence", arXiv:2505.13412, 2025.
     """
     raise NotImplementedError("end_curves is not implemented yet.")
 
@@ -86,6 +106,16 @@ def fibered_barcode(
     -------
     tuple or numpy.ndarray
         All degree barcodes for the line, or the selected degree barcode.
+
+    Output
+    ------
+    tuple or numpy.ndarray
+        All degree barcodes for the line, or the selected degree barcode.
+
+    References
+    ----------
+    Carlsson and Zomorodian, "The theory of multidimensional persistence",
+    Discrete & Computational Geometry, 2009. DOI: 10.1007/s00454-009-9176-0.
     """
     barcode = _as_slicer(filtered_complex).persistence_on_line(
         basepoint,
@@ -128,6 +158,18 @@ def fibered_barcodes(
         One barcode object per line.  If ``degree`` is ``None``, each entry
         contains all homological degrees; otherwise each entry is the selected
         degree barcode.
+
+    Output
+    ------
+    tuple
+        One barcode object per line.  If ``degree`` is ``None``, each entry
+        contains all homological degrees; otherwise each entry is the selected
+        degree barcode.
+
+    References
+    ----------
+    Carlsson and Zomorodian, "The theory of multidimensional persistence",
+    Discrete & Computational Geometry, 2009. DOI: 10.1007/s00454-009-9176-0.
     """
     barcodes = _as_slicer(filtered_complex).persistence_on_lines(
         basepoints,
@@ -218,6 +260,12 @@ def hilbert_function(
         Dense Hilbert tensor for ``degree``, or one dense tensor per entry of
         ``degrees``.  Each tensor has shape ``tuple(len(axis) for axis in
         grid)``.
+
+    Output
+    ------
+    numpy.ndarray or tuple[numpy.ndarray, ...]
+        Dense Hilbert tensor for ``degree``, or one dense tensor per entry of
+        ``degrees``. Each tensor has shape ``tuple(len(axis) for axis in grid)``.
     """
     filtered_complex = _as_slicer(filtered_complex)
     inferred_degree = None
@@ -350,6 +398,17 @@ def rank_invariant(
     numpy.ndarray or tuple[numpy.ndarray, ...]
         Dense rank tensor for ``degree``, or one dense rank tensor per entry of
         ``degrees``.  Each tensor has shape ``grid_shape + grid_shape``.
+
+    Output
+    ------
+    numpy.ndarray or tuple[numpy.ndarray, ...]
+        Dense rank tensor for ``degree``, or one dense rank tensor per entry of
+        ``degrees``. Each tensor has shape ``grid_shape + grid_shape``.
+
+    References
+    ----------
+    Carlsson and Zomorodian, "The theory of multidimensional persistence",
+    Discrete & Computational Geometry, 2009. DOI: 10.1007/s00454-009-9176-0.
     """
     filtered_complex = _as_slicer(filtered_complex)
     inferred_degree = None
@@ -457,6 +516,17 @@ def betti_degrees(resolution, degree: Optional[int] = None):
     tuple[numpy.ndarray, ...]
         ``out[i]`` contains the multigrades of the free generators in ``F_i``.
         Empty input returns an empty tuple.
+
+    Output
+    ------
+    tuple[numpy.ndarray, ...]
+        ``out[i]`` contains the multigrades of the free generators in ``F_i``.
+        Empty input returns an empty tuple.
+
+    References
+    ----------
+    Carlsson and Zomorodian, "The theory of multidimensional persistence",
+    Discrete & Computational Geometry, 2009. DOI: 10.1007/s00454-009-9176-0.
     """
     from multipers.slicer import is_slicer
 
@@ -514,6 +584,18 @@ def betti_table(resolution, degree: Optional[int] = None):
         For each free term ``F_i``, a pair ``(grades, multiplicities)``.  The
         rows of ``grades`` are unique multigrades and ``multiplicities`` gives
         their Betti counts.
+
+    Output
+    ------
+    tuple[tuple[numpy.ndarray, numpy.ndarray], ...]
+        For each free term ``F_i``, a pair ``(grades, multiplicities)``. The
+        rows of ``grades`` are unique multigrades and ``multiplicities`` gives
+        their Betti counts.
+
+    References
+    ----------
+    Carlsson and Zomorodian, "The theory of multidimensional persistence",
+    Discrete & Computational Geometry, 2009. DOI: 10.1007/s00454-009-9176-0.
     """
     table = []
     for grades in betti_degrees(resolution, degree=degree):
