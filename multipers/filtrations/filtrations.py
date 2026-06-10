@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from importlib.util import find_spec
+from operator import index as _index
 from typing import Optional
 
 import numpy as np
@@ -1004,6 +1005,125 @@ def DegreeRips(
                 st_multi.filtration_grid = filtration_grid
             timing.substep("squeezed_grid")
         return st_multi
+
+
+def MultiscaleClusteringBifiltration(
+    partitions: ArrayLike,
+    filtration_indices: Optional[ArrayLike] = None,
+    *,
+    method: str = "standard",
+    max_dim: int = 2,
+    verbose: bool = False,
+) -> SimplexTreeMulti_type:
+    """
+    Build the Multiscale Clustering Bifiltration (MCbiF).
+
+    This constructor implements the bifiltration from Schindler and Barahona,
+    "MCbiF: Measuring Topological Autocorrelation in Multiscale Clusterings via
+    2-Parameter Persistent Homology". The input is a sequence of partitions of
+    the same point set. A simplex is present on interval ``[s, t]`` when all its
+    vertices occur in one common cluster at some scale in that interval.
+
+    The returned object is the raw 2-parameter k-critical ``SimplexTreeMulti``
+    used before module approximation. Coordinates follow the existing MCbiF
+    convention: start scale ``s`` is stored as ``-s`` and end scale ``t`` is
+    stored as ``t``.
+
+    Parameters
+    ----------
+    partitions:
+        Integer partition labels with shape ``(n_partitions, n_points)``. Rows
+        are scales; columns are data points. Labels may be non-contiguous.
+    filtration_indices:
+        Strictly increasing scale values. Defaults to ``1..n_partitions``.
+    method:
+        ``"standard"`` builds simplices on original data-point vertices.
+        ``"nerve"`` builds the cluster nerve on distinct cluster vertices.
+    max_dim:
+        Maximal simplex dimension to build. Must be nonnegative.
+    verbose:
+        Emit timing logs.
+
+    Returns
+    -------
+    SimplexTreeMulti_type
+        Float64 k-critical 2-parameter simplex tree.
+
+    References
+    ----------
+    Schindler, J. and Barahona, M. (2026). MCbiF: Measuring Topological
+    Autocorrelation in Multiscale Clusterings via 2-Parameter Persistent
+    Homology. ICLR 2026. https://openreview.net/forum?id=E7D6uybODJ
+    """
+    from multipers._mcbif_nanobind import build_mcbif_simplextree
+    from multipers.simplex_tree_multi import SimplexTreeMulti
+
+    partitions_array = np.asarray(partitions)
+    if partitions_array.ndim != 2:
+        raise ValueError(
+            f"partitions must be a 2D array of shape (n_partitions, n_points), got {partitions_array.shape}."
+        )
+    if partitions_array.shape[0] == 0:
+        raise ValueError("partitions must contain at least one partition.")
+    if partitions_array.shape[1] == 0:
+        raise ValueError("partitions must contain at least one point.")
+    try:
+        partitions_int = np.asarray(partitions_array, dtype=np.int64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("partitions must contain integer labels.") from exc
+    if not np.array_equal(partitions_array, partitions_int):
+        raise ValueError("partitions must contain integer labels.")
+    partitions_int = np.ascontiguousarray(partitions_int, dtype=np.int64)
+
+    if filtration_indices is None:
+        filtration_indices_np = np.arange(1, partitions_int.shape[0] + 1, dtype=np.float64)
+    else:
+        filtration_indices_np = np.asarray(filtration_indices, dtype=np.float64)
+    if filtration_indices_np.ndim != 1:
+        raise ValueError("filtration_indices must be a 1D array.")
+    if filtration_indices_np.shape[0] != partitions_int.shape[0]:
+        raise ValueError("filtration_indices length must match the number of partitions.")
+    if not np.all(np.isfinite(filtration_indices_np)):
+        raise ValueError("filtration_indices must be finite.")
+    if np.any(filtration_indices_np[1:] <= filtration_indices_np[:-1]):
+        raise ValueError("filtration_indices must be strictly increasing.")
+    filtration_indices_np = np.ascontiguousarray(filtration_indices_np, dtype=np.float64)
+
+    try:
+        max_dim_int = _index(max_dim)
+    except TypeError as exc:
+        raise ValueError("max_dim must be a nonnegative integer.") from exc
+    if max_dim_int < 0:
+        raise ValueError("max_dim must be nonnegative.")
+
+    method = str(method).lower()
+    if method not in {"standard", "nerve"}:
+        raise ValueError("method must be 'standard' or 'nerve'.")
+    max_dim_build = min(
+        max_dim_int,
+        partitions_int.shape[1] - 1 if method == "standard" else partitions_int.shape[0] - 1,
+    )
+
+    with _mp_logs.timings(
+        "MultiscaleClusteringBifiltration",
+        enabled=verbose,
+        details={
+            "backend": "mcbif",
+            "method": method,
+            "max_dim": max_dim_int,
+            "num_partitions": int(partitions_int.shape[0]),
+            "num_points": int(partitions_int.shape[1]),
+        },
+    ) as timing:
+        simplex_tree_multi = build_mcbif_simplextree(
+            SimplexTreeMulti(num_parameters=2, kcritical=True, dtype=np.float64),
+            partitions_int,
+            filtration_indices_np,
+            max_dim_build,
+            method,
+        )
+        timing.substep("built_mcbif")
+        return simplex_tree_multi
 
 
 def CoreDelaunay(

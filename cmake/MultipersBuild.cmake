@@ -770,6 +770,9 @@ function(multipers_configure_module module_name target_name)
   elseif(module_name STREQUAL "_function_rips_nanobind")
     multipers_link_tbb(${target_name})
 
+  elseif(module_name STREQUAL "_mcbif_nanobind")
+    multipers_link_tbb(${target_name})
+
   elseif(module_name STREQUAL "_core_delaunay_nanobind")
     multipers_link_tbb(${target_name})
     multipers_link_cgal(${target_name})
@@ -963,6 +966,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _mma_nanobind
   _simplex_tree_multi_nanobind
   _function_rips_nanobind
+  _mcbif_nanobind
   _core_delaunay_nanobind
   _grid_helper_nanobind
   _mpfree_interface
