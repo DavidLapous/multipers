@@ -46,8 +46,8 @@ def signed_measure(
     Computes the signed measures given by the decomposition of the hilbert
     function or the euler characteristic, or the rank invariant.
 
-    Input
-    -----
+    Parameters
+    ----------
      - filtered_complex: given by a simplextree or a slicer.
      - degree:int|None / degrees:list[int] the degrees to compute.
        None represents the euler characteristic.
@@ -82,6 +82,17 @@ def signed_measure(
 
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
+
+    References
+    ----------
+    Loiseaux, Carrière, Botnan, Oudot, and Scoccola, "Stable Vectorization of
+    Multiparameter Persistent Homology using Signed Barcodes as Measures",
+    Advances in Neural Information Processing Systems, 2023.
+
+    Scoccola, Setlur, Loiseaux, Carrière, and Oudot, "Differentiability and
+    Optimization of Multiparameter Persistent Homology", Proceedings of the
+    41st International Conference on Machine Learning, PMLR 235:43986-44011,
+    2024.
 
     Notes on computational backends
     -------------------------------
