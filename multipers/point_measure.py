@@ -96,13 +96,15 @@ def integrate_measure(
             resolution=resolution,
             **get_fitration_kwargs,
         )
-    if api.size(pts) == 0:
-        return np.empty()
-    pts = np.ascontiguousarray(api.asnumpy(pts))
-    weights = np.ascontiguousarray(api.asnumpy(weights))
     filtration_grid = tuple(
         np.ascontiguousarray(api_from_tensor(f).asnumpy(f)) for f in filtration_grid
     )
+    if api.size(pts) == 0:
+        weights_dtype = np.asarray(api.asnumpy(weights)).dtype
+        out = np.zeros(tuple(len(axis) for axis in filtration_grid), dtype=weights_dtype)
+        return (out, filtration_grid) if return_grid else out
+    pts = api.asnumpy(pts, contiguous=True)
+    weights = api.asnumpy(weights, contiguous=True)
     out = _mg_nb.integrate_measure(pts, weights, filtration_grid)
     if plot:
         from multipers.plots import plot_surface
