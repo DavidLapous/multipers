@@ -142,6 +142,12 @@ def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _sp_logsumexp(x, axis=axis, keepdims=keepdim)
 
 
+def cumsum(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _np.cumsum(x, axis=axis, **kwargs)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
@@ -233,7 +239,7 @@ def set_at(x, idx, y):
 
 
 def add_at(x, idx, y):
-    x[idx] += y
+    _np.add.at(x, idx, y)
     return x
 
 

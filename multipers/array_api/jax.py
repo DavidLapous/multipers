@@ -75,6 +75,12 @@ def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _jsp_special.logsumexp(x, axis=axis, keepdims=keepdim)
 
 
+def cumsum(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _jnp.cumsum(x, axis=axis, **kwargs)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim

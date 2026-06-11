@@ -96,6 +96,12 @@ def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _torch.logsumexp(x, dim=dim, keepdim=keepdim)
 
 
+def cumsum(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _torch.cumsum(x, dim=dim, **kwargs)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if dim is None:
         dim = axis
@@ -184,6 +190,10 @@ def set_at(x, idx, y):
 
 
 def add_at(x, idx, y):
+    if not isinstance(idx, tuple):
+        idx = (idx,)
+    if all(isinstance(i, _torch.Tensor) for i in idx):
+        return x.index_put_(idx, y, accumulate=True)
     x[idx] += y
     return x
 
