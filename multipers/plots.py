@@ -189,6 +189,169 @@ def plot_signed_measures(
     plt.tight_layout()
 
 
+def plot_presentation(
+    presentation,
+    degree: Optional[int] = None,
+    *,
+    ax=None,
+    show_hilbert: bool = True,
+    show_rank: bool = False,
+    label: bool = True,
+    relation_lines: bool = True,
+    line_color="0.7",
+    line_width: float = 1.0,
+    line_zorder: float = 0,
+    fontsize: float = 10,
+    label_x_offset: float = 0.01,
+    label_y_step: float = 0.05,
+    signed_measure_kwargs: Optional[dict] = None,
+    rank_kwargs: Optional[dict] = None,
+):
+    """Plot a 2-parameter presentation with generator/relation annotations.
+
+    ``presentation`` must be a single multipers slicer. If ``degree`` is not
+    provided for a minimal presentation, ``presentation.minpres_degree`` is used.
+    Generators in ``degree`` are labelled ``Gen: (i)``. Relations in
+    ``degree + 1`` are labelled by their boundary, and gray segments connect
+    each relation to its degree-``degree`` boundary generators. Label positions
+    are offset vertically to reduce collisions; segments use the unshifted
+    filtration coordinates.
+
+    Parameters
+    ----------
+    presentation : Slicer
+        Single multipers slicer containing the presentation to plot.
+    degree : int, optional
+        Homological degree of generators to annotate. Required unless
+        ``presentation`` is a minimal presentation with ``minpres_degree`` set.
+    ax : matplotlib.axes.Axes, optional
+        Axis to draw on. If omitted, uses the current axis.
+    show_hilbert : bool, default=True
+        Whether to draw the Hilbert signed measure before annotations.
+    show_rank : bool, default=False
+        Whether to draw the rank signed measure before annotations.
+    label : bool, default=True
+        Whether to label generators and relations.
+    relation_lines : bool, default=True
+        Whether to draw segments from relations to boundary generators.
+    line_color : object, default="0.7"
+        Matplotlib color for relation segments.
+    line_width : float, default=1.0
+        Matplotlib linewidth for relation segments.
+    line_zorder : float, default=0
+        Matplotlib z-order for relation segments.
+    fontsize : float, default=10
+        Text label font size.
+    label_x_offset : float, default=0.01
+        Horizontal label offset as a fraction of filtration span.
+    label_y_step : float, default=0.05
+        Vertical spacing used to separate labels with close coordinates.
+    signed_measure_kwargs : dict, optional
+        Extra keyword arguments forwarded to Hilbert signed-measure plotting.
+    rank_kwargs : dict, optional
+        Extra keyword arguments forwarded to rank signed-measure plotting.
+
+    Output
+    ------
+    matplotlib.axes.Axes
+        Axis containing the presentation plot.
+    """
+    from multipers.slicer import is_slicer
+
+    if not is_slicer(presentation, allow_minpres=False):
+        raise TypeError("plot_presentation expects a single multipers slicer input.")
+    if degree is None:
+        if presentation.is_minpres and presentation.minpres_degree >= 0:
+            degree = int(presentation.minpres_degree)
+        else:
+            raise ValueError("`degree` is required unless input is a minimal presentation.")
+    else:
+        degree = int(degree)
+
+    if ax is None:
+        ax = plt.gca()
+    else:
+        plt.sca(ax)
+
+    filtrations = presentation.get_filtrations(unsqueeze=presentation.is_squeezed)
+    if filtrations.ndim != 2:
+        filtrations = filtrations.reshape(-1, presentation.num_parameters)
+    if filtrations.shape[1] != 2:
+        raise ValueError("plot_presentation only supports 2-parameter presentations.")
+
+    dimensions = presentation.get_dimensions()
+    boundary_indptr, boundary_flat = presentation.get_boundaries(packed=True)
+    target_generators = dimensions == degree
+    relation_mask = dimensions == degree + 1
+
+    if show_hilbert:
+        from multipers import signed_measure
+
+        kwargs = {} if signed_measure_kwargs is None else dict(signed_measure_kwargs)
+        signed_measure(presentation, plot=True, invariant="hilbert", degree=degree, **kwargs)
+    if show_rank:
+        from multipers import signed_measure
+        from multipers.grids import compute_bounding_box
+
+        kwargs = {} if rank_kwargs is None else dict(rank_kwargs)
+        box = compute_bounding_box(presentation)
+        signed_measure(
+            presentation.grid_squeeze(threshold_max=box[1]),
+            plot=True,
+            invariant="rank",
+            **kwargs,
+        )
+
+    finite = filtrations[np.all(np.isfinite(filtrations), axis=1)]
+    if finite.size:
+        span = np.ptp(finite, axis=0)
+    else:
+        span = np.ones(2, dtype=np.float64)
+    span = np.maximum(span, 1.0)
+
+    label_positions = filtrations.copy()
+    offsets = {}
+    for i, point in enumerate(filtrations):
+        key = tuple(np.round(point, 3))
+        offset = offsets.get(key, 0.01 * span[1]) - label_y_step * span[1]
+        offsets[key] = offset
+        label_positions[i, 1] = point[1] + offset
+
+    if relation_lines:
+        for i in np.flatnonzero(relation_mask):
+            x_rel, y_rel = filtrations[i]
+            start = int(boundary_indptr[i])
+            stop = int(boundary_indptr[i + 1])
+            for j in boundary_flat[start:stop]:
+                j = int(j)
+                if 0 <= j < len(filtrations) and target_generators[j]:
+                    x_gen, y_gen = filtrations[j]
+                    ax.plot(
+                        [x_gen, x_rel],
+                        [y_gen, y_rel],
+                        color=line_color,
+                        linewidth=line_width,
+                        zorder=line_zorder,
+                    )
+
+    if label:
+        x_offset = label_x_offset * span[0]
+        for i in np.flatnonzero(target_generators):
+            x, y = label_positions[i]
+            ax.text(x + x_offset, y, f"Gen: ({i})", fontsize=fontsize)
+        for i in np.flatnonzero(relation_mask):
+            x, y = label_positions[i]
+            start = int(boundary_indptr[i])
+            stop = int(boundary_indptr[i + 1])
+            ax.text(
+                x + x_offset,
+                y,
+                f"Rel: {boundary_flat[start:stop]}",
+                fontsize=fontsize,
+            )
+    return ax
+
+
 def plot_surface(
     grid,
     hf,
