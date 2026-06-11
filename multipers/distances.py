@@ -193,7 +193,32 @@ def pairwise_distances(items_X, items_Y=None, metric=None, n_jobs=None, api=None
     return api.set_at(matrix, (triu[1], triu[0]), dists)
 
 
-def sm2diff(sm1, sm2, threshold=None, api=None):
+def sm2diff(sm1, sm2, threshold=None, api=None, flatten_weights: bool = True):
+    """Transform two discrete signed measures into a difference representation.
+
+    Parameters
+    ----------
+    sm1, sm2 : tuple[array-like, array-like]
+        Discrete signed measures encoded as `sm = (x, w)`, representing
+        `mu = sum_i w_i delta_{x_i}`. `x` has shape `(num_points, dimension)`
+        and stores Dirac locations; `w` has shape `(num_points,)` and stores
+        signed weights.
+    threshold : scalar or array-like, optional
+        Coordinate-wise upper clipping value applied before constructing the
+        output.
+    api : multipers.array_api module, optional
+        Array backend. If `None`, inferred from `sm1` points.
+    flatten_weights : bool, default=True
+        If `True`, return the repeated positive and negative point clouds used
+        by Wasserstein code. If `False`, return concatenated points and signed
+        weights without expanding weights into repeated points.
+
+    Output
+    ------
+    tuple
+        `(x, y)` repeated point clouds when `flatten_weights=True`; otherwise
+        `(points, weights)` for the signed difference `sm1 - sm2`.
+    """
     pts1, w1 = sm1
     pts2, w2 = sm2
     if api is None:
@@ -203,6 +228,14 @@ def sm2diff(sm1, sm2, threshold=None, api=None):
     pts2 = api.to_device(api.astensor(pts2), device)
     w1 = api.to_device(api.astensor(w1).reshape(-1), device)
     w2 = api.to_device(api.astensor(w2).reshape(-1), device)
+
+    if threshold is not None:
+        threshold = api.to_device(api.astensor(threshold, dtype=pts1.dtype), device)
+        pts1 = api.where(pts1 > threshold, threshold, pts1)
+        pts2 = api.where(pts2 > threshold, threshold, pts2)
+
+    if not flatten_weights:
+        return api.cat([pts1, pts2], 0), api.cat([w1, -w2], 0)
 
     x = api.cat(
         [
@@ -218,11 +251,338 @@ def sm2diff(sm1, sm2, threshold=None, api=None):
         ],
         0,
     )
-    if threshold is not None:
-        threshold = api.to_device(api.astensor(threshold, dtype=pts1.dtype), device)
-        x = api.where(x > threshold, threshold, x)
-        y = api.where(y > threshold, threshold, y)
     return x, y
+
+
+def _half_plus_half_minus_orientation(dimension: int, invariant: str):
+    half_dimension = dimension >> 1
+    if (half_dimension << 1) != dimension:
+        raise ValueError(
+            f"{invariant!r} invariant orientation requires an even ambient dimension. "
+            f"Got {dimension}."
+        )
+    return np.concatenate(
+        [
+            np.ones(half_dimension, dtype=np.float64),
+            -np.ones(half_dimension, dtype=np.float64),
+        ]
+    )
+
+
+def _validate_orientation(orientation, dimension: int):
+    orientation = np.asarray(orientation, dtype=np.float64)
+    if orientation.shape != (dimension,):
+        raise ValueError(
+            "orientation must contain one +/-1 entry per signed-measure coordinate. "
+            f"Got shape {orientation.shape} for dimension {dimension}."
+        )
+    if not np.all(np.isin(orientation, (-1.0, 1.0))):
+        raise ValueError("orientation entries must be +1 or -1.")
+    return orientation
+
+
+def _orientation_from_invariant(invariant, dimension: int):
+    if invariant is None:
+        return np.ones(dimension, dtype=np.float64)
+
+    if not isinstance(invariant, str):
+        raise TypeError(
+            f"invariant must be None or a string. Got {type(invariant)!r}."
+        )
+    invariant = invariant.lower().replace("-", "_")
+    if invariant in {"hilbert", "hilbert_function", "euler", "euler_characteristic"}:
+        return np.ones(dimension, dtype=np.float64)
+    if invariant in {"rank", "rank_invariant", "rectangle", "hook"}:
+        return _half_plus_half_minus_orientation(dimension, invariant)
+    raise ValueError(
+        "Unknown invariant for integral distance. Expected None, 'hilbert', "
+        "'euler', 'rank', 'rectangle', 'hook', or explicit orientation. "
+        f"Got {invariant!r}."
+    )
+
+
+def _normalize_orientation(*, invariant, orientation, dimension: int, api, dtype, device):
+    if orientation is not None:
+        if invariant is not None:
+            raise ValueError("orientation and invariant are mutually exclusive.")
+        orientation = _validate_orientation(orientation, dimension)
+    else:
+        orientation = _orientation_from_invariant(invariant, dimension)
+    return api.astensor(orientation, dtype=dtype, device=device)
+
+
+def _normalize_two_signed_measures(sm1, sm2, api=None):
+    measures, api, dimension, _, _ = _normalize_signed_measures([sm1, sm2], api=api)
+    left_pts, left_weights = measures[0]
+    right_pts, right_weights = measures[1]
+    return left_pts, left_weights, right_pts, right_weights, dimension, api
+
+
+def _auto_oriented_top(point_sets, orientation):
+    nonempty = [pts for pts in point_sets if pts.shape[0] > 0]
+    if not nonempty:
+        raise ValueError("top='auto' requires at least one signed-measure point.")
+    api = api_from_tensor(nonempty[0])
+    pts = api.cat(nonempty, 0)
+    return api.maxvalues(pts * orientation, axis=0)
+
+
+def _oriented_top(top, point_sets, orientation, dimension: int, api, dtype, device):
+    if top is None:
+        return _auto_oriented_top(point_sets, orientation)
+    if isinstance(top, str):
+        if top.lower().replace("-", "_") == "auto":
+            return _auto_oriented_top(point_sets, orientation)
+        raise ValueError(f"Unknown top value {top!r}. Expected 'auto' or an array.")
+
+    top = api.astensor(top, dtype=dtype, device=device)
+    if top.ndim == 0 and dimension == 1:
+        top = api.reshape(top, (1,))
+    if top.shape != (dimension,):
+        raise ValueError(
+            "top must contain one value per coordinate. "
+            f"Got shape {top.shape} for dimension {dimension}."
+        )
+    return top * orientation
+
+
+def _signed_integral(pts, weights, oriented_top, orientation, api):
+    if pts.shape[0] == 0:
+        return api.astensor(0.0, dtype=weights.dtype, device=api.device(weights))
+
+    oriented_pts = pts * orientation
+    deltas = oriented_top[None, :] - oriented_pts
+    zeros = api.zeros(deltas.shape, dtype=deltas.dtype, device=api.device(deltas))
+    deltas = api.where(oriented_pts == oriented_top[None, :], zeros, deltas)
+    rectangle_edges = api.relu(deltas)
+    if rectangle_edges.shape[1] == 0:
+        rectangle_volumes = api.zeros(
+            (rectangle_edges.shape[0],),
+            dtype=rectangle_edges.dtype,
+            device=api.device(rectangle_edges),
+        )
+    else:
+        rectangle_volumes = rectangle_edges[:, 0]
+        for axis in range(1, rectangle_edges.shape[1]):
+            rectangle_volumes = rectangle_volumes * rectangle_edges[:, axis]
+    return api.sum(rectangle_volumes * weights)
+
+
+def signed_integral_distance(
+    sm1: tuple,
+    sm2: tuple,
+    *,
+    top="auto",
+    invariant=None,
+    orientation=None,
+    absolute: bool = True,
+    api=None,
+):
+    """Integrate the signed difference of two cumulative signed measures.
+
+    The signed measures encode ``F(x) = sum_{z <= x} w_z`` in the product poset
+    selected by ``invariant`` or explicit ``orientation``.  Use
+    ``invariant='rectangle'`` or ``invariant='hook'`` for endpoint measures whose
+    last half of coordinates have the opposite order.  ``top='auto'`` uses the
+    least upper bound of all input points in that poset.
+
+    Parameters
+    ----------
+    sm1, sm2 : tuple[array-like, array-like]
+        Discrete signed measures encoded as `sm = (x, w)`, representing
+        `mu = sum_i w_i delta_{x_i}`. `x` has shape `(num_points, dimension)`
+        and stores Dirac locations; `w` has shape `(num_points,)` and stores
+        signed weights.
+    top : "auto" or array-like, default="auto"
+        Integration upper corner in the oriented product order.
+    invariant : {None, "hilbert", "euler", "rank", "rectangle", "hook"}, optional
+        Named orientation convention.
+    orientation : array-like, optional
+        Explicit +/-1 orientation per coordinate. Mutually exclusive with
+        `invariant`.
+    absolute : bool, default=True
+        If `True`, return the absolute value of the signed integral.
+    api : multipers.array_api module, optional
+        Array backend. If `None`, inferred from inputs.
+
+    Output
+    ------
+    scalar
+        Signed integral value, or its absolute value when `absolute=True`.
+    """
+    left_pts, left_weights, right_pts, right_weights, dimension, api = (
+        _normalize_two_signed_measures(sm1, sm2, api=api)
+    )
+    device = api.device(left_pts)
+    if left_pts.shape[0] == 0 and right_pts.shape[0] == 0:
+        return api.astensor(0.0, dtype=left_weights.dtype, device=device)
+
+    orientation = _normalize_orientation(
+        invariant=invariant,
+        orientation=orientation,
+        dimension=dimension,
+        api=api,
+        dtype=left_pts.dtype,
+        device=device,
+    )
+    oriented_top = _oriented_top(
+        top,
+        (left_pts, right_pts),
+        orientation,
+        dimension,
+        api,
+        left_pts.dtype,
+        device,
+    )
+    pts, weights = sm2diff(
+        (left_pts, left_weights),
+        (right_pts, right_weights),
+        api=api,
+        flatten_weights=False,
+    )
+    value = _signed_integral(pts, weights, oriented_top, orientation, api)
+    return api.abs(value) if absolute else value
+
+
+def integral_distance(
+    sm1: tuple,
+    sm2: tuple,
+    *,
+    top="auto",
+    invariant=None,
+    orientation=None,
+    api=None,
+):
+    """Exact L1 distance between cumulative functions of two signed measures.
+
+    ``invariant='hilbert'`` uses usual coordinate order.  ``invariant='rectangle'``
+    and ``invariant='hook'`` use usual order on lower endpoints and opposite
+    order on upper endpoints.  ``orientation`` can be an explicit +/-1 array with
+    one entry per coordinate, and is mutually exclusive with ``invariant``.
+    ``top='auto'`` uses the least upper bound of all input points in this poset.
+
+    Parameters
+    ----------
+    sm1, sm2 : tuple[array-like, array-like]
+        Discrete signed measures encoded as `sm = (x, w)`, representing
+        `mu = sum_i w_i delta_{x_i}`. `x` has shape `(num_points, dimension)`
+        and stores Dirac locations; `w` has shape `(num_points,)` and stores
+        signed weights.
+    top : "auto" or array-like, default="auto"
+        Integration upper corner in the oriented product order.
+    invariant : {None, "hilbert", "euler", "rank", "rectangle", "hook"}, optional
+        Named orientation convention.
+    orientation : array-like, optional
+        Explicit +/-1 orientation per coordinate. Mutually exclusive with
+        `invariant`.
+    api : multipers.array_api module, optional
+        Array backend. If `None`, inferred from inputs.
+
+    Output
+    ------
+    scalar
+        Exact L1 distance between cumulative signed measures.
+    """
+    left_pts, left_weights, right_pts, right_weights, dimension, api = (
+        _normalize_two_signed_measures(sm1, sm2, api=api)
+    )
+    device = api.device(left_pts)
+    if left_pts.shape[0] == 0 and right_pts.shape[0] == 0:
+        return api.astensor(0.0, dtype=left_weights.dtype, device=device)
+
+    orientation = _normalize_orientation(
+        invariant=invariant,
+        orientation=orientation,
+        dimension=dimension,
+        api=api,
+        dtype=left_pts.dtype,
+        device=device,
+    )
+    oriented_top = _oriented_top(
+        top,
+        (left_pts, right_pts),
+        orientation,
+        dimension,
+        api,
+        left_pts.dtype,
+        device,
+    )
+    pts, weights = sm2diff(
+        (left_pts, left_weights),
+        (right_pts, right_weights),
+        api=api,
+        flatten_weights=False,
+    )
+    if pts.shape[0] == 0:
+        return api.astensor(0.0, dtype=weights.dtype, device=device)
+
+    oriented_pts = pts * orientation
+    active = ~api.any(oriented_pts > oriented_top[None, :], axis=1)
+    oriented_pts = oriented_pts[active]
+    weights = weights[active]
+    if oriented_pts.shape[0] == 0:
+        return api.astensor(0.0, dtype=weights.dtype, device=device)
+
+    axes = [
+        api.sort(
+            api.cat([oriented_pts[:, dim], oriented_top[dim : dim + 1]], 0),
+            axis=0,
+        )
+        for dim in range(dimension)
+    ]
+    cell_counts = tuple(axis.shape[0] - 1 for axis in axes)
+    if any(count <= 0 for count in cell_counts):
+        return api.astensor(0.0, dtype=weights.dtype, device=device)
+
+    total_cells = 1
+    for count in cell_counts:
+        total_cells *= count
+
+    strides = [1] * dimension
+    for dim in range(dimension - 2, -1, -1):
+        strides[dim] = strides[dim + 1] * cell_counts[dim + 1]
+
+    flat_indices = api.zeros((oriented_pts.shape[0],), dtype=api.int64, device=device)
+    active_cells = api.astensor(np.ones(oriented_pts.shape[0], dtype=bool), device=device)
+    for dim, count in enumerate(cell_counts):
+        indices = api.astype(
+            api.searchsorted(axes[dim], oriented_pts[:, dim], side="left"),
+            api.int64,
+        )
+        indices_active = indices < count
+        active_cells = active_cells & indices_active
+        indices = api.where(
+            indices_active,
+            indices,
+            api.zeros(indices.shape, dtype=api.int64, device=device),
+        )
+        flat_indices = flat_indices + indices * strides[dim]
+
+    weights = api.where(
+        active_cells,
+        weights,
+        api.zeros(weights.shape, dtype=weights.dtype, device=device),
+    )
+    cumulative = api.reshape(
+        api.add_at(
+            api.zeros((total_cells,), dtype=weights.dtype, device=device),
+            api.astype(flat_indices, api.int64),
+            weights,
+        ),
+        cell_counts,
+    )
+
+    for axis in range(dimension):
+        cumulative = api.cumsum(cumulative, axis=axis)
+
+    cell_volumes = api.astensor(1.0, dtype=oriented_pts.dtype, device=device)
+    for dim, grid_axis in enumerate(axes):
+        widths = grid_axis[1:] - grid_axis[:-1]
+        shape = [1] * dimension
+        shape[dim] = widths.shape[0]
+        cell_volumes = cell_volumes * api.reshape(widths, tuple(shape))
+
+    return api.sum(api.abs(cumulative) * cell_volumes)
 
 
 def sm_distance(
@@ -238,13 +598,7 @@ def sm_distance(
     num_directions: int = 10,
     seed: int = 42,
 ):
-    """
-    Computes a distance between two signed measures,
-    of the form
-     - (pts,weights)
-    with
-     - pts : (num_pts, dim) float array
-     - weights : (num_pts,) int array
+    """Compute a transport distance between two signed measures.
 
     Regularisation:
       - sinkhorn if reg != 0
@@ -255,6 +609,44 @@ def sm_distance(
     are only supported by the unbalanced Sinkhorn path (`reg != 0` and
     `reg_m != 0`).
 
+    Parameters
+    ----------
+    sm1, sm2 : tuple[array-like, array-like]
+        Discrete signed measures encoded as `sm = (x, w)`, representing
+        `mu = sum_i w_i delta_{x_i}`. `x` has shape `(num_points, dimension)`
+        and stores Dirac locations; `w` has shape `(num_points,)` and stores
+        signed weights.
+    sliced : bool, default=False
+        If `True`, compute balanced sliced Wasserstein distance on the expanded
+        signed measures.
+    api : multipers.array_api module, optional
+        Array backend. If `None`, inferred from `sm1` points.
+    reg : float, default=0
+        Sinkhorn entropy regularization. `0` selects exact EMD unless `sliced`
+        is enabled.
+    reg_m : float, default=0
+        Unbalanced Sinkhorn mass regularization. Only used when `reg != 0`.
+    numItermax : int, default=10000
+        Maximum Sinkhorn iterations.
+    p : float, default=1
+        Ground metric order for pairwise distances.
+    threshold : scalar or array-like, optional
+        Coordinate-wise upper clipping value applied before transport.
+    num_directions : int, default=10
+        Number of random projections for sliced Wasserstein mode.
+    seed : int, default=42
+        Random seed for sliced Wasserstein projections.
+
+    Output
+    ------
+    scalar
+        Transport distance between the signed measures.
+
+    References
+    ----------
+    Loiseaux, Scoccola, Carrière, Botnan, and Oudot, "Stable Vectorization of
+    Multiparameter Persistent Homology Using Signed Barcodes as Measures",
+    Advances in Neural Information Processing Systems, 2023.
     """
     if api is None:
         api = api_from_tensor(sm1[0])
@@ -358,6 +750,24 @@ def hera_bottleneck_distances(
     The compiled Hera bridge drops diagonal points once, then evaluates the
     batch with a native TBB loop when available. `n_jobs <= 0` keeps backend
     default concurrency.
+
+    Parameters
+    ----------
+    left_diagrams, right_diagrams : sequence[array-like]
+        Aligned persistence diagram batches. Each diagram has shape `(n, 2)`.
+    delta : float, default=0.01
+        Hera relative approximation parameter. Use `0` for exact bottleneck.
+    n_jobs : int, default=0
+        Native worker count. `n_jobs <= 0` keeps backend default concurrency.
+
+    Output
+    ------
+    numpy.ndarray
+        One bottleneck distance per aligned diagram pair.
+
+    References
+    ----------
+    Hera project: https://github.com/anigmetov/hera
     """
     from multipers import _hera_interface
 
@@ -385,6 +795,28 @@ def hera_wasserstein_distances(
     The compiled Hera bridge drops diagonal points internally and evaluates the
     batch with a native TBB loop when available. `n_jobs <= 0` keeps backend
     default concurrency.
+
+    Parameters
+    ----------
+    left_diagrams, right_diagrams : sequence[array-like]
+        Aligned persistence diagram batches. Each diagram has shape `(n, 2)`.
+    order : float, default=1.0
+        Wasserstein order.
+    internal_p : float, default=numpy.inf
+        Ground metric order inside diagrams.
+    delta : float, default=0.01
+        Hera relative approximation parameter.
+    n_jobs : int, default=0
+        Native worker count. `n_jobs <= 0` keeps backend default concurrency.
+
+    Output
+    ------
+    numpy.ndarray
+        One Wasserstein distance per aligned diagram pair.
+
+    References
+    ----------
+    Hera project: https://github.com/anigmetov/hera
     """
     from multipers import _hera_interface
 
@@ -913,7 +1345,7 @@ def _matching_distance_scalar_prepared(
                         line_distance_order=line_distance_order,
                         return_stats=bool(return_stats),
                     )
-                if return_stats:
+                if return_stats and isinstance(out, tuple):
                     step.add_stats(out[1])
                 return out
 
@@ -1087,8 +1519,8 @@ def matching_distance(
         the same shape `(nlines, num_parameters)` or `(num_parameters,)`, and
         every direction coordinate must be strictly positive.
 
-    Returns
-    -------
+    Output
+    ------
     float, numpy.ndarray, or tuple[float | numpy.ndarray, dict | list[dict]]
         Scalar inputs return one matching distance, optionally paired with Hera
         diagnostics when `return_stats=True`. Batched inputs return a 1D NumPy
@@ -1097,6 +1529,11 @@ def matching_distance(
     References
     ----------
     Hera project: https://github.com/anigmetov/hera
+
+    Kerber, Nigmetov, Cabello, and Chen, "Efficient Approximation of the
+    Matching Distance for 2-Parameter Persistence", 36th International
+    Symposium on Computational Geometry (SoCG), 2020. DOI:
+    10.4230/LIPIcs.SoCG.2020.53.
     """
     from multipers.simplex_tree_multi import is_simplextree_multi
     from multipers.slicer import is_slicer
@@ -1233,8 +1670,8 @@ def _native_monte_carlo_matching_distance_batch(
         basepoints=mc_basepoints,
         directions=mc_directions,
     )
-    basepoints_np = np.ascontiguousarray(api.asnumpy(basepoints), dtype=np.float64)
-    directions_np = np.ascontiguousarray(api.asnumpy(directions), dtype=np.float64)
+    basepoints_np = api.asnumpy(basepoints, dtype=np.float64, contiguous=True)
+    directions_np = api.asnumpy(directions, dtype=np.float64, contiguous=True)
 
     wasserstein_order = _normalize_monte_carlo_wasserstein_order(mc_wp)
     if wasserstein_order is None:
