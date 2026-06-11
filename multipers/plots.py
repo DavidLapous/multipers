@@ -628,8 +628,19 @@ def plot_birth_curve(
             **line_kwargs,
         )
 
-    ax.set_xlim(box[0, 0], box[1, 0])
-    ax.set_ylim(box[0, 1], box[1, 1])
+    for axis, get_limits, set_limits in (
+        (0, ax.get_xlim, ax.set_xlim),
+        (1, ax.get_ylim, ax.set_ylim),
+    ):
+        lo, hi = box[0, axis], box[1, axis]
+        padding = abs(hi - lo) * 0.05
+        target_lo = min(lo, hi) - padding
+        target_hi = max(lo, hi) + padding
+        current = get_limits()
+        reverse = current[0] > current[1]
+        current_lo, current_hi = sorted(current)
+        expanded = (min(current_lo, target_lo), max(current_hi, target_hi))
+        set_limits(expanded[::-1] if reverse else expanded)
     ax.grid(True, alpha=0.18, linewidth=0.6)
     if xlabel is not None:
         ax.set_xlabel(xlabel)
