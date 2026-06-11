@@ -80,17 +80,55 @@ nb::tuple dump_summand(const Gudhi::multi_persistence::Summand<T>& summand) {
 }
 
 template <typename T>
-nb::tuple barcode_to_python(
-    const std::vector<std::vector<typename Gudhi::multi_persistence::Module<T>::Bar>>& barcode) {
-  return tuple_from_size(barcode.size(), [&](size_t dim) -> nb::object {
-    const auto& bars = barcode[dim];
-    std::vector<T> flat;
-    flat.reserve(bars.size() * 2);
-    for (const auto& bar : bars) {
-      flat.push_back(bar[0]);
-      flat.push_back(bar[1]);
+nb::tuple batched_barcode_to_python(
+    const std::vector<std::vector<typename Gudhi::multi_persistence::Module<T>::Bar>>& barcodes,
+    size_t num_lines,
+    bool keep_inf) {
+  constexpr T inf = std::numeric_limits<T>::infinity();
+  return tuple_from_size(barcodes.size(), [&](size_t dim) -> nb::object {
+    const auto& bars = barcodes[dim];
+    if (num_lines == 0) {
+      auto split_indices = owned_array<uint64_t>(std::vector<uint64_t>{}, {size_t(0)});
+      if (keep_inf) {
+        return nb::make_tuple(owned_array<T>(std::vector<T>{}, {size_t(0), size_t(0), size_t(2)}), split_indices);
+      }
+      return nb::make_tuple(owned_array<T>(std::vector<T>{}, {size_t(0), size_t(2)}), split_indices);
     }
-    return nb::cast(owned_array<T>(std::move(flat), {bars.size(), size_t(2)}));
+    if (bars.size() % num_lines != 0) {
+      throw std::runtime_error("Barcodes along different lines do not have a consistent shape.");
+    }
+
+    const size_t bars_per_line = bars.size() / num_lines;
+    std::vector<T> flat;
+    if (keep_inf) {
+      flat.reserve(bars.size() * 2);
+      for (const auto& bar : bars) {
+        flat.push_back(bar[0]);
+        flat.push_back(bar[1]);
+      }
+      return nb::make_tuple(owned_array<T>(std::move(flat), {num_lines, bars_per_line, size_t(2)}),
+                            owned_array<uint64_t>(std::vector<uint64_t>{}, {size_t(0)}));
+    }
+
+    std::vector<uint64_t> split_indices;
+    split_indices.reserve(num_lines > 0 ? num_lines - 1 : 0);
+    uint64_t kept_count = 0;
+    for (size_t line = 0; line < num_lines; ++line) {
+      const size_t line_offset = line * bars_per_line;
+      for (size_t j = 0; j < bars_per_line; ++j) {
+        const auto& bar = bars[line_offset + j];
+        if (bar[0] < inf) {
+          flat.push_back(bar[0]);
+          flat.push_back(bar[1]);
+          ++kept_count;
+        }
+      }
+      if (line + 1 < num_lines) {
+        split_indices.push_back(kept_count);
+      }
+    }
+    return nb::make_tuple(owned_array<T>(std::move(flat), {static_cast<size_t>(kept_count), size_t(2)}),
+                          owned_array<uint64_t>(std::move(split_indices), {num_lines - 1}));
   });
 }
 
@@ -142,23 +180,30 @@ Gudhi::multi_persistence::Box<T> box_from_array(nb::ndarray<nb::numpy, const T, 
 }
 
 template <typename T>
-Gudhi::multi_persistence::Line<T> line_from_vectors(const std::vector<T>& basepoint, const std::vector<T>* direction) {
-  return direction == nullptr ? Gudhi::multi_persistence::Line<T>(basepoint)
-                              : Gudhi::multi_persistence::Line<T>(basepoint, *direction);
-}
+nb::tuple barcodes_from_lines_impl(Gudhi::multi_persistence::Module<T>& self,
+                                   const std::vector<std::vector<T>>& basepoints,
+                                   const std::vector<std::vector<T>>& directions,
+                                   int degree,
+                                   bool keep_inf) {
+  if (basepoints.size() != directions.size()) {
+    throw std::runtime_error("Basepoints and directions must contain the same number of lines.");
+  }
 
-template <typename T>
-nb::tuple barcode_from_line_impl(Gudhi::multi_persistence::Module<T>& self,
-                                 const std::vector<T>& basepoint,
-                                 const std::vector<T>* direction,
-                                 int degree) {
-  auto line = line_from_vectors(basepoint, direction);
-  decltype(self.get_barcode_from_line(line, degree)) barcode;
+  std::vector<Gudhi::multi_persistence::Line<T>> lines;
+  lines.reserve(basepoints.size());
+  for (size_t i = 0; i < basepoints.size(); ++i) {
+    if (basepoints[i].size() != directions[i].size()) {
+      throw std::runtime_error("Basepoints and directions must have the same number of parameters.");
+    }
+    lines.emplace_back(basepoints[i], directions[i]);
+  }
+
+  decltype(self.get_barcodes_from_set_of_lines(lines, degree)) barcodes;
   {
     nb::gil_scoped_release release;
-    barcode = self.get_barcode_from_line(line, degree);
+    barcodes = self.get_barcodes_from_set_of_lines(lines, degree);
   }
-  return barcode_to_python<T>(barcode);
+  return batched_barcode_to_python<T>(barcodes, lines.size(), keep_inf);
 }
 
 template <typename T, class GridRange>
@@ -483,22 +528,19 @@ void bind_float_module_methods(Class& cls) {
     using Module = Gudhi::multi_persistence::Module<T>;
 
     cls.def(
-           "_get_barcode_from_line",
-           [](Module& self,
-              nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig> basepoint,
-              nb::object direction,
-              int degree) -> nb::tuple {
-             auto basepoint_values = vector_from_array(basepoint);
-             if (direction.is_none()) {
-               return barcode_from_line_impl<T>(self, basepoint_values, nullptr, degree);
-             }
-             auto direction_array = nb::cast<nb::ndarray<nb::numpy, const T, nb::ndim<1>, nb::c_contig>>(direction);
-             auto direction_values = vector_from_array(direction_array);
-             return barcode_from_line_impl<T>(self, basepoint_values, &direction_values, degree);
-           },
-           "basepoint"_a,
-           "direction"_a = nb::none(),
-           "degree"_a = -1)
+            "_get_barcodes_from_lines",
+            [](Module& self,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> basepoints,
+               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> directions,
+               int degree,
+               bool keep_inf) -> nb::tuple {
+              return barcodes_from_lines_impl<T>(
+                  self, matrix_from_array(basepoints), matrix_from_array(directions), degree, keep_inf);
+            },
+            "basepoints"_a,
+            "directions"_a,
+            "degree"_a = -1,
+            "keep_inf"_a = true)
         .def(
             "evaluate_in_grid",
             [](Module& self, nb::handle grid_handle) -> Module& {
