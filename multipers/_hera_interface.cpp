@@ -95,10 +95,8 @@ diagram_t diagram_from_handle(nb::handle h, bool drop_diagonal = false) {
   diagram_t out;
   out.reserve(static_cast<std::size_t>(diagram.shape(0)));
 
-  const auto row_stride = static_cast<std::ptrdiff_t>(diagram.stride(0)) /
-                          static_cast<std::ptrdiff_t>(sizeof(double));
-  const auto col_stride = static_cast<std::ptrdiff_t>(diagram.stride(1)) /
-                          static_cast<std::ptrdiff_t>(sizeof(double));
+  const auto row_stride = static_cast<std::ptrdiff_t>(diagram.stride(0));
+  const auto col_stride = static_cast<std::ptrdiff_t>(diagram.stride(1));
   const auto* values = diagram.data();
   for (std::ptrdiff_t i = 0; i < static_cast<std::ptrdiff_t>(diagram.shape(0)); ++i) {
     const double birth = values[i * row_stride];
