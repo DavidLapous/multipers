@@ -6,6 +6,7 @@ from typing import Optional
 import numpy as np
 
 from multipers._signed_measure_meta import signed_measure
+from multipers.array_api import api_from_tensor
 from multipers.grids import Lstrategies, compute_grid
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_signed_measure
@@ -80,6 +81,7 @@ def fibered_barcode(
     direction=None,
     *,
     degree: Optional[int] = None,
+    min_persistence: float = 0.0,
     **kwargs,
 ):
     """Compute the barcode of one affine-line restriction.
@@ -99,6 +101,9 @@ def fibered_barcode(
     degree : int, optional
         If provided, return only this homological degree.  If omitted, return all
         degree barcodes for the line.
+    min_persistence : float, default=0.0
+        Keep only bars with strict persistence larger than this value.  The
+        default removes zero-length bars; pass a negative value to keep them.
     **kwargs : object
         Forwarded to ``persistence_on_line``.
 
@@ -123,9 +128,9 @@ def fibered_barcode(
         **kwargs,
     )
     if degree is None:
-        return barcode
+        return _filter_barcodes_by_persistence(barcode, min_persistence)
     degree = int(degree)
-    return barcode[degree]
+    return _filter_barcode_by_persistence(barcode[degree], min_persistence)
 
 
 def fibered_barcodes(
@@ -134,6 +139,7 @@ def fibered_barcodes(
     directions=None,
     *,
     degree: Optional[int] = None,
+    min_persistence: float = 0.0,
     **kwargs,
 ):
     """Compute barcodes of several affine-line restrictions.
@@ -149,6 +155,9 @@ def fibered_barcodes(
     degree : int, optional
         If provided, return only this homological degree for each line.  If
         omitted, return all degree barcodes for each line.
+    min_persistence : float, default=0.0
+        Keep only bars with strict persistence larger than this value.  The
+        default removes zero-length bars; pass a negative value to keep them.
     **kwargs : object
         Forwarded to ``persistence_on_lines``.
 
@@ -177,9 +186,31 @@ def fibered_barcodes(
         **kwargs,
     )
     if degree is None:
-        return barcodes
+        return tuple(
+            _filter_barcodes_by_persistence(barcode, min_persistence)
+            for barcode in barcodes
+        )
     degree = int(degree)
-    return tuple(barcode[degree] for barcode in barcodes)
+    return tuple(
+        _filter_barcode_by_persistence(barcode[degree], min_persistence)
+        for barcode in barcodes
+    )
+
+
+def _filter_barcode_by_persistence(barcode, min_persistence: float):
+    api = api_from_tensor(barcode)
+    bars = api.reshape(api.astensor(barcode), (-1, 2))
+    if api.size(bars) == 0:
+        return bars
+    persistence = bars[:, 1] - bars[:, 0]
+    return bars[persistence > float(min_persistence)]
+
+
+def _filter_barcodes_by_persistence(barcodes, min_persistence: float):
+    return tuple(
+        _filter_barcode_by_persistence(barcode, min_persistence)
+        for barcode in barcodes
+    )
 
 
 def hilbert_function(
