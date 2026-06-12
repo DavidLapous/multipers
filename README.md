@@ -108,5 +108,9 @@ you can use the following journal bibtex entry
 }
 ```
 ## Contributions
-Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
-In particular, if you have a nice example or application that is not taken care in the documentation (see the `./docs/notebooks/` folder), please contact me to add it there.
+Feel free to contribute, report a bug on a pipeline, or ask for documentation
+by opening an issue.<br>
+A good amount of doc pages are empty notebooks that just need to be filled!  
+In particular, if you have a nice example or application that is not taken care
+in the documentation (see the `./docs/notebooks/` folder), please open a PR or
+contact me to add it there.
