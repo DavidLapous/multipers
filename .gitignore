@@ -42,6 +42,7 @@ tools/core/*.inc
 ## docs folders
 docs/_build/
 docs/source/
+docs/notebooks/**/*.py
 
 ## Hidden files
 .*

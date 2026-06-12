@@ -1,4 +1,5 @@
 import os
+import warnings
 from os import listdir
 from os.path import expanduser
 from typing import Iterable
@@ -8,7 +9,8 @@ import MDAnalysis as mda
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from MDAnalysis.topology.guessers import guess_masses
+from MDAnalysis.exceptions import NoDataError
+from MDAnalysis.guesser import tables as mda_tables
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import LabelEncoder
 
@@ -20,6 +22,60 @@ import multipers as mp
 DATASET_PATH = expanduser("~/Datasets/")
 JC_path = DATASET_PATH + "Cleves-Jain/"
 DUDE_path = DATASET_PATH + "DUD-E/"
+
+
+def _load_molecule(path: str | mda.Universe):
+    if isinstance(path, mda.Universe):
+        return path
+
+    kwargs = {"to_guess": ()} if path.lower().endswith(".mol2") else {}
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Unknown elements found for some atoms: .*",
+            category=UserWarning,
+            module=r"MDAnalysis\.topology\.MOL2Parser",
+        )
+        return mda.Universe(path, **kwargs)
+
+
+def _mass_labels(molecule: mda.Universe):
+    labels = np.asarray(molecule.atoms.types, dtype=object).copy()
+    try:
+        elements = np.asarray(molecule.atoms.elements, dtype=object)
+    except NoDataError:
+        elements = None
+
+    if elements is not None:
+        has_element = elements != ""
+        labels[has_element] = elements[has_element]
+
+    return np.asarray(
+        [label.split(".", 1)[0] if isinstance(label, str) else label for label in labels],
+        dtype=object,
+    )
+
+
+def _lookup_masses(labels):
+    masses = np.zeros(len(labels), dtype=np.float64)
+    for i, label in enumerate(labels):
+        label = str(label)
+        masses[i] = mda_tables.masses.get(
+            label, mda_tables.masses.get(label.upper(), 0.0)
+        )
+    return masses
+
+
+def _atom_masses(molecule: mda.Universe):
+    try:
+        masses = molecule.atoms.masses.copy()
+    except NoDataError:
+        masses = np.zeros(molecule.atoms.n_atoms, dtype=np.float64)
+
+    null_indices = masses == 0
+    if np.any(null_indices):
+        masses[null_indices] = _lookup_masses(_mass_labels(molecule)[null_indices])
+    return masses
 
 
 # pathes = get_data_path()
@@ -253,7 +309,8 @@ def lines2bonds(
 
 
 def lines2bonds_MOL2(mol: mda.Universe):
-    _lines = open(mol.filename, "r").readlines()
+    with open(mol.filename, "r") as molecule_file:
+        _lines = molecule_file.readlines()
     out = []
     index = 0
     while index < len(_lines) and _lines[index].strip() != "@<TRIPOS>BOND":
@@ -281,7 +338,7 @@ def lines2bonds_PDB(mol: mda.Universe):
 def _mol2graphst(
     path: str | mda.Universe, filtrations: Iterable[str], molecule_format=None
 ):
-    molecule = path if isinstance(path, mda.Universe) else mda.Universe(path)
+    molecule = _load_molecule(path)
 
     num_filtrations = len(filtrations)
     nodes = molecule.atoms.indices.reshape(1, -1)
@@ -320,12 +377,7 @@ def _mol2graphst(
                 charges = molecule.atoms.charges
                 st.fill_lowerstar(charges, parameter=i)
             case "atomic_mass":
-                masses = molecule.atoms.masses
-                null_indices = masses == 0
-                if np.any(null_indices):  # guess if necessary
-                    masses[null_indices] = guess_masses(molecule.atoms.types)[
-                        null_indices
-                    ]
+                masses = _atom_masses(molecule)
                 st.fill_lowerstar(-masses, parameter=i)
             case _:
                 pass
@@ -342,7 +394,7 @@ def _mol2ripsst(
     import gudhi as gd
 
     assert "bond_length" == filtrations[0], "Bond length has to be first for rips."
-    molecule = path if isinstance(path, mda.Universe) else mda.Universe(path)
+    molecule = _load_molecule(path)
     num_parameters = len(filtrations)
     st_rips = gd.RipsComplex(
         points=molecule.atoms.positions, max_edge_length=threshold
@@ -391,12 +443,7 @@ def _mol2ripsst(
                 charges = molecule.atoms.charges
                 st.fill_lowerstar(charges, parameter=i)
             case "atomic_mass":
-                masses = molecule.atoms.masses
-                null_indices = masses == 0
-                if np.any(null_indices):  # guess if necessary
-                    masses[null_indices] = guess_masses(molecule.atoms.types)[
-                        null_indices
-                    ]
+                masses = _atom_masses(molecule)
                 # print(masses)
                 st.fill_lowerstar(-masses, parameter=i)
             case _:
@@ -442,7 +489,7 @@ class Molecule2SimplexTree(BaseEstimator, TransformerMixin):
     def fit(self, X: Iterable[str], y=None):
         if len(X) == 0:
             return self
-        test_mol = mda.Universe(X[0])
+        test_mol = _load_molecule(X[0])
         self._molecule_format = test_mol.filename.split(".")[-1].lower()
         return self
 
