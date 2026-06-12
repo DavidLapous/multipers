@@ -98,10 +98,14 @@ def _module_representation(
     coordinates = mpg.todense(grid)
 
     if kernel == "linear":
-        concatenated_images = np.asarray(
-            self._compute_pixels(
-                coordinates, degrees, box, bandwidth, p, normalize, n_jobs
-            )
+        concatenated_images = self._compute_pixels(
+            np.asarray(coordinates, dtype=self.dtype),
+            np.asarray(degrees),
+            np.asarray(box, dtype=self.dtype),
+            bandwidth,
+            p,
+            normalize,
+            n_jobs,
         )
     else:
         if kernel == "linear2":
@@ -196,8 +200,8 @@ def _module_landscapes(
         out = np.asarray(
             self._compute_landscapes_grid(
                 int(degree),
-                ks.tolist(),
-                [np.asarray(g, dtype=self.dtype).tolist() for g in grid],
+                ks,
+                [np.asarray(g, dtype=self.dtype) for g in grid],
                 int(n_jobs),
             )
         )
@@ -667,7 +671,7 @@ def module_approximation(
         mod = constructor().set_box(box)
         for i, m in enumerate(modules):
             mod.merge(
-                m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree
+                m, input[i].minpres_degree
             )
         return mod
 

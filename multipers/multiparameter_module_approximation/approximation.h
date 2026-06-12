@@ -65,10 +65,10 @@ inline void threshold_filters_list(std::vector<filtration_type> &filtersList, co
 
 template <typename value_type>
 inline void add_barcode_to_module(Module<value_type> &module,
+                                  const Box<value_type>& box,
                                   const Line<value_type> &line,
                                   const std::vector<std::vector<std::array<value_type, 2>>> &barcode,
                                   bool thresholdToBox) {
-  const auto& box = module.get_box();
 #ifdef GUDHI_USE_TBB
   std::vector<std::size_t> shifts(barcode.size(), 0U);
   for (std::size_t i = 1U; i < barcode.size(); i++) {
@@ -128,6 +128,7 @@ class LineIterator {
 
 template <class Filtration_value, int axis_ = 0, bool sign = true, class Slicer>
 inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value::value_type> &module,
+                                                const Box<typename Filtration_value::value_type>& box,
                                                 Slicer &&slicer,
                                                 LineIterator<Filtration_value, axis_, sign> &line_iterator,
                                                 const bool threshold,
@@ -145,12 +146,13 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
 
     slicer.update_persistence_computation();
     if constexpr (verbose2) std::cout << slicer << std::endl;
-    add_barcode_to_module(module, new_line, slicer.template get_flat_barcode<true>(), threshold);
+    add_barcode_to_module(module, box, new_line, slicer.template get_flat_barcode<true>(), threshold);
   };
 };
 
 template <class Filtration_value, class Slicer = multipers::tmp_interface::SimplicialVineMatrixTruc<>>
 void _rec_mma(Module<typename Filtration_value::value_type> &module,
+              const Box<typename Filtration_value::value_type>& box,
               typename Line<value_type>::Point_t &basepoint,
               const std::vector<int> &grid_size,
               int dim_to_iterate,
@@ -160,7 +162,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
   if (dim_to_iterate <= 0) {
     LineIterator<Filtration_value, 0> line_iterator(std::move(basepoint), precision, grid_size[0]);
     __add_vineyard_trajectory_to_module<Filtration_value, 0, Slicer>(
-        module, std::move(current_persistence), line_iterator, threshold);
+        module, box, std::move(current_persistence), line_iterator, threshold);
     return;
   }
   Slicer pers_copy;
@@ -170,7 +172,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
     // module
     pers_copy = current_persistence;
     basepoint_copy = basepoint;
-    _rec_mma(module, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy, precision, threshold);
+    _rec_mma(module, box, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy, precision, threshold);
     basepoint[dim_to_iterate] += precision;
     // current_persistence.push_to(Line(basepoint));
     // current_persistence.update_persistence_computation();
@@ -179,6 +181,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
 
 template <int axis, class Filtration_value, class Slicer>
 void _rec_mma2(Module<typename Filtration_value::value_type> &module,
+               const Box<typename Filtration_value::value_type>& box,
                typename Line<typename Filtration_value::value_type>::Point_t &&basepoint,
                const Filtration_value &direction,
                const std::vector<int> &grid_size,
@@ -194,12 +197,12 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
       LineIterator<Filtration_value, axis, true> line_iterator(
           std::move(basepoint), direction, precision, grid_size[axis]);
       __add_vineyard_trajectory_to_module<Filtration_value, axis, true, Slicer>(
-          module, std::move(current_persistence), line_iterator, threshold);
+          module, box, std::move(current_persistence), line_iterator, threshold);
     } else {
       LineIterator<Filtration_value, axis, false> line_iterator(
           std::move(basepoint), direction, precision, grid_size[axis]);
       __add_vineyard_trajectory_to_module<Filtration_value, axis, false, Slicer>(
-          module, std::move(current_persistence), line_iterator, threshold);
+          module, box, std::move(current_persistence), line_iterator, threshold);
     }
 
     return;
@@ -207,6 +210,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
   if (grid_size[dim_to_iterate] == 0) {
     // no need to copy basepoint, we just skip the dim here
     _rec_mma2<axis, Filtration_value, Slicer>(module,
+                                              box,
                                               std::move(basepoint),
                                               direction,
                                               grid_size,
@@ -223,6 +227,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
     const bool is_last = i + 1 == grid_size[dim_to_iterate];
     if (is_last) {
       _rec_mma2<axis, Filtration_value, Slicer>(module,
+                                                box,
                                                 std::move(basepoint),
                                                 direction,
                                                 grid_size,
@@ -234,6 +239,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
     } else {
       _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(
           module,
+          box,
           typename Line<typename Filtration_value::value_type>::Point_t(basepoint),
           direction,
           grid_size,
@@ -266,7 +272,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
   oneapi::tbb::task_arena arena(n_jobs);
   return arena.execute([&] {
     typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
-    const std::size_t num_parameters = box.get_dimension();
+    const std::size_t num_parameters = box.get_number_of_coordinates();
     std::vector<int> grid_size(num_parameters);
     std::vector<bool> signs(num_parameters);
     int signs_shifts = 0;
@@ -299,8 +305,8 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
       if (verbose)
         std::cout << "Had to flatten/shift coordinate " << arg_max_signs_shifts << " by " << signs_shifts << std::endl;
     }
-    Module<value_type> out(box);
-    box.inflate(2 * precision);  // for infinte summands
+    Module<value_type> out;
+    // box.inflate(2 * precision);  // for infinte summands
 
     if (verbose) std::cout << "Num parameters : " << num_parameters << std::endl;
     if (verbose) std::cout << "Box : " << box << std::endl;
@@ -331,7 +337,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
           ++i;
         }
       }
-      add_barcode_to_module(out, current_line, barcode, threshold);
+      add_barcode_to_module(out, box, current_line, barcode, threshold);
 
       if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
     }
@@ -384,6 +390,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
         }
         // if (!direction.size() || direction[0] > 0)
         _rec_mma2<0>(out,
+                     box,
                      typename Line<value_type>::Point_t(basepoint),
                      direction,
                      temp_grid_size,
@@ -402,6 +409,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
           std::cout << std::endl;
         }
         _rec_mma2<1>(out,
+                     box,
                      std::move(basepoint),
                      direction,
                      grid_size,

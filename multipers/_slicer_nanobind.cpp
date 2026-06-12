@@ -32,8 +32,10 @@
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
+#include "gudhi/Multi_persistence/Box.h"
 #include "gudhi/slicer_conversion_core.hpp"
 #include "gudhi/slicer_helpers.h"
+#include "gudhi/Module_interface.h"
 #include <python_interfaces/numpy_utils.h>
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
@@ -317,7 +319,7 @@ nb::tuple compute_persistence_on_slices(
     throw nb::value_error("Expected one filtration value per generator.");
   }
   std::vector<Barcode> barcodes(num_slices);
-  Numpy_2d_span<Value> view(values);
+  Numpy_2d_span view(values);
   {
     nb::gil_scoped_release release;
     if constexpr (Desc::is_vine) {
@@ -2083,7 +2085,7 @@ nb::tuple compute_rank_signed_measure_sparse(type_list<Ds...>,
 }
 
 template <typename Desc>
-nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
+Gudhi::multi_persistence::Module_interface<double> module_approximation_from_desc(typename Desc::wrapper& wrapper,
                                           const std::vector<double>& direction,
                                           double max_error,
                                           Gudhi::multi_persistence::Box<double> box,
@@ -2100,12 +2102,12 @@ nb::object module_approximation_from_desc(typename Desc::wrapper& wrapper,
       mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
           wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
     }
-    return nb::cast(std::move(mod));
+    return {std::move(mod), std::move(box)};
   }
 }
 
 template <typename... Ds>
-nb::object compute_module_approximation_from_slicer(type_list<Ds...>,
+Gudhi::multi_persistence::Module_interface<double> compute_module_approximation_from_slicer(type_list<Ds...>,
                                                     nb::handle slicer,
                                                     const std::vector<double>& direction,
                                                     double max_error,
@@ -2117,7 +2119,7 @@ nb::object compute_module_approximation_from_slicer(type_list<Ds...>,
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   }
-  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::object {
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> Gudhi::multi_persistence::Module_interface<double> {
     auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
     return module_approximation_from_desc<D>(wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs);
   });
