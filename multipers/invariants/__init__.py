@@ -18,9 +18,9 @@ from .projected_barcode import projected_barcode
 def death_curves(*args, **kwargs):
     """Two-parameter death-curve invariant, not implemented yet.
 
-    Death-curves are the indecomposable summands of ``coker(xy)`` for a
+    Death-curves are the indecomposable summands of ``ker(xy)`` for a
     2-parameter module over a grid.  They are ephemeral modules and are
-    classified by spread curves, dual to the birth-curves from ``ker(xy)``.
+    classified by spread curves, dual to the birth-curves from ``coker(xy)``.
 
     Parameters
     ----------
