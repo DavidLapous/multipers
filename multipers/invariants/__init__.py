@@ -11,68 +11,8 @@ from multipers.grids import Lstrategies, compute_grid
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_signed_measure
 from ._utils import _as_slicer, _normalize_degrees
-from .birth_curves import birth_curves
+from .end_curves import birth_curves, death_curves, end_curves
 from .projected_barcode import projected_barcode
-
-
-def death_curves(*args, **kwargs):
-    """Two-parameter death-curve invariant, not implemented yet.
-
-    Death-curves are the indecomposable summands of ``ker(xy)`` for a
-    2-parameter module over a grid.  They are ephemeral modules and are
-    classified by spread curves, dual to the birth-curves from ``coker(xy)``.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the future death-curve API.
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised until the invariant is implemented.
-
-    Output
-    ------
-    None
-        No value is returned because this invariant is not implemented yet.
-
-    References
-    ----------
-    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
-    two-parameter persistence", arXiv:2505.13412, 2025.
-    """
-    raise NotImplementedError("death_curves is not implemented yet.")
-
-
-def end_curves(*args, **kwargs):
-    """Two-parameter end-curve invariant, not implemented yet.
-
-    End-curves collect both birth-curves and death-curves.  In the 2-parameter
-    theory these curves determine Betti tables and give a positive curve count
-    for finite-grid modules.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the future paired end-curve API.
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised until the invariant is implemented.
-
-    Output
-    ------
-    None
-        No value is returned because this invariant is not implemented yet.
-
-    References
-    ----------
-    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
-    two-parameter persistence", arXiv:2505.13412, 2025.
-    """
-    raise NotImplementedError("end_curves is not implemented yet.")
 
 
 def fibered_barcode(

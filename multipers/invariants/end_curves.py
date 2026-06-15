@@ -10,6 +10,36 @@ from multipers.grids import Lstrategies, compute_grid
 from ._utils import _as_slicer
 
 
+def end_curves(*args, **kwargs):
+    """Two-parameter end-curve invariant, not implemented yet.
+
+    End-curves collect both birth-curves and death-curves.  In the 2-parameter
+    theory these curves determine Betti tables and give a positive curve count
+    for finite-grid modules.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Reserved for the future paired end-curve API.
+
+    Raises
+    ------
+    NotImplementedError
+        Always raised until the invariant is implemented.
+
+    Output
+    ------
+    None
+        No value is returned because this invariant is not implemented yet.
+
+    References
+    ----------
+    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
+    two-parameter persistence", arXiv:2505.13412, 2025.
+    """
+    raise NotImplementedError("end_curves is not implemented yet.")
+
+
 def _grid_inf_indices(grid) -> np.ndarray:
     lengths = np.fromiter((len(axis) for axis in grid), dtype=np.int64)
     has_inf = np.fromiter(
@@ -387,6 +417,147 @@ def birth_curves(
         verbose=verbose,
         progress=progress,
     ):
+        curve = _curve_vertices(summand, degree, inf_indices, include_infinite)
+        if sort:
+            curve = _sort_spread_curve(curve)
+        if coordinates:
+            curve = _to_grid_coordinates(curve, grid, inf_indices, include_infinite)
+        elif not include_infinite:
+            curve = curve[np.all(curve < inf_indices, axis=1)]
+        curves.append(curve)
+    if plot:
+        from multipers.plots import plot_birth_curve
+
+        plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
+        plot_kwargs["min_length"] = min_length
+        plot_birth_curve(curves, **plot_kwargs)
+    return curves
+
+
+def death_curves(
+    filtered_complex,
+    degree: Optional[int] = None,
+    *,
+    grid: Optional[Iterable] = None,
+    grid_strategy: Lstrategies = "exact",
+    coordinates: bool = True,
+    include_infinite: bool = True,
+    sort: bool = True,
+    aida_sort: bool = True,
+    verbose: bool = False,
+    progress: bool = False,
+    minpres_kwargs: Optional[dict] = None,
+    plot: bool = False,
+    min_length: float = -1,
+    plot_kwargs: Optional[dict] = None,
+    **infer_grid_kwargs,
+) -> list[np.ndarray]:
+    """Compute two-parameter death-curves.
+
+    Death-curves are the spread-curve indecomposable summands obtained from
+    the death part of the end-curve construction for a two-parameter module.
+    Returns one ``(k, 2)`` array per death-curve. By default points are mapped
+    back from squeezed grid indices to filtration coordinates, with one
+    ``np.inf`` sentinel per axis for curves reaching infinity. If the input is
+    a minimal-presentation slicer, ``degree`` is inferred from
+    ``minpres_degree``. ``min_length`` only filters plotted curves when
+    ``plot=True``; returned curves are not filtered.
+
+    Parameters
+    ----------
+    filtered_complex : Slicer or SimplexTreeMulti-like
+        Two-parameter filtered complex, module presentation, or object
+        convertible to a slicer.
+    degree : int, optional
+        Homological degree. Inferred from ``minpres_degree`` when
+        ``filtered_complex`` is already a minimal-presentation slicer.
+    grid : iterable of array-like, optional
+        Filtration grid used before squeezing. If omitted, ``compute_grid`` is
+        called with ``grid_strategy`` and ``infer_grid_kwargs``.
+    coordinates : bool, default=True
+        If true, return filtration coordinates; otherwise return squeezed
+        grid-index vertices.
+    include_infinite : bool, default=True
+        Whether to include vertices representing curves reaching infinity.
+    sort : bool, default=True
+        Whether to lexicographically sort vertices along each returned curve.
+    aida_sort, verbose, progress
+        Options forwarded to ``multipers.ops.aida``.
+    minpres_kwargs : dict, optional
+        Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
+        is forced to ``False``.
+    plot, min_length, plot_kwargs
+        Plotting options forwarded to ``multipers.plots.plot_birth_curve``;
+        ``min_length`` does not filter returned curves.
+    **infer_grid_kwargs : object
+        Additional keyword arguments forwarded to ``compute_grid``.
+
+    Availability
+    ------------
+    Requires the optional persistence-algebra backend exposed as
+    ``multipers._persistence_algebra_interface``.
+
+    Output
+    ------
+    list[numpy.ndarray]
+        One ``(k, 2)`` array per death-curve. Rows are curve vertices in
+        filtration coordinates when ``coordinates=True`` and squeezed grid
+        indices otherwise.
+
+    References
+    ----------
+    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
+    two-parameter persistence", arXiv:2505.13412, 2025.
+    """
+    slicer = _as_slicer(filtered_complex)
+    if slicer.num_parameters != 2:
+        raise ValueError("death_curves is only defined for 2-parameter modules.")
+    from multipers import _persistence_algebra_interface, ops
+
+    _persistence_algebra_interface.require()
+    if degree is None and slicer.is_minpres:
+        degree = slicer.minpres_degree
+
+    requested_grid = grid is not None
+    grid = (
+        tuple(grid)
+        if grid is not None
+        else tuple(compute_grid(slicer, strategy=grid_strategy, **infer_grid_kwargs))
+    )
+    if not slicer.is_squeezed or requested_grid:
+        slicer = slicer.grid_squeeze(grid)
+    grid = tuple(slicer.filtration_grid)
+    inf_indices = _grid_inf_indices(grid)
+
+    if degree is None or degree < 0:
+        raise ValueError("`degree` is inferred for minpres inputs, otherwise required.")
+    degree = int(degree)
+
+    if slicer.is_minpres:
+        if slicer.minpres_degree != degree:
+            raise ValueError(
+                "Cannot change degree of an already minimal-presentation slicer."
+            )
+        presentation = slicer
+    else:
+        minpres_kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
+        minpres_kwargs["full_resolution"] = False
+        presentation = slicer.minpres(degree=degree, **minpres_kwargs)
+
+    death_presentation = _persistence_algebra_interface.death_curve_presentation(
+        presentation,
+        degree,
+    )
+    death_presentation._mark_minpres(degree)
+
+    curves = []
+    for summand in ops.aida(
+        death_presentation,
+        sort=aida_sort,
+        verbose=verbose,
+        progress=progress,
+    ):
+        # ponytail: PA returns the same spread-curve presentation shape as birth curves.
         curve = _curve_vertices(summand, degree, inf_indices, include_infinite)
         if sort:
             curve = _sort_spread_curve(curve)

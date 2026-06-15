@@ -875,6 +875,11 @@ function(multipers_configure_module module_name target_name)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
     endif()
 
+  elseif(module_name STREQUAL "_persistence_algebra_interface")
+    multipers_link_nanobind_runtime(${target_name})
+    multipers_link_openmp(${target_name})
+    target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+
   elseif(module_name STREQUAL "_hera_interface")
     if(NOT MULTIPERS_DISABLE_HERA_INTERFACE)
       multipers_link_shared_core(${target_name})
@@ -978,6 +983,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _multi_critical_interface
   _rhomboid_tiling_interface
   _aida_interface
+  _persistence_algebra_interface
 )
 
 foreach(module_name IN LISTS MULTIPERS_NANOBIND_MODULES)
