@@ -302,6 +302,7 @@ include = [
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Multi_persistence/Summand.h",
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Multi_persistence/module_helpers.h",
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Multi_persistence/summand_helpers.h",
+  "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Multi_persistence/utils.h",
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Projective_cover_kernel.h",
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Slicer.h",
   "ext/gudhi-devel/src/Multi_persistence/include/gudhi/Thread_safe_slicer.h",
