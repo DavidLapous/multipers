@@ -115,7 +115,7 @@ def _module_representation(
     import multipers.plots
 
     if box is None:
-        box = self.get_box()
+        box = self.box
     num_parameters = self.num_parameters
     if degrees is None:
         degrees = np.arange(self.max_degree + 1)
@@ -240,7 +240,7 @@ def _module_landscapes(
         return out
 
     if box is None:
-        box = self.get_box()
+        box = self.box
     try:
         int(resolution)
         resolution = [int(resolution)] * self.num_parameters
@@ -317,7 +317,7 @@ def _module_barcodes(
     squeeze: bool = False,
 ):
     if box is None:
-        box = self.get_box()
+        box = self.box
     if basepoints is None:
         if len(box[0]) != 2:
             raise ValueError(
@@ -381,7 +381,7 @@ def _module_plot(self, degree: int = -1, **kwargs):
     from multipers.plots import plot2d_PyModule
     import matplotlib.pyplot as plt
 
-    box = kwargs.pop("box", self.get_box())
+    box = kwargs.pop("box", self.box)
     if len(box[0]) != 2:
         print("Filtration size :", len(box[0]), " != 2")
         return None
@@ -483,6 +483,7 @@ def module_approximation_from_slicer(
         verbose,
         n_jobs,
     )
+    approx_mod.box = np.asarray(box, dtype=dtype)
 
     if unsqueeze_grid is not None:
         if verbose:
@@ -491,7 +492,7 @@ def module_approximation_from_slicer(
         from multipers.grids import compute_bounding_box
 
         if len(approx_mod):
-            approx_mod.set_box(compute_bounding_box(approx_mod))
+            approx_mod.box = compute_bounding_box(approx_mod)
         if verbose:
             print("Done.", flush=True)
 
@@ -765,13 +766,14 @@ def module_approximation(
             )
         box = np.array(
             [
-                np.min([m.get_box()[0] for m in non_empty_modules], axis=0),
-                np.max([m.get_box()[1] for m in non_empty_modules], axis=0),
+                np.min([m.box[0] for m in non_empty_modules], axis=0),
+                np.max([m.box[1] for m in non_empty_modules], axis=0),
             ]
         )
         if constructor is None:
             raise ValueError(f"Unsupported module dtype {dtype} for module merge.")
-        mod = constructor().set_box(box)
+        mod = constructor()
+        mod.box = box
         for i, m in enumerate(modules):
             mod.merge(
                 m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree

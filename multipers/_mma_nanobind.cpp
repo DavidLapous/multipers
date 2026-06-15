@@ -13,6 +13,8 @@
 #include <limits>
 #include <new>
 #include <optional>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -48,6 +50,9 @@ using multipers::nanobind_utils::tuple_from_size;
 using multipers::nanobind_utils::vector_from_handle;
 
 template <typename T>
+using BoxArray = nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig>;
+
+template <typename T>
 nb::ndarray<nb::numpy, T> corner_matrix_to_python(std::vector<T>&& flat, size_t rows, size_t cols) {
   return owned_array<T>(std::move(flat), {rows, cols});
 }
@@ -64,6 +69,78 @@ nb::ndarray<nb::numpy, T> corner_pair_to_python(const std::vector<T>& lower, con
   flat.insert(flat.end(), lower.begin(), lower.end());
   flat.insert(flat.end(), upper.begin(), upper.end());
   return owned_array<T>(std::move(flat), {size_t(2), lower.size()});
+}
+
+template <typename T>
+nb::ndarray<nb::numpy, T> box_to_array(const Gudhi::multi_persistence::Box<T>& box) {
+  auto lower = std::vector<T>(box.get_lower_corner().begin(), box.get_lower_corner().end());
+  auto upper = std::vector<T>(box.get_upper_corner().begin(), box.get_upper_corner().end());
+  return corner_pair_to_python<T>(lower, upper);
+}
+
+template <typename T>
+nb::ndarray<nb::numpy, T> box_rows_to_array(const std::vector<std::vector<T>>& box) {
+  if (box.size() != 2) {
+    throw std::invalid_argument("Module box must have shape (2, n_parameters).");
+  }
+  if (box[0].size() != box[1].size()) {
+    throw std::invalid_argument("Module box corners must have the same number of parameters.");
+  }
+  return corner_pair_to_python<T>(box[0], box[1]);
+}
+
+template <typename T>
+nb::ndarray<nb::numpy, T> empty_box_array() {
+  return owned_array<T>(std::vector<T>{}, {size_t(2), size_t(0)});
+}
+
+template <typename T>
+BoxArray<T> module_box_array(Gudhi::multi_persistence::Module<T>& module) {
+  return nb::cast<BoxArray<T>>(nb::find(module).attr("_box"));
+}
+
+template <typename T>
+std::vector<std::vector<T>> module_box_rows(Gudhi::multi_persistence::Module<T>& module) {
+  return matrix_from_array<T>(module_box_array<T>(module));
+}
+
+template <typename T>
+void set_module_box(Gudhi::multi_persistence::Module<T>& module, BoxArray<T> box) {
+  nb::find(module).attr("_box") = box_rows_to_array<T>(matrix_from_array<T>(box));
+}
+
+template <typename T>
+void set_module_box_from_handle(Gudhi::multi_persistence::Module<T>& module, nb::handle box) {
+  nb::find(module).attr("_box") = box_rows_to_array<T>(matrix_from_handle<T>(box));
+}
+
+template <typename T>
+void set_module_box(Gudhi::multi_persistence::Module<T>& module, const Gudhi::multi_persistence::Box<T>& box) {
+  nb::find(module).attr("_box") = box_to_array<T>(box);
+}
+
+template <typename T>
+int module_num_parameters(Gudhi::multi_persistence::Module<T>& module) {
+  int num_parameters = module.get_number_of_parameters();
+  if (num_parameters >= 0) return num_parameters;
+  auto box = module_box_rows<T>(module);
+  return static_cast<int>(box[0].size());
+}
+
+template <typename T>
+nb::object module_to_python(Gudhi::multi_persistence::Module<T>&& value, BoxArray<T> box) {
+  nb::object out = nb::borrow<nb::object>(nb::type<Gudhi::multi_persistence::Module<T>>())();
+  auto& module = nb::cast<Gudhi::multi_persistence::Module<T>&>(out);
+  module = std::move(value);
+  set_module_box<T>(module, box);
+  return out;
+}
+
+inline void warn_deprecated_box_method(const char* method, const char* replacement) {
+  std::string message = std::string(method) + " is deprecated; use " + replacement + " instead.";
+  if (PyErr_WarnEx(PyExc_DeprecationWarning, message.c_str(), 1) < 0) {
+    throw nb::python_error();
+  }
 }
 
 template <typename T>
@@ -151,16 +228,8 @@ Gudhi::multi_persistence::Summand<T> summand_from_dump(nb::handle dump) {
 }
 
 template <typename T>
-nb::tuple dump_module(const Gudhi::multi_persistence::Module<T>& module) {
-  auto box = module.get_box();
-  std::vector<T> lower(box.get_lower_corner().begin(), box.get_lower_corner().end());
-  std::vector<T> upper(box.get_upper_corner().begin(), box.get_upper_corner().end());
-  std::vector<T> flat_box;
-  flat_box.reserve(lower.size() + upper.size());
-  flat_box.insert(flat_box.end(), lower.begin(), lower.end());
-  flat_box.insert(flat_box.end(), upper.begin(), upper.end());
-  nb::object box_arr = nb::cast(owned_array<T>(std::move(flat_box), {size_t(2), box.get_lower_corner().size()}));
-
+nb::tuple dump_module(Gudhi::multi_persistence::Module<T>& module) {
+  auto box_arr = module_box_array<T>(module);
   nb::tuple summands = tuple_from_size(
       module.size(), [&](size_t i) -> nb::object { return dump_summand<T>(module.get_summand((unsigned int)i)); });
   return nb::make_tuple(box_arr, summands);
@@ -198,10 +267,25 @@ nb::tuple barcodes_from_lines_impl(Gudhi::multi_persistence::Module<T>& self,
     lines.emplace_back(basepoints[i], directions[i]);
   }
 
-  decltype(self.get_barcodes_from_set_of_lines(lines, degree)) barcodes;
+  using Bar = typename Gudhi::multi_persistence::Module<T>::Bar;
+  std::vector<std::vector<Bar>> barcodes;
+  const int max_dimension = self.get_max_dimension();
+  if (max_dimension < 0) {
+    return batched_barcode_to_python<T>(barcodes, lines.size(), keep_inf);
+  }
+  barcodes.resize(static_cast<size_t>(max_dimension) + 1);
   {
     nb::gil_scoped_release release;
-    barcodes = self.get_barcodes_from_set_of_lines(lines, degree);
+    for (const auto& line : lines) {
+      for (const auto& summand : self) {
+        const int dimension = summand.get_dimension();
+        if (degree >= 0 && dimension != degree) {
+          continue;
+        }
+        auto bar = summand.get_bar(line);
+        barcodes[static_cast<size_t>(dimension)].push_back(Bar{static_cast<T>(bar[0]), static_cast<T>(bar[1])});
+      }
+    }
   }
   return batched_barcode_to_python<T>(barcodes, lines.size(), keep_inf);
 }
@@ -218,11 +302,11 @@ Gudhi::multi_persistence::Module<T>& evaluate_in_grid_impl(Gudhi::multi_persiste
 
 template <typename T, class RandomAccessValueRange1, class RandomAccessValueRange2>
 auto compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
-                                                      int degree,
-                                                      const RandomAccessValueRange1& ks,
-                                                      const Gudhi::multi_persistence::Box<T>& box,
-                                                      const RandomAccessValueRange2& resolution,
-                                                      int n_jobs) {
+                                 int degree,
+                                 const RandomAccessValueRange1& ks,
+                                 const Gudhi::multi_persistence::Box<T>& box,
+                                 const RandomAccessValueRange2& resolution,
+                                 int n_jobs) {
   if (resolution.size() != 2) {
     throw std::invalid_argument("Module landscapes require a 2D resolution array.");
   }
@@ -236,10 +320,10 @@ auto compute_landscapes_box_impl(Gudhi::multi_persistence::Module<T>& self,
 
 template <typename T, class RandomAccessValueRange, class RandomAccessArray>
 auto compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
-                                                        int degree,
-                                                        const RandomAccessValueRange& ks,
-                                                        const std::vector<RandomAccessArray>& grid,
-                                                        int n_jobs) {
+                                  int degree,
+                                  const RandomAccessValueRange& ks,
+                                  const std::vector<RandomAccessArray>& grid,
+                                  int n_jobs) {
   if (grid.size() != 2) {
     throw std::invalid_argument("Module landscapes require a 2D grid.");
   }
@@ -249,6 +333,98 @@ auto compute_landscapes_grid_impl(Gudhi::multi_persistence::Module<T>& self,
     out = Gudhi::multi_persistence::compute_set_of_module_landscapes(self, degree, ks, grid, n_jobs);
   }
   return _wrap_as_numpy_array(std::move(out), ks.size(), grid[0].size(), grid[1].size());
+}
+
+template <typename T, class RandomAccessValueRange>
+T module_pixel_value(typename Gudhi::multi_persistence::Module<T>::const_iterator start,
+                     typename Gudhi::multi_persistence::Module<T>::const_iterator end,
+                     const RandomAccessValueRange& x,
+                     T delta,
+                     T p,
+                     bool normalize,
+                     T module_weight,
+                     const std::vector<T>& interleavings) {
+  using Module = Gudhi::multi_persistence::Module<T>;
+  T value = 0;
+
+  if (p == 0) {
+    for (auto it = start; it != end; ++it) {
+      value += static_cast<T>(Gudhi::multi_persistence::compute_summand_local_weight(*it, x, delta));
+    }
+    return normalize && module_weight != 0 ? value / module_weight : value;
+  }
+
+  if (p != Module::T_inf) {
+    std::size_t c = 0;
+    for (auto it = start; it != end; ++it) {
+      const T summand_weight = interleavings[c++];
+      const T summand_x_weight = static_cast<T>(Gudhi::multi_persistence::compute_summand_local_weight(*it, x, delta));
+      value += static_cast<T>(std::pow(summand_weight, p)) * summand_x_weight;
+    }
+    return normalize && module_weight != 0 ? value / module_weight : value;
+  }
+
+  for (auto it = start; it != end; ++it) {
+    value = std::max(value, static_cast<T>(Gudhi::multi_persistence::compute_summand_local_weight(*it, x, delta)));
+  }
+  return value;
+}
+
+template <typename T, class RandomAccessPointRange, class DimensionRange>
+std::vector<T> compute_module_pixels_local(const Gudhi::multi_persistence::Module<T>& module,
+                                           const RandomAccessPointRange& coordinates,
+                                           const DimensionRange& degrees,
+                                           const Gudhi::multi_persistence::Box<T>& box,
+                                           T delta,
+                                           T p,
+                                           bool normalize,
+                                           int n_jobs) {
+  using Module = Gudhi::multi_persistence::Module<T>;
+  std::vector<T> out(degrees.size() * coordinates.size());
+  Gudhi::Simple_mdspan view(out.data(), degrees.size(), coordinates.size());
+
+  auto start = module.begin();
+  auto end = module.begin();
+  auto dim_it = degrees.begin();
+  for (std::size_t degree_idx = 0; degree_idx < degrees.size(); ++degree_idx) {
+    const auto degree = *dim_it;
+    ++dim_it;
+    start = end;
+    while (start != module.end() && start->get_dimension() != degree) ++start;
+    if (start == module.end()) break;
+    end = start;
+    while (end != module.end() && end->get_dimension() == degree) ++end;
+
+    std::vector<T> interleavings(static_cast<std::size_t>(std::distance(start, end)));
+    T module_weight = 0;
+    std::size_t c = 0;
+    for (auto it = start; it != end; ++it) {
+      const T interleaving = static_cast<T>(Gudhi::multi_persistence::compute_summand_interleaving(*it, box));
+      interleavings[c++] = interleaving;
+      if (p == 0) {
+        module_weight += interleaving > 0 ? T{1} : T{0};
+      } else if (p != Module::T_inf) {
+        if (interleaving > 0 && interleaving != Module::T_inf) {
+          module_weight += static_cast<T>(std::pow(interleaving, p));
+        }
+      } else if (interleaving > 0 && interleaving != Module::T_inf) {
+        module_weight = std::max(module_weight, interleaving);
+      }
+    }
+    if (module_weight == 0) continue;
+
+    auto compute_coordinate = [&](std::size_t i) {
+      view(degree_idx, i) =
+          module_pixel_value<T>(start, end, coordinates[i], delta, p, normalize, module_weight, interleavings);
+    };
+#ifdef GUDHI_USE_TBB
+    oneapi::tbb::task_arena arena(n_jobs);
+    arena.execute([&] { tbb::parallel_for(std::size_t(0), coordinates.size(), compute_coordinate); });
+#else
+    for (std::size_t i = 0; i < coordinates.size(); ++i) compute_coordinate(i);
+#endif
+  }
+  return out;
 }
 
 template <typename T, class RandomAccessPointRange, class DimensionRange>
@@ -263,7 +439,7 @@ nb::ndarray<nb::numpy, T> compute_pixels_impl(Gudhi::multi_persistence::Module<T
   std::vector<T> out;
   {
     nb::gil_scoped_release release;
-    out = Gudhi::multi_persistence::compute_module_pixels(self, coordinates, degrees, box, delta, p, normalize, n_jobs);
+    out = compute_module_pixels_local(self, coordinates, degrees, box, delta, p, normalize, n_jobs);
   }
   return owned_array<T>(std::move(out), {degrees.size(), coordinates.size()});
 }
@@ -279,16 +455,6 @@ nb::ndarray<nb::numpy, T> distance_to_impl(Gudhi::multi_persistence::Module<T>& 
     out = Gudhi::multi_persistence::compute_module_distances_to(self, pts, signed_distance, n_jobs);
   }
   return owned_array<T>(std::move(out), {pts.size(), self.size()});
-}
-
-template <typename T>
-Gudhi::multi_persistence::Module<T>& set_box_impl(Gudhi::multi_persistence::Module<T>& self,
-                                                  const Gudhi::multi_persistence::Box<T>& box) {
-  {
-    nb::gil_scoped_release release;
-    self.set_box(box);
-  }
-  return self;
 }
 
 template <typename T>
@@ -316,11 +482,7 @@ Gudhi::multi_persistence::Module<T>& translate_impl(Gudhi::multi_persistence::Mo
 template <typename T>
 Gudhi::multi_persistence::Module<T> module_from_dump(nb::handle dump) {
   nb::tuple tpl = nb::cast<nb::tuple>(dump);
-  auto box = matrix_from_handle<T>(tpl[0]);
-  std::vector<T> lower = box.empty() ? std::vector<T>{} : box[0];
-  std::vector<T> upper = box.size() < 2 ? std::vector<T>{} : box[1];
   Gudhi::multi_persistence::Module<T> out;
-  out.set_box(Gudhi::multi_persistence::Box<T>(lower, upper));
   for (nb::handle summand_dump : nb::iter(tpl[1])) {
     out.add_summand(summand_from_dump<T>(summand_dump));
   }
@@ -331,7 +493,9 @@ template <typename T>
 std::vector<std::vector<T>> filtration_values_from_module(const Gudhi::multi_persistence::Module<T>& module,
                                                           bool unique) {
   std::vector<std::vector<T>> values;
-  size_t num_parameters = module.get_box().get_lower_corner().size();
+  int module_num_parameters = module.get_number_of_parameters();
+  if (module_num_parameters < 0) return values;
+  size_t num_parameters = static_cast<size_t>(module_num_parameters);
   values.resize(num_parameters);
   for (const auto& summand : module) {
     auto births = summand.compute_flat_upset();
@@ -451,7 +615,7 @@ std::vector<int32_t> flat_idx_from_corners(const std::vector<T>& corners,
 
 template <typename T>
 nb::tuple to_flat_idx_impl(const Gudhi::multi_persistence::Module<T>& module, const std::vector<std::vector<T>>& grid) {
-  const size_t num_parameters = module.get_box().get_lower_corner().size();
+  const size_t num_parameters = grid.size();
   const size_t num_summands = module.size();
 
   std::vector<int32_t> birth_sizes;
@@ -528,19 +692,19 @@ void bind_float_module_methods(Class& cls) {
     using Module = Gudhi::multi_persistence::Module<T>;
 
     cls.def(
-            "_get_barcodes_from_lines",
-            [](Module& self,
-               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> basepoints,
-               nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> directions,
-               int degree,
-               bool keep_inf) -> nb::tuple {
-              return barcodes_from_lines_impl<T>(
-                  self, matrix_from_array(basepoints), matrix_from_array(directions), degree, keep_inf);
-            },
-            "basepoints"_a,
-            "directions"_a,
-            "degree"_a = -1,
-            "keep_inf"_a = true)
+           "_get_barcodes_from_lines",
+           [](Module& self,
+              nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> basepoints,
+              nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> directions,
+              int degree,
+              bool keep_inf) -> nb::tuple {
+             return barcodes_from_lines_impl<T>(
+                 self, matrix_from_array(basepoints), matrix_from_array(directions), degree, keep_inf);
+           },
+           "basepoints"_a,
+           "directions"_a,
+           "degree"_a = -1,
+           "keep_inf"_a = true)
         .def(
             "evaluate_in_grid",
             [](Module& self, nb::handle grid_handle) -> Module& {
@@ -730,19 +894,19 @@ void bind_float_module_methods(Class& cls) {
             "n_jobs"_a = 0)
         .def(
             "distance_to",
-            [](Module& self,
-               nb::ndarray<const T, nb::ndim<2>, nb::any_contig> pts,
-               bool signed_distance,
-               int n_jobs) { return distance_to_impl<T>(self, Numpy_2d_span<T>(pts), signed_distance, n_jobs); },
+            [](Module& self, nb::ndarray<const T, nb::ndim<2>, nb::any_contig> pts, bool signed_distance, int n_jobs) {
+              return distance_to_impl<T>(self, Numpy_2d_span<T>(pts), signed_distance, n_jobs);
+            },
             "pts"_a,
             "signed"_a = false,
             "n_jobs"_a = 0)
         .def("get_interleavings",
              [](Module& self) -> nb::ndarray<nb::numpy, T> {
                std::vector<T> interleavings;
+               auto box = box_from_rows<T>(module_box_rows<T>(self));
                {
                  nb::gil_scoped_release release;
-                 interleavings = Gudhi::multi_persistence::compute_module_interleavings(self, self.get_box());
+                 interleavings = Gudhi::multi_persistence::compute_module_interleavings(self, box);
                }
                return owned_array<T>(std::move(interleavings), {interleavings.size()});
              })
@@ -843,9 +1007,9 @@ void bind_box_class(nb::module_& m) {
              auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
              auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
              return corner_pair_to_python<T>(lower, upper);
-            })
-       .def("to_multipers",
-            [](Box& self) -> nb::ndarray<nb::numpy, T> {
+           })
+      .def("to_multipers",
+           [](Box& self) -> nb::ndarray<nb::numpy, T> {
              auto lower = std::vector<T>(self.get_lower_corner().begin(), self.get_lower_corner().end());
              auto upper = std::vector<T>(self.get_upper_corner().begin(), self.get_upper_corner().end());
              std::vector<T> flat;
@@ -854,7 +1018,7 @@ void bind_box_class(nb::module_& m) {
                flat.push_back(lower[i]);
                flat.push_back(upper[i]);
              }
-              return owned_array<T>(std::move(flat), {size_t(2), lower.size()});
+             return owned_array<T>(std::move(flat), {size_t(2), lower.size()});
            })
       .def_prop_ro("_template_id", [](const Box&) -> int { return Desc::template_id; })
       .def_prop_ro("dtype", [](const Box&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
@@ -868,8 +1032,12 @@ void bind_module_class(nb::module_& m) {
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
 
   auto module_cls =
-      nb::class_<Module>(m, Desc::module_name.data())
-          .def(nb::init<>())
+      nb::class_<Module>(m, Desc::module_name.data(), nb::dynamic_attr())
+          .def("__init__",
+               [](nb::pointer_and_handle<Module> self) {
+                 new (self.p) Module();
+                 nb::borrow<nb::object>(self.h).attr("_box") = empty_box_array<T>();
+               })
           .def(
               "_from_ptr",
               [](Module& self, intptr_t ptr) -> Module& {
@@ -929,44 +1097,45 @@ void bind_module_class(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def("permute_summands",
                [](Module& self, nb::ndarray<const int, nb::ndim<1>, nb::c_contig, nb::device::cpu> permutation) {
+                 auto box = module_box_array<T>(self);
                  Module out;
                  {
                    nb::gil_scoped_release release;
                    out = Gudhi::multi_persistence::build_permuted_module(
                        self, make_element_range(permutation.data(), permutation.view(), false));
                  }
-                 return out;
+                 return module_to_python<T>(std::move(out), box);
                })
+          .def_prop_rw(
+              "box",
+              [](Module& self) -> BoxArray<T> { return module_box_array<T>(self); },
+              [](Module& self, nb::handle box) { set_module_box_from_handle<T>(self, box); })
           .def(
               "set_box",
               [](Module& self, nb::handle box_handle) -> Module& {
-                return set_box_impl<T>(self, box_from_rows<T>(matrix_from_handle<T>(box_handle)));
-              },
-              nb::rv_policy::reference_internal)
-          .def(
-              "set_box",
-              [](Module& self, nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig> box) -> Module& {
-                return set_box_impl<T>(self, box_from_array<T>(box));
+                warn_deprecated_box_method("set_box()", "the .box property");
+                set_module_box_from_handle<T>(self, box_handle);
+                return self;
               },
               nb::rv_policy::reference_internal)
           .def("get_module_of_degree",
-               [](Module& self, int degree) {
+               [](Module& self, int degree) -> nb::object {
+                 auto box = module_box_array<T>(self);
                  Module out;
                  {
                    nb::gil_scoped_release release;
-                   out.set_box(self.get_box());
                    for (const auto& summand : self)
                      if (summand.get_dimension() == degree) out.add_summand(summand);
                  }
-                 return out;
+                 return module_to_python<T>(std::move(out), box);
                })
           .def("get_module_of_degrees",
-               [](Module& self, nb::handle degrees_handle) {
+               [](Module& self, nb::handle degrees_handle) -> nb::object {
+                 auto box = module_box_array<T>(self);
                  auto degrees = vector_from_handle<int>(degrees_handle);
                  Module out;
                  {
                    nb::gil_scoped_release release;
-                   out.set_box(self.get_box());
                    for (const auto& summand : self) {
                      for (int degree : degrees) {
                        if (degree == summand.get_dimension()) {
@@ -976,7 +1145,7 @@ void bind_module_class(nb::module_& m) {
                      }
                    }
                  }
-                 return out;
+                 return module_to_python<T>(std::move(out), box);
                })
           .def("_get_dump", [](Module& self) -> nb::tuple { return dump_module<T>(self); })
           .def(
@@ -1001,12 +1170,19 @@ void bind_module_class(nb::module_& m) {
           .def(
               "_load_dump",
               [](Module& self, nb::handle dump) -> Module& {
+                nb::tuple tpl = nb::cast<nb::tuple>(dump);
                 self = module_from_dump<T>(dump);
+                set_module_box<T>(self, nb::cast<BoxArray<T>>(tpl[0]));
                 return self;
               },
               nb::rv_policy::reference_internal)
           .def("__getstate__", [](Module& self) -> nb::tuple { return dump_module<T>(self); })
-          .def("__setstate__", [](Module& self, nb::handle state) { new (&self) Module(module_from_dump<T>(state)); })
+          .def("__setstate__",
+               [](Module& self, nb::handle state) {
+                 nb::tuple tpl = nb::cast<nb::tuple>(state);
+                 new (&self) Module(module_from_dump<T>(state));
+                 set_module_box<T>(self, nb::cast<BoxArray<T>>(tpl[0]));
+               })
           .def(
               "_add_mmas",
               [](Module& self, nb::iterable mmas) -> Module& {
@@ -1020,45 +1196,40 @@ void bind_module_class(nb::module_& m) {
                 return self;
               },
               nb::rv_policy::reference_internal)
-           .def("get_bottom",
-                [](Module& self) -> nb::ndarray<nb::numpy, T> {
-                  return owned_array<T>(
-                      std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end()),
-                      {self.get_box().get_lower_corner().size()});
-                })
-           .def("get_top",
-                [](Module& self) -> nb::ndarray<nb::numpy, T> {
-                  return owned_array<T>(
-                      std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end()),
-                      {self.get_box().get_upper_corner().size()});
-                })
-           .def("get_box",
-                [](Module& self) -> nb::ndarray<nb::numpy, T> {
-                 auto lower =
-                     std::vector<T>(self.get_box().get_lower_corner().begin(), self.get_box().get_lower_corner().end());
-                 auto upper =
-                     std::vector<T>(self.get_box().get_upper_corner().begin(), self.get_box().get_upper_corner().end());
-                 std::vector<T> flat_box;
-                 flat_box.reserve(lower.size() + upper.size());
-                 flat_box.insert(flat_box.end(), lower.begin(), lower.end());
-                 flat_box.insert(flat_box.end(), upper.begin(), upper.end());
-                  return owned_array<T>(std::move(flat_box), {size_t(2), self.get_box().get_lower_corner().size()});
+          .def("get_bottom",
+               [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                 auto box = module_box_rows<T>(self);
+                 const size_t size = box[0].size();
+                 return owned_array<T>(std::move(box[0]), {size});
+               })
+          .def("get_top",
+               [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                 auto box = module_box_rows<T>(self);
+                 const size_t size = box[1].size();
+                 return owned_array<T>(std::move(box[1]), {size});
+               })
+          .def("get_box",
+               [](Module& self) -> BoxArray<T> {
+                 warn_deprecated_box_method("get_box()", "the .box property");
+                 return module_box_array<T>(self);
                })
           .def_prop_ro("max_degree", [](const Module& self) -> int { return self.get_max_dimension(); })
-          .def_prop_ro("num_parameters",
-                       [](const Module& self) -> int { return self.get_box().get_lower_corner().size(); })
-           .def("get_bounds",
-                [](Module& self) -> nb::ndarray<nb::numpy, T> {
-                  std::pair<std::vector<T>, std::vector<T>> cbounds;
-                  {
-                    nb::gil_scoped_release release;
-                    auto bounds = self.compute_bounds();
-                    auto cpp_bounds = bounds.get_bounding_corners();
-                    cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
-                    cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
-                  }
-                  return corner_pair_to_python<T>(cbounds.first, cbounds.second);
-                })
+          .def_prop_ro("num_parameters", [](Module& self) -> int { return module_num_parameters<T>(self); })
+          .def("get_bounds",
+               [](Module& self) -> nb::ndarray<nb::numpy, T> {
+                 if (self.get_number_of_parameters() < 0) {
+                   return owned_array<T>(std::vector<T>{}, {size_t(2), size_t(0)});
+                 }
+                 std::pair<std::vector<T>, std::vector<T>> cbounds;
+                 {
+                   nb::gil_scoped_release release;
+                   auto bounds = self.compute_bounds();
+                   auto cpp_bounds = bounds.get_bounding_corners();
+                   cbounds.first.assign(cpp_bounds.first.begin(), cpp_bounds.first.end());
+                   cbounds.second.assign(cpp_bounds.second.begin(), cpp_bounds.second.end());
+                 }
+                 return corner_pair_to_python<T>(cbounds.first, cbounds.second);
+               })
           .def(
               "rescale",
               [](Module& self, nb::handle factors, int degree) -> Module& {
@@ -1077,9 +1248,9 @@ void bind_module_class(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def(
               "translate",
-              [](Module& self, nb::handle factors, int degree) -> Module& {
-                return translate_impl<T>(self, vector_from_handle<T>(factors), degree);
-              },
+              [](Module& self,
+                 nb::handle factors,
+                 int degree) -> Module& { return translate_impl<T>(self, vector_from_handle<T>(factors), degree); },
               "translation"_a,
               "degree"_a = -1,
               nb::rv_policy::reference_internal)
@@ -1093,9 +1264,8 @@ void bind_module_class(nb::module_& m) {
               nb::rv_policy::reference_internal)
           .def(
               "get_filtration_values",
-              [](Module& self, bool unique) -> std::vector<std::vector<T>> {
-                return filtration_values_from_module<T>(self, unique);
-              },
+              [](Module& self,
+                 bool unique) -> std::vector<std::vector<T>> { return filtration_values_from_module<T>(self, unique); },
               "unique"_a = true)
           .def(
               "to_flat_idx",
@@ -1123,10 +1293,10 @@ void bind_module_class(nb::module_& m) {
   std::string from_dump_name = std::string(Desc::from_dump_name);
   m.def(
       from_dump_name.c_str(),
-      [](nb::handle dump) {
-        Module out;
-        out = module_from_dump<T>(dump);
-        return out;
+      [](nb::handle dump) -> nb::object {
+        nb::tuple tpl = nb::cast<nb::tuple>(dump);
+        Module out = module_from_dump<T>(dump);
+        return module_to_python<T>(std::move(out), nb::cast<BoxArray<T>>(tpl[0]));
       },
       "dump"_a);
 }

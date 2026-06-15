@@ -53,15 +53,21 @@ using Gudhi::multi_persistence::Module;
 using value_type = double;
 using filtration_type = multipers::tmp_interface::Filtration_value<value_type>;
 
-inline void threshold_filters_list(std::vector<filtration_type> &filtersList, const Box<value_type> &box) {
-  return;
-  for (unsigned int i = 0; i < filtersList.size(); i++) {
-    for (unsigned int p = 0; p < filtersList[i].num_parameters(); ++p) {
-      value_type &value = filtersList[i](0, p);
-      value = std::min(std::max(value, box.get_lower_corner()[i]), box.get_upper_corner()[i]);
+template <typename T, class Barcode>
+inline void add_barcode_to_module(Module<T> &module,
+                                  const Line<T> &line,
+                                  const Barcode &barcode,
+                                  const Box<T> &box,
+                                  bool threshold) {
+  std::size_t offset = 0;
+  for (const auto &bar_dim : barcode) {
+    for (const auto &bar : bar_dim) {
+      module.get_summand(offset++).add_bar(line, bar[0], bar[1], box, threshold);
     }
   }
 }
+
+inline void threshold_filters_list(std::vector<filtration_type> &, const Box<value_type> &) {}
 
 template <class Filtration_value, int axis = 0, bool sign = true>
 class LineIterator {
@@ -106,6 +112,7 @@ template <class Filtration_value, int axis_ = 0, bool sign = true, class Slicer>
 inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value::value_type> &module,
                                                 Slicer &&slicer,
                                                 LineIterator<Filtration_value, axis_, sign> &line_iterator,
+                                                const Box<typename Filtration_value::value_type> &box,
                                                 const bool threshold,
                                                 int axis = 0) {
   static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::Filtration_value::value_type>);
@@ -121,7 +128,7 @@ inline void __add_vineyard_trajectory_to_module(Module<typename Filtration_value
 
     slicer.update_persistence_computation();
     if constexpr (verbose2) std::cout << slicer << std::endl;
-    module.add_barcode(new_line, slicer.template get_flat_barcode<true>(), threshold);
+    add_barcode_to_module(module, new_line, slicer.template get_flat_barcode<true>(), box, threshold);
   };
 };
 
@@ -132,11 +139,12 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
               int dim_to_iterate,
               Slicer &&current_persistence,
               const value_type precision,
+              const Box<typename Filtration_value::value_type> &box,
               bool threshold) {
   if (dim_to_iterate <= 0) {
     LineIterator<Filtration_value, 0> line_iterator(std::move(basepoint), precision, grid_size[0]);
     __add_vineyard_trajectory_to_module<Filtration_value, 0, Slicer>(
-        module, std::move(current_persistence), line_iterator, threshold);
+        module, std::move(current_persistence), line_iterator, box, threshold);
     return;
   }
   Slicer pers_copy;
@@ -146,7 +154,7 @@ void _rec_mma(Module<typename Filtration_value::value_type> &module,
     // module
     pers_copy = current_persistence;
     basepoint_copy = basepoint;
-    _rec_mma(module, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy, precision, threshold);
+    _rec_mma(module, basepoint_copy, grid_size, dim_to_iterate - 1, pers_copy, precision, box, threshold);
     basepoint[dim_to_iterate] += precision;
     // current_persistence.push_to(Line(basepoint));
     // current_persistence.update_persistence_computation();
@@ -162,6 +170,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                int dim_to_iterate,
                Slicer &&current_persistence,
                const value_type precision,
+               const Box<typename Filtration_value::value_type> &box,
                bool threshold) {
   static_assert(std::is_same_v<typename Filtration_value::value_type, typename Slicer::T>);
 
@@ -170,12 +179,12 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
       LineIterator<Filtration_value, axis, true> line_iterator(
           std::move(basepoint), direction, precision, grid_size[axis]);
       __add_vineyard_trajectory_to_module<Filtration_value, axis, true, Slicer>(
-          module, std::move(current_persistence), line_iterator, threshold);
+          module, std::move(current_persistence), line_iterator, box, threshold);
     } else {
       LineIterator<Filtration_value, axis, false> line_iterator(
           std::move(basepoint), direction, precision, grid_size[axis]);
       __add_vineyard_trajectory_to_module<Filtration_value, axis, false, Slicer>(
-          module, std::move(current_persistence), line_iterator, threshold);
+          module, std::move(current_persistence), line_iterator, box, threshold);
     }
 
     return;
@@ -190,6 +199,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                                               dim_to_iterate - 1,
                                               std::move(current_persistence),
                                               precision,
+                                              box,
                                               threshold);
     return;
   }
@@ -206,6 +216,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
                                                 dim_to_iterate - 1,
                                                 std::move(current_persistence),
                                                 precision,
+                                                box,
                                                 threshold);
     } else {
       _rec_mma2<axis, Filtration_value, typename Slicer::Thread_safe>(
@@ -217,6 +228,7 @@ void _rec_mma2(Module<typename Filtration_value::value_type> &module,
           dim_to_iterate - 1,
           current_persistence.weak_copy(),
           precision,
+          box,
           threshold);
       basepoint[dim_to_iterate] += signs[dim_to_iterate] ? precision : -precision;
     }
@@ -242,7 +254,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
   oneapi::tbb::task_arena arena(n_jobs);
   return arena.execute([&] {
     typename Box<value_type>::Point_t basepoint = box.get_lower_corner();
-    const std::size_t num_parameters = box.get_dimension();
+    const std::size_t num_parameters = box.get_number_of_coordinates();
     std::vector<int> grid_size(num_parameters);
     std::vector<bool> signs(num_parameters);
     int signs_shifts = 0;
@@ -275,7 +287,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
       if (verbose)
         std::cout << "Had to flatten/shift coordinate " << arg_max_signs_shifts << " by " << signs_shifts << std::endl;
     }
-    Module<value_type> out(box);
+    Module<value_type> out;
     box.inflate(2 * precision);  // for infinte summands
 
     if (verbose) std::cout << "Num parameters : " << num_parameters << std::endl;
@@ -307,7 +319,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
           ++i;
         }
       }
-      out.add_barcode(current_line, barcode, threshold);
+      add_barcode_to_module(out, current_line, barcode, box, threshold);
 
       if (verbose) std::cout << "Instantiated " << num_bars << " summands" << std::endl;
     }
@@ -367,6 +379,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
                      num_parameters - 1,
                      slicer.weak_copy(),
                      precision,
+                     box,
                      threshold);
       }
       // last one, we can destroy basepoint & cie
@@ -385,6 +398,7 @@ Module<value_type> multiparameter_module_approximation(Slicer &slicer,
                      num_parameters - 1,
                      std::move(slicer),
                      precision,
+                     box,
                      threshold);
       }
     }

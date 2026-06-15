@@ -868,7 +868,7 @@ def plot_simplicial_complex(
         plot_simplicial_complex(st, pts, x, y)
         plt.sca(b)
         mma.plot(degree=degree)
-        box = mma.get_box()
+        box = mma.box
         a, b, c, d = box.ravel()
         mma.plot(degree=1, min_persistence=0.01)
         plt.vlines(x, b, d, color="k", linestyle="--")
@@ -929,7 +929,7 @@ def plot_point_cloud(
         plot_point_cloud(pts, function, x, y)
         plt.sca(b)
         mma.plot(degree=degree)
-        box = mma.get_box()
+        box = mma.box
         a, b, c, d = box.ravel()
         mma.plot(degree=1, min_persistence=0.01)
         plt.vlines(x, b, d, color="k", linestyle="--")
