@@ -55,6 +55,13 @@ using contiguous_i32_complex = contiguous_complex<std::int32_t>;
 
 using contiguous_f64_complex = contiguous_complex<double>;
 
+struct packed_morphism_columns {
+  const std::uint64_t* indptr = nullptr;
+  const std::uint32_t* indices = nullptr;
+  std::size_t indptr_size = 0;
+  std::size_t indices_size = 0;
+};
+
 template <typename value_type, typename index_type>
 inline contiguous_complex<value_type> build_contiguous_slicer_from_output(
     const std::vector<value_type>& filtration_values,

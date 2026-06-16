@@ -1,7 +1,10 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <cstdint>
 #include <stdexcept>
 
 #include "ext_interface/persistence_algebra_interface.hpp"
@@ -13,6 +16,12 @@ using namespace nb::literals;
 namespace mppai {
 
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
+
+inline multipers::packed_morphism_columns packed_columns(
+    nb::ndarray<nb::numpy, const std::uint64_t, nb::ndim<1>, nb::c_contig> indptr,
+    nb::ndarray<nb::numpy, const std::uint32_t, nb::ndim<1>, nb::c_contig> indices) {
+  return {indptr.data(), indices.data(), indptr.shape(0), indices.shape(0)};
+}
 
 #if MULTIPERS_HAS_PERSISTENCE_ALGEBRA_INTERFACE
 inline nb::list cast_degrees(const std::vector<multipers::persistence_algebra_detail::pa_degree>& degrees) {
@@ -40,6 +49,37 @@ inline nb::object minimal_presentation_for_target(nb::object target, int degree,
   return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
 }
 
+inline nb::object algebra_operation_for_target(nb::object source,
+                                               nb::object target,
+                                               nb::object owner,
+                                               const multipers::packed_morphism_columns& columns,
+                                               int degree,
+                                               const std::string& op) {
+  auto& source_wrapper = nb::cast<CanonicalWrapper&>(source);
+  auto& target_wrapper = nb::cast<CanonicalWrapper&>(target);
+  if (op == "kernel") {
+    auto complex = multipers::persistence_algebra_kernel_contiguous_interface(
+        source_wrapper.truc, target_wrapper.truc, columns, degree);
+    return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
+  }
+  if (op == "image") {
+    auto complex = multipers::persistence_algebra_image_contiguous_interface(
+        source_wrapper.truc, target_wrapper.truc, columns, degree);
+    return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
+  }
+  if (op == "cokernel") {
+    auto complex = multipers::persistence_algebra_cokernel_contiguous_interface(
+        source_wrapper.truc, target_wrapper.truc, columns, degree);
+    return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
+  }
+  if (op == "coimage") {
+    auto complex = multipers::persistence_algebra_coimage_contiguous_interface(
+        source_wrapper.truc, target_wrapper.truc, columns, degree);
+    return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
+  }
+  throw std::invalid_argument("Unknown Persistence-Algebra operation.");
+}
+
 }  // namespace mppai
 
 NB_MODULE(_persistence_algebra_interface, m) {
@@ -49,7 +89,8 @@ NB_MODULE(_persistence_algebra_interface, m) {
   m.def("require", [available]() {
     if (!available()) {
       throw std::runtime_error(
-          "Persistence-Algebra interface is not available in this build. Rebuild multipers with Persistence-Algebra support to enable this backend.");
+          "Persistence-Algebra interface is not available in this build. Rebuild multipers with Persistence-Algebra "
+          "support to enable this backend.");
     }
   });
 
@@ -140,13 +181,39 @@ NB_MODULE(_persistence_algebra_interface, m) {
       "with_homology"_a = false);
 
   m.def(
+      "algebra_operation",
+      [](const std::string& op,
+         nb::object source,
+         nb::object target,
+         nb::ndarray<nb::numpy, const std::uint64_t, nb::ndim<1>, nb::c_contig> column_indptr,
+         nb::ndarray<nb::numpy, const std::uint32_t, nb::ndim<1>, nb::c_contig> row_indices,
+         int degree) {
+        auto columns = mppai::packed_columns(column_indptr, row_indices);
+        if (!multipers::persistence_algebra_interface_available()) {
+          throw std::runtime_error("Persistence-Algebra interface is not available.");
+        }
+        nb::object source_target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(source);
+        nb::object target_target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(target);
+        const bool source_owned = op == "kernel" || op == "coimage";
+        nb::object owner = source_owned ? source : target;
+        nb::object owner_target = source_owned ? source_target : target_target;
+        nb::object out =
+            mppai::algebra_operation_for_target(source_target, target_target, owner_target, columns, degree, op);
+        if (owner_target.ptr() == owner.ptr()) {
+          return out;
+        }
+        return multipers::nanobind_helpers::astype_slicer_to_original_type(owner, out);
+      },
+      "op"_a,
+      "source"_a,
+      "target"_a,
+      "column_indptr"_a,
+      "row_indices"_a,
+      "degree"_a);
+
+  m.def(
       "minimal_presentation",
-      [](nb::object slicer,
-         int degree,
-         bool full_resolution,
-         bool use_clearing,
-         bool use_chunk,
-         bool verbose) {
+      [](nb::object slicer, int degree, bool full_resolution, bool use_clearing, bool use_chunk, bool verbose) {
         (void)use_clearing;
         (void)use_chunk;
         (void)verbose;
@@ -176,7 +243,8 @@ NB_MODULE(_persistence_algebra_interface, m) {
         nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
         auto& input_wrapper = nb::cast<mppai::CanonicalWrapper&>(target);
         auto complex = multipers::persistence_algebra_death_curve_contiguous_interface(input_wrapper.truc, degree);
-        nb::object out = multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
+        nb::object out =
+            multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
         if (target.ptr() == slicer.ptr()) {
           return out;
         }

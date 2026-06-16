@@ -100,6 +100,36 @@ inline grade_t vector_to_grade(const std::vector<std::int64_t>& values) {
   return grade;
 }
 
+inline bool filtration_leq(const std::vector<std::int64_t>& left, const std::vector<std::int64_t>& right) {
+  if (left.size() != right.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    if (left[i] > right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline std::vector<int> normalize_f2_indices(std::vector<int> rows) {
+  std::sort(rows.begin(), rows.end());
+  std::vector<int> out;
+  out.reserve(rows.size());
+  for (std::size_t i = 0; i < rows.size();) {
+    const auto row = rows[i];
+    std::size_t count = 1;
+    while (i + count < rows.size() && rows[i + count] == row) {
+      ++count;
+    }
+    if (count % 2 == 1) {
+      out.push_back(row);
+    }
+    i += count;
+  }
+  return out;
+}
+
 inline std::vector<std::int64_t> grade_to_vector(const grade_t& grade) {
   std::vector<std::int64_t> out;
   out.reserve(grade.size());
@@ -176,6 +206,119 @@ inline std::vector<grade_t> row_grades_from_matrix(const Matrix& matrix) {
     out.push_back(column.grade);
   }
   return out;
+}
+
+inline void require_provably_free_matrix(Matrix& matrix, const std::string& op) {
+  std::vector<index_t> pivots;
+  pivots.reserve(matrix.size());
+  for (auto& column : matrix) {
+    if (column.empty()) {
+      continue;
+    }
+    pivots.push_back(column.get_pivot_index());
+  }
+  std::sort(pivots.begin(), pivots.end());
+  if (std::adjacent_find(pivots.begin(), pivots.end()) != pivots.end()) {
+    throw std::invalid_argument(
+        "Muphasa " + op + " is only bound when the result is provably free; non-free presentations are not yet "
+        "bound.");
+  }
+}
+
+template <typename index_type>
+Matrix build_morphism_matrix(const muphasa_interface_input<index_type>& source,
+                             const muphasa_interface_input<index_type>& target,
+                             const packed_morphism_columns& columns,
+                             int degree) {
+  const std::size_t source_begin = first_index_of_dimension(source.dimensions, degree);
+  const std::size_t source_end = first_index_of_dimension(source.dimensions, degree + 1);
+  const std::size_t target_begin = first_index_of_dimension(target.dimensions, degree);
+  const std::size_t target_end = first_index_of_dimension(target.dimensions, degree + 1);
+  const std::size_t num_columns = source_end - source_begin;
+  if (columns.indptr == nullptr || (columns.indices == nullptr && columns.indices_size != 0)) {
+    throw std::invalid_argument("Muphasa morphism columns must be packed CSR arrays.");
+  }
+  if (columns.indptr_size != num_columns + 1) {
+    throw std::invalid_argument("Muphasa morphism needs one column per source generator.");
+  }
+  if (columns.indptr[0] != 0 || columns.indptr[num_columns] != columns.indices_size) {
+    throw std::invalid_argument("Muphasa morphism CSR indptr is inconsistent with indices.");
+  }
+  Matrix out;
+  out.reserve(num_columns);
+  for (std::size_t i = 0; i < num_columns; ++i) {
+    if (columns.indptr[i] > columns.indptr[i + 1]) {
+      throw std::invalid_argument("Muphasa morphism CSR indptr must be nondecreasing.");
+    }
+    SignatureColumn column(vector_to_grade(source.filtration_values[source_begin + i]), static_cast<index_t>(i));
+    std::vector<int> rows;
+    rows.reserve(static_cast<std::size_t>(columns.indptr[i + 1] - columns.indptr[i]));
+    for (std::uint64_t idx = columns.indptr[i]; idx < columns.indptr[i + 1]; ++idx) {
+      const auto row = columns.indices[idx];
+      if (row >= target_end - target_begin) {
+        throw std::invalid_argument("Muphasa morphism row indices are outside target generators.");
+      }
+      rows.push_back(static_cast<int>(row));
+    }
+    rows = normalize_f2_indices(std::move(rows));
+    for (const auto row : rows) {
+      if (!filtration_leq(target.filtration_values[target_begin + row], source.filtration_values[source_begin + i])) {
+        throw std::invalid_argument("Muphasa morphism entry is not coordinatewise grade-compatible.");
+      }
+      column.push(column_entry_t(1, static_cast<index_t>(row)));
+    }
+    column.syzygy.push(column_entry_t(1, static_cast<index_t>(i)));
+    out.push_back(std::move(column));
+  }
+  return out;
+}
+
+template <typename index_type>
+raw_result compute_free_morphism_op(const muphasa_interface_input<index_type>& source,
+                                     const muphasa_interface_input<index_type>& target,
+                                     const packed_morphism_columns& columns,
+                                     int degree,
+                                     const std::string& op) {
+  const std::size_t source_rel_begin = first_index_of_dimension(source.dimensions, degree + 1);
+  const std::size_t source_rel_end = first_index_of_dimension(source.dimensions, degree + 2);
+  const std::size_t target_rel_begin = first_index_of_dimension(target.dimensions, degree + 1);
+  const std::size_t target_rel_end = first_index_of_dimension(target.dimensions, degree + 2);
+  if (source_rel_begin != source_rel_end || target_rel_begin != target_rel_end) {
+    throw std::invalid_argument(
+        "Muphasa kernel/image are currently bound for free degree blocks only; presentations with relations are not "
+        "yet bound.");
+  }
+  auto matrix = build_morphism_matrix(source, target, columns, degree);
+  if (op == "kernel") {
+    Matrix nonzero;
+    Matrix zero;
+    for (auto& column : matrix) {
+      (column.empty() ? zero : nonzero).push_back(column);
+    }
+    auto rows = row_grades_from_matrix(zero);
+    if (!nonzero.empty()) {
+      Matrix kernel = source.num_parameters == 2 ? computeKernel_2p(nonzero) : computekernel_gradeopt(nonzero);
+      require_provably_free_matrix(kernel, op);
+      auto kernel_rows = row_grades_from_matrix(kernel);
+      rows.insert(rows.end(), kernel_rows.begin(), kernel_rows.end());
+    }
+    return raw_result{Matrix{}, std::move(rows)};
+  }
+  if (op == "image") {
+    Matrix nonzero;
+    for (auto& column : matrix) {
+      if (!column.empty()) {
+        nonzero.push_back(column);
+      }
+    }
+    if (nonzero.empty()) {
+      return raw_result{Matrix{}, {}};
+    }
+    Matrix image = ImageGB(nonzero);
+    require_provably_free_matrix(image, op);
+    return raw_result{Matrix{}, row_grades_from_matrix(image)};
+  }
+  throw std::invalid_argument("Unknown Muphasa operation.");
 }
 
 inline bool grade_colex_less(const std::vector<std::int64_t>& left, const std::vector<std::int64_t>& right) {
