@@ -1,5 +1,21 @@
 #pragma once
 
+#ifndef MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+#define MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE 0
+#endif
+
+#if MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+
+#define MULTIPERS_HAS_PERSISTENCE_ALGEBRA_INTERFACE 0
+
+namespace multipers {
+
+inline bool persistence_algebra_interface_available() { return false; }
+
+}  // namespace multipers
+
+#else
+
 #include <algorithm>
 #include <cstddef>
 #include <map>
@@ -54,10 +70,6 @@ contiguous_f64_complex persistence_algebra_coimage_contiguous_interface(contiguo
                                                                         int degree);
 
 }  // namespace multipers
-
-#ifndef MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
-#define MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE 0
-#endif
 
 #if !MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE && __has_include(<grlina/r2graded_matrix.hpp>)
 #define MULTIPERS_HAS_PERSISTENCE_ALGEBRA_INTERFACE 1
@@ -579,3 +591,5 @@ inline contiguous_f64_complex persistence_algebra_coimage_contiguous_interface(c
 #endif
 
 }  // namespace multipers
+
+#endif  // MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
