@@ -878,6 +878,7 @@ function(multipers_configure_module module_name target_name)
   elseif(module_name STREQUAL "_persistence_algebra_interface")
     multipers_link_nanobind_runtime(${target_name})
     multipers_link_openmp(${target_name})
+    multipers_link_tbb(${target_name})
     target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
 
   elseif(module_name STREQUAL "_hera_interface")
