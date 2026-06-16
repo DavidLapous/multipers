@@ -22,6 +22,7 @@ endif()
 multipers_default_disable_flag("multi_critical" MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE)
 multipers_default_disable_flag("rhomboid" MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE)
 multipers_default_disable_flag("hera" MULTIPERS_DISABLE_HERA_INTERFACE)
+multipers_default_disable_flag("persistence_algebra" MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE)
 
 if(WIN32)
   set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
@@ -38,6 +39,8 @@ if(WIN32)
   message(STATUS "[rhomboid] Forced MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_HERA_INTERFACE ON)
   message(STATUS "[hera] Forced MULTIPERS_DISABLE_HERA_INTERFACE=${MULTIPERS_DISABLE_HERA_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE ON)
+  message(STATUS "[persistence_algebra] Forced MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE=${MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE} on WIN32")
 endif()
 
 if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER)
@@ -111,6 +114,7 @@ set(MULTIPERS_INTERFACE_DISABLE_FLAGS
   MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
   MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
   MULTIPERS_DISABLE_HERA_INTERFACE
+  MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
 )
 
 set(MULTIPERS_INTERFACE_DISABLE_DEFINITIONS "")
@@ -876,10 +880,12 @@ function(multipers_configure_module module_name target_name)
     endif()
 
   elseif(module_name STREQUAL "_persistence_algebra_interface")
-    multipers_link_nanobind_runtime(${target_name})
-    multipers_link_openmp(${target_name})
-    multipers_link_tbb(${target_name})
-    target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+    if(NOT MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE)
+      multipers_link_nanobind_runtime(${target_name})
+      multipers_link_openmp(${target_name})
+      multipers_link_tbb(${target_name})
+      target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+    endif()
 
   elseif(module_name STREQUAL "_hera_interface")
     if(NOT MULTIPERS_DISABLE_HERA_INTERFACE)

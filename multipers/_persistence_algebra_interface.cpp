@@ -8,12 +8,17 @@
 #include <stdexcept>
 
 #include "ext_interface/persistence_algebra_interface.hpp"
+
+#if !MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
 #include "ext_interface/nanobind_registry_runtime.hpp"
+#endif
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mppai {
+
+#if !MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
 
 using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_slicer_wrapper;
 
@@ -79,6 +84,8 @@ inline nb::object algebra_operation_for_target(nb::object source,
   }
   throw std::invalid_argument("Unknown Persistence-Algebra operation.");
 }
+
+#endif
 
 }  // namespace mppai
 
@@ -188,6 +195,15 @@ NB_MODULE(_persistence_algebra_interface, m) {
          nb::ndarray<nb::numpy, const std::uint64_t, nb::ndim<1>, nb::c_contig> column_indptr,
          nb::ndarray<nb::numpy, const std::uint32_t, nb::ndim<1>, nb::c_contig> row_indices,
          int degree) {
+#if MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+        (void)op;
+        (void)source;
+        (void)target;
+        (void)column_indptr;
+        (void)row_indices;
+        (void)degree;
+        throw std::runtime_error("Persistence-Algebra interface is disabled at compile time.");
+#else
         auto columns = mppai::packed_columns(column_indptr, row_indices);
         if (!multipers::persistence_algebra_interface_available()) {
           throw std::runtime_error("Persistence-Algebra interface is not available.");
@@ -203,6 +219,7 @@ NB_MODULE(_persistence_algebra_interface, m) {
           return out;
         }
         return multipers::nanobind_helpers::astype_slicer_to_original_type(owner, out);
+#endif
       },
       "op"_a,
       "source"_a,
@@ -217,6 +234,12 @@ NB_MODULE(_persistence_algebra_interface, m) {
         (void)use_clearing;
         (void)use_chunk;
         (void)verbose;
+#if MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+        (void)slicer;
+        (void)degree;
+        (void)full_resolution;
+        throw std::runtime_error("Persistence-Algebra interface is disabled at compile time.");
+#else
         if (!multipers::persistence_algebra_interface_available()) {
           throw std::runtime_error("Persistence-Algebra interface is not available.");
         }
@@ -226,6 +249,7 @@ NB_MODULE(_persistence_algebra_interface, m) {
           return out;
         }
         return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
+#endif
       },
       "slicer"_a,
       "degree"_a,
@@ -237,6 +261,11 @@ NB_MODULE(_persistence_algebra_interface, m) {
   m.def(
       "death_curve_presentation",
       [](nb::object slicer, int degree) {
+#if MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+        (void)slicer;
+        (void)degree;
+        throw std::runtime_error("Persistence-Algebra interface is disabled at compile time.");
+#else
         if (!multipers::persistence_algebra_interface_available()) {
           throw std::runtime_error("Persistence-Algebra interface is not available.");
         }
@@ -249,6 +278,7 @@ NB_MODULE(_persistence_algebra_interface, m) {
           return out;
         }
         return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
+#endif
       },
       "slicer"_a,
       "degree"_a);
