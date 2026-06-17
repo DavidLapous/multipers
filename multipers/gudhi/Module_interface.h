@@ -89,7 +89,6 @@ class Module_interface {
 
   const_iterator end() const { return module_.end(); }
 
-  // TODO: nanobind binding for multipers
   Summand_of_dimension_range get_summands_of_dimension_range(int degree) const {
     // alternative would be to just warn + return empty range instead of throw
     if (degree < 0) throw std::invalid_argument("Cannot iterate over summands of negative dimension.");
@@ -238,7 +237,7 @@ class Module_interface {
   }
 
   nanobind::list get_barcode_from_line(Tensor1D basepoint, std::optional<Tensor1D> direction, int degree) const {
-    std::vector<std::vector<std::array<value_type, 2>>> barcode;
+    std::vector<std::vector<std::array<double, 2>>> barcode;
     nanobind::list out;
     {
       nanobind::gil_scoped_release release;
@@ -365,7 +364,7 @@ class Module_interface {
                                    int n_jobs) {
     if (degree < 0) throw std::invalid_argument("Landscape dimension has to be positive.");
 
-    std::vector<T> out;
+    std::vector<maybe_make_signed_t<T> > out;
     Numpy_span resolutionView(resolution);
     {
       nanobind::gil_scoped_release release;
@@ -382,7 +381,7 @@ class Module_interface {
                                     int n_jobs) {
     if (degree < 0) throw std::invalid_argument("Landscape dimension has to be positive.");
 
-    std::vector<T> out;
+    std::vector<maybe_make_signed_t<T> > out;
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
@@ -395,11 +394,11 @@ class Module_interface {
   auto compute_pixels(Tensor2D coordinates,
                       IntTensor1D<IntegerType> degrees,
                       Tensor2D box,
-                      T delta,
-                      T p,
+                      double delta,
+                      double p,
                       bool normalize,
                       int n_jobs) {
-    std::vector<T> out;
+    std::vector<double> out;
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_pixels(module_,
@@ -420,7 +419,7 @@ class Module_interface {
   nanobind::ndarray<nanobind::numpy, T> compute_distance_to(const std::vector<std::vector<T>> &pts,
                                                             bool signed_distance,
                                                             int n_jobs) {
-    std::vector<T> out;
+    std::vector<maybe_make_signed_t<T> > out;
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_distances_to(module_, pts, signed_distance, n_jobs);
@@ -429,7 +428,7 @@ class Module_interface {
   }
 
   nanobind::ndarray<nanobind::numpy, T> compute_distance_to(Tensor2D pts, bool signed_distance, int n_jobs) {
-    std::vector<T> out;
+    std::vector<maybe_make_signed_t<T> > out;
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_distances_to(module_, Numpy_2d_span(pts), signed_distance, n_jobs);
@@ -438,7 +437,7 @@ class Module_interface {
   }
 
   nanobind::ndarray<nanobind::numpy, T> compute_interleavings() {
-    std::vector<T> interleavings;
+    std::vector<maybe_make_signed_t<T> > interleavings;
     {
       nanobind::gil_scoped_release release;
       interleavings = Gudhi::multi_persistence::compute_module_interleavings(module_, box_);
@@ -447,7 +446,7 @@ class Module_interface {
   }
 
   nanobind::ndarray<nanobind::numpy, T> compute_interleavings(Tensor2D box) {
-    std::vector<T> interleavings;
+    std::vector<maybe_make_signed_t<T> > interleavings;
     {
       nanobind::gil_scoped_release release;
       interleavings = Gudhi::multi_persistence::compute_module_interleavings(module_, get_box_from_tensor(box));

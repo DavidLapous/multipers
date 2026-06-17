@@ -245,6 +245,7 @@ void bind_module_class(nb::module_& m) {
       nb::class_<Module>(m, Desc::module_name.data())
           .def(nb::init<>())
           .def(nb::init<Box>())
+          .def_prop_ro("dtype", [](const Module&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
           .def_prop_ro("_template_id", [](const Module&) -> int { return Desc::template_id; })
           .def(nb::self == nb::self)
           .def("__len__", [](Module& self) -> int { return self.size(); })
@@ -312,8 +313,6 @@ void bind_module_class(nb::module_& m) {
           });
 
   bind_float_module_methods<Desc>(module_cls);
-
-  module_cls.def_prop_ro("dtype", [](const Module&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); });
 
   std::string range_name = std::string("_SummandByDimensionRange_") + std::string(Desc::short_name);
   std::string range_it_name = std::string("_SummandByDimensionIt_") + std::string(Desc::short_name);
