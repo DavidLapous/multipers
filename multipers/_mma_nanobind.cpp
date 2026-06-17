@@ -72,6 +72,12 @@ void bind_float_module_methods(Class& cls) {
             "basepoint"_a,
             "direction"_a = nb::none(),
             "degree"_a = -1)
+        .def("_get_barcodes_from_lines",
+             &Module::get_barcode_from_lines,
+             "basepoints"_a,
+             "directions"_a = nb::none(),
+             "degree"_a = -1,
+             "keep_inf"_a = true)
         // .def("evaluate_in_grid", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::evaluate_in_grid))
         .def("evaluate_in_grid", nb::overload_cast<const std::vector<NDArray1>&>(&Module::evaluate_in_grid))
         .def("evaluate_in_grid", nb::overload_cast<NDArray2>(&Module::evaluate_in_grid))
