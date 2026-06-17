@@ -1,7 +1,271 @@
 import numpy as np
+from operator import index as _index
 from typing import Iterable, Literal, Optional
 
 import multipers.logs as _mp_logs
+from multipers.array_api import api_from_tensors
+from multipers.slicer import is_slicer
+
+
+def _normalize_degree(source, target, degree):
+    if degree is None:
+        source_degree = _index(source.minpres_degree)
+        target_degree = _index(target.minpres_degree)
+        if source_degree >= 0 and source_degree == target_degree:
+            return source_degree
+        raise ValueError("Expected degree= unless source and target have the same minpres_degree.")
+    if isinstance(degree, bool):
+        raise ValueError("Expected an integral non-bool degree.")
+    try:
+        degree = _index(degree)
+    except TypeError as exc:
+        raise ValueError("Expected an integral non-bool degree.") from exc
+    if degree < 0:
+        raise ValueError("Expected a non-negative degree.")
+    return degree
+
+
+def _degree_block_filtrations(slicer, degree):
+    bounds = np.searchsorted(np.asarray(slicer.get_dimensions(), dtype=np.int32), [degree, degree + 1])
+    return np.asarray(slicer.get_filtrations())[bounds[0] : bounds[1]]
+
+
+def _packed_block_boundaries(slicer, row_degree, col_degree):
+    dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
+    row_bounds = np.searchsorted(dimensions, [row_degree, row_degree + 1])
+    col_bounds = np.searchsorted(dimensions, [col_degree, col_degree + 1])
+    indptr, indices = slicer.get_boundaries(packed=True)
+    indptr = np.asarray(indptr, dtype=np.uint64)
+    indices = np.asarray(indices, dtype=np.uint32)
+    start = indptr[col_bounds[0]]
+    stop = indptr[col_bounds[1]]
+    raw_indices = indices[start:stop]
+    if np.any((raw_indices < row_bounds[0]) | (raw_indices >= row_bounds[1])):
+        raise ValueError("Morphism slicer boundaries must point from source generators to target generators.")
+    return (
+        np.ascontiguousarray(indptr[col_bounds[0] : col_bounds[1] + 1] - start, dtype=np.uint64),
+        np.ascontiguousarray(raw_indices.astype(np.int64, copy=False) - row_bounds[0], dtype=np.uint32),
+    )
+
+
+def _packed_morphism_from_slicer(morphism, source, target, degree):
+    if morphism.is_kcritical:
+        raise ValueError("Algebra ops expect a one-critical morphism slicer.")
+    source_grades = _degree_block_filtrations(source, degree)
+    target_grades = _degree_block_filtrations(target, degree)
+    map_rows = _degree_block_filtrations(morphism, degree)
+    map_cols = _degree_block_filtrations(morphism, degree + 1)
+    if len(map_rows) != len(target_grades) or len(map_cols) != len(source_grades):
+        raise ValueError("Morphism slicer must have target generators in degree and source generators in degree + 1.")
+    if not np.array_equal(map_rows, target_grades) or not np.array_equal(map_cols, source_grades):
+        raise ValueError("Morphism slicer grades must match target/source generator grades.")
+    return _packed_block_boundaries(morphism, degree, degree + 1)
+
+
+def _same_local_relation_boundaries(source, target, degree):
+    def relation_block(slicer):
+        dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
+        row_bounds = np.searchsorted(dimensions, [degree, degree + 1])
+        col_bounds = np.searchsorted(dimensions, [degree + 1, degree + 2])
+        indptr, indices = slicer.get_boundaries(packed=True)
+        indptr = np.asarray(indptr, dtype=np.uint64)
+        indices = np.asarray(indices, dtype=np.uint32)
+        start = indptr[col_bounds[0]]
+        stop = indptr[col_bounds[1]]
+        block_indices = indices[start:stop]
+        if np.any((block_indices < row_bounds[0]) | (block_indices >= row_bounds[1])):
+            return None
+        return indptr[col_bounds[0] : col_bounds[1] + 1] - start, block_indices.astype(np.int64) - row_bounds[0]
+
+    source_block = relation_block(source)
+    target_block = relation_block(target)
+    return (
+        source_block is not None
+        and target_block is not None
+        and np.array_equal(source_block[0], target_block[0])
+        and np.array_equal(source_block[1], target_block[1])
+    )
+
+
+def _implicit_identity_columns(source, target, degree):
+    source_bounds = np.searchsorted(np.asarray(source.get_dimensions(), dtype=np.int32), [degree, degree + 1])
+    target_bounds = np.searchsorted(np.asarray(target.get_dimensions(), dtype=np.int32), [degree, degree + 1])
+    rank = source_bounds[1] - source_bounds[0]
+    if rank != target_bounds[1] - target_bounds[0] or not _same_local_relation_boundaries(source, target, degree):
+        raise ValueError("Implicit identity morphism requires source and target to have the same boundary structure.")
+    if rank > np.iinfo(np.uint32).max:
+        raise ValueError("Implicit identity morphism rank exceeds supported uint32 range.")
+    return np.arange(rank + 1, dtype=np.uint64), np.arange(rank, dtype=np.uint32)
+
+
+def _parse_morphism(morphism, source, target, degree):
+    if isinstance(morphism, dict):
+        source = morphism.get("source", source)
+        target = morphism.get("target", target)
+        degree = morphism.get("degree", degree)
+        morphism = morphism.get("map", morphism.get("slicer"))
+    if source is None or target is None:
+        raise ValueError("Expected source= and target= for algebra operations.")
+    if not is_slicer(source, allow_minpres=False) or not is_slicer(target, allow_minpres=False):
+        raise ValueError("Expected source= and target= to be slicers for algebra operations.")
+    degree = _normalize_degree(source, target, degree)
+    _validate_algebra_inputs(source, target)
+    if is_slicer(morphism, allow_minpres=False):
+        columns = _packed_morphism_from_slicer(morphism, source, target, degree)
+    elif morphism is None:
+        columns = _implicit_identity_columns(source, target, degree)
+    else:
+        raise ValueError("Expected a morphism slicer, a dict with a map/slicer key, or morphism=None.")
+    return source, target, degree, columns
+
+
+def _same_grid(left, right):
+    if left is None or right is None or len(left) != len(right):
+        return False
+    if len(left) == 0:
+        return True
+    try:
+        api = api_from_tensors(*left, *right)
+    except ValueError:
+        return False
+    return all(
+        np.array_equal(api.asnumpy(api.astensor(a)), api.asnumpy(api.astensor(b)))
+        for a, b in zip(left, right)
+    )
+
+
+def _validate_squeezed_grids(source, target):
+    source_squeezed = bool(source.is_squeezed)
+    target_squeezed = bool(target.is_squeezed)
+    if source_squeezed != target_squeezed:
+        raise ValueError("Squeezed source/target grids must both be present and identical for algebra ops.")
+    if source_squeezed and not _same_grid(source.filtration_grid, target.filtration_grid):
+        raise ValueError("Squeezed source/target filtration grids must be identical for algebra ops.")
+
+
+def _validate_free_slicers(source, target):
+    for label, slicer in (("source", source), ("target", target)):
+        if slicer.is_kcritical:
+            raise ValueError(
+                f"Algebra ops expect free/one-critical {label} slicers; "
+                "call multipers.ops.one_criticalify on multicritical inputs first."
+            )
+
+
+def _validate_algebra_inputs(source, target):
+    _validate_free_slicers(source, target)
+    _validate_squeezed_grids(source, target)
+
+
+def _algebra_op(op, morphism, *, source=None, target=None, degree=None, backend="persistence-algebra"):
+    """Run an algebra operation on an explicit degree-wise morphism."""
+    if backend == "muphasa":
+        return _muphasa_op(op, morphism, source=source, target=target, degree=degree)
+    if backend not in {"persistence-algebra", "pa"}:
+        raise ValueError("Algebra operations support backend='persistence-algebra' or backend='muphasa'.")
+    source, target, degree, columns = _parse_morphism(morphism, source, target, degree)
+    from multipers import _persistence_algebra_interface
+
+    out = _persistence_algebra_interface.algebra_operation(op, source, target, *columns, degree)
+    out._mark_minpres(degree, is_minres=False)
+    owner = source if op in {"kernel", "coimage"} else target
+    if owner.is_squeezed:
+        out.filtration_grid = owner.filtration_grid
+    return out
+
+
+def _muphasa_op(op, morphism, *, source=None, target=None, degree=None):
+    if op not in {"kernel", "image"}:
+        raise NotImplementedError("Muphasa kernel/image are supported but cokernel/coimage are not yet bound.")
+    source, target, degree, columns = _parse_morphism(morphism, source, target, degree)
+    from multipers import _muphasa_interface
+
+    _muphasa_interface.require()
+    owner = source if op == "kernel" else target
+    auto_grid = None
+    if source.is_squeezed:
+        source_arg, target_arg = source, target
+    else:
+        grid = source.get_filtration_grid("exact")
+        if not _same_grid(grid, target.get_filtration_grid("exact")):
+            raise ValueError("Muphasa source/target exact filtration grids must be identical for algebra ops.")
+        auto_grid = grid
+        source_arg = source.grid_squeeze(grid)
+        target_arg = target.grid_squeeze(grid)
+    try:
+        out = _muphasa_interface.algebra_operation(op, source_arg, target_arg, *columns, degree)
+    except RuntimeError as exc:
+        if "only bound when the result is provably free" in str(exc):
+            raise NotImplementedError(str(exc)) from exc
+        raise
+    out._mark_minpres(degree, is_minres=False)
+    if owner.is_squeezed:
+        out.filtration_grid = owner.filtration_grid
+    elif auto_grid is not None:
+        out.filtration_grid = auto_grid
+    return out
+
+
+def kernel(morphism=None, *, source=None, target=None, degree=None, backend="persistence-algebra"):
+    """Kernel of a 2-parameter finitely presented module morphism.
+
+    Parameters
+    ----------
+    morphism : Slicer, dict, or None
+        A morphism slicer stores target generators in ``degree`` and source
+        generators in ``degree + 1``; its boundaries are the matrix columns.
+        ``None`` means the implicit identity/change-of-filtration map, allowed
+        only when source and target have the same boundary structure. A dict may
+        carry ``source``, ``target``, ``degree``, and ``map`` keys. Duplicate
+        boundary entries cancel in F2. Nonzero entries must be coordinatewise
+        grade-compatible and source relations must map into the target relation
+        submodule.
+    source, target : Slicer
+        Free/one-critical presentation slicers of the source and target.
+        Multicritical inputs must first be converted with ``one_criticalify``.
+        Dimension ``degree`` stores generators; ``degree + 1`` stores relations.
+    degree : int, optional
+        Presented module degree. If omitted, source and target must be marked as
+        minimal presentations with the same ``minpres_degree``.
+    backend : {'persistence-algebra', 'muphasa'}
+        Persistence-Algebra is the default. Muphasa computes kernel/image for
+        free degree blocks; quotient/coimage are not yet bound.
+
+    Returns
+    -------
+    Slicer
+        Presentation of the kernel, with generators in ``degree`` and relations
+        in ``degree + 1``. Kernel/coimage inherit source metadata; image/cokernel
+        inherit target metadata. Squeezed source/target grids must match.
+    """
+    return _algebra_op("kernel", morphism, source=source, target=target, degree=degree, backend=backend)
+
+
+def image(morphism=None, *, source=None, target=None, degree=None, backend="persistence-algebra"):
+    """Image of a 2-parameter finitely presented module morphism.
+
+    Inputs and output use the morphism/source/target/degree API
+    documented in :func:`kernel`.
+    """
+    return _algebra_op("image", morphism, source=source, target=target, degree=degree, backend=backend)
+
+
+def cokernel(morphism=None, *, source=None, target=None, degree=None, backend="persistence-algebra"):
+    """Cokernel of a 2-parameter finitely presented module morphism.
+
+    Inputs and output use the morphism/source/target/degree API
+    documented in :func:`kernel`.
+    """
+    return _algebra_op("cokernel", morphism, source=source, target=target, degree=degree, backend=backend)
+
+
+def coimage(morphism=None, *, source=None, target=None, degree=None, backend="persistence-algebra"):
+    """Coimage of a 2-parameter finitely presented module morphism.
+
+    Inputs and output use the morphism/source/target/degree API
+    documented in :func:`kernel`.
+    """
+    return _algebra_op("coimage", morphism, source=source, target=target, degree=degree, backend=backend)
 
 
 def _minimal_presentation_from_slicer(
@@ -15,6 +279,37 @@ def _minimal_presentation_from_slicer(
     use_chunk=True,
     keep_generators=False,
 ):
+    if backend == "muphasa":
+        from multipers import _muphasa_interface
+
+        if full_resolution:
+            raise ValueError("Muphasa backend currently supports only full_resolution=False.")
+        if keep_generators:
+            raise ValueError("Muphasa backend does not support keep_generators yet.")
+        if slicer.num_parameters < 2:
+            raise ValueError("Muphasa backend expects at least 2-parameter slicers.")
+        _muphasa_interface.require()
+        if not slicer.is_squeezed:
+            slicer = slicer.grid_squeeze(slicer.get_filtration_grid("exact"))
+        with _mp_logs.timings(
+            "minimal_presentation",
+            enabled=verbose,
+            details={"backend": "muphasa", "mode": "cpp_interface", "degree": degree},
+        ) as timing:
+            new_slicer = _muphasa_interface.minimal_presentation(
+                slicer,
+                degree=degree,
+                verbose=verbose,
+                full_resolution=False,
+                keep_generators=False,
+            )
+            timing.substep("backend_call")
+        new_slicer._mark_minpres(degree, is_minres=False)
+        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+        if new_slicer.is_squeezed and auto_clean:
+            new_slicer = new_slicer._clean_filtration_grid()
+        return new_slicer
+
     if backend == "mpfree":
         from multipers import _mpfree_interface
 
@@ -34,24 +329,26 @@ def _minimal_presentation_from_slicer(
                 keep_generators=keep_generators,
             )
             timing.substep("backend_call")
-        new_slicer.minpres_degree = degree
+        new_slicer._mark_minpres(degree, is_minres=full_resolution)
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
         return new_slicer
 
-    if backend == "2pac":
+    if backend in {"2pac", "2pac-homology"}:
         from multipers import _2pac_interface
 
         _2pac_interface.require()
+        use_cohomology = backend == "2pac"
         with _mp_logs.timings(
             "minimal_presentation",
             enabled=verbose,
             details={
-                "backend": "2pac",
+                "backend": backend,
                 "mode": "cpp_interface",
                 "degree": degree,
                 "keep_generators": keep_generators,
+                "algorithm": "cohomology" if use_cohomology else "homology",
             },
         ) as timing:
             new_slicer = _2pac_interface.minimal_presentation(
@@ -62,16 +359,17 @@ def _minimal_presentation_from_slicer(
                 use_clearing=use_clearing,
                 full_resolution=full_resolution,
                 keep_generators=keep_generators,
+                use_cohomology=use_cohomology,
             )
             timing.substep("backend_call")
-        new_slicer.minpres_degree = degree
+        new_slicer._mark_minpres(degree, is_minres=full_resolution)
         new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
         if new_slicer.is_squeezed and auto_clean:
             new_slicer = new_slicer._clean_filtration_grid()
         return new_slicer
 
     raise ValueError(
-        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree` and `2pac`."
+        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `muphasa`, `2pac`, and `2pac-homology`."
     )
 
 
@@ -157,7 +455,6 @@ def one_criticalify(
     From [Fast free resolutions of bifiltered chain complexes](https://doi.org/10.48550/arXiv.2512.08652),
     whose code is available here: https://bitbucket.org/mkerber/multi_critical
     """
-    from multipers.slicer import is_slicer
     from multipers.simplex_tree_multi import is_simplextree_multi
 
     if is_simplextree_multi(slicer):
@@ -206,7 +503,7 @@ def one_criticalify(
 
     def _todo(x, i):
         x.filtration_grid = F
-        x.minpres_degree = i
+        x._mark_minpres(i, is_minres=False)
         if reduce and force_resolution:
             x = minimal_presentation(x, degree=i, force=True)
         return x
@@ -220,7 +517,7 @@ def minimal_presentation(
     slicer,
     degree=-1,
     degrees: Iterable[int] = [],
-    backend: Literal["mpfree", "2pac", ""] = "mpfree",
+    backend: Literal["mpfree", "muphasa", "2pac", "2pac-homology", ""] = "mpfree",
     n_jobs=-1,
     force=False,
     auto_clean=True,
@@ -236,12 +533,15 @@ def minimal_presentation(
     From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
     whose code is available here: https://bitbucket.org/mkerber/mpfree
 
-    Available backends include `mpfree` and `2pac`.
+    Available backends include `mpfree`, `muphasa` (Muphasa backend, currently
+    at least 2-parameter and full_resolution=False only), `2pac` (2pac cohomology / dual
+    transpose route, with 2pac's bounded-support assumptions), and
+    `2pac-homology` (the original direct homology route).
     """
     from joblib import Parallel, delayed
-    from multipers.slicer import is_slicer
+    full_resolution = bool(full_resolution)
 
-    if is_slicer(slicer) and slicer.is_minpres and not force:
+    if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
         _mp_logs.warn_superfluous_computation(
             f"The slicer seems to be already reduced, "
             f"from homology of degree {slicer.minpres_degree}."

@@ -310,7 +310,6 @@ assert len(args.degrees) > 0 or len(args.rank_degrees) > 0, (
 print("Loading core dependencies...", end="", flush=True)
 import multipers as mp
 
-mp.simplex_tree_multi.SAFE_CONVERSION = True
 from copy import deepcopy
 from random import choice
 

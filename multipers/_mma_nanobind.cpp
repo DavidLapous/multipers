@@ -37,6 +37,9 @@ using multipers::nanobind_utils::owned_array;
 using multipers::nanobind_utils::vector_from_handle;
 
 template <typename T>
+using BoxArray = nb::ndarray<nb::numpy, const T, nb::ndim<2>, nb::c_contig>;
+
+template <typename T>
 nb::ndarray<nb::numpy, T> corner_matrix_to_python(std::vector<T>&& flat, size_t rows, size_t cols) {
   return owned_array<T>(std::move(flat), {rows, cols});
 }
@@ -242,7 +245,7 @@ void bind_module_class(nb::module_& m) {
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
 
   auto module_cls =
-      nb::class_<Module>(m, Desc::module_name.data())
+      nb::class_<Module>(m, Desc::module_name.data(), nb::dynamic_attr())
           .def(nb::init<>())
           .def(nb::init<Box>())
           .def_prop_ro("dtype", [](const Module&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })

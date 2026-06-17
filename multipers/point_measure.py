@@ -21,7 +21,7 @@ def signed_betti(hilbert_function: np.ndarray, threshold=False):
         _mp_logs.warn_autodiff(
             "`signed_betti` converts its input to NumPy and loses autodiff information."
         )
-    hilbert_function = np.ascontiguousarray(api.asnumpy(hilbert_function))
+    hilbert_function = api.asnumpy(hilbert_function, contiguous=True)
     return _mg_nb.signed_betti_inplace(hilbert_function, threshold=threshold)
 
 
@@ -96,13 +96,15 @@ def integrate_measure(
             resolution=resolution,
             **get_fitration_kwargs,
         )
-    if api.size(pts) == 0:
-        return np.empty()
-    pts = np.ascontiguousarray(api.asnumpy(pts))
-    weights = np.ascontiguousarray(api.asnumpy(weights))
     filtration_grid = tuple(
-        np.ascontiguousarray(api_from_tensor(f).asnumpy(f)) for f in filtration_grid
+        api_from_tensor(f).asnumpy(f, contiguous=True) for f in filtration_grid
     )
+    if api.size(pts) == 0:
+        weights_dtype = api.asnumpy(weights).dtype
+        out = np.zeros(tuple(len(axis) for axis in filtration_grid), dtype=weights_dtype)
+        return (out, filtration_grid) if return_grid else out
+    pts = api.asnumpy(pts, contiguous=True)
+    weights = api.asnumpy(weights, contiguous=True)
     out = _mg_nb.integrate_measure(pts, weights, filtration_grid)
     if plot:
         from multipers.plots import plot_surface
@@ -198,7 +200,7 @@ def clean_sms(sms):
 
 
 def zero_out_sm(pts, weights, mass_default):
-    """
+    r"""
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
     api = api_from_tensors(pts, weights, mass_default)
@@ -224,7 +226,7 @@ def zero_out_sm(pts, weights, mass_default):
 
 
 def zero_out_sms(sms, mass_default):
-    """
+    r"""
     Zeros out the modules outside of \f$ \{ x\in \mathbb R^n \mid x \le \mathrm{mass_default}\}\f$.
     """
     return tuple(zero_out_sm(pts, weights, mass_default) for pts, weights in sms)
@@ -256,6 +258,26 @@ def barcode_from_rank_sm(
     and returns the associated estimated barcode.
     If full is True, the barcode is given as coordinates in R^{`num_parameters`} instead
     of coordinates w.r.t. the line.
+
+    Parameters
+    ----------
+    sm : tuple[numpy.ndarray, numpy.ndarray]
+        Rank signed measure ``(points, weights)``. Points have birth coordinates
+        followed by death coordinates.
+    basepoint : numpy.ndarray
+        Basepoint of the affine line used for slicing.
+    direction : numpy.ndarray, optional
+        Direction of the affine line. Positive coordinates are used to project
+        birth and death endpoints.
+    full : bool, default=False
+        If true, return endpoints in ambient multiparameter coordinates instead
+        of line coordinates.
+
+    Output
+    ------
+    numpy.ndarray
+        Estimated barcode on the selected line. Shape is ``(n, 2)`` when
+        ``full=False`` and ``(n, 2, num_parameters)`` when ``full=True``.
     """
     x, w = sm
     api = (
@@ -296,9 +318,9 @@ def barcode_from_rank_sm(
         ys = ya
     out = api.cat([xs, ys], axis=1)
 
-    out_np = np.ascontiguousarray(api.asnumpy(out, dtype=np.float64))
+    out_np = api.asnumpy(out, dtype=np.float64, contiguous=True)
     w_api = api_from_tensor(w)
-    w_np = np.ascontiguousarray(w_api.asnumpy(w), dtype=np.int64)
+    w_np = w_api.asnumpy(w, dtype=np.int64, contiguous=True)
     _, first_idx, inv = np.unique(
         out_np, return_index=True, return_inverse=True, axis=0
     )

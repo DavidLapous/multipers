@@ -50,15 +50,6 @@ def _has_filtration_grid(self) -> bool:
     )
 
 
-def _is_minpres(self) -> bool:
-    return self.minpres_degree >= 0
-
-
-def _dimension(self):
-    dims = self.get_dimensions()
-    return dims[-1] if len(dims) else -np.inf
-
-
 def _info(self):
     print(self._info_string())
 
@@ -67,7 +58,8 @@ def _repr(self):
     return (
         f"slicer[backend={self.pers_backend},dtype={np.dtype(self.dtype).name},"
         f"num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},"
-        f"is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},max_dim={self.dimension}]"
+        f"is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},"
+        f"is_minres={self.is_minres},max_dim={self.dimension}]"
     )
 
 
@@ -154,7 +146,7 @@ def _compute_persistence(
         if one_filtration.ndim == 1:
             one_filtration = one_filtration[None]
             squeeze = True
-        one_filtration = np.ascontiguousarray(api.asnumpy(one_filtration), dtype=self.dtype)
+        one_filtration = api.asnumpy(one_filtration, dtype=self.dtype, contiguous=True)
         out = self._compute_persistence_on_slices(
             one_filtration,
             ignore_infinite_filtration_values=ignore_infinite_filtration_values,
@@ -451,19 +443,34 @@ def _getstate(self):
     )
 
 
+def _looks_like_serialized_state(state) -> bool:
+    try:
+        arr = np.asarray(state)
+    except ValueError:
+        return False
+    return arr.ndim == 1 and arr.dtype == np.uint8
+
+
 def _setstate(self, dump):
-    if isinstance(dump, tuple) and len(dump) == 4:
+    explicit_is_minres = None
+    if isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
+        serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
+        serialized_is_minres = bool(self._deserialize_state(serialized))
+    elif isinstance(dump, tuple) and len(dump) == 4:
         serialized, filtration_grid, generator_basis, minpres_degree = dump
-        self._deserialize_state(serialized)
+        serialized_is_minres = bool(self._deserialize_state(serialized))
     elif isinstance(dump, tuple) and len(dump) == 3:
         serialized, filtration_grid, minpres_degree = dump
         generator_basis = None
-        self._deserialize_state(serialized)
+        serialized_is_minres = bool(self._deserialize_state(serialized))
     else:
         generator_basis = None
         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
         self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
-    self.minpres_degree = minpres_degree
+        serialized_is_minres = False
+    if explicit_is_minres is not None:
+        serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
+    self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
     self.filtration_grid = filtration_grid
     self._generator_basis = generator_basis
 
@@ -520,9 +527,11 @@ def _grid_squeeze(
             threshold_max=threshold_max,
         )
     api = api_from_tensor(filtration_grid[0]) if len(filtration_grid) else None
-    c_grid = [
-        np.ascontiguousarray(api.asnumpy(g, dtype=self.dtype)) for g in filtration_grid
-    ]
+    c_grid = (
+        []
+        if api is None
+        else [api.asnumpy(g, dtype=self.dtype, contiguous=True) for g in filtration_grid]
+    )
     if inplace or not coordinates:
         self.coarsen_on_grid_inplace(c_grid, coordinates)
         if coordinates:
@@ -531,7 +540,7 @@ def _grid_squeeze(
     out = self.coarsen_on_grid_copy(c_grid)
     if coordinates:
         out.filtration_grid = sanitize_grid(filtration_grid, api=api)
-    out.minpres_degree = self.minpres_degree
+    out._mark_minpres(self.minpres_degree, is_minres=self.is_minres)
     return out
 
 
@@ -643,7 +652,7 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         self.get_dimensions(),
         new_filtrations,
     )
-    new_slicer.minpres_degree = self.minpres_degree
+    new_slicer._mark_minpres(self.minpres_degree, is_minres=self.is_minres)
     return new_slicer
 
 
@@ -735,8 +744,6 @@ def _install_python_api():
         cls.to_scc = _to_scc
         cls.unsqueeze = _unsqueeze
         cls.is_squeezed = property(_has_filtration_grid)
-        cls.is_minpres = property(_is_minpres)
-        cls.dimension = property(_dimension)
         cls.info = property(_info)
         cls.make_filtration_non_decreasing = cls._make_filtration_non_decreasing_raw
         cls._simplify_filtration = cls._simplify_filtration_raw

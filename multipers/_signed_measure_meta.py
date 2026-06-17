@@ -46,8 +46,8 @@ def signed_measure(
     Computes the signed measures given by the decomposition of the hilbert
     function or the euler characteristic, or the rank invariant.
 
-    Input
-    -----
+    Parameters
+    ----------
      - filtered_complex: given by a simplextree or a slicer.
      - degree:int|None / degrees:list[int] the degrees to compute.
        None represents the euler characteristic.
@@ -83,6 +83,17 @@ def signed_measure(
     `[signed_measure_of_degree for degree in degrees]`
     with `signed_measure_of_degree` of the form `(dirac location, dirac weights)`.
 
+    References
+    ----------
+    Loiseaux, Carrière, Botnan, Oudot, and Scoccola, "Stable Vectorization of
+    Multiparameter Persistent Homology using Signed Barcodes as Measures",
+    Advances in Neural Information Processing Systems, 2023.
+
+    Scoccola, Setlur, Loiseaux, Carrière, and Oudot, "Differentiability and
+    Optimization of Multiparameter Persistent Homology", Proceedings of the
+    41st International Conference on Machine Learning, PMLR 235:43986-44011,
+    2024.
+
     Notes on computational backends
     -------------------------------
     There are several backends for each of these computations.
@@ -90,7 +101,7 @@ def signed_measure(
     Also note that if `backend` is given, then the input will be converted to a slicer.
      - Euler: is always computed by summing the weights of the simplices
      - Hilbert: is computed by computing persistence on slices, and a Möbius inversion,
-       unless the detected input is a minimal presentation (i.e., `filtered_complex.is_minpres`),
+       unless the detected input is a minimal free resolution (i.e., `filtered_complex.is_minres`),
        which in that case, doesn't need any computation.
        - If the input is a simplextree, it is converted to a slicer first.
         - If the input is a slicer then
@@ -131,8 +142,28 @@ def signed_measure(
                 """
         )
 
+    degrees = [] if degrees is None else list(degrees)
+    if (
+        degree is None
+        and len(degrees) == 0
+        and is_slicer(filtered_complex)
+        and filtered_complex.is_minpres
+        and invariant is not None
+    ):
+        degree = filtered_complex.minpres_degree
     if degree is not None or len(degrees) == 0:
-        degrees = list(degrees) + [degree]
+        degrees.append(degree)
+    if (
+        is_slicer(filtered_complex)
+        and filtered_complex.is_minpres
+        and invariant is not None
+        and None not in degrees
+        and not np.array_equal(
+            np.asarray(degrees, dtype=int).reshape(-1),
+            np.asarray([filtered_complex.minpres_degree], dtype=int),
+        )
+    ):
+        raise ValueError("Cannot change degree of an already minimal-presentation slicer.")
     if None in degrees:
         if len(degrees) != 1:
             raise ValueError(
@@ -216,7 +247,7 @@ def signed_measure(
 
     # assert filtered_complex_.is_squeezed
     if None not in degrees:
-        if is_slicer(filtered_complex_) and filtered_complex_.is_minpres:
+        if is_slicer(filtered_complex_) and filtered_complex_.is_minres:
             pass
         else:
             max_degree = np.max(degrees) + 1
@@ -255,10 +286,10 @@ def signed_measure(
                 fix_mass_default = False
                 if verbose:
                     print(f"Done. ({time.time() - t0:.3f}s)")
-            elif filtered_complex_.is_minpres:
+            elif filtered_complex_.is_minres:
                 if verbose:
                     print(
-                        "Reduced slicer. Retrieving measure from it...",
+                        "Minimal-resolution slicer. Retrieving measure from it...",
                         end="",
                         flush=True,
                     )

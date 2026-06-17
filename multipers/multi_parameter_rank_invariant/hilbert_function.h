@@ -23,7 +23,7 @@ namespace hilbert_function {
 
 template <std::size_t N, typename index_type>
 inline std::array<index_type, 1 + N> hilbert_sparse_key_shape(const std::array<index_type, N> &grid_shape,
-                                                             const index_type degree_count) {
+                                                              const index_type degree_count) {
   std::array<index_type, 1 + N> key_shape{};
   key_shape[0] = degree_count;
   for (std::size_t axis = 0; axis < N; ++axis) key_shape[1 + axis] = grid_shape[axis];
@@ -37,8 +37,7 @@ class packed_hilbert_sparse_accumulator {
   using coordinate_type = std::array<index_type, 1 + N>;
   using entry_type = std::pair<key_type, dtype>;
 
-  explicit packed_hilbert_sparse_accumulator(const coordinate_type &key_shape,
-                                             const std::size_t initial_reserve = 1024)
+  explicit packed_hilbert_sparse_accumulator(const coordinate_type &key_shape, const std::size_t initial_reserve = 1024)
       : key_shape_(key_shape), initial_reserve_(initial_reserve) {
     validate_key_shape();
     weights_.reserve(initial_reserve_);
@@ -132,7 +131,7 @@ inline void add_hilbert_atom(Accumulator &sm_pts,
 
 template <std::size_t N, typename index_type>
 inline std::array<index_type, N> hilbert_active_shape(const std::array<index_type, N> &output_shape,
-                                                     const bool zero_pad) {
+                                                      const bool zero_pad) {
   std::array<index_type, N> active_shape = output_shape;
   if (zero_pad) {
     for (auto &extent : active_shape) --extent;
@@ -156,7 +155,7 @@ inline std::size_t hilbert_sparse_barcode_axis(const std::array<index_type, N> &
 
 template <std::size_t N, typename index_type>
 inline index_type hilbert_fixed_slice_count(const std::array<index_type, N> &active_shape,
-                                           const std::size_t barcode_axis) {
+                                            const std::size_t barcode_axis) {
   index_type count = 1;
   for (std::size_t axis = 0; axis < N; ++axis) {
     if (axis != barcode_axis) count *= active_shape[axis];
@@ -166,8 +165,8 @@ inline index_type hilbert_fixed_slice_count(const std::array<index_type, N> &act
 
 template <std::size_t N, typename index_type>
 inline std::array<index_type, N> hilbert_fixed_from_linear(index_type linear,
-                                                          const std::array<index_type, N> &active_shape,
-                                                          const std::size_t barcode_axis) {
+                                                           const std::array<index_type, N> &active_shape,
+                                                           const std::size_t barcode_axis) {
   std::array<index_type, N> fixed{};
   for (std::size_t axis = N; axis-- > 0;) {
     if (axis == barcode_axis) continue;
@@ -178,11 +177,10 @@ inline std::array<index_type, N> hilbert_fixed_from_linear(index_type linear,
 }
 
 template <std::size_t N, typename Filtration, typename index_type>
-inline typename Filtration::value_type get_hilbert_line_filtration_on_axis(
-    const Filtration &filtration,
-    unsigned int generator,
-    const std::array<index_type, N> &fixed,
-    const std::size_t barcode_axis) {
+inline typename Filtration::value_type get_hilbert_line_filtration_on_axis(const Filtration &filtration,
+                                                                           unsigned int generator,
+                                                                           const std::array<index_type, N> &fixed,
+                                                                           const std::size_t barcode_axis) {
   using value_type = typename Filtration::value_type;
   for (std::size_t axis = 0; axis < N; ++axis) {
     if (axis == barcode_axis) continue;
@@ -324,7 +322,8 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> merge
   std::vector<typename packed_hilbert_sparse_accumulator<N, dtype, index_type>::entry_type> entries;
   entries.reserve(merged.size());
   merged.append_entries_to(entries);
-  std::sort(entries.begin(), entries.end(), [](const auto &left, const auto &right) { return left.first < right.first; });
+  std::sort(
+      entries.begin(), entries.end(), [](const auto &left, const auto &right) { return left.first < right.first; });
 
   std::vector<std::vector<index_type>> coordinates;
   std::vector<dtype> weights;
@@ -426,53 +425,55 @@ inline void compute_2d_hilbert_surface(
     bc_type barcodes = slicer.template get_flat_barcode<true>();
     index_type degree_index = 0;
     for (auto degree : degrees) {  // TODO range view cartesian product
-      const auto &barcode = barcodes[degree];
       coordinates_container[0] = degree_index;
-      for (const auto &bar : barcode) {
-        auto birth = bar[0];  // float
-        auto death = bar[1];
-        if (birth >= I)  // some births are the squeezed infinity sentinel
-          continue;
+      if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
+        const auto &barcode = barcodes[degree];
+        for (const auto &bar : barcode) {
+          auto birth = bar[0];  // float
+          auto death = bar[1];
+          if (birth >= I)  // some births are the squeezed infinity sentinel
+            continue;
 
-        if (!mobius_inverion) {
-          coordinates_container[i + 1] = static_cast<index_type>(birth);
-          index_type shift_value = out.get_cum_resolution()[i + 1];
-          index_type border = I;
-          // index_type border  = out.get_resolution()[i+1];
-          dtype *ptr = &out[coordinates_container];
-          auto stop_value = death > static_cast<value_type>(border) ? border : static_cast<index_type>(death);
-          // Warning : for some reason linux static casts float inf to -min_int
-          // so min doesnt work.
-          if constexpr (verbose) {
-            std::cout << "Adding : (";
-            for (auto stuff : coordinates_container) std::cout << stuff << ", ";
-            std::cout << ") With death " << death << " casted at " << static_cast<index_type>(death)
-                      << "with threshold at" << stop_value << " with " << border << std::endl;
-          }
-          for (index_type b = birth; b < stop_value; b++) {
-            (*ptr)++;            // adds one to the vector
-            ptr += shift_value;  // shift the pointer to the next element in the
-                                 // segment [birth, death]
-          }
-        } else {
-          coordinates_container[i + 1] = static_cast<index_type>(birth);
-          out[coordinates_container]++;
+          if (!mobius_inverion) {
+            coordinates_container[i + 1] = static_cast<index_type>(birth);
+            index_type shift_value = out.get_cum_resolution()[i + 1];
+            index_type border = I;
+            // index_type border  = out.get_resolution()[i+1];
+            dtype *ptr = &out[coordinates_container];
+            auto stop_value = death > static_cast<value_type>(border) ? border : static_cast<index_type>(death);
+            // Warning : for some reason linux static casts float inf to -min_int
+            // so min doesnt work.
+            if constexpr (verbose) {
+              std::cout << "Adding : (";
+              for (auto stuff : coordinates_container) std::cout << stuff << ", ";
+              std::cout << ") With death " << death << " casted at " << static_cast<index_type>(death)
+                        << "with threshold at" << stop_value << " with " << border << std::endl;
+            }
+            for (index_type b = birth; b < stop_value; b++) {
+              (*ptr)++;            // adds one to the vector
+              ptr += shift_value;  // shift the pointer to the next element in the
+                                   // segment [birth, death]
+            }
+          } else {
+            coordinates_container[i + 1] = static_cast<index_type>(birth);
+            out[coordinates_container]++;
 
-          if constexpr (verbose) {
-            std::cout << "Coordinate : ";
-            for (auto c : coordinates_container) std::cout << c << ", ";
-            std::cout << std::endl;
-            std::cout << "axis, death, resolution : " << i + 1 << ", " << std::to_string(death) << ", "
-                      << out.get_resolution()[i + 1];
-            std::cout << std::endl;
-          }
+            if constexpr (verbose) {
+              std::cout << "Coordinate : ";
+              for (auto c : coordinates_container) std::cout << c << ", ";
+              std::cout << std::endl;
+              std::cout << "axis, death, resolution : " << i + 1 << ", " << std::to_string(death) << ", "
+                        << out.get_resolution()[i + 1];
+              std::cout << std::endl;
+            }
 
-          if (death < I) {
-            coordinates_container[i + 1] = static_cast<index_type>(death);
-            out[coordinates_container]--;
-          } else if (zero_pad) {
-            coordinates_container[i + 1] = I - 1;
-            out[coordinates_container]--;
+            if (death < I) {
+              coordinates_container[i + 1] = static_cast<index_type>(death);
+              out[coordinates_container]--;
+            } else if (zero_pad) {
+              coordinates_container[i + 1] = I - 1;
+              out[coordinates_container]--;
+            }
           }
         }
       }
@@ -707,8 +708,8 @@ compute_hilbert_signed_measure_sparse_by_slices(Gudhi::multi_persistence::Slicer
 
   using value_type = typename Filtration::value_type;
   using ThreadSafe = typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::Thread_safe;
-  using bc_type = typename Gudhi::multi_persistence::Slicer<Filtration,
-                                                            PersBackend>::template Multi_dimensional_flat_barcode<>;
+  using bc_type =
+      typename Gudhi::multi_persistence::Slicer<Filtration, PersBackend>::template Multi_dimensional_flat_barcode<>;
 
   const auto active_shape = hilbert_active_shape<N>(output_shape, zero_pad);
   const auto barcode_axis = hilbert_sparse_barcode_axis<N>(active_shape);
@@ -736,9 +737,8 @@ compute_hilbert_signed_measure_sparse_by_slices(Gudhi::multi_persistence::Slicer
       const auto &filtration = multi_filtration[simplex_index];
       value_type filtration_in_slice = Filtration::T_inf;
       for (unsigned int generator = 0; generator < filtration.num_generators(); ++generator) {
-        filtration_in_slice = std::min(filtration_in_slice,
-                                       get_hilbert_line_filtration_on_axis<N>(
-                                           filtration, generator, fixed, barcode_axis));
+        filtration_in_slice = std::min(
+            filtration_in_slice, get_hilbert_line_filtration_on_axis<N>(filtration, generator, fixed, barcode_axis));
       }
       slice_filtration[simplex_index] = filtration_in_slice;
     }
@@ -753,18 +753,11 @@ compute_hilbert_signed_measure_sparse_by_slices(Gudhi::multi_persistence::Slicer
     auto &sm_pts = thread_sm_pts.local();
     index_type degree_index = 0;
     for (auto degree : degrees) {
-      if (degree >= index_type{0} && degree < static_cast<index_type>(barcodes.size())) {
+      if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
         const auto &barcode = barcodes[degree];
         for (const auto &bar : barcode) {
-          emit_hilbert_bar_signed_measure_atoms<N, dtype, index_type, value_type>(sm_pts,
-                                                                                  degree_index,
-                                                                                  bar[0],
-                                                                                  bar[1],
-                                                                                  fixed,
-                                                                                  active_shape,
-                                                                                  output_shape,
-                                                                                  barcode_axis,
-                                                                                  zero_pad);
+          emit_hilbert_bar_signed_measure_atoms<N, dtype, index_type, value_type>(
+              sm_pts, degree_index, bar[0], bar[1], fixed, active_shape, output_shape, barcode_axis, zero_pad);
         }
       }
       ++degree_index;
@@ -787,7 +780,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_hi
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);
   switch (num_parameters) {
     case 2: {
-      if (grid_shape.size() != 2) [[unlikely]] throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+      if (grid_shape.size() != 2) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
       const std::array<indices_type, 2> parameter_shape = {grid_shape[0], grid_shape[1]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {
@@ -797,7 +791,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_hi
       return out;
     }
     case 3: {
-      if (grid_shape.size() != 3) [[unlikely]] throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+      if (grid_shape.size() != 3) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
       const std::array<indices_type, 3> parameter_shape = {grid_shape[0], grid_shape[1], grid_shape[2]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {
@@ -807,7 +802,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_hi
       return out;
     }
     case 4: {
-      if (grid_shape.size() != 4) [[unlikely]] throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+      if (grid_shape.size() != 4) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
       const std::array<indices_type, 4> parameter_shape = {grid_shape[0], grid_shape[1], grid_shape[2], grid_shape[3]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {

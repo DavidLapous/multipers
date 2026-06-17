@@ -29,7 +29,6 @@ where = _torch.where
 no_grad = _torch.no_grad
 cdist = _torch.cdist
 pdist = _torch.pdist
-zeros = _torch.zeros
 min = _torch.min
 max = _torch.max
 repeat_interleave = _torch.repeat_interleave
@@ -97,6 +96,12 @@ def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _torch.logsumexp(x, dim=dim, keepdim=keepdim)
 
 
+def cumsum(x, axis=None, dim=None, **kwargs):
+    if dim is None:
+        dim = axis
+    return _torch.cumsum(x, dim=dim, **kwargs)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if dim is None:
         dim = axis
@@ -107,11 +112,17 @@ def astype(x, dtype):
     return astensor(x).to(dtype=dtype)
 
 
-def astensor(x, contiguous=False, dtype=None):
+def astensor(x, contiguous=False, dtype=None, device=None):
     out = _torch.as_tensor(x, dtype=dtype)
+    if device is not None:
+        out = out.to(device=device)
     if contiguous:
         out = out.contiguous()
     return out
+
+
+def zeros(shape, dtype=None, device=None):
+    return _torch.zeros(shape, dtype=dtype, device=device)
 
 
 def clip(x, min=None, max=None):
@@ -179,6 +190,10 @@ def set_at(x, idx, y):
 
 
 def add_at(x, idx, y):
+    if not isinstance(idx, tuple):
+        idx = (idx,)
+    if all(isinstance(i, _torch.Tensor) for i in idx):
+        return x.index_put_(idx, y, accumulate=True)
     x[idx] += y
     return x
 
@@ -248,8 +263,10 @@ def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _torch.max(x)
 
 
-def asnumpy(x, dtype=None):
+def asnumpy(x, dtype=None, contiguous=False):
     out = x.cpu().detach().numpy()
+    if contiguous:
+        return _np.ascontiguousarray(out, dtype=dtype)
     if dtype is not None:
         out = out.astype(dtype, copy=False)
     return out

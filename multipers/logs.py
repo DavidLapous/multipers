@@ -67,6 +67,8 @@ _BACKEND_LOG_BITS = {
     "multi_critical": 1 << 1,
     "function_delaunay": 1 << 2,
     "2pac": 1 << 3,
+    "deg_rips": 1 << 4,
+    "muphasa": 1 << 5,
 }
 
 
@@ -230,6 +232,8 @@ def enable_ext_log(enabled: bool = True) -> None:
         multi_critical=enabled,
         function_delaunay=enabled,
         twopac=enabled,
+        deg_rips=enabled,
+        muphasa=enabled,
     )
 
 
@@ -239,6 +243,8 @@ def set_ext_log_policy(
     multi_critical: bool | None = None,
     function_delaunay: bool | None = None,
     twopac: bool | None = None,
+    deg_rips: bool | None = None,
+    muphasa: bool | None = None,
 ) -> None:
     """Set raw backend log policy for external backends.
 
@@ -253,6 +259,8 @@ def set_ext_log_policy(
         "multi_critical": multi_critical,
         "function_delaunay": function_delaunay,
         "2pac": twopac,
+        "deg_rips": deg_rips,
+        "muphasa": muphasa,
     }
     for backend, enabled in updates.items():
         if enabled is None:

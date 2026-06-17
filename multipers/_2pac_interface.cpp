@@ -26,9 +26,17 @@ nb::object minimal_presentation_for_target(nb::object target,
                                            bool use_clearing,
                                            bool use_chunk,
                                            bool verbose,
-                                           bool keep_generators) {
+                                           bool keep_generators,
+                                           bool use_cohomology) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
   (void)verbose;
+  if (keep_generators && use_cohomology) {
+    throw std::invalid_argument(
+        "2pac cohomology backend does not support keep_generators; use backend='2pac-homology'.");
+  }
+  const auto algorithm = use_cohomology ? multipers::twopac_minpres_algorithm::cohomology
+                                        : multipers::twopac_minpres_algorithm::homology;
+  const char* backend_name = use_cohomology ? "2pac" : "2pac-homology";
   const bool effective_verbose_output = multipers::backend_log_policy::backend_log_enabled(
       multipers::backend_log_policy::backend_log_bit::twopac);
   return multipers::nanobind_helpers::build_minpres_slicer_output_for_target(
@@ -36,14 +44,26 @@ nb::object minimal_presentation_for_target(nb::object target,
       input_wrapper,
       degree,
       keep_generators,
-      "2pac",
+      backend_name,
       [&] {
         return multipers::twopac_minpres_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, effective_verbose_output);
+            input_wrapper.truc,
+            degree,
+            full_resolution,
+            use_chunk,
+            use_clearing,
+            effective_verbose_output,
+            algorithm);
       },
       [&] {
         return multipers::twopac_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, effective_verbose_output);
+            input_wrapper.truc,
+            degree,
+            full_resolution,
+            use_chunk,
+            use_clearing,
+            effective_verbose_output,
+            algorithm);
       });
 }
 
@@ -69,7 +89,8 @@ NB_MODULE(_2pac_interface, m) {
          bool use_clearing,
          bool use_chunk,
          bool keep_generators,
-         bool verbose) {
+         bool verbose,
+         bool use_cohomology) {
 #if MULTIPERS_DISABLE_2PAC_INTERFACE
         throw std::runtime_error("2pac interface is disabled at compile time.");
 #else
@@ -79,7 +100,15 @@ NB_MODULE(_2pac_interface, m) {
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
             slicer,
             [&](const nb::object& target) {
-              return mtpi::minimal_presentation_for_target(target, degree, full_resolution, use_clearing, use_chunk, verbose, keep_generators);
+              return mtpi::minimal_presentation_for_target(
+                  target,
+                  degree,
+                  full_resolution,
+                  use_clearing,
+                  use_chunk,
+                  verbose,
+                  keep_generators,
+                  use_cohomology);
             });
 #endif
       },
@@ -89,5 +118,6 @@ NB_MODULE(_2pac_interface, m) {
       "use_clearing"_a = true,
       "use_chunk"_a = true,
       "keep_generators"_a = false,
-      "verbose"_a = false);
+      "verbose"_a = false,
+      "use_cohomology"_a = true);
 }

@@ -1,0 +1,72 @@
+--- a/ext/deg_rips/include/deg_rips/Edge_domination_checker.h
++++ b/ext/deg_rips/include/deg_rips/Edge_domination_checker.h
+@@ -386,6 +386,14 @@
+ 	int n = dist.size();
+ 	long count_deleted=0;
+ 	std::vector<Edge_copy> flattened_edge_copies;
++	std::vector<int> potential_dominators;
++	std::vector<int> common_neighbors;
++	std::vector<Grade> staircase_av,staircase_bv,staircase;
++	potential_dominators.reserve(n);
++	common_neighbors.reserve(n);
++	staircase_av.reserve(16);
++	staircase_bv.reserve(16);
++	staircase.reserve(16);
+ 
+ 	for(auto&  map_pair : edge_copy) {
+ 	    std::copy(map_pair.second.begin(),map_pair.second.end(),std::back_inserter(flattened_edge_copies));
+@@ -407,12 +415,14 @@
+ 	
+ 	for(const Edge_copy& c : flattened_edge_copies) {
+ 	    //std::cout << "Next: " << c.a << " " << c.b << ", grade: " << c.g.x << " " << c.g.y << std::endl;
+-	    std::vector<int> potential_dominators;
+-	    std::vector<int> common_neighbors;
++	    potential_dominators.clear();
++	    common_neighbors.clear();
+ 
+ 	    dist.common_neighbors(c.a,c.b,common_neighbors);
+ 
++#if DEG_RIPS_TIMERS
+ 	    test_timer_2.resume();
++#endif
+ 	    
+ 	    for(int i : common_neighbors) {
+ 		if(is_vertex_present_at(i,c.g)  && is_edge_present_at(i,c.a,c.g) && is_edge_present_at(i,c.b,c.g)) {
+@@ -421,12 +431,16 @@
+ 		} 
+ 	    }
+ 
++#if DEG_RIPS_TIMERS
+ 	    test_timer_2.stop();
++#endif
+ 
+ 	    
+ 	    //std::cout << "Info: " << common_neighbors.size() << " " << potential_dominators.size() << std::endl;
+ 
++#if DEG_RIPS_TIMERS
+ 	    test_timer_3.resume();
++#endif
+ 	
+ 
+ 	    
+@@ -437,7 +451,9 @@
+ 		//std::cout << "Check vertex " << v << " for edge copy " <<  c.a << " " << c.b << " - " << c.g.x << " " << c.g.y << std::endl;
+ 
+ 		//test_timer_4.resume();
+-		std::vector<Grade> staircase_av,staircase_bv,staircase;
++		staircase_av.clear();
++		staircase_bv.clear();
++		staircase.clear();
+ 		/*
+ 		  {
+ 		  std::cout << "Get Staricase 1: " << c.a << " " << v << ", grades: " << c.g.x << " " << c.g.y << std::endl;
+@@ -559,7 +575,9 @@
+ 		}
+ 		
+ 	    }
++#if DEG_RIPS_TIMERS
+ 	    test_timer_3.stop();
++#endif
+ 	
+ 	    if(!potential_dominators.empty()) {
+ 		/*

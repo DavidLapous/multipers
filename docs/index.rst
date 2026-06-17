@@ -105,11 +105,13 @@ For theoretical references:
  - Module Decomposition Representations :cite:p:`loiseauxFrameworkFastStable2023`
  - Signed Barcodes as Signed Measures :cite:p:`loiseauxStableVectorizationMultiparameter2023`
  - Differentiability and Multiparameter Persistence :cite:p:`scoccolaDifferentiabilityOptimizationMultiparameter2024`
+ - AIDA decomposition :cite:p:`deyDecomposingMultiparameterPersistence2025`
  - multipers :cite:p:`loiseauxMultipersMultiparameterPersistence2024`
  - mpfree :cite:p:`kerberFastMinimalPresentations2021`
  - function_delaunay :cite:p:`alonsoDelaunayBifiltrationsFunctions2024`
  - filtration_domination :cite:p:`alonsoFiltrationdominationBifilteredGraphs2023`
- - Core bifiltration :cite:p:`blaserCoreBifiltration2024`
+ - Core bifiltration :cite:p:`blaserCoreBifiltration2025`
+ - MCbiF :cite:p:`schindlerMCbiFMeasuringTopological2025`
 
 
 .. toctree::
@@ -132,34 +134,57 @@ For theoretical references:
 .. toctree::
   :caption: Filtrations
 
-  notebooks/rips
-  notebooks/function_delaunay
-  notebooks/delaunay_core_bifiltration
-  notebooks/cubical
-  notebooks/degree_rips_interface
-  notebooks/rhomboid_bifiltration
+  notebooks/filtrations/rips
+  notebooks/filtrations/function_delaunay
+  notebooks/filtrations/delaunay_core_bifiltration
+  notebooks/filtrations/cubical
+  notebooks/filtrations/degree_rips_interface
+  notebooks/filtrations/rhomboid_bifiltration
 
 
 .. toctree::
   :caption: Operations
 
   notebooks/representative_cycles
-  notebooks/AIDA
+  notebooks/ops/AIDA
+  notebooks/ops/minimal_presentations_resolutions
+  notebooks/ops/multicritical_free_implicit_resolution
+
+.. toctree::
+  :caption: Invariants
+
+  notebooks/invariants/hilbert_function
+  notebooks/invariants/rank_invariant
+  notebooks/invariants/signed_measure
+  notebooks/invariants/fibered_barcode
+  notebooks/invariants/projected_barcode
+  notebooks/invariants/birth_curves
+  notebooks/invariants/betti_table
+  notebooks/invariants/module_approximation
+
+.. toctree::
+  :caption: Distances
+
+  notebooks/distances/matching_distance
+  notebooks/distances/sm_distance
+  notebooks/distances/integral_distance
+  notebooks/distances/signed_integral_distance
 
 .. toctree::
   :caption: Example zoo
 
-  notebooks/time_series_classification
-  notebooks/graph_classification
-  notebooks/molecular_embedding
-  notebooks/immuno_img
+  notebooks/example_zoo/time_series_classification
+  notebooks/example_zoo/graph_classification
+  notebooks/example_zoo/molecular_embedding
+  notebooks/example_zoo/immuno_img
+  notebooks/example_zoo/barcode_from_rank_signed_measure
 
 .. toctree::
   :caption: Differentiation
 
-  notebooks/differentiability_by_hand
-  notebooks/rips_density_autodiff
-  notebooks/graph_autodiff
+  notebooks/differentiability/differentiability_by_hand
+  notebooks/differentiability/rips_density_autodiff
+  notebooks/differentiability/graph_autodiff
 
 .. toctree::
   :caption: Modules and Functions tree
@@ -178,7 +203,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
-
-
-

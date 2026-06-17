@@ -58,6 +58,42 @@ def _module_threshold_bc(bc):
     )
 
 
+def _module_raw_barcodes_to_full(raw_barcodes, basepoints, directions):
+    basepoints = np.asarray(basepoints)
+    directions = np.asarray(directions)
+    line_indices_by_dim = {}
+    out = []
+    for bars, split_indices in raw_barcodes:
+        bars = np.asarray(bars)
+        split_indices = np.asarray(split_indices, dtype=np.uint64)
+        if bars.ndim == 3:
+            out.append(
+                (
+                    bars[..., None] * directions[:, None, None, :]
+                    + basepoints[:, None, None, :],
+                    split_indices,
+                )
+            )
+            continue
+
+        key = (bars.shape[0], split_indices.tobytes())
+        if key not in line_indices_by_dim:
+            split_indices_int = split_indices.astype(np.intp, copy=False)
+            counts = np.diff(
+                np.concatenate(([0], split_indices_int, [bars.shape[0]]))
+            )
+            line_indices_by_dim[key] = np.repeat(np.arange(basepoints.shape[0]), counts)
+        line_indices = line_indices_by_dim[key]
+        out.append(
+            (
+                bars[:, :, None] * directions[line_indices, None, :]
+                + basepoints[line_indices, None, :],
+                split_indices,
+            )
+        )
+    return tuple(out)
+
+
 def _module_representation(
     self,
     degrees=None,
@@ -79,7 +115,7 @@ def _module_representation(
     import multipers.plots
 
     if box is None:
-        box = self.get_box()
+        box = self.box
     num_parameters = self.num_parameters
     if degrees is None:
         degrees = np.arange(self.max_degree + 1)
@@ -208,7 +244,7 @@ def _module_landscapes(
         return out
 
     if box is None:
-        box = self.get_box()
+        box = self.box
     try:
         int(resolution)
         resolution = [int(resolution)] * self.num_parameters
@@ -259,32 +295,33 @@ def _module_barcode2(
     keep_inf: bool = True,
     full: bool = False,
 ):
-    basepoint = np.ascontiguousarray(basepoint, dtype=self.dtype)
-    if direction is not None:
-        direction = np.ascontiguousarray(direction, dtype=self.dtype)
-    if threshold:
-        keep_inf = False
-    bc = tuple(
-        np.asarray(x).reshape(-1, 2)
-        for x in self._get_barcode_from_line(basepoint, direction, int(degree))
+    return _module_barcodes(
+        self,
+        degree=degree,
+        basepoints=basepoint,
+        directions=direction,
+        threshold=threshold,
+        keep_inf=keep_inf,
+        full=full,
+        squeeze=True,
     )
-    if not keep_inf:
-        bc = type(self)._threshold_bc(bc)
-    if full:
-        bc = type(self)._bc_to_full(bc, basepoint, direction)
-    return bc
 
 
 def _module_barcodes(
     self,
     degree: int = -1,
     basepoints=None,
+    directions=None,
+    direction=None,
     num: int = 100,
     box=None,
     threshold: bool = False,
+    keep_inf: bool = True,
+    full: bool = False,
+    squeeze: bool = False,
 ):
     if box is None:
-        box = self.get_box()
+        box = self.box
     if basepoints is None:
         if len(box[0]) != 2:
             raise ValueError(
@@ -296,33 +333,51 @@ def _module_barcodes(
             [box[1][0], box[0][1]],
             num=num,
         )
-    else:
-        num = len(basepoints)
-
     basepoints = np.ascontiguousarray(basepoints, dtype=self.dtype)
-    per_dimension = [[] for _ in range(self.max_degree + 1)]
-    for basepoint in basepoints:
-        barcodes = self.barcode2(
-            basepoint=basepoint,
-            degree=degree,
-            threshold=threshold,
-            keep_inf=not threshold,
-        )
-        for dim, bars in enumerate(barcodes):
-            per_dimension[dim].append(np.asarray(bars).reshape(-1, 2))
+    if basepoints.ndim == 1:
+        basepoints = basepoints.reshape(1, -1)
+    if threshold:
+        keep_inf = False
 
-    dtype = np.dtype(self.dtype)
-    out = []
-    for bars in per_dimension:
-        if not bars:
-            out.append(np.empty((num, 0, 2), dtype=dtype))
-            continue
-        first_shape = bars[0].shape
-        if any(bar.shape != first_shape for bar in bars[1:]):
+    if direction is not None:
+        if directions is not None:
+            raise ValueError("Specify only one of `direction` and `directions`.")
+        directions = direction
+
+    backend_directions = directions
+    if directions is None:
+        backend_directions = np.ones_like(basepoints)
+    else:
+        backend_directions = np.ascontiguousarray(directions, dtype=self.dtype)
+        if backend_directions.ndim == 1:
+            backend_directions = backend_directions.reshape(1, -1)
+        if backend_directions.shape[0] == 1 and basepoints.shape[0] != 1:
+            backend_directions = np.broadcast_to(backend_directions, basepoints.shape).copy()
+        if backend_directions.shape != basepoints.shape:
             raise ValueError(
-                "Barcodes along different lines do not have a consistent shape."
+                "Basepoints and directions must have the same shape, or directions must be a single direction. "
+                f"Got {basepoints.shape=} and {backend_directions.shape=}."
             )
-        out.append(np.stack(bars, axis=0))
+
+    raw_barcodes = self._get_barcodes_from_lines(
+        basepoints,
+        backend_directions,
+        int(degree),
+        bool(keep_inf),
+    )
+    if full:
+        raw_barcodes = _module_raw_barcodes_to_full(
+            raw_barcodes, basepoints, backend_directions
+        )
+    out = []
+    for bars, split_indices in raw_barcodes:
+        bars = np.asarray(bars)
+        if keep_inf:
+            out.append(bars[0].reshape((-1,) + bars.shape[2:]) if squeeze else bars)
+        elif squeeze:
+            out.append(bars)
+        else:
+            out.append(tuple(np.split(bars, np.asarray(split_indices, dtype=np.intp))))
     return tuple(out)
 
 
@@ -330,7 +385,7 @@ def _module_plot(self, degree: int = -1, **kwargs):
     from multipers.plots import plot2d_PyModule
     import matplotlib.pyplot as plt
 
-    box = kwargs.pop("box", self.get_box())
+    box = kwargs.pop("box", self.box)
     if len(box[0]) != 2:
         print("Filtration size :", len(box[0]), " != 2")
         return None
@@ -432,6 +487,7 @@ def module_approximation_from_slicer(
         verbose,
         n_jobs,
     )
+    approx_mod.box = np.asarray(box, dtype=dtype)
 
     if unsqueeze_grid is not None:
         if verbose:
@@ -440,7 +496,7 @@ def module_approximation_from_slicer(
         from multipers.grids import compute_bounding_box
 
         if len(approx_mod):
-            approx_mod.set_box(compute_bounding_box(approx_mod))
+            approx_mod.box = compute_bounding_box(approx_mod)
         if verbose:
             print("Done.", flush=True)
 
@@ -619,6 +675,58 @@ def module_approximation(
     *,
     n_jobs: int = -1,
 ) -> PyModule_type:
+    """Approximate a multiparameter module by interval-decomposable modules.
+
+    The approximation is built from a filtered complex, slicer, or tuple of
+    minimal-presentation slicers. The returned module object can be vectorized
+    or queried through the MMA Python bindings.
+
+    Parameters
+    ----------
+    input : SimplexTreeMulti, Slicer, or tuple[Slicer, ...]
+        Object to approximate. Tuple inputs must contain minimal presentations
+        and are merged by homological degree.
+    box : numpy.ndarray, optional
+        Bounding box for the approximation. If omitted, one is inferred from the
+        input.
+    max_error : float, default=-1
+        Approximation error target passed to the backend.
+    nlines : int, default=557
+        Number of lines used by the approximation backend.
+    from_coordinates : bool, default=False
+        Whether input data is already expressed in coordinates expected by the
+        backend.
+    complete : bool, default=True
+        Whether to complete the approximation in the backend.
+    threshold : bool, default=False
+        Whether to threshold backend output.
+    verbose : bool, default=False
+        Whether to print backend progress information.
+    ignore_warnings : bool, default=False
+        Whether to suppress backend warnings.
+    direction : iterable of float, optional
+        Optional direction passed to the approximation backend.
+    swap_box_coords : iterable of int, optional
+        Coordinate swaps applied to the box before backend computation.
+    n_jobs : int, default=-1
+        Parallelism used for tuple inputs and backend computations.
+
+    Output
+    ------
+    PyModule
+        MMA module approximation object matching the input dtype.
+
+    References
+    ----------
+    Carrière, Blumberg, and Loiseaux, "Multi-parameter Module Approximation: an
+    efficient and interpretable invariant for multi-parameter persistence
+    modules with guarantees", Journal of Applied and Computational Topology,
+    2025. DOI: 10.1007/s41468-025-00222-y.
+
+    Loiseaux, Carrière, and Blumberg, "A Framework for Fast and Stable
+    Representations of Multiparameter Persistent Homology Decompositions",
+    Advances in Neural Information Processing Systems, 2023.
+    """
     if isinstance(input, tuple) or isinstance(input, list):
         dtype = next((np.dtype(s.dtype) for s in input if hasattr(s, "dtype")), None)
     else:
@@ -662,13 +770,14 @@ def module_approximation(
             )
         box = np.array(
             [
-                np.min([m.get_box()[0] for m in non_empty_modules], axis=0),
-                np.max([m.get_box()[1] for m in non_empty_modules], axis=0),
+                np.min([m.box[0] for m in non_empty_modules], axis=0),
+                np.max([m.box[1] for m in non_empty_modules], axis=0),
             ]
         )
         if constructor is None:
             raise ValueError(f"Unsupported module dtype {dtype} for module merge.")
-        mod = constructor().set_box(box)
+        mod = constructor()
+        mod.box = box
         for i, m in enumerate(modules):
             mod.merge(
                 m, input[i].minpres_degree

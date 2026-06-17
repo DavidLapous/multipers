@@ -1,6 +1,6 @@
 --- a/ext/mpfree/include/mpfree/global.h
 +++ b/ext/mpfree/include/mpfree/global.h
-@@ -20,9 +20,17 @@
+@@ -20,9 +20,18 @@
  
  #include<phat/helpers/misc.h>
  
@@ -10,6 +10,7 @@
 +
  namespace mpfree {
  
++
 +#if __has_include("ext_interface/backend_log_flag.hpp")
 +  inline multipers::backend_log_policy::runtime_flag<multipers::backend_log_policy::backend_log_bit::mpfree> verbose;
 +#else

@@ -45,22 +45,25 @@ This library features a bunch of different functions and helpers. See below for 
 <br>Filled box refers to implemented or interfaced code.
  - [x] [[Multiparameter Module Approximation, JACT]](https://doi.org/10.1007/s41468-025-00222-y) provides the multiparameter simplicial structure, as well as technics for approximating modules, via interval-decomposable modules. It is also very useful for visualization.
  - [x] [[Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures, NeurIPS2023]](https://proceedings.neurips.cc/paper_files/paper/2023/hash/d75c474bc01735929a1fab5d0de3b189-Abstract-Conference.html) provides fast representations of multiparameter persistence modules, by using their signed barcodes decompositions encoded into signed measures. Implemented decompositions : Euler surfaces, Hilbert function, rank invariant (i.e. rectangles). It also provides representation technics for Machine Learning, i.e., Sliced Wasserstein kernels, and Vectorizations.
- - [x] [[A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions, NeurIPS2023]](https://proceedings.neurips.cc/paper_files/paper/2023/hash/702b67152ec4435795f681865b67999c-Abstract-Conference.html) Provides a vectorization framework for interval decomposable modules, for Machine Learning. Currently implemented as an extension of MMA.
+ - [x] [[A Framework for Fast and Stable Representations of Multiparameter Persistent Homology Decompositions, NeurIPS2023]](https://proceedings.neurips.cc/paper_files/paper/2023/hash/702b67152ec4435795f681865b67999c-Abstract-Conference.html) Provides a vectorization framework for interval decomposable modules, for Machine Learning. Implemented as an extension of MMA.
  - [x] [[Differentiability and Optimization of Multiparameter Persistent Homology, ICML2024]](https://proceedings.mlr.press/v235/scoccola24a.html) An approach to compute a (clarke) gradient for any reasonable multiparameter persistent invariant. Currently, any `multipers` computation is auto-differentiable using this strategy, provided that the input are pytorch gradient capable tensor.
  - [x] [[Multiparameter Persistence Landscapes, JMLR]](https://jmlr.org/papers/v21/19-054.html) A vectorization technic for multiparameter persistence modules.
  - [x] [[Filtration-Domination in Bifiltered Graphs, ALENEX2023]](https://doi.org/10.1137/1.9781611977561.ch3) Allows for 2-parameter edge collapses for 1-critical clique complexes. Very useful to speed up, e.g., Rips-Codensity bifiltrations.
  - [x] [[Fast free resolutions of bifiltered chain complexes]](https://arxiv.org/abs/2512.08652) One-critical representation of multicritical filtrations, using [multi_critical](https://bitbucket.org/mkerber/multi_critical).
  - [x] [[Chunk Reduction for Multi-Parameter Persistent Homology, SoCG2019]](https://doi.org/10.4230/LIPIcs.SoCG.2019.37) Multi-filtration preprocessing algorithm for homology computations.
  - [x] [[Computing Minimal Presentations and Bigraded Betti Numbers of 2-Parameter Persistent Homology, JAAG]](https://doi.org/10.1137/20M1388425) Minimal presentation of multiparameter persistence modules, using [mpfree](https://bitbucket.org/mkerber/mpfree/src/master/). Hilbert, Rank Decomposition Signed Measures, and MMA decompositions can be computed using the mpfree backend.
- - [x] [[Hera]](https://github.com/anigmetov/hera) Matching distance between 2-parameter presentations, 1-parameter bottleneck/wasserstein distances.
+ - [x] [[Hera]](https://github.com/anigmetov/hera) Matching distance between 2-parameter presentations, 1-parameter bottleneck/wasserstein distances ([[paper]](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.SoCG.2020.53))
  - [x] [[Decomposing Multiparameter Persistence Modules, SoCG2025]](https://doi.org/10.4230/LIPIcs.SoCG.2025.41) Using the [AIDA](https://github.com/JanJend/AIDA) and [Persistence-Algebra](https://github.com/JanJend/Persistence-Algebra/) libraries.
  - [x] [[Delaunay Bifiltrations of Functions on Point Clouds, SODA2024]](https://epubs.siam.org/doi/10.1137/1.9781611977912.173) Provides an alternative to function rips bifiltrations, using Delaunay complexes. Very good alternative to Rips-Density like bifiltrations.
- - [x] [[Delaunay Core Bifiltration]](https://arxiv.org/abs/2405.01214) Bifiltration for point clouds, taking into account the density. Similar to Rips-Density. 
+ - [x] [[Delaunay Core Bifiltration, JACT]](https://doi.org/10.1007/s41468-025-00226-8) Bifiltration for point clouds, taking into account the density. Similar to Rips-Density. 
  - [x] [[Computing the Multicover Bifiltration, SOCG2021]](https://doi.org/10.4230/LIPIcs.SoCG.2021.27) Rhomboid Tiling bifiltration. Equivalent to the multicover bifiltration, using [rhomboidtiling](https://github.com/geoo89/rhomboidtiling).
- - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence
+ - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence. 
  - [x] [[Kernel Operations on the GPU, with Autodiff, without Memory Overflows, JMLR]](http://jmlr.org/papers/v22/20-275.html) Although not linked, at first glance, to persistence in any way, this library allows computing blazingly fast signed measures convolutions (and more!) with custom kernels. 
- - [x] [[Projected distances for multi-parameter persistence modules]](https://arxiv.org/abs/2206.08818) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes. Implementation is a WIP.
+ - [x] [[Projected distances for multi-parameter persistence modules, Institut Fourier]](https://aif.centre-mersenne.org/articles/10.5802/aif.3752/) and [[Computation of $\gamma$-linear projected barcodes, JACT]](https://doi.org/10.1007/s41468-025-00209-9) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes.
  - [x] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
+ - [x] [[deg_rips]](https://bitbucket.org/mkerber/deg_rips) Efficient implementation of the DegreeRips bifiltration. Alternative to the multipers-native one.
+ - [ ] [[Multiscale Clusterings BiFiltration, ICLR2026]](https://openreview.net/forum?id=E7D6uybODJ) WIP implementation. 
+
 
 If I missed something, or you want to add something, feel free to open an issue.
 
@@ -71,7 +74,7 @@ If I missed something, or you want to add something, feel free to open an issue.
 (Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)),<br>
 [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein),<br>
 [Odin Hoff Gardå](https://odinhg.github.io/) (Delaunay Core bifiltration),<br>
-[Michael Kerber](https://www.geometrie.tugraz.at/kerber/) ([mpfree](https://bitbucket.org/mkerber/mpfree/src/master/), [function_delaunay](https://bitbucket.org/mkerber/function_delaunay), [multi_critical](https://bitbucket.org/mkerber/multi_critical), [multi_chunk](https://bitbucket.org/mkerber/multi_chunk) backends),<br>
+[Michael Kerber](https://www.geometrie.tugraz.at/kerber/) ([mpfree](https://bitbucket.org/mkerber/mpfree/src/master/), [function_delaunay](https://bitbucket.org/mkerber/function_delaunay), [multi_critical](https://bitbucket.org/mkerber/multi_critical), [multi_chunk](https://bitbucket.org/mkerber/multi_chunk), [[deg_rips]](https://bitbucket.org/mkerber/deg_rips) backends),<br>
 [Jan Jendrysiak](https://github.com/JanJend) ([Module Decomposition (AIDA)](https://github.com/JanJend/AIDA), [Persistence Algebra](https://github.com/JanJend/Persistence-Algebra)).<br>
 
 ## Licensing
@@ -105,5 +108,9 @@ you can use the following journal bibtex entry
 }
 ```
 ## Contributions
-Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
-In particular, if you have a nice example or application that is not taken care in the documentation (see the `./docs/notebooks/` folder), please contact me to add it there.
+Feel free to contribute, report a bug on a pipeline, or ask for documentation
+by opening an issue.<br>
+A good amount of doc pages are empty notebooks that just need to be filled!  
+In particular, if you have a nice example or application that is not taken care
+in the documentation (see the `./docs/notebooks/` folder), please open a PR or
+contact me to add it there.

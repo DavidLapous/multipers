@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+from typing import Optional
+
+import numpy as np
+
+import multipers.logs as _mp_logs
+
+from ._utils import _as_slicer
+
+
+def projected_barcode(
+    filtered_complex,
+    direction,
+    *,
+    degree: Optional[int] = None,
+    minpres_kwargs: Optional[dict] = None,
+    ignore_infinite_filtration_values: bool = True,
+):
+    """Gamma-linear projected barcode of one homology module.
+
+    The input may be a filtered complex or an already computed full resolution.
+    For a filtered complex, this first computes a full free resolution of
+    ``H_degree`` and then projects that resolution. This is not ordinary
+    persistence of the original chain complex after scalarizing its cell grades.
+
+    One or several directions may be passed. A single direction returns the
+    barcode of the projected resolution; a 2D array of directions returns one
+    such barcode per row.
+
+    Parameters
+    ----------
+    filtered_complex : Slicer or SimplexTreeMulti-like
+        Filtered complex, module presentation, full free resolution, or object
+        convertible to a slicer.
+    direction : array-like
+        Strictly positive projection direction with shape ``(num_parameters,)``
+        or one direction per row with shape ``(num_directions, num_parameters)``.
+    degree : int, optional
+        Homological degree. Inferred from ``minpres_degree`` for minimal-
+        presentation input.
+    minpres_kwargs : dict, optional
+        Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
+        is forced to ``True``.
+    ignore_infinite_filtration_values : bool, default=True
+        Whether ``compute_persistence`` should ignore infinite projected grades.
+
+    Output
+    ------
+    object
+        Barcode returned by ``resolution.compute_persistence`` for one
+        direction, or one such barcode per row when several directions are
+        supplied.
+
+    References
+    ----------
+    Fernandes, Oudot, and Petit, "Computation of gamma-linear projected
+    barcodes for multiparameter persistence", Journal of Applied and
+    Computational Topology, 2025. DOI: 10.1007/s41468-025-00209-9.
+
+    Berkouk and Petit, "Projected distances for multi-parameter persistence
+    modules", Annales de l'Institut Fourier, 2026. DOI: 10.5802/aif.3752.
+    """
+    slicer = _as_slicer(filtered_complex)
+    if slicer.is_minpres:
+        if degree is None:
+            degree = slicer.minpres_degree
+        elif slicer.minpres_degree != int(degree):
+            raise ValueError(
+                "Cannot change degree of an already minimal-presentation slicer."
+            )
+        if degree is None or degree < 0:
+            raise ValueError("Minimal-presentation input has no valid `minpres_degree`.")
+        degree = int(degree)
+        if not slicer.is_minres:
+            _mp_logs.warn_superfluous_computation(
+                "projected_barcode received a minimal-presentation input that "
+                "is not marked as a full free resolution. Recomputing "
+                "`minpres(full_resolution=True)`; this computation can be "
+                "avoided by passing a full-resolution minpres, or by marking "
+                "the input as `is_minres` when it is already one."
+            )
+            minpres_kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
+            if not minpres_kwargs.get("full_resolution", True):
+                raise ValueError("projected_barcode requires `full_resolution=True`.")
+            minpres_kwargs["full_resolution"] = True
+            minpres_kwargs["force"] = True
+            resolution = slicer.minpres(degree=degree, **minpres_kwargs)
+        else:
+            resolution = slicer
+    else:
+        if degree is None or degree < 0:
+            raise ValueError("`degree` is inferred for minpres inputs, otherwise required.")
+        minpres_kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
+        if not minpres_kwargs.get("full_resolution", True):
+            raise ValueError("projected_barcode requires `full_resolution=True`.")
+        minpres_kwargs["full_resolution"] = True
+        resolution = slicer.minpres(degree=int(degree), **minpres_kwargs)
+
+    directions = np.asarray(direction, dtype=np.float64)
+    if not np.all(np.isfinite(directions)):
+        raise ValueError("`direction` must contain finite values.")
+    if np.any(directions <= 0):
+        raise ValueError("`direction` must be strictly positive in every coordinate.")
+    grades = np.asarray(
+        resolution.get_filtrations(unsqueeze=resolution.is_squeezed),
+        dtype=np.float64,
+    )
+    num_parameters = resolution.num_parameters
+    if directions.ndim == 1:
+        if directions.shape[0] != num_parameters:
+            raise ValueError(
+                f"Expected direction length {num_parameters}. Got {directions.shape[0]}."
+            )
+        projected_grades = grades @ directions
+    elif directions.ndim == 2:
+        if directions.shape[1] != num_parameters:
+            raise ValueError(
+                f"Expected directions with {num_parameters} columns. "
+                f"Got {directions.shape[1]}."
+            )
+        projected_grades = directions @ grades.T
+    else:
+        raise ValueError(
+            "Expected `direction` with shape (num_parameters,) or "
+            "(num_directions, num_parameters)."
+        )
+
+    return resolution.compute_persistence(
+        projected_grades,
+        ignore_infinite_filtration_values=ignore_infinite_filtration_values,
+    )
+
+
+__all__ = ["projected_barcode"]

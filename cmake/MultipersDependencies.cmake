@@ -43,7 +43,7 @@ set(MULTIPERS_NANOBIND_ROBIN_MAP_INCLUDE_DIR "${MULTIPERS_NANOBIND_PACKAGE_DIR}/
 list(PREPEND CMAKE_PREFIX_PATH "${MULTIPERS_NANOBIND_CMAKE_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 
-find_package(Boost REQUIRED COMPONENTS system timer chrono)
+find_package(Boost REQUIRED COMPONENTS timer chrono)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
 if(POLICY CMP0167)
@@ -157,6 +157,18 @@ set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
 )
 
+set(MULTIPERS_MUPHASA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/muphasa" CACHE PATH "Path to a Muphasa source checkout")
+set(MULTIPERS_MUPHASA_INCLUDE_DIRS "")
+if(EXISTS "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/main.cpp")
+  set(MULTIPERS_MUPHASA_INCLUDE_DIRS "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph")
+endif()
+
+set(MULTIPERS_DEG_RIPS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/deg_rips" CACHE PATH "Path to a deg_rips source checkout")
+set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "")
+if(EXISTS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include/deg_rips/build_complex.h")
+  set(MULTIPERS_DEG_RIPS_INCLUDE_DIRS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include")
+endif()
+
 set(MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src"
 )
@@ -188,14 +200,27 @@ if(NOT MULTIPERS_DISABLE_2PAC_INTERFACE AND EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}
     "${MULTIPERS_2PAC_SOURCE_DIR}/minimize.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/factor.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/chunk.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/Cone.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/complexes.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/computation.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/bireductions.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/reductions.cpp"
+    "${MULTIPERS_2PAC_SOURCE_DIR}/relative_cohomology.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/ArrayColumn.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/HeapColumn.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/time_measurement.cpp"
     "${MULTIPERS_2PAC_SOURCE_DIR}/block_column_matrix.cpp"
   )
   target_include_directories(multipers_2pac_static PUBLIC ${MULTIPERS_2PAC_INCLUDE_DIRS})
+  if(TARGET Boost::headers)
+    target_link_libraries(multipers_2pac_static PUBLIC Boost::headers)
+  elseif(TARGET Boost::boost)
+    target_link_libraries(multipers_2pac_static PUBLIC Boost::boost)
+  else()
+    target_include_directories(multipers_2pac_static PUBLIC ${Boost_INCLUDE_DIRS})
+  endif()
   target_link_libraries(multipers_2pac_static PUBLIC OpenMP::OpenMP_CXX)
   target_compile_definitions(multipers_2pac_static PUBLIC MULTIPERS_HAS_2PAC_INTERFACE=1)
   message(STATUS "[2pac] Created multipers_2pac_static with MULTIPERS_HAS_2PAC_INTERFACE=1")
@@ -212,7 +237,7 @@ else()
   )
 endif()
 
-if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
+if(NOT MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE AND CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp" AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
   add_library(
     multipers_rhomboid_tiling_static
     STATIC
@@ -226,10 +251,13 @@ if(CGAL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_vers
   endif()
   message(STATUS "[rhomboid] Created multipers_rhomboid_tiling_static")
 else()
-  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: CGAL_FOUND=${CGAL_FOUND}")
+  message(STATUS "[rhomboid] Skipped multipers_rhomboid_tiling_static creation: disable=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE}, CGAL_FOUND=${CGAL_FOUND}")
 endif()
 
-if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
+if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/src/aida_decompose.cpp"
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/include/aida_interface.hpp"
+   AND EXISTS "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include/grlina/graded_matrix.hpp")
   add_library(
     multipers_aida_static
     STATIC

@@ -41,3 +41,11 @@
 	path = ext/gudhi-devel
 	url = https://github.com/hschreiber/gudhi-devel.git
 	branch = multi_persistence
+[submodule "ext/deg_rips"]
+	path = ext/deg_rips
+	url = https://bitbucket.org/mkerber/deg_rips
+	branch = main
+[submodule "ext/muphasa"]
+	path = ext/muphasa
+	url = https://github.com/DavidLapous/muphasa.git
+	branch = fix/guard-empty-grade-queue

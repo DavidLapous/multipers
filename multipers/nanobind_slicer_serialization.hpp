@@ -20,7 +20,7 @@ namespace mpnb {
 namespace nb = nanobind;
 
 inline constexpr uint32_t kSlicerSerializationMagic = 0x4d50534c;
-inline constexpr uint32_t kSlicerSerializationVersion = 1;
+inline constexpr uint32_t kSlicerSerializationVersion = 2;
 
 enum class SlicerSerializationMode : uint32_t {
   OneCritical = 0,
@@ -32,7 +32,7 @@ struct SlicerSerializationHeaderV1 {
   uint32_t magic;
   uint32_t version;
   uint32_t mode;
-  uint32_t reserved;
+  uint32_t is_minres;
   uint64_t num_generators;
   uint64_t boundary_flat_size;
   uint64_t num_parameters;
@@ -71,9 +71,9 @@ inline size_t align_serialized_offset(size_t offset, size_t alignment) {
 
 template <bool IsKCritical, bool IsDegreeRips>
 constexpr uint32_t expected_slicer_serialization_mode() {
-  return static_cast<uint32_t>(IsDegreeRips ? SlicerSerializationMode::DegreeRips
-                                            : (IsKCritical ? SlicerSerializationMode::KCritical
-                                                           : SlicerSerializationMode::OneCritical));
+  return static_cast<uint32_t>(
+      IsDegreeRips ? SlicerSerializationMode::DegreeRips
+                   : (IsKCritical ? SlicerSerializationMode::KCritical : SlicerSerializationMode::OneCritical));
 }
 
 template <typename Value>
@@ -178,13 +178,13 @@ FiltrationValue filtration_from_serialized_rows(const Value* grades_flat,
 }
 
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical, bool IsDegreeRips>
-void load_state_v1(Wrapper& self, const uint8_t* data, size_t buffer_size) {
+bool load_state_v1(Wrapper& self, const uint8_t* data, size_t buffer_size) {
   if (buffer_size < sizeof(SlicerSerializationHeaderV1)) {
     throw std::runtime_error("Invalid serialized slicer state.");
   }
   SlicerSerializationHeaderV1 header;
   std::memcpy(&header, data, sizeof(header));
-  if (header.magic != kSlicerSerializationMagic || header.version != kSlicerSerializationVersion ||
+  if (header.magic != kSlicerSerializationMagic || header.version < 1 || header.version > kSlicerSerializationVersion ||
       header.total_size != buffer_size) {
     throw std::runtime_error("Invalid serialized slicer state.");
   }
@@ -268,6 +268,7 @@ void load_state_v1(Wrapper& self, const uint8_t* data, size_t buffer_size) {
 
   load_slicer_from_generator_data<Wrapper, Concrete>(
       self, std::move(boundaries), std::move(dimensions), std::move(c_filtrations));
+  return header.version >= 2 && header.is_minres != 0;
 }
 
 template <typename Wrapper, typename Value, bool IsKCritical, bool IsDegreeRips>
@@ -307,7 +308,7 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
     SlicerSerializationHeaderV1 header{kSlicerSerializationMagic,
                                        kSlicerSerializationVersion,
                                        expected_slicer_serialization_mode<IsKCritical, IsDegreeRips>(),
-                                       0,
+                                       (self.minpres_degree >= 0 && self.is_minres) ? 1u : 0u,
                                        static_cast<uint64_t>(num_generators),
                                        static_cast<uint64_t>(total_boundary_size),
                                        static_cast<uint64_t>(num_parameters),
@@ -320,11 +321,11 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
                                        static_cast<uint64_t>(layout.total_size)};
     std::memcpy(buffer.data(), &header, sizeof(header));
 
-    auto* boundary_indptr = mutable_serialized_block<uint64_t>(buffer, layout.boundary_indptr_offset, num_generators + 1);
+    auto* boundary_indptr =
+        mutable_serialized_block<uint64_t>(buffer, layout.boundary_indptr_offset, num_generators + 1);
     auto* boundary_flat = mutable_serialized_block<uint32_t>(buffer, layout.boundary_flat_offset, total_boundary_size);
     auto* dimensions = mutable_serialized_block<int32_t>(buffer, layout.dimensions_offset, num_generators);
-    auto* grades_flat =
-        mutable_serialized_block<Value>(buffer, layout.grades_offset, filtration_rows * num_parameters);
+    auto* grades_flat = mutable_serialized_block<Value>(buffer, layout.grades_offset, filtration_rows * num_parameters);
     boundary_indptr[0] = 0;
 
     size_t boundary_offset = 0;
@@ -373,13 +374,16 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
 }
 
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical, bool IsDegreeRips>
-void load_state(Wrapper& self, nb::handle state) {
+bool load_state(Wrapper& self, nb::handle state) {
   auto buffer = nb::cast<nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>, nb::c_contig>>(state);
+  bool is_minres = false;
   {
     nb::gil_scoped_release release;
-    load_state_v1<Wrapper, Concrete, Value, IsKCritical, IsDegreeRips>(self, buffer.data(), buffer.size());
+    is_minres = load_state_v1<Wrapper, Concrete, Value, IsKCritical, IsDegreeRips>(self, buffer.data(), buffer.size());
   }
   multipers::nanobind_helpers::reset_slicer_python_state(self);
+  self.is_minres = is_minres;
+  return is_minres;
 }
 
 }  // namespace mpnb

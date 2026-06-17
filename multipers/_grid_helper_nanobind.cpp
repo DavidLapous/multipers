@@ -193,6 +193,39 @@ std::vector<int32_t> integrate_measure_impl(
   return out;
 }
 
+template <typename Point>
+nb::ndarray<nb::numpy, int64_t> push_to_grid_coordinates_bound(
+    const nb::ndarray<nb::numpy, const Point, nb::ndim<2>, nb::c_contig>& points,
+    const nb::tuple& grid) {
+  auto grids = cast_grid_sequence<Point>(grid);
+  std::vector<int64_t> coords;
+  {
+    nb::gil_scoped_release release;
+    coords = grid_coordinates_impl<Point, int32_t>(points, grids);
+  }
+  return owned_array<int64_t>(std::move(coords), {points.shape(0), points.shape(1)});
+}
+
+template <typename Point, typename Weight>
+nb::ndarray<nb::numpy, int32_t> integrate_measure_bound(
+    const nb::ndarray<nb::numpy, const Point, nb::ndim<2>, nb::c_contig>& points,
+    const nb::ndarray<nb::numpy, const Weight, nb::ndim<1>, nb::c_contig>& weights,
+    const nb::tuple& grid) {
+  auto grids = cast_grid_sequence<Point>(grid);
+  std::vector<size_t> shape;
+  shape.reserve(grid.size());
+  for (const auto& g : grids) {
+    shape.push_back(g.shape(0));
+  }
+
+  std::vector<int32_t> out;
+  {
+    nb::gil_scoped_release release;
+    out = integrate_measure_impl(points, weights, grids);
+  }
+  return owned_array<int32_t>(std::move(out), shape);
+}
+
 template <typename T>
 void apply_threshold_last_plane(T* data,
                                 const std::vector<size_t>& shape,
@@ -271,18 +304,14 @@ NB_MODULE(_grid_helper_nanobind, m) {
   m.def(
       "push_to_grid_coordinates",
       [](nb::ndarray<nb::numpy, const float, nb::ndim<2>, nb::c_contig> points, nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<float>(grid);
-        auto coords = mpgnb::grid_coordinates_impl<float, int32_t>(points, grids);
-        return mpgnb::owned_array<int64_t>(std::move(coords), {points.shape(0), points.shape(1)});
+        return mpgnb::push_to_grid_coordinates_bound(points, grid);
       },
       "points"_a,
       "grid"_a);
   m.def(
       "push_to_grid_coordinates",
       [](nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> points, nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<double>(grid);
-        auto coords = mpgnb::grid_coordinates_impl<double, int32_t>(points, grids);
-        return mpgnb::owned_array<int64_t>(std::move(coords), {points.shape(0), points.shape(1)});
+        return mpgnb::push_to_grid_coordinates_bound(points, grid);
       },
       "points"_a,
       "grid"_a);
@@ -292,14 +321,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       [](nb::ndarray<nb::numpy, const float, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> weights,
          nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<float>(grid);
-        auto out = mpgnb::integrate_measure_impl(points, weights, grids);
-        std::vector<size_t> shape;
-        shape.reserve(grid.size());
-        for (const auto& g : grids) {
-          shape.push_back(g.shape(0));
-        }
-        return mpgnb::owned_array<int32_t>(std::move(out), shape);
+        return mpgnb::integrate_measure_bound(points, weights, grid);
       },
       "points"_a,
       "weights"_a,
@@ -309,14 +331,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       [](nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> weights,
          nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<double>(grid);
-        auto out = mpgnb::integrate_measure_impl(points, weights, grids);
-        std::vector<size_t> shape;
-        shape.reserve(grid.size());
-        for (const auto& g : grids) {
-          shape.push_back(g.shape(0));
-        }
-        return mpgnb::owned_array<int32_t>(std::move(out), shape);
+        return mpgnb::integrate_measure_bound(points, weights, grid);
       },
       "points"_a,
       "weights"_a,
@@ -326,14 +341,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       [](nb::ndarray<nb::numpy, const float, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> weights,
          nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<float>(grid);
-        auto out = mpgnb::integrate_measure_impl(points, weights, grids);
-        std::vector<size_t> shape;
-        shape.reserve(grid.size());
-        for (const auto& g : grids) {
-          shape.push_back(g.shape(0));
-        }
-        return mpgnb::owned_array<int32_t>(std::move(out), shape);
+        return mpgnb::integrate_measure_bound(points, weights, grid);
       },
       "points"_a,
       "weights"_a,
@@ -343,14 +351,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       [](nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> weights,
          nb::tuple grid) {
-        auto grids = mpgnb::cast_grid_sequence<double>(grid);
-        auto out = mpgnb::integrate_measure_impl(points, weights, grids);
-        std::vector<size_t> shape;
-        shape.reserve(grid.size());
-        for (const auto& g : grids) {
-          shape.push_back(g.shape(0));
-        }
-        return mpgnb::owned_array<int32_t>(std::move(out), shape);
+        return mpgnb::integrate_measure_bound(points, weights, grid);
       },
       "points"_a,
       "weights"_a,

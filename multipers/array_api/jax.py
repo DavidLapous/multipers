@@ -75,6 +75,12 @@ def logsumexp(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _jsp_special.logsumexp(x, axis=axis, keepdims=keepdim)
 
 
+def cumsum(x, axis=None, dim=None, **kwargs):
+    if axis is None:
+        axis = dim
+    return _jnp.cumsum(x, axis=axis, **kwargs)
+
+
 def norm(x, axis=None, dim=None, **kwargs):
     if axis is None:
         axis = dim
@@ -85,8 +91,13 @@ def astype(x, dtype):
     return astensor(x).astype(dtype)
 
 
-def astensor(x, contiguous=False, dtype=None):
-    return _jnp.asarray(x, dtype=dtype)
+def astensor(x, contiguous=False, dtype=None, device=None):
+    out = _jnp.asarray(x, dtype=dtype)
+    return to_device(out, device)
+
+
+def zeros(shape, dtype=None, device=None):
+    return to_device(_jnp.zeros(shape, dtype=dtype), device)
 
 
 def check_keops():
@@ -194,8 +205,11 @@ def pdist(x, p=2):
     return distances[row_idx, col_idx]
 
 
-def asnumpy(x, dtype=None):
-    return _np.asarray(_jax.lax.stop_gradient(x), dtype=dtype)
+def asnumpy(x, dtype=None, contiguous=False):
+    x = _jax.lax.stop_gradient(x)
+    if contiguous:
+        return _np.ascontiguousarray(x, dtype=dtype)
+    return _np.asarray(x, dtype=dtype)
 
 
 def is_tensor(x):

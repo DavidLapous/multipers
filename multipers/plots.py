@@ -189,6 +189,169 @@ def plot_signed_measures(
     plt.tight_layout()
 
 
+def plot_presentation(
+    presentation,
+    degree: Optional[int] = None,
+    *,
+    ax=None,
+    show_hilbert: bool = True,
+    show_rank: bool = False,
+    label: bool = True,
+    relation_lines: bool = True,
+    line_color="0.7",
+    line_width: float = 1.0,
+    line_zorder: float = 0,
+    fontsize: float = 10,
+    label_x_offset: float = 0.01,
+    label_y_step: float = 0.05,
+    signed_measure_kwargs: Optional[dict] = None,
+    rank_kwargs: Optional[dict] = None,
+):
+    """Plot a 2-parameter presentation with generator/relation annotations.
+
+    ``presentation`` must be a single multipers slicer. If ``degree`` is not
+    provided for a minimal presentation, ``presentation.minpres_degree`` is used.
+    Generators in ``degree`` are labelled ``Gen: (i)``. Relations in
+    ``degree + 1`` are labelled by their boundary, and gray segments connect
+    each relation to its degree-``degree`` boundary generators. Label positions
+    are offset vertically to reduce collisions; segments use the unshifted
+    filtration coordinates.
+
+    Parameters
+    ----------
+    presentation : Slicer
+        Single multipers slicer containing the presentation to plot.
+    degree : int, optional
+        Homological degree of generators to annotate. Required unless
+        ``presentation`` is a minimal presentation with ``minpres_degree`` set.
+    ax : matplotlib.axes.Axes, optional
+        Axis to draw on. If omitted, uses the current axis.
+    show_hilbert : bool, default=True
+        Whether to draw the Hilbert signed measure before annotations.
+    show_rank : bool, default=False
+        Whether to draw the rank signed measure before annotations.
+    label : bool, default=True
+        Whether to label generators and relations.
+    relation_lines : bool, default=True
+        Whether to draw segments from relations to boundary generators.
+    line_color : object, default="0.7"
+        Matplotlib color for relation segments.
+    line_width : float, default=1.0
+        Matplotlib linewidth for relation segments.
+    line_zorder : float, default=0
+        Matplotlib z-order for relation segments.
+    fontsize : float, default=10
+        Text label font size.
+    label_x_offset : float, default=0.01
+        Horizontal label offset as a fraction of filtration span.
+    label_y_step : float, default=0.05
+        Vertical spacing used to separate labels with close coordinates.
+    signed_measure_kwargs : dict, optional
+        Extra keyword arguments forwarded to Hilbert signed-measure plotting.
+    rank_kwargs : dict, optional
+        Extra keyword arguments forwarded to rank signed-measure plotting.
+
+    Output
+    ------
+    matplotlib.axes.Axes
+        Axis containing the presentation plot.
+    """
+    from multipers.slicer import is_slicer
+
+    if not is_slicer(presentation, allow_minpres=False):
+        raise TypeError("plot_presentation expects a single multipers slicer input.")
+    if degree is None:
+        if presentation.is_minpres and presentation.minpres_degree >= 0:
+            degree = int(presentation.minpres_degree)
+        else:
+            raise ValueError("`degree` is required unless input is a minimal presentation.")
+    else:
+        degree = int(degree)
+
+    if ax is None:
+        ax = plt.gca()
+    else:
+        plt.sca(ax)
+
+    filtrations = presentation.get_filtrations(unsqueeze=presentation.is_squeezed)
+    if filtrations.ndim != 2:
+        filtrations = filtrations.reshape(-1, presentation.num_parameters)
+    if filtrations.shape[1] != 2:
+        raise ValueError("plot_presentation only supports 2-parameter presentations.")
+
+    dimensions = presentation.get_dimensions()
+    boundary_indptr, boundary_flat = presentation.get_boundaries(packed=True)
+    target_generators = dimensions == degree
+    relation_mask = dimensions == degree + 1
+
+    if show_hilbert:
+        from multipers import signed_measure
+
+        kwargs = {} if signed_measure_kwargs is None else dict(signed_measure_kwargs)
+        signed_measure(presentation, plot=True, invariant="hilbert", degree=degree, **kwargs)
+    if show_rank:
+        from multipers import signed_measure
+        from multipers.grids import compute_bounding_box
+
+        kwargs = {} if rank_kwargs is None else dict(rank_kwargs)
+        box = compute_bounding_box(presentation)
+        signed_measure(
+            presentation.grid_squeeze(threshold_max=box[1]),
+            plot=True,
+            invariant="rank",
+            **kwargs,
+        )
+
+    finite = filtrations[np.all(np.isfinite(filtrations), axis=1)]
+    if finite.size:
+        span = np.ptp(finite, axis=0)
+    else:
+        span = np.ones(2, dtype=np.float64)
+    span = np.maximum(span, 1.0)
+
+    label_positions = filtrations.copy()
+    offsets = {}
+    for i, point in enumerate(filtrations):
+        key = tuple(np.round(point, 3))
+        offset = offsets.get(key, 0.01 * span[1]) - label_y_step * span[1]
+        offsets[key] = offset
+        label_positions[i, 1] = point[1] + offset
+
+    if relation_lines:
+        for i in np.flatnonzero(relation_mask):
+            x_rel, y_rel = filtrations[i]
+            start = int(boundary_indptr[i])
+            stop = int(boundary_indptr[i + 1])
+            for j in boundary_flat[start:stop]:
+                j = int(j)
+                if 0 <= j < len(filtrations) and target_generators[j]:
+                    x_gen, y_gen = filtrations[j]
+                    ax.plot(
+                        [x_gen, x_rel],
+                        [y_gen, y_rel],
+                        color=line_color,
+                        linewidth=line_width,
+                        zorder=line_zorder,
+                    )
+
+    if label:
+        x_offset = label_x_offset * span[0]
+        for i in np.flatnonzero(target_generators):
+            x, y = label_positions[i]
+            ax.text(x + x_offset, y, f"Gen: ({i})", fontsize=fontsize)
+        for i in np.flatnonzero(relation_mask):
+            x, y = label_positions[i]
+            start = int(boundary_indptr[i])
+            stop = int(boundary_indptr[i + 1])
+            ax.text(
+                x + x_offset,
+                y,
+                f"Rel: {boundary_flat[start:stop]}",
+                fontsize=fontsize,
+            )
+    return ax
+
+
 def plot_surface(
     grid,
     hf,
@@ -321,6 +484,171 @@ def plot_surfaces(HF, size=4, **plt_args):
     for ax, hf_of_degree in zip(axes, hf):
         plot_surface(grid=grid, hf=hf_of_degree, fig=fig, ax=ax, **plt_args)
     plt.tight_layout()
+
+
+def _as_birth_curve_list(curves):
+    if isinstance(curves, np.ndarray):
+        if curves.ndim != 2 or curves.shape[1] != 2:
+            raise ValueError(f"Expected curve shape (k, 2). Got {curves.shape}.")
+        return [curves]
+    out = []
+    for curve in curves:
+        curve = np.asarray(curve, dtype=np.float64)
+        if curve.ndim != 2 or curve.shape[1] != 2:
+            raise ValueError(f"Expected each curve shape (k, 2). Got {curve.shape}.")
+        out.append(curve)
+    return out
+
+
+def _birth_curve_box(curves, box=None):
+    if box is not None:
+        box = np.asarray(box, dtype=np.float64)
+        if box.shape != (2, 2):
+            raise ValueError(f"Expected box shape (2, 2). Got {box.shape}.")
+        return box
+
+    mins = []
+    maxs = []
+    for axis in range(2):
+        values = [curve[:, axis] for curve in curves if curve.size]
+        values = np.concatenate(values) if values else np.empty(0)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            mins.append(0.0)
+            maxs.append(1.0)
+            continue
+        lo = float(np.min(values))
+        hi = float(np.max(values))
+        if lo == hi:
+            hi = lo + 1.0
+        mins.append(lo)
+        maxs.append(hi)
+    return np.asarray([mins, maxs], dtype=np.float64)
+
+
+def _birth_curve_length(curve):
+    if len(curve) <= 1:
+        return 0.0
+    if np.any(np.isinf(curve)):
+        return np.inf
+    return float(np.linalg.norm(np.diff(curve, axis=0), axis=1).sum())
+
+
+def _clip_birth_curve_to_box(curve, box):
+    clipped = np.asarray(curve, dtype=np.float64).copy()
+    for axis in range(2):
+        clipped[np.isneginf(clipped[:, axis]), axis] = box[0, axis]
+        clipped[np.isposinf(clipped[:, axis]), axis] = box[1, axis]
+    return np.clip(clipped, box[0], box[1])
+
+
+def _diagonal_intersection_parameters(curve, box):
+    lo = box[0]
+    diagonal = box[1] - box[0]
+    parameters = []
+    if np.allclose(diagonal, 0):
+        return parameters
+    for start, end in zip(curve[:-1], curve[1:]):
+        segment = end - start
+        matrix = np.column_stack((segment, -diagonal))
+        det = np.linalg.det(matrix)
+        if abs(det) < 1e-12:
+            continue
+        u, t = np.linalg.solve(matrix, lo - start)
+        if -1e-9 <= u <= 1 + 1e-9 and -1e-9 <= t <= 1 + 1e-9:
+            parameters.append(float(np.clip(t, 0, 1)))
+    return parameters
+
+
+def _diagonal_order_key(curve, box):
+    curve = _clip_birth_curve_to_box(curve, box)
+    hits = _diagonal_intersection_parameters(curve, box)
+    if hits:
+        return min(hits)
+    diagonal = box[1] - box[0]
+    denom = float(np.dot(diagonal, diagonal))
+    if denom == 0 or curve.size == 0:
+        return 0.0
+    projections = (curve - box[0]) @ diagonal / denom
+    return float(np.mean(np.clip(projections, 0, 1)))
+
+
+def plot_birth_curve(
+    curves,
+    *,
+    ax=None,
+    box=None,
+    cmap=None,
+    sort=True,
+    min_length=-1,
+    linewidth=2.0,
+    marker="o",
+    markersize=3.0,
+    alpha=0.95,
+    xlabel=None,
+    ylabel=None,
+    title="Birth curves",
+    **line_kwargs,
+):
+    """Plot 2-parameter birth-curves with MMA-compatible coloring.
+
+    ``box`` controls displayed coordinate extents. Figure size and aspect ratio
+    are left to the caller/axes. ``min_length`` filters plotted curves by
+    polyline length: only curves with length strictly larger than the threshold
+    are shown. The default ``-1`` keeps all curves; ``0`` drops point curves.
+    """
+    curves = _as_birth_curve_list(curves)
+    curves = [curve for curve in curves if _birth_curve_length(curve) > min_length]
+    box = _birth_curve_box(curves, box=box)
+    if sort:
+        curves = sorted(curves, key=lambda curve: _diagonal_order_key(curve, box))
+
+    if ax is None:
+        ax = plt.gca()
+    else:
+        plt.sca(ax)
+
+    cmap_instance = (
+        matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
+    )
+    n_curves = len(curves)
+    for i, curve in enumerate(curves):
+        if curve.size == 0:
+            continue
+        clipped = _clip_birth_curve_to_box(curve, box)
+        color = cmap_instance(i / max(n_curves, 1))
+        ax.plot(
+            clipped[:, 0],
+            clipped[:, 1],
+            color=color,
+            linewidth=linewidth,
+            marker=marker,
+            markersize=markersize,
+            alpha=alpha,
+            **line_kwargs,
+        )
+
+    for axis, get_limits, set_limits in (
+        (0, ax.get_xlim, ax.set_xlim),
+        (1, ax.get_ylim, ax.set_ylim),
+    ):
+        lo, hi = box[0, axis], box[1, axis]
+        padding = abs(hi - lo) * 0.05
+        target_lo = min(lo, hi) - padding
+        target_hi = max(lo, hi) + padding
+        current = get_limits()
+        reverse = current[0] > current[1]
+        current_lo, current_hi = sorted(current)
+        expanded = (min(current_lo, target_lo), max(current_hi, target_hi))
+        set_limits(expanded[::-1] if reverse else expanded)
+    ax.grid(True, alpha=0.18, linewidth=0.6)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+    if title is not None:
+        ax.set_title(title)
+    return ax
 
 
 def _rectangle(x, y, color, alpha):
@@ -540,7 +868,7 @@ def plot_simplicial_complex(
         plot_simplicial_complex(st, pts, x, y)
         plt.sca(b)
         mma.plot(degree=degree)
-        box = mma.get_box()
+        box = mma.box
         a, b, c, d = box.ravel()
         mma.plot(degree=1, min_persistence=0.01)
         plt.vlines(x, b, d, color="k", linestyle="--")
@@ -601,7 +929,7 @@ def plot_point_cloud(
         plot_point_cloud(pts, function, x, y)
         plt.sca(b)
         mma.plot(degree=degree)
-        box = mma.get_box()
+        box = mma.box
         a, b, c, d = box.ravel()
         mma.plot(degree=1, min_persistence=0.01)
         plt.vlines(x, b, d, color="k", linestyle="--")

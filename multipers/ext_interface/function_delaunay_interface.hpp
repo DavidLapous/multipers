@@ -3,6 +3,7 @@
 #include "backend_log_policy.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <mutex>
@@ -11,6 +12,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include <gudhi/simple_mdspan.h>
 
 #ifndef FUNCTION_DELAUNAY_TIMERS
 #define FUNCTION_DELAUNAY_TIMERS 0
@@ -48,14 +51,18 @@ namespace multipers {
 
 template <typename index_type>
 struct function_delaunay_interface_input {
-  std::vector<std::vector<double> > points;
+  std::vector<double> points;
+  std::size_t num_points = 0;
+  std::size_t num_point_coordinates = 0;
   std::vector<double> function_values;
+  std::size_t num_function_parameters = 0;
   bool recover_ids = false;
 };
 
 template <typename index_type>
 struct function_delaunay_interface_output {
-  std::vector<std::pair<double, double> > filtration_values;
+  std::vector<double> filtration_values;
+  std::size_t num_parameters = 0;
   std::vector<std::vector<index_type> > boundaries;
   std::vector<int> dimensions;
 };
@@ -122,9 +129,7 @@ inline std::mutex& function_delaunay_interface_mutex() {
   return m;
 }
 
-inline bool function_delaunay_wrapper_silences_backend_output() {
-  return false;
-}
+inline bool function_delaunay_wrapper_silences_backend_output() { return false; }
 
 inline bool function_delaunay_interface_needs_global_state_lock() {
 #if FUNCTION_DELAUNAY_TIMERS || MULTI_CHUNK_TIMERS || MPFREE_TIMERS
@@ -182,15 +187,113 @@ inline std::vector<index_type> sorted_to_original_vertex_ids(
 }
 
 template <typename index_type>
+inline std::size_t validate_function_delaunay_input(const function_delaunay_interface_input<index_type>& input) {
+  if (input.num_points == 0) {
+    if (!input.points.empty()) {
+      throw std::invalid_argument("function_delaunay interface got point coordinates without input points.");
+    }
+    if (!input.function_values.empty()) {
+      throw std::invalid_argument("function_delaunay interface got function values without input points.");
+    }
+    if (input.num_function_parameters > 2) {
+      throw std::invalid_argument("function_delaunay interface expects one or two function parameters.");
+    }
+    return input.num_function_parameters;
+  }
+
+  if (input.num_point_coordinates == 0) {
+    throw std::invalid_argument("function_delaunay interface expects points with positive ambient dimension.");
+  }
+  if (input.points.size() != input.num_points * input.num_point_coordinates) {
+    throw std::invalid_argument("function_delaunay interface got malformed point cloud data.");
+  }
+
+  const std::size_t num_function_parameters = input.num_function_parameters;
+  if (num_function_parameters == 0 || num_function_parameters > 2) {
+    throw std::invalid_argument("function_delaunay interface expects one or two function parameters.");
+  }
+  if (input.function_values.size() != input.num_points * num_function_parameters) {
+    throw std::invalid_argument("function_delaunay interface expects one function row per input point.");
+  }
+  return num_function_parameters;
+}
+
+template <typename index_type>
+inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> > point_cloud_view(
+    const function_delaunay_interface_input<index_type>& input) {
+  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+      input.points.data(), input.num_points, input.num_point_coordinates);
+}
+
+template <typename index_type>
+inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> > function_values_view(
+    const function_delaunay_interface_input<index_type>& input) {
+  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+      input.function_values.data(), input.num_points, input.num_function_parameters);
+}
+
+template <typename index_type>
+inline std::size_t filtration_value_rows(const function_delaunay_interface_output<index_type>& out) {
+  if (out.num_parameters == 0) {
+    if (!out.filtration_values.empty()) {
+      throw std::runtime_error("function_delaunay bridge got filtration values without grade dimension.");
+    }
+    return 0;
+  }
+  if (out.filtration_values.size() % out.num_parameters != 0) {
+    throw std::runtime_error("function_delaunay bridge got malformed contiguous filtration values.");
+  }
+  return out.filtration_values.size() / out.num_parameters;
+}
+
+template <typename index_type>
+inline void append_grade(function_delaunay_interface_output<index_type>& out, const Graded_matrix::Grade& grade) {
+  if (grade.at.size() < 2) {
+    throw std::invalid_argument("function_delaunay interface expects at least bifiltration grades.");
+  }
+  if (out.num_parameters == 0) {
+    out.num_parameters = grade.at.size();
+  } else if (grade.at.size() != out.num_parameters) {
+    throw std::invalid_argument("function_delaunay interface got inconsistent grade dimensions.");
+  }
+  out.filtration_values.insert(out.filtration_values.end(), grade.at.begin(), grade.at.end());
+}
+
+template <typename index_type>
+inline std::vector<function_delaunay::Point_with_densities> make_sorted_function_delaunay_points(
+    const function_delaunay_interface_input<index_type>& input,
+    std::size_t* num_function_parameters = nullptr) {
+  const auto num_functions = validate_function_delaunay_input(input);
+  if (num_function_parameters != nullptr) {
+    *num_function_parameters = num_functions;
+  }
+
+  std::vector<function_delaunay::Point_with_densities> points;
+  points.reserve(input.num_points);
+  const auto point_view = point_cloud_view(input);
+  const auto densities_view = function_values_view(input);
+  for (std::size_t i = 0; i < input.num_points; ++i) {
+    const double* coords_begin = point_view.data_handle() + i * point_view.stride(0);
+    const double* densities_begin = densities_view.data_handle() + i * densities_view.stride(0);
+    points.emplace_back(
+        coords_begin, coords_begin + input.num_point_coordinates, densities_begin, densities_begin + num_functions);
+    points.back().idx = static_cast<int>(i);
+  }
+  std::sort(points.begin(), points.end(), function_delaunay::Lex_sort_by_density());
+  return points;
+}
+
+template <typename index_type>
 inline void recover_vertex_ids(function_delaunay_interface_output<index_type>& out,
                                const std::vector<index_type>& sorted_to_original) {
   const std::size_t num_vertices = sorted_to_original.size();
-  if (out.dimensions.size() < num_vertices || out.filtration_values.size() < num_vertices ||
+  const std::size_t num_filtration_rows = filtration_value_rows(out);
+  if (out.num_parameters == 0 || out.dimensions.size() < num_vertices || num_filtration_rows < num_vertices ||
       out.boundaries.size() < num_vertices) {
     throw std::runtime_error("function_delaunay bridge expected a full 0-simplex block.");
   }
 
-  std::vector<std::pair<double, double> > vertex_filtrations(num_vertices);
+  std::vector<double> vertex_filtrations(num_vertices * out.num_parameters);
   std::vector<std::vector<index_type> > vertex_boundaries(num_vertices);
   std::vector<uint8_t> seen(num_vertices, 0);
   for (std::size_t sorted_idx = 0; sorted_idx < num_vertices; ++sorted_idx) {
@@ -201,7 +304,9 @@ inline void recover_vertex_ids(function_delaunay_interface_output<index_type>& o
     if (original_idx >= num_vertices) {
       throw std::runtime_error("function_delaunay bridge recovered vertex id out of range.");
     }
-    vertex_filtrations[original_idx] = std::move(out.filtration_values[sorted_idx]);
+    std::copy(out.filtration_values.begin() + static_cast<std::ptrdiff_t>(sorted_idx * out.num_parameters),
+              out.filtration_values.begin() + static_cast<std::ptrdiff_t>((sorted_idx + 1) * out.num_parameters),
+              vertex_filtrations.begin() + static_cast<std::ptrdiff_t>(original_idx * out.num_parameters));
     vertex_boundaries[original_idx] = std::move(out.boundaries[sorted_idx]);
     seen[original_idx] = 1;
   }
@@ -224,13 +329,6 @@ inline void recover_vertex_ids(function_delaunay_interface_output<index_type>& o
   }
 }
 
-inline std::pair<double, double> grade_to_pair(const Graded_matrix::Grade& grade) {
-  if (grade.at.size() < 2) {
-    throw std::invalid_argument("function_delaunay interface expects bifiltration grades.");
-  }
-  return {grade.at[0], grade.at[1]};
-}
-
 template <typename index_type>
 inline function_delaunay_interface_output<index_type> append_columns(
     const Graded_matrix& matrix,
@@ -238,7 +336,6 @@ inline function_delaunay_interface_output<index_type> append_columns(
     index_type row_shift,
     function_delaunay_interface_output<index_type> out = function_delaunay_interface_output<index_type>()) {
   for (phat::index col_idx = 0; col_idx < matrix.get_num_cols(); ++col_idx) {
-    out.filtration_values.push_back(grade_to_pair(matrix.grades[col_idx]));
     std::vector<phat::index> local_boundary;
     matrix.get_col(col_idx, local_boundary);
     std::vector<index_type> boundary;
@@ -246,6 +343,7 @@ inline function_delaunay_interface_output<index_type> append_columns(
     for (const auto row_idx : local_boundary) {
       boundary.push_back(static_cast<index_type>(row_idx) + row_shift);
     }
+    append_grade(out, matrix.grades[col_idx]);
     out.boundaries.push_back(std::move(boundary));
     out.dimensions.push_back(out_dimension);
   }
@@ -262,9 +360,21 @@ inline function_delaunay_interface_output<index_type> convert_chain_complex(
 
   const std::size_t num_dims = matrices.size();
   std::vector<index_type> counts(num_dims, 0);
+  std::size_t total_generators = 0;
+  std::size_t grade_dim = 0;
   for (std::size_t i = 0; i < num_dims; ++i) {
     const std::size_t matrix_idx = num_dims - 1 - i;
-    counts[i] = static_cast<index_type>(matrices[matrix_idx].get_num_cols());
+    const auto num_cols = static_cast<std::size_t>(matrices[matrix_idx].get_num_cols());
+    counts[i] = static_cast<index_type>(num_cols);
+    total_generators += num_cols;
+    if (grade_dim == 0 && num_cols > 0) {
+      grade_dim = matrices[matrix_idx].grades[0].at.size();
+    }
+  }
+  out.boundaries.reserve(total_generators);
+  out.dimensions.reserve(total_generators);
+  if (grade_dim > 0) {
+    out.filtration_values.reserve(total_generators * grade_dim);
   }
   std::vector<index_type> offsets(num_dims, 0);
   for (std::size_t i = 1; i < num_dims; ++i) {
@@ -282,14 +392,18 @@ inline function_delaunay_interface_output<index_type> convert_chain_complex(
 }
 
 inline std::vector<double> lowerstar_values_from_points(
-    const std::vector<function_delaunay::Point_with_densities>& points) {
+    const std::vector<function_delaunay::Point_with_densities>& points,
+    std::size_t num_function_parameters) {
   std::vector<double> lowerstar_values;
-  lowerstar_values.reserve(points.size());
+  lowerstar_values.reserve(points.size() * num_function_parameters);
   for (const auto& point : points) {
     if (point.densities.empty()) {
       throw std::runtime_error("function_delaunay simplex interface expects one function value per point.");
     }
-    lowerstar_values.push_back(point.densities[0]);
+    if (point.densities.size() != num_function_parameters) {
+      throw std::runtime_error("function_delaunay simplex interface got inconsistent function dimensions.");
+    }
+    lowerstar_values.insert(lowerstar_values.end(), point.densities.begin(), point.densities.end());
   }
   return lowerstar_values;
 }
@@ -327,10 +441,20 @@ inline Gudhi::Simplex_tree<> relabel_simplex_tree_vertices(const Gudhi::Simplex_
   return out;
 }
 
-inline function_delaunay_simplextree_interface_output convert_simplex_tree(
-    Gudhi::Simplex_tree<>& simplex_tree,
-    const std::vector<double>& lowerstar_values) {
+inline function_delaunay_simplextree_interface_output convert_simplex_tree(Gudhi::Simplex_tree<>& simplex_tree,
+                                                                           const std::vector<double>& lowerstar_values,
+                                                                           std::size_t num_function_parameters) {
   function_delaunay_simplextree_interface_output out;
+
+  if (num_function_parameters == 0) {
+    throw std::invalid_argument("function_delaunay simplex interface expects at least one function parameter.");
+  }
+  if (lowerstar_values.size() % num_function_parameters != 0) {
+    throw std::invalid_argument("function_delaunay simplex interface got malformed function values.");
+  }
+  const std::size_t num_vertices = lowerstar_values.size() / num_function_parameters;
+  const auto lowerstar_view = Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+      lowerstar_values.data(), num_vertices, num_function_parameters);
 
   const std::size_t serialized_size = simplex_tree.get_serialization_size();
   std::vector<char> serialized_simplextree(serialized_size);
@@ -338,12 +462,19 @@ inline function_delaunay_simplextree_interface_output convert_simplex_tree(
     simplex_tree.serialize(serialized_simplextree.data(), serialized_size);
   }
 
-  std::vector<double> default_values(2, -std::numeric_limits<double>::infinity());
+  std::vector<double> default_values(1 + num_function_parameters, -std::numeric_limits<double>::infinity());
   if (serialized_size > 0) {
     out.from_std(serialized_simplextree.data(), serialized_size, 0, default_values);
   }
 
-  out.fill_lowerstar(lowerstar_values, 1);
+  for (std::size_t parameter = 0; parameter < num_function_parameters; ++parameter) {
+    std::vector<double> column_values;
+    column_values.reserve(num_vertices);
+    for (std::size_t vertex = 0; vertex < num_vertices; ++vertex) {
+      column_values.push_back(lowerstar_view(vertex, parameter));
+    }
+    out.fill_lowerstar(column_values, static_cast<int>(1 + parameter));
+  }
 
   return out;
 }
@@ -351,9 +482,22 @@ inline function_delaunay_simplextree_interface_output convert_simplex_tree(
 template <typename index_type>
 inline function_delaunay_interface_output<index_type> convert_minpres(Graded_matrix& min_rep, int degree) {
   function_delaunay_interface_output<index_type> out;
+  const auto num_cols = static_cast<std::size_t>(min_rep.get_num_cols());
+  const std::size_t total_generators = min_rep.row_grades.size() + num_cols;
+  std::size_t grade_dim = 0;
+  if (!min_rep.row_grades.empty()) {
+    grade_dim = min_rep.row_grades.front().at.size();
+  } else if (num_cols > 0) {
+    grade_dim = min_rep.grades[0].at.size();
+  }
+  out.boundaries.reserve(total_generators);
+  out.dimensions.reserve(total_generators);
+  if (grade_dim > 0) {
+    out.filtration_values.reserve(total_generators * grade_dim);
+  }
 
   for (const auto& row_grade : min_rep.row_grades) {
-    out.filtration_values.push_back(grade_to_pair(row_grade));
+    append_grade(out, row_grade);
     out.boundaries.emplace_back();
     out.dimensions.push_back(degree);
   }
@@ -374,32 +518,11 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
     global_state_lock.emplace(detail::function_delaunay_interface_mutex());
   }
 
-  if (input.points.size() != input.function_values.size()) {
-    throw std::invalid_argument("function_delaunay interface expects as many function values as input points.");
-  }
-  if (input.points.empty()) {
+  if (input.num_points == 0) {
     return function_delaunay_interface_output<index_type>();
   }
 
-  const std::size_t point_dim = input.points[0].size();
-  if (point_dim == 0) {
-    throw std::invalid_argument("function_delaunay interface expects points with positive ambient dimension.");
-  }
-  for (const auto& point : input.points) {
-    if (point.size() != point_dim) {
-      throw std::invalid_argument("All points must have the same ambient dimension.");
-    }
-  }
-
-  std::vector<function_delaunay::Point_with_densities> points;
-  points.reserve(input.points.size());
-  for (std::size_t i = 0; i < input.points.size(); ++i) {
-    const auto& coords = input.points[i];
-    std::vector<double> densities(1, input.function_values[i]);
-    points.emplace_back(coords.begin(), coords.end(), densities.begin(), densities.end());
-    points.back().idx = static_cast<int>(i);
-  }
-  std::sort(points.begin(), points.end(), function_delaunay::Lex_sort_by_density());
+  auto points = detail::make_sorted_function_delaunay_points(input);
   if (degree >= 0 && input.recover_ids) {
     throw std::invalid_argument("function_delaunay recover_ids=True is only supported for full-complex outputs.");
   }
@@ -447,32 +570,12 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
     global_state_lock.emplace(detail::function_delaunay_interface_mutex());
   }
 
-  if (input.points.size() != input.function_values.size()) {
-    throw std::invalid_argument("function_delaunay interface expects as many function values as input points.");
-  }
-  if (input.points.empty()) {
+  if (input.num_points == 0) {
     return function_delaunay_simplextree_interface_output();
   }
 
-  const std::size_t point_dim = input.points[0].size();
-  if (point_dim == 0) {
-    throw std::invalid_argument("function_delaunay interface expects points with positive ambient dimension.");
-  }
-  for (const auto& point : input.points) {
-    if (point.size() != point_dim) {
-      throw std::invalid_argument("All points must have the same ambient dimension.");
-    }
-  }
-
-  std::vector<function_delaunay::Point_with_densities> points;
-  points.reserve(input.points.size());
-  for (std::size_t i = 0; i < input.points.size(); ++i) {
-    const auto& coords = input.points[i];
-    std::vector<double> densities(1, input.function_values[i]);
-    points.emplace_back(coords.begin(), coords.end(), densities.begin(), densities.end());
-    points.back().idx = static_cast<int>(i);
-  }
-  std::sort(points.begin(), points.end(), function_delaunay::Lex_sort_by_density());
+  std::size_t num_function_parameters = 0;
+  auto points = detail::make_sorted_function_delaunay_points(input, &num_function_parameters);
   const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
 
   (void)verbose_output;
@@ -481,9 +584,10 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
   function_delaunay::incremental_delaunay_complex(points, simplex_tree, false);
   if (input.recover_ids) {
     simplex_tree = detail::relabel_simplex_tree_vertices(simplex_tree, sorted_to_original);
-    return detail::convert_simplex_tree(simplex_tree, input.function_values);
+    return detail::convert_simplex_tree(simplex_tree, input.function_values, num_function_parameters);
   }
-  return detail::convert_simplex_tree(simplex_tree, detail::lowerstar_values_from_points(points));
+  return detail::convert_simplex_tree(
+      simplex_tree, detail::lowerstar_values_from_points(points, num_function_parameters), num_function_parameters);
 }
 
 template <typename index_type>
@@ -493,7 +597,8 @@ contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
     bool use_multi_chunk,
     bool verbose_output) {
   auto out = function_delaunay_interface<index_type>(input, degree, use_multi_chunk, verbose_output);
-  return build_contiguous_f64_slicer_from_output<index_type>(out.filtration_values, out.boundaries, out.dimensions);
+  return build_contiguous_f64_slicer_from_output<index_type>(
+      out.filtration_values, out.num_parameters, out.boundaries, out.dimensions);
 }
 #endif
 

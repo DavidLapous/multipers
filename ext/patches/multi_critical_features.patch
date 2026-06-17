@@ -1,0 +1,504 @@
+--- a/ext/multi_critical/include/multi_critical/free_resolution.h
++++ b/ext/multi_critical/include/multi_critical/free_resolution.h
+@@ -221,6 +221,9 @@
+ 	std::vector<index> copies;
+ 	// relations[i] is the list of pairs (j,idx) with i<j and idx a relation joining i and j
+ 	std::vector<std::vector<std::pair<index,index>>> relations;
++	// path mode only creates adjacent relations, so direct lookup avoids repeated scans
++	bool path_uses_only_adjacent_relations=false;
++	std::vector<index> adjacent_relations;
+ 	// Syzygy with relation idx as upper boundary is saved with key idx
+ 	std::unordered_map<index,index> syzygies;
+ 	// The two other relations bounding the syzygy are saved here
+@@ -233,10 +236,17 @@
+ 	    std::copy(boundary.begin(),boundary.end(),std::back_inserter(this->boundary));
+ 	    
+ 	}
+-
+ 	void get_path_of_relations(int i,int j, std::vector<index>& rels) {
+ 	    assert(i<=j);
+ 	    if(i==j) {
++		return;
++	    }
++	    if(path_uses_only_adjacent_relations) {
++		assert(j<=adjacent_relations.size());
++		for(int k=i;k<j;k++) {
++		    assert(adjacent_relations[k]>=0);
++		    rels.push_back(adjacent_relations[k]);
++		}
+ 		return;
+ 	    }
+ 	    int next_copy=0;
+@@ -447,8 +457,284 @@
+       }
+       
+   };
+-  
+-    
++
++  template<typename Matrix_Grade>
++  class Window_output_complex_accessor {
++
++  public:
++
++      typedef Matrix_Grade Grade;
++
++      typedef std::vector<std::vector<Output_simplex>> Output_complex;
++
++      Output_complex& output_complex;
++
++      std::vector<std::vector<index>>& permutations;
++      std::vector<std::vector<index>>& inv_permutations;
++      int first_level;
++      int matrix_count;
++
++      Window_output_complex_accessor(Output_complex& output_complex,
++				     std::vector<std::vector<index>>& permutations,
++				     std::vector<std::vector<index>>& inv_permutations,
++				     int first_level,
++				     int matrix_count)
++	  : output_complex(output_complex), permutations(permutations), inv_permutations(inv_permutations), first_level(first_level), matrix_count(matrix_count) {
++      }
++
++      int number_of_parameters() {
++	  return 2;
++      }
++
++      int number_of_matrices() {
++	  return matrix_count;
++      }
++
++      int output_level(int i) {
++	  return first_level - i;
++      }
++
++      int number_of_columns(int i) {
++	  int ell=output_level(i);
++	  if(ell<0 || ell>=output_complex.size()) {
++	      return 0;
++	  }
++	  return output_complex[ell].size();
++      }
++
++      Grade get_grade(int i, int j) {
++	  int ell=output_level(i);
++	  Grade g(output_complex[ell][permutations[ell][j]].grade.x,
++		  output_complex[ell][permutations[ell][j]].grade.y);
++	  return g;
++      }
++
++      void get_boundary(int i, int j,std::vector<index>& result) {
++	  int ell=output_level(i);
++	  if(ell<=0) {
++	      return;
++	  }
++	  std::vector<index>& bd=output_complex[ell][permutations[ell][j]].boundary;
++	  result.resize(bd.size());
++	  for(int k=0;k<bd.size();k++) {
++	      result[k]=inv_permutations[ell-1][bd[k]];
++	  }
++	  std::sort(result.begin(),result.end());
++      }
++
++      void clear(int i) {
++      }
++
++  };
++
++  struct Compressed_window_matrix {
++      std::vector<Grade> grades;
++      std::vector<std::vector<index>> columns;
++      index num_rows=0;
++  };
++
++  inline bool same_window_grade(const Grade& g1, const Grade& g2) {
++      return g1.x==g2.x && g1.y==g2.y;
++  }
++
++  inline index max_window_column_index(const std::vector<index>& col) {
++      if(col.empty()) {
++	  return -1;
++      }
++      return col.back();
++  }
++
++  inline void xor_sorted_window_columns(std::vector<index>& target, const std::vector<index>& source) {
++      std::vector<index> out;
++      out.resize(target.size()+source.size());
++      auto out_end=std::set_symmetric_difference(target.begin(),target.end(),source.begin(),source.end(),out.begin());
++      out.erase(out_end,out.end());
++      target.swap(out);
++  }
++
++  inline void build_window_matrices_from_output_complex(
++	  std::vector<std::vector<Output_simplex>>& output_complex,
++	  std::vector<std::vector<index>>& permutations,
++	  std::vector<std::vector<index>>& inv_permutations,
++	  int first_level,
++	  int last_level,
++	  std::vector<Compressed_window_matrix>& matrices) {
++      int matrix_count=first_level-last_level+1;
++      matrices.clear();
++      matrices.resize(matrix_count);
++      for(int d=0;d<matrix_count;d++) {
++	  int ell=first_level-d;
++	  Compressed_window_matrix& matrix=matrices[d];
++	  matrix.num_rows = ell > 0 ? output_complex[ell-1].size() : 0;
++	  int n=output_complex[ell].size();
++	  matrix.grades.resize(n);
++	  matrix.columns.resize(n);
++	  for(int j=0;j<n;j++) {
++	      Output_simplex& output_simplex=output_complex[ell][permutations[ell][j]];
++	      matrix.grades[j]=output_simplex.grade;
++	      if(ell<=0) {
++		  continue;
++	      }
++	      std::vector<index>& bd=output_simplex.boundary;
++	      std::vector<index>& col=matrix.columns[j];
++	      col.resize(bd.size());
++	      for(int k=0;k<bd.size();k++) {
++		  col[k]=inv_permutations[ell-1][bd[k]];
++	      }
++	      std::sort(col.begin(),col.end());
++	  }
++      }
++  }
++
++  inline bool compressed_window_column_is_local(std::vector<Compressed_window_matrix>& matrices, int d, index i) {
++      index p=max_window_column_index(matrices[d].columns[i]);
++      return p!=-1 && same_window_grade(matrices[d].grades[i],matrices[d+1].grades[p]);
++  }
++
++  inline void compress_window_before_matrix_materialization(std::vector<Compressed_window_matrix>& matrices) {
++      if(matrices.size()<2) {
++	  return;
++      }
++      index max_d=matrices.size()-2;
++      std::vector<std::vector<index>> pivots(matrices.size());
++      std::vector<std::vector<char>> status(matrices.size());
++      std::vector<std::vector<index>> global_index(matrices.size());
++      for(int d=0;d<matrices.size();d++) {
++	  pivots[d].assign(matrices[d].num_rows,-1);
++	  status[d].assign(matrices[d].columns.size(),0);
++	  global_index[d].assign(matrices[d].columns.size(),-1);
++      }
++
++      for(index d=0;d<=max_d;d++) {
++	  index gl_index=0;
++	  for(index i=0;i<matrices[d].columns.size();i++) {
++	      if(matrices[d].columns[i].empty()) {
++		  if(status[d][i]==0) {
++		      status[d][i]=2;
++		      global_index[d][i]=gl_index++;
++		  }
++		  continue;
++	      }
++	      index k=max_window_column_index(matrices[d].columns[i]);
++	      index l=pivots[d][k];
++	      while(compressed_window_column_is_local(matrices,d,i) && l!=-1) {
++		  xor_sorted_window_columns(matrices[d].columns[i],matrices[d].columns[l]);
++		  if(matrices[d].columns[i].empty()) {
++		      break;
++		  }
++		  k=max_window_column_index(matrices[d].columns[i]);
++		  l=pivots[d][k];
++	      }
++	      if(compressed_window_column_is_local(matrices,d,i)) {
++		  k=max_window_column_index(matrices[d].columns[i]);
++		  pivots[d][k]=i;
++		  status[d][i]=-1;
++		  status[d+1][k]=1;
++		  matrices[d+1].columns[k].clear();
++	      } else {
++		  if(status[d][i]==0) {
++		      status[d][i]=2;
++		      global_index[d][i]=gl_index++;
++		  }
++	      }
++	  }
++      }
++
++      {
++	  index last=matrices.size()-1;
++	  index gl_index=0;
++	  for(index i=0;i<matrices[last].columns.size();i++) {
++	      if(status[last][i]==0) {
++		  status[last][i]=2;
++	      }
++	      if(status[last][i]==2) {
++		  global_index[last][i]=gl_index++;
++	      }
++	  }
++      }
++
++      for(index d=max_d;d>=0;d--) {
++	  for(index i=0;i<matrices[d].columns.size();i++) {
++	      if(status[d][i]!=2) {
++		  continue;
++	      }
++	      std::vector<index> col;
++	      while(!matrices[d].columns[i].empty()) {
++		  index p=max_window_column_index(matrices[d].columns[i]);
++		  index j=pivots[d][p];
++		  if(j!=-1) {
++		      assert(status[d][j]==-1);
++		      xor_sorted_window_columns(matrices[d].columns[i],matrices[d].columns[j]);
++		  } else {
++		      assert(status[d+1][p]==-1 || status[d+1][p]==2);
++		      if(status[d+1][p]==2) {
++			  col.push_back(global_index[d+1][p]);
++		      }
++		      matrices[d].columns[i].pop_back();
++		  }
++	      }
++	      std::reverse(col.begin(),col.end());
++	      matrices[d].columns[i].swap(col);
++	  }
++	  if(d==0) {
++	      break;
++	  }
++      }
++
++      for(index d=matrices.size()-1;d>=0;d--) {
++	  Compressed_window_matrix reduced;
++	  reduced.num_rows = d==matrices.size()-1 ? matrices[d].num_rows : matrices[d+1].grades.size();
++	  for(index i=0;i<matrices[d].columns.size();i++) {
++	      if(status[d][i]==2) {
++		  reduced.grades.push_back(matrices[d].grades[i]);
++		  reduced.columns.push_back(std::move(matrices[d].columns[i]));
++	      }
++	  }
++	  matrices[d]=std::move(reduced);
++	  if(d==0) {
++	      break;
++	  }
++      }
++  }
++
++  template<typename Matrix_Grade>
++  class Compressed_window_accessor {
++
++  public:
++
++      typedef Matrix_Grade Grade;
++
++      std::vector<Compressed_window_matrix>& matrices;
++
++      Compressed_window_accessor(std::vector<Compressed_window_matrix>& matrices) : matrices(matrices) {}
++
++      int number_of_parameters() {
++	  return 2;
++      }
++
++      int number_of_matrices() {
++	  return matrices.size();
++      }
++
++      int number_of_columns(int i) {
++	  return matrices[i].grades.size();
++      }
++
++      Grade get_grade(int i, int j) {
++	  Grade g(matrices[i].grades[j].x,matrices[i].grades[j].y);
++	  return g;
++      }
++
++      void get_boundary(int i, int j,std::vector<index>& result) {
++	  result=std::move(matrices[i].columns[j]);
++      }
++
++      void clear(int i) {
++      }
++
++  };
++
++
+     void debug_print_output_complex(std::vector<std::vector<Output_simplex>>& complex) {
+ 	for(int i=0;i<complex.size();i++) {
+ 	    std::cout << "Dimension " << i << std::endl;
+@@ -491,7 +777,13 @@
+ 	    if(g1.x>g2.x) {
+ 		return false;
+ 	    }
+-	    return g1.y<g2.y;
++	    if(g1.y<g2.y) {
++		return true;
++	    }
++	    if(g1.y>g2.y) {
++		return false;
++	    }
++	    return i<j;
+ 	}
+     };
+ 
+@@ -576,7 +868,10 @@
+     template<typename ParserType, typename GradedMatrix>
+ 	void free_resolution(ParserType& parser,
+ 			     std::vector<GradedMatrix>& result,
+-			     bool use_logpath=true) {
++			     bool use_logpath=true,
++			     int target_degree=-1,
++			     int target_window_radius=0,
++			     bool target_prelocal=false) {
+ 
+ 
+ 	
+@@ -704,7 +999,11 @@
+ 		}
+ 		// Generate relations and syzygies
+ 		int width=1;
++		input_simplex.path_uses_only_adjacent_relations=!use_logpath;
+ 		input_simplex.relations.resize(input_simplex.copies.size());
++		if(input_simplex.path_uses_only_adjacent_relations && input_simplex.copies.size()>1) {
++		    input_simplex.adjacent_relations.assign(input_simplex.copies.size()-1,-1);
++		}
+ 		// It is important for later that the relations are generated in increasing
+ 		// length, that is, the width of the relations (for a single input simplex)
+ 		// increase with their index
+@@ -726,6 +1025,10 @@
+ 						
+ 			output_complex[ell+1].push_back(new_output_simplex_for_relation);
+ 			input_simplex.relations[j-width].push_back(std::make_pair(j,idx_of_new_output_relation));
++			if(input_simplex.path_uses_only_adjacent_relations) {
++			    assert(width==1);
++			    input_simplex.adjacent_relations[j-width]=idx_of_new_output_relation;
++			}
+ 			
+ 			
+ 			if(width>1) {
+@@ -1208,7 +1511,10 @@
+ 	std::vector<std::vector<index>> permutations, inv_permutations;
+ 	permutations.resize(output_complex.size());
+ 	inv_permutations.resize(output_complex.size());
+-	for(int i=0;i<output_complex.size();i++) {
++	auto initialize_level_order = [&](int i) {
++	    if(i<0 || i>=output_complex.size()) {
++		return;
++	    }
+ 	    long m = output_complex[i].size();
+ 	    permutations[i].resize(m);
+ 	    inv_permutations[i].resize(m);
+@@ -1217,25 +1523,64 @@
+ 	    }
+ #if 1
+ 	    Grade_sorter sorter(output_complex[i]);
+-	    std::stable_sort(permutations[i].begin(),permutations[i].end(),sorter);
++	    std::sort(permutations[i].begin(),permutations[i].end(),sorter);
+ #endif
+ 	    for(int j=0;j<m;j++) {
+ 		inv_permutations[i][permutations[i][j]]=j;
+ 	    }
++	};
++	int first_level=-1;
++	int last_level=-1;
++	if(target_degree>=0) {
++	    int max_level=output_complex.size()-1;
++	    if(target_degree+1>max_level) {
++		result.clear();
++		return;
++	    }
++	    int upper_extra=std::min(target_window_radius,max_level-(target_degree+1));
++	    int lower_extra=std::min(target_window_radius,target_degree);
++	    first_level=target_degree+1+upper_extra;
++	    last_level=target_degree-lower_extra;
++	    for(int ell=first_level;ell>=last_level;ell--) {
++		initialize_level_order(ell);
++	    }
++	    if(last_level>0) {
++		initialize_level_order(last_level-1);
++	    }
++	} else {
++	    for(int i=0;i<output_complex.size();i++) {
++		initialize_level_order(i);
++	    }
+ 	}
+ 
+ #if MULTI_CRITICAL_TIMERS
+ 	multi_critical::sort_by_grades_timer.stop();
+ #endif
+-	
+-	
++
++
+ #if MULTI_CRITICAL_TIMERS
+ 	multi_critical::convert_to_graded_matrices_timer.start();
+ #endif
+ 	if(multi_critical::verbose) std::cout << "Convert to graded matrices" << std::endl;
+ 	typedef typename GradedMatrix::Grade Matrix_Grade;
+-	Output_complex_accessor<Matrix_Grade> accessor(output_complex,permutations,inv_permutations);
+-	mpp_utils::create_graded_matrices_from_pre_column_struct(accessor,result,0,false);
++	if(target_degree>=0) {
++	    int matrix_count=first_level-last_level+1;
++	    int number_of_rows_in_last_matrix = last_level > 0 ? output_complex[last_level-1].size() : 0;
++	    if(target_prelocal) {
++		std::vector<Compressed_window_matrix> compressed_matrices;
++		build_window_matrices_from_output_complex(output_complex,permutations,inv_permutations,first_level,last_level,compressed_matrices);
++		compress_window_before_matrix_materialization(compressed_matrices);
++		number_of_rows_in_last_matrix = compressed_matrices.empty() ? 0 : compressed_matrices.back().num_rows;
++		Compressed_window_accessor<Matrix_Grade> accessor(compressed_matrices);
++		mpp_utils::create_graded_matrices_from_pre_column_struct(accessor,result,number_of_rows_in_last_matrix,false);
++	    } else {
++		Window_output_complex_accessor<Matrix_Grade> accessor(output_complex,permutations,inv_permutations,first_level,matrix_count);
++		mpp_utils::create_graded_matrices_from_pre_column_struct(accessor,result,number_of_rows_in_last_matrix,false);
++	    }
++	} else {
++	    Output_complex_accessor<Matrix_Grade> accessor(output_complex,permutations,inv_permutations);
++	    mpp_utils::create_graded_matrices_from_pre_column_struct(accessor,result,0,false);
++	}
+ 
+ #if !NDEBUG
+ 	for(int i=0;i<result.size();i++) {
+--- a/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h
++++ b/ext/multi_critical/mpp_utils_mod/include/mpp_utils/Graded_matrix.h
+@@ -538,10 +538,7 @@
+ 	    GradedMatrix& M1=*it1;
+ 	    GradedMatrix& M2=*it2;
+ 	    assert(M1.num_rows==M2.get_num_cols());
+-	    M1.row_grades.clear();
+-	    for(index j=0;j<M1.num_rows;j++) {
+-		M1.row_grades.push_back(M2.grades[j]);
+-	    }
++	    M1.row_grades.assign(M2.grades.begin(),M2.grades.begin()+M1.num_rows);
+ 	    //std::cout << "Copied " << M1.num_rows << " grades" << std::endl;
+ 	    it1++;
+ 	    it2++;
+@@ -685,10 +682,7 @@
+ 	    M2.grades[i].index_at[0]=val_to_index_x[M2.grades[i].at[0]];
+ 	    M2.grades[i].index_at[1]=val_to_index_y[M2.grades[i].at[1]];
+ 	}
+-	M1.row_grades.clear();
+-	for(int i=0;i<n2;i++) {
+-	    M1.row_grades.push_back(M2.grades[i]);
+-	}
++	M1.row_grades.assign(M2.grades.begin(),M2.grades.begin()+n2);
+ 	M1.grade_indices_assigned=true;
+ 	M2.grade_indices_assigned=true;
+     
+--- a/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h
++++ b/ext/multi_critical/mpp_utils_mod/include/mpp_utils/create_graded_matrices_from_pre_column_struct.h
+@@ -19,6 +19,7 @@
+ #pragma once
+ 
+ #include<cstring>
++#include<utility>
+ 
+ #include<mpp_utils/basic.h>
+ #include<mpp_utils/Pre_column_struct.h>
+@@ -61,7 +62,7 @@
+       }
+ 
+       void get_boundary(int i, int j,std::vector<index>& result) {
+-	  result=pre_columns[i][j].boundary;
++	  result=std::move(pre_columns[i][j].boundary);
+       }
+ 
+       void clear(int i) {
+@@ -100,7 +101,7 @@
+ 	matrix.grades[j]=pre_column_accessor.get_grade(i,j);
+ 	bd.clear();
+ 	pre_column_accessor.get_boundary(i,j,bd);
+-	matrix.set_col(j,bd);
++	matrix.set_col(j,std::move(bd));
+       }
+       pre_column_accessor.clear(i);
+       matrix.sync();

@@ -26,8 +26,8 @@ namespace rank_invariant {
 
 template <std::size_t N, typename index_type>
 inline std::array<index_type, 1 + 2 * N> rank_sparse_key_shape(const std::array<index_type, N> &grid_shape,
-                                                              const index_type degree_count,
-                                                              const bool zero_pad) {
+                                                               const index_type degree_count,
+                                                               const bool zero_pad) {
   std::array<index_type, 1 + 2 * N> key_shape{};
   key_shape[0] = degree_count;
   for (std::size_t axis = 0; axis < N; ++axis) {
@@ -239,7 +239,7 @@ inline bool axis_order_is_identity(const std::array<std::size_t, N> &axis_order)
 
 template <std::size_t N, typename index_type>
 inline std::array<index_type, N> ordered_grid_shape(const std::array<index_type, N> &grid_shape,
-                                                   const std::array<std::size_t, N> &axis_order) {
+                                                    const std::array<std::size_t, N> &axis_order) {
   std::array<index_type, N> out{};
   for (std::size_t axis = 0; axis < N; ++axis) out[axis] = grid_shape[axis_order[axis]];
   return out;
@@ -292,17 +292,14 @@ inline index_type path_last_segment_stop(const std::array<index_type, N> &upper,
 }
 
 template <std::size_t N, typename Filtration, typename index_type>
-inline typename Filtration::value_type get_slice_rank_filtration_on_slice_path(
-    const Filtration &filtration,
-    unsigned int generator,
-    const std::array<index_type, N> &lower,
-    const std::array<index_type, N> &upper) {
+inline typename Filtration::value_type get_slice_rank_filtration_on_slice_path(const Filtration &filtration,
+                                                                               unsigned int generator,
+                                                                               const std::array<index_type, N> &lower,
+                                                                               const std::array<index_type, N> &upper) {
   using value_type = typename Filtration::value_type;
   if constexpr (N == 2) {
-    return get_slice_rank_filtration<index_type, value_type>(filtration(generator, 0),
-                                                            filtration(generator, 1),
-                                                            upper[0],
-                                                            lower[1]);
+    return get_slice_rank_filtration<index_type, value_type>(
+        filtration(generator, 0), filtration(generator, 1), upper[0], lower[1]);
   }
   for (std::size_t segment = 0; segment < N; ++segment) {
     bool appears_on_segment = true;
@@ -354,7 +351,8 @@ inline typename Filtration::value_type get_slice_rank_filtration_on_ordered_slic
       }
     }
     if (!appears_on_segment) continue;
-    const auto coordinate = static_cast<index_type>(filtration(generator, static_cast<unsigned int>(axis_order[segment])));
+    const auto coordinate =
+        static_cast<index_type>(filtration(generator, static_cast<unsigned int>(axis_order[segment])));
     if (coordinate > upper[segment]) continue;
     index_type scalar = std::max(lower[segment], coordinate);
     for (std::size_t axis = 0; axis < segment; ++axis) scalar += upper[axis];
@@ -365,13 +363,12 @@ inline typename Filtration::value_type get_slice_rank_filtration_on_ordered_slic
 }
 
 template <std::size_t Axis, std::size_t N, typename dtype, typename index_type, typename Accumulator>
-inline void emit_endpoint_atom_combinations(
-    Accumulator &atoms,
-    const std::array<std::array<index_type, 2>, 2 * N> &endpoint_coordinates,
-    const std::array<std::array<dtype, 2>, 2 * N> &endpoint_weights,
-    const std::array<std::size_t, 2 * N> &endpoint_counts,
-    std::array<index_type, 1 + 2 * N> &coordinates,
-    const dtype weight) {
+inline void emit_endpoint_atom_combinations(Accumulator &atoms,
+                                            const std::array<std::array<index_type, 2>, 2 * N> &endpoint_coordinates,
+                                            const std::array<std::array<dtype, 2>, 2 * N> &endpoint_weights,
+                                            const std::array<std::size_t, 2 * N> &endpoint_counts,
+                                            std::array<index_type, 1 + 2 * N> &coordinates,
+                                            const dtype weight) {
   if constexpr (Axis == 2 * N) {
     bool valid_rank_coordinate = true;
     for (std::size_t axis = 0; axis < N; ++axis) {
@@ -384,13 +381,12 @@ inline void emit_endpoint_atom_combinations(
   } else {
     for (std::size_t choice = 0; choice < endpoint_counts[Axis]; ++choice) {
       coordinates[1 + Axis] = endpoint_coordinates[Axis][choice];
-      emit_endpoint_atom_combinations<Axis + 1, N>(
-          atoms,
-          endpoint_coordinates,
-          endpoint_weights,
-          endpoint_counts,
-          coordinates,
-          static_cast<dtype>(weight * endpoint_weights[Axis][choice]));
+      emit_endpoint_atom_combinations<Axis + 1, N>(atoms,
+                                                   endpoint_coordinates,
+                                                   endpoint_weights,
+                                                   endpoint_counts,
+                                                   coordinates,
+                                                   static_cast<dtype>(weight * endpoint_weights[Axis][choice]));
     }
   }
 }
@@ -424,9 +420,9 @@ inline void add_slice_path_bar_contribution(const Output &out,
 
 template <std::size_t N, typename dtype, typename index_type, typename Accumulator>
 inline void emit_interval_endpoint_atoms(Accumulator &atoms,
-                                          index_type degree_index,
-                                          const std::array<index_type, N> &birth_low,
-                                          const std::array<index_type, N> &birth_high,
+                                         index_type degree_index,
+                                         const std::array<index_type, N> &birth_low,
+                                         const std::array<index_type, N> &birth_high,
                                          const std::array<index_type, N> &death_low,
                                          const std::array<index_type, N> &death_high,
                                          const std::array<index_type, N> &grid_shape,
@@ -518,8 +514,7 @@ inline void emit_slice_path_bar_signed_measure_atoms(Accumulator &atoms,
       endpoint_counts[1] = 2;
     }
 
-    const index_type death_x_high_endpoint =
-        zero_pad ? std::min(death_x_high, grid_shape[0] - 1) : death_x_high;
+    const index_type death_x_high_endpoint = zero_pad ? std::min(death_x_high, grid_shape[0] - 1) : death_x_high;
     if (death_x_high_endpoint <= death_x_low) return;
     endpoint_coordinates[2][0] = death_x_high_endpoint;
     endpoint_weights[2][0] = dtype{1};
@@ -530,8 +525,7 @@ inline void emit_slice_path_bar_signed_measure_atoms(Accumulator &atoms,
       endpoint_counts[2] = 2;
     }
 
-    const index_type death_y_high_endpoint =
-        zero_pad ? std::min(death_y_high, grid_shape[1] - 1) : death_y_high;
+    const index_type death_y_high_endpoint = zero_pad ? std::min(death_y_high, grid_shape[1] - 1) : death_y_high;
     if (death_y_high_endpoint <= death_y_low) return;
     std::array<index_type, 5> coordinates{};
     coordinates[0] = degree_index;
@@ -576,14 +570,8 @@ inline void emit_slice_path_bar_signed_measure_atoms(Accumulator &atoms,
   death_low[N - 1] = lower[N - 1];
   death_high[N - 1] = lower[N - 1] + death_stop - last_start;
 
-  emit_interval_endpoint_atoms<N, dtype, index_type, Accumulator>(atoms,
-                                                                  degree_index,
-                                                                  birth_low,
-                                                                  birth_high,
-                                                                  death_low,
-                                                                  death_high,
-                                                                  grid_shape,
-                                                                  zero_pad);
+  emit_interval_endpoint_atoms<N, dtype, index_type, Accumulator>(
+      atoms, degree_index, birth_low, birth_high, death_low, death_high, grid_shape, zero_pad);
 }
 
 template <std::size_t N, typename dtype, typename index_type, typename Accumulator>
@@ -624,14 +612,8 @@ inline void emit_ordered_slice_path_bar_signed_measure_atoms(Accumulator &atoms,
   death_low[axis_order[N - 1]] = lower[N - 1];
   death_high[axis_order[N - 1]] = lower[N - 1] + death_stop - last_start;
 
-  emit_interval_endpoint_atoms<N, dtype, index_type, Accumulator>(atoms,
-                                                                  degree_index,
-                                                                  birth_low,
-                                                                  birth_high,
-                                                                  death_low,
-                                                                  death_high,
-                                                                  grid_shape,
-                                                                  zero_pad);
+  emit_interval_endpoint_atoms<N, dtype, index_type, Accumulator>(
+      atoms, degree_index, birth_low, birth_high, death_low, death_high, grid_shape, zero_pad);
 }
 
 template <typename index_type, typename Output>
@@ -717,19 +699,20 @@ inline void compute_2d_rank_invariant_of_elbow(
   for (auto degree : degrees) {
     // this assumes barcodes degrees starts from 0
     if constexpr (verbose) std::cout << "Adding Barcode of degree " << degree << std::endl;
-    if (degree >= static_cast<index_type>(barcodes.size())) continue;
-    const auto &barcode = barcodes[degree];
-    for (const auto &bar : barcode) {
-      if (bar[0] > Y + I) continue;
-      if constexpr (verbose)
-        std::cout << bar[0] << " " << bar[1] << "checkinf: " << MultiFiltration::T_inf << " ==? "
-                  << (bar[0] == MultiFiltration::T_inf) << std::endl;
-      auto birth = static_cast<index_type>(bar[0]);
-      auto death = static_cast<index_type>(
-          std::min(bar[1],
-                   static_cast<typename MultiFiltration::value_type>(Y + I)));  // I,J atteints, pas X ni Y
-      if constexpr (false) std::cout << "Birth " << birth << " Death " << death << std::endl;
-      add_bar_contribution(out, degree_index, birth, death, I, J, flip_death);
+    if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
+      const auto &barcode = barcodes[degree];
+      for (const auto &bar : barcode) {
+        if (bar[0] > Y + I) continue;
+        if constexpr (verbose)
+          std::cout << bar[0] << " " << bar[1] << "checkinf: " << MultiFiltration::T_inf << " ==? "
+                    << (bar[0] == MultiFiltration::T_inf) << std::endl;
+        auto birth = static_cast<index_type>(bar[0]);
+        auto death = static_cast<index_type>(
+            std::min(bar[1],
+                     static_cast<typename MultiFiltration::value_type>(Y + I)));  // I,J atteints, pas X ni Y
+        if constexpr (false) std::cout << "Birth " << birth << " Death " << death << std::endl;
+        add_bar_contribution(out, degree_index, birth, death, I, J, flip_death);
+      }
     }
     degree_index++;
   }
@@ -790,9 +773,8 @@ inline void compute_nd_rank_invariant_by_slice_paths(
       const auto &filtration = filtration_values[i];
       value_type filtration_in_slice = MultiFiltration::T_inf;
       for (unsigned int generator = 0; generator < filtration.num_generators(); ++generator) {
-        filtration_in_slice = std::min(
-            filtration_in_slice,
-            get_slice_rank_filtration_on_slice_path<N>(filtration, generator, lower, upper));
+        filtration_in_slice = std::min(filtration_in_slice,
+                                       get_slice_rank_filtration_on_slice_path<N>(filtration, generator, lower, upper));
       }
       slice_filtration[i] = filtration_in_slice;
     }
@@ -808,7 +790,7 @@ inline void compute_nd_rank_invariant_by_slice_paths(
 
     index_type degree_index = 0;
     for (auto degree : degrees) {
-      if (degree < static_cast<index_type>(barcodes.size())) {
+      if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
         const auto &barcode = barcodes[degree];
         for (const auto &bar : barcode) {
           const auto birth = static_cast<index_type>(bar[0]);
@@ -862,7 +844,8 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> compu
     ThreadSafe slicer_thread(slicer);
     tbb::enumerable_thread_specific<ThreadSafe> thread_locals(slicer_thread);
     packed_rank_sparse_accumulator<N, dtype, index_type> atom_accumulator(key_shape);
-    tbb::enumerable_thread_specific<packed_rank_sparse_accumulator<N, dtype, index_type>> thread_atoms(atom_accumulator);
+    tbb::enumerable_thread_specific<packed_rank_sparse_accumulator<N, dtype, index_type>> thread_atoms(
+        atom_accumulator);
 
     const index_type X = grid_shape[0];
     const index_type Y = grid_shape[1];
@@ -879,12 +862,9 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> compu
         const auto &filtration = filtration_values[i];
         value_type filtration_in_slice = MultiFiltration::T_inf;
         for (unsigned int generator = 0; generator < filtration.num_generators(); ++generator) {
-          filtration_in_slice =
-              std::min(filtration_in_slice,
-                       get_slice_rank_filtration<index_type, value_type>(filtration(generator, 0),
-                                                                         filtration(generator, 1),
-                                                                         I,
-                                                                         J));
+          filtration_in_slice = std::min(filtration_in_slice,
+                                         get_slice_rank_filtration<index_type, value_type>(
+                                             filtration(generator, 0), filtration(generator, 1), I, J));
         }
         slice_filtration[i] = filtration_in_slice;
       }
@@ -901,7 +881,7 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> compu
       auto &sm_pts = thread_atoms.local();
       index_type degree_index = 0;
       for (auto degree : degrees) {
-        if (degree < static_cast<index_type>(barcodes.size())) {
+        if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
           const auto &barcode = barcodes[degree];
           for (const auto &bar : barcode) {
             const auto birth = static_cast<index_type>(bar[0]);
@@ -942,14 +922,11 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> compu
       const auto &filtration = filtration_values[i];
       value_type filtration_in_slice = MultiFiltration::T_inf;
       for (unsigned int generator = 0; generator < filtration.num_generators(); ++generator) {
-        filtration_in_slice =
-            std::min(filtration_in_slice,
-                     reorder_axes ? get_slice_rank_filtration_on_ordered_slice_path<N>(filtration,
-                                                                                        generator,
-                                                                                        lower,
-                                                                                        upper,
-                                                                                        axis_order)
-                                  : get_slice_rank_filtration_on_slice_path<N>(filtration, generator, lower, upper));
+        filtration_in_slice = std::min(
+            filtration_in_slice,
+            reorder_axes
+                ? get_slice_rank_filtration_on_ordered_slice_path<N>(filtration, generator, lower, upper, axis_order)
+                : get_slice_rank_filtration_on_slice_path<N>(filtration, generator, lower, upper));
       }
       slice_filtration[i] = filtration_in_slice;
     }
@@ -966,7 +943,7 @@ inline std::pair<std::vector<std::vector<index_type>>, std::vector<dtype>> compu
     auto &sm_pts = thread_atoms.local();
     index_type degree_index = 0;
     for (auto degree : degrees) {
-      if (degree < static_cast<index_type>(barcodes.size())) {
+      if (degree >= index_type{0} && static_cast<std::size_t>(degree) < barcodes.size()) {
         const auto &barcode = barcodes[degree];
         for (const auto &bar : barcode) {
           const auto birth = static_cast<index_type>(bar[0]);
@@ -1009,7 +986,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
   oneapi::tbb::task_arena arena(PersBackend::is_vine ? 1 : n_jobs);
   switch (num_parameters) {
     case 2: {
-      if (grid_shape.size() != 2) [[unlikely]] throw std::runtime_error("Internal error: invalid rank grid shape.");
+      if (grid_shape.size() != 2) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid rank grid shape.");
       const std::array<indices_type, 2> parameter_shape = {grid_shape[0], grid_shape[1]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {
@@ -1019,7 +997,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
       return out;
     }
     case 3: {
-      if (grid_shape.size() != 3) [[unlikely]] throw std::runtime_error("Internal error: invalid rank grid shape.");
+      if (grid_shape.size() != 3) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid rank grid shape.");
       const std::array<indices_type, 3> parameter_shape = {grid_shape[0], grid_shape[1], grid_shape[2]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {
@@ -1029,7 +1008,8 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_ra
       return out;
     }
     case 4: {
-      if (grid_shape.size() != 4) [[unlikely]] throw std::runtime_error("Internal error: invalid rank grid shape.");
+      if (grid_shape.size() != 4) [[unlikely]]
+        throw std::runtime_error("Internal error: invalid rank grid shape.");
       const std::array<indices_type, 4> parameter_shape = {grid_shape[0], grid_shape[1], grid_shape[2], grid_shape[3]};
       std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> out;
       arena.execute([&] {
@@ -1076,16 +1056,18 @@ void compute_rank_invariant_python(Gudhi::multi_persistence::Slicer<MultiFiltrat
       mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
       const auto shape = vector_to_full_rank_shape<3>(grid_shape);
       const std::array<indices_type, 3> parameter_shape = {shape[1], shape[2], shape[3]};
-      arena.execute(
-          [&] { compute_nd_rank_invariant_by_slice_paths<3>(slicer, container, parameter_shape, degrees, ignore_inf); });
+      arena.execute([&] {
+        compute_nd_rank_invariant_by_slice_paths<3>(slicer, container, parameter_shape, degrees, ignore_inf);
+      });
       break;
     }
     case 4: {
       mobius_inversion::dense_tensor_view<dtype, indices_type> container(data_ptr, grid_shape);  // assumes zero tensor
       const auto shape = vector_to_full_rank_shape<4>(grid_shape);
       const std::array<indices_type, 4> parameter_shape = {shape[1], shape[2], shape[3], shape[4]};
-      arena.execute(
-          [&] { compute_nd_rank_invariant_by_slice_paths<4>(slicer, container, parameter_shape, degrees, ignore_inf); });
+      arena.execute([&] {
+        compute_nd_rank_invariant_by_slice_paths<4>(slicer, container, parameter_shape, degrees, ignore_inf);
+      });
       break;
     }
     default:

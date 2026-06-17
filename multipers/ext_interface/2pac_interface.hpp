@@ -10,6 +10,8 @@
 
 namespace multipers {
 
+enum class twopac_minpres_algorithm { cohomology, homology };
+
 template <typename index_type>
 struct twopac_interface_input {
   std::vector<std::pair<double, double>> filtration_values;
@@ -46,7 +48,8 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool full_resolution = true,
                                                              bool use_chunk = true,
                                                              bool use_clearing = false,
-                                                             bool verbose_output = false);
+                                                             bool verbose_output = false,
+                                                             twopac_minpres_algorithm algorithm = twopac_minpres_algorithm::cohomology);
 
 template <typename index_type>
 twopac_minpres_with_generators_output<index_type> twopac_minpres_with_generators_interface(
@@ -55,7 +58,8 @@ twopac_minpres_with_generators_output<index_type> twopac_minpres_with_generators
     bool full_resolution = true,
     bool use_chunk = false,
     bool use_clearing = false,
-    bool verbose_output = false);
+    bool verbose_output = false,
+    twopac_minpres_algorithm algorithm = twopac_minpres_algorithm::cohomology);
 
 }  // namespace multipers
 
@@ -78,7 +82,8 @@ contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_slicer_typ
                                                            bool full_resolution = true,
                                                            bool use_chunk = true,
                                                            bool use_clearing = false,
-                                                           bool verbose_output = false);
+                                                           bool verbose_output = false,
+                                                           twopac_minpres_algorithm algorithm = twopac_minpres_algorithm::cohomology);
 
 template <typename contiguous_slicer_type>
 std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
@@ -87,18 +92,35 @@ twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& inpu
                                                     bool full_resolution = true,
                                                     bool use_chunk = false,
                                                     bool use_clearing = false,
-                                                    bool verbose_output = false);
+                                                    bool verbose_output = false,
+                                                    twopac_minpres_algorithm algorithm = twopac_minpres_algorithm::cohomology);
 
 }  // namespace multipers
 #endif
 
 #ifndef MULTIPERS_HAS_2PAC_INTERFACE
+#if !MULTIPERS_DISABLE_2PAC_INTERFACE && __has_include("Cone.hpp") && __has_include("chunk.hpp") && \
+    __has_include("complexes.hpp") && __has_include("computation.hpp") && __has_include("factor.hpp") && \
+    __has_include("lw.hpp") && __has_include("matrices.hpp") && __has_include("minimize.hpp") && \
+    __has_include("time_measurement.hpp")
+#define MULTIPERS_HAS_2PAC_INTERFACE 1
+#else
 #define MULTIPERS_HAS_2PAC_INTERFACE 0
 #endif
+#endif
+
+namespace multipers {
+
+inline bool twopac_interface_available() { return MULTIPERS_HAS_2PAC_INTERFACE; }
+
+}  // namespace multipers
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE && MULTIPERS_HAS_2PAC_INTERFACE
 
+#include "Cone.hpp"
 #include "chunk.hpp"
+#include "complexes.hpp"
+#include "computation.hpp"
 #include "factor.hpp"
 #include "lw.hpp"
 #include "matrices.hpp"
@@ -106,8 +128,6 @@ twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& inpu
 #include "time_measurement.hpp"
 
 namespace multipers {
-
-inline bool twopac_interface_available() { return true; }
 
 namespace twopac_detail {
 
@@ -146,6 +166,16 @@ struct timing_mute_guard {
   }
 
   bool old_muted;
+};
+
+struct cohomology_clearing_guard {
+  explicit cohomology_clearing_guard(bool use_clearing) : old_no_clearing(Cohomology::no_clearing) {
+    Cohomology::no_clearing = !use_clearing;
+  }
+
+  ~cohomology_clearing_guard() { Cohomology::no_clearing = old_no_clearing; }
+
+  bool old_no_clearing;
 };
 
 class VectorChainComplex : public Complex {
@@ -317,6 +347,31 @@ inline std::vector<size_t> identity_indices(std::size_t size) {
   return indices;
 }
 
+inline bool is_finite_grade(const grade& value) {
+  return value.x > grade::min && value.x < grade::max && value.y > grade::min && value.y < grade::max;
+}
+
+inline std::vector<size_t> finite_grade_indices(const std::vector<grade>& values) {
+  std::vector<size_t> indices;
+  indices.reserve(values.size());
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (is_finite_grade(values[i])) {
+      indices.push_back(i);
+    }
+  }
+  return indices;
+}
+
+inline twopac_resolution_t finite_part(twopac_resolution_t resolution) {
+  auto& f0 = resolution.first;
+  auto& f1 = resolution.second;
+  auto finite_generators = finite_grade_indices(f0.row_grades);
+  auto finite_relations = finite_grade_indices(f0.column_grades);
+  auto finite_second_syzygies = finite_grade_indices(f1.column_grades);
+  return {std::move(f0).get_columns(finite_relations).get_rows(finite_generators),
+          std::move(f1).get_columns(finite_second_syzygies).get_rows(finite_relations)};
+}
+
 inline std::vector<GradedMatrix> chunk_chain_matrices_with_provenance(std::vector<GradedMatrix> matrices,
                                                                       int target_degree,
                                                                       std::vector<size_t>& target_row_indices) {
@@ -445,14 +500,42 @@ template <typename index_type>
 inline twopac_raw_result compute_twopac_minpres_raw(const twopac_interface_input<index_type>& input,
                                                     int degree,
                                                     bool use_chunk,
+                                                    bool use_clearing,
                                                     bool verbose_output,
-                                                    bool capture_generators) {
+                                                    bool capture_generators,
+                                                    twopac_minpres_algorithm algorithm) {
   std::lock_guard<std::mutex> lock(twopac_interface_mutex());
   timing_mute_guard timing_guard(verbose_output);
 
   auto matrices = build_boundary_matrices(input, degree);
   if (matrices.empty()) {
     return twopac_raw_result{};
+  }
+
+  if (algorithm == twopac_minpres_algorithm::cohomology) {
+    if (capture_generators) {
+      throw std::invalid_argument(
+          "2pac cohomology backend does not expose generator cycles; use backend='2pac-homology' with "
+          "keep_generators=True.");
+    }
+
+    cohomology_clearing_guard clearing_guard(use_clearing);
+    std::shared_ptr<Complex> complex = std::make_shared<VectorChainComplex>(std::move(matrices));
+    complex = std::make_shared<TransposeComplex>(std::move(complex));
+    // The 2pac cohomology theorem assumes finite-total-dimension homology. Cone
+    // both axes at infinity so raw finite filtrations satisfy that assumption.
+    complex = std::make_shared<Cone>(std::move(complex), 1);
+    complex = std::make_shared<Cone>(std::move(complex), 0);
+    if (use_chunk) {
+      complex = std::make_shared<Chunk>(std::move(complex), static_cast<uint>(degree + 1));
+    }
+
+    Cohomology cohomology;
+    twopac_resolution_t resolution;
+    for (int dim = 0; dim <= degree; ++dim) {
+      resolution = cohomology(complex->next_matrix());
+    }
+    return twopac_raw_result{finite_part(std::move(resolution)), {}, {}};
   }
 
   if (capture_generators && use_chunk) {
@@ -498,10 +581,10 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool full_resolution,
                                                              bool use_chunk,
                                                              bool use_clearing,
-                                                             bool verbose_output) {
-  (void)use_clearing;
-
-  auto raw = twopac_detail::compute_twopac_minpres_raw(input, degree, use_chunk, verbose_output, false);
+                                                             bool verbose_output,
+                                                             twopac_minpres_algorithm algorithm) {
+  auto raw = twopac_detail::compute_twopac_minpres_raw(
+      input, degree, use_chunk, use_clearing, verbose_output, false, algorithm);
   if (raw.resolution.first.rows() == 0 && raw.resolution.first.columns() == 0 && raw.resolution.second.rows() == 0 &&
       raw.resolution.second.columns() == 0) {
     return twopac_interface_output<index_type>();
@@ -517,10 +600,10 @@ twopac_minpres_with_generators_output<index_type> twopac_minpres_with_generators
     bool full_resolution,
     bool use_chunk,
     bool use_clearing,
-    bool verbose_output) {
-  (void)use_clearing;
-
-  auto raw = twopac_detail::compute_twopac_minpres_raw(input, degree, use_chunk, verbose_output, true);
+    bool verbose_output,
+    twopac_minpres_algorithm algorithm) {
+  auto raw = twopac_detail::compute_twopac_minpres_raw(
+      input, degree, use_chunk, use_clearing, verbose_output, true, algorithm);
   if (!raw.generators.has_value() && raw.resolution.first.rows() == 0 && raw.resolution.first.columns() == 0 &&
       raw.resolution.second.rows() == 0 && raw.resolution.second.columns() == 0) {
     return twopac_minpres_with_generators_output<index_type>();
@@ -543,10 +626,11 @@ inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_sli
                                                                   bool full_resolution,
                                                                   bool use_chunk,
                                                                   bool use_clearing,
-                                                                  bool verbose_output) {
+                                                                  bool verbose_output,
+                                                                  twopac_minpres_algorithm algorithm) {
   auto converted_input = twopac_detail::convert_contiguous_slicer_to_input<int>(input);
-  auto out =
-      twopac_minpres_interface<int>(converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+  auto out = twopac_minpres_interface<int>(
+      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output, algorithm);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
 }
 
@@ -557,10 +641,11 @@ twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& inpu
                                                     bool full_resolution,
                                                     bool use_chunk,
                                                     bool use_clearing,
-                                                    bool verbose_output) {
+                                                    bool verbose_output,
+                                                    twopac_minpres_algorithm algorithm) {
   auto converted_input = twopac_detail::convert_contiguous_slicer_to_input<int>(input);
   auto out = twopac_minpres_with_generators_interface<int>(
-      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output);
+      converted_input, degree, full_resolution, use_chunk, use_clearing, verbose_output, algorithm);
   return {build_contiguous_f64_slicer_from_output<int>(out.minimal_presentation.filtration_values,
                                                        out.minimal_presentation.boundaries,
                                                        out.minimal_presentation.dimensions),
@@ -574,7 +659,11 @@ twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type& inpu
 
 namespace multipers {
 
-inline bool twopac_interface_available() { return false; }
+[[noreturn]] inline void throw_twopac_interface_unavailable() {
+  throw std::runtime_error(
+      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
+      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+}
 
 template <typename index_type>
 twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interface_input<index_type>&,
@@ -582,18 +671,21 @@ twopac_interface_output<index_type> twopac_minpres_interface(const twopac_interf
                                                              bool,
                                                              bool,
                                                              bool,
-                                                             bool) {
-  throw std::runtime_error(
-      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
-      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+                                                             bool,
+                                                             twopac_minpres_algorithm) {
+  throw_twopac_interface_unavailable();
 }
 
 template <typename index_type>
 twopac_minpres_with_generators_output<index_type>
-twopac_minpres_with_generators_interface(const twopac_interface_input<index_type>&, int, bool, bool, bool, bool) {
-  throw std::runtime_error(
-      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
-      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+twopac_minpres_with_generators_interface(const twopac_interface_input<index_type>&,
+                                         int,
+                                         bool,
+                                         bool,
+                                         bool,
+                                         bool,
+                                         twopac_minpres_algorithm) {
+  throw_twopac_interface_unavailable();
 }
 
 #if !MULTIPERS_DISABLE_2PAC_INTERFACE
@@ -603,18 +695,21 @@ inline contiguous_f64_complex twopac_minpres_contiguous_interface(contiguous_sli
                                                                   bool,
                                                                   bool,
                                                                   bool,
-                                                                  bool) {
-  throw std::runtime_error(
-      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
-      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+                                                                  bool,
+                                                                  twopac_minpres_algorithm) {
+  throw_twopac_interface_unavailable();
 }
 
 template <typename contiguous_slicer_type>
 inline std::pair<contiguous_f64_complex, twopac_generator_matrix_output<int>>
-twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type&, int, bool, bool, bool, bool) {
-  throw std::runtime_error(
-      "2pac interface is not available at compile time. Initialize ext/2pac (or set "
-      "MULTIPERS_2PAC_SOURCE_DIR) and rebuild.");
+twopac_minpres_with_generators_contiguous_interface(contiguous_slicer_type&,
+                                                    int,
+                                                    bool,
+                                                    bool,
+                                                    bool,
+                                                    bool,
+                                                    twopac_minpres_algorithm) {
+  throw_twopac_interface_unavailable();
 }
 #endif
 

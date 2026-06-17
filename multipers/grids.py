@@ -351,7 +351,7 @@ def _todo_regular_closest(f, r, unique, api=None):
     if f.ndim != 1:
         raise ValueError(f"Got ndim!=1. {f=}")
     sorted_f = api.sort(f)
-    sorted_f_np = np.ascontiguousarray(api.asnumpy(sorted_f))
+    sorted_f_np = api.asnumpy(sorted_f, contiguous=True)
     indices = _mg_nb.regular_closest_1d_indices(sorted_f_np, int(r), unique)
     indices = np.ascontiguousarray(indices)
     return sorted_f[indices]
@@ -410,6 +410,19 @@ def compute_bounding_box(stuff, inflate=0.0):
         box[1] += inflate
     return box
 
+def compute_bounding_box_from_iterable(stuff, inflate=0.0):
+    r"""
+    Returns an array of shape (2, num_parameters) bounding all filtration values
+    appearing in the iterable ``stuff``.
+    """
+    grid = compute_grid_from_iterable(stuff, strategy="regular", resolution=2)
+    api = api_from_tensors(*grid)
+    box = api.moveaxis(api.stack(grid), 0, 1)
+    if inflate:
+        box[0] -= inflate
+        box[1] += inflate
+    return box
+
 
 def push_to_grid(points, grid, return_coordinate=False):
     """
@@ -420,8 +433,8 @@ def push_to_grid(points, grid, return_coordinate=False):
     points = api.astensor(points, contiguous=True)
     grid = tuple(api.astensor(g, contiguous=True) for g in grid)
     coordinates = _mg_nb.push_to_grid_coordinates(
-        np.ascontiguousarray(api.asnumpy(points)),
-        tuple(np.ascontiguousarray(api.asnumpy(g)) for g in grid),
+        api.asnumpy(points, contiguous=True),
+        tuple(api.asnumpy(g, contiguous=True) for g in grid),
     )
     coordinates = np.ascontiguousarray(coordinates)
     if return_coordinate:
@@ -644,7 +657,7 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordi
     if not return_coordinate:
         return out
 
-    order = np.argsort(np.ascontiguousarray(api.asnumpy(out)), axis=1, kind="stable")
+    order = np.argsort(api.asnumpy(out, contiguous=True), axis=1, kind="stable")
     coordinates = np.empty_like(order)
     coordinates[np.arange(order.shape[0])[:, None], order] = np.arange(
         order.shape[1], dtype=order.dtype

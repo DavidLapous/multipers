@@ -15,6 +15,8 @@ namespace multipers::nanobind_helpers {
 
 using canonical_contiguous_f64_slicer = multipers::contiguous_f64_slicer;
 using canonical_contiguous_f64_slicer_wrapper = PySlicer<canonical_contiguous_f64_slicer>;
+using canonical_contiguous_i32_slicer = multipers::contiguous_i32_slicer;
+using canonical_contiguous_i32_slicer_wrapper = PySlicer<canonical_contiguous_i32_slicer>;
 using canonical_kcontiguous_f64_slicer = multipers::kcontiguous_f64_slicer;
 using canonical_kcontiguous_f64_slicer_wrapper = PySlicer<canonical_kcontiguous_f64_slicer>;
 
@@ -94,7 +96,10 @@ nanobind::object build_canonical_contiguous_f64_slicer_object_from_complex(const
                                                                            Complex& complex) {
   nanobind::object out = target.type()();
   auto& out_wrapper = nanobind::cast<canonical_contiguous_f64_slicer_wrapper&>(out);
-  build_slicer_from_complex(out_wrapper.truc, complex);
+  {
+    nanobind::gil_scoped_release release;
+    build_slicer_from_complex(out_wrapper.truc, complex);
+  }
   return out;
 }
 
@@ -112,7 +117,7 @@ Wrapper colexical_slicer_copy(const Wrapper& source) {
 }
 
 template <typename Wrapper>
-std::pair<Wrapper, std::vector<uint32_t> > colexical_slicer_copy_with_permutation(const Wrapper& source) {
+std::pair<Wrapper, std::vector<uint32_t>> colexical_slicer_copy_with_permutation(const Wrapper& source) {
   decltype(build_permuted_slicer(source.truc)) stuff;
   {
     nanobind::gil_scoped_release release;
@@ -144,6 +149,8 @@ nanobind::object rewrap_slicer_output_to_original_type(const nanobind::object& o
                                                        const nanobind::object& output);
 void copy_into_canonical_contiguous_f64_slicer(const nanobind::handle& input, canonical_contiguous_f64_slicer& output);
 nanobind::object ensure_canonical_contiguous_f64_slicer_object(const nanobind::object& input);
+void copy_into_canonical_contiguous_i32_slicer(const nanobind::handle& input, canonical_contiguous_i32_slicer& output);
+nanobind::object ensure_canonical_contiguous_i32_slicer_object(const nanobind::object& input);
 void copy_into_canonical_kcontiguous_f64_slicer(const nanobind::handle& input,
                                                 canonical_kcontiguous_f64_slicer& output);
 nanobind::object ensure_canonical_kcontiguous_f64_slicer_object(const nanobind::object& input);
@@ -151,6 +158,13 @@ nanobind::object ensure_canonical_kcontiguous_f64_slicer_object(const nanobind::
 template <typename Func>
 nanobind::object run_with_canonical_contiguous_f64_slicer_output(const nanobind::object& original, Func&& func) {
   nanobind::object canonical_target = ensure_canonical_contiguous_f64_slicer_object(original);
+  nanobind::object output = std::forward<Func>(func)(canonical_target);
+  return rewrap_slicer_output_to_original_type(original, canonical_target, output);
+}
+
+template <typename Func>
+nanobind::object run_with_canonical_contiguous_i32_slicer_output(const nanobind::object& original, Func&& func) {
+  nanobind::object canonical_target = ensure_canonical_contiguous_i32_slicer_object(original);
   nanobind::object output = std::forward<Func>(func)(canonical_target);
   return rewrap_slicer_output_to_original_type(original, canonical_target, output);
 }

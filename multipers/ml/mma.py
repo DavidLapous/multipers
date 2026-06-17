@@ -512,7 +512,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
         for j, degree in enumerate(degrees):
             copy.translate(translation[j], degree=degree)
             copy.rescale(rescale_factors[j], degree=degree)
-        copy.set_box(new_box)
+        copy.box = new_box
         return copy
 
     def transform(self, X_in):
