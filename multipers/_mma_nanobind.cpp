@@ -125,18 +125,10 @@ void bind_float_module_methods(Class& cls) {
              "p"_a,
              "normalize"_a = false,
              "n_jobs"_a = 0)
-        // .def("distance_to",
-        //      nb::overload_cast<const std::vector<std::vector<T>>&, bool, int>(&Module::compute_distance_to),
-        //      "pts"_a,
-        //      "signed"_a = false,
-        //      "n_jobs"_a = 0)
-        .def("distance_to",
-             nb::overload_cast<NDArray2, bool, int>(&Module::compute_distance_to),
-             "pts"_a,
-             "signed"_a = false,
-             "n_jobs"_a = 0)
-        .def("get_interleavings", nb::overload_cast<>(&Module::compute_interleavings))
-        .def("get_interleavings", nb::overload_cast<NDArray2>(&Module::compute_interleavings));
+        // .def("distance_to", &Module::compute_distance_to_iterable, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
+        .def("distance_to", &Module::compute_distance_to_tensor, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
+        .def("get_interleavings", &Module::compute_interleavings)
+        .def("get_interleavings", &Module::compute_interleavings_from_box);
   }
 }
 
