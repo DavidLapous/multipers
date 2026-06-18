@@ -279,12 +279,46 @@ void bind_module_class(nb::module_& m) {
           .def("summands_of_dimension_range", &Module::get_summands_of_dimension_range)
           .def_prop_ro("max_degree", &Module::get_max_dimension)
           .def_prop_ro("num_parameters", &Module::get_number_of_parameters)
-          .def("set_box", nb::overload_cast<const Box&>(&Module::set_box))
-          .def("set_box", nb::overload_cast<NDArray2>(&Module::set_box))
-          .def("set_box", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::set_box))
+          .def_prop_rw("box",
+                       &Module::get_box_view,
+                       [](Module& self, nb::object box) {
+                         if (nb::ndarray_check(box.ptr())) {
+                           self.set_box(nb::cast<NDArray2>(box));
+                           return;
+                         }
+                         if (nb::isinstance<Box>(box)) {
+                           self.set_box(nb::cast<const Box&>(box));
+                           return;
+                         }
+                         try {
+                           self.set_box(nb::cast<std::vector<std::vector<T>>>(box));
+                           return;
+                         } catch (const nb::cast_error&) {
+                           throw nb::type_error("Box has to be set with a 2D array, nested sequence or a PyBox.");
+                         }
+                       })
+          .def("set_box",
+               [](Module& self, const Box& box) {
+                 PyErr_WarnEx(PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1);
+                 return self.set_box(box);
+               })
+          .def("set_box",
+               [](Module& self, NDArray2 box) {
+                 PyErr_WarnEx(PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1);
+                 return self.set_box(box);
+               })
+          .def("set_box",
+               [](Module& self, const std::vector<std::vector<T>>& box) {
+                 PyErr_WarnEx(PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1);
+                 return self.set_box(box);
+               })
           .def("get_bottom", &Module::get_box_lower_corner_view)
           .def("get_top", &Module::get_box_upper_corner_view)
-          .def("get_box", &Module::get_flat_box)
+          .def("get_box",
+               [](const Module& self) {
+                 PyErr_WarnEx(PyExc_DeprecationWarning, "get_box() is deprecated, use the .box property instead", 1);
+                 return self.get_box_view();
+               })
           .def("get_bounds", &Module::compute_bounds)
           .def("get_filtration_values", &Module::get_flat_filtration_values, "unique"_a = true)
           .def("get_dimensions", &Module::get_all_dimension)

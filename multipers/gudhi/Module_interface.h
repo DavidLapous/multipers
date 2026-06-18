@@ -60,21 +60,27 @@ class Module_interface {
   using Tensor2D = nanobind::ndarray<const value_type, nanobind::ndim<2>, nanobind::any_contig>;
   template <typename IntegerType>
   using IntTensor1D = nanobind::ndarray<const IntegerType, nanobind::ndim<1>, nanobind::any_contig>;
+  using Box_t = std::vector<T>;
 
   static constexpr T T_inf = Summand_t::T_inf;     /**< Infinity. */
   static constexpr T T_m_inf = Summand_t::T_m_inf; /**< Minus infinity. */
 
   Module_interface() = default;
 
-  Module_interface(const Box<value_type> &box) : module_(), box_(box) {}
+  Module_interface(const Box<value_type> &box) : module_(), box_(get_flat_box(box)) {}
 
-  Module_interface(Box<value_type> &&box) : module_(), box_(std::move(box)) {}
+  Module_interface(const Box_t &box) : module_(), box_(box) {}
 
-  Module_interface(Module<value_type>&& mod, Box<value_type> &&box) : module_(std::move(mod)), box_(std::move(box)) {}
+  Module_interface(Tensor2D box) : module_(), box_(get_flat_box_from_tensor(box)) {}
+
+  Module_interface(Module<value_type>&& mod, Box_t &&box) : module_(std::move(mod)), box_(std::move(box)) {}
+
+  Module_interface(Module<value_type> &&mod, const Box<value_type> &box)
+      : module_(std::move(mod)), box_(get_flat_box(box)) {}
 
   [[nodiscard]] int get_number_of_parameters() const {
     int numParam = module_.get_number_of_parameters();
-    if (numParam == get_null_value<int>() && !box_.is_trivial()) return box_.get_number_of_coordinates();
+    if (numParam == get_null_value<int>() && !is_trivial_box(box_)) return box_.size() / 2;
     return numParam;
   }
 
@@ -99,41 +105,37 @@ class Module_interface {
 
   auto get_box_lower_corner_view() const {
     // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<const T, nanobind::numpy>(box_.get_lower_corner().data(),
-                                                       {box_.get_number_of_coordinates()});
+    return nanobind::ndarray<const T, nanobind::numpy>(box_.data(), {box_.size() / 2});
   }
 
   auto get_box_upper_corner_view() const {
+    auto shift = box_.size() / 2;
     // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<const T, nanobind::numpy>(box_.get_upper_corner().data(),
-                                                       {box_.get_number_of_coordinates()});
+    return nanobind::ndarray<const T, nanobind::numpy>(box_.data() + shift, {shift});
   }
 
-  auto get_flat_box() const {
-    std::vector<T> fb(box_.get_lower_corner().retrieve_underlying_container());
-    {
-      nanobind::gil_scoped_release release;
-      fb.reserve(fb.size() * 2);
-      fb.insert(fb.end(), box_.get_upper_corner().begin(), box_.get_upper_corner().end());
-    }
-    return _wrap_as_numpy_array(std::move(fb), 2, box_.get_number_of_coordinates());
+  auto get_box_view() const {
+    // no transfer of ownership, dies together with the box
+    return nanobind::ndarray<const T, nanobind::numpy>(box_.data(), {2, box_.size() / 2});
   }
 
   Module_interface &set_box(const Box<value_type> &box) {
-    box_ = box;
+    box_ = get_flat_box(box);
     return *this;
   }
 
   Module_interface &set_box(Tensor2D box) {
-    box_ = get_box_from_tensor(box);
+    box_ = get_flat_box_from_tensor(box);
     return *this;
   }
 
-  Module_interface &set_box(const std::vector<std::vector<value_type>> &box) {
+  Module_interface &set_box(const std::vector<std::vector<T>> &box) {
     if (box.size() != 2) throw std::invalid_argument("Box has to be represented by two corners.");
     if (box[0].size() != box[1].size())
       throw std::invalid_argument("Both corners defining the box must have same dimension.");
-    box_ = Box<value_type>(box[0], box[1]);
+    box_ = Box_t(box[0].begin(), box[0].end());
+    box_.reserve(box_.size() * 2);
+    box_.insert(box_.end(), box[1].begin(), box[1].end());
     return *this;
   }
 
@@ -473,7 +475,7 @@ class Module_interface {
     std::vector<maybe_make_signed_t<T> > interleavings;
     {
       nanobind::gil_scoped_release release;
-      interleavings = Gudhi::multi_persistence::compute_module_interleavings(module_, box_);
+      interleavings = Gudhi::multi_persistence::compute_module_interleavings(module_, get_box_from_tensor(box_));
     }
     return _wrap_as_numpy_array(std::move(interleavings), interleavings.size());
   }
@@ -499,20 +501,33 @@ class Module_interface {
 
   friend char *serialize_value_to_char_buffer(const Module_interface &value, char *start) {
     char *curr = start;
-    curr = serialize_value_to_char_buffer(value.box_, curr);
+    const std::size_t length = value.box_.size();
+    const std::size_t argSize = sizeof(T) * length;
+    const std::size_t typeSize = sizeof(std::size_t);
+    memcpy(curr, &length, typeSize);
+    curr += typeSize;
+    memcpy(curr, value.box_.data(), argSize);
+    curr += argSize;
     curr = serialize_value_to_char_buffer(value.module_, curr);
     return curr;
   }
 
   friend const char *deserialize_value_from_char_buffer(Module_interface &value, const char *start) {
     const char *curr = start;
-    curr = deserialize_value_from_char_buffer(value.box_, curr);
+    const std::size_t typeSize = sizeof(std::size_t);
+    std::size_t length;
+    memcpy(&length, curr, typeSize);
+    curr += typeSize;
+    std::size_t argSize = sizeof(T) * length;
+    value.box_.resize(length);
+    memcpy(value.box_.data(), curr, argSize);
+    curr += argSize;
     curr = deserialize_value_from_char_buffer(value.module_, curr);
     return curr;
   }
 
   friend std::size_t get_serialization_size_of(const Module_interface &value) {
-    return get_serialization_size_of(value.box_) + get_serialization_size_of(value.module_);
+    return sizeof(std::size_t) + (sizeof(T) * value.box_.size()) + get_serialization_size_of(value.module_);
   }
 
   friend void swap(Module_interface &mod1, Module_interface &mod2) noexcept {
@@ -522,11 +537,27 @@ class Module_interface {
 
  private:
   Module<T> module_;
-  Box<T> box_;
+  Box_t box_;
 
   template <typename Y>
   static constexpr Y get_null_value() {
     return Module<T>::Summand_t::template get_null_value<Y>();
+  }
+
+  static bool is_trivial_box(const Box_t &box) {
+    if (box.empty()) return true;
+    std::size_t size = box.size() / 2;
+    std::size_t bstart = 0;
+    std::size_t ustart = size;
+    // not completely true, as they can be more NaN values, but I just assume that if something is NaN, all is NaN.
+    // the loop is faster this way in the non trivial case.
+    if (Gudhi::multi_filtration::_is_nan(box[bstart]) || Gudhi::multi_filtration::_is_nan(box[ustart])) return true;
+    while (bstart < size) {
+      if (box[bstart] != box[ustart]) return false;
+      ++bstart;
+      ++ustart;
+    }
+    return true;
   }
 
   static Box<T> get_box_from_tensor(Tensor2D box) {
@@ -534,6 +565,28 @@ class Module_interface {
     auto lowerView = boxView[0];
     auto upperView = boxView[1];
     return {lowerView.begin(), lowerView.end(), upperView.begin(), upperView.end()};
+  }
+
+  static Box<T> get_box_from_tensor(const Box_t &box) {
+    std::size_t size = box.size() / 2;
+    return {box.data(), box.data() + size, box.data() + size, box.data() + (size * 2)};
+  }
+
+  static Box_t get_flat_box_from_tensor(Tensor2D box) {
+    Numpy_2d_span boxView(box);
+    auto lowerView = boxView[0];
+    auto upperView = boxView[1];
+    Box_t fb(lowerView.begin(), lowerView.end());
+    fb.reserve(fb.size() * 2);
+    fb.insert(fb.end(), upperView.begin(), upperView.end());
+    return fb;
+  }
+
+  static Box_t get_flat_box(const Box<T> &box) {
+    Box_t fb(box.get_lower_corner().retrieve_underlying_container());
+    fb.reserve(fb.size() * 2);
+    fb.insert(fb.end(), box.get_upper_corner().begin(), box.get_upper_corner().end());
+    return fb;
   }
 
   static nanobind::list get_numpy_barcode_from_lines_with_inf(std::vector<std::vector<std::array<double, 2>>> &barcode,

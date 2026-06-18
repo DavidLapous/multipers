@@ -2131,7 +2131,7 @@ Gudhi::multi_persistence::Module_interface<double> module_approximation_from_des
       mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
           wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
     }
-    return {std::move(mod), std::move(box)};
+    return {std::move(mod), box};
   }
 }
 
