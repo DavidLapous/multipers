@@ -1202,6 +1202,32 @@ void validate_packed_indptr(const int64_t* indptr, size_t indptr_size, size_t fl
   }
 }
 
+void validate_packed_boundaries(const int64_t* indptr,
+                                const int32_t* flat,
+                                const int32_t* dimensions,
+                                size_t num_generators) {
+  for (size_t cell = 0; cell < num_generators; ++cell) {
+    const int dimension = static_cast<int>(dimensions[cell]);
+    if (dimension < 0) {
+      throw std::runtime_error("generator_dimensions must be nonnegative.");
+    }
+    const int64_t begin = indptr[cell];
+    const int64_t end = indptr[cell + 1];
+    if (dimension == 0 && begin != end) {
+      throw std::runtime_error("0-dimensional generators must have empty boundaries.");
+    }
+    for (int64_t idx = begin; idx < end; ++idx) {
+      const int32_t boundary = flat[idx];
+      if (boundary < 0 || static_cast<size_t>(boundary) >= num_generators) {
+        throw std::runtime_error("boundary_flat contains an invalid generator index.");
+      }
+      if (static_cast<int>(dimensions[boundary]) != dimension - 1) {
+        throw std::runtime_error("boundary_flat contains a dimension-incompatible generator index.");
+      }
+    }
+  }
+}
+
 template <typename Wrapper, typename Concrete, typename Value>
 Wrapper construct_kcritical_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
@@ -1222,6 +1248,7 @@ Wrapper construct_kcritical_from_packed(
       boundary_indptr.data(), boundary_indptr.shape(0), boundary_flat.shape(0), "boundary_indptr");
   validate_packed_indptr<Wrapper, Concrete, Value>(
       grade_indptr.data(), grade_indptr.shape(0), grades_flat.shape(0), "grade_indptr");
+  validate_packed_boundaries(boundary_indptr.data(), boundary_flat.data(), generator_dimensions.data(), num_generators);
 
   std::vector<std::vector<uint32_t>> boundaries(num_generators);
   const int64_t* boundary_ptr = boundary_indptr.data();
@@ -1287,6 +1314,7 @@ Wrapper construct_contiguous_from_packed(
   }
   validate_packed_indptr<Wrapper, Concrete, Value>(
       boundary_indptr.data(), boundary_indptr.shape(0), boundary_flat.shape(0), "boundary_indptr");
+  validate_packed_boundaries(boundary_indptr.data(), boundary_flat.data(), generator_dimensions.data(), num_generators);
 
   std::vector<std::vector<uint32_t>> boundaries(num_generators);
   const int64_t* boundary_ptr = boundary_indptr.data();

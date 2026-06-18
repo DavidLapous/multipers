@@ -1209,10 +1209,8 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             bandwidth = float(bandwidth)
             bandwidth = bandwidth if bandwidth > 0 else -bandwidth * self.diameter
         else:
-            bandwidth = np.where(
-                bandwidth > 0,
-                bandwidth,
-                -bandwidth * self._api.asnumpy(self.diameter),
+            raise ValueError(
+                "Sparse signed measure convolution requires a scalar bandwidth."
             )
         return convolution_signed_measures(
             X,

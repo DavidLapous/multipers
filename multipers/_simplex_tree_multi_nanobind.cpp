@@ -888,13 +888,6 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
   constexpr bool k_is_kcritical = Desc::is_kcritical;
   constexpr bool k_sort_rows = std::string_view(Desc::filtration_container_name) != std::string_view("Flat");
 
-  auto adopt_ptr = [](Wrapper& self, intptr_t ptr) -> Wrapper& {
-    Interface* other = reinterpret_cast<Interface*>(ptr);
-    self.tree = *other;
-    delete other;
-    return self;
-  };
-
   auto cls =
       nb::class_<Wrapper>(m, Desc::python_name.data())
           .def(nb::init<>())
@@ -912,7 +905,6 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               [](Wrapper& self, nb::object value) { self.filtration_grid = value; },
               nb::arg("value").none())
           .def_prop_ro("thisptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); })
-          .def("_from_ptr", adopt_ptr, nb::rv_policy::reference_internal)
           .def(
               "_copy_from_any",
               [](Wrapper& self, nb::handle other) -> Wrapper& {
