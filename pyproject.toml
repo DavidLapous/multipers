@@ -138,8 +138,11 @@ exclude = [
   "*.tmp"
 ]
 include = [
+  "CMakeLists.txt",
+  "cmake/**",
   "multipers/",
   "multipers/tests",
+  "options.py",
   "tools/tempita_grid_gen.py",
   "tools/codegen/_registry.py",
   "tools/core/**",
