@@ -254,6 +254,7 @@ void bind_module_class(nb::module_& m) {
       nb::class_<Module>(m, Desc::module_name.data(), nb::dynamic_attr())
           .def(nb::init<>())
           .def(nb::init<Box>())
+          .def(nb::init<NDArray2>())
           .def_prop_ro("dtype", [](const Module&) -> nb::object { return numpy_dtype_type(Desc::dtype_name); })
           .def_prop_ro("_template_id", [](const Module&) -> int { return Desc::template_id; })
           .def(nb::self == nb::self)
