@@ -264,7 +264,7 @@ def max_at(x, idx, y):
 
 
 def device(x):
-    return x.device
+    return getattr(x, "device", None)
 
 
 # type: ignore[no-unused-arg]
@@ -303,6 +303,8 @@ def has_grad(_):
 
 
 def to_device(x, device):
+    if device is None or device == "cpu":
+        return x
     return x.to_device(device)
 
 

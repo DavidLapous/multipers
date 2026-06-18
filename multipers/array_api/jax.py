@@ -230,6 +230,8 @@ def has_grad(x):
 def to_device(x, device):
     if device is None:
         return x
+    if isinstance(device, str):
+        device = _jax.devices(device)[0]
     return _jax.device_put(x, device)
 
 
