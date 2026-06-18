@@ -527,9 +527,9 @@ def _AlphaLowerstar(
         st.fill_lowerstar(api.asnumpy(function[:, i]), parameter=1 + i)
 
     if api.has_grad(points) or api.has_grad(function):
-        D = api.pdist(points, points) ** 2
+        D = api.pdist(points) ** 2
 
-        grid = compute_grid([D.ravel(), *filtrations.T])
+        grid = compute_grid([D.ravel(), *function.T])
         st = st.grid_squeeze(grid)
         st._clean_filtration_grid()
     return st

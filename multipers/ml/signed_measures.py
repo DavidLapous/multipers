@@ -5,6 +5,7 @@ from typing import Optional, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Parallel, delayed
+from scipy.spatial import distance_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
 from tqdm import tqdm
 
@@ -704,12 +705,11 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
         self._normalization_factors = None
         self.deep_format = deep_format
         self.unrag = unrag
-        assert not self.deep_format or not self.unsparse or not self.integrate, (
-            "One post processing at the time."
-        )
         self.verbose = verbose
         self._num_degrees = 0
         self.integrate = integrate
+        if sum(bool(x) for x in (self.deep_format, self.unsparse, self.integrate)) > 1:
+            raise ValueError("One post processing at the time.")
         self.grid_strategy = grid_strategy
         self._infered_grids = None
         self._axis_iterator = None
@@ -1204,9 +1204,16 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
         )
 
     def _transform_from_sparse(self, X):
-        bandwidth = (
-            self.bandwidth if self.bandwidth > 0 else -self.bandwidth * self.diameter
-        )
+        bandwidth = np.asarray(self.bandwidth)
+        if bandwidth.ndim == 0:
+            bandwidth = float(bandwidth)
+            bandwidth = bandwidth if bandwidth > 0 else -bandwidth * self.diameter
+        else:
+            bandwidth = np.where(
+                bandwidth > 0,
+                bandwidth,
+                -bandwidth * self._api.asnumpy(self.diameter),
+            )
         return convolution_signed_measures(
             X,
             filtrations=self.filtration_grid,
@@ -1607,6 +1614,8 @@ class DegreeRips2SignedMeasure(BaseEstimator, TransformerMixin):
         return self
 
     def _transform1(self, data: np.ndarray):
+        from multipers.ml.invariants_with_persistable import hf_degree_rips
+
         _distance_matrix = distance_matrix(data, data)
         signed_measures = []
         (

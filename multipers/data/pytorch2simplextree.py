@@ -53,7 +53,7 @@ def modelnet2graphs(version = '10', print_flag = False, labels_only = False, a =
 	""" load modelnet 10 or 40 and convert to graphs"""
 	from torch_geometric.transforms import FaceToEdge
 	from .shape3d import load_modelnet
-	train_dataset, test_dataset = load_modelnet(version, point_flag = False)
+	train_dataset, test_dataset = load_modelnet(version, sample_points = False)
 	dataset = train_dataset + test_dataset
 	if b>0:	dataset = [dataset[i] for i in range(a,b)]
 	if labels_only:

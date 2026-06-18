@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from types import FunctionType
 from typing import Iterable
 
@@ -9,15 +11,15 @@ import multipers as mp
 from multipers.simplex_tree_multi import SimplexTreeMulti
 
 
-def get_simplex_tree_from_delayed(x) -> mp.SimplexTreeMulti:
+def get_simplex_tree_from_delayed(x):
     f, args, kwargs = x
     return f(*args, **kwargs)
 
 
-def get_simplextree(x) -> mp.SimplexTreeMulti:
-    if isinstance(x, mp.SimplexTreeMulti):
+def get_simplextree(x):
+    if mp.simplex_tree_multi.is_simplextree_multi(x):
         return x
-    if len(x) == 3 and isinstance(x[0], FunctionType):
+    if isinstance(x, (tuple, list)) and len(x) == 3 and isinstance(x[0], FunctionType):
         return get_simplex_tree_from_delayed(x)
     else:
         raise TypeError("Not a valid SimplexTree !")
@@ -96,18 +98,16 @@ class SimplexTreeEdgeCollapser(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        edges_list = Parallel(n_jobs=-1, prefer="threads")(
-            delayed(mp.SimplextreeMulti.get_edge_list)(x) for x in X
-        )
-        collapsed_edge_lists = Parallel(n_jobs=self.n_jobs)(
-            delayed(mp._collapse_edge_list)(
-                edges, full=self.full, num=self.num_collapses
+        def collapse(x):
+            st = get_simplextree(x).copy()
+            st.collapse_edges(
+                num=self.num_collapses,
+                full=self.full,
+                max_dimension=0 if self.max_dimension is None else self.max_dimension,
             )
-            for edges in edges_list
-        )
-        collapsed_simplextrees = Parallel(n_jobs=-1, prefer="threads")(
-            delayed(mp.SimplexTreeMulti._reconstruct_from_edge_list)(
-                collapsed_edge_lists, swap=True, expand_dim=self.max_dimension
-            )
+            return st
+
+        collapsed_simplextrees = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+            delayed(collapse)(x) for x in X
         )
         return collapsed_simplextrees

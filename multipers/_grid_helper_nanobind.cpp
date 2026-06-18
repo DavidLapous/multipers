@@ -152,6 +152,9 @@ std::vector<int32_t> integrate_measure_impl(
   }
   auto strides = row_major_strides(shape);
   std::vector<int32_t> out(total_size, 0);
+  if (total_size == 0) {
+    return out;
+  }
 
   for (size_t i = 0; i < num_points; ++i) {
     size_t linear_index = 0;
@@ -250,6 +253,9 @@ void signed_betti_inplace_impl(nb::ndarray<nb::numpy, T, nb::c_contig> array, bo
   if (shape.empty()) {
     return;
   }
+  if (std::any_of(shape.begin(), shape.end(), [](size_t size) { return size == 0; })) {
+    return;
+  }
   auto strides = row_major_strides(shape);
   T* data = array.data();
   const size_t total_size = strides[0] * shape[0];
@@ -283,6 +289,9 @@ NB_MODULE(_grid_helper_nanobind, m) {
   m.def(
       "regular_closest_1d_indices",
       [](nb::ndarray<nb::numpy, const float, nb::ndim<1>, nb::c_contig> values, int resolution, bool unique) {
+        if (resolution < 0) {
+          throw nb::value_error("resolution must be nonnegative.");
+        }
         auto out = mpgnb::regular_closest_1d_indices_impl(values, static_cast<size_t>(resolution), unique);
         auto len = out.size();
         return mpgnb::owned_array<int64_t>(std::move(out), {len});
@@ -293,6 +302,9 @@ NB_MODULE(_grid_helper_nanobind, m) {
   m.def(
       "regular_closest_1d_indices",
       [](nb::ndarray<nb::numpy, const double, nb::ndim<1>, nb::c_contig> values, int resolution, bool unique) {
+        if (resolution < 0) {
+          throw nb::value_error("resolution must be nonnegative.");
+        }
         auto out = mpgnb::regular_closest_1d_indices_impl(values, static_cast<size_t>(resolution), unique);
         auto len = out.size();
         return mpgnb::owned_array<int64_t>(std::move(out), {len});
@@ -320,9 +332,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "integrate_measure",
       [](nb::ndarray<nb::numpy, const float, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> weights,
-         nb::tuple grid) {
-        return mpgnb::integrate_measure_bound(points, weights, grid);
-      },
+         nb::tuple grid) { return mpgnb::integrate_measure_bound(points, weights, grid); },
       "points"_a,
       "weights"_a,
       "grid"_a);
@@ -330,9 +340,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "integrate_measure",
       [](nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> weights,
-         nb::tuple grid) {
-        return mpgnb::integrate_measure_bound(points, weights, grid);
-      },
+         nb::tuple grid) { return mpgnb::integrate_measure_bound(points, weights, grid); },
       "points"_a,
       "weights"_a,
       "grid"_a);
@@ -340,9 +348,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "integrate_measure",
       [](nb::ndarray<nb::numpy, const float, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> weights,
-         nb::tuple grid) {
-        return mpgnb::integrate_measure_bound(points, weights, grid);
-      },
+         nb::tuple grid) { return mpgnb::integrate_measure_bound(points, weights, grid); },
       "points"_a,
       "weights"_a,
       "grid"_a);
@@ -350,9 +356,7 @@ NB_MODULE(_grid_helper_nanobind, m) {
       "integrate_measure",
       [](nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> points,
          nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> weights,
-         nb::tuple grid) {
-        return mpgnb::integrate_measure_bound(points, weights, grid);
-      },
+         nb::tuple grid) { return mpgnb::integrate_measure_bound(points, weights, grid); },
       "points"_a,
       "weights"_a,
       "grid"_a);

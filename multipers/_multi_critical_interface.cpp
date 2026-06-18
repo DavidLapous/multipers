@@ -48,12 +48,27 @@ int target_pair_window_offset(const multipers::packed_multi_critical_bridge_inpu
   return std::min(radius, std::max(0, max_output_level - (degree + 1)));
 }
 
+void validate_packed_indptr(const int64_t* indptr, size_t indptr_size, size_t flat_size, const char* name) {
+  if (indptr_size == 0) return;
+  if (indptr[0] != 0) throw std::runtime_error(std::string(name) + " must start at 0.");
+  int64_t previous = 0;
+  for (size_t i = 1; i < indptr_size; ++i) {
+    const int64_t current = indptr[i];
+    if (current < previous) throw std::runtime_error(std::string(name) + " must be nondecreasing.");
+    previous = current;
+  }
+  if (previous < 0 || static_cast<size_t>(previous) > flat_size) {
+    throw std::runtime_error(std::string(name) + " exceeds packed data length.");
+  }
+}
+
 std::vector<std::vector<int>> boundaries_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat) {
   if (boundary_indptr.shape(0) == 0) {
     return {};
   }
+  validate_packed_indptr(boundary_indptr.data(), boundary_indptr.shape(0), boundary_flat.shape(0), "boundary_indptr");
   std::vector<std::vector<int>> boundaries((size_t)boundary_indptr.shape(0) - 1);
   const int64_t* indptr = boundary_indptr.data();
   const int32_t* flat = boundary_flat.data();
@@ -75,6 +90,15 @@ multipers::multi_critical_interface_input<int> input_from_packed(
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> dimensions,
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
     nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
+  const size_t num_cells = boundary_indptr.shape(0) == 0 ? 0 : static_cast<size_t>(boundary_indptr.shape(0) - 1);
+  if (static_cast<size_t>(dimensions.shape(0)) != num_cells ||
+      static_cast<size_t>(grade_indptr.shape(0)) != num_cells + 1) {
+    throw std::runtime_error("Invalid packed input, shape do not coincide.");
+  }
+  if (grades_flat.shape(1) < 2) {
+    throw std::runtime_error("grades_flat must have at least two columns.");
+  }
+  validate_packed_indptr(grade_indptr.data(), grade_indptr.shape(0), grades_flat.shape(0), "grade_indptr");
   auto boundaries = boundaries_from_packed(boundary_indptr, boundary_flat);
   multipers::multi_critical_interface_input<int> input;
   input.dimensions.reserve((size_t)dimensions.shape(0));

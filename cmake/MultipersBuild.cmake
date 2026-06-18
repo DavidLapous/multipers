@@ -179,8 +179,7 @@ set(MULTIPERS_GENERATED_INCLUDE_DIRS
 
 set(MULTIPERS_COMPILED_MODULES_DIR "${CMAKE_BINARY_DIR}/compiled_modules/multipers")
 
-if(WIN32 AND NOT SKBUILD AND NOT DEFINED ENV{MULTIPERS_INTERNAL_WHEEL_BUILD})
-  # Only collect runtime deps for local installs, not wheel builds
+if(WIN32)
   set(MULTIPERS_WINDOWS_RUNTIME_DEP_SET multipers_windows_runtime_deps)
   set(MULTIPERS_WINDOWS_RUNTIME_DEP_DIRECTORIES "")
   if(DEFINED ENV{CONDA_PREFIX} AND NOT "$ENV{CONDA_PREFIX}" STREQUAL "")
@@ -992,6 +991,10 @@ set(MULTIPERS_NANOBIND_MODULES
   _aida_interface
   _persistence_algebra_interface
 )
+
+if(NOT CGAL_FOUND)
+  list(REMOVE_ITEM MULTIPERS_NANOBIND_MODULES _core_delaunay_nanobind)
+endif()
 
 foreach(module_name IN LISTS MULTIPERS_NANOBIND_MODULES)
   multipers_add_nanobind_module(${module_name})

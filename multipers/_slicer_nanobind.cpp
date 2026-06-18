@@ -1182,6 +1182,27 @@ void bind_dense_generator_data_overloads(Class& cls) {
 }
 
 template <typename Wrapper, typename Concrete, typename Value>
+void validate_packed_indptr(const int64_t* indptr, size_t indptr_size, size_t flat_size, const char* name) {
+  if (indptr_size == 0) {
+    return;
+  }
+  if (indptr[0] != 0) {
+    throw std::runtime_error(std::string(name) + " must start at 0.");
+  }
+  int64_t previous = 0;
+  for (size_t i = 1; i < indptr_size; ++i) {
+    const int64_t current = indptr[i];
+    if (current < previous) {
+      throw std::runtime_error(std::string(name) + " must be nondecreasing.");
+    }
+    previous = current;
+  }
+  if (previous < 0 || static_cast<size_t>(previous) > flat_size) {
+    throw std::runtime_error(std::string(name) + " exceeds packed data length.");
+  }
+}
+
+template <typename Wrapper, typename Concrete, typename Value>
 Wrapper construct_kcritical_from_packed(
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
@@ -1197,6 +1218,10 @@ Wrapper construct_kcritical_from_packed(
   if ((size_t)generator_dimensions.shape(0) != num_generators || (size_t)grade_indptr.shape(0) != num_generators + 1) {
     throw std::runtime_error("Invalid packed input, shape do not coincide.");
   }
+  validate_packed_indptr<Wrapper, Concrete, Value>(
+      boundary_indptr.data(), boundary_indptr.shape(0), boundary_flat.shape(0), "boundary_indptr");
+  validate_packed_indptr<Wrapper, Concrete, Value>(
+      grade_indptr.data(), grade_indptr.shape(0), grades_flat.shape(0), "grade_indptr");
 
   std::vector<std::vector<uint32_t>> boundaries(num_generators);
   const int64_t* boundary_ptr = boundary_indptr.data();
@@ -1260,6 +1285,8 @@ Wrapper construct_contiguous_from_packed(
       static_cast<size_t>(grades_flat.shape(0)) != num_generators) {
     throw std::runtime_error("Invalid packed input, shape do not coincide.");
   }
+  validate_packed_indptr<Wrapper, Concrete, Value>(
+      boundary_indptr.data(), boundary_indptr.shape(0), boundary_flat.shape(0), "boundary_indptr");
 
   std::vector<std::vector<uint32_t>> boundaries(num_generators);
   const int64_t* boundary_ptr = boundary_indptr.data();
@@ -1709,7 +1736,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
                                 self.filtration_grid,
                                 self.generator_basis,
-                                self.minpres_degree));
+                                 self.minpres_degree));
            })
       .def("__reduce_ex__",
            [](Wrapper& self, int) -> nb::tuple {
@@ -1719,7 +1746,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
                                 self.filtration_grid,
                                 self.generator_basis,
-                                self.minpres_degree));
+                                 self.minpres_degree));
            })
       .def("_serialize_state",
            [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
@@ -2370,6 +2397,9 @@ NB_MODULE(_slicer_nanobind, m) {
          bool complete,
          bool verbose,
          int n_jobs) {
+        if (box_array.shape(0) != 2 || (direction.shape(0) != 0 && box_array.shape(1) != direction.shape(0))) {
+          throw nb::value_error("box must have shape (2, num_parameters).");
+        }
         auto direction_values = mpnb::vector_from_array(direction);
         auto box_values = mpnb::matrix_from_array(box_array);
         Gudhi::multi_persistence::Box<double> box(box_values[0], box_values[1]);

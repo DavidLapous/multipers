@@ -687,7 +687,7 @@ def _collapse_edges(
     ignore_warning=False,
     auto_clean=True,
 ):
-    if num == 0:
+    if num == 0 and not full:
         return self
     if num == -1:
         num = 100

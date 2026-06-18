@@ -4,6 +4,7 @@
 #include <nanobind/nanobind.h>
 
 #include <cstddef>
+#include <stdexcept>
 #include <vector>
 
 namespace multipers::nanobind_simplextree_utils {
@@ -34,6 +35,11 @@ inline flat_simplex_batch simplices_from_vertex_rows(const std::vector<std::vect
   flat_simplex_batch simplices;
   simplices.simplex_size = vertex_array.size();
   simplices.num_simplices = vertex_array[0].size();
+  for (const auto& row : vertex_array) {
+    if (row.size() != simplices.num_simplices) {
+      throw std::runtime_error("Simplex vertex rows must have the same length.");
+    }
+  }
   simplices.vertices.resize(simplices.simplex_size * simplices.num_simplices);
   for (size_t i = 0; i < simplices.num_simplices; ++i) {
     for (size_t j = 0; j < simplices.simplex_size; ++j) {

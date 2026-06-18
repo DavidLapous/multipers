@@ -290,21 +290,13 @@ def _compute_grid(
     if strategy == "precomputed":
         return filtrations_values
     if a != 0 or b != 0:
-        boxes = api.astensor(
-            [
-                api.quantile_closest(filtration, [a, b], axis=1)
-                for filtration in filtrations_values
-            ]
-        )
-        min_filtration, max_filtration = (
-            api.minvalues(boxes, axis=(0, 1)),
-            api.maxvalues(boxes, axis=(0, 1)),
-        )  # box, birth/death, filtration
+        boxes = [
+            api.quantile_closest(filtration, [a, b], axis=0)
+            for filtration in filtrations_values
+        ]
         filtrations_values = [
-            filtration[(m < filtration) * (filtration < M)]
-            for filtration, m, M in zip(
-                filtrations_values, min_filtration, max_filtration
-            )
+            filtration[(box[0] < filtration) * (filtration < box[1])]
+            for filtration, box in zip(filtrations_values, boxes)
         ]
 
     if strategy == "quantile":

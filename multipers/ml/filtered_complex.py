@@ -478,7 +478,7 @@ class FilteredComplexPreprocess(BaseEstimator, TransformerMixin):
                     filtration_container=self.filtration_container,
                 )
             else:
-                cplx.astype(
+                cplx = cplx.astype(
                     vineyard=self.vineyard,
                     backend=self.pers_backend,
                     column_type=self.column_type,

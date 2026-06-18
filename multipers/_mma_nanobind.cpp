@@ -1180,7 +1180,7 @@ void bind_module_class(nb::module_& m) {
           .def("__setstate__",
                [](Module& self, nb::handle state) {
                  nb::tuple tpl = nb::cast<nb::tuple>(state);
-                 new (&self) Module(module_from_dump<T>(state));
+                 self = module_from_dump<T>(state);
                  set_module_box<T>(self, nb::cast<BoxArray<T>>(tpl[0]));
                })
           .def(

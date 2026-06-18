@@ -70,7 +70,7 @@ class PointCloud2SimplexTree(BaseEstimator,TransformerMixin):
 		def todo(point_cloud) -> gd.SimplexTree: # TODO : use batch insert
 			st = gd.AlphaComplex(points=point_cloud).create_simplex_tree(max_alpha_square = self.threshold**2)
 			return st
-		return [todo, X] if self.delayed is None else Parallel(n_jobs=-1, prefer="threads")(delayed(todo)(point_cloud) for point_cloud in X)
+		return [todo, X] if self.delayed else Parallel(n_jobs=-1, prefer="threads")(delayed(todo)(point_cloud) for point_cloud in X)
 
 
 
@@ -334,6 +334,7 @@ class Dgms2SWK(BaseEstimator, TransformerMixin):
 				else:
 					distance_matrix = self.SW_[i].transform([dgms[i] for dgms in X])
 					np.save(open(SW_i_path, "wb"), distance_matrix)
+					distance_matrices.append(distance_matrix)
 		else:
 			distance_matrices = [sw.transform([dgms[i] for dgms in X]) for i, sw in enumerate(self.SW_)]
 		kernels = [np.exp(-distance_matrix / (2*self.bandwidth**2)) for distance_matrix in distance_matrices]
@@ -468,5 +469,4 @@ class Dgms2Image(BaseEstimator, TransformerMixin):
 	def transform(self,X):
 		if len(X) == 0:	return []
 		return np.concatenate([pers_image.transform([dgms[degree] for dgms in X]) for degree, pers_image in enumerate(self.PI)], axis=1)
-
 
