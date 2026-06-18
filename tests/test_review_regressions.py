@@ -38,6 +38,21 @@ def test_sparse_convolution_rejects_iterable_bandwidth():
         transform.transform(signed_measures)
 
 
+def test_sparse_convolution_allows_multivariate_bandwidth():
+    from multipers.ml.signed_measures import SignedMeasure2Convolution
+
+    signed_measures = [[(np.array([[0.0, 0.0]]), np.array([1]))]]
+    transform = SignedMeasure2Convolution(
+        filtration_grid=[np.array([0.0, 1.0]), np.array([0.0, 1.0])],
+        bandwidth=np.eye(2),
+        kernel="multivariate_gaussian",
+        backend="dense",
+    ).fit(signed_measures)
+
+    out = transform.transform(signed_measures)
+    assert np.isfinite(out).all()
+
+
 def test_get_simplextree_rejects_plain_object_cleanly():
     from multipers.ml.tools import get_simplextree
 
@@ -81,6 +96,25 @@ def test_simplextree_rejects_missing_simplex_and_hides_raw_pointer_adoption():
         st[[0]]
 
 
+def test_public_raw_pointer_apis_are_hidden():
+    import multipers as mp
+    from multipers import _multi_critical_interface
+
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0], [0.0, 0.0])
+    slicer = mp.Slicer(st)
+    module = mp.module_approximation(st, box=np.array([[0.0, 0.0], [1.0, 1.0]]))
+
+    assert not hasattr(st, "thisptr")
+    assert not hasattr(st, "_from_ptr")
+    assert not hasattr(slicer, "get_ptr")
+    assert not hasattr(slicer, "_from_ptr")
+    assert not hasattr(module, "_from_ptr")
+    assert not hasattr(_multi_critical_interface, "resolution_from_ptr")
+    assert not hasattr(_multi_critical_interface, "minpres_from_ptr")
+    assert not hasattr(_multi_critical_interface, "minpres_all_from_ptr")
+
+
 def test_integrate_measure_accepts_empty_grid_axis():
     from multipers._grid_helper_nanobind import integrate_measure
 
@@ -114,5 +148,17 @@ def test_packed_slicer_rejects_nonempty_zero_cell_boundary():
             np.array([0], dtype=np.int32),
             np.array([0], dtype=np.int32),
             np.array([0, 1], dtype=np.int64),
+            np.array([[0.0, 0.0]], dtype=float),
+        )
+
+
+def test_packed_slicer_rejects_empty_indptr_with_side_data():
+    from multipers._slicer_nanobind import build_contiguous_f64_slicer_from_packed_f64
+
+    with pytest.raises(RuntimeError, match="boundary_indptr"):
+        build_contiguous_f64_slicer_from_packed_f64(
+            np.array([], dtype=np.int64),
+            np.array([], dtype=np.int32),
+            np.array([0], dtype=np.int32),
             np.array([[0.0, 0.0]], dtype=float),
         )

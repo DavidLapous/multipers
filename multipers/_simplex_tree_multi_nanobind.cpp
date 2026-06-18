@@ -904,7 +904,6 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               [](Wrapper& self) -> nb::object { return self.filtration_grid; },
               [](Wrapper& self, nb::object value) { self.filtration_grid = value; },
               nb::arg("value").none())
-          .def_prop_ro("thisptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.tree); })
           .def(
               "_copy_from_any",
               [](Wrapper& self, nb::handle other) -> Wrapper& {

@@ -1209,9 +1209,15 @@ class SignedMeasure2Convolution(BaseEstimator, TransformerMixin):
             bandwidth = float(bandwidth)
             bandwidth = bandwidth if bandwidth > 0 else -bandwidth * self.diameter
         else:
-            raise ValueError(
-                "Sparse signed measure convolution requires a scalar bandwidth."
-            )
+            num_parameters = len(self.filtration_grid)
+            if self.kernel != "multivariate_gaussian":
+                raise ValueError(
+                    "Sparse signed measure convolution requires a scalar bandwidth unless kernel='multivariate_gaussian'."
+                )
+            if bandwidth.shape != (num_parameters, num_parameters):
+                raise ValueError(
+                    "multivariate_gaussian bandwidth must have shape (num_parameters, num_parameters)."
+                )
         return convolution_signed_measures(
             X,
             filtrations=self.filtration_grid,

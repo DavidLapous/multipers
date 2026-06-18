@@ -1235,10 +1235,10 @@ Wrapper construct_kcritical_from_packed(
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
     nb::ndarray<nb::numpy, const int64_t, nb::ndim<1>, nb::c_contig> grade_indptr,
     nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
-  Wrapper out;
   if (boundary_indptr.shape(0) == 0) {
-    return out;
+    throw std::runtime_error("boundary_indptr must contain at least one offset.");
   }
+  Wrapper out;
 
   const size_t num_generators = (size_t)boundary_indptr.shape(0) - 1;
   if ((size_t)generator_dimensions.shape(0) != num_generators || (size_t)grade_indptr.shape(0) != num_generators + 1) {
@@ -1302,10 +1302,10 @@ Wrapper construct_contiguous_from_packed(
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> boundary_flat,
     nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> generator_dimensions,
     nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades_flat) {
-  Wrapper out;
   if (boundary_indptr.shape(0) == 0) {
-    return out;
+    throw std::runtime_error("boundary_indptr must contain at least one offset.");
   }
+  Wrapper out;
 
   const size_t num_generators = static_cast<size_t>(boundary_indptr.shape(0) - 1);
   if (static_cast<size_t>(generator_dimensions.shape(0)) != num_generators ||
@@ -1349,88 +1349,6 @@ Wrapper construct_contiguous_from_packed(
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
       std::move(boundaries), std::move(dims), std::move(filtrations));
   out.truc = Concrete(std::move(cpx));
-  reset_slicer_python_state(out);
-  return out;
-}
-
-template <typename Wrapper, typename Concrete, typename Value>
-Wrapper construct_kcritical_from_ptr(intptr_t input_ptr) {
-  if (input_ptr == 0) {
-    throw std::runtime_error("Expected a non-null packed multicritical bridge pointer.");
-  }
-
-  std::unique_ptr<multipers::packed_multi_critical_bridge_input> input_bridge(
-      reinterpret_cast<multipers::packed_multi_critical_bridge_input*>(input_ptr));
-  Wrapper out;
-  if (input_bridge->dimensions.empty()) {
-    return out;
-  }
-
-  const size_t num_generators = input_bridge->dimensions.size();
-  if (input_bridge->boundary_size() != num_generators || input_bridge->grade_indptr.size() != num_generators + 1) {
-    throw std::runtime_error("Invalid packed bridge input, shape do not coincide.");
-  }
-  if (input_bridge->grade_indptr.empty()) {
-    throw std::runtime_error("Invalid packed bridge input, missing grade indptr.");
-  }
-  const int64_t total_rows = input_bridge->grade_indptr.back();
-  if (total_rows < 0) {
-    throw std::runtime_error("Invalid packed bridge input, negative filtration row count.");
-  }
-  if (input_bridge->grade_values.size() != 2 * (size_t)total_rows) {
-    throw std::runtime_error("Invalid packed bridge input, grade values do not match grade indptr.");
-  }
-
-  {
-    nb::gil_scoped_release release;
-    std::vector<int> dims;
-    if constexpr (std::is_same_v<int32_t, int>) {
-      dims = std::move(input_bridge->dimensions);
-    } else {
-      dims.assign(input_bridge->dimensions.begin(), input_bridge->dimensions.end());
-    }
-    std::vector<typename Concrete::Filtration_value> filtrations;
-    filtrations.reserve(num_generators);
-    const int64_t* grade_ptr = input_bridge->grade_indptr.data();
-    const double* grade_vals = input_bridge->grade_values.data();
-    constexpr size_t num_parameters = 2;
-    for (size_t i = 0; i < num_generators; ++i) {
-      const int64_t begin = grade_ptr[i];
-      const int64_t end = grade_ptr[i + 1];
-      if (begin > end || begin < 0 || end > total_rows) {
-        throw std::runtime_error("Invalid packed bridge input, malformed grade row range.");
-      }
-      typename Concrete::Filtration_value filtration(num_parameters);
-      const size_t row_count = static_cast<size_t>(end - begin);
-      if (row_count == 0) {
-        filtration = Concrete::Filtration_value::inf(num_parameters);
-      } else {
-        filtration.set_num_generators(row_count);
-        // The packed bicub bridge stores antichain rows as a staircase with decreasing radius
-        // and increasing threshold. Fill the Gudhi multicritical filtration in reverse row order
-        // so its internal generator list stays in the expected lexicographic order.
-        for (size_t local = 0; local < row_count; ++local) {
-          const size_t src = static_cast<size_t>(end - 1) - local;
-          filtration(local, 0) = static_cast<Value>(grade_vals[2 * src]);
-          filtration(local, 1) = static_cast<Value>(grade_vals[2 * src + 1]);
-        }
-      }
-      filtrations.push_back(std::move(filtration));
-    }
-
-    // Reconstruct jagged boundaries from CSR if CSR mode was used.
-    if (input_bridge->boundaries.empty() && !input_bridge->csr_boundaries_indptr.empty()) {
-      input_bridge->boundaries.resize(input_bridge->boundary_size());
-      for (std::size_t i = 0; i < input_bridge->boundary_size(); ++i) {
-        auto rv = input_bridge->boundary_row(i);
-        input_bridge->boundaries[i].assign(rv.data, rv.data + rv.size);
-      }
-    }
-    Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
-        std::move(input_bridge->boundaries), std::move(dims), std::move(filtrations));
-    out.truc = Concrete(std::move(cpx));
-  }
-
   reset_slicer_python_state(out);
   return out;
 }
@@ -1731,14 +1649,6 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           },
           "degree"_a,
           "is_minres"_a = false)
-      .def("get_ptr", [](Wrapper& self) -> intptr_t { return reinterpret_cast<intptr_t>(&self.truc); })
-      .def(
-          "_from_ptr",
-          [](Wrapper& self, intptr_t slicer_ptr) -> Wrapper& {
-            self.truc = *reinterpret_cast<Concrete*>(slicer_ptr);
-            return self;
-          },
-          nb::rv_policy::reference_internal)
       .def(
           "_copy_from_any",
           [](Wrapper& self, nb::handle other) -> Wrapper& {
@@ -2295,15 +2205,6 @@ NB_MODULE(_slicer_nanobind, m) {
       "generator_dimensions"_a,
       "grade_indptr"_a,
       "grades_flat"_a);
-
-  m.def(
-      "build_kcritical_contiguous_slicer_from_ptr",
-      [](intptr_t input_ptr) {
-        return mpnb::construct_kcritical_from_ptr<mpnb::KcriticalContiguousF64MatrixSlicerDesc::wrapper,
-                                                  mpnb::KcriticalContiguousF64MatrixSlicerDesc::concrete,
-                                                  double>(input_ptr);
-      },
-      "input_ptr"_a);
 
   m.def(
       "_compute_hilbert_signed_measure",

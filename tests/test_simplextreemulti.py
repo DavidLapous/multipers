@@ -331,13 +331,10 @@ def test_astypes():
         )
         st.insert([0], [0, 0])
 
-        assert st.thisptr == st.astype().thisptr
-        assert st.thisptr == st.astype(dtype=st.dtype).thisptr
-        assert st.thisptr == st.astype(kcritical=st.is_kcritical).thisptr
-        assert (
-            st.thisptr
-            == st.astype(filtration_container=st.filtration_container.lower()).thisptr
-        )
+        assert st.astype() is st
+        assert st.astype(dtype=st.dtype) is st
+        assert st.astype(kcritical=st.is_kcritical) is st
+        assert st.astype(filtration_container=st.filtration_container.lower()) is st
 
     st = random_st()
     for cls in available_simplextrees:

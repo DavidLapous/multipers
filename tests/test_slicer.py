@@ -568,4 +568,4 @@ def test_astypes():
                             assert s.col_type == col
                             assert s.pers_backend == pers_backend
     s = mp.Slicer(st)
-    assert s.get_ptr() == s.astype().get_ptr()
+    assert s.astype() is s

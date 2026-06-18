@@ -1038,15 +1038,6 @@ void bind_module_class(nb::module_& m) {
                  new (self.p) Module();
                  nb::borrow<nb::object>(self.h).attr("_box") = empty_box_array<T>();
                })
-          .def(
-              "_from_ptr",
-              [](Module& self, intptr_t ptr) -> Module& {
-                auto* other = reinterpret_cast<Module*>(ptr);
-                self = std::move(*other);
-                delete other;
-                return self;
-              },
-              nb::rv_policy::reference_internal)
           .def("__len__", [](Module& self) -> int { return self.size(); })
           .def("__eq__", [](Module& self, Module& other) { return self == other; })
           .def_prop_ro("_template_id", [](const Module&) -> int { return Desc::template_id; })
