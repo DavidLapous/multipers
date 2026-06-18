@@ -114,9 +114,14 @@ class Module_interface {
     return nanobind::ndarray<const T, nanobind::numpy>(box_.data() + shift, {shift});
   }
 
-  auto get_box_view() const {
+  auto get_box_view_ro() const {
     // no transfer of ownership, dies together with the box
     return nanobind::ndarray<const T, nanobind::numpy>(box_.data(), {2, box_.size() / 2});
+  }
+
+  auto get_box_view() {
+    // no transfer of ownership, dies together with the box
+    return nanobind::ndarray<T, nanobind::numpy>(box_.data(), {2, box_.size() / 2});
   }
 
   Module_interface &set_box(const Box<value_type> &box) {
@@ -597,7 +602,6 @@ class Module_interface {
                                         _wrap_as_numpy_array(std::move(splits), 0)));
       }
       return out;
-      ;
     }
 
     for (auto &d : barcode) {
@@ -657,7 +661,7 @@ class Module_interface {
 };
 
 template <typename T>
-Module_interface<T> deserialize_from_python(
+Module_interface<T> deserialize_module_from_python(
     const nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> &state) {
   Module_interface<T> mod;
   {
