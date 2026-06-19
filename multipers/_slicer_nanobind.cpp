@@ -308,7 +308,7 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
 
 template <typename Desc, typename Wrapper, typename Value>
 nb::tuple compute_persistence_on_slices(Wrapper& self,
-                                        const nb::ndarray<const Value, nb::ndim<2>, nb::any_contig>& values,
+                                        const nb::ndarray<const Value, nb::ndim<2> >& values,
                                         bool ignore_infinite_filtration_values) {
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
@@ -1902,7 +1902,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def(
           "_compute_persistence_on_slices",
           [](Wrapper& self,
-             nb::ndarray<const Value, nb::ndim<2>, nb::any_contig> values,
+             nb::ndarray<const Value, nb::ndim<2> > values,
              bool ignore_infinite_filtration_values) -> nb::tuple {
             return compute_persistence_on_slices<Desc>(self, values, ignore_infinite_filtration_values);
           },

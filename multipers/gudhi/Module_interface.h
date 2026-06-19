@@ -57,7 +57,7 @@ class Module_interface {
   using Summand_of_dimension_range =
       boost::any_range<Summand_t, boost::forward_traversal_tag, const Summand_t &, std::ptrdiff_t>;
   using Tensor1D = nanobind::ndarray<const value_type, nanobind::ndim<1>, nanobind::any_contig>;
-  using Tensor2D = nanobind::ndarray<const value_type, nanobind::ndim<2>, nanobind::any_contig>;
+  using Tensor2D = nanobind::ndarray<const value_type, nanobind::ndim<2> >;
   template <typename IntegerType>
   using IntTensor1D = nanobind::ndarray<const IntegerType, nanobind::ndim<1>, nanobind::any_contig>;
   using Box_t = std::vector<T>;
