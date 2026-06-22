@@ -573,7 +573,7 @@ def _diagonal_order_key(curve, box):
     return float(np.mean(np.clip(projections, 0, 1)))
 
 
-def plot_birth_curve(
+def plot_end_curve(
     curves,
     *,
     ax=None,
@@ -587,10 +587,10 @@ def plot_birth_curve(
     alpha=0.95,
     xlabel=None,
     ylabel=None,
-    title="Birth curves",
+    title="End curves",
     **line_kwargs,
 ):
-    """Plot 2-parameter birth-curves with MMA-compatible coloring.
+    """Plot 2-parameter end-curves with MMA-compatible coloring.
 
     ``box`` controls displayed coordinate extents. Figure size and aspect ratio
     are left to the caller/axes. ``min_length`` filters plotted curves by

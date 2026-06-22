@@ -350,11 +350,11 @@ def birth_curves(
         Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
         is forced to ``False``.
     plot : bool, default=False
-        If true, plot the curves with ``multipers.plots.plot_birth_curve``.
+        If true, plot the curves with ``multipers.plots.plot_end_curve``.
     min_length : float, default=-1
         Minimum plotted curve length. Does not filter returned curves.
     plot_kwargs : dict, optional
-        Keyword arguments forwarded to ``plot_birth_curve``.
+        Keyword arguments forwarded to ``plot_end_curve``.
     **infer_grid_kwargs : object
         Additional keyword arguments forwarded to ``compute_grid``.
 
@@ -426,11 +426,12 @@ def birth_curves(
             curve = curve[np.all(curve < inf_indices, axis=1)]
         curves.append(curve)
     if plot:
-        from multipers.plots import plot_birth_curve
+        from multipers.plots import plot_end_curve
 
         plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
         plot_kwargs["min_length"] = min_length
-        plot_birth_curve(curves, **plot_kwargs)
+        plot_kwargs.setdefault("title", "Birth curves")
+        plot_end_curve(curves, **plot_kwargs)
     return curves
 
 
@@ -487,7 +488,7 @@ def death_curves(
         Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
         is forced to ``False``.
     plot, min_length, plot_kwargs
-        Plotting options forwarded to ``multipers.plots.plot_birth_curve``;
+        Plotting options forwarded to ``multipers.plots.plot_end_curve``;
         ``min_length`` does not filter returned curves.
     **infer_grid_kwargs : object
         Additional keyword arguments forwarded to ``compute_grid``.
@@ -567,9 +568,10 @@ def death_curves(
             curve = curve[np.all(curve < inf_indices, axis=1)]
         curves.append(curve)
     if plot:
-        from multipers.plots import plot_birth_curve
+        from multipers.plots import plot_end_curve
 
         plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
         plot_kwargs["min_length"] = min_length
-        plot_birth_curve(curves, **plot_kwargs)
+        plot_kwargs.setdefault("title", "Death curves")
+        plot_end_curve(curves, **plot_kwargs)
     return curves
