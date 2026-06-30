@@ -38,6 +38,7 @@
 #include <gudhi/Multi_persistence/module_helpers.h>
 #include <gudhi/Multi_persistence/Line.h>
 #include <gudhi/Multi_persistence/Box.h>
+#include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/numpy_utils.h>
 
 namespace Gudhi {
@@ -125,11 +126,19 @@ class Module_interface {
   }
 
   Module_interface &set_box(const Box<value_type> &box) {
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box.get_number_of_coordinates())
+      throw std::invalid_argument(
+          "The given box has not the same number of coordinates than parameters in the stored module");
     box_ = get_flat_box(box);
     return *this;
   }
 
   Module_interface &set_box(Tensor2D box) {
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box.shape(1))
+      throw std::invalid_argument(
+          "The given box has not the same number of coordinates than parameters in the stored module");
     box_ = get_flat_box_from_tensor(box);
     return *this;
   }
@@ -138,6 +147,10 @@ class Module_interface {
     if (box.size() != 2) throw std::invalid_argument("Box has to be represented by two corners.");
     if (box[0].size() != box[1].size())
       throw std::invalid_argument("Both corners defining the box must have same dimension.");
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box[0].size())
+      throw std::invalid_argument(
+          "The given box has not the same number of coordinates than parameters in the stored module");
     box_ = Box_t(box[0].begin(), box[0].end());
     box_.reserve(box_.size() * 2);
     box_.insert(box_.end(), box[1].begin(), box[1].end());
@@ -574,6 +587,8 @@ class Module_interface {
   }
 
   static Box_t get_flat_box_from_tensor(Tensor2D box) {
+    if (box.shape(0) != 2) throw std::invalid_argument("Box has to be represented by two corners.");
+
     Numpy_2d_span boxView(box);
     auto lowerView = boxView[0];
     auto upperView = boxView[1];

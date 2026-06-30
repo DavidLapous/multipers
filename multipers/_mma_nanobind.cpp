@@ -199,15 +199,16 @@ void bind_module_class(nb::module_& m) {
           .def_prop_rw("box",
                        &Module::get_box_view,
                        [](Module& self, nb::object box) {
-                         if (nb::ndarray_check(box.ptr())) {
-                           self.set_box(nb::cast<NDArray2>(box));
-                           return;
-                         }
                          try {
+                           if (nb::ndarray_check(box.ptr())) {
+                             self.set_box(nb::cast<NDArray2>(box));
+                             return;
+                           }
                            self.set_box(nb::cast<std::vector<std::vector<T>>>(box));
                            return;
                          } catch (const nb::cast_error&) {
-                           throw nb::type_error("Box has to be set with a 2D array or a nested sequence.");
+                           throw nb::type_error(
+                               "Box has to be set with an array or a nested sequence of shape (2, p).");
                          }
                        })
           .def("set_box",
