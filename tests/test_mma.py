@@ -18,6 +18,21 @@ def test_1():
     assert np.asarray(mma_pymodule.get_bounds()).shape[0] == 2
 
 
+def test_to_flat_idx():
+    st = mp.SimplexTreeMulti(num_parameters=3)
+    st.insert([0], [0, 1, 0])
+    st.insert([1], [1, 0, 1])
+    st.insert([0, 1], [1, 1, 2])
+    st.insert([2], [0, 2, 3])
+    st.insert([1, 2, 3], [1, 3, 4])
+    mma_pymodule = mp.module_approximation(st)
+    res = mma_pymodule.to_flat_idx([[-1.0, 2.0, 3.0], [0.0, 1.0], [-2.0, 1.0, 4.0, 9.0]])
+
+    assert np.array_equal(res[0], [[2, 1, 1], [1, 1, 3]])
+    assert np.array_equal(res[1], [[1, 1, 1], [1, 0, 1], [1, 1, 1], [1, 1, 2]])
+    assert np.array_equal(res[2], [[2, 1, 3], [2, 1, 2], [1, 1, 3], [2, 1, 3], [2, 1, 2]])
+
+
 def test_img():
     simplextree = mp.SimplexTreeMulti(num_parameters=4)
     simplextree.insert([0], [1, 2, 3, 4])
