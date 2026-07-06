@@ -17,8 +17,10 @@
 #ifndef MP_PY_MODULE_H_INCLUDED
 #define MP_PY_MODULE_H_INCLUDED
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -34,6 +36,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <gudhi/Debug_utils.h>
+#include <gudhi/simple_mdspan.h>
 #include <gudhi/Multi_persistence/Module.h>
 #include <gudhi/Multi_persistence/module_helpers.h>
 #include <gudhi/Multi_persistence/Line.h>
@@ -391,7 +394,7 @@ class Module_interface {
     return out;
   }
 
-  Module_interface get_module_of_degrees(Tensor1D degrees) {
+  Module_interface get_module_of_degrees(IntTensor1D<int> degrees) {
     Module_interface out(box_);
     {
       nanobind::gil_scoped_release release;
@@ -400,7 +403,7 @@ class Module_interface {
     return out;
   }
 
-  Module_interface get_module_of_degrees(const std::vector<T> &degrees) {
+  Module_interface get_module_of_degrees(const std::vector<int> &degrees) {
     Module_interface out(box_);
     {
       nanobind::gil_scoped_release release;
@@ -416,6 +419,10 @@ class Module_interface {
                                    IntTensor1D<IntegerType> resolution,
                                    int n_jobs) {
     if (degree < 0) throw std::invalid_argument("Landscape dimension has to be positive.");
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box.shape(1))
+      throw std::invalid_argument(
+          "The given box has not the same number of coordinates than parameters in the stored module");
 
     std::vector<maybe_make_signed_t<T>> out;
     Numpy_span resolutionView(resolution);
@@ -451,6 +458,12 @@ class Module_interface {
                       double p,
                       bool normalize,
                       int n_jobs) {
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box.shape(1) && box.shape(1) != 0)
+      throw std::invalid_argument(
+          "The given box is neither trivial nor has not the same number of coordinates than parameters in the stored "
+          "module");
+
     std::vector<double> out;
     {
       nanobind::gil_scoped_release release;
@@ -495,12 +508,25 @@ class Module_interface {
   }
 
   auto compute_interleavings_from_box(Tensor2D box) {
+    if (module_.get_number_of_parameters() != get_null_value<int>() &&
+        module_.get_number_of_parameters() != box.shape(1))
+      throw std::invalid_argument(
+          "The given box has not the same number of coordinates than parameters in the stored module");
+
     std::vector<maybe_make_signed_t<T>> interleavings;
     {
       nanobind::gil_scoped_release release;
       interleavings = Gudhi::multi_persistence::compute_module_interleavings(module_, get_box_from_tensor(box));
     }
     return _wrap_as_numpy_array(std::move(interleavings), interleavings.size());
+  }
+
+  nanobind::tuple get_flat_indices_in_grid(const std::vector<Tensor1D> &grid) {
+    return _get_flat_indices_in_grid(std::vector<Numpy_span<T>>(grid.begin(), grid.end()));
+  }
+
+  nanobind::tuple get_flat_indices_in_grid(const std::vector<std::vector<T>> &grid) {
+    return _get_flat_indices_in_grid(grid);
   }
 
   friend bool operator==(const Module_interface &a, const Module_interface &b) {
@@ -575,6 +601,8 @@ class Module_interface {
   }
 
   static Box<T> get_box_from_tensor(Tensor2D box) {
+    if (box.shape(0) != 2) throw std::invalid_argument("Box has to be represented by two corners.");
+
     Numpy_2d_span boxView(box);
     auto lowerView = boxView[0];
     auto upperView = boxView[1];
@@ -672,6 +700,74 @@ class Module_interface {
                                                      bool keepInf) {
     if (keepInf) return get_numpy_barcode_from_lines_with_inf(barcode, numberOfLines);
     return get_numpy_barcode_from_lines_without_inf(barcode, numberOfLines);
+  }
+
+  template <typename Index, class GridRow>
+  Index _get_grid_index(T value, const GridRow &row) const {
+    if (row.empty()) throw std::invalid_argument("Grid axes must be non-empty.");
+
+    // static_cast because of Windows bug not accepting integer types for isnan method...
+    if (value == Summand_t::T_inf || std::isnan(static_cast<double>(value))) return row.size() - 1;
+    if (value == Summand_t::T_m_inf) return 0;
+
+    if (value <= row[0]) return 0;
+    if (value >= row[row.size() - 1]) return row.size() - 1;
+
+    return std::distance(row.begin(), std::lower_bound(row.begin(), row.end(), value));
+  }
+
+  template <typename Index, class Corners, class GridRow>
+  void _add_corner_coordinates(std::vector<Index> &coordinates,
+                               const Corners &corners,
+                               const std::vector<GridRow> &grid) const {
+    std::size_t startIdx = coordinates.size();
+    coordinates.resize(coordinates.size() + (corners.num_generators() * corners.num_parameters()));
+    Gudhi::Simple_mdspan coordsView(coordinates.data() + startIdx, corners.num_generators(), corners.num_parameters());
+    for (std::size_t g = 0; g < corners.num_generators(); ++g) {
+      for (std::size_t p = 0; p < corners.num_parameters(); ++p) {
+        coordsView(g, p) = _get_grid_index<Index>(corners(g, p), grid[p]);
+      }
+    }
+  }
+
+  template <class GridRow, typename Index = std::int32_t>
+  nanobind::tuple _get_flat_indices_in_grid(const std::vector<GridRow> &grid) const {
+    const int numParam = get_number_of_parameters();
+    const std::size_t numSummands = module_.size();
+
+    std::vector<Index> sizes;
+    std::vector<Index> birthCoordinates;
+    std::vector<Index> deathCoordinates;
+
+    if (numParam == get_null_value<int>() || grid.size() == 0 || numSummands == 0) {
+      return nanobind::make_tuple(_wrap_as_numpy_array(std::move(sizes), 2, 0),
+                                  _wrap_as_numpy_array(std::move(birthCoordinates), 0, grid.size()),
+                                  _wrap_as_numpy_array(std::move(deathCoordinates), 0, grid.size()));
+    }
+
+    if (grid.size() != numParam)
+      throw std::invalid_argument(
+          "Given grid does not have the same number of rows as number of parameters in the module.");
+
+    {
+      nanobind::gil_scoped_release release;
+
+      sizes.resize(2 * numSummands);
+      Gudhi::Simple_mdspan sizesView(sizes.data(), 2, numSummands);
+      for (std::size_t s = 0; s < numSummands; ++s) {
+        const auto &sum = module_.get_summand(s);
+        sizesView(0, s) = sum.get_number_of_birth_corners();
+        sizesView(1, s) = sum.get_number_of_death_corners();
+
+        _add_corner_coordinates(birthCoordinates, sum.get_upset(), grid);
+        _add_corner_coordinates(deathCoordinates, sum.get_downset(), grid);
+      }
+    }
+
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(std::move(sizes), 2, numSummands),
+        _wrap_as_numpy_array(std::move(birthCoordinates), birthCoordinates.size() / numParam, numParam),
+        _wrap_as_numpy_array(std::move(deathCoordinates), deathCoordinates.size() / numParam, numParam));
   }
 };
 

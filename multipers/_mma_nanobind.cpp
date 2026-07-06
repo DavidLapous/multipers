@@ -164,6 +164,7 @@ void bind_module_class(nb::module_& m) {
   using Summand = typename Module::Summand_t;
   using NDArray1 = typename Module::Tensor1D;
   using NDArray2 = typename Module::Tensor2D;
+  using IntNDArray = typename Module::template IntTensor1D<int>;
 
   std::string iterator_name = std::string("_PyModuleIterator_") + std::string(Desc::short_name);
 
@@ -246,8 +247,10 @@ void bind_module_class(nb::module_& m) {
           //      "degree"_a = -1)
           .def("permute_summands", &Module::permute_summands)
           .def("get_module_of_degree", &Module::get_module_of_degree)
-          .def("get_module_of_degrees", nb::overload_cast<NDArray1>(&Module::get_module_of_degrees))
-          .def("get_module_of_degrees", nb::overload_cast<const std::vector<T>&>(&Module::get_module_of_degrees))
+          .def("get_module_of_degrees", nb::overload_cast<IntNDArray>(&Module::get_module_of_degrees))
+          .def("get_module_of_degrees", nb::overload_cast<const std::vector<int>&>(&Module::get_module_of_degrees))
+          .def("to_flat_idx", nb::overload_cast<const std::vector<NDArray1>&>(&Module::get_flat_indices_in_grid))
+          .def("to_flat_idx", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::get_flat_indices_in_grid))
           .def("__getstate__",
                [](const Module& self) -> nb::ndarray<nb::numpy, char> {
                  std::size_t buffer_size;
