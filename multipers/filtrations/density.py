@@ -491,7 +491,8 @@ class KDE:
             if x_weights is not None:
                 if isinstance(x_weights, np.ndarray):
                     x_weights = torch.from_numpy(x_weights)
-                w = LazyTensor(x_weights.reshape(-1, 1).type(X.dtype), axis=0)
+                x_weights = x_weights.to(device=X.device, dtype=X.dtype).reshape(-1, 1)
+                w = LazyTensor(x_weights, axis=0)
                 return lazy_x, lazy_y, w
             return lazy_x, lazy_y, None
         raise Exception("Bad tensor type.")
@@ -557,7 +558,7 @@ class DTM:
         metric :
                 The distance between points to consider
         """
-        self.masses = masses
+        self.masses = np.array([]) if masses is None else np.atleast_1d(masses)
         self.metric = metric
         self._kdtree_kwargs = _kdtree_kwargs
         self._ks = None
@@ -606,7 +607,7 @@ class DTM:
             _Y = self.api.asnumpy(Y)
         NN_Dist, NN = self._kdtree.query(_Y, self._ks.max(), return_distance=True)
         DTMs = np.array([((NN_Dist**2)[:, :k].mean(1)) ** 0.5 for k in self._ks])
-        return self.api.astensor(DTMs)
+        return self.api.astensor(DTMs, device=self.api.device(Y))
 
     def score_samples_diff(self, Y):
         """Returns the kernel density estimates of each point in `Y`.
