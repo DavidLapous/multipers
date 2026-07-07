@@ -473,7 +473,7 @@ inline contiguous_f64_complex persistence_algebra_death_curve_contiguous_interfa
   auto death = ker_epsilon.presentation_of_submodule(original);
   death.sort_columns_lexicographically();
   death.sort_rows_lexicographically();
-  death.minimize();
+  death.minimize_variant();
 
   auto out = persistence_algebra_detail::convert_minpres_to_output<int>(std::move(death), degree, false);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
