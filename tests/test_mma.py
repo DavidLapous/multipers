@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 
 import multipers as mp
-from multipers._mma_nanobind import PyBox_f64
 import multipers.ml.mma as mma
 from multipers.tests import random_st
 
@@ -17,7 +16,21 @@ def test_1():
     assert np.array_equal(mma_pymodule[0].get_death_list(), [[np.inf, np.inf]])
     assert np.asarray(mma_pymodule[0].get_bounds()).shape[0] == 2
     assert np.asarray(mma_pymodule.get_bounds()).shape[0] == 2
-    assert np.array_equal(PyBox_f64([0.0, 1.0], [2.0, 3.0]).get(), [[0.0, 1.0], [2.0, 3.0]])
+
+
+def test_to_flat_idx():
+    st = mp.SimplexTreeMulti(num_parameters=3)
+    st.insert([0], [0, 1, 0])
+    st.insert([1], [1, 0, 1])
+    st.insert([0, 1], [1, 1, 2])
+    st.insert([2], [0, 2, 3])
+    st.insert([1, 2, 3], [1, 3, 4])
+    mma_pymodule = mp.module_approximation(st)
+    res = mma_pymodule.to_flat_idx([[-1.0, 2.0, 3.0], [0.0, 1.0], [-2.0, 1.0, 4.0, 9.0]])
+
+    assert np.array_equal(res[0], [[2, 1, 1], [1, 1, 3]])
+    assert np.array_equal(res[1], [[1, 1, 1], [1, 0, 1], [1, 1, 1], [1, 1, 2]])
+    assert np.array_equal(res[2], [[2, 1, 3], [2, 1, 2], [1, 1, 3], [2, 1, 3], [2, 1, 2]])
 
 
 def test_img():

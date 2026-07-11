@@ -21,11 +21,8 @@ available_pymodules = tuple(
 available_pysummands = tuple(
     cls for name, cls in sorted(vars(_mma).items()) if name.startswith("PySummand_")
 )
-available_pyboxes = tuple(
-    cls for name, cls in sorted(vars(_mma).items()) if name.startswith("PyBox_")
-)
 
-for _cls in (*available_pymodules, *available_pysummands, *available_pyboxes):
+for _cls in (*available_pymodules, *available_pysummands):
     globals()[_cls.__name__] = _cls
 
 for _name, _value in vars(_mma).items():
@@ -34,7 +31,6 @@ for _name, _value in vars(_mma).items():
 
 PyModule_type = reduce(or_, available_pymodules) if available_pymodules else Any
 PySummand_type = reduce(or_, available_pysummands) if available_pysummands else Any
-PyBox_type = reduce(or_, available_pyboxes) if available_pyboxes else Any
 
 _MMA_CONSTRUCTORS = {np.dtype(cls().dtype): cls for cls in available_pymodules}
 
@@ -134,10 +130,14 @@ def _module_representation(
     coordinates = mpg.todense(grid)
 
     if kernel == "linear":
-        concatenated_images = np.asarray(
-            self._compute_pixels(
-                coordinates, degrees, box, bandwidth, p, normalize, n_jobs
-            )
+        concatenated_images = self._compute_pixels(
+            np.asarray(coordinates, dtype=self.dtype),
+            np.asarray(degrees),
+            np.asarray(box, dtype=self.dtype),
+            bandwidth,
+            p,
+            normalize,
+            n_jobs,
         )
     else:
         if kernel == "linear2":
@@ -232,8 +232,8 @@ def _module_landscapes(
         out = np.asarray(
             self._compute_landscapes_grid(
                 int(degree),
-                ks.tolist(),
-                [np.asarray(g, dtype=self.dtype).tolist() for g in grid],
+                ks,
+                [np.asarray(g, dtype=self.dtype) for g in grid],
                 int(n_jobs),
             )
         )
@@ -776,7 +776,7 @@ def module_approximation(
         mod.box = box
         for i, m in enumerate(modules):
             mod.merge(
-                m.get_module_of_degree(input[i].minpres_degree), input[i].minpres_degree
+                m, input[i].minpres_degree
             )
         return mod
 
@@ -811,12 +811,10 @@ def module_approximation(
 __all__ = [
     *(cls.__name__ for cls in available_pymodules),
     *(cls.__name__ for cls in available_pysummands),
-    *(cls.__name__ for cls in available_pyboxes),
     *(name for name in vars(_mma) if name.startswith("from_dump_")),
     "available_pymodules",
     "PyModule_type",
     "PySummand_type",
-    "PyBox_type",
     "is_mma",
     "module_approximation",
     "module_approximation_from_slicer",
