@@ -461,7 +461,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
                 X, self._degrees, self._axis, self.quantiles
             )
         else:
-            m = np.zeros((self._num_axis, len(self._degrees), self._num_parameters))
+            m = np.zeros((len(self._axis), len(self._degrees), self._num_parameters))
             M = m + 1
             self._module_bounds = (m, M)
         assert self._num_parameters == self._module_bounds[0].shape[-1]
@@ -476,7 +476,18 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             print(m)
             print("-- Upper bound :", M.shape)
             print(M)
-        w = 1 if self.weights is None else np.asarray(self.weights)
+        w = np.asarray(1 if self.weights is None else self.weights)
+        if w.ndim > 1 or w.size not in (1, self._num_parameters):
+            raise ValueError(
+                f"weights must be scalar or have length {self._num_parameters}"
+            )
+        if (
+            not np.issubdtype(w.dtype, np.number)
+            or np.issubdtype(w.dtype, np.complexfloating)
+            or not np.all(np.isfinite(w))
+        ):
+            raise ValueError("weights must contain finite real numbers")
+        self._weights = np.broadcast_to(w, (self._num_parameters,)).copy()
         m, M = self._module_bounds
         normalizer = M - m
         zero_normalizer = normalizer == 0
@@ -485,7 +496,7 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
 
             warn(f"Encountered empty bounds. Please fix me. \n M-m = {normalizer}")
         normalizer[zero_normalizer] = 1
-        self._normalization_factors = w / normalizer
+        self._normalization_factors = self._weights / normalizer
         if self.verbose:
             print("-- Normalization factors:", self._normalization_factors.shape)
             print(self._normalization_factors)
@@ -506,6 +517,18 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def copy_transform(mod, degrees, translation, rescale_factors, new_box):
+        dtype = np.dtype(mod.dtype)
+        arrays = tuple(
+            np.asarray(values) for values in (translation, rescale_factors, new_box)
+        )
+        if np.issubdtype(dtype, np.integer):
+            raise ValueError("MMAFormatter transformations require floating modules")
+        limit = np.finfo(dtype).max
+        if any(np.any(np.abs(values) > limit) for values in arrays):
+            raise ValueError(f"MMAFormatter transformation exceeds {dtype} range")
+        translation, rescale_factors, new_box = (
+            np.ascontiguousarray(values, dtype=dtype) for values in arrays
+        )
         copy = mod.get_module_of_degrees(
             degrees
         )  # and only returns the specific degrees
@@ -517,15 +540,12 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
 
     def transform(self, X_in):
         X = self._maybe_from_dump(X_in)
-        if np.any(self._normalization_factors != 1):
+        if self.normalize or np.any(self._normalization_factors != 1):
             if self.verbose:
                 print("Normalizing...", end="")
-            w = (
-                [1] * self._num_parameters
-                if self.weights is None
-                else np.asarray(self.weights)
+            standard_box = np.array(
+                [np.zeros(self._num_parameters), self._weights]
             )
-            standard_box = np.array([[0] * self._num_parameters, w])
 
             X_copy = [
                 [
@@ -542,8 +562,8 @@ class MMAFormatter(BaseEstimator, TransformerMixin):
             ]
             if self.verbose:
                 print("Done.")
-            return X_copy
-        if self.axis_ != -1:
+            X = X_copy if self.axis_ == -1 else [mods[0] for mods in X_copy]
+        elif self.axis_ is not None and self.axis_ != -1:
             X = [x[self.axis_] for x in X]
         if self.dump:
             import pickle
