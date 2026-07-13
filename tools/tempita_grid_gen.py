@@ -452,7 +452,6 @@ def _render_mma_nanobind_registry(value_types: list[tuple[str, str, str]]) -> st
                 f'  static constexpr std::string_view short_name = "{short}";',
                 f'  static constexpr std::string_view dtype_name = "{dtype_name}";',
                 f'  static constexpr std::string_view summand_name = "PySummand_{short}";',
-                f'  static constexpr std::string_view box_name = "PyBox_{short}";',
                 f'  static constexpr std::string_view module_name = "PyModule_{short}";',
                 f'  static constexpr std::string_view from_dump_name = "from_dump_{short}";',
                 "};",

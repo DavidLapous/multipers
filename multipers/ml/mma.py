@@ -9,7 +9,7 @@ import multipers as mp
 import multipers.simplex_tree_multi
 import multipers.slicer
 from multipers.grids import compute_grid
-from multipers.mma_structures import PyBox_f64, PyModule_type
+from multipers.mma_structures import PyModule_type
 
 _FilteredComplexType = Union[
     mp.slicer.Slicer_type, mp.simplex_tree_multi.SimplexTreeMulti_type
