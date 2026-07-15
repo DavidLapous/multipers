@@ -96,16 +96,24 @@ def test_3():
 def test_make_filtration_non_decreasing_propagates_transitively():
     slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64)
     slicer = slicer_type(
-        [[], [], [0, 1], [2]],
-        np.asarray([0, 0, 1, 2], dtype=np.int32),
-        np.asarray([[0, 0], [0, 0], [1, 1], [5, 5]], dtype=np.float64),
+        [[], [0, 2], [], [], [5], [1, 6], [2, 3]],
+        np.asarray([0, 1, 0, 0, 3, 2, 2], dtype=np.int32),
+        np.asarray(
+            [[0, 2, 1], [0, 2, 0], [0, 1, 2], [3, 4, 5], [6, 4, 2], [3, 4, 3], [1, 2, 4]],
+            dtype=np.float64,
+        ),
     )
 
     slicer.make_filtration_non_decreasing()
 
     got = np.asarray(slicer.get_filtrations(), dtype=np.float64)
-    expected = np.asarray([[5, 5], [5, 5], [5, 5], [5, 5]], dtype=np.float64)
+    expected = np.asarray(
+        [[0, 2, 1], [0, 2, 2], [0, 1, 2], [3, 4, 5], [6, 4, 5], [3, 4, 5], [3, 4, 5]],
+        dtype=np.float64,
+    )
     assert np.array_equal(got, expected)
+
+
 def test_rank_custom():
     B = [[], [0], [0], [0], [0]]
     F = [[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]]

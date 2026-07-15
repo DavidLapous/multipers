@@ -6,12 +6,10 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -28,7 +26,6 @@
 #include "Persistence_slices_interface.h"
 #include "ext_interface/backend_log_policy.hpp"
 #include "ext_interface/nanobind_generator_basis.hpp"
-#include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
@@ -39,10 +36,9 @@
 #include <python_interfaces/numpy_utils.h>
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
-#include "multiparameter_module_approximation/approximation.h"
+#include <gudhi/multiparameter_module_approximation.h>
 #include "nanobind_array_utils.hpp"
 #include "nanobind_dense_array_utils.hpp"
-#include "nanobind_mma_registry_helpers.hpp"
 #include "nanobind_object_utils.hpp"
 #include "nanobind_slicer_serialization.hpp"
 
@@ -208,9 +204,9 @@ Wrapper& make_filtration_non_decreasing_inplace(Wrapper& self, bool safe) {
     bool modified = true;
     while (modified) {
       modified = false;
-      for (size_t i = boundaries.size(); i-- > 0;) {
+      for (size_t i = 1; i < boundaries.size(); ++i) {
         for (auto b : boundaries[i]) {
-          modified |= intersect_lifetimes(filtrations[b], filtrations[i]);
+          modified |= intersect_lifetimes(filtrations[i], filtrations[b]);
         }
       }
       if (ordered) {
@@ -1676,7 +1672,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
                                 self.filtration_grid,
                                 self.generator_basis,
-                                 self.minpres_degree));
+                                self.minpres_degree));
            })
       .def("__reduce_ex__",
            [](Wrapper& self, int) -> nb::tuple {
@@ -1686,7 +1682,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
                                 self.filtration_grid,
                                 self.generator_basis,
-                                 self.minpres_degree));
+                                self.minpres_degree));
            })
       .def("_serialize_state",
            [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
@@ -1842,17 +1838,17 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           "basepoint"_a,
           "direction"_a = nb::none(),
           nb::rv_policy::reference_internal)
-      .def(
-          "set_slice",
-          [](Wrapper& self, nb::object values) -> Wrapper& {
-            auto c_values = cast_vector<Value>(values);
-            {
-              nb::gil_scoped_release release;
-              self.truc.set_slice(c_values);
-            }
-            return self;
-          },
-          nb::rv_policy::reference_internal)
+      // .def(
+      //     "set_slice",
+      //     [](Wrapper& self, nb::object values) -> Wrapper& {
+      //       auto c_values = cast_vector<Value>(values);
+      //       {
+      //         nb::gil_scoped_release release;
+      //         self.truc.set_slice(c_values);
+      //       }
+      //       return self;
+      //     },
+      //     nb::rv_policy::reference_internal)
       .def(
           "initialize_persistence_computation",
           [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
@@ -1904,15 +1900,15 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
              }
              return dim_barcode_to_tuple<Barcode, int>(barcode);
            })
-      .def("get_current_filtration",
-           [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
-             std::vector<Value> current;
-             {
-               nb::gil_scoped_release release;
-               current = self.truc.get_slice();
-             }
-             return owned_array<Value>(std::move(current), {current.size()});
-           })
+      // .def("get_current_filtration",
+      //      [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> {
+      //        std::vector<Value> current;
+      //        {
+      //          nb::gil_scoped_release release;
+      //          current = self.truc.get_slice();
+      //        }
+      //        return owned_array<Value>(std::move(current), {current.size()});
+      //      })
       .def(
           "prune_above_dimension",
           [](Wrapper& self, int max_dimension) -> Wrapper& {
@@ -2093,8 +2089,15 @@ Gudhi::multi_persistence::Module_interface<double> module_approximation_from_des
     Gudhi::multi_persistence::Module<double> mod;
     {
       nb::gil_scoped_release release;
-      mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
-          wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
+      mod = Gudhi::multi_persistence::multiparameter_module_approximation(wrapper.truc,
+                                                                          max_error,
+                                                                          box.get_lower_corner(),
+                                                                          box.get_upper_corner(),
+                                                                          direction,
+                                                                          threshold,
+                                                                          complete,
+                                                                          verbose,
+                                                                          n_jobs);
     }
     return {std::move(mod), box};
   }
