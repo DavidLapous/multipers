@@ -126,6 +126,12 @@ set(MULTIPERS_AIDA_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include"
 )
 
+set(MULTIPERS_SKYSCRAPER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/Skyscraper-Invariant" CACHE PATH "Path to Skyscraper-Invariant")
+set(MULTIPERS_SKYSCRAPER_INCLUDE_DIRS
+  "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/include"
+  "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include"
+)
+
 set(MULTIPERS_MPFREE_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/mpfree/include"
   "${CMAKE_SOURCE_DIR}/ext/mpfree/mpp_utils_mod/include"

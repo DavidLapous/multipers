@@ -23,7 +23,7 @@ dependencies = [
   "pot"
 ]
 requires-python = ">=3.10"
-license = "GPL-3.0-or-later"
+license = "GPL-3.0-only"
 license-files = [
   "LICENSE",
   "licenses/LGPL-3.0-or-later.txt",
@@ -214,6 +214,24 @@ include = [
   "ext/Persistence-Algebra/include/grlina/r3graded_matrix.hpp",
   "ext/Persistence-Algebra/include/grlina/sparse_matrix.hpp",
   "ext/Persistence-Algebra/include/grlina/to_quiver.hpp",
+  "ext/Skyscraper-Invariant/include/file_reader.hpp",
+  "ext/Skyscraper-Invariant/include/filt_landscape.hpp",
+  "ext/Skyscraper-Invariant/include/hnf.hpp",
+  "ext/Skyscraper-Invariant/include/hnf_at.hpp",
+  "ext/Skyscraper-Invariant/include/hnf_interface.hpp",
+  "ext/Skyscraper-Invariant/include/hnf_uni_b1.hpp",
+  "ext/Skyscraper-Invariant/include/skyscraper_core.hpp",
+  "ext/Skyscraper-Invariant/include/stb_image_write.h",
+  "ext/Skyscraper-Invariant/include/subdivision.hpp",
+  "ext/Skyscraper-Invariant/include/uni_b1.hpp",
+  "ext/Skyscraper-Invariant/src/file_reader.cpp",
+  "ext/Skyscraper-Invariant/src/filt_landscape.cpp",
+  "ext/Skyscraper-Invariant/src/hnf.cpp",
+  "ext/Skyscraper-Invariant/src/hnf_at.cpp",
+  "ext/Skyscraper-Invariant/src/hnf_uni_b1.cpp",
+  "ext/Skyscraper-Invariant/src/skyscraper_core.cpp",
+  "ext/Skyscraper-Invariant/src/subdivision.cpp",
+  "ext/Skyscraper-Invariant/src/uni_b1.cpp",
   "ext/deg_rips/include/deg_rips/Complex.h",
   "ext/deg_rips/include/deg_rips/Edge_domination_checker.h",
   "ext/deg_rips/include/deg_rips/Grade.h",
@@ -558,6 +576,7 @@ include = [
   # Vendored license files kept in the sdist.
   "ext/AIDA/LICENSE",
   "ext/Persistence-Algebra/LICENSE",
+  "ext/Skyscraper-Invariant/LICENSE",
   "ext/deg_rips/COPYING",
   "ext/deg_rips/COPYING.LESSER",
   "ext/function_delaunay/COPYING",

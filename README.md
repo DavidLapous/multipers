@@ -80,10 +80,10 @@ If I missed something, or you want to add something, feel free to open an issue.
 ## Licensing
 
 `multipers` distributions that include the compiled external interfaces are provided under
-**GPL-3.0-or-later**.
+**GPL-3.0-only** when they contain the Skyscraper-Invariant backend.
 
 This is due to linked GPL/LGPL third-party components used by the build, notably
-`AIDA`, `Persistence-Algebra`, `function_delaunay`, `mpfree`, `multi_critical`, and
+`AIDA`, `Persistence-Algebra`, `Skyscraper-Invariant`, `function_delaunay`, `mpfree`, `multi_critical`, and
 `multi_chunk`.
 
 See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.

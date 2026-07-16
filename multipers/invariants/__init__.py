@@ -13,6 +13,7 @@ from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_si
 from ._utils import _as_slicer, _normalize_degrees
 from .end_curves import birth_curves, death_curves, end_curves
 from .projected_barcode import projected_barcode
+from .skyscraper import SkyscraperInvariant, skyscraper_invariant
 
 
 def fibered_barcode(
@@ -592,4 +593,6 @@ __all__ = [
     "projected_barcode",
     "rank_invariant",
     "signed_measure",
+    "SkyscraperInvariant",
+    "skyscraper_invariant",
 ]

@@ -1,8 +1,8 @@
 # Third-Party Notices
 
 This distribution includes and/or links against third-party components with GPL/LGPL licenses.
-As a result, distributed `multipers` artifacts built with these components are licensed under
-`GPL-3.0-or-later`.
+Distributed `multipers` artifacts containing the Skyscraper-Invariant backend are licensed under
+`GPL-3.0-only`; builds without that backend remain `GPL-3.0-or-later`.
 
 ## Components
 
@@ -17,6 +17,13 @@ As a result, distributed `multipers` artifacts built with these components are l
   - Source in this repository: `ext/Persistence-Algebra/`
   - Commit used in this workspace: `07e2c0d0bd7b6b48f6a584eee42d4c6ad583e078`
   - License: GPL-3.0-or-later (see `ext/Persistence-Algebra/LICENSE`)
+
+- `Skyscraper-Invariant`
+  - Upstream: https://github.com/JanJend/Skyscraper-Invariant
+  - Fork: https://github.com/DavidLapous/Skyscraper-Invariant
+  - Source in this repository: `ext/Skyscraper-Invariant/`
+  - Commit used in this workspace: `cea2ef8fd7dcdba24bd3c53820b18287de1308fe`
+  - License: GPL-3.0-only (see upstream `README.md` and `ext/Skyscraper-Invariant/LICENSE`)
 
 - `function_delaunay`
   - Upstream: https://bitbucket.org/mkerber/function_delaunay/

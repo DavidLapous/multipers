@@ -387,33 +387,44 @@ def _todo_partition_(data, resolution, unique):
     return f
 
 
-def compute_bounding_box(stuff, inflate=0.0):
+def _inflate_box(box, inflate, relative, api):
+    if not inflate:
+        return box
+    if relative:
+        span = box[1] - box[0]
+        padding = inflate * api.where(span > 0, span, span * 0 + 1)
+    else:
+        padding = inflate
+    return api.stack((box[0] - padding, box[1] + padding))
+
+
+def compute_bounding_box(stuff, inflate=0.0, *, relative=False):
     r"""
-    Returns a array of shape (2, num_parameters)
+    Returns an array of shape (2, num_parameters)
     such that for any filtration value $y$ of something in stuff,
     then if (x,z) is the output of this function, we have
     $x\le y \le z$.
+
+    If ``relative`` is true, ``inflate`` is interpreted as a fraction of each
+    parameter's range. Otherwise it is an absolute padding value.
     """
     grid = compute_grid(stuff, strategy="regular", resolution=2)
     api = api_from_tensors(*grid)
     box = api.moveaxis(api.stack(grid), 0, 1)
-    if inflate:
-        box[0] -= inflate
-        box[1] += inflate
-    return box
+    return _inflate_box(box, inflate, relative, api)
 
-def compute_bounding_box_from_iterable(stuff, inflate=0.0):
+
+def compute_bounding_box_from_iterable(stuff, inflate=0.0, *, relative=False):
     r"""
     Returns an array of shape (2, num_parameters) bounding all filtration values
-    appearing in the iterable ``stuff``.
+    appearing in the iterable ``stuff``. If ``relative`` is true, ``inflate``
+    is interpreted as a fraction of each parameter's range. Otherwise it is an
+    absolute padding value.
     """
     grid = compute_grid_from_iterable(stuff, strategy="regular", resolution=2)
     api = api_from_tensors(*grid)
     box = api.moveaxis(api.stack(grid), 0, 1)
-    if inflate:
-        box[0] -= inflate
-        box[1] += inflate
-    return box
+    return _inflate_box(box, inflate, relative, api)
 
 
 def push_to_grid(points, grid, return_coordinate=False):
@@ -434,7 +445,7 @@ def push_to_grid(points, grid, return_coordinate=False):
     return evaluate_in_grid(coordinates, grid)
 
 
-def coarsen_points(points, strategy="exact", resolution=-1, coordinate=False):
+def coarsen_points(points, strategy="exact", resolution=None, coordinate=False):
     grid = _compute_grid(points.T, strategy=strategy, resolution=resolution)
     if coordinate:
         return push_to_grid(points, grid, coordinate), grid
@@ -659,28 +670,28 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordi
     return out, coordinates
 
 
-# def evaluate_mod_in_grid(mod, grid, box=None):
-#     """Given an MMA module, pushes it into the specified grid.
-#     Useful for e.g., make it differentiable.
+def evaluate_mod_in_grid(mod, grid, box=None):
+    """Given an MMA module, pushes it into the specified grid.
+    Useful for e.g., make it differentiable.
 
-#     Input
-#     -----
-#      - mod: PyModule
-#      - grid: Iterable of 1d array, for num_parameters
-#     Ouput
-#     -----
-#     torch-compatible module in the format:
-#     (num_degrees) x (num_interval of degree) x ((num_birth, num_parameter), (num_death, num_parameters))
+    Input
+    -----
+     - mod: PyModule
+     - grid: Iterable of 1d array, for num_parameters
+    Ouput
+    -----
+    torch-compatible module in the format:
+    (num_degrees) x (num_interval of degree) x ((num_birth, num_parameter), (num_death, num_parameters))
 
-#     """
-#     (birth_sizes, death_sizes), births, deaths = mod.to_flat_idx(grid)
-#     births = evaluate_in_grid(births, grid)
-#     deaths = evaluate_in_grid(deaths, grid)
-#     api = api_from_tensors(births, deaths)
-#     diff_mod = tuple(
-#         zip(
-#             api.split_with_sizes(births, birth_sizes.tolist()),
-#             api.split_with_sizes(deaths, death_sizes.tolist()),
-#         )
-#     )
-#     return diff_mod
+    """
+    (birth_sizes, death_sizes), births, deaths = mod.to_flat_idx(grid)
+    births = evaluate_in_grid(births, grid)
+    deaths = evaluate_in_grid(deaths, grid)
+    api = api_from_tensors(births, deaths)
+    diff_mod = tuple(
+        zip(
+            api.split_with_sizes(births, birth_sizes.tolist()),
+            api.split_with_sizes(deaths, death_sizes.tolist()),
+        )
+    )
+    return diff_mod

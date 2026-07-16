@@ -50,6 +50,8 @@ def _config_only_ext_files(root: Path) -> set[str]:
         "ext/function_delaunay/multi_chunk_mod/include",
         "ext/function_delaunay/phat/include",
         "ext/function_delaunay/scc_mod/include",
+        "ext/Skyscraper-Invariant/include",
+        "ext/Skyscraper-Invariant/src",
         "ext/deg_rips/include",
         "ext/multi_critical/include",
         "ext/multi_critical/mpfree_mod/include",

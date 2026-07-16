@@ -23,6 +23,7 @@ multipers_default_disable_flag("multi_critical" MULTIPERS_DISABLE_MULTI_CRITICAL
 multipers_default_disable_flag("rhomboid" MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE)
 multipers_default_disable_flag("hera" MULTIPERS_DISABLE_HERA_INTERFACE)
 multipers_default_disable_flag("persistence_algebra" MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE)
+multipers_default_disable_flag("skyscraper" MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE)
 
 if(WIN32)
   set(MULTIPERS_DISABLE_MPFREE_INTERFACE ON)
@@ -41,6 +42,8 @@ if(WIN32)
   message(STATUS "[hera] Forced MULTIPERS_DISABLE_HERA_INTERFACE=${MULTIPERS_DISABLE_HERA_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE ON)
   message(STATUS "[persistence_algebra] Forced MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE=${MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE ON)
+  message(STATUS "[skyscraper] Forced MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE=ON on WIN32")
 endif()
 
 if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER)
@@ -97,6 +100,24 @@ else()
   message(STATUS "[aida] multipers_aida_static target is available")
 endif()
 
+if(MULTIPERS_DISABLE_AIDA_INTERFACE OR MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+   OR NOT TARGET multipers_aida_static
+   OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include/grlina/graded_linalg.hpp"
+   OR NOT EXISTS "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/include/skyscraper_core.hpp")
+  set(MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE ON)
+  message(STATUS "[skyscraper] Disabled because AIDA, Persistence-Algebra, or core is unavailable")
+endif()
+
+if(NOT MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE)
+  add_library(multipers_skyscraper_core STATIC
+    "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/src/skyscraper_core.cpp"
+    "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/src/uni_b1.cpp"
+    "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/src/hnf_at.cpp"
+  )
+  target_include_directories(multipers_skyscraper_core PUBLIC ${MULTIPERS_SKYSCRAPER_INCLUDE_DIRS})
+  set_target_properties(multipers_skyscraper_core PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+endif()
+
 if(NOT TARGET multipers_rhomboid_tiling_static)
   set(MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE ON)
   message(STATUS "[rhomboid] Set MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE=${MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE} because multipers_rhomboid_tiling_static is missing")
@@ -115,6 +136,7 @@ set(MULTIPERS_INTERFACE_DISABLE_FLAGS
   MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
   MULTIPERS_DISABLE_HERA_INTERFACE
   MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+  MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE
 )
 
 set(MULTIPERS_INTERFACE_DISABLE_DEFINITIONS "")
@@ -886,6 +908,13 @@ function(multipers_configure_module module_name target_name)
       target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
     endif()
 
+  elseif(module_name STREQUAL "_skyscraper_interface")
+    if(NOT MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE)
+      multipers_link_nanobind_runtime(${target_name})
+      target_link_libraries(${target_name} PRIVATE multipers_skyscraper_core)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_SKYSCRAPER_INCLUDE_DIRS})
+    endif()
+
   elseif(module_name STREQUAL "_hera_interface")
     if(NOT MULTIPERS_DISABLE_HERA_INTERFACE)
       multipers_link_shared_core(${target_name})
@@ -990,6 +1019,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _rhomboid_tiling_interface
   _aida_interface
   _persistence_algebra_interface
+  _skyscraper_interface
 )
 
 if(NOT CGAL_FOUND)

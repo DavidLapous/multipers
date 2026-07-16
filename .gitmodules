@@ -53,3 +53,7 @@
 	path = ext/graphcode
 	url = https://bitbucket.org/mkerber/graphcode
 	branch = main
+[submodule "ext/Skyscraper-Invariant"]
+	path = ext/Skyscraper-Invariant
+	url = https://github.com/DavidLapous/Skyscraper-Invariant.git
+	branch = chatty
