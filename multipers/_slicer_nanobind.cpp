@@ -33,6 +33,7 @@
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
 #include "gudhi/Multi_persistence/Box.h"
+#include "gudhi/representative_cycle_intersection.hpp"
 #include "gudhi/slicer_conversion_core.hpp"
 #include "gudhi/slicer_helpers.h"
 #include "gudhi/Module_interface.h"
@@ -1042,21 +1043,6 @@ inline void bind_generator_basis(nb::module_& m) {
       });
 }
 
-inline bool cycle_intersects_points(const std::vector<std::vector<uint32_t>>& cycle,
-                                    const std::unordered_set<uint32_t>& intersect_points) {
-  if (intersect_points.empty()) {
-    return false;
-  }
-  for (const auto& simplex : cycle) {
-    for (uint32_t vertex : simplex) {
-      if (intersect_points.contains(vertex)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 template <typename Wrapper, typename Concrete, typename Value, bool IsKCritical>
 Wrapper construct_from_generator_data(nb::object generator_maps,
                                       nb::object generator_dimensions,
@@ -1437,6 +1423,9 @@ void bind_vine_methods(Class& cls) {
                 intersect_points.insert(requested_points.begin(), requested_points.end());
               }
               multipers::nanobind_helpers::GeneratorBasisData generator_basis = extract_generator_basis(self);
+              if (filter_points && generator_basis.active && generator_basis.degree != 1) {
+                throw nb::value_error("intersect_points with keep_generators is only supported in degree 1.");
+              }
               std::vector<std::vector<std::vector<std::vector<uint32_t>>>> out_cpp;
               std::vector<std::vector<uint8_t>> keep_mask;
               {
@@ -1476,11 +1465,30 @@ void bind_vine_methods(Class& cls) {
                   out_cpp[i].resize(selected_indices[i].size());
                   keep_mask[i].assign(selected_indices[i].size(), 0);
                 }
+                multipers::core::RepresentativeCycleIntersection intersection(
+                    self.truc.get_boundaries(), self.truc.get_dimensions(), intersect_points);
+                for (size_t i = 0; i < cycle_idx.size(); ++i) {
+                  const bool use_generator_basis =
+                      generator_basis.active && static_cast<int>(i) == generator_basis.degree;
+                  for (size_t j = 0; j < selected_indices[i].size(); ++j) {
+                    const auto& cycle = cycle_idx[i][selected_indices[i][j]];
+                    if (!filter_points) {
+                      keep_mask[i][j] = 1;
+                    } else if (!use_generator_basis && intersection.intersects(cycle)) {
+                      keep_mask[i][j] = 1;
+                    }
+                  }
+                }
                 tbb::parallel_for(size_t(0), cycle_idx.size(), [&](size_t i) {
+                  const bool use_generator_basis =
+                      generator_basis.active && static_cast<int>(i) == generator_basis.degree;
                   for (size_t j = 0; j < selected_indices[i].size(); ++j) {
                     size_t selected_idx = selected_indices[i][j];
+                    if (filter_points && !use_generator_basis && !keep_mask[i][j]) {
+                      continue;
+                    }
                     if (!cycle_idx[i][selected_idx].empty()) {
-                      if (generator_basis.active && static_cast<int>(i) == generator_basis.degree) {
+                      if (use_generator_basis) {
                         out_cpp[i][j] = expand_cycle_in_generator_basis(cycle_idx[i][selected_idx], generator_basis);
                       } else if (self.truc.get_boundary(cycle_idx[i][selected_idx][0]).empty()) {
                         out_cpp[i][j] = {std::vector<uint32_t>{}};
@@ -1490,11 +1498,11 @@ void bind_vine_methods(Class& cls) {
                           out_cpp[i][j][k] = self.truc.get_boundary(cycle_idx[i][selected_idx][k]);
                         }
                       }
-                      if (!filter_points || cycle_intersects_points(out_cpp[i][j], intersect_points)) {
+                      if (use_generator_basis &&
+                          (!filter_points ||
+                           multipers::core::vertex_boundaries_intersect_points(out_cpp[i][j], intersect_points))) {
                         keep_mask[i][j] = 1;
                       }
-                    } else if (!filter_points) {
-                      keep_mask[i][j] = 1;
                     }
                   }
                 });

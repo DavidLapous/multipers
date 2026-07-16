@@ -178,6 +178,46 @@ def test_representative_cycles():
     assert len(cycles[2]) == 0, "Found a 2-cycle, which should not exist"
 
 
+def test_representative_cycles_intersect_points_descends_boundaries():
+    boundaries = [
+        [],
+        [],
+        [],
+        [],
+        [],  # isolated vertex
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [1, 2],
+        [1, 3],
+        [2, 3],
+        [5, 6, 8],
+        [5, 7, 9],
+        [6, 7, 10],
+        [8, 9, 10],
+        [11, 12, 13, 14],
+    ]
+    dimensions = np.asarray([0] * 5 + [1] * 6 + [2] * 4 + [3], dtype=np.int32)
+    filtration = np.asarray([0] * 5 + [1] * 10 + [2], dtype=np.float64)
+    slicer = mp.Slicer(return_type_only=True, vineyard=True, dtype=np.float64)(
+        boundaries,
+        dimensions,
+        np.column_stack((filtration, filtration)),
+    )
+    slicer.compute_persistence(one_filtration=filtration)
+
+    assert len(slicer.get_representative_cycles(intersect_points=[4])[0]) == 1
+    assert slicer.get_representative_cycles(intersect_points=[100])[0] == []
+
+    cycles = slicer.get_representative_cycles()[2]
+    assert len(cycles) == 1
+    filtered = slicer.get_representative_cycles(intersect_points=[0])[2]
+    assert len(filtered) == 1
+    assert [boundary.tolist() for boundary in filtered[0]] == [boundary.tolist() for boundary in cycles[0]]
+    assert slicer.get_representative_cycles(intersect_points=[4])[2] == []
+    assert slicer.get_representative_cycles(intersect_points=[100])[2] == []
+
+
 # def test_pruning():
 #     from multipers.tests import random_st
 #
