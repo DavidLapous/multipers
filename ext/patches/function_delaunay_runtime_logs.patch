@@ -441,7 +441,7 @@
  #include <boost/container_hash/hash.hpp>
  
  typedef std::unordered_set<
-@@ -50,12 +52,12 @@
+@@ -56,21 +58,21 @@
  #ifdef DBG_PRINT
  #define PRINT_SIMPLICES(simplices)                                       \
      do {                                                                 \
@@ -456,9 +456,23 @@
 -        std::cout << "End of final list" << std::endl;                   \
 +        FUNCTION_DELAUNAY_COUT << "End of final list" << std::endl;                   \
      } while (0)
+ #define PRINT_CONFLICTS(conflict_table)                                  \
+     do {                                                                 \
+-        std::cout << "Conflict table size: " << conflict_table.size() << std::endl; \
++        FUNCTION_DELAUNAY_COUT << "Conflict table size: " << conflict_table.size() << std::endl; \
+         for (auto& entry : conflict_table) {                             \
+-            for (int v : entry.first) std::cout << v << " ";             \
+-            std::cout << "-> ";                                          \
+-            for (int v : entry.second) std::cout << v << " ";            \
+-            std::cout << std::endl;                                      \
++            for (int v : entry.first) FUNCTION_DELAUNAY_COUT << v << " ";             \
++            FUNCTION_DELAUNAY_COUT << "-> ";                                          \
++            for (int v : entry.second) FUNCTION_DELAUNAY_COUT << v << " ";            \
++            FUNCTION_DELAUNAY_COUT << std::endl;                                      \
+         }                                                                \
+     } while (0)
  #else
- #define PRINT_SIMPLICES(simplices) do {} while (0)
-@@ -119,11 +121,11 @@
+@@ -136,11 +138,11 @@
  		    simplices.push_back(cell_idx);
  	  
  		    /*
@@ -473,7 +487,7 @@
  		    */
  		}
  		vh = T.insert(p,loc);
-@@ -137,7 +139,7 @@
+@@ -154,7 +156,7 @@
  	    counter++;
        
  	}
@@ -482,7 +496,7 @@
      }
  
      void get_simplices_from_triangulation_one_function(std::vector<Point_with_densities> &input_points,
-@@ -150,13 +152,13 @@
+@@ -167,13 +169,13 @@
  
  	if(d==2) {
  	    // Delaunay_triangulation_2 seems faster than the general one
@@ -498,7 +512,7 @@
  	    typedef Delaunay_triangulation_accessor_3 DT_accessor;
  	    DT_accessor T;
  	    _get_simplices_from_triangulation_one_function(T,input_points,simplices);
-@@ -231,11 +233,11 @@
+@@ -248,11 +250,11 @@
  
  	    }
  	    /*
@@ -513,7 +527,7 @@
  	    */
  	    vh_new = T.insert(p,loc);
  	    T.data_of_vertex(vh_new).idx = point.idx;
-@@ -244,7 +246,7 @@
+@@ -261,7 +263,7 @@
  	    //std::cout << "Inserting " << point.idx << ", coors " << point.x[0] << " " << point.x[1] << "..." << std::endl;
  	    /*
  	      for(auto it = T.vertices_begin(); it!=T.vertices_end();it++) {
@@ -522,130 +536,426 @@
  	      }
  	    */
  
-@@ -281,22 +283,22 @@
- 	//std::cout << "Conflict sizes: "  << conflicts1.size() << " " << conflicts2.size() << std::endl;
-         
+@@ -314,13 +316,13 @@
+ 		});
+ 
  #ifdef DBG_PRINT
--	std::cout << "Conflict1:" << std::endl;
-+	FUNCTION_DELAUNAY_COUT << "Conflict1:" << std::endl;
- 
- 	for(auto v : conflicts1) {
- 	    for (int x : v) {
--		std::cout << x << " ";
-+		FUNCTION_DELAUNAY_COUT << x << " ";
- 	    }
+-	    std::cout << "Sigma: " << std::flush;
+-	    for(int v : sigma) std::cout << v << " ";
 -	    std::cout << std::endl;
--	}
 -
--	std::cout << "Conflict2:" << std::endl;
-+	    FUNCTION_DELAUNAY_COUT << std::endl;
-+	}
-+
-+	FUNCTION_DELAUNAY_COUT << "Conflict2:" << std::endl;
- 
- 	for(auto v : conflicts2) {
- 	    for (int x : v) {
--		std::cout << x << " ";
-+		FUNCTION_DELAUNAY_COUT << x << " ";
- 	    }
+-	    std::cout << "T_sigma (sorted): " << std::flush;
+-	    for(int v : conflicting_points) std::cout << v << " ";
 -	    std::cout << std::endl;
++	    FUNCTION_DELAUNAY_COUT << "Sigma: " << std::flush;
++	    for(int v : sigma) FUNCTION_DELAUNAY_COUT << v << " ";
 +	    FUNCTION_DELAUNAY_COUT << std::endl;
- 	}
++
++	    FUNCTION_DELAUNAY_COUT << "T_sigma (sorted): " << std::flush;
++	    for(int v : conflicting_points) FUNCTION_DELAUNAY_COUT << v << " ";
++	    FUNCTION_DELAUNAY_COUT << std::endl;
  #endif
- 	// Quick and dirty solution: Create a std::set with the conflicts1, and just search each element in conflicts2:
-@@ -307,11 +309,11 @@
- 	for(auto s : conflicts2) {
- 	    if(conflict_map1.count(s)) {
- 		/*
+ 
+ 
+@@ -331,11 +333,11 @@
+ 		std::sort(triple.begin(),triple.end());
+ 
+ #ifdef DBG_PRINT
 -		std::cout << "FOUND DOUBLE CONFLICT: " << std::flush;
 +		FUNCTION_DELAUNAY_COUT << "FOUND DOUBLE CONFLICT: " << std::flush;
- 		for(int v : s) {
+ 		for(int v : triple) {
 -		    std::cout << v << " ";
-+		    FUNCTION_DELAUNAY_COUT << v << " ";
- 		}
+-		}
 -		std::cout << std::endl;
++		    FUNCTION_DELAUNAY_COUT << v << " ";
++		}
 +		FUNCTION_DELAUNAY_COUT << std::endl;
- 		*/
- 		std::vector<int> double_conflict_simplex;
- 		std::copy(s.begin(),s.end(),std::back_inserter(double_conflict_simplex));
-@@ -331,7 +333,7 @@
- 							 std::vector<Point_with_densities> &input_points,
- 							 Uset &simplices) {
+ #endif
+ 		simplices.insert(triple);
+ 	    }
+@@ -351,7 +353,7 @@
+ 	typedef DelaunayTriangulationAccessor Delaunay_triangulation_accessor;
+ 	typedef typename Delaunay_triangulation_accessor::Vertex_handle Vertex_handle;
  
--        std::cout << "Naive routine: \n";
-+        FUNCTION_DELAUNAY_COUT << "Naive routine: \n";
+-        std::cout << "NON-LOCAL METHOD" <<std::endl;
++        FUNCTION_DELAUNAY_COUT << "NON-LOCAL METHOD" <<std::endl;
  
- 	int outside_convex_hull=0;
+ 	if(input_points.size()==0) {
+ 	    return;
+@@ -364,11 +366,11 @@
  
-@@ -429,7 +431,7 @@
- 
- 		//std::cout << "Adding " << left.idx << "..." << std::flush;
- 		add_point_to_triangulation(T,left,vh_left,conflicts_dummy,simplices,outside_convex_hull,false,true);
--		std::cout << "Simplices size at this step: " << simplices.size() << std::endl;
-+		FUNCTION_DELAUNAY_COUT << "Simplices size at this step: " << simplices.size() << std::endl;
- 
- 		// Now remove them and re-insert them in opposite order
- 		//std::cout << "Removing " << point.idx << std::endl;
-@@ -458,7 +460,7 @@
- 		find_double_conflicts(T,point.idx,left.idx,conflicts_up,conflicts_right,simplices);
- 		test_timer_1.stop();
- 
--                std::cout << "Simplices size at this step: " << simplices.size() << std::endl;
-+                FUNCTION_DELAUNAY_COUT << "Simplices size at this step: " << simplices.size() << std::endl;
- 		number_of_squares_visited++;
- 		if(simplices.size()>old_number_of_simplices) {
- 		    number_of_squares_needed++;
-@@ -470,9 +472,9 @@
+ #ifdef DBG_PRINT
+ 	for(auto& p:input_points) {
+-	    std::cout << "ID " << p.idx << ": " << std::flush;
++	    FUNCTION_DELAUNAY_COUT << "ID " << p.idx << ": " << std::flush;
+ 	    for(int i=0;i<p.x.size();i++) {
+-		std::cout << p.x[i] << " ";
+-	    }
+-	    std::cout << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
++		FUNCTION_DELAUNAY_COUT << p.x[i] << " ";
++	    }
++	    FUNCTION_DELAUNAY_COUT << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
  	}
+ #endif
  
+@@ -386,8 +388,8 @@
+ 	    int secondary_axis = 1 - axis;
+ 
+ #ifdef DBG_PRINT
+-	    if(axis==0) std::cout << "---- Pass 1: traverse by increasing densities[0] ----  i.e. left to right " << std::endl;
+-	    else        std::cout << "---- Pass 2: traverse by increasing densities[1] ----  i.e. bottom to top " << std::endl;
++	    if(axis==0) FUNCTION_DELAUNAY_COUT << "---- Pass 1: traverse by increasing densities[0] ----  i.e. left to right " << std::endl;
++	    else        FUNCTION_DELAUNAY_COUT << "---- Pass 2: traverse by increasing densities[1] ----  i.e. bottom to top " << std::endl;
+ #endif
+ 
+ 	    if(axis==0) {
+@@ -402,9 +404,9 @@
+ 	    for(auto& point : sorted_points) {
+ 
+ #ifdef DBG_PRINT
+-		std::cout << "ID " << point.idx << ": " << std::endl;
+-		std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
+-		std::cout << "****** Handling point " << point.idx << ": " << point.densities[0] << " " << point.densities[1] << std::endl;
++		FUNCTION_DELAUNAY_COUT << "ID " << point.idx << ": " << std::endl;
++		FUNCTION_DELAUNAY_COUT << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
++		FUNCTION_DELAUNAY_COUT << "****** Handling point " << point.idx << ": " << point.densities[0] << " " << point.densities[1] << std::endl;
+ #endif
+ 
+                 test_timer_4.resume();
+@@ -418,10 +420,10 @@
+                 test_timer_4.stop();
+ 
+ #ifdef DBG_PRINT
+-		std::cout << "Find position to insert..." << std::flush;
+-		std::cout << "done, " << points_to_reinsert.size() << " points to reinsert" << std::endl;
+-		std::cout << "Adding point.." << std::endl;
+-		std::cout << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Find position to insert..." << std::flush;
++		FUNCTION_DELAUNAY_COUT << "done, " << points_to_reinsert.size() << " points to reinsert" << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Adding point.." << std::endl;
++		FUNCTION_DELAUNAY_COUT << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+ #endif
+ 
+ 		{
+@@ -433,9 +435,9 @@
+ 		    for(auto& sigma : conflicts) {
+ #ifdef DBG_PRINT
+ 	            if(sigma == std::vector<int>{1,2} || sigma == std::vector<int>{2,4}) {
+-	                std::cout << "[[SIGMA WATCH]] sigma=";
+-	                for(int v: sigma) std::cout << v << " ";
+-	                std::cout << "| triggered by PIVOT point " << point.idx << std::endl;
++	                FUNCTION_DELAUNAY_COUT << "[[SIGMA WATCH]] sigma=";
++	                for(int v: sigma) FUNCTION_DELAUNAY_COUT << v << " ";
++	                FUNCTION_DELAUNAY_COUT << "| triggered by PIVOT point " << point.idx << std::endl;
+ 	            }
+ #endif
+ 			conflict_table[sigma].push_back(point.idx);
+@@ -452,16 +454,16 @@
+ 		}
+ 
+ #ifdef DBG_PRINT
+-		std::cout << "Done, number of simplices: " << simplices.size() << std::endl;
+-                std::cout << points_to_reinsert.size() << " points to reinsert: " << std::endl;
+-                for(auto& pt : points_to_reinsert) std::cout << pt.idx << "->"; std::cout << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Done, number of simplices: " << simplices.size() << std::endl;
++                FUNCTION_DELAUNAY_COUT << points_to_reinsert.size() << " points to reinsert: " << std::endl;
++                for(auto& pt : points_to_reinsert) FUNCTION_DELAUNAY_COUT << pt.idx << "->"; FUNCTION_DELAUNAY_COUT << std::endl;
+ #endif
+ 
+ 
+ 		for(auto& p : points_to_reinsert) {
+ #ifdef DBG_PRINT
+-		    std::cout << "Reinserting " << p.idx << " with coordinates " << p.densities[0] << " " << p.densities[1] << std::endl;
+-		    std::cout << "Adding " << p.idx << "..." << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Reinserting " << p.idx << " with coordinates " << p.densities[0] << " " << p.densities[1] << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Adding " << p.idx << "..." << std::endl;
+ #endif
+ 		    Vertex_handle vh;
+ 		    bool outside_convex_hull;
+@@ -471,9 +473,9 @@
+ 		    for(auto& sigma : conflicts) {
+ #ifdef DBG_PRINT
+ 	                if(sigma == std::vector<int>{1,2} || sigma == std::vector<int>{2,4}) {
+-	                    std::cout << "[[SIGMA WATCH]] sigma=";
+-	                    for(int v: sigma) std::cout << v << " ";
+-	                    std::cout << "| triggered by REINSERTED point " << p.idx << std::endl;
++	                    FUNCTION_DELAUNAY_COUT << "[[SIGMA WATCH]] sigma=";
++	                    for(int v: sigma) FUNCTION_DELAUNAY_COUT << v << " ";
++	                    FUNCTION_DELAUNAY_COUT << "| triggered by REINSERTED point " << p.idx << std::endl;
+ 	                }
+ #endif
+ 			conflict_table[sigma].push_back(p.idx);
+@@ -490,7 +492,7 @@
+ 
+ 	}
+ #ifdef DBG_PRINT
+-        std::cout << "Number of simplices before double conflicts: " << simplices.size() << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Number of simplices before double conflicts: " << simplices.size() << std::endl;
          PRINT_SIMPLICES(simplices);
--	std::cout << "Number of points: " << input_points.size() << std::endl;
--	std::cout << "Squares visited:  " << number_of_squares_visited << std::endl;
--	std::cout << "Squares needed:   " << number_of_squares_needed << std::endl;
-+	FUNCTION_DELAUNAY_COUT << "Number of points: " << input_points.size() << std::endl;
-+	FUNCTION_DELAUNAY_COUT << "Squares visited:  " << number_of_squares_visited << std::endl;
-+	FUNCTION_DELAUNAY_COUT << "Squares needed:   " << number_of_squares_needed << std::endl;
+ #endif
+ 	find_double_conflicts(conflict_table,input_points,simplices);
+@@ -498,11 +500,11 @@
+ #ifdef DBG_PRINT
+ 
+ 	PRINT_CONFLICTS(conflict_table);
+-        std::cout << "After find_double_conflicts \n";
++        FUNCTION_DELAUNAY_COUT << "After find_double_conflicts \n";
+         PRINT_SIMPLICES(simplices);
+ #endif
+-        std::cout << "Total removals: " << total_removals << std::endl;
+-        std::cout << "Average time per removal: " << (total_removals>0 ? (double(test_timer_4.elapsed().wall)/std::pow(10,9))/total_removals : 0) << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Total removals: " << total_removals << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Average time per removal: " << (total_removals>0 ? (double(test_timer_4.elapsed().wall)/std::pow(10,9))/total_removals : 0) << std::endl;
+ 
      }
  
- 
-@@ -501,12 +503,12 @@
- 
+@@ -520,12 +522,12 @@
+         VertexHandle vh = idx_to_vh[point_idx];
          // no null handle
          if (vh == Vertex_handle()) {
 -            std::cerr << " idx_to_vh[" << point_idx << "] is nullptr.\n";
 +            FUNCTION_DELAUNAY_CERR << " idx_to_vh[" << point_idx << "] is nullptr.\n";
              return higher;
          }
- 
+         // no infinite handle
          if (T.is_infinite(vh)) {
 -            std::cerr << " idx_to_vh[" << point_idx << "] is infinite.\n";
 +            FUNCTION_DELAUNAY_CERR << " idx_to_vh[" << point_idx << "] is infinite.\n";
              return higher;
          }
+     
+@@ -559,7 +561,7 @@
+ 	typedef typename Delaunay_triangulation_accessor::Vertex_handle Vertex_handle;
  
-@@ -547,7 +549,7 @@
-         							 std::vector<Point_with_densities> &input_points,
-         							 Uset &simplices) {
  
--            std::cout << "Calling ALT routine \n";
-+            FUNCTION_DELAUNAY_COUT << "Calling ALT routine \n";
+-        std::cout << "LOCAL METHOD" <<std::endl;
++        FUNCTION_DELAUNAY_COUT << "LOCAL METHOD" <<std::endl;
  
-             typedef DelaunayTriangulationAccessor Delaunay_triangulation_accessor;
-             typedef typename Delaunay_triangulation_accessor::Vertex_handle Vertex_handle;
-@@ -675,9 +677,9 @@
+ 	if(input_points.size()==0) {
+ 	    return;
+@@ -572,11 +574,11 @@
  
-             }
-             PRINT_SIMPLICES(simplices);
--            std::cout << "Number of points: " << input_points.size() << std::endl;
--            std::cout << "Squares visited:  " << number_of_squares_visited << std::endl;
--            std::cout << "Squares needed:   " << number_of_squares_needed << std::endl;	
-+            FUNCTION_DELAUNAY_COUT << "Number of points: " << input_points.size() << std::endl;
-+            FUNCTION_DELAUNAY_COUT << "Squares visited:  " << number_of_squares_visited << std::endl;
-+            FUNCTION_DELAUNAY_COUT << "Squares needed:   " << number_of_squares_needed << std::endl;	
+ #ifdef DBG_PRINT
+ 	for(auto& p:input_points) {
+-	    std::cout << "ID " << p.idx << ": " << std::flush;
++	    FUNCTION_DELAUNAY_COUT << "ID " << p.idx << ": " << std::flush;
+ 	    for(int i=0;i<p.x.size();i++) {
+-		std::cout << p.x[i] << " ";
+-	    }
+-	    std::cout << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
++		FUNCTION_DELAUNAY_COUT << p.x[i] << " ";
++	    }
++	    FUNCTION_DELAUNAY_COUT << "("<< p.densities[0] << ", " << p.densities[1] << ")" << std::endl;
+ 	}
+ #endif
+ 
+@@ -592,8 +594,8 @@
+ 	    int secondary_axis = 1 - axis; // axis 0 -> probe densities[1], axis 1 -> probe densities[0]
+ 
+ #ifdef DBG_PRINT
+-	    if(axis==0) std::cout << "\n---- Pass 1: sweep by increasing densities[0], probe along densities[1] ----" << std::endl;
+-	    else        std::cout << "\n---- Pass 2: sweep by increasing densities[1], probe along densities[0] ----" << std::endl;
++	    if(axis==0) FUNCTION_DELAUNAY_COUT << "\n---- Pass 1: sweep by increasing densities[0], probe along densities[1] ----" << std::endl;
++	    else        FUNCTION_DELAUNAY_COUT << "\n---- Pass 2: sweep by increasing densities[1], probe along densities[0] ----" << std::endl;
+ #endif
+ 
+ 	    if(axis==0) {
+@@ -607,9 +609,9 @@
+ 	    for(auto& point : sorted_points) {
+ 
+ #ifdef DBG_PRINT
+-		std::cout << "ID " << point.idx << ": " << std::endl;
+-		std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
+-		std::cout << "****** Handling point " << point.idx << ": " << point.densities[0] << " " << point.densities[1] << std::endl;
++		FUNCTION_DELAUNAY_COUT << "ID " << point.idx << ": " << std::endl;
++		FUNCTION_DELAUNAY_COUT << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
++		FUNCTION_DELAUNAY_COUT << "****** Handling point " << point.idx << ": " << point.densities[0] << " " << point.densities[1] << std::endl;
+ #endif
+ 
+ 		auto p = T.get_point(point);
+@@ -625,7 +627,7 @@
+ 		    }
+ 		    for(int idx : incomparable) {
+ #ifdef DBG_PRINT
+-                	std::cout << "  Removing " << idx << std::endl;
++                	FUNCTION_DELAUNAY_COUT << "  Removing " << idx << std::endl;
+ #endif
+ 			points_to_reinsert.push_back(input_points[idx]);
+ 			T.remove(idx_to_vh[idx]);
+@@ -651,10 +653,10 @@
+ 
+ 		// insert the point first, unfiltered, since every conflict here involves the point by definition
+ #ifdef DBG_PRINT
+-		std::cout << "Find position to insert..." << std::flush;
+-		std::cout << "done, " << points_to_reinsert.size() << " points to reinsert: " << std::endl;
+-		std::cout << "Adding point.." << std::endl;
+-		std::cout << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Find position to insert..." << std::flush;
++		FUNCTION_DELAUNAY_COUT << "done, " << points_to_reinsert.size() << " points to reinsert: " << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Adding point.." << std::endl;
++		FUNCTION_DELAUNAY_COUT << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+ #endif
+ 
+ 		{
+@@ -668,17 +670,17 @@
+ 		    }
+ 		}
+ #ifdef DBG_PRINT
+-		std::cout << "Done, number of simplices: " << simplices.size() << std::endl;
+-                std::cout << points_to_reinsert.size() << " points to reinsert: " << std::endl;
+-                for(auto& pt : points_to_reinsert) std::cout << pt.idx << "->"; std::cout << std::endl;
++		FUNCTION_DELAUNAY_COUT << "Done, number of simplices: " << simplices.size() << std::endl;
++                FUNCTION_DELAUNAY_COUT << points_to_reinsert.size() << " points to reinsert: " << std::endl;
++                for(auto& pt : points_to_reinsert) FUNCTION_DELAUNAY_COUT << pt.idx << "->"; FUNCTION_DELAUNAY_COUT << std::endl;
+ #endif
+ 
+                 // reinsert the rest, keeping only conflicts/simplices that involve the point
+ 		for(auto& next : points_to_reinsert) {
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << "Reinserting " << next.idx << " with coordinates " << next.densities[0] << " " << next.densities[1] << std::endl;
+-		    std::cout << "Adding " << next.idx << "..." << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Reinserting " << next.idx << " with coordinates " << next.densities[0] << " " << next.densities[1] << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Adding " << next.idx << "..." << std::endl;
+ #endif
+ 
+ 		    Vertex_handle vh_next;
+@@ -710,7 +712,7 @@
          }
  
+ #ifdef DBG_PRINT
+-        std::cout << "Number of simplices before double conflicts: " << simplices.size() << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Number of simplices before double conflicts: " << simplices.size() << std::endl;
+         PRINT_SIMPLICES(simplices);
+ #endif
+         test_timer_2.resume();
+@@ -718,11 +720,11 @@
+         test_timer_2.stop();
+ #ifdef DBG_PRINT
+ 	PRINT_CONFLICTS(conflict_table);
+-        std::cout << "After find_double_conflicts \n";
++        FUNCTION_DELAUNAY_COUT << "After find_double_conflicts \n";
+         PRINT_SIMPLICES(simplices);
+ #endif
+-        std::cout << "Total removals: " << total_removals << std::endl;
+-        std::cout << "Average time per removal: " << (total_removals>0 ? (double(test_timer_4.elapsed().wall)/std::pow(10,9))/total_removals : 0) << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Total removals: " << total_removals << std::endl;
++        FUNCTION_DELAUNAY_COUT << "Average time per removal: " << (total_removals>0 ? (double(test_timer_4.elapsed().wall)/std::pow(10,9))/total_removals : 0) << std::endl;
+     }
  
-@@ -692,7 +694,7 @@
+         template<typename DelaunayTriangulationAccessor>
+@@ -734,7 +736,7 @@
+ 	    typedef typename Delaunay_triangulation_accessor::Vertex_handle Vertex_handle;
+ 	    typedef typename Delaunay_triangulation_accessor::Point Point;
+ 
+-            std::cout << "SEEDING" <<std::endl;
++            FUNCTION_DELAUNAY_COUT << "SEEDING" <<std::endl;
+ 
+ 	    if(input_points.size()==0) {
+ 		return;
+@@ -751,8 +753,8 @@
+ 	    for(int axis=0; axis<2; axis++) {
+ 
+ #ifdef DBG_PRINT
+-		if(axis==0) std::cout << "---- Pass 1: seeding ----" << std::endl;
+-		else        std::cout << "---- Pass 2: seeding ----" << std::endl;
++		if(axis==0) FUNCTION_DELAUNAY_COUT << "---- Pass 1: seeding ----" << std::endl;
++		else        FUNCTION_DELAUNAY_COUT << "---- Pass 2: seeding ----" << std::endl;
+ #endif
+ 
+ 		std::vector<Point_with_densities> sorted_points = input_points;
+@@ -766,9 +768,9 @@
+ 		    Point_with_densities& p = sorted_points[i];
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << "ID " << p.idx << ": " << std::endl;
+-		    std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
+-		    std::cout << "****** Handling point " << p.idx << ": " << p.densities[0] << " " << p.densities[1] << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "ID " << p.idx << ": " << std::endl;
++		    FUNCTION_DELAUNAY_COUT << ">>>>>>>>>>>>>>>>>>>>>>>>>>> \n";
++		    FUNCTION_DELAUNAY_COUT << "****** Handling point " << p.idx << ": " << p.densities[0] << " " << p.densities[1] << std::endl;
+ #endif
+ 
+ 		    std::vector<std::pair<Point,Vertex_info>> comparables;
+@@ -794,8 +796,8 @@
+ 
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << comparables.size() << " comparables bulk inserted, " << incomparables.size() << " incomparables to reinsert" << std::endl;
+-		    std::cout << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++		    FUNCTION_DELAUNAY_COUT << comparables.size() << " comparables bulk inserted, " << incomparables.size() << " incomparables to reinsert" << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+ #endif
+ 
+ 		    {
+@@ -809,7 +811,7 @@
+ 		    }
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << "Done, number of simplices: " << simplices.size() << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Done, number of simplices: " << simplices.size() << std::endl;
+ #endif
+ 
+ 		    if(axis==0) {
+@@ -819,13 +821,13 @@
+ 		    }
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << incomparables.size() << " incomparables to reinsert: " << std::endl;
+-		    for(auto& q : incomparables) std::cout << q.idx << "->"; std::cout << std::endl;
++		    FUNCTION_DELAUNAY_COUT << incomparables.size() << " incomparables to reinsert: " << std::endl;
++		    for(auto& q : incomparables) FUNCTION_DELAUNAY_COUT << q.idx << "->"; FUNCTION_DELAUNAY_COUT << std::endl;
+ #endif
+ 
+ 		    for(auto& q : incomparables) {
+ #ifdef DBG_PRINT
+-			std::cout << "Reinserting " << q.idx << " with coordinates " << q.densities[0] << " " << q.densities[1] << std::endl;
++			FUNCTION_DELAUNAY_COUT << "Reinserting " << q.idx << " with coordinates " << q.densities[0] << " " << q.densities[1] << std::endl;
+ #endif
+ 			Vertex_handle vh;
+ 			bool outside_convex_hull;
+@@ -837,7 +839,7 @@
+ 		    }
+ 
+ #ifdef DBG_PRINT
+-		    std::cout << "Before clear, T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "Before clear, T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+ #endif
+ 		    T.clear();
+                     //std::vector<Vertex_handle> to_remove;
+@@ -850,20 +852,20 @@
+                     //    T.remove(vh);
+                     //}
+ #ifdef DBG_PRINT
+-		    std::cout << "After clear, T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
+-#endif
+-		}
+-	    }
+-
+-#ifdef DBG_PRINT
+-            std::cout << "Number of simplices before double conflicts:" << simplices.size() << std::endl;
++		    FUNCTION_DELAUNAY_COUT << "After clear, T has " << std::distance(T.vertices_begin(),T.vertices_end()) << " vertices" << std::endl;
++#endif
++		}
++	    }
++
++#ifdef DBG_PRINT
++            FUNCTION_DELAUNAY_COUT << "Number of simplices before double conflicts:" << simplices.size() << std::endl;
+ 	    PRINT_SIMPLICES(simplices);
+ #endif
+ 	    find_double_conflicts(conflict_table,input_points,simplices);
+-            std::cout << "Total bulk insert (RIC): " << total_bulk_inserted << std::endl;
+-#ifdef DBG_PRINT
+-
+-	    std::cout << "After find_double_conflicts \n";
++            FUNCTION_DELAUNAY_COUT << "Total bulk insert (RIC): " << total_bulk_inserted << std::endl;
++#ifdef DBG_PRINT
++
++	    FUNCTION_DELAUNAY_COUT << "After find_double_conflicts \n";
+ 	    PRINT_SIMPLICES(simplices);
+ 	    PRINT_CONFLICTS(conflict_table);
+ #endif
+@@ -881,7 +883,7 @@
  	int d=input_points[0].dimension();
  
  	if(d==2) {
@@ -654,7 +964,7 @@
  	    typedef Delaunay_triangulation_accessor_2 Delaunay_triangulation_accessor;
  	    Delaunay_triangulation_accessor T;
  #ifdef NAIVE
-@@ -701,7 +703,7 @@
+@@ -892,7 +894,7 @@
  	    _get_simplices_from_triangulation_two_functions(T,input_points,simplices);
  #endif 
  	} else if(d==3) {
@@ -663,7 +973,7 @@
        	    typedef Delaunay_triangulation_accessor_3 Delaunay_triangulation_accessor;
  	    Delaunay_triangulation_accessor T;
  	    //_get_simplices_from_triangulation_two_functions(T,input_points,simplices);
-@@ -711,7 +713,7 @@
+@@ -904,7 +906,7 @@
  	    _get_simplices_from_triangulation_two_functions(T,input_points,simplices);
  #endif 
  	} else {
@@ -672,7 +982,7 @@
  	    typedef CGAL::Dynamic_dimension_tag Dim_tag;
  	    typedef Delaunay_triangulation_accessor_d<Dim_tag> Delaunay_triangulation_accessor;
  	    Delaunay_triangulation_accessor T(d);
-@@ -739,7 +741,7 @@
+@@ -935,7 +937,7 @@
  
  	    std::copy(simplices_set.begin(),simplices_set.end(),std::back_inserter(simplices));
  	} else {

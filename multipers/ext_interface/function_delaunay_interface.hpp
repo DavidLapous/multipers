@@ -34,11 +34,17 @@
 #endif
 #else
 struct multipers_function_delaunay_timer_stub {
+  struct times {
+    long long wall = 0;
+  };
+
   void start() {}
 
   void stop() {}
 
   void resume() {}
+
+  times elapsed() const { return {}; }
 };
 
 static multipers_function_delaunay_timer_stub test_timer_1;
