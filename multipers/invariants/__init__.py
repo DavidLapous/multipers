@@ -10,6 +10,7 @@ import multipers.logs as _mp_logs
 from multipers._signed_measure_meta import signed_measure
 from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.grids import Lstrategies, compute_grid
+from multipers.invariants.landscapes import persistence_landscape
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_signed_measure
 from ._utils import _as_slicer, _normalize_degrees
@@ -745,6 +746,7 @@ __all__ = [
     "graphcode",
     "hilbert_function",
     "module_approximation",
+    "persistence_landscape",
     "projected_barcode",
     "rank_invariant",
     "signed_measure",

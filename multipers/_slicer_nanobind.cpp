@@ -1900,6 +1900,41 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           "values"_a,
           "ignore_infinite_filtration_values"_a = true)
       .def(
+          "_landscapes_on_grid",
+          [](Wrapper& self,
+             nb::ndarray<const Value, nb::ndim<1>, nb::c_contig> xgrid,
+             nb::ndarray<const Value, nb::ndim<1>, nb::c_contig> ygrid,
+             nb::ndarray<const Value, nb::ndim<1>, nb::c_contig> direction,
+             size_t stride_i,
+             size_t stride_j,
+             double dt,
+             int degree,
+             nb::ndarray<const int32_t, nb::ndim<1>, nb::c_contig> ks,
+             int n_jobs,
+             bool ignore_infinite_filtration_values) -> nb::ndarray<nb::numpy, double> {
+            return landscapes_on_grid<Desc>(self,
+                                            xgrid,
+                                            ygrid,
+                                            direction,
+                                            stride_i,
+                                            stride_j,
+                                            dt,
+                                            degree,
+                                            ks,
+                                            n_jobs,
+                                            ignore_infinite_filtration_values);
+          },
+          "xgrid"_a,
+          "ygrid"_a,
+          "direction"_a,
+          "stride_i"_a,
+          "stride_j"_a,
+          "dt"_a,
+          "degree"_a,
+          "ks"_a,
+          "n_jobs"_a = 0,
+          "ignore_infinite_filtration_values"_a = true)
+      .def(
           "update_persistence_computation",
           [](Wrapper& self, bool ignore_infinite_filtration_values) -> Wrapper& {
             {
