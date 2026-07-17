@@ -131,18 +131,43 @@ inline std::vector<std::vector<Value>> cast_squeezed_coordinate_grid(
 struct PySlicerPythonState {
   nanobind::object filtration_grid;
   nanobind::object generator_basis;
-  int minpres_degree;
+  int pres_degree;
+  bool is_minpres;
   bool is_minres;
 
   PySlicerPythonState()
-      : filtration_grid(nanobind::none()), generator_basis(nanobind::none()), minpres_degree(-1), is_minres(false) {}
+      : filtration_grid(nanobind::none()),
+        generator_basis(nanobind::none()),
+        pres_degree(-1),
+        is_minpres(false),
+        is_minres(false) {}
 };
+
+template <typename State>
+inline int slicer_minpres_degree(const State& state) {
+  return state.is_minpres ? state.pres_degree : -1;
+}
+
+template <typename State>
+inline void mark_slicer_minpres(State& state, int degree, bool is_minres = false) {
+  state.is_minpres = degree >= 0;
+  if (state.is_minpres) state.pres_degree = degree;
+  state.is_minres = state.is_minpres && is_minres;
+}
+
+template <typename State>
+inline void mark_slicer_pres(State& state, int degree) {
+  state.pres_degree = degree;
+  state.is_minpres = false;
+  state.is_minres = false;
+}
 
 template <typename TargetState, typename SourceState>
 inline void copy_slicer_python_state(TargetState& target, const SourceState& source) {
   target.filtration_grid = source.filtration_grid;
   target.generator_basis = source.generator_basis;
-  target.minpres_degree = source.minpres_degree;
+  target.pres_degree = source.pres_degree;
+  target.is_minpres = source.is_minpres;
   target.is_minres = source.is_minres;
 }
 
@@ -150,8 +175,7 @@ template <typename State>
 inline void reset_slicer_python_state(State& state) {
   state.filtration_grid = nanobind::none();
   state.generator_basis = nanobind::none();
-  state.minpres_degree = -1;
-  state.is_minres = false;
+  mark_slicer_pres(state, -1);
 }
 
 template <typename Slicer>

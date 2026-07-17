@@ -134,9 +134,7 @@ nb::object graph_mph0_slicer_output(multipers::contiguous_f64_complex&& complex,
     nb::gil_scoped_release release;
     multipers::build_slicer_from_complex(wrapper.truc, complex);
   }
-  wrapper.pres_degree = degree;
-  wrapper.minpres_degree = degree;
-  wrapper.is_minres = is_minres;
+  multipers::nanobind_helpers::mark_slicer_minpres(wrapper, degree, is_minres);
   return out;
 }
 
