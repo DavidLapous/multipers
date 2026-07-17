@@ -4,6 +4,7 @@ from typing import Optional, Union
 import numpy as np
 import time
 
+from multipers.array_api import api_from_tensors
 from multipers.grids import compute_grid, sms_in_grid
 from multipers.point_measure import clean_sms, zero_out_sms
 from multipers.simplex_tree_multi import (
@@ -218,7 +219,10 @@ def signed_measure(
         pass
     elif isinstance(mass_default, str):
         if mass_default == "auto":
-            mass_default = np.array([1.1 * np.max(f) - 0.1 * np.min(f) for f in grid])
+            api = api_from_tensors(*grid)
+            mass_default = api.asnumpy(
+                api.stack([1.1 * api.max(f) - 0.1 * api.min(f) for f in grid])
+            )
         elif mass_default == "inf":
             mass_default = np.array([np.inf] * filtered_complex.num_parameters)
         else:
