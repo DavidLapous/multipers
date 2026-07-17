@@ -21,7 +21,6 @@ cat = _jnp.concatenate
 det = _jnp.linalg.det
 tensor = _jnp.array
 stack = _jnp.stack
-empty = _jnp.empty
 where = _jnp.where
 no_grad = nullcontext
 jit = _jax.jit
@@ -100,6 +99,10 @@ def zeros(shape, dtype=None, device=None):
     return to_device(_jnp.zeros(shape, dtype=dtype), device)
 
 
+def empty(shape, dtype=None, device=None):
+    return to_device(_jnp.empty(shape, dtype=dtype), device)
+
+
 def check_keops():
     return False
 
@@ -175,9 +178,10 @@ def unique(x, assume_sorted=False, _mean=False):
 
 
 def quantile_closest(x, q, axis=None):
-    # JAX quantile doesn't have 'nearest' interpolation in the same way?
-    # Actually it has 'method' in newer versions, but let's be safe.
-    return _jnp.quantile(x, q, axis=axis)
+    try:
+        return _jnp.quantile(x, q, axis=axis, method="nearest")
+    except TypeError:
+        return _jnp.quantile(x, q, axis=axis, interpolation="nearest")
 
 
 def minvalues(x, **kwargs):
