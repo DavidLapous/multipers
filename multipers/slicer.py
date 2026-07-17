@@ -453,6 +453,8 @@ def _getstate(self):
         self.filtration_grid,
         getattr(self, "_generator_basis", None),
         self.minpres_degree,
+        self.is_minres,
+        self.pres_degree,
     )
 
 
@@ -466,8 +468,6 @@ def _looks_like_serialized_state(state) -> bool:
 
 def _setstate(self, dump):
     explicit_is_minres = None
-        self.is_minres,
-        self.pres_degree,
     pres_degree = -1
     if isinstance(dump, tuple) and len(dump) == 6 and _looks_like_serialized_state(dump[0]):
         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres, pres_degree = dump
@@ -489,6 +489,9 @@ def _setstate(self, dump):
         serialized_is_minres = False
     if explicit_is_minres is not None:
         serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
+    if pres_degree < 0 and minpres_degree >= 0:
+        pres_degree = minpres_degree
+    self._mark_pres(pres_degree)
     self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
     self.filtration_grid = filtration_grid
     self._generator_basis = generator_basis
@@ -502,13 +505,22 @@ def _bc_to_full(bcs, basepoint, direction=None):
             _bc_to_full(current, bp, dir_)
             for current, bp, dir_ in zip(bcs, basepoint, directions)
         )
-    if pres_degree < 0 and minpres_degree >= 0:
-        pres_degree = minpres_degree
-    self._mark_pres(pres_degree)
 
     basepoint = basepoint[None, None, :]
     direction = 1 if direction is None else np.asarray(direction)[None, None, :]
     return tuple(bc[:, :, None] * direction + basepoint for bc in bcs)
+
+
+def _is_minimal_presentation(slicer):
+    filtrations = np.asarray(slicer.get_filtrations())
+    if filtrations.ndim != 2:
+        return False
+    indptr, boundary = slicer.get_boundaries(packed=True)
+    lengths = np.diff(indptr).astype(np.int64, copy=False)
+    if boundary.size == 0:
+        return True
+    sources = np.repeat(np.arange(len(slicer)), lengths)
+    return not np.any(np.all(filtrations[sources] == filtrations[boundary], axis=1))
 
 
 def _grid_squeeze(
@@ -524,18 +536,6 @@ def _grid_squeeze(
 ):
     if grid_strategy is not None:
         warn(
-def _is_minimal_presentation(slicer):
-    filtrations = np.asarray(slicer.get_filtrations())
-    if filtrations.ndim != 2:
-        return False
-    indptr, boundary = slicer.get_boundaries(packed=True)
-    lengths = np.diff(indptr).astype(np.int64, copy=False)
-    if boundary.size == 0:
-        return True
-    sources = np.repeat(np.arange(len(slicer)), lengths)
-    return not np.any(np.all(filtrations[sources] == filtrations[boundary], axis=1))
-
-
             "`grid_strategy` is deprecated, use `strategy` instead.", DeprecationWarning
         )
         strategy = grid_strategy
@@ -566,8 +566,15 @@ def _is_minimal_presentation(slicer):
         if api is None
         else [api.asnumpy(g, dtype=self.dtype, contiguous=True) for g in filtration_grid]
     )
+    pres_degree = self.pres_degree
+    minpres_degree = self.minpres_degree
+    is_minres = self.is_minres
     if inplace or not coordinates:
         self.coarsen_on_grid_inplace(c_grid, coordinates)
+        if minpres_degree >= 0 and _is_minimal_presentation(self):
+            self._mark_minpres(minpres_degree, is_minres=is_minres)
+        else:
+            self._mark_pres(pres_degree)
         if coordinates:
             self.filtration_grid = sanitize_grid(filtration_grid, api=api)
         return self
@@ -582,15 +589,8 @@ def _is_minimal_presentation(slicer):
 
 
 def _clean_filtration_grid(self):
-    pres_degree = self.pres_degree
-    minpres_degree = self.minpres_degree
-    is_minres = self.is_minres
     if not self.is_squeezed:
         raise ValueError("No grid to clean.")
-        if minpres_degree >= 0 and _is_minimal_presentation(self):
-            self._mark_minpres(minpres_degree, is_minres=is_minres)
-        else:
-            self._mark_pres(pres_degree)
     return self._clean_filtration_grid_raw()
 
 
@@ -696,6 +696,7 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         self.get_dimensions(),
         new_filtrations,
     )
+    new_slicer._mark_pres(self.pres_degree)
     new_slicer._mark_minpres(self.minpres_degree, is_minres=self.is_minres)
     return new_slicer
 
@@ -709,7 +710,6 @@ def to_simplextree(s: Slicer_type, max_dim: int = -1):
         dtype=s.dtype,
         kcritical=s.is_kcritical,
         ftype=s.filtration_container,
-    new_slicer._mark_pres(self.pres_degree)
         max_dim=max_dim,
     )
 
