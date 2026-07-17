@@ -279,8 +279,7 @@ void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& sou
   }
   self.filtration_grid = source.filtration_grid;
   self.generator_basis = nb::none();
-  self.minpres_degree = -1;
-  self.is_minres = false;
+  multipers::nanobind_helpers::mark_slicer_pres(self, -1);
 }
 
 template <typename Wrapper, typename Concrete>
@@ -1643,13 +1642,20 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
             self.generator_basis = nb::cast(multipers::nanobind_helpers::generator_basis_from_object(value));
           },
           nb::arg("value").none())
-      .def_rw("minpres_degree", &Wrapper::minpres_degree)
-      .def_prop_ro("is_minpres", [](const Wrapper& self) -> bool { return self.minpres_degree >= 0; })
+      .def_prop_rw(
+          "minpres_degree",
+          [](const Wrapper& self) { return multipers::nanobind_helpers::slicer_minpres_degree(self); },
+          [](Wrapper& self, int degree) {
+            multipers::nanobind_helpers::mark_slicer_minpres(self, degree, self.is_minres);
+          })
+      .def_prop_ro("is_pres", [](const Wrapper& self) -> bool { return self.pres_degree >= 0; })
+      .def_prop_ro("pres_degree", [](const Wrapper& self) -> int { return self.pres_degree; })
+      .def_prop_ro("is_minpres", [](const Wrapper& self) -> bool { return self.is_minpres; })
       .def_prop_rw(
           "is_minres",
-          [](const Wrapper& self) -> bool { return self.minpres_degree >= 0 && self.is_minres; },
+          [](const Wrapper& self) -> bool { return self.is_minres; },
           [](Wrapper& self, bool value) {
-            if (value && self.minpres_degree < 0) {
+            if (value && !self.is_minpres) {
               throw std::invalid_argument("Cannot mark a slicer as `is_minres` without a valid `minpres_degree`.");
             }
             self.is_minres = value;
@@ -1657,8 +1663,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def(
           "_mark_minpres",
           [](Wrapper& self, int degree, bool is_minres) {
-            self.minpres_degree = degree;
-            self.is_minres = degree >= 0 && is_minres;
+            multipers::nanobind_helpers::mark_slicer_minpres(self, degree, is_minres);
           },
           "degree"_a,
           "is_minres"_a = false)
@@ -1675,9 +1680,11 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def("__getstate__",
            [](Wrapper& self) -> nb::tuple {
              return nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                   self.filtration_grid,
-                                   self.generator_basis,
-                                   self.minpres_degree);
+                                    self.filtration_grid,
+                                    self.generator_basis,
+                                    multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                    self.is_minres,
+                                   self.pres_degree);
            })
       .def("__reduce__",
            [](Wrapper& self) -> nb::tuple {
@@ -1685,9 +1692,11 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::borrow<nb::object>(nb::type<Wrapper>()),
                  nb::make_tuple(),
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                self.filtration_grid,
-                                self.generator_basis,
-                                 self.minpres_degree));
+                                 self.filtration_grid,
+                                 self.generator_basis,
+                                 multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                 self.is_minres,
+                                self.pres_degree));
            })
       .def("__reduce_ex__",
            [](Wrapper& self, int) -> nb::tuple {
@@ -1695,9 +1704,11 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::borrow<nb::object>(nb::type<Wrapper>()),
                  nb::make_tuple(),
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                self.filtration_grid,
-                                self.generator_basis,
-                                 self.minpres_degree));
+                                 self.filtration_grid,
+                                 self.generator_basis,
+                                 multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                 self.is_minres,
+                                self.pres_degree));
            })
       .def("_serialize_state",
            [](Wrapper& self) -> nb::ndarray<nb::numpy, uint8_t> {
@@ -1739,6 +1750,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                     if constexpr (std::is_floating_point_v<Value>) {
                       return nb::cast(std::numeric_limits<Value>::infinity());
                     }
+      .def(
+          "_mark_pres",
+          [](Wrapper& self, int degree) { multipers::nanobind_helpers::mark_slicer_pres(self, degree); },
+          "degree"_a)
                     return nb::cast(std::numeric_limits<Value>::max());
                   })
       .def("get_dimensions", [](Wrapper& self) -> nb::ndarray<nb::numpy, int32_t> { return dimensions_array(self); })

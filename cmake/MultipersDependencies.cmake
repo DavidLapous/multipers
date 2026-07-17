@@ -165,6 +165,13 @@ set(MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS
   "${CMAKE_SOURCE_DIR}/ext/function_delaunay/scc_mod/include"
 )
 
+set(MULTIPERS_GRAPHCODE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/graphcode" CACHE PATH "Path to a graphcode source checkout")
+set(MULTIPERS_GRAPHCODE_INCLUDE_DIRS
+  "${MULTIPERS_GRAPHCODE_SOURCE_DIR}/include"
+  "${MULTIPERS_GRAPHCODE_SOURCE_DIR}/mpp_utils_mod/include"
+  "${MULTIPERS_GRAPHCODE_SOURCE_DIR}/phat_mod/include"
+)
+
 set(MULTIPERS_MUPHASA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ext/muphasa" CACHE PATH "Path to a Muphasa source checkout")
 set(MULTIPERS_MUPHASA_INCLUDE_DIRS "")
 if(EXISTS "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/main.cpp")

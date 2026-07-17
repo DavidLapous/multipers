@@ -58,11 +58,12 @@ struct SkyscraperInvariant {
 };
 
 hnf::Presentation presentation_from_slicer(const Wrapper& wrapper) {
-  if (wrapper.minpres_degree < 0 || wrapper.truc.get_number_of_parameters() != 2)
+  const int degree = multipers::nanobind_helpers::slicer_minpres_degree(wrapper);
+  if (degree < 0 || wrapper.truc.get_number_of_parameters() != 2)
     throw std::invalid_argument("Each summand must be a one-critical 2D minimal presentation.");
   if (multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.filtration_grid))
     throw std::invalid_argument("Summand coordinates must be unsqueezed physical coordinates.");
-  auto block = multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(wrapper, wrapper.minpres_degree);
+  auto block = multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(wrapper, degree);
   const auto finite_grade = [](const auto& grade) { return std::isfinite(grade.first) && std::isfinite(grade.second); };
   if (!std::all_of(block.row_grades.begin(), block.row_grades.end(), finite_grade) ||
       !std::all_of(block.relation_grades.begin(), block.relation_grades.end(), finite_grade))
@@ -613,7 +614,7 @@ NB_MODULE(_skyscraper_interface, m) {
         for (const auto& summand : summands) {
           auto canonical = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(summand);
           const auto& wrapper = nb::cast<const Wrapper&>(canonical);
-          if (degree >= 0 && wrapper.minpres_degree != degree)
+          if (degree >= 0 && multipers::nanobind_helpers::slicer_minpres_degree(wrapper) != degree)
             throw std::invalid_argument("Summand degree does not match requested degree.");
           input.push_back(presentation_from_slicer(wrapper));
         }

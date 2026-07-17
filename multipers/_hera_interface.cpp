@@ -207,7 +207,7 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
         }
 
         auto block = multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(
-            wrapper, wrapper.minpres_degree);
+            wrapper, multipers::nanobind_helpers::slicer_minpres_degree(wrapper));
 
         multipers::hera_module_presentation_input<int> out;
         out.generator_grades = std::move(block.row_grades);

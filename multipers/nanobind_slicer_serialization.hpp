@@ -308,7 +308,7 @@ nb::ndarray<nb::numpy, uint8_t> serialized_state(Wrapper& self) {
     SlicerSerializationHeaderV1 header{kSlicerSerializationMagic,
                                        kSlicerSerializationVersion,
                                        expected_slicer_serialization_mode<IsKCritical, IsDegreeRips>(),
-                                       (self.minpres_degree >= 0 && self.is_minres) ? 1u : 0u,
+                                        self.is_minres ? 1u : 0u,
                                        static_cast<uint64_t>(num_generators),
                                        static_cast<uint64_t>(total_boundary_size),
                                        static_cast<uint64_t>(num_parameters),
@@ -382,7 +382,6 @@ bool load_state(Wrapper& self, nb::handle state) {
     is_minres = load_state_v1<Wrapper, Concrete, Value, IsKCritical, IsDegreeRips>(self, buffer.data(), buffer.size());
   }
   multipers::nanobind_helpers::reset_slicer_python_state(self);
-  self.is_minres = is_minres;
   return is_minres;
 }
 

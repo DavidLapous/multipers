@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from operator import index as _index
 from typing import Optional
 
 import numpy as np
 
+import multipers.logs as _mp_logs
 from multipers._signed_measure_meta import signed_measure
-from multipers.array_api import api_from_tensor
+from multipers.array_api import api_from_tensor, api_from_tensors
 from multipers.grids import Lstrategies, compute_grid
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_signed_measure
@@ -461,6 +463,158 @@ def rank_invariant(
     return out[0] if single_output else out
 
 
+def graphcode(
+    filtered_complex,
+    degree: Optional[int] = None,
+    *,
+    primary_parameter: int = 1,
+    slices: int = 0,
+    include_infinite_bars: bool = True,
+    filter_out_disjoint_pairs: bool = True,
+    do_exhaustive_reduction: bool = False,
+    relevance_threshold: float = -1.0,
+    secondary_threshold: float = np.inf,
+    compressed: bool = True,
+    double_edges: bool = True,
+    verbose: bool = False,
+):
+    """Compute graphcode of a 2-parameter module, in memory.
+
+    Input must be a presentation slicer. Nonminimal presentations are minimized
+    before computing the ``vertices``, ``edges``, and ``slice_values`` output.
+    """
+    from multipers import _graphcode_interface
+
+    slicer = _as_slicer(filtered_complex)
+    if slicer.num_parameters != 2:
+        raise ValueError("graphcode expects a 2-parameter slicer.")
+    if not slicer.is_pres or slicer.pres_degree < 0:
+        raise ValueError("graphcode expects a presentation slicer.")
+    if degree is None:
+        degree = int(slicer.pres_degree)
+    else:
+        if isinstance(degree, bool):
+            raise ValueError("`degree` must be a non-negative integer.")
+        degree = _index(degree)
+        if degree < 0:
+            raise ValueError("`degree` must be a non-negative integer.")
+        if slicer.pres_degree != degree:
+            raise ValueError("Cannot change degree of an existing presentation slicer.")
+
+    if not slicer.is_minpres:
+        slicer = slicer.minpres(degree=degree, full_resolution=False)
+
+    _graphcode_interface.require()
+
+    grid_api = None
+    grid = None
+    coordinate_output = False
+    backend_slicer = slicer
+    if slicer.is_squeezed:
+        grid = slicer.filtration_grid
+        grid_api = api_from_tensors(*grid)
+        coordinate_output = (
+            slices == 0
+            and np.isinf(float(secondary_threshold))
+            and float(relevance_threshold) <= 0.0
+        )
+        if not coordinate_output:
+            if any(grid_api.has_grad(axis) for axis in grid):
+                _mp_logs.warn_autodiff(
+                    "graphcode preserves filtration gradients only for squeezed slicers "
+                    "with slices=0 and default thresholds."
+                )
+            backend_slicer = slicer.unsqueeze()
+
+    with _mp_logs.timings(
+        "graphcode",
+        enabled=verbose,
+        details={"degree": degree, "primary_parameter": primary_parameter, "slices": slices},
+    ) as timing:
+        out = _graphcode_interface.graphcode(
+            backend_slicer,
+            primary_parameter=primary_parameter,
+            slices=slices,
+            include_infinite_bars=include_infinite_bars,
+            filter_out_disjoint_pairs=filter_out_disjoint_pairs,
+            do_exhaustive_reduction=do_exhaustive_reduction,
+            relevance_threshold=relevance_threshold,
+            secondary_threshold=secondary_threshold,
+            compressed_graphcode=compressed,
+            double_edges=double_edges,
+        )
+        timing.substep("backend_call")
+    return _graphcode_array_output(
+        out,
+        api=grid_api,
+        grid=grid,
+        primary_parameter=primary_parameter,
+        coordinate_output=coordinate_output,
+    )
+
+
+def _graphcode_array_output(
+    out,
+    *,
+    api=None,
+    grid=None,
+    primary_parameter: int = 1,
+    coordinate_output: bool = False,
+):
+    vertices = np.ascontiguousarray(np.asarray(out["vertices"], dtype=np.float64).reshape(-1, 4))
+    edges = np.ascontiguousarray(np.asarray(out["edges"], dtype=np.int64).reshape(-1, 2))
+    slice_values = np.ascontiguousarray(np.asarray(out["slice_values"], dtype=np.float64).reshape(-1))
+    if api is None or grid is None or not coordinate_output:
+        api = api_from_tensor(vertices)
+        return {
+            "vertices": api.astensor(vertices, contiguous=True),
+            "edges": api.astensor(edges, dtype=api.int64, contiguous=True),
+            "slice_values": api.astensor(slice_values, contiguous=True),
+        }
+
+    primary_parameter = _index(primary_parameter)
+    secondary_parameter = 1 - primary_parameter
+    birth = _graphcode_take_grid_values(api, grid[secondary_parameter], vertices[:, 0])
+    death = _graphcode_take_grid_values(api, grid[secondary_parameter], vertices[:, 1])
+    slice_index = api.astensor(
+        np.ascontiguousarray(vertices[:, 2]),
+        dtype=getattr(birth, "dtype", None),
+        device=api.device(grid[primary_parameter]),
+    )
+    vertex_slice_values = _graphcode_take_grid_values(api, grid[primary_parameter], vertices[:, 3])
+    return {
+        "vertices": api.ascontiguous(
+            api.moveaxis(api.stack([birth, death, slice_index, vertex_slice_values]), 0, 1)
+        ),
+        "edges": api.astensor(
+            edges,
+            dtype=api.int64,
+            contiguous=True,
+            device=api.device(grid[primary_parameter]),
+        ),
+        "slice_values": api.ascontiguous(
+            _graphcode_take_grid_values(api, grid[primary_parameter], slice_values)
+        ),
+    }
+def _graphcode_take_grid_values(api, axis, coordinates):
+    axis = api.astensor(axis, contiguous=True)
+    coordinates = np.asarray(coordinates, dtype=np.float64).reshape(-1)
+    finite = np.isfinite(coordinates) & (0 <= coordinates) & (coordinates < len(axis))
+    indices = np.zeros(coordinates.shape, dtype=np.int64)
+    indices[finite] = np.rint(coordinates[finite]).astype(np.int64)
+    index_tensor = api.astensor(indices, dtype=api.int64, device=api.device(axis))
+    values = axis[index_tensor]
+    if np.all(finite):
+        return api.ascontiguous(values)
+    infinity = api.astensor(
+        np.full(coordinates.shape, np.finfo(np.float64).max),
+        dtype=getattr(values, "dtype", None),
+        device=api.device(axis),
+    )
+    mask = api.astensor(finite, device=api.device(axis))
+    return api.ascontiguous(api.where(mask, values, infinity))
+
+
 def betti_degrees(resolution, degree: Optional[int] = None):
     """Return generator grades grouped by free-resolution index.
 
@@ -588,6 +742,7 @@ __all__ = [
     "end_curves",
     "fibered_barcode",
     "fibered_barcodes",
+    "graphcode",
     "hilbert_function",
     "module_approximation",
     "projected_barcode",

@@ -30,13 +30,14 @@ inline nb::object to_colexical_target(const nb::object& target) {
 }
 
 multipers::nanobind_helpers::BifiltrationMinpresDegreeBlock build_input_from_slicer(const CanonicalWrapper& wrapper) {
-  if (wrapper.minpres_degree < 0) {
+  const int degree = multipers::nanobind_helpers::slicer_minpres_degree(wrapper);
+  if (degree < 0) {
     throw std::runtime_error("AIDA takes a minimal presentation as an input.");
   }
   if (wrapper.truc.get_number_of_parameters() != 2) {
     throw std::runtime_error("AIDA is only compatible with 2-parameter minimal presentations.");
   }
-  return multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(wrapper, wrapper.minpres_degree);
+  return multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(wrapper, degree);
 }
 
 template <typename Summand>
@@ -82,8 +83,7 @@ nb::object summand_to_slicer(nb::object target,
   nb::object out =
       multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
-  out_wrapper.minpres_degree = degree;
-  out_wrapper.is_minres = false;
+  multipers::nanobind_helpers::mark_slicer_minpres(out_wrapper, degree);
   if (is_squeezed) {
     out_wrapper.filtration_grid = compact_grid;
   }

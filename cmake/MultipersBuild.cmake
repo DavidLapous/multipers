@@ -13,6 +13,7 @@ endfunction()
 multipers_default_disable_flag("mpfree" MULTIPERS_DISABLE_MPFREE_INTERFACE)
 multipers_default_disable_flag("muphasa" MULTIPERS_DISABLE_MUPHASA_INTERFACE)
 multipers_default_disable_flag("function_delaunay" MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE)
+multipers_default_disable_flag("graphcode" MULTIPERS_DISABLE_GRAPHCODE_INTERFACE)
 if(NOT DEFINED MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
   set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE OFF)
   message(STATUS "[deg_rips] Defaulted MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE}")
@@ -32,6 +33,8 @@ if(WIN32)
   message(STATUS "[muphasa] Forced MULTIPERS_DISABLE_MUPHASA_INTERFACE=${MULTIPERS_DISABLE_MUPHASA_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
   message(STATUS "[function_delaunay] Forced MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE} on WIN32")
+  set(MULTIPERS_DISABLE_GRAPHCODE_INTERFACE ON)
+  message(STATUS "[graphcode] Forced MULTIPERS_DISABLE_GRAPHCODE_INTERFACE=${MULTIPERS_DISABLE_GRAPHCODE_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_DEG_RIPS_INTERFACE ON)
   message(STATUS "[deg_rips] Forced MULTIPERS_DISABLE_DEG_RIPS_INTERFACE=${MULTIPERS_DISABLE_DEG_RIPS_INTERFACE} on WIN32")
   set(MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE ON)
@@ -74,6 +77,11 @@ endif()
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h")
   set(MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE ON)
   message(STATUS "[function_delaunay] Set MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE=${MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE} because function_delaunay headers are missing")
+endif()
+
+if(NOT EXISTS "${MULTIPERS_GRAPHCODE_SOURCE_DIR}/include/graphcode/Graphcode.h")
+  set(MULTIPERS_DISABLE_GRAPHCODE_INTERFACE ON)
+  message(STATUS "[graphcode] Set MULTIPERS_DISABLE_GRAPHCODE_INTERFACE=${MULTIPERS_DISABLE_GRAPHCODE_INTERFACE} because graphcode headers are missing")
 endif()
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h")
@@ -129,6 +137,7 @@ set(MULTIPERS_INTERFACE_DISABLE_FLAGS
   MULTIPERS_DISABLE_MPFREE_INTERFACE
   MULTIPERS_DISABLE_MUPHASA_INTERFACE
   MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+  MULTIPERS_DISABLE_GRAPHCODE_INTERFACE
   MULTIPERS_DISABLE_DEG_RIPS_INTERFACE
   MULTIPERS_DISABLE_2PAC_INTERFACE
   MULTIPERS_DISABLE_AIDA_INTERFACE
@@ -272,6 +281,7 @@ multipers_add_core_object_library(
   multipers_core_hera_obj
   "${CMAKE_SOURCE_DIR}/tools/core/hera_monte_carlo_core.cc"
 )
+
 multipers_add_core_object_library(
   multipers_core_graph_mph0_obj
   "${CMAKE_SOURCE_DIR}/multipers/graph_mph0/graph_mph0.cpp"
@@ -753,6 +763,7 @@ target_include_directories(
     ${MULTIPERS_MUPHASA_INCLUDE_DIRS}
     ${MULTIPERS_MULTI_CRITICAL_INCLUDE_DIRS}
     ${MULTIPERS_FUNCTION_DELAUNAY_INCLUDE_DIRS}
+    ${MULTIPERS_GRAPHCODE_INCLUDE_DIRS}
     ${MULTIPERS_DEG_RIPS_INCLUDE_DIRS}
     ${MULTIPERS_RHOMBOID_TILING_INCLUDE_DIRS}
     ${MULTIPERS_HERA_INCLUDE_DIRS}
@@ -850,6 +861,15 @@ function(multipers_configure_module module_name target_name)
     endif()
     set(_use_phat_includes FALSE)
 
+  elseif(module_name STREQUAL "_graphcode_interface")
+    if(NOT MULTIPERS_DISABLE_GRAPHCODE_INTERFACE)
+      multipers_link_shared_core(${target_name})
+      multipers_link_nanobind_runtime(${target_name})
+      target_link_libraries(${target_name} PRIVATE Boost::timer Boost::chrono)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_GRAPHCODE_INCLUDE_DIRS})
+    endif()
+    set(_use_phat_includes FALSE)
+
   elseif(module_name STREQUAL "_deg_rips_interface")
     if(NOT MULTIPERS_DISABLE_DEG_RIPS_INTERFACE)
       add_dependencies(${target_name} multipers_deg_rips_optimization_overlay)
@@ -912,6 +932,10 @@ function(multipers_configure_module module_name target_name)
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+      if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
+        target_link_libraries(${target_name} PRIVATE multipers_aida_static)
+        target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
+      endif()
     endif()
 
   elseif(module_name STREQUAL "_skyscraper_interface")
@@ -1018,6 +1042,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _mpfree_interface
   _muphasa_interface
   _function_delaunay_interface
+  _graphcode_interface
   _deg_rips_interface
   _2pac_interface
   _hera_interface
