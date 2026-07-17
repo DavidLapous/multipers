@@ -60,9 +60,12 @@ This library features a bunch of different functions and helpers. See below for 
  - [x] [[Rivet]](https://github.com/rivetTDA/rivet) Interactive two parameter persistence. 
  - [x] [[Kernel Operations on the GPU, with Autodiff, without Memory Overflows, JMLR]](http://jmlr.org/papers/v22/20-275.html) Although not linked, at first glance, to persistence in any way, this library allows computing blazingly fast signed measures convolutions (and more!) with custom kernels. 
  - [x] [[Projected distances for multi-parameter persistence modules, Institut Fourier]](https://aif.centre-mersenne.org/articles/10.5802/aif.3752/) and [[Computation of $\gamma$-linear projected barcodes, JACT]](https://doi.org/10.1007/s41468-025-00209-9) Provides a strategy to estimate the convolution distance between multiparameter persistence module using projected barcodes.
- - [x] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence algorithm.
+ - [x] [[Efficient Two-Parameter Persistence Computation via Cohomology, SoCG2023]](https://doi.org/10.4230/LIPIcs.SoCG.2023.15) Minimal presentations for 2-parameter persistence using the [2pac](https://gitlab.com/flenzen/2pac) cohomology and homology backends.
  - [x] [[deg_rips]](https://bitbucket.org/mkerber/deg_rips) Efficient implementation of the DegreeRips bifiltration. Alternative to the multipers-native one.
- - [ ] [[Multiscale Clusterings BiFiltration, ICLR2026]](https://openreview.net/forum?id=E7D6uybODJ) WIP implementation. 
+ - [ ] [[Multiscale Clusterings BiFiltration, ICLR2026]](https://openreview.net/forum?id=E7D6uybODJ) Native MCbiF constructor with standard and nerve filtrations.
+ - [ ] [[Muphasa]](https://github.com/olivergafvert/muphasa) Minimal presentations for $(3+)$-parameter persistence modules.
+ - [ ] [[Graphcode: Learning from multiparameter persistent homology using graph neural networks, NeurIPS2024]](https://neurips.cc/virtual/2024/poster/95396) Graphcodes for 2-parameter persistence modules, using [graphcode](https://bitbucket.org/mkerber/graphcode).
+ - [ ] [[Computing the Skyscraper Invariant, SoCG2026]](https://doi.org/10.4230/LIPIcs.SoCG.2026.47) Skyscraper invariants and filtered landscapes for 2-parameter persistence modules, using [Skyscraper-Invariant](https://github.com/JanJend/Skyscraper-Invariant).
 
 
 If I missed something, or you want to add something, feel free to open an issue.
@@ -89,7 +92,7 @@ This is due to linked GPL/LGPL third-party components used by the build, notably
 See `THIRD_PARTY_NOTICES.md` for dependency details and pinned revisions used in this workspace.
 
 ## Citation
-Please cite this library and its dependencies (see above) when using it in scientific publications;
+Please cite this library and its dependencies (see above or [in the biblio](https://davidlapous.github.io/multipers/bibliography.html)) when using it in scientific publications;
 you can use the following journal bibtex entry
 ```bib
 @article{multipers,
