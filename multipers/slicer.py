@@ -58,7 +58,7 @@ def _repr(self):
     return (
         f"slicer[backend={self.pers_backend},dtype={np.dtype(self.dtype).name},"
         f"num_param={self.num_parameters},vineyard={self.is_vine},kcritical={self.is_kcritical},"
-        f"is_squeezed={self.is_squeezed},is_minpres={self.is_minpres},"
+        f"is_squeezed={self.is_squeezed},is_pres={self.is_pres},is_minpres={self.is_minpres},"
         f"is_minres={self.is_minres},max_dim={self.dimension}]"
     )
 

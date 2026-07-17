@@ -272,6 +272,10 @@ multipers_add_core_object_library(
   multipers_core_hera_obj
   "${CMAKE_SOURCE_DIR}/tools/core/hera_monte_carlo_core.cc"
 )
+multipers_add_core_object_library(
+  multipers_core_graph_mph0_obj
+  "${CMAKE_SOURCE_DIR}/multipers/graph_mph0/graph_mph0.cpp"
+)
 target_include_directories(
   multipers_core_hera_obj
   BEFORE
@@ -289,6 +293,7 @@ add_library(
   $<TARGET_OBJECTS:multipers_core_simplextree_obj>
   $<TARGET_OBJECTS:multipers_core_slicer_obj>
   $<TARGET_OBJECTS:multipers_core_hera_obj>
+  $<TARGET_OBJECTS:multipers_core_graph_mph0_obj>
 )
 add_dependencies(multipers_core_shared multipers_codegen)
 multipers_link_tbb(multipers_core_shared)
@@ -784,6 +789,7 @@ function(multipers_configure_module module_name target_name)
     multipers_link_tbb(${target_name})
 
   elseif(module_name STREQUAL "_slicer_nanobind")
+    target_sources(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/multipers/graph_mph0/nanobind_interface.cpp")
     multipers_link_shared_core(${target_name})
     multipers_link_tbb(${target_name})
     # Build slicer templates in-module so import does not depend on ELF shared-core exports.

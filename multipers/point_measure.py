@@ -117,8 +117,9 @@ def integrate_measure(
 
 ## for benchmark purposes
 def integrate_measure_python(pts, weights, filtrations):
+    weights = np.asarray(weights)
     resolution = tuple([len(f) for f in filtrations])
-    out = np.zeros(shape=resolution, dtype=pts.dtype)
+    out = np.zeros(shape=resolution, dtype=weights.dtype)
     num_pts = pts.shape[0]
     num_parameters = pts.shape[1]
     for i in range(num_pts):  # this is slow.

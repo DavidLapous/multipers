@@ -152,6 +152,21 @@ def test_reference_landscape_exact_and_threshold_equality():
         invariant.reference_landscape(0, k=0)
 
 
+def test_filtered_landscape_plot(monkeypatch):
+    import multipers.plots as plots
+
+    calls = []
+    monkeypatch.setattr(plots, "plot_surfaces", lambda data, **kwargs: calls.append((data, kwargs)))
+    invariant = _single_piece(x=(0, 2, 4), y=(0, 1, 2), corner=(4, 2))
+    landscape = invariant.filtered_landscape(0, k=2, plot=True)
+
+    (grid, plotted), kwargs = calls.pop()
+    np.testing.assert_array_equal(grid[0], invariant.x_grid)
+    np.testing.assert_array_equal(grid[1], invariant.y_grid)
+    np.testing.assert_array_equal(plotted, np.swapaxes(landscape, -1, -2))
+    assert kwargs == {"cmap": "hot", "contour": False}
+
+
 def test_reference_landscape_non_square_step_and_grid_validation():
     invariant = _single_piece(x=(0, 2, 4), y=(0, 1, 2), corner=(4, 2))
     np.testing.assert_array_equal(np.diag(invariant.reference_landscape(0)[0]), [0, 2, 0])

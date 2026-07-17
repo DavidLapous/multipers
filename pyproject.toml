@@ -598,6 +598,7 @@ include = [
   "options.py",
   "multipers/**/*.hpp",
   "multipers/**/*.h",
+  "multipers/graph_mph0/*.cpp",
   "CITATION.cff",
   "LICENSE",
   "README.md",

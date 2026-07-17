@@ -1,10 +1,32 @@
 import numpy as np
 from operator import index as _index
-from typing import Iterable, Literal, Optional
+from typing import Literal, Optional, Sequence
 
 import multipers.logs as _mp_logs
 from multipers.array_api import api_from_tensors
 from multipers.slicer import is_slicer
+from multipers.simplex_tree_multi import is_simplextree_multi
+
+
+def _graph_mph0_minimal_presentation(slicer, degree, full_resolution):
+    if is_simplextree_multi(slicer):
+        from multipers import Slicer
+
+        slicer = Slicer(slicer)
+    if not is_slicer(slicer):
+        raise ValueError(f"Expected a Slicer or SimplexTreeMulti, got {type(slicer)=}.")
+    if slicer.is_kcritical:
+        raise ValueError("graph requires a one-critical filtration.")
+    if slicer.num_parameters != 2:
+        raise ValueError("graph requires exactly two filtration parameters.")
+    if slicer.is_squeezed:
+        slicer = slicer.unsqueeze()
+
+    from multipers import _slicer_nanobind
+
+    return _slicer_nanobind._graph_mph0_minimal_presentation(
+        slicer, degree, full_resolution
+    )
 
 
 def _normalize_degree(source, target, degree):
@@ -157,6 +179,13 @@ def _validate_algebra_inputs(source, target):
     _validate_squeezed_grids(source, target)
 
 
+def normalize(filtered_complex, box=None, copy=True):
+    """Normalize filtration values into the affine coordinates of ``box``."""
+    if is_slicer(filtered_complex, allow_minpres=False) or is_simplextree_multi(filtered_complex):
+        return filtered_complex.normalize_filtrations(box=box, copy=copy)
+    raise ValueError(f"Expected a Slicer or SimplexTreeMulti, got {type(filtered_complex)=}.")
+
+
 def _algebra_op(op, morphism, *, source=None, target=None, degree=None, backend="persistence-algebra"):
     """Run an algebra operation on an explicit degree-wise morphism."""
     if backend == "muphasa":
@@ -279,6 +308,11 @@ def _minimal_presentation_from_slicer(
     use_chunk=True,
     keep_generators=False,
 ):
+    if backend == "graph":
+        if keep_generators:
+            raise ValueError("graph does not support keep_generators.")
+        return _graph_mph0_minimal_presentation(slicer, degree, full_resolution)
+
     if backend == "muphasa":
         from multipers import _muphasa_interface
 
@@ -369,7 +403,8 @@ def _minimal_presentation_from_slicer(
         return new_slicer
 
     raise ValueError(
-        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `muphasa`, `2pac`, and `2pac-homology`."
+        f"Unsupported backend {backend!r}. Minimal presentation supports only `mpfree`, `muphasa`, `2pac`, "
+        "`2pac-homology`, and `graph`."
     )
 
 
@@ -516,8 +551,8 @@ def one_criticalify(
 def minimal_presentation(
     slicer,
     degree=-1,
-    degrees: Iterable[int] = [],
-    backend: Literal["mpfree", "muphasa", "2pac", "2pac-homology", ""] = "mpfree",
+    degrees: Sequence[int] = (),
+    backend: Literal["mpfree", "muphasa", "2pac", "2pac-homology", "graph", ""] = "mpfree",
     n_jobs=-1,
     force=False,
     auto_clean=True,
@@ -530,23 +565,28 @@ def minimal_presentation(
     """
     Computes a minimal presentation of a (1-critical) multifiltered complex.
 
-    From [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
-    whose code is available here: https://bitbucket.org/mkerber/mpfree
+    Backend references:
+
+    - `mpfree`: [Fast minimal presentations of bi-graded persistence modules](https://doi.org/10.1137/1.9781611976472.16),
+      with code at https://bitbucket.org/mkerber/mpfree
+    - `2pac`: [Efficient Two-Parameter Persistence Computation via Cohomology](https://doi.org/10.4230/LIPIcs.SoCG.2023.15)
+    - `muphasa`: https://github.com/olivergafvert/muphasa
+    - `graph`: [Computing Betti Tables and Minimal Presentations of Zero-Dimensional Persistent Homology](https://doi.org/10.4230/LIPIcs.SoCG.2025.69)
 
     Available backends include `mpfree`, `muphasa` (Muphasa backend, currently
     at least 2-parameter and full_resolution=False only), `2pac` (2pac cohomology / dual
     transpose route, with 2pac's bounded-support assumptions), and
-    `2pac-homology` (the original direct homology route).
+    `2pac-homology` (the original direct homology route), and `graph` (for
+    graph-shaped presentations).
     """
     from joblib import Parallel, delayed
     full_resolution = bool(full_resolution)
 
-    if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
-        _mp_logs.warn_superfluous_computation(
-            f"The slicer seems to be already reduced, "
-            f"from homology of degree {slicer.minpres_degree}."
-        )
-        return slicer
+    if is_simplextree_multi(slicer):
+        from multipers import Slicer
+
+        slicer = Slicer(slicer)
+
     if len(degrees) > 0:
 
         def todo(degree):
@@ -568,6 +608,24 @@ def minimal_presentation(
             )
         )
     assert degree >= 0, "Degree not provided."
+    if backend == "graph":
+        return _minimal_presentation_from_slicer(
+            slicer,
+            degree=degree,
+            backend=backend,
+            auto_clean=auto_clean,
+            verbose=verbose,
+            full_resolution=full_resolution,
+            use_chunk=use_chunk,
+            use_clearing=use_clearing,
+            keep_generators=keep_generators,
+        )
+    if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
+        _mp_logs.warn_superfluous_computation(
+            f"The slicer seems to be already reduced, "
+            f"from homology of degree {slicer.minpres_degree}."
+        )
+        return slicer
     dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
     idx = np.searchsorted(dimensions, degree)
     if idx >= dimensions.shape[0] or dimensions[idx] != degree:

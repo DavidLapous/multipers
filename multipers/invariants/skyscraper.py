@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+import multipers.logs as _mp_logs
+from multipers.array_api import api_from_tensors
 from multipers.grids import compute_bounding_box, compute_grid
 
 from ._utils import _as_slicer
@@ -17,6 +19,15 @@ _METADATA_FIELDS = {
     "algorithm", "field", "coordinate_order", "backend_revision",
     "slope_tie_relative_tolerance", "sky_version", "grouping_lost",
 }
+
+
+def _plot_filtered_landscape(grid, landscape) -> None:
+    from multipers.plots import plot_surfaces
+
+    plot_surfaces(
+        (grid, np.swapaxes(landscape, -1, -2)),
+        contour=False,
+    )
 
 
 @dataclass(frozen=True)
@@ -183,11 +194,12 @@ class _PythonSkyscraperInvariant:
         ranks[:, self.x_grid > target[0]] = 0
         return ranks
 
-    def filtered_landscape(self, theta, k=1) -> np.ndarray:
+    def filtered_landscape(self, theta, k=1, plot=False) -> np.ndarray:
         """Compute filtered Skyscraper landscape; ``k`` is number of levels.
 
         Upstream levels are 1-indexed; returned axis 0 stores levels 1 through
-        ``k``. Requires regular x/y grids with positive steps.
+        ``k``. Requires regular x/y grids with positive steps. Set ``plot=True``
+        to plot every level with :func:`multipers.plots.plot_surfaces`.
         """
         k = index(k)
         if k < 1:
@@ -205,7 +217,10 @@ class _PythonSkyscraperInvariant:
         from multipers import _skyscraper_interface
 
         if _skyscraper_interface.available():
-            return _skyscraper_interface.filtered_landscape(self, theta, k)
+            out = _skyscraper_interface.filtered_landscape(self, theta, k)
+            if plot:
+                _plot_filtered_landscape((self.x_grid, self.y_grid), out)
+            return out
         step_x, slope = float(dx[0]), float(dy[0] / dx[0])
         if slope <= 0 or not np.isfinite(slope):
             raise ValueError("filtered_landscape direction must be finite.")
@@ -238,7 +253,10 @@ class _PythonSkyscraperInvariant:
                         out[level, iy + t, ix + t] = max(out[level, iy + t, ix + t], value)
                         if t and value == 0:
                             break
-        return np.minimum.accumulate(out, axis=0)
+        out = np.minimum.accumulate(out, axis=0)
+        if plot:
+            _plot_filtered_landscape((self.x_grid, self.y_grid), out)
+        return out
 
     def reference_landscape(self, theta, k=1) -> np.ndarray:
         """Alias for :meth:`filtered_landscape` retained for compatibility."""
@@ -475,6 +493,7 @@ def skyscraper_invariant(
     max_rank=7,
     grid_strategy="exact",
     resolution=None,
+    inflate=0.1,
     minpres_kwargs=None,
 ):
     """Compute fixed-grid Skyscraper invariant of a 2-parameter module."""
@@ -498,19 +517,28 @@ def skyscraper_invariant(
         raise ValueError("degree must be non-negative.")
     if grid is None:
         grid = compute_grid(slicer, strategy=grid_strategy, resolution=resolution)
-    grid = tuple(np.ascontiguousarray(axis, dtype=np.float64) for axis in grid)
-    if len(grid) != 2 or any(len(axis) == 0 for axis in grid):
+    if len(grid) != 2:
+        raise ValueError("grid must contain two nonempty axes.")
+    grid_api = api_from_tensors(*grid)
+    if any(grid_api.has_grad(axis) for axis in grid):
+        _mp_logs.warn_autodiff(
+            "skyscraper_invariant converts grid axes to NumPy; grid gradients will be lost."
+        )
+    grid = tuple(grid_api.asnumpy(axis, dtype=np.float64, contiguous=True) for axis in grid)
+    if any(len(axis) == 0 for axis in grid):
         raise ValueError("grid must contain two nonempty axes.")
     if any(not np.all(np.isfinite(axis)) or np.any(np.diff(axis) <= 0) for axis in grid):
         raise ValueError("grid axes must contain finite, strictly increasing coordinates.")
     if box is None:
-        box = compute_bounding_box(slicer, inflate=0.1, relative=True)
+        box = compute_bounding_box(slicer, inflate=inflate, relative=True)
     box = np.ascontiguousarray(box, dtype=np.float64)
     if box.shape != (2, 2) or not np.all(np.isfinite(box)) or np.any(box[0] >= box[1]):
         raise ValueError("box must be a finite nonempty rectangle with shape (2, 2).")
     kwargs = {} if minpres_kwargs is None else dict(minpres_kwargs)
     if kwargs.pop("full_resolution", False):
-        raise ValueError("skyscraper_invariant requires full_resolution=False.")
+        _mp_logs.warn_superfluous_computation(
+            "skyscraper_invariant ignores `full_resolution=True`; only a minimal presentation is needed."
+        )
     presentation = slicer if slicer.is_minpres else slicer.minpres(degree=degree, full_resolution=False, **kwargs)
     summands = [summand.unsqueeze() if summand.is_squeezed else summand for summand in aida(presentation)]
     max_rank = index(max_rank)

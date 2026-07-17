@@ -278,17 +278,17 @@ def _render_instantiations_include_slicer(type_names: list[str]) -> str:
     lines.extend(
         f"template<> std::vector<std::vector<{type_name}::Cycle>> {type_name}::_get_representative_cycles(const {type_name}::Complex&, bool) = delete;"
         for type_name in type_names
-        if "GudhiCohomology" in type_name
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(
         f"template<> {type_name}::Cycle {type_name}::get_most_persistent_cycle({type_name}::Dimension, bool) = delete;"
         for type_name in type_names
-        if "GudhiCohomology" in type_name
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(
         f"template<> std::vector<std::vector<{type_name}::Cycle>> {type_name}::get_representative_cycles(bool) = delete;"
         for type_name in type_names
-        if "GudhiCohomology" in type_name
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(f"template class {type_name};" for type_name in type_names)
     lines.append("")

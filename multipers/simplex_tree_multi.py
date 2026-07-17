@@ -563,6 +563,19 @@ def _filtration_bounds(self, degrees=None, q=0, split_dimension=False):
     return np.asarray([np.nanmin(boxes, axis=(0, 1)), np.nanmax(boxes, axis=(0, 1))])
 
 
+def _normalize_filtrations(self, box=None, copy=True):
+    from multipers.slicer import _grid_normalization_box, _normalization_box, _normalize_grid
+
+    out = self.copy() if copy else self
+    if out.is_squeezed:
+        box = _grid_normalization_box(out.filtration_grid) if box is None else _normalization_box(box, out.num_parameters)
+        out.filtration_grid = _normalize_grid(out.filtration_grid, box)
+        return out
+
+    box = None if box is None else _normalization_box(box, out.num_parameters)
+    return out._normalize_filtrations_raw(box)
+
+
 def _fill_lowerstar(self, F, parameter):
     _fill_lowerstar_raw[type(self)](self, np.asarray(F, dtype=self.dtype), parameter)
     return self
@@ -799,6 +812,7 @@ def _install_python_api():
         cls.grid_squeeze = _grid_squeeze
         cls.unsqueeze = _unsqueeze
         cls.filtration_bounds = _filtration_bounds
+        cls.normalize_filtrations = _normalize_filtrations
         cls.fill_lowerstar = _fill_lowerstar
         cls.fill_distance_matrix = _fill_distance_matrix
         cls.project_on_line = _project_on_line

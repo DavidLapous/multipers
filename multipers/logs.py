@@ -27,6 +27,10 @@ class SuperfluousComputationWarning(MultipersWarning):
     enabled: bool = True
 
 
+class SlowComputationWarning(MultipersWarning):
+    enabled: bool = True
+
+
 class AutodiffWarning(MultipersWarning):
     enabled: bool = True
 
@@ -46,6 +50,7 @@ class GeometryWarning(MultipersWarning):
 _WARNING_CLASSES = {
     "copy": CopyWarning,
     "superfluous_computation": SuperfluousComputationWarning,
+    "slow_computation": SlowComputationWarning,
     "autodiff": AutodiffWarning,
     "experimental": ExperimentalWarning,
     "fallback": FallbackWarning,
@@ -55,6 +60,7 @@ _WARNING_CLASSES = {
 _DEFAULTS = {
     CopyWarning: False,
     SuperfluousComputationWarning: True,
+    SlowComputationWarning: True,
     AutodiffWarning: True,
     ExperimentalWarning: True,
     FallbackWarning: True,
@@ -99,6 +105,10 @@ def warn_copy(message: str, *, stacklevel: int = 2) -> None:
 
 def warn_superfluous_computation(message: str, *, stacklevel: int = 2) -> None:
     _emit("superfluous_computation", message, stacklevel=stacklevel)
+
+
+def warn_slow_computation(message: str, *, stacklevel: int = 2) -> None:
+    _emit("slow_computation", message, stacklevel=stacklevel)
 
 
 def warn_autodiff(message: str, *, stacklevel: int = 2) -> None:

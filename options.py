@@ -29,7 +29,7 @@ COLUMNS = [
 # Backend IDs
 BACKENDS = [
     "Matrix",  # default
-    # "Graph",
+    "Graph",
     # "Clement",
     "GudhiCohomology",
 ]
@@ -67,6 +67,9 @@ RULES = [
     "Graph|Clement => vine=True",
     "GudhiCohomology => vine=False",
     f"Graph|GudhiCohomology => column={COLUMNS[0]}",
+    "Graph => kcritical=False",
+    "Graph => value_type=int32|float64",
+    "Graph => filtration_container=Multi_parameter_filtration",
 ]
 
 # Hard requirements validated after RULES are applied.
@@ -78,4 +81,6 @@ REQUIRED_SLICER_COMBINATIONS = [
     f"backend=Matrix, vine=False, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
     f"backend=Matrix, vine=False, kcritical=True, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
     f"backend=Matrix, vine=False, kcritical=True, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Graph, vine=True, kcritical=False, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Graph, vine=True, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
 ]

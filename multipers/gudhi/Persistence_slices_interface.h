@@ -14,7 +14,7 @@
 #include "gudhi/Degree_rips_bifiltration.h"
 #include "gudhi/Slicer.h"
 
-#include "tmp_h0_pers/mma_interface_h0.h"
+#include "graph_mph0/slicer_backend.h"
 
 namespace multipers::tmp_interface {
 
@@ -117,7 +117,7 @@ using MatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineya
 template <Available_columns col>
 using ClementMatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineyard<Multi_persistence_vineyard_chain_options<col>>;
 template <typename Filtration>
-using GraphBackendVine = Gudhi::multiparameter::truc_interface::Persistence_backend_h0<StructureStuff<Filtration>>;
+using GraphBackendVine = multipers::graph_mph0::Slicer_backend<StructureStuff<Filtration>>;
 
 template <typename value_type = float>
 using Filtration_value = Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, true>;

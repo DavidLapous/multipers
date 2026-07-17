@@ -361,6 +361,7 @@ def plot_surface(
     discrete_surface: Optional[bool] = None,
     has_negative_values: Optional[bool | np.bool_] = None,
     contour: bool = True,
+    colorbar: bool = True,
     threshold_max=10,
     threshold_min=-10,
     **plt_args,
@@ -433,18 +434,19 @@ def plot_surface(
         im = ax.pcolormesh(
             grid[0], grid[1], hf.T, cmap=cmap, norm=norm, shading="flat", **plt_args
         )
-        cbar = fig.colorbar(
-            cm.ScalarMappable(cmap=cmap, norm=norm),
-            spacing="proportional",
-            ax=ax,
-        )
-        # Limit the number of ticks to 10
-        if len(bounds) > 10:
-            indices = np.linspace(0, len(bounds) - 1, 10, dtype=int)
-            ticks = bounds[indices]
-        else:
-            ticks = bounds
-        cbar.set_ticks(ticks=ticks, labels=ticks)
+        if colorbar:
+            cbar = fig.colorbar(
+                cm.ScalarMappable(cmap=cmap, norm=norm),
+                spacing="proportional",
+                ax=ax,
+            )
+            # Limit the number of ticks to 10
+            if len(bounds) > 10:
+                indices = np.linspace(0, len(bounds) - 1, 10, dtype=int)
+                ticks = bounds[indices]
+            else:
+                ticks = bounds
+            cbar.set_ticks(ticks=ticks, labels=ticks)
         return im
 
     if contour:

@@ -530,7 +530,19 @@ NB_MODULE(_skyscraper_interface, m) {
           },
           "theta"_a,
           "target"_a)
-      .def("filtered_landscape", &landscape, "theta"_a, "k"_a = 1)
+      .def(
+          "filtered_landscape",
+          [](const SkyscraperInvariant& self, double theta, std::size_t k, bool plot) {
+            auto out = landscape(self, theta, k);
+            if (plot)
+              nb::module_::import_("multipers.invariants.skyscraper")
+                  .attr("_plot_filtered_landscape")(
+                      nb::make_tuple(vector_array(self.result.x_grid), vector_array(self.result.y_grid)), out);
+            return out;
+          },
+          "theta"_a,
+          "k"_a = 1,
+          "plot"_a = false)
       .def("reference_landscape", &landscape, "theta"_a, "k"_a = 1)
       .def(
           "filtered_landscape_difference",

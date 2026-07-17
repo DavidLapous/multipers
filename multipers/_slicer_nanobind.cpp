@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -31,6 +32,7 @@
 #include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
+#include "graph_mph0/nanobind_interface.hpp"
 #include "gudhi/Multi_parameter_filtered_complex.h"
 #include "gudhi/Multi_persistence/Box.h"
 #include "gudhi/representative_cycle_intersection.hpp"
@@ -46,6 +48,7 @@
 #include "nanobind_mma_registry_helpers.hpp"
 #include "nanobind_object_utils.hpp"
 #include "nanobind_slicer_serialization.hpp"
+#include "slicer_landscapes.hpp"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -2181,6 +2184,14 @@ NB_MODULE(_slicer_nanobind, m) {
 
   mpnb::bind_generator_basis(m);
   mpnb::bind_all_slicers(mpnb::SlicerDescriptorList{}, m, available_slicers);
+
+  m.def("_graph_mph0_raw",
+        &mpnb::graph_mph0_raw,
+        "boundary_indptr"_a,
+        "boundary_indices"_a,
+        "dimensions"_a,
+        "grades"_a,
+        "degree"_a);
 
   m.def(
       "build_contiguous_f64_slicer_from_packed_f64",

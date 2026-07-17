@@ -398,6 +398,60 @@ def _inflate_box(box, inflate, relative, api):
     return api.stack((box[0] - padding, box[1] + padding))
 
 
+def _normalization_box(box, num_parameters):
+    api = api_from_tensor(box)
+    box = api.astensor(box)
+    if box.shape != (2, num_parameters):
+        raise ValueError(f"Expected box shape (2, {num_parameters}). Got {box.shape}.")
+    if bool(api.asnumpy(api.any(box[1] < box[0]))):
+        raise ValueError("Box upper corner must be coordinatewise >= lower corner.")
+    return box
+
+
+def _grid_normalization_box(grid):
+    if not grid:
+        return np.empty((2, 0), dtype=np.float64)
+    api = api_from_tensors(*grid)
+    device = api.device(grid[0])
+    lower, upper = [], []
+    for values in grid:
+        values = api.astensor(values, device=device)
+        if api.size(values) == 0:
+            bounds = api.astensor((0.0, 1.0), device=device)
+            lower.append(bounds[0])
+            upper.append(bounds[1])
+            continue
+        finite = (values == values) & (api.abs(values) != api.inf)
+        has_finite = api.any(finite)
+        zero = api.zeros((), dtype=values.dtype, device=device)
+        lower.append(
+            api.where(has_finite, api.minvalues(api.where(finite, values, api.inf)), zero)
+        )
+        upper.append(
+            api.where(has_finite, api.maxvalues(api.where(finite, values, -api.inf)), zero + 1)
+        )
+    return api.stack((api.stack(lower), api.stack(upper)))
+
+
+def _normalize_grid(grid, box):
+    if not grid:
+        return []
+    api = api_from_tensors(*grid)
+    device = api.device(grid[0])
+    box = api.astensor(box, device=device)
+    lower, upper = box
+    scale = api.where(upper > lower, upper - lower, upper * 0 + 1)
+    return [
+        api.where(
+            (values == values) & (api.abs(values) != api.inf),
+            (values - lower[parameter]) / scale[parameter],
+            values,
+        )
+        for parameter, raw_values in enumerate(grid)
+        for values in (api.astensor(raw_values, device=device),)
+    ]
+
+
 def compute_bounding_box(stuff, inflate=0.0, *, relative=False):
     r"""
     Returns an array of shape (2, num_parameters)
