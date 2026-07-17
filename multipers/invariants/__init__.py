@@ -173,6 +173,7 @@ def hilbert_function(
     ignore_infinite_filtration_values: bool = True,
     mobius: str = "auto",
     plot: bool = False,
+    colorbar: bool = True,
     plot_kwargs: Optional[dict] = None,
     **kwargs,
 ):
@@ -223,6 +224,8 @@ def hilbert_function(
     plot : bool, default=False
         If true, plot the dense Hilbert tensor(s) as discrete surfaces and still
         return the tensor data.
+    colorbar : bool, default=True
+        Whether plotted Hilbert surfaces include a colorbar.
     plot_kwargs : dict, optional
         Keyword arguments forwarded to ``multipers.plots.plot_surface`` or
         ``plot_surfaces``.
@@ -291,6 +294,7 @@ def hilbert_function(
         plot_kwargs.setdefault("has_negative_values", False)
         plot_kwargs.setdefault("threshold_min", 0)
         plot_kwargs.setdefault("threshold_max", 10)
+        plot_kwargs.setdefault("colorbar", colorbar)
         if single_output or len(out) == 1:
             from multipers.plots import plot_surface
 
