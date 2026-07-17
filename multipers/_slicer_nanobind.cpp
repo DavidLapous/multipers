@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -22,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
@@ -311,7 +313,7 @@ nb::tuple dim_barcode_to_tuple(const Barcode& barcode) {
 
 template <typename Desc, typename Wrapper, typename Value>
 nb::tuple compute_persistence_on_slices(Wrapper& self,
-                                        const nb::ndarray<const Value, nb::ndim<2> >& values,
+                                        const nb::ndarray<const Value, nb::ndim<2>, nb::c_contig>& values,
                                         bool ignore_infinite_filtration_values) {
   using Barcode = decltype(self.truc.template get_flat_barcode<true, Value, false>());
   using Concrete = std::remove_reference_t<decltype(self.truc)>;
@@ -321,7 +323,8 @@ nb::tuple compute_persistence_on_slices(Wrapper& self,
     throw nb::value_error("Expected one filtration value per generator.");
   }
   std::vector<Barcode> barcodes(num_slices);
-  Numpy_2d_span view(values);
+  typename Numpy_2d_span<Value>::Array gudhi_values(values);
+  Numpy_2d_span<Value> view(gudhi_values);
   {
     nb::gil_scoped_release release;
     if constexpr (Desc::is_vine) {
@@ -1459,188 +1462,191 @@ void bind_vine_methods(Class& cls) {
     using Value = typename Desc::value_type;
 
     cls.def(
-           "vine_update",
-           [](Wrapper& self, nb::object basepoint, nb::object direction) -> Wrapper& {
-             std::vector<Value> bp = cast_vector<Value>(basepoint);
-             std::vector<Value> dir;
-             bool has_direction = !direction.is_none();
-             if (has_direction) {
-               dir = cast_vector<Value>(direction);
-             }
-             {
-               nb::gil_scoped_release release;
-               if (has_direction) {
-                 self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp, dir));
-               } else {
-                 self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp));
-               }
-               self.truc.update_persistence_computation();
-             }
-             return self;
-           },
-           "basepoint"_a,
-           "direction"_a = nb::none(),
-           nb::rv_policy::reference_internal)
-        .def(
-            "get_representative_cycles",
-            [](Wrapper& self, bool update, nb::object idx_obj, nb::object intersect_points_obj) {
-              std::vector<int64_t> requested;
-              bool filter_cycles = !idx_obj.is_none();
-              if (filter_cycles) {
-                requested = cast_vector<int64_t>(idx_obj);
-              }
-              std::unordered_set<uint32_t> intersect_points;
-              const bool filter_points = !intersect_points_obj.is_none();
-              if (filter_points) {
-                auto requested_points = cast_vector<uint32_t>(intersect_points_obj);
-                intersect_points.insert(requested_points.begin(), requested_points.end());
-              }
-              multipers::nanobind_helpers::GeneratorBasisData generator_basis = extract_generator_basis(self);
-              if (filter_points && generator_basis.active && generator_basis.degree != 1) {
-                throw nb::value_error("intersect_points with keep_generators is only supported in degree 1.");
-              }
-              std::vector<std::vector<std::vector<std::vector<uint32_t>>>> out_cpp;
-              std::vector<std::vector<uint8_t>> keep_mask;
-              {
-                nb::gil_scoped_release release;
-                auto cycle_idx = self.truc.get_representative_cycles(update);
-                std::vector<std::vector<size_t>> selected_indices(cycle_idx.size());
-                if (!filter_cycles) {
-                  for (size_t i = 0; i < cycle_idx.size(); ++i) {
-                    selected_indices[i].resize(cycle_idx[i].size());
-                    for (size_t j = 0; j < cycle_idx[i].size(); ++j) {
-                      selected_indices[i][j] = j;
-                    }
-                  }
-                } else {
-                  std::vector<size_t> offsets(cycle_idx.size() + 1, 0);
-                  for (size_t i = 0; i < cycle_idx.size(); ++i) {
-                    offsets[i + 1] = offsets[i] + cycle_idx[i].size();
-                  }
-                  size_t total_cycles = offsets.back();
-                  for (int64_t raw_idx : requested) {
-                    int64_t normalized = raw_idx;
-                    if (normalized < 0) {
-                      normalized += static_cast<int64_t>(total_cycles);
-                    }
-                    if (normalized < 0 || normalized >= static_cast<int64_t>(total_cycles)) {
-                      throw nb::index_error("Representative cycle index out of range.");
-                    }
-                    size_t current = static_cast<size_t>(normalized);
-                    auto it = std::upper_bound(offsets.begin(), offsets.end(), current);
-                    size_t dim = static_cast<size_t>(std::distance(offsets.begin(), it) - 1);
-                    selected_indices[dim].push_back(current - offsets[dim]);
-                  }
-                }
-                out_cpp.resize(cycle_idx.size());
-                keep_mask.resize(cycle_idx.size());
-                for (size_t i = 0; i < cycle_idx.size(); ++i) {
-                  out_cpp[i].resize(selected_indices[i].size());
-                  keep_mask[i].assign(selected_indices[i].size(), 0);
-                }
-                multipers::core::RepresentativeCycleIntersection intersection(
-                    self.truc.get_boundaries(), self.truc.get_dimensions(), intersect_points);
-                for (size_t i = 0; i < cycle_idx.size(); ++i) {
-                  const bool use_generator_basis =
-                      generator_basis.active && static_cast<int>(i) == generator_basis.degree;
-                  for (size_t j = 0; j < selected_indices[i].size(); ++j) {
-                    const auto& cycle = cycle_idx[i][selected_indices[i][j]];
-                    if (!filter_points) {
-                      keep_mask[i][j] = 1;
-                    } else if (!use_generator_basis && intersection.intersects(cycle)) {
-                      keep_mask[i][j] = 1;
-                    }
-                  }
-                }
-                tbb::parallel_for(size_t(0), cycle_idx.size(), [&](size_t i) {
-                  const bool use_generator_basis =
-                      generator_basis.active && static_cast<int>(i) == generator_basis.degree;
-                  for (size_t j = 0; j < selected_indices[i].size(); ++j) {
-                    size_t selected_idx = selected_indices[i][j];
-                    if (filter_points && !use_generator_basis && !keep_mask[i][j]) {
-                      continue;
-                    }
-                    if (!cycle_idx[i][selected_idx].empty()) {
-                      if (use_generator_basis) {
-                        out_cpp[i][j] = expand_cycle_in_generator_basis(cycle_idx[i][selected_idx], generator_basis);
-                      } else if (self.truc.get_boundary(cycle_idx[i][selected_idx][0]).empty()) {
-                        out_cpp[i][j] = {std::vector<uint32_t>{}};
-                      } else {
-                        out_cpp[i][j].resize(cycle_idx[i][selected_idx].size());
-                        for (size_t k = 0; k < cycle_idx[i][selected_idx].size(); ++k) {
-                          out_cpp[i][j][k] = self.truc.get_boundary(cycle_idx[i][selected_idx][k]);
-                        }
-                      }
-                      if (use_generator_basis &&
-                          (!filter_points ||
-                           multipers::core::vertex_boundaries_intersect_points(out_cpp[i][j], intersect_points))) {
-                        keep_mask[i][j] = 1;
-                      }
-                    }
-                  }
-                });
-              }
-              nb::list out;
-              for (size_t i = 0; i < out_cpp.size(); ++i) {
-                nb::list dim_cycles;
-                for (size_t j = 0; j < out_cpp[i].size(); ++j) {
-                  if (!keep_mask[i][j]) {
-                    continue;
-                  }
-                  nb::list cycle;
-                  for (size_t k = 0; k < out_cpp[i][j].size(); ++k) {
-                    auto boundary = std::move(out_cpp[i][j][k]);
-                    cycle.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
-                  }
-                  dim_cycles.append(cycle);
-                }
-                out.append(dim_cycles);
-              }
-              return out;
-            },
-            "update"_a = true,
-            "idx"_a = nb::none(),
-            "intersect_points"_a = nb::none())
-        .def(
-            "get_most_persistent_cycle",
-            [](Wrapper& self, int dim, bool update, bool idx) -> nb::object {
-              std::vector<uint32_t> cycle_idx;
-              std::vector<std::vector<uint32_t>> out_cpp;
-              {
-                nb::gil_scoped_release release;
-                cycle_idx = self.truc.get_most_persistent_cycle(dim, update);
-                if (!idx && !cycle_idx.empty()) {
-                  if (self.truc.get_boundary(cycle_idx[0]).empty()) {
-                    out_cpp.push_back(std::vector<uint32_t>{});
-                  } else {
-                    out_cpp.resize(cycle_idx.size());
-                    for (size_t k = 0; k < cycle_idx.size(); ++k) {
-                      out_cpp[k] = self.truc.get_boundary(cycle_idx[k]);
-                    }
-                  }
-                }
-              }
-              if (idx) {
-                return nb::cast(owned_array<uint32_t>(std::move(cycle_idx), {cycle_idx.size()}));
-              }
-              nb::list out;
-              for (size_t k = 0; k < out_cpp.size(); ++k) {
-                auto boundary = std::move(out_cpp[k]);
-                out.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
-              }
-              return nb::object(out);
-            },
-            "dim"_a = 1,
-            "update"_a = true,
-            "idx"_a = false)
-        .def("get_permutation", [](Wrapper& self) -> nb::ndarray<nb::numpy, uint32_t> {
-          std::vector<uint32_t> order;
+        "vine_update",
+        [](Wrapper& self, nb::object basepoint, nb::object direction) -> Wrapper& {
+          std::vector<Value> bp = cast_vector<Value>(basepoint);
+          std::vector<Value> dir;
+          bool has_direction = !direction.is_none();
+          if (has_direction) {
+            dir = cast_vector<Value>(direction);
+          }
           {
             nb::gil_scoped_release release;
-            order = self.truc.get_current_order();
+            if (has_direction) {
+              self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp, dir));
+            } else {
+              self.truc.push_to(Gudhi::multi_persistence::Line<Value>(bp));
+            }
+            self.truc.update_persistence_computation();
           }
-          return owned_array<uint32_t>(std::move(order), {order.size()});
-        });
+          return self;
+        },
+        "basepoint"_a,
+        "direction"_a = nb::none(),
+        nb::rv_policy::reference_internal);
+    using Persistence = typename Desc::concrete::Persistence;
+    if constexpr (Persistence::has_rep_cycles) {
+      cls.def(
+             "get_representative_cycles",
+             [](Wrapper& self, bool update, nb::object idx_obj, nb::object intersect_points_obj) {
+               std::vector<int64_t> requested;
+               bool filter_cycles = !idx_obj.is_none();
+               if (filter_cycles) {
+                 requested = cast_vector<int64_t>(idx_obj);
+               }
+               std::unordered_set<uint32_t> intersect_points;
+               const bool filter_points = !intersect_points_obj.is_none();
+               if (filter_points) {
+                 auto requested_points = cast_vector<uint32_t>(intersect_points_obj);
+                 intersect_points.insert(requested_points.begin(), requested_points.end());
+               }
+               multipers::nanobind_helpers::GeneratorBasisData generator_basis = extract_generator_basis(self);
+               if (filter_points && generator_basis.active && generator_basis.degree != 1) {
+                 throw nb::value_error("intersect_points with keep_generators is only supported in degree 1.");
+               }
+               std::vector<std::vector<std::vector<std::vector<uint32_t>>>> out_cpp;
+               std::vector<std::vector<uint8_t>> keep_mask;
+               {
+                 nb::gil_scoped_release release;
+                 auto cycle_idx = self.truc.get_representative_cycles(update);
+                 std::vector<std::vector<size_t>> selected_indices(cycle_idx.size());
+                 if (!filter_cycles) {
+                   for (size_t i = 0; i < cycle_idx.size(); ++i) {
+                     selected_indices[i].resize(cycle_idx[i].size());
+                     for (size_t j = 0; j < cycle_idx[i].size(); ++j) {
+                       selected_indices[i][j] = j;
+                     }
+                   }
+                 } else {
+                   std::vector<size_t> offsets(cycle_idx.size() + 1, 0);
+                   for (size_t i = 0; i < cycle_idx.size(); ++i) {
+                     offsets[i + 1] = offsets[i] + cycle_idx[i].size();
+                   }
+                   size_t total_cycles = offsets.back();
+                   for (int64_t raw_idx : requested) {
+                     int64_t normalized = raw_idx;
+                     if (normalized < 0) {
+                       normalized += static_cast<int64_t>(total_cycles);
+                     }
+                     if (normalized < 0 || normalized >= static_cast<int64_t>(total_cycles)) {
+                       throw nb::index_error("Representative cycle index out of range.");
+                     }
+                     size_t current = static_cast<size_t>(normalized);
+                     auto it = std::upper_bound(offsets.begin(), offsets.end(), current);
+                     size_t dim = static_cast<size_t>(std::distance(offsets.begin(), it) - 1);
+                     selected_indices[dim].push_back(current - offsets[dim]);
+                   }
+                 }
+                 out_cpp.resize(cycle_idx.size());
+                 keep_mask.resize(cycle_idx.size());
+                 for (size_t i = 0; i < cycle_idx.size(); ++i) {
+                   out_cpp[i].resize(selected_indices[i].size());
+                   keep_mask[i].assign(selected_indices[i].size(), 0);
+                 }
+                 multipers::core::RepresentativeCycleIntersection intersection(
+                     self.truc.get_boundaries(), self.truc.get_dimensions(), intersect_points);
+                 for (size_t i = 0; i < cycle_idx.size(); ++i) {
+                   const bool use_generator_basis =
+                       generator_basis.active && static_cast<int>(i) == generator_basis.degree;
+                   for (size_t j = 0; j < selected_indices[i].size(); ++j) {
+                     const auto& cycle = cycle_idx[i][selected_indices[i][j]];
+                     if (!filter_points) {
+                       keep_mask[i][j] = 1;
+                     } else if (!use_generator_basis && intersection.intersects(cycle)) {
+                       keep_mask[i][j] = 1;
+                     }
+                   }
+                 }
+                 tbb::parallel_for(size_t(0), cycle_idx.size(), [&](size_t i) {
+                   const bool use_generator_basis =
+                       generator_basis.active && static_cast<int>(i) == generator_basis.degree;
+                   for (size_t j = 0; j < selected_indices[i].size(); ++j) {
+                     size_t selected_idx = selected_indices[i][j];
+                     if (filter_points && !use_generator_basis && !keep_mask[i][j]) {
+                       continue;
+                     }
+                     if (!cycle_idx[i][selected_idx].empty()) {
+                       if (use_generator_basis) {
+                         out_cpp[i][j] = expand_cycle_in_generator_basis(cycle_idx[i][selected_idx], generator_basis);
+                       } else if (self.truc.get_boundary(cycle_idx[i][selected_idx][0]).empty()) {
+                         out_cpp[i][j] = {std::vector<uint32_t>{}};
+                       } else {
+                         out_cpp[i][j].resize(cycle_idx[i][selected_idx].size());
+                         for (size_t k = 0; k < cycle_idx[i][selected_idx].size(); ++k) {
+                           out_cpp[i][j][k] = self.truc.get_boundary(cycle_idx[i][selected_idx][k]);
+                         }
+                       }
+                       if (use_generator_basis &&
+                           (!filter_points ||
+                            multipers::core::vertex_boundaries_intersect_points(out_cpp[i][j], intersect_points))) {
+                         keep_mask[i][j] = 1;
+                       }
+                     }
+                   }
+                 });
+               }
+               nb::list out;
+               for (size_t i = 0; i < out_cpp.size(); ++i) {
+                 nb::list dim_cycles;
+                 for (size_t j = 0; j < out_cpp[i].size(); ++j) {
+                   if (!keep_mask[i][j]) {
+                     continue;
+                   }
+                   nb::list cycle;
+                   for (size_t k = 0; k < out_cpp[i][j].size(); ++k) {
+                     auto boundary = std::move(out_cpp[i][j][k]);
+                     cycle.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
+                   }
+                   dim_cycles.append(cycle);
+                 }
+                 out.append(dim_cycles);
+               }
+               return out;
+             },
+             "update"_a = true,
+             "idx"_a = nb::none(),
+             "intersect_points"_a = nb::none())
+          .def(
+              "get_most_persistent_cycle",
+              [](Wrapper& self, int dim, bool update, bool idx) -> nb::object {
+                std::vector<uint32_t> cycle_idx;
+                std::vector<std::vector<uint32_t>> out_cpp;
+                {
+                  nb::gil_scoped_release release;
+                  cycle_idx = self.truc.get_most_persistent_cycle(dim, update);
+                  if (!idx && !cycle_idx.empty()) {
+                    if (self.truc.get_boundary(cycle_idx[0]).empty()) {
+                      out_cpp.push_back(std::vector<uint32_t>{});
+                    } else {
+                      out_cpp.resize(cycle_idx.size());
+                      for (size_t k = 0; k < cycle_idx.size(); ++k) {
+                        out_cpp[k] = self.truc.get_boundary(cycle_idx[k]);
+                      }
+                    }
+                  }
+                }
+                if (idx) {
+                  return nb::cast(owned_array<uint32_t>(std::move(cycle_idx), {cycle_idx.size()}));
+                }
+                nb::list out;
+                for (size_t k = 0; k < out_cpp.size(); ++k) {
+                  auto boundary = std::move(out_cpp[k]);
+                  out.append(owned_array<uint32_t>(std::move(boundary), {boundary.size()}));
+                }
+                return nb::object(out);
+              },
+              "dim"_a = 1,
+              "update"_a = true,
+              "idx"_a = false);
+    }
+    cls.def("get_permutation", [](Wrapper& self) -> nb::ndarray<nb::numpy, uint32_t> {
+      std::vector<uint32_t> order;
+      {
+        nb::gil_scoped_release release;
+        order = self.truc.get_current_order();
+      }
+      return owned_array<uint32_t>(std::move(order), {order.size()});
+    });
   }
 }
 
@@ -1739,6 +1745,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
           "degree"_a,
           "is_minres"_a = false)
       .def(
+          "_mark_pres",
+          [](Wrapper& self, int degree) { multipers::nanobind_helpers::mark_slicer_pres(self, degree); },
+          "degree"_a)
+      .def(
           "_copy_from_any",
           [](Wrapper& self, nb::handle other) -> Wrapper& {
             if (!try_copy_from_existing<Wrapper, Concrete>(self, other)) {
@@ -1821,10 +1831,6 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                     if constexpr (std::is_floating_point_v<Value>) {
                       return nb::cast(std::numeric_limits<Value>::infinity());
                     }
-      .def(
-          "_mark_pres",
-          [](Wrapper& self, int degree) { multipers::nanobind_helpers::mark_slicer_pres(self, degree); },
-          "degree"_a)
                     return nb::cast(std::numeric_limits<Value>::max());
                   })
       .def("get_dimensions", [](Wrapper& self) -> nb::ndarray<nb::numpy, int32_t> { return dimensions_array(self); })
@@ -1964,7 +1970,7 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def(
           "_compute_persistence_on_slices",
           [](Wrapper& self,
-             nb::ndarray<const Value, nb::ndim<2> > values,
+             nb::ndarray<const Value, nb::ndim<2>, nb::c_contig> values,
              bool ignore_infinite_filtration_values) -> nb::tuple {
             return compute_persistence_on_slices<Desc>(self, values, ignore_infinite_filtration_values);
           },
@@ -2218,14 +2224,15 @@ nb::tuple compute_rank_signed_measure_sparse(type_list<Ds...>,
 }
 
 template <typename Desc>
-Gudhi::multi_persistence::Module_interface<double> module_approximation_from_desc(typename Desc::wrapper& wrapper,
-                                          const std::vector<double>& direction,
-                                          double max_error,
-                                          Gudhi::multi_persistence::Box<double> box,
-                                          bool threshold,
-                                          bool complete,
-                                          bool verbose,
-                                          int n_jobs) {
+Gudhi::multi_persistence::Module_interface<double> module_approximation_from_desc(
+    typename Desc::wrapper& wrapper,
+    const std::vector<double>& direction,
+    double max_error,
+    Gudhi::multi_persistence::Box<double> box,
+    bool threshold,
+    bool complete,
+    bool verbose,
+    int n_jobs) {
   if constexpr (!Desc::enable_module_approximation) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   } else {
@@ -2240,22 +2247,25 @@ Gudhi::multi_persistence::Module_interface<double> module_approximation_from_des
 }
 
 template <typename... Ds>
-Gudhi::multi_persistence::Module_interface<double> compute_module_approximation_from_slicer(type_list<Ds...>,
-                                                    nb::handle slicer,
-                                                    const std::vector<double>& direction,
-                                                    double max_error,
-                                                    Gudhi::multi_persistence::Box<double> box,
-                                                    bool threshold,
-                                                    bool complete,
-                                                    bool verbose,
-                                                    int n_jobs) {
+Gudhi::multi_persistence::Module_interface<double> compute_module_approximation_from_slicer(
+    type_list<Ds...>,
+    nb::handle slicer,
+    const std::vector<double>& direction,
+    double max_error,
+    Gudhi::multi_persistence::Box<double> box,
+    bool threshold,
+    bool complete,
+    bool verbose,
+    int n_jobs) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type for module approximation.");
   }
-  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> Gudhi::multi_persistence::Module_interface<double> {
-    auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
-    return module_approximation_from_desc<D>(wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs);
-  });
+  return dispatch_slicer_by_template_id(template_id_of(slicer),
+                                        [&]<typename D>() -> Gudhi::multi_persistence::Module_interface<double> {
+                                          auto& wrapper = nb::cast<typename D::wrapper&>(slicer);
+                                          return module_approximation_from_desc<D>(
+                                              wrapper, direction, max_error, box, threshold, complete, verbose, n_jobs);
+                                        });
 }
 
 template <typename Desc>
@@ -2320,6 +2330,11 @@ NB_MODULE(_slicer_nanobind, m) {
         "dimensions"_a,
         "grades"_a,
         "degree"_a);
+  m.def("_graph_mph0_minimal_presentation",
+        &mpnb::graph_mph0_minimal_presentation,
+        "slicer"_a,
+        "degree"_a,
+        "full_resolution"_a);
 
   m.def(
       "build_contiguous_f64_slicer_from_packed_f64",
