@@ -14,6 +14,9 @@ from multipers import _slicer_nanobind as _nb
 from multipers.array_api import api_from_tensor, api_from_tensors
 import multipers.array_api.numpy as npapi
 from multipers.grids import (
+    _grid_normalization_box,
+    _normalization_box,
+    _normalize_grid,
     compute_grid,
     evaluate_in_grid,
     sanitize_grid,
@@ -168,6 +171,16 @@ def _get_filtration_grid(self, grid_strategy="exact", **infer_grid_kwargs):
     return compute_grid(
         self.get_filtrations_values().T, strategy=grid_strategy, **infer_grid_kwargs
     )
+
+
+def _normalize_filtrations(self, box=None):
+    if self.is_squeezed:
+        box = _grid_normalization_box(self.filtration_grid) if box is None else _normalization_box(box, self.num_parameters)
+        self.filtration_grid = _normalize_grid(self.filtration_grid, box)
+        return self
+
+    box = None if box is None else _normalization_box(box, self.num_parameters)
+    return self._normalize_filtrations_raw(box)
 
 
 def _bp_dir_to_2d(basepoints, directions, api):
@@ -770,6 +783,7 @@ def _install_python_api():
         cls.persistence_on_lines = _persistence_on_lines
         cls.filtration_bounds = _filtration_bounds
         cls.get_filtration_grid = _get_filtration_grid
+        cls.normalize_filtrations = _normalize_filtrations
         cls.grid_squeeze = _grid_squeeze
         cls._clean_filtration_grid = _clean_filtration_grid
         cls.minpres = _minpres

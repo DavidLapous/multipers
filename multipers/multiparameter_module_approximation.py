@@ -488,7 +488,9 @@ def module_approximation_from_slicer(
     if unsqueeze_grid is not None:
         if verbose:
             print("Reevaluating module in filtration grid...", end="", flush=True)
-        approx_mod.evaluate_in_grid(unsqueeze_grid)
+        approx_mod.evaluate_in_grid(
+            [np.ascontiguousarray(axis, dtype=dtype) for axis in unsqueeze_grid]
+        )
         from multipers.grids import compute_bounding_box
 
         if len(approx_mod):
@@ -546,6 +548,8 @@ def _infer_max_error_from_box(
     ignore_warnings: bool,
 ) -> float:
     num_parameters = box.shape[1]
+    if num_parameters < 2:
+        raise ValueError("module_approximation requires at least 2 parameters.")
     widths = np.abs(box[1] - box[0])
     terms = np.prod(np.where(np.eye(num_parameters, dtype=bool), 1.0, widths), axis=1)
     if direction.size:

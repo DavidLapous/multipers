@@ -179,10 +179,10 @@ def _validate_algebra_inputs(source, target):
     _validate_squeezed_grids(source, target)
 
 
-def normalize(filtered_complex, box=None, copy=True):
-    """Normalize filtration values into the affine coordinates of ``box``."""
+def normalize(filtered_complex, box=None):
+    """Normalize filtration values in place into the affine coordinates of ``box``."""
     if is_slicer(filtered_complex, allow_minpres=False) or is_simplextree_multi(filtered_complex):
-        return filtered_complex.normalize_filtrations(box=box, copy=copy)
+        return filtered_complex.normalize_filtrations(box=box)
     raise ValueError(f"Expected a Slicer or SimplexTreeMulti, got {type(filtered_complex)=}.")
 
 

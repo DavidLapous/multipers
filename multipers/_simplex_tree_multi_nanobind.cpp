@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <iterator>
+#include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -116,6 +118,78 @@ inline nb::object get_simplextree_class_from_template_id(int template_id) {
 }
 
 inline bool is_simplextree_multi(nb::handle input) { return is_simplextree_object(input); }
+
+template <typename Wrapper, typename Value>
+Wrapper& normalize_filtrations_inplace(Wrapper& self, nb::object box_obj) {
+  if constexpr (!std::is_floating_point_v<Value>) {
+    throw nb::type_error("normalize requires a floating-point dtype for unsqueezed SimplexTreeMulti inputs.");
+  } else {
+    const size_t num_parameters = self.tree.num_parameters();
+    std::vector<double> lower(num_parameters, std::numeric_limits<double>::infinity());
+    std::vector<double> upper(num_parameters, -std::numeric_limits<double>::infinity());
+
+    if (!box_obj.is_none()) {
+      auto box = matrix_from_handle<double>(box_obj);
+      if (box.size() != 2 || box[0].size() != num_parameters || box[1].size() != num_parameters) {
+        throw nb::value_error("box must have shape (2, num_parameters).");
+      }
+      lower = std::move(box[0]);
+      upper = std::move(box[1]);
+    }
+
+    {
+      nb::gil_scoped_release release;
+      if (box_obj.is_none()) {
+        std::vector<bool> has_finite(num_parameters, false);
+        for (auto it = self.tree.get_simplices_iterator_begin(); it != self.tree.get_simplices_iterator_end(); ++it) {
+          auto simplex_and_filtration = self.tree.get_simplex_and_filtration(*it);
+          auto& filtration = *simplex_and_filtration.second;
+          for (size_t g = 0; g < filtration.num_generators(); ++g) {
+            for (size_t p = 0; p < num_parameters; ++p) {
+              const double value = static_cast<double>(filtration(g, p));
+              if (!std::isfinite(value)) {
+                continue;
+              }
+              lower[p] = std::min(lower[p], value);
+              upper[p] = std::max(upper[p], value);
+              has_finite[p] = true;
+            }
+          }
+        }
+        for (size_t p = 0; p < num_parameters; ++p) {
+          if (!has_finite[p]) {
+            lower[p] = 0.0;
+            upper[p] = 1.0;
+          }
+        }
+      }
+
+      std::vector<double> scale(num_parameters, 1.0);
+      for (size_t p = 0; p < num_parameters; ++p) {
+        if (upper[p] < lower[p]) {
+          throw std::invalid_argument("box upper corner must be coordinatewise >= lower corner.");
+        }
+        if (upper[p] > lower[p]) {
+          scale[p] = upper[p] - lower[p];
+        }
+      }
+
+      for (auto it = self.tree.get_simplices_iterator_begin(); it != self.tree.get_simplices_iterator_end(); ++it) {
+        auto simplex_and_filtration = self.tree.get_simplex_and_filtration(*it);
+        auto& filtration = *simplex_and_filtration.second;
+        for (size_t g = 0; g < filtration.num_generators(); ++g) {
+          for (size_t p = 0; p < num_parameters; ++p) {
+            const double value = static_cast<double>(filtration(g, p));
+            if (std::isfinite(value)) {
+              filtration(g, p) = static_cast<Value>((value - lower[p]) / scale[p]);
+            }
+          }
+        }
+      }
+    }
+    return self;
+  }
+}
 
 template <typename Wrapper, typename Filtration, typename T, bool IsKCritical, bool SortRows, typename Iterator>
 class SimplexEntryIterator {
@@ -1116,6 +1190,13 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
              }
              return nb::cast(out);
            })
+      .def(
+          "_normalize_filtrations_raw",
+          [](Wrapper& self, nb::object box) -> Wrapper& {
+            return normalize_filtrations_inplace<Wrapper, Value>(self, box);
+          },
+          "box"_a = nb::none(),
+          nb::rv_policy::reference_internal)
       .def("_get_to_std_state",
            [](Wrapper& self, nb::handle basepoint_handle, nb::handle direction_handle, int parameter) {
              auto basepoint = vector_from_handle<double>(basepoint_handle);

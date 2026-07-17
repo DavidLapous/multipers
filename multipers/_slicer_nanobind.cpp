@@ -675,6 +675,77 @@ nb::ndarray<nb::numpy, Value> filtration_values_array(Wrapper& self) {
   }
 }
 
+template <typename Wrapper, typename Value, bool IsDegreeRips>
+Wrapper& normalize_filtrations_inplace(Wrapper& self, nb::object box_obj) {
+  if constexpr (IsDegreeRips) {
+    throw nb::type_error("Degree-Rips slicers cannot be affinely normalized in-place.");
+  } else if constexpr (!std::is_floating_point_v<Value>) {
+    throw nb::type_error("normalize_filtrations requires a floating-point dtype for unsqueezed slicers.");
+  } else {
+    const size_t num_parameters = self.truc.get_number_of_parameters();
+    std::vector<double> lower(num_parameters, std::numeric_limits<double>::infinity());
+    std::vector<double> upper(num_parameters, -std::numeric_limits<double>::infinity());
+
+    if (!box_obj.is_none()) {
+      auto box = cast_matrix<double>(box_obj);
+      if (box.size() != 2 || box[0].size() != num_parameters || box[1].size() != num_parameters) {
+        throw nb::value_error("box must have shape (2, num_parameters).");
+      }
+      lower = std::move(box[0]);
+      upper = std::move(box[1]);
+    }
+
+    {
+      nb::gil_scoped_release release;
+      auto& filtrations = self.truc.get_filtration_values();
+      if (box_obj.is_none()) {
+        std::vector<bool> has_finite(num_parameters, false);
+        for (auto& filtration : filtrations) {
+          for (size_t g = 0; g < filtration.num_generators(); ++g) {
+            for (size_t p = 0; p < num_parameters; ++p) {
+              const double value = static_cast<double>(filtration(g, p));
+              if (!std::isfinite(value)) {
+                continue;
+              }
+              lower[p] = std::min(lower[p], value);
+              upper[p] = std::max(upper[p], value);
+              has_finite[p] = true;
+            }
+          }
+        }
+        for (size_t p = 0; p < num_parameters; ++p) {
+          if (!has_finite[p]) {
+            lower[p] = 0.0;
+            upper[p] = 1.0;
+          }
+        }
+      }
+
+      std::vector<double> scale(num_parameters, 1.0);
+      for (size_t p = 0; p < num_parameters; ++p) {
+        if (upper[p] < lower[p]) {
+          throw std::invalid_argument("box upper corner must be coordinatewise >= lower corner.");
+        }
+        if (upper[p] > lower[p]) {
+          scale[p] = upper[p] - lower[p];
+        }
+      }
+
+      for (auto& filtration : filtrations) {
+        for (size_t g = 0; g < filtration.num_generators(); ++g) {
+          for (size_t p = 0; p < num_parameters; ++p) {
+            const double value = static_cast<double>(filtration(g, p));
+            if (std::isfinite(value)) {
+              filtration(g, p) = static_cast<Value>((value - lower[p]) / scale[p]);
+            }
+          }
+        }
+      }
+    }
+    return self;
+  }
+}
+
 template <typename TargetWrapper, typename TargetConcrete>
 bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
   if (!has_slicer_template_id(source)) {
@@ -2001,6 +2072,13 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
             }
             return self;
           },
+          nb::rv_policy::reference_internal)
+      .def(
+          "_normalize_filtrations_raw",
+          [](Wrapper& self, nb::object box) -> Wrapper& {
+            return normalize_filtrations_inplace<Wrapper, Value, Desc::is_degree_rips>(self, box);
+          },
+          "box"_a = nb::none(),
           nb::rv_policy::reference_internal)
       .def(
           "_clean_filtration_grid_raw",
