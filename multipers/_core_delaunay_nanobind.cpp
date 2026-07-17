@@ -3,6 +3,7 @@
 #include <nanobind/stl/string.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -22,6 +23,7 @@
 #include "nanobind_dense_array_utils.hpp"
 
 #include <gudhi/Alpha_complex.h>
+#include <gudhi/Alpha_complex_3d.h>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -39,6 +41,10 @@ using multipers::nanobind_helpers::visit_simplextree_wrapper;
 
 template <typename Kernel>
 using AlphaComplex = Gudhi::alpha_complex::Alpha_complex<Kernel>;
+
+template <Gudhi::alpha_complex::complexity Complexity>
+using PeriodicAlphaComplex =
+    Gudhi::alpha_complex::Alpha_complex_3d<Complexity, false, true>;
 
 template <typename Kernel>
 std::vector<typename AlphaComplex<Kernel>::Point_d> point_cloud_from_array(
@@ -99,6 +105,67 @@ std::vector<double> compute_knn_selected(const std::vector<typename AlphaComplex
     }
   });
   return out;
+}
+
+std::vector<double> compute_periodic_knn_selected(
+    const std::vector<std::array<double, 3>>& point_cloud,
+    const std::vector<int64_t>& ks,
+    const std::array<double, 6>& domain) {
+  const size_t num_points = point_cloud.size();
+  const size_t num_ks = ks.size();
+  const size_t max_k = static_cast<size_t>(ks.back());
+  const std::array<double, 3> side_lengths = {
+      domain[3] - domain[0], domain[4] - domain[1], domain[5] - domain[2]};
+
+  std::vector<double> out(num_points * num_ks, 0.0);
+  tbb::parallel_for(size_t{0}, num_points, [&](size_t i) {
+    std::vector<double> squared_distances(num_points);
+    for (size_t j = 0; j < num_points; ++j) {
+      double squared_distance = 0.0;
+      for (size_t axis = 0; axis < 3; ++axis) {
+        double delta = std::abs(point_cloud[i][axis] - point_cloud[j][axis]);
+        delta = std::min(delta, side_lengths[axis] - delta);
+        squared_distance += delta * delta;
+      }
+      squared_distances[j] = squared_distance;
+    }
+    std::partial_sort(squared_distances.begin(),
+                      squared_distances.begin() + max_k,
+                      squared_distances.end());
+    for (size_t k_index = 0; k_index < num_ks; ++k_index) {
+      out[i * num_ks + k_index] =
+          std::sqrt(squared_distances[static_cast<size_t>(ks[k_index] - 1)]);
+    }
+  });
+  return out;
+}
+
+void validate_periodic_input(
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& points,
+    const std::array<double, 6>& domain) {
+  if (points.shape(1) != 3) {
+    throw nb::value_error("Periodic CoreDelaunay requires three-dimensional points.");
+  }
+  const double side_length = domain[3] - domain[0];
+  if (!std::isfinite(side_length) || side_length <= 0.0) {
+    throw nb::value_error("periodic_domain must contain finite positive side lengths.");
+  }
+  for (size_t axis = 0; axis < 3; ++axis) {
+    if (!std::isfinite(domain[axis]) || !std::isfinite(domain[axis + 3]) ||
+        domain[axis + 3] - domain[axis] != side_length) {
+      throw nb::value_error("periodic_domain must define a finite cubic domain.");
+    }
+  }
+  for (size_t point = 0; point < points.shape(0); ++point) {
+    for (size_t axis = 0; axis < 3; ++axis) {
+      const double coordinate = points.data()[3 * point + axis];
+      if (!std::isfinite(coordinate) || coordinate < domain[axis] ||
+          coordinate >= domain[axis + 3]) {
+        throw nb::value_error(
+            "Periodic points must be finite and lie in the half-open periodic domain.");
+      }
+    }
+  }
 }
 
 template <typename Wrapper>
@@ -182,6 +249,64 @@ void build_core_delaunay_dispatch(nb::object& out,
   });
 }
 
+template <Gudhi::alpha_complex::complexity Complexity>
+void build_periodic_core_delaunay_dispatch(
+    nb::object& out,
+    const nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig>& points,
+    const std::vector<int64_t>& ks,
+    double beta,
+    double max_alpha_square,
+    bool positive_degree,
+    const std::array<double, 6>& domain) {
+  using Complex = PeriodicAlphaComplex<Complexity>;
+  using Point = typename Complex::Bare_point_3;
+
+  std::vector<Point> point_cloud;
+  point_cloud.reserve(points.shape(0));
+  for (size_t i = 0; i < points.shape(0); ++i) {
+    const double* row = points.data() + 3 * i;
+    point_cloud.emplace_back(row[0], row[1], row[2]);
+  }
+
+  AlphaTree alpha_tree;
+  std::vector<double> knn_distances;
+  {
+    nb::gil_scoped_release release;
+    Complex alpha_complex(point_cloud,
+                          domain[0], domain[1], domain[2],
+                          domain[3], domain[4], domain[5]);
+    if (!alpha_complex.create_complex(alpha_tree, max_alpha_square)) {
+      throw std::runtime_error("Failed to build Gudhi periodic alpha complex.");
+    }
+    if (alpha_tree.num_vertices() != points.shape(0)) {
+      throw std::invalid_argument(
+          "Periodic points must be unique modulo the periodic domain.");
+    }
+
+    // Alpha_complex_3d assigns its own vertex ids. Compute k-neighbor radii in
+    // that same order so simplex vertices and scalar rows remain aligned.
+    std::vector<std::array<double, 3>> ordered_points(alpha_tree.num_vertices());
+    for (size_t vertex = 0; vertex < ordered_points.size(); ++vertex) {
+      const auto& point = alpha_complex.get_point(vertex);
+      ordered_points[vertex] = {
+          CGAL::to_double(point.x()),
+          CGAL::to_double(point.y()),
+          CGAL::to_double(point.z())};
+    }
+    knn_distances = compute_periodic_knn_selected(ordered_points, ks, domain);
+  }
+  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) {
+    if constexpr (Desc::is_kcritical && std::is_same_v<typename Desc::value_type, double>) {
+      nb::gil_scoped_release release;
+      fill_core_delaunay_simplextree(
+          wrapper, alpha_tree, knn_distances, ks, beta, positive_degree);
+    } else {
+      throw nb::type_error(
+          "build_core_delaunay_simplextree expects a float64 k-critical SimplexTreeMulti target.");
+    }
+  });
+}
+
 }  // namespace mpcd
 
 NB_MODULE(_core_delaunay_nanobind, m) {
@@ -193,7 +318,8 @@ NB_MODULE(_core_delaunay_nanobind, m) {
          double beta,
          std::string precision,
          double max_alpha_square,
-         bool positive_degree) -> nb::object {
+         bool positive_degree,
+         nb::object periodic_domain_obj) -> nb::object {
         if (!mpcd::is_simplextree_object(target)) {
           throw nb::type_error("build_core_delaunay_simplextree expects a SimplexTreeMulti target.");
         }
@@ -205,13 +331,41 @@ NB_MODULE(_core_delaunay_nanobind, m) {
         }
 
         auto degree_values = mpcd::cast_vector_from_array<int64_t>(ks);
-        if (static_cast<size_t>(degree_values.back()) > points.shape(0)) {
-          throw nb::value_error(
-              "All values in ks must be less than or equal to the number of points in the point cloud.");
+        for (size_t index = 0; index < degree_values.size(); ++index) {
+          if (degree_values[index] <= 0 ||
+              static_cast<size_t>(degree_values[index]) > points.shape(0)) {
+            throw nb::value_error(
+                "All values in ks must lie between one and the number of points.");
+          }
+          if (index > 0 && degree_values[index] <= degree_values[index - 1]) {
+            throw nb::value_error("ks must be strictly increasing.");
+          }
         }
 
         nb::object out = target.type()();
-        if (precision == "fast") {
+        if (!periodic_domain_obj.is_none()) {
+          auto periodic_domain = nb::cast<
+              nb::ndarray<nb::numpy, const double, nb::ndim<1>, nb::c_contig>>(
+              periodic_domain_obj);
+          if (periodic_domain.shape(0) != 6) {
+            throw nb::value_error("periodic_domain must contain six bounds.");
+          }
+          std::array<double, 6> domain;
+          std::copy(periodic_domain.data(), periodic_domain.data() + 6, domain.begin());
+          mpcd::validate_periodic_input(points, domain);
+          if (precision == "fast") {
+            mpcd::build_periodic_core_delaunay_dispatch<Gudhi::alpha_complex::complexity::FAST>(
+                out, points, degree_values, beta, max_alpha_square, positive_degree, domain);
+          } else if (precision == "safe") {
+            mpcd::build_periodic_core_delaunay_dispatch<Gudhi::alpha_complex::complexity::SAFE>(
+                out, points, degree_values, beta, max_alpha_square, positive_degree, domain);
+          } else if (precision == "exact") {
+            mpcd::build_periodic_core_delaunay_dispatch<Gudhi::alpha_complex::complexity::EXACT>(
+                out, points, degree_values, beta, max_alpha_square, positive_degree, domain);
+          } else {
+            throw nb::value_error("precision must be one of {'safe', 'exact', 'fast'}.");
+          }
+        } else if (precision == "fast") {
           mpcd::build_core_delaunay_dispatch<mpcd::FastKernel>(
               out, points, degree_values, beta, max_alpha_square, positive_degree, false);
         } else if (precision == "safe") {
@@ -231,5 +385,6 @@ NB_MODULE(_core_delaunay_nanobind, m) {
       "beta"_a,
       "precision"_a,
       "max_alpha_square"_a,
-      "positive_degree"_a = false);
+      "positive_degree"_a = false,
+      "periodic_domain"_a = nb::none());
 }

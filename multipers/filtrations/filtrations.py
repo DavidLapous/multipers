@@ -860,7 +860,9 @@ def DegreeRips(
             st = gd.SimplexTree.create_from_array(
                 api.asnumpy(D), max_filtration=float(threshold_radius)
             )
-            rips_filtration = api.unique(D.ravel())
+            # Values above the requested cutoff cannot occur in the truncated
+            # Rips graph and can dominate memory for dense distance matrices.
+            rips_filtration = api.unique(D[D <= threshold_radius])
             num_vertices = D.shape[0]
         else:
             import multipers.array_api.numpy as npapi
@@ -885,9 +887,9 @@ def DegreeRips(
                 st, num_parameters=1
             )  # Gudhi is missing some functionality
             if should_infer_ks:
-                max_degree = (
-                    np.bincount(_temp_st.get_simplices_of_dimension(1).ravel()).max() // 2
-                )
+                max_degree = np.bincount(
+                    _temp_st.get_simplices_of_dimension(1).ravel()
+                ).max()
                 ks = (
                     np.arange(0, max_degree + 1)
                     if num is None
@@ -1135,6 +1137,7 @@ def CoreDelaunay(
     verbose: bool = False,
     max_alpha_square: float = float("inf"),
     positive_degree: bool = False,
+    periodic_box: Optional[ArrayLike] = None,
 ) -> SimplexTreeMulti_type:
     """
     Build Delaunay core bifiltration of a Euclidean point cloud.
@@ -1157,7 +1160,7 @@ def CoreDelaunay(
     beta:
         Scale parameter balancing metric scale and k-core distance.
     ks:
-        Positive density thresholds to include. If omitted, uses
+        Strictly increasing positive density thresholds to include. If omitted, uses
         ``1, ..., n_points``. For large point clouds, passing fewer k-values is
         usually much faster.
     precision:
@@ -1170,6 +1173,17 @@ def CoreDelaunay(
     positive_degree:
         Store the density axis as ``max(ks) - k`` instead of the default ``-k``
         opposite-order convention.
+    periodic_box:
+        Optional periodic 3D cube. A scalar or length-3 array defines side
+        lengths from the origin; a ``(2, 3)`` array defines lower and upper
+        bounds. GUDHI's periodic alpha complex currently requires equal side
+        lengths. Points are wrapped into this domain before construction.
+
+    Notes
+    -----
+    Periodic construction uses GUDHI's one-sheet periodic 3D alpha complex.
+    Point clouds too sparse to admit a one-sheet periodic triangulation are
+    rejected by GUDHI.
 
     Returns
     -------
@@ -1181,14 +1195,63 @@ def CoreDelaunay(
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
     points = np.asarray(points)
-    if len(points) == 0:
-        return SimplexTreeMulti(num_parameters=2)
     if points.ndim != 2:
         raise ValueError(f"The point cloud must be a 2D array, got {points.ndim}D.")
+    if not np.all(np.isfinite(points)):
+        raise ValueError("The point cloud must contain only finite coordinates.")
+    if periodic_box is None:
+        periodic_domain = None
+    else:
+        if points.shape[1] != 3:
+            raise ValueError("Periodic CoreDelaunay requires three-dimensional points.")
+        periodic_box = np.asarray(periodic_box, dtype=np.float64)
+        if periodic_box.ndim == 0:
+            lower = np.zeros(3, dtype=np.float64)
+            upper = np.full(3, periodic_box, dtype=np.float64)
+        elif periodic_box.shape == (3,):
+            lower = np.zeros(3, dtype=np.float64)
+            upper = periodic_box
+        elif periodic_box.shape == (2, 3):
+            lower, upper = periodic_box
+        else:
+            raise ValueError(
+                "periodic_box must be a scalar, three side lengths, or a (2, 3) bounds array."
+            )
+        side_lengths = upper - lower
+        if (
+            not np.all(np.isfinite(periodic_box))
+            or not np.all(np.isfinite(side_lengths))
+            or np.any(side_lengths <= 0)
+        ):
+            raise ValueError("periodic_box must contain finite positive side lengths.")
+        if not np.array_equal(side_lengths, np.full(3, side_lengths[0])):
+            raise ValueError("GUDHI periodic alpha complexes require a cubic domain.")
+        side_length = float(side_lengths[0])
+        points = lower + np.mod(points - lower, side_length)
+        if not np.all(np.isfinite(points)):
+            raise ValueError("Wrapped periodic points must be finite.")
+        periodic_domain = np.ascontiguousarray(
+            np.concatenate((lower, upper)), dtype=np.float64
+        )
+    if len(points) == 0:
+        return SimplexTreeMulti(num_parameters=2)
     if ks is None:
         ks = np.arange(1, len(points) + 1)
     else:
-        ks = np.asarray(ks, dtype=int)
+        ks_values = np.asarray(ks)
+        if ks_values.ndim != 1:
+            raise ValueError("The parameter ks must be a one-dimensional sequence.")
+        if np.iscomplexobj(ks_values):
+            raise ValueError("The parameter ks must contain real integers.")
+        try:
+            ks_float = np.asarray(ks_values, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The parameter ks must contain integers.") from exc
+        if not np.all(np.isfinite(ks_float)) or not np.array_equal(
+            ks_float, np.floor(ks_float)
+        ):
+            raise ValueError("The parameter ks must contain integers.")
+        ks = ks_float.astype(np.int64)
     ks: np.ndarray
 
     if len(ks) == 0:
@@ -1199,8 +1262,12 @@ def CoreDelaunay(
         raise ValueError(
             "All values in ks must be less than or equal to the number of points in the point cloud."
         )
-    if beta < 0:
-        raise ValueError(f"The parameter beta must be positive, got {beta}.")
+    if np.any(ks[1:] <= ks[:-1]):
+        raise ValueError("The values in ks must be strictly increasing.")
+    if not np.isfinite(beta) or beta < 0:
+        raise ValueError(f"The parameter beta must be finite and nonnegative, got {beta}.")
+    if np.isnan(max_alpha_square) or max_alpha_square < 0:
+        raise ValueError("max_alpha_square must be nonnegative.")
     if precision not in ["safe", "exact", "fast"]:
         raise ValueError(
             "The parameter precision must be one of ['safe', 'exact', 'fast'], "
@@ -1221,6 +1288,7 @@ def CoreDelaunay(
             "ks_count": len(ks),
             "precision": precision,
             "positive_degree": positive_degree,
+            "periodic": periodic_box is not None,
         },
     ) as timing:
         simplex_tree_multi = build_core_delaunay_simplextree(
@@ -1231,6 +1299,7 @@ def CoreDelaunay(
             precision,
             float(max_alpha_square),
             positive_degree,
+            periodic_domain,
         )
         timing.substep("built_native_core_delaunay")
         return simplex_tree_multi
