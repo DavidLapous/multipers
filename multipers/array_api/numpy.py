@@ -1,14 +1,13 @@
 from contextlib import nullcontext
 from functools import wraps
-from importlib.util import find_spec
 
 import numpy as _np
 import multipers.logs as _mp_logs
 
-if find_spec("numba"):
+try:
     import numba as _numba
     from numba.core.errors import NumbaError as _NumbaError
-else:
+except ImportError:
     _numba = None
     _NumbaError = None
 

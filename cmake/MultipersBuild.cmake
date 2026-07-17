@@ -926,16 +926,26 @@ function(multipers_configure_module module_name target_name)
       target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
     endif()
 
+  elseif(module_name STREQUAL "_end_curves_interface")
+    if(NOT MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE)
+      target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+    endif()
+    if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
+      multipers_link_nanobind_runtime(${target_name})
+      target_link_libraries(${target_name} PRIVATE Boost::timer Boost::chrono)
+      target_link_libraries(${target_name} PRIVATE "${MULTIPERS_GMP_LIBRARY}")
+      multipers_link_openmp(${target_name})
+      multipers_link_tbb(${target_name})
+      target_link_libraries(${target_name} PRIVATE multipers_aida_static)
+      target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
+    endif()
+
   elseif(module_name STREQUAL "_persistence_algebra_interface")
     if(NOT MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE)
       multipers_link_nanobind_runtime(${target_name})
       multipers_link_openmp(${target_name})
       multipers_link_tbb(${target_name})
       target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
-      if(NOT MULTIPERS_DISABLE_AIDA_INTERFACE)
-        target_link_libraries(${target_name} PRIVATE multipers_aida_static)
-        target_include_directories(${target_name} PRIVATE ${MULTIPERS_AIDA_INCLUDE_DIRS})
-      endif()
     endif()
 
   elseif(module_name STREQUAL "_skyscraper_interface")
@@ -1049,6 +1059,7 @@ set(MULTIPERS_NANOBIND_MODULES
   _multi_critical_interface
   _rhomboid_tiling_interface
   _aida_interface
+  _end_curves_interface
   _persistence_algebra_interface
   _skyscraper_interface
 )

@@ -4,6 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 
@@ -257,29 +258,4 @@ NB_MODULE(_persistence_algebra_interface, m) {
       "use_clearing"_a = true,
       "use_chunk"_a = true,
       "verbose"_a = false);
-
-  m.def(
-      "death_curve_presentation",
-      [](nb::object slicer, int degree) {
-#if MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
-        (void)slicer;
-        (void)degree;
-        throw std::runtime_error("Persistence-Algebra interface is disabled at compile time.");
-#else
-        if (!multipers::persistence_algebra_interface_available()) {
-          throw std::runtime_error("Persistence-Algebra interface is not available.");
-        }
-        nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
-        auto& input_wrapper = nb::cast<mppai::CanonicalWrapper&>(target);
-        auto complex = multipers::persistence_algebra_death_curve_contiguous_interface(input_wrapper.truc, degree);
-        nb::object out =
-            multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
-        if (target.ptr() == slicer.ptr()) {
-          return out;
-        }
-        return multipers::nanobind_helpers::astype_slicer_to_original_type(slicer, out);
-#endif
-      },
-      "slicer"_a,
-      "degree"_a);
 }

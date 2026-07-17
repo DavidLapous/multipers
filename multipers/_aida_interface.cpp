@@ -1,8 +1,10 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -50,19 +52,19 @@ nb::object summand_to_slicer(nb::object target,
   std::fill_n(dimensions.begin(), summand.row_degrees.size(), degree);
   std::fill(dimensions.begin() + static_cast<std::ptrdiff_t>(summand.row_degrees.size()), dimensions.end(), degree + 1);
 
-  std::vector<std::vector<int> > boundaries(dimensions.size());
+  std::vector<std::vector<int>> boundaries(dimensions.size());
   for (std::size_t i = 0; i < summand.matrix.size(); ++i) {
     boundaries[summand.row_degrees.size() + i] = summand.matrix[i];
   }
 
-  std::vector<std::pair<double, double> > filtration_values;
+  std::vector<std::pair<double, double>> filtration_values;
   filtration_values.reserve(summand.row_degrees.size() + summand.col_degrees.size());
   filtration_values.insert(filtration_values.end(), summand.row_degrees.begin(), summand.row_degrees.end());
   filtration_values.insert(filtration_values.end(), summand.col_degrees.begin(), summand.col_degrees.end());
 
   nb::object compact_grid = nb::none();
   if (is_squeezed) {
-    std::vector<std::vector<int64_t> > used_coordinates(2);
+    std::vector<std::vector<int64_t>> used_coordinates(2);
     used_coordinates[0].reserve(filtration_values.size());
     used_coordinates[1].reserve(filtration_values.size());
     for (const auto& degree : filtration_values) {

@@ -74,7 +74,11 @@ def _packed_row_positions(starts: np.ndarray, lengths: np.ndarray) -> tuple[np.n
 
 def _birth_curve_presentation(presentation, inf_indices: np.ndarray):
     if not presentation.is_minpres:
-        raise ValueError("birth-curve input presentation must be minimal.")
+        if not presentation.is_pres:
+            raise ValueError("birth-curve input must be a presentation.")
+        presentation = presentation.minpres(
+            degree=presentation.pres_degree, full_resolution=False
+        )
     degree = presentation.minpres_degree
     boundary_indptr, boundary_flat = presentation.get_boundaries(packed=True)
     boundary_indptr = np.asarray(boundary_indptr, dtype=np.int64)
@@ -154,125 +158,6 @@ def _birth_curve_presentation(presentation, inf_indices: np.ndarray):
     )
 
 
-def _curve_vertices(
-    summand,
-    degree: int,
-    inf_indices: np.ndarray,
-    include_infinite: bool,
-) -> np.ndarray:
-    boundary_indptr, boundary_flat = summand.get_boundaries(packed=True)
-    boundary_indptr = np.asarray(boundary_indptr, dtype=np.int64)
-    boundary_flat = np.asarray(boundary_flat)
-    dimensions = np.asarray(summand.get_dimensions(), dtype=np.int32)
-    num_parameters = len(inf_indices)
-    filtrations = np.asarray(summand.get_filtrations(), dtype=np.int64)
-    if filtrations.ndim != 2:
-        filtrations = filtrations.reshape(-1, num_parameters)
-
-    generators = np.flatnonzero(dimensions == degree)
-    relations = np.flatnonzero(dimensions == degree + 1)
-    finite_limit = np.maximum(inf_indices - 1, 0)
-    unbounded_limit = inf_indices if include_infinite else finite_limit
-    generator_position = np.full(dimensions.shape[0], -1, dtype=np.int64)
-    generator_position[generators] = np.arange(generators.size, dtype=np.int64)
-    terminated_axes = np.zeros((generators.size, num_parameters), dtype=bool)
-
-    chunks = []
-    if generators.size:
-        chunks.append(filtrations[generators])
-
-    relation_starts = boundary_indptr[relations]
-    relation_raw_lengths = boundary_indptr[relations + 1] - relation_starts
-    relation_ids_full, relation_positions = _packed_row_positions(
-        relation_starts, relation_raw_lengths
-    )
-    if relation_positions.size:
-        boundary = boundary_flat[relation_positions]
-        boundary_generator_positions = generator_position[boundary]
-        keep = boundary_generator_positions >= 0
-        relation_ids = relation_ids_full[keep]
-        boundary = boundary[keep]
-        boundary_generator_positions = boundary_generator_positions[keep]
-        relation_lengths = np.bincount(
-            relation_ids,
-            minlength=relations.size,
-        ).astype(np.int64, copy=False)
-    else:
-        relation_ids = np.empty(0, dtype=np.int64)
-        boundary = np.empty(0, dtype=np.int64)
-        boundary_generator_positions = np.empty(0, dtype=np.int64)
-        relation_lengths = np.zeros(relations.size, dtype=np.int64)
-
-    if boundary.size:
-        relation_offsets = np.concatenate(
-            (
-                np.zeros(1, dtype=np.int64),
-                np.cumsum(relation_lengths[:-1], dtype=np.int64),
-            )
-        )
-
-        single_relation_ids = np.flatnonzero(relation_lengths == 1)
-        if single_relation_ids.size:
-            single_offsets = relation_offsets[single_relation_ids]
-            single_boundary = boundary[single_offsets]
-            single_generator_positions = boundary_generator_positions[single_offsets]
-            single_relations = relations[single_relation_ids]
-            active = filtrations[single_relations] > filtrations[single_boundary]
-            valid = active.sum(axis=1) == 1
-            if np.any(valid):
-                axes = active[valid].argmax(axis=1)
-                vertices = filtrations[single_relations[valid]].copy()
-                vertices[np.arange(axes.size), axes] -= 1
-                chunks.append(vertices)
-                terminated_axes[single_generator_positions[valid], axes] = True
-
-        # ``np.maximum.reduceat`` reduces ``filtrations[boundary]`` over each
-        # nonempty relation block. Reduceat skips zero-length blocks because
-        # consecutive starts would match. We pre-allocate ``joins`` per relation
-        # for direct ``joins[relation_id]`` indexing.
-        nonempty_relation_ids = np.flatnonzero(relation_lengths > 0)
-        joins = np.empty((relations.size, num_parameters), dtype=filtrations.dtype)
-        if nonempty_relation_ids.size:
-            joins[nonempty_relation_ids] = np.maximum.reduceat(
-                filtrations[boundary],
-                relation_offsets[nonempty_relation_ids],
-            )
-        multi_relation_ids = np.flatnonzero(relation_lengths >= 2)
-        if multi_relation_ids.size:
-            chunks.append(joins[multi_relation_ids])
-            multi_entries = relation_lengths[relation_ids] >= 2
-            multi_generator_positions = boundary_generator_positions[multi_entries]
-            active = (
-                joins[relation_ids[multi_entries]]
-                > filtrations[boundary[multi_entries]]
-            )
-            valid = active.sum(axis=1) == 1
-            if np.any(valid):
-                terminated_axes[
-                    multi_generator_positions[valid], active[valid].argmax(axis=1)
-                ] = True
-
-    if generators.size:
-        unbounded_generators, unbounded_axes = np.nonzero(~terminated_axes)
-        if unbounded_generators.size:
-            unbounded_vertices = filtrations[generators[unbounded_generators]].copy()
-            unbounded_vertices[
-                np.arange(unbounded_axes.size), unbounded_axes
-            ] = unbounded_limit[unbounded_axes]
-            chunks.append(unbounded_vertices)
-
-    if not chunks:
-        return np.empty((0, num_parameters), dtype=np.int64)
-    return np.unique(np.vstack(chunks).astype(np.int64, copy=False), axis=0)
-
-
-def _sort_spread_curve(points: np.ndarray) -> np.ndarray:
-    if len(points) <= 1:
-        return points
-    order = np.lexsort((-points[:, 1], points[:, 0]))
-    return points[order]
-
-
 def _to_grid_coordinates(
     points: np.ndarray,
     grid,
@@ -289,6 +174,31 @@ def _to_grid_coordinates(
         out[finite, axis] = values[coordinate[finite]]
         out[~finite, axis] = np.inf
     return out
+
+
+def _plot_box_from_grid(grid, coordinates: bool) -> np.ndarray:
+    if not coordinates:
+        return np.asarray([[0.0, 0.0], _grid_inf_indices(grid)], dtype=np.float64)
+
+    mins = []
+    maxs = []
+    for axis in grid:
+        values = np.asarray(axis, dtype=np.float64)
+        finite = values[np.isfinite(values)]
+        if finite.size == 0:
+            mins.append(0.0)
+            maxs.append(1.0)
+            continue
+        lo = float(finite[0])
+        if finite.size > 1:
+            step = float(finite[-1] - finite[-2])
+            if not np.isfinite(step) or step <= 0:
+                step = 1.0
+        else:
+            step = 1.0
+        mins.append(lo)
+        maxs.append(float(finite[-1] + step))
+    return np.asarray([mins, maxs], dtype=np.float64)
 
 
 def birth_curves(
@@ -341,11 +251,11 @@ def birth_curves(
     sort : bool, default=True
         Whether to lexicographically sort vertices along each returned curve.
     aida_sort : bool, default=True
-        Sort option forwarded to ``multipers.ops.aida``.
+        Sort option forwarded to the C++ AIDA decomposition used internally.
     verbose : bool, default=False
-        Verbosity forwarded to ``multipers.ops.aida``.
+        Verbosity forwarded to the C++ AIDA decomposition used internally.
     progress : bool, default=False
-        Progress-bar option forwarded to ``multipers.ops.aida``.
+        Progress-bar option forwarded to the C++ AIDA decomposition used internally.
     minpres_kwargs : dict, optional
         Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
         is forced to ``False``.
@@ -373,8 +283,14 @@ def birth_curves(
     slicer = _as_slicer(filtered_complex)
     if slicer.num_parameters != 2:
         raise ValueError("birth_curves is only defined for 2-parameter modules.")
-    if degree is None and slicer.is_minpres:
-        degree = slicer.minpres_degree
+    from multipers import _end_curves_interface
+
+    _end_curves_interface.require_birth()
+    if slicer.is_pres:
+        if degree is None:
+            degree = slicer.pres_degree
+        elif int(degree) != slicer.pres_degree:
+            raise ValueError("Cannot change degree of an existing presentation.")
 
     requested_grid = grid is not None
     grid = (
@@ -388,7 +304,7 @@ def birth_curves(
     inf_indices = _grid_inf_indices(grid)
 
     if degree is None or degree < 0:
-        raise ValueError("`degree` is inferred for minpres inputs, otherwise required.")
+        raise ValueError("`degree` is inferred for presentation inputs, otherwise required.")
     degree = int(degree)
 
     if slicer.is_minpres:
@@ -408,18 +324,19 @@ def birth_curves(
         full_resolution=False,
     )
 
-    from multipers import ops
-
-    curves = []
-    for summand in ops.aida(
+    index_curves = _end_curves_interface.birth_curve_indices(
         birth_presentation,
-        sort=aida_sort,
+        inf_indices.tolist(),
+        include_infinite=include_infinite,
+        sort=sort,
+        aida_sort=aida_sort,
         verbose=verbose,
         progress=progress,
-    ):
-        curve = _curve_vertices(summand, degree, inf_indices, include_infinite)
-        if sort:
-            curve = _sort_spread_curve(curve)
+    )
+
+    curves = []
+    for curve in index_curves:
+        curve = np.asarray(curve, dtype=np.int64)
         if coordinates:
             curve = _to_grid_coordinates(curve, grid, inf_indices, include_infinite)
         elif not include_infinite:
@@ -430,6 +347,7 @@ def birth_curves(
 
         plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
         plot_kwargs["min_length"] = min_length
+        plot_kwargs.setdefault("box", _plot_box_from_grid(grid, coordinates))
         plot_kwargs.setdefault("title", "Birth curves")
         plot_end_curve(curves, **plot_kwargs)
     return curves
@@ -483,7 +401,7 @@ def death_curves(
     sort : bool, default=True
         Whether to lexicographically sort vertices along each returned curve.
     aida_sort, verbose, progress
-        Options forwarded to ``multipers.ops.aida``.
+        Options forwarded to the C++ AIDA decomposition used internally.
     minpres_kwargs : dict, optional
         Keyword arguments forwarded to ``slicer.minpres``. ``full_resolution``
         is forced to ``False``.
@@ -495,8 +413,7 @@ def death_curves(
 
     Availability
     ------------
-    Requires the optional persistence-algebra backend exposed as
-    ``multipers._persistence_algebra_interface``.
+    Requires the optional Persistence-Algebra and AIDA backends.
 
     Output
     ------
@@ -513,11 +430,14 @@ def death_curves(
     slicer = _as_slicer(filtered_complex)
     if slicer.num_parameters != 2:
         raise ValueError("death_curves is only defined for 2-parameter modules.")
-    from multipers import _persistence_algebra_interface, ops
+    from multipers import _end_curves_interface
 
-    _persistence_algebra_interface.require()
-    if degree is None and slicer.is_minpres:
-        degree = slicer.minpres_degree
+    _end_curves_interface.require_death()
+    if slicer.is_pres:
+        if degree is None:
+            degree = slicer.pres_degree
+        elif int(degree) != slicer.pres_degree:
+            raise ValueError("Cannot change degree of an existing presentation.")
 
     requested_grid = grid is not None
     grid = (
@@ -531,7 +451,7 @@ def death_curves(
     inf_indices = _grid_inf_indices(grid)
 
     if degree is None or degree < 0:
-        raise ValueError("`degree` is inferred for minpres inputs, otherwise required.")
+        raise ValueError("`degree` is inferred for presentation inputs, otherwise required.")
     degree = int(degree)
 
     if slicer.is_minpres:
@@ -545,23 +465,20 @@ def death_curves(
         minpres_kwargs["full_resolution"] = False
         presentation = slicer.minpres(degree=degree, **minpres_kwargs)
 
-    death_presentation = _persistence_algebra_interface.death_curve_presentation(
+    index_curves = _end_curves_interface.death_curve_indices(
         presentation,
         degree,
-    )
-    death_presentation._mark_minpres(degree)
-
-    curves = []
-    for summand in ops.aida(
-        death_presentation,
-        sort=aida_sort,
+        inf_indices.tolist(),
+        include_infinite=include_infinite,
+        sort=sort,
+        aida_sort=aida_sort,
         verbose=verbose,
         progress=progress,
-    ):
-        # ponytail: PA returns the same spread-curve presentation shape as birth curves.
-        curve = _curve_vertices(summand, degree, inf_indices, include_infinite)
-        if sort:
-            curve = _sort_spread_curve(curve)
+    )
+
+    curves = []
+    for curve in index_curves:
+        curve = np.asarray(curve, dtype=np.int64)
         if coordinates:
             curve = _to_grid_coordinates(curve, grid, inf_indices, include_infinite)
         elif not include_infinite:
@@ -572,6 +489,7 @@ def death_curves(
 
         plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
         plot_kwargs["min_length"] = min_length
+        plot_kwargs.setdefault("box", _plot_box_from_grid(grid, coordinates))
         plot_kwargs.setdefault("title", "Death curves")
         plot_end_curve(curves, **plot_kwargs)
     return curves
