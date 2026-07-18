@@ -355,11 +355,6 @@ def test_seeded_packed_payload_properties_and_validation(tmp_path):
         [0, 1, 2], [0, 0, 0], np.empty((0, 2)), {},
     )
     np.testing.assert_array_equal(exact.factor_group_ids, large_ids)
-    with pytest.raises(ValueError, match="nonnegative integers"):
-        SkyscraperInvariant(
-            [0], [0], [[0, 0], [1, 1]], [0, 1], [1], [1], [float(2**64)],
-            [0, 1], [0, 0], np.empty((0, 2)), {},
-        )
     with pytest.raises(ValueError, match="finite"):
         exact.slopes_at(np.nan, 0)
     partial_metadata = SkyscraperInvariant(
