@@ -13,7 +13,6 @@
 #include <cstring>
 #include <functional>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -31,7 +30,6 @@
 #include "Persistence_slices_interface.h"
 #include "ext_interface/backend_log_policy.hpp"
 #include "ext_interface/nanobind_generator_basis.hpp"
-#include "ext_interface/packed_multi_critical_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #include "graph_mph0/nanobind_interface.hpp"
@@ -44,10 +42,9 @@
 #include <python_interfaces/numpy_utils.h>
 #include "multi_parameter_rank_invariant/hilbert_function.h"
 #include "multi_parameter_rank_invariant/rank_invariant.h"
-#include "multiparameter_module_approximation/approximation.h"
+#include <gudhi/multiparameter_module_approximation.h>
 #include "nanobind_array_utils.hpp"
 #include "nanobind_dense_array_utils.hpp"
-#include "nanobind_mma_registry_helpers.hpp"
 #include "nanobind_object_utils.hpp"
 #include "nanobind_slicer_serialization.hpp"
 #include "slicer_landscapes.hpp"
@@ -214,9 +211,9 @@ Wrapper& make_filtration_non_decreasing_inplace(Wrapper& self, bool safe) {
     bool modified = true;
     while (modified) {
       modified = false;
-      for (size_t i = boundaries.size(); i-- > 0;) {
+      for (size_t i = 1; i < boundaries.size(); ++i) {
         for (auto b : boundaries[i]) {
-          modified |= intersect_lifetimes(filtrations[b], filtrations[i]);
+          modified |= intersect_lifetimes(filtrations[i], filtrations[b]);
         }
       }
       if (ordered) {
@@ -1761,10 +1758,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
       .def("__getstate__",
            [](Wrapper& self) -> nb::tuple {
              return nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                    self.filtration_grid,
-                                    self.generator_basis,
-                                    multipers::nanobind_helpers::slicer_minpres_degree(self),
-                                    self.is_minres,
+                                   self.filtration_grid,
+                                   self.generator_basis,
+                                   multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                   self.is_minres,
                                    self.pres_degree);
            })
       .def("__reduce__",
@@ -1773,10 +1770,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::borrow<nb::object>(nb::type<Wrapper>()),
                  nb::make_tuple(),
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                 self.filtration_grid,
-                                 self.generator_basis,
-                                 multipers::nanobind_helpers::slicer_minpres_degree(self),
-                                 self.is_minres,
+                                self.filtration_grid,
+                                self.generator_basis,
+                                multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                self.is_minres,
                                 self.pres_degree));
            })
       .def("__reduce_ex__",
@@ -1785,10 +1782,10 @@ void bind_slicer_class(nb::module_& m, nb::list& available_slicers) {
                  nb::borrow<nb::object>(nb::type<Wrapper>()),
                  nb::make_tuple(),
                  nb::make_tuple(serialized_state<Wrapper, Value, Desc::is_kcritical, Desc::is_degree_rips>(self),
-                                 self.filtration_grid,
-                                 self.generator_basis,
-                                 multipers::nanobind_helpers::slicer_minpres_degree(self),
-                                 self.is_minres,
+                                self.filtration_grid,
+                                self.generator_basis,
+                                multipers::nanobind_helpers::slicer_minpres_degree(self),
+                                self.is_minres,
                                 self.pres_degree));
            })
       .def("_serialize_state",
@@ -2239,8 +2236,15 @@ Gudhi::multi_persistence::Module_interface<double> module_approximation_from_des
     Gudhi::multi_persistence::Module<double> mod;
     {
       nb::gil_scoped_release release;
-      mod = Gudhi::multiparameter::mma::multiparameter_module_approximation(
-          wrapper.truc, direction, max_error, box, threshold, complete, verbose, n_jobs);
+      mod = Gudhi::multi_persistence::multiparameter_module_approximation(wrapper.truc,
+                                                                          max_error,
+                                                                          box.get_lower_corner(),
+                                                                          box.get_upper_corner(),
+                                                                          direction,
+                                                                          threshold,
+                                                                          complete,
+                                                                          verbose,
+                                                                          n_jobs);
     }
     return {std::move(mod), box};
   }

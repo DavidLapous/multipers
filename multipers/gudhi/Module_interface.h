@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/type_traits/add_const.hpp>  // missing in boost/range/any_range.hpp
 #include <boost/range/any_range.hpp>
 #include <boost/range/adaptor/type_erased.hpp>
 
@@ -43,18 +44,19 @@
 #include <gudhi/Multi_persistence/Box.h>
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/numpy_utils.h>
+#include <python_interfaces/construction_utils.h>
 
 namespace Gudhi {
 namespace multi_persistence {
 
 template <typename T, typename... Args>
-Numpy_span<T> contiguous_numpy_span(const nanobind::ndarray<const T, Args...>& array) {
+Numpy_span<T> contiguous_numpy_span(const nanobind::ndarray<const T, Args...> &array) {
   return {array.data(), array.data() + array.shape(0)};
 }
 
 template <typename T>
 Numpy_2d_span<T> contiguous_numpy_2d_span(
-    const nanobind::ndarray<const T, nanobind::ndim<2>, nanobind::c_contig>& array) {
+    const nanobind::ndarray<const T, nanobind::ndim<2>, nanobind::c_contig> &array) {
   typename Numpy_2d_span<T>::Array gudhi_array(array);
   return Numpy_2d_span<T>(gudhi_array);
 }
@@ -172,7 +174,7 @@ class Module_interface {
     return *this;
   }
 
-  [[nodiscard]] nanobind::list get_flat_filtration_values(bool unique) const {
+  [[nodiscard]] nanobind::tuple get_flat_filtration_values(bool unique) const {
     int numParam = module_.get_number_of_parameters();
     if (numParam == get_null_value<int>()) return {};  // empty module
 
@@ -205,15 +207,14 @@ class Module_interface {
       }
     }
 
-    nanobind::list out;
-    for (auto &vals : values) {
+    return Gudhi::python::_build_tuple(numParam, [&](std::size_t p) {
+      auto &vals = values[p];
       if (unique) {
         std::sort(vals.begin(), vals.end());
         vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
       }
-      out.append(_wrap_as_numpy_array(std::move(vals), vals.size()));
-    }
-    return out;
+      return _wrap_as_numpy_array(std::move(vals), vals.size());
+    });
   }
 
   auto get_all_dimension() const {
@@ -272,9 +273,8 @@ class Module_interface {
     return _wrap_as_numpy_array(std::move(corners), 2, dim);
   }
 
-  nanobind::list get_barcode_from_line(Tensor1D basepoint, std::optional<Tensor1D> direction, int degree) const {
+  nanobind::tuple get_barcode_from_line(Tensor1D basepoint, std::optional<Tensor1D> direction, int degree) const {
     std::vector<std::vector<std::array<double, 2>>> barcode;
-    nanobind::list out;
     {
       nanobind::gil_scoped_release release;
       Dimension dim = degree < 0 ? get_null_value<Dimension>() : static_cast<Dimension>(degree);
@@ -288,16 +288,15 @@ class Module_interface {
       }
       barcode = module_.get_barcode_from_line(line, dim);
     }
-    for (auto &d : barcode) {
-      out.append(_wrap_as_numpy_array(std::move(d)));
-    }
-    return out;
+
+    return Gudhi::python::_build_tuple(barcode.size(),
+                                       [&](std::size_t d) { return _wrap_as_numpy_array(std::move(barcode[d])); });
   }
 
-  nanobind::list get_barcode_from_lines(Tensor2D basepoints,
-                                        std::optional<Tensor2D> directions,
-                                        int degree,
-                                        bool keep_inf) const {
+  nanobind::tuple get_barcode_from_lines(Tensor2D basepoints,
+                                         std::optional<Tensor2D> directions,
+                                         int degree,
+                                         bool keep_inf) const {
     std::vector<std::vector<std::array<double, 2>>> barcode;
     std::size_t numberOfLines;
     {
@@ -375,7 +374,7 @@ class Module_interface {
       nanobind::gil_scoped_release release;
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
-      for (const auto& axis : grid) views.push_back(contiguous_numpy_span(axis));
+      for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
       module_.evaluate_in_grid(views);
     }
     return *this;
@@ -460,7 +459,7 @@ class Module_interface {
       nanobind::gil_scoped_release release;
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
-      for (const auto& axis : grid) views.push_back(contiguous_numpy_span(axis));
+      for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
       out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
           module_, degree, contiguous_numpy_span(ks), views, n_jobs);
     }
@@ -485,8 +484,8 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_pixels(module_,
-                                                             contiguous_numpy_2d_span(coordinates),
-                                                             contiguous_numpy_span(degrees),
+                                                            contiguous_numpy_2d_span(coordinates),
+                                                            contiguous_numpy_span(degrees),
                                                             get_box_from_tensor(box),
                                                             delta,
                                                             p,
@@ -542,7 +541,7 @@ class Module_interface {
   nanobind::tuple get_flat_indices_in_grid(const std::vector<Tensor1D> &grid) {
     std::vector<Numpy_span<T>> views;
     views.reserve(grid.size());
-    for (const auto& axis : grid) views.push_back(contiguous_numpy_span(axis));
+    for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
     return _get_flat_indices_in_grid(views);
   }
 
@@ -638,55 +637,49 @@ class Module_interface {
     return fb;
   }
 
-  static nanobind::list get_numpy_barcode_from_lines_with_inf(std::vector<std::vector<std::array<double, 2>>> &barcode,
-                                                              std::size_t numberOfLines) {
-    nanobind::list out;
+  static nanobind::tuple get_numpy_barcode_from_lines_with_inf(std::vector<std::vector<std::array<double, 2>>> &barcode,
+                                                               std::size_t numberOfLines) {
     std::vector<std::uint64_t> splits;
 
     if (numberOfLines == 0) {
-      for (auto &d : barcode) {
-        if (d.size() != 0) throw std::logic_error("No lines but the barcode is not empty... ?");
-        out.append(nanobind::make_tuple(_wrap_as_numpy_array(std::move(d), 0, 0, 2),
-                                         _wrap_as_numpy_array(std::move(splits), 0)));
-      }
-      return out;
+      return Gudhi::python::_build_tuple(barcode.size(), [&](std::size_t d) {
+        if (barcode[d].size() != 0) throw std::logic_error("No lines but the barcode is not empty... ?");
+        return nanobind::make_tuple(_wrap_as_numpy_array(std::move(barcode[d]), 0, 0, 2),
+                                    _wrap_as_numpy_array(std::move(splits), 0));
+      });
     }
 
-    for (auto &d : barcode) {
-      if (d.size() % numberOfLines != 0)
+    return Gudhi::python::_build_tuple(barcode.size(), [&](std::size_t d) {
+      if (barcode[d].size() % numberOfLines != 0)
         throw std::logic_error("Barcodes do not have consistent sizes from a line to another.");
-      std::size_t numberOfBars = d.size() / numberOfLines;
-      out.append(nanobind::make_tuple(_wrap_as_numpy_array(std::move(d), numberOfLines, numberOfBars, 2),
-                                       _wrap_as_numpy_array(std::move(splits), 0)));
-    }
-    return out;
+      std::size_t numberOfBars = barcode[d].size() / numberOfLines;
+      return nanobind::make_tuple(_wrap_as_numpy_array(std::move(barcode[d]), numberOfLines, numberOfBars, 2),
+                                  _wrap_as_numpy_array(std::move(splits), 0));
+    });
   }
 
-  static nanobind::list get_numpy_barcode_from_lines_without_inf(
+  static nanobind::tuple get_numpy_barcode_from_lines_without_inf(
       std::vector<std::vector<std::array<double, 2>>> &barcode,
       std::size_t numberOfLines) {
-    nanobind::list out;
-
     if (numberOfLines == 0) {
-      for (auto &d : barcode) {
-        if (d.size() != 0) throw std::logic_error("No lines but the barcode is not empty... ?");
+      return Gudhi::python::_build_tuple(barcode.size(), [&](std::size_t d) {
+        if (barcode[d].size() != 0) throw std::logic_error("No lines but the barcode is not empty... ?");
         std::vector<std::uint64_t> splits;
-        out.append(
-            nanobind::make_tuple(_wrap_as_numpy_array(std::move(d), 0, 2), _wrap_as_numpy_array(std::move(splits), 0)));
-      }
-      return out;
+        return nanobind::make_tuple(_wrap_as_numpy_array(std::move(barcode[d]), 0, 2),
+                                    _wrap_as_numpy_array(std::move(splits), 0));
+      });
     }
 
-    for (auto &d : barcode) {
-      if (d.size() % numberOfLines != 0)
+    return Gudhi::python::_build_tuple(barcode.size(), [&](std::size_t d) {
+      if (barcode[d].size() % numberOfLines != 0)
         throw std::logic_error("Barcodes do not have consistent sizes from a line to another.");
       std::vector<std::uint64_t> splits(numberOfLines - 1);
       std::size_t barCount = 0;
-      std::size_t numberOfBars = d.size() / numberOfLines;
+      std::size_t numberOfBars = barcode[d].size() / numberOfLines;
       std::vector<std::array<double, 2>> bars;
       for (std::size_t l = 0; l < numberOfLines; ++l) {
         for (std::size_t i = 0; i < numberOfBars; ++i) {
-          auto &b = d[i + (l * numberOfBars)];
+          auto &b = barcode[d][i + (l * numberOfBars)];
           if (b[0] != Module<double>::T_inf) {
             bars.push_back(b);
             ++barCount;
@@ -694,15 +687,14 @@ class Module_interface {
         }
         if (l + 1 < numberOfLines) splits[l] = barCount;
       }
-      out.append(nanobind::make_tuple(_wrap_as_numpy_array(std::move(bars), barCount, 2),
-                                       _wrap_as_numpy_array(std::move(splits), numberOfLines - 1)));
-    }
-    return out;
+      return nanobind::make_tuple(_wrap_as_numpy_array(std::move(bars), barCount, 2),
+                                  _wrap_as_numpy_array(std::move(splits), numberOfLines - 1));
+    });
   }
 
-  static nanobind::list get_numpy_barcode_from_lines(std::vector<std::vector<std::array<double, 2>>> &barcode,
-                                                     std::size_t numberOfLines,
-                                                     bool keepInf) {
+  static nanobind::tuple get_numpy_barcode_from_lines(std::vector<std::vector<std::array<double, 2>>> &barcode,
+                                                      std::size_t numberOfLines,
+                                                      bool keepInf) {
     if (keepInf) return get_numpy_barcode_from_lines_with_inf(barcode, numberOfLines);
     return get_numpy_barcode_from_lines_without_inf(barcode, numberOfLines);
   }

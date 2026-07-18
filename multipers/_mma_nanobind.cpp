@@ -199,18 +199,11 @@ void bind_module_class(nb::module_& m) {
           .def_prop_ro("num_parameters", &Module::get_number_of_parameters)
           .def_prop_rw("box",
                        &Module::get_box_view,
-                       [](Module& self, nb::object box) {
-                         try {
-                           if (nb::ndarray_check(box.ptr())) {
-                             self.set_box(nb::cast<NDArray2>(box));
-                             return;
-                           }
-                           self.set_box(nb::cast<std::vector<std::vector<T>>>(box));
-                           return;
-                         } catch (const nb::cast_error&) {
-                           throw nb::type_error(
-                               "Box has to be set with an array or a nested sequence of shape (2, p).");
-                         }
+                       [](Module& self, nb::iterable box) {
+                         auto boxCpp =
+                             Gudhi::python::_convert_iterable_to_cpp_type<NDArray2, std::vector<std::vector<T>>>(
+                                 box, "Box has to be set with an array or a nested sequence of shape (2, p).");
+                         std::visit([&](auto&& val) { self.set_box(val); }, boxCpp);
                        })
           .def("set_box",
                [](Module& self, NDArray2 box) {
