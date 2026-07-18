@@ -26,6 +26,7 @@ def _plot_filtered_landscape(grid, landscape) -> None:
 
     plot_surfaces(
         (grid, np.swapaxes(landscape, -1, -2)),
+        cmap="hot",
         contour=False,
     )
 

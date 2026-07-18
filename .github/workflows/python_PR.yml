@@ -156,6 +156,7 @@ jobs:
         system_dlls = {
             "kernel32.dll",
             "msvcp140.dll",
+            "msvcp140_1.dll",
             "python" + "${{ matrix.python-version }}".replace(".", "") + ".dll",
             "vcruntime140.dll",
             "vcruntime140_1.dll",

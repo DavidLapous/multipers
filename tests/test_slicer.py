@@ -587,33 +587,17 @@ def test_astypes():
 
     st = random_st()
 
-    for vine in [True, False]:
-        for kcritical in [True, False]:
-            for dtype in mp.slicer.available_dtype:
-                # for dtype in [np.int32,np.float64]:
-                for ftype in mp.slicer.available_filtration_container:
-                    for col in mp.slicer.available_columns:
-                        for pers_backend in mp.slicer.available_pers_backend:
-                            if pers_backend == "GudhiCohomology" and (
-                                vine
-                                or col != next(iter(mp.slicer.available_columns))[0]
-                            ):
-                                continue
-                            if ftype == "Flat" and not kcritical:
-                                continue
-                            s = mp.Slicer(st).astype(
-                                kcritical=kcritical,
-                                vineyard=vine,
-                                dtype=dtype,
-                                filtration_container=ftype,
-                                col=col,
-                                pers_backend=pers_backend,
-                            )
-                            assert s.is_kcritical == kcritical
-                            assert s.is_vine == vine
-                            assert s.dtype == dtype
-                            assert s.filtration_container == ftype
-                            assert s.col_type == col
-                            assert s.pers_backend == pers_backend
-    s = mp.Slicer(st)
-    assert s.astype() is s
+    for cls in mp.slicer.available_slicers:
+        target = cls()
+        converted = mp.Slicer(st).astype(
+            kcritical=target.is_kcritical,
+            vineyard=target.is_vine,
+            dtype=target.dtype,
+            filtration_container=target.filtration_container,
+            col=target.col_type,
+            pers_backend=target.pers_backend,
+        )
+        assert type(converted) is cls
+
+    slicer = mp.Slicer(st)
+    assert slicer.astype() is slicer
