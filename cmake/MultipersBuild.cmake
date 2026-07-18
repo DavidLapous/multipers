@@ -123,6 +123,13 @@ if(NOT MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE)
     "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/src/hnf_at.cpp"
   )
   target_include_directories(multipers_skyscraper_core PUBLIC ${MULTIPERS_SKYSCRAPER_INCLUDE_DIRS})
+  if(TARGET Boost::headers)
+    target_link_libraries(multipers_skyscraper_core PUBLIC Boost::headers)
+  elseif(TARGET Boost::boost)
+    target_link_libraries(multipers_skyscraper_core PUBLIC Boost::boost)
+  else()
+    target_include_directories(multipers_skyscraper_core PUBLIC ${Boost_INCLUDE_DIRS})
+  endif()
   set_target_properties(multipers_skyscraper_core PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 endif()
 
