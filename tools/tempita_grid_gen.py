@@ -286,7 +286,17 @@ def _render_instantiations_include_slicer(type_names: list[str]) -> str:
         if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(
+        f"template<> std::vector<{type_name}::Cycle> {type_name}::get_n_most_persistent_cycles({type_name}::Dimension, {type_name}::Index, bool) = delete;"
+        for type_name in type_names
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
+    )
+    lines.extend(
         f"template<> std::vector<std::vector<{type_name}::Cycle>> {type_name}::get_representative_cycles(bool) = delete;"
+        for type_name in type_names
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
+    )
+    lines.extend(
+        f"template<> std::vector<{type_name}::Cycle> {type_name}::get_representative_cycles_in_dim({type_name}::Dimension, bool) = delete;"
         for type_name in type_names
         if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
