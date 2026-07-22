@@ -95,23 +95,23 @@ struct Generator_basis_data {
   }
 
   std::vector<std::vector<Index>> expand_cycle(const std::vector<Index>& cycle) {
-    std::vector<std::uint8_t> active_rows(rowBoundaries.size(), 0);
-    for (Index generator_idx : cycle) {
-      if (generator_idx >= columns.size()) {
+    std::vector<std::uint8_t> activeRows(rowBoundaries.size(), 0);
+    for (Index genIdx : cycle) {
+      if (genIdx >= columns.size()) {
         throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
       }
-      for (Index row_idx : columns[generator_idx]) {
-        if (row_idx >= rowBoundaries.size()) {
+      for (Index rowIdx : columns[genIdx]) {
+        if (rowIdx >= rowBoundaries.size()) {
           throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_boundaries`.");
         }
-        active_rows[row_idx] ^= 1;
+        activeRows[rowIdx] ^= 1;
       }
     }
 
     std::vector<std::vector<Index>> out;
-    for (std::size_t row_idx = 0; row_idx < active_rows.size(); ++row_idx) {
-      if (active_rows[row_idx] != 0) {
-        out.push_back(rowBoundaries[row_idx]);
+    for (std::size_t rowIdx = 0; rowIdx < activeRows.size(); ++rowIdx) {
+      if (activeRows[rowIdx] != 0) {
+        out.push_back(rowBoundaries[rowIdx]);
       }
     }
     return out;
@@ -242,6 +242,76 @@ struct Compacted_squeezed_filtration_grid {
 
       return selection;
     });
+  }
+};
+
+template <class Boundaries, class Dimensions, typename Index>
+class Representative_cycle_intersection {
+ public:
+  Representative_cycle_intersection(const Boundaries& boundaries,
+                                    const Dimensions& dimensions,
+                                    const std::unordered_set<Index>& points)
+      : boundaries_(&boundaries), dimensions_(&dimensions), points_(&points), cache_(boundaries.size(), -1) {}
+
+  bool intersects(const std::vector<Index>& cycle) {
+    if (points_->empty()) {
+      return false;
+    }
+    for (Index cell : cycle) {
+      if (_cell_intersects(cell)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // for Generator_basis_data case, temporary
+  bool dim_1_boundaries_intersects(const std::vector<std::vector<Index>>& cycle) {
+    if (points_->empty()) {
+      return false;
+    }
+    for (const auto& boundary : cycle) {
+      for (Index vertex : boundary) {
+        if (points_->contains(vertex)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  template <class F>
+  void initialize_cache(std::size_t n, F&& get_cycle) {
+    for (std::size_t i = 0; i < n; ++i) {
+      intersects(std::forward<F>(get_cycle)(i));
+    }
+  }
+
+ private:
+  Boundaries const* boundaries_;
+  Dimensions const* dimensions_;
+  std::unordered_set<Index> const* points_;
+  std::vector<std::int8_t> cache_;
+
+  bool _cell_intersects(Index cell) {
+    auto& cached = cache_[static_cast<std::size_t>(cell)];
+    if (cached >= 0) {
+      return cached != 0;
+    }
+
+    bool intersects = false;
+    if (dimensions_[cell] == 0) {
+      intersects = points_->find(cell) != points_->end();
+    } else {
+      for (auto face : boundaries_[cell]) {
+        if (_cell_intersects(face)) {
+          intersects = true;
+          break;
+        }
+      }
+    }
+    cached = static_cast<std::int8_t>(intersects);
+    return intersects;
   }
 };
 

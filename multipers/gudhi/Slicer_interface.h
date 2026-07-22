@@ -25,6 +25,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -71,14 +72,16 @@ class Slicer_interface {
   static constexpr value_type T_inf = MultiFiltrationValue::T_inf;     /**< Infinity. */
   static constexpr value_type T_m_inf = MultiFiltrationValue::T_m_inf; /**< Minus infinity. */
 
-  Slicer_interface() : slicer_(), filtrationGrid_(nanobind::none()), minPresDegree_(-1), isMinRes_(false) {};
+  Slicer_interface()
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {};
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
   Slicer_interface(const Slicer_interface<OtherMultiFiltrationValue, OtherPersistenceAlgorithm> &other)
       : slicer_(other.slicer_),
         filtrationGrid_(other.filtrationGrid_),
         generatorBasis_(other.generatorBasis_),
-        minPresDegree_(other.minPresDegree_),
+        presDegree_(other.presDegree_),
+        isMinPres_(other.isMinPres_),
         isMinRes_(other.isMinRes_) {}
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
@@ -87,24 +90,23 @@ class Slicer_interface {
       : slicer_(std::move(slicer)),
         filtrationGrid_(other.filtrationGrid_),
         generatorBasis_(other.generatorBasis_),
-        minPresDegree_(other.minPresDegree_),
+        presDegree_(other.presDegree_),
+        isMinPres_(other.isMinPres_),
         isMinRes_(other.isMinRes_) {}
 
   template <class OtherMultiFiltrationValue>
   Slicer_interface(
       const Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<OtherMultiFiltrationValue>
           &simplexTree)
-      : slicer_(), filtrationGrid_(simplexTree.filtration_grid), minPresDegree_(-1), isMinRes_(false) {
+      : slicer_(), filtrationGrid_(simplexTree.filtration_grid), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
     {
       nanobind::gil_scoped_release release;
-      slicer_ =
-          Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(
-              simplexTree);
+      slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree);
     }
   }
 
   Slicer_interface(const std::string &path, int shiftDimension, bool isRivetCompatible = false, bool isReversed = false)
-      : slicer_(), filtrationGrid_(nanobind::none()), minPresDegree_(-1), isMinRes_(false) {
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
     {
       nanobind::gil_scoped_release release;
       slicer_ = Gudhi::multi_persistence::build_slicer_from_scc_file<Slicer_t>(
@@ -115,7 +117,7 @@ class Slicer_interface {
   Slicer_interface(nanobind::iterable generator_maps,
                    nanobind::iterable generator_dimensions,
                    nanobind::iterable filtration_values)
-      : slicer_(), filtrationGrid_(nanobind::none()), minPresDegree_(-1), isMinRes_(false) {
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
     {
       nanobind::gil_scoped_release release;
       auto maps = detail::_get_compatible_generator_maps(generator_maps);
@@ -139,6 +141,23 @@ class Slicer_interface {
     }
   }
 
+  // std::vector<unsigned int> imposed by Gudhi::cubical_complex::Bitmap_cubical_complex
+  Slicer_interface(Tensor2D<value_type> image, const std::vector<unsigned int> &shape)
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    Numpy_2d_span imageView(image);
+    if (imageView.size() == 0 || shape.size() == 0 || shape[0] == 0) return;
+    {
+      nanobind::gil_scoped_release release;
+      std::vector<MultiFiltrationValue> vertices;
+      vertices.reserve(imageView.size());
+      for (std::size_t i = 0; i < imageView.size(); ++i) {
+        auto rowView = imageView[i];
+        vertices.emplace_back(rowView.begin(), rowView.end());
+      }
+      slicer_ = Gudhi::multi_persistence::build_slicer_from_bitmap<Slicer_t>(vertices, shape);
+    }
+  }
+
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
   Slicer_interface &copy(const Slicer_interface<OtherMultiFiltrationValue, OtherPersistenceAlgorithm> &other) {
     *this = Slicer_interface(other);
@@ -152,9 +171,7 @@ class Slicer_interface {
     return *this;
   }
 
-  [[nodiscard]] nanobind::object get_filtration_grid() const {
-    return filtrationGrid_;
-  }
+  [[nodiscard]] nanobind::object get_filtration_grid() const { return filtrationGrid_; }
 
   void set_filtration_grid(nanobind::object grid) {
     if (grid.is_none()) {
@@ -164,7 +181,7 @@ class Slicer_interface {
 
     // throws if it does not pass the check
     // returns false if valid but empty
-    if (_verify_grid_validity(grid)){
+    if (_verify_grid_validity(grid)) {
       filtrationGrid_ = grid;
       return;
     }
@@ -175,7 +192,7 @@ class Slicer_interface {
   // TODO: verify if nanobind does transform an empty optional into None.
   [[nodiscard]] std::optional<detail::Generator_basis_data> get_generator_basis() const { return generatorBasis_; }
 
-  void set_generator_basis(const std::optional<detail::Generator_basis_data>& basis) {
+  void set_generator_basis(const std::optional<detail::Generator_basis_data> &basis) {
     if (basis.has_value()) {
       generatorBasis_ = basis;
       return;
@@ -191,13 +208,33 @@ class Slicer_interface {
     generatorBasis_ = detail::Generator_basis_data(basis);
   }
 
-  [[nodiscard]] int get_min_pres_degree() const { return minPresDegree_; }
+  [[nodiscard]] int get_min_pres_degree() const { return isMinPres_ ? presDegree_ : -1; }
 
-  // void set_min_pres_degree(int degree) { minPresDegree_ = degree; }
+  void set_min_pres_degree(int degree, bool isMinRes = false) {
+    isMinPres_ = degree >= 0;
+    if (isMinPres_) presDegree_ = degree;
+    isMinRes_ = isMinPres_ && isMinRes;
+  }
 
-  [[nodiscard]] bool is_min_pres() const { return minPresDegree_ >= 0; }
+  [[nodiscard]] int get_pres_degree() const { return presDegree_; }
 
-  [[nodiscard]] bool is_min_res() const { return minPresDegree_ >= 0 && isMinRes_; }
+  [[nodiscard]] bool is_pres() const { return presDegree_ >= 0; }
+
+  void set_is_pres(int degree, bool isMinPres = false) {
+    presDegree_ = degree;
+    isMinPres_ = degree >= 0 ? isMinPres : false;
+    isMinRes_ = isMinPres_;
+  }
+
+  [[nodiscard]] bool is_min_pres() const { return isMinPres_; }
+
+  [[nodiscard]] bool is_min_res() const { return isMinRes_; }
+
+  void set_is_min_res(bool isMinRes) {
+    if (isMinRes && !isMinPres_)
+      throw std::invalid_argument("Cannot mark a slicer as `is_minres` without a valid `minpres_degree`.");
+    isMinRes_ = isMinRes;
+  }
 
   [[nodiscard]] int size() const { return slicer_.get_number_of_cycle_generators(); }
 
@@ -340,7 +377,7 @@ class Slicer_interface {
   }
 
   template <typename U>
-  Slicer_interface &coarsen_on_grid(const std::vector<std::vector<U>>& grid, bool coordinates) {
+  Slicer_interface &coarsen_on_grid(const std::vector<std::vector<U>> &grid, bool coordinates) {
     {
       nanobind::gil_scoped_release release;
       slicer_.coarsen_on_grid(grid, coordinates);
@@ -356,6 +393,34 @@ class Slicer_interface {
       slicer_.coarsen_on_grid(views, coordinates);
     }
     return *this;
+  }
+
+  template <typename U>
+  Slicer_interface &normalize_filtration_values(const std::optional<Tensor2D<U>> &box) {
+    if constexpr (std::is_same_v<MultiFiltrationValue,
+                                 Gudhi::multi_filtration::Degree_rips_bifiltration<
+                                     value_type,
+                                     MultiFiltrationValue::has_negative_cones(),
+                                     MultiFiltrationValue::ensures_1_criticality()>>) {
+      throw nanobind::type_error("Degree-Rips slicers cannot be affinely normalized.");
+    } else if constexpr (!std::is_floating_point_v<value_type>) {
+      throw nanobind::type_error("Normalize filtration requires a floating-point dtype for slicers.");
+    } else {
+      {
+        nanobind::gil_scoped_release release;
+        if (box.has_value()) {
+          if (box.shape(0) != 2 || box.shape(1) != slicer_.get_number_of_parameters())
+            throw std::invalid_argument("Box must have shape (2, num_parameters).");
+          auto boxView = Numpy_2d_span(box);
+          auto lowerView = boxView[0];
+          auto upperView = boxView[1];
+          slicer_.normalize_filtration_values({lowerView.begin(), lowerView.end(), upperView.begin(), upperView.end()});
+        } else {
+          slicer_.normalize_filtration_values();
+        }
+      }
+      return *this;
+    }
   }
 
   Slicer_interface &clean_filtration_grid() {
@@ -418,6 +483,68 @@ class Slicer_interface {
     return Gudhi::python::_build_tuple(barcode.size(), [&](std::size_t i) {
       return _wrap_as_numpy_array(std::move(barcode[i]), barcode[i].size(), 2);
     });
+  }
+
+  template <typename U>
+  auto compute_landscapes_on_grid(Tensor1D<U> xGrid,
+                                  Tensor1D<U> yGrid,
+                                  Tensor1D<U> direction,
+                                  std::size_t xStride,
+                                  std::size_t yStride,
+                                  double dt,
+                                  int degree,
+                                  Tensor1D<std::int32_t> ks,
+                                  int n_jobs,
+                                  bool ignoreInf = true) {
+    auto xView = xGrid.view();
+    auto yView = yGrid.view();
+    auto dirView = direction.view();
+    auto kView = ks.view();
+
+    const std::size_t nx = xView.shape(0);
+    const std::size_t ny = yView.shape(0);
+
+    if (nx == 0 || ny == 0) throw nanobind::value_error("Landscape grid axes must be non-empty.");
+    if (direction.shape(0) != 2) throw nanobind::value_error("Landscape direction must be two-dimensional.");
+    if (xStride == 0 || yStride == 0) throw nanobind::value_error("Landscape grid strides must be strictly positive.");
+    if (!std::isfinite(dt) || dt <= 0.0)
+      throw nanobind::value_error("Landscape grid step must be finite and strictly positive.");
+    if (nx > std::numeric_limits<std::size_t>::max() / ny)
+      throw nanobind::value_error("Landscape output grid is too large.");
+    if (degree < 0) throw nanobind::value_error("Degree has to be positive.");
+
+    for (std::size_t i = 0; i < nx; ++i) {
+      if (!std::isfinite(xView(i))) throw nanobind::value_error("Landscape x-grid must be finite.");
+    }
+    for (std::size_t i = 0; i < ny; ++i) {
+      if (!std::isfinite(yView(i))) throw nanobind::value_error("Landscape y-grid must be finite.");
+    }
+    for (std::size_t i = 0; i < dirView.shape(0); ++i) {
+      if (!std::isfinite(dirView(i))) throw nanobind::value_error("Landscape direction must be finite.");
+      if (dirView(i) <= 0.0) throw nanobind::value_error("Landscape direction must be strictly positive.");
+    }
+    for (std::size_t i = 0; i < kView.shape(0); ++i) {
+      if (kView(i) < 0) throw nanobind::value_error("Landscape ks must be strictly positive.");
+    }
+
+    std::vector<double> out;
+
+    {
+      nanobind::gil_scoped_release release;
+      out = Gudhi::multi_persistence::compute_slicer_landscapes_on_grid(slicer_,
+                                                                        Numpy_span(xGrid),
+                                                                        Numpy_span(yGrid),
+                                                                        Numpy_span(direction),
+                                                                        xStride,
+                                                                        yStride,
+                                                                        dt,
+                                                                        degree,
+                                                                        Numpy_span(ks),
+                                                                        ignoreInf,
+                                                                        n_jobs);
+    }
+
+    return _wrap_as_numpy_array(std::move(out), kView.shape(0), nx, ny);
   }
 
   [[nodiscard]] nanobind::object get_representative_cycles(
@@ -615,7 +742,8 @@ class Slicer_interface {
   Slicer_t slicer_;
   nanobind::object filtrationGrid_;
   std::optional<detail::Generator_basis_data> generatorBasis_;
-  int minPresDegree_;
+  int presDegree_;
+  bool isMinPres_;
   bool isMinRes_;
 
   static auto _get_filtration_array(const MultiFiltrationValue &f) {
@@ -740,7 +868,7 @@ class Slicer_interface {
       hasNonEmptyRows |= hasPrev;
     }
 
-    return hasNonEmptyRows; // returns false if the grid is valid but empty
+    return hasNonEmptyRows;  // returns false if the grid is valid but empty
   }
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
@@ -820,21 +948,6 @@ class Slicer_interface {
         grid, [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); });
   }
 
-  bool _cycle_intersects_points(const std::vector<std::vector<Index>> &cycle, const std::unordered_set<Index> &points) {
-    // TODO: generalize
-    if (points.empty()) {
-      return false;
-    }
-    for (const auto &simplex : cycle) {
-      for (Index vertex : simplex) {
-        if (points.contains(vertex)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   void _get_cycle_boundary(std::vector<std::vector<Index>> &outCycle, const std::vector<Index> &cycle, int dim) {
     if (cycle.size() == 0) throw std::runtime_error("A cycle should not be empty");
     if (generatorBasis_.has_value() && dim == generatorBasis_->degree) {
@@ -855,9 +968,11 @@ class Slicer_interface {
       const std::optional<Tensor1D<Index>> &pointsToIntersect) const {
     std::unordered_set<Index> points;
     if (pointsToIntersect.has_value()) {
-      PyErr_WarnEx(PyExc_UserWarning,
-                   "Points to intersect are ignored for dimensions different of 1 for now: to be implemented.",
-                   1);
+      if (generatorBasis_.has_value())
+        PyErr_WarnEx(PyExc_UserWarning,
+                     " When there is a generator basis, points to intersect are ignored for dimensions different of 1 "
+                     "for now: to be implemented.",
+                     1);
       Numpy_span view(*pointsToIntersect);
       points.reserve(view.size());
       points.insert(view.begin(), view.end());
@@ -870,7 +985,7 @@ class Slicer_interface {
       auto cycleIdx = slicer_.get_representative_cycles(update);
       out.resize(cycleIdx.size());
       std::vector<std::array<std::size_t, 3>> blocks;
-  
+
       if (barcodeIndices.has_value()) {
         Numpy_2d_span view(*barcodeIndices);
         std::vector<std::size_t> sizeByDim(cycleIdx.size(), 0);
@@ -893,15 +1008,25 @@ class Slicer_interface {
           }
         }
       }
+      detail::Representative_cycle_intersection inter(slicer_.get_boundaries(), slicer_.get_dimensions(), points);
+      if (pointsToIntersect.has_value() && !generatorBasis_.has_value()) {
+        // pre-initialize cache in sequential loop to avoid problems in parallelization
+        inter.initialize_cache(blocks.size(), [&](std::size_t i) -> const auto & {
+          auto [dim, cIdx, cOut] = blocks[i];
+          return cycleIdx[dim][cIdx];
+        });
+      }
       tbb::parallel_for(std::size_t(0), blocks.size(), [&](std::size_t blockIdx) {
         auto [dim, cIdx, cOut] = blocks[blockIdx];
-        auto &outCycle = out[dim][cOut];
         const auto &cycle = cycleIdx[dim][cIdx];
-        _get_cycle_boundary(outCycle, cycle, dim);
-        // TODO: once _cycle_intersects_points generalized, it would probably make more sense to put this
-        // condition even before constructing outCycle and give cycle as input
-        if (dim == 1 && pointsToIntersect.has_value() && !_cycle_intersects_points(outCycle, points)) {
-          outCycle.clear();  // to mark as to be ignored
+        if (!pointsToIntersect.has_value() || generatorBasis_.has_value() || inter.intersects(cycle)) {
+          auto &outCycle = out[dim][cOut];
+          _get_cycle_boundary(outCycle, cycle, dim);
+          // TODO: intersects version for generatorBasis_ and remove this if
+          if (dim == 1 && generatorBasis_.has_value() && pointsToIntersect.has_value() &&
+              !inter.dim_1_boundaries_intersects(outCycle)) {
+            outCycle.clear();  // to mark as to be ignored
+          }
         }
       });
     }
@@ -916,9 +1041,10 @@ class Slicer_interface {
       const std::optional<Tensor1D<Index>> &pointsToIntersect) const {
     std::unordered_set<Index> points;
     if (pointsToIntersect.has_value()) {
-      if (dimension != 1) {
+      if (dimension != 1 && generatorBasis_.has_value()) {
         PyErr_WarnEx(PyExc_UserWarning,
-                     "Points to intersect are ignored for dimensions different of 1 for now: to be implemented.",
+                     "When there is a generator basis, points to intersect are ignored for dimensions different of 1 "
+                     "for now: to be implemented.",
                      1);
       } else {
         Numpy_span view(*pointsToIntersect);
@@ -932,20 +1058,27 @@ class Slicer_interface {
     {
       nanobind::gil_scoped_release release;
       auto cycleIdx = slicer_.get_representative_cycles_in_dim(dimension, update);
-  
-      auto compute_boundaries = [&](const auto& range) {
+
+      detail::Representative_cycle_intersection inter(slicer_.get_boundaries(), slicer_.get_dimensions(), points);
+      auto compute_boundaries = [&](const auto &range) {
+        if (pointsToIntersect.has_value() && !generatorBasis_.has_value()) {
+          // pre-initialize cache in sequential loop to avoid problems in parallelization
+          inter.initialize_cache(range.size(), [&](std::size_t i) -> const auto & { return cycleIdx[range[i]]; });
+        }
         tbb::parallel_for(std::size_t(0), range.size(), [&](std::size_t idx) {
-          auto &outCycle = out[idx];
           const auto &cycle = cycleIdx[range[idx]];
-          _get_cycle_boundary(outCycle, cycle, dimension);
-          // TODO: once _cycle_intersects_points generalized, it would probably make more sense to put this
-          // condition even before constructing outCycle and give cycle as input
-          if (dimension == 1 && pointsToIntersect.has_value() && !_cycle_intersects_points(outCycle, points)) {
-            outCycle.clear();  // to mark as to be ignored
+          if (!pointsToIntersect.has_value() || generatorBasis_.has_value() || inter.intersects(cycle)) {
+            auto &outCycle = out[idx];
+            _get_cycle_boundary(outCycle, cycle, dimension);
+            // TODO: intersects version for generatorBasis_ and remove this if
+            if (dimension == 1 && generatorBasis_.has_value() && pointsToIntersect.has_value() &&
+                !inter.dim_1_boundaries_intersects(outCycle)) {
+              outCycle.clear();  // to mark as to be ignored
+            }
           }
         });
       };
-  
+
       if (barcodeIndices.has_value()) {
         Numpy_span view(*barcodeIndices);
         out.resize(view.size());

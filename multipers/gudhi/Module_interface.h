@@ -49,18 +49,6 @@
 namespace Gudhi {
 namespace multi_persistence {
 
-template <typename T, typename... Args>
-Numpy_span<T> contiguous_numpy_span(const nanobind::ndarray<const T, Args...> &array) {
-  return {array.data(), array.data() + array.shape(0)};
-}
-
-template <typename T>
-Numpy_2d_span<T> contiguous_numpy_2d_span(
-    const nanobind::ndarray<const T, nanobind::ndim<2>, nanobind::c_contig> &array) {
-  typename Numpy_2d_span<T>::Array gudhi_array(array);
-  return Numpy_2d_span<T>(gudhi_array);
-}
-
 /**
  * @private
  */
@@ -278,10 +266,10 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       Dimension dim = degree < 0 ? get_null_value<Dimension>() : static_cast<Dimension>(degree);
-      auto baseView = contiguous_numpy_span(basepoint);
+      auto baseView = Numpy_span(basepoint);
       Line<T> line;
       if (direction.has_value()) {
-        auto dirView = contiguous_numpy_span(*direction);
+        auto dirView = Numpy_span(*direction);
         line = Line<T>(baseView.begin(), baseView.end(), dirView.begin(), dirView.end());
       } else {
         line = Line<T>(baseView.begin(), baseView.end());
@@ -302,11 +290,11 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       Dimension dim = degree < 0 ? get_null_value<Dimension>() : static_cast<Dimension>(degree);
-      auto basesView = contiguous_numpy_2d_span(basepoints);
+      auto basesView = Numpy_2d_span(basepoints);
       numberOfLines = basesView.size();
       std::vector<Line<T>> lines(numberOfLines);
       if (directions.has_value()) {
-        auto dirsView = contiguous_numpy_2d_span(*directions);
+        auto dirsView = Numpy_2d_span(*directions);
         if (numberOfLines != dirsView.size())
           throw std::invalid_argument("If directions are specified, there need to be as many as base points.");
         for (std::size_t i = 0; i < lines.size(); ++i) {
@@ -338,7 +326,7 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       Dimension dim = degree < 0 ? get_null_value<Dimension>() : static_cast<Dimension>(degree);
-      module_.rescale(contiguous_numpy_span(rescaleFactors), dim);
+      module_.rescale(Numpy_span(rescaleFactors), dim);
     }
     return *this;
   }
@@ -356,7 +344,7 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       Dimension dim = degree < 0 ? get_null_value<Dimension>() : static_cast<Dimension>(degree);
-      module_.translate(contiguous_numpy_span(translation), dim);
+      module_.translate(Numpy_span(translation), dim);
     }
     return *this;
   }
@@ -374,7 +362,7 @@ class Module_interface {
       nanobind::gil_scoped_release release;
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
-      for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
+      for (const auto &axis : grid) views.push_back(Numpy_span(axis));
       module_.evaluate_in_grid(views);
     }
     return *this;
@@ -383,7 +371,7 @@ class Module_interface {
   Module_interface &evaluate_in_grid(Tensor2D grid) {
     {
       nanobind::gil_scoped_release release;
-      module_.evaluate_in_grid(contiguous_numpy_2d_span(grid));
+      module_.evaluate_in_grid(Numpy_2d_span(grid));
     }
     return *this;
   }
@@ -392,7 +380,7 @@ class Module_interface {
     Module_interface out(box_);
     {
       nanobind::gil_scoped_release release;
-      out.module_ = Gudhi::multi_persistence::build_permuted_module(module_, contiguous_numpy_span(permutation));
+      out.module_ = Gudhi::multi_persistence::build_permuted_module(module_, Numpy_span(permutation));
     }
     return out;
   }
@@ -411,7 +399,7 @@ class Module_interface {
     Module_interface out(box_);
     {
       nanobind::gil_scoped_release release;
-      out.module_ = Gudhi::multi_persistence::build_module_of_dimension(module_, contiguous_numpy_span(degrees));
+      out.module_ = Gudhi::multi_persistence::build_module_of_dimension(module_, Numpy_span(degrees));
     }
     return out;
   }
@@ -438,11 +426,11 @@ class Module_interface {
           "The given box has not the same number of coordinates than parameters in the stored module");
 
     std::vector<maybe_make_signed_t<T>> out;
-    auto resolutionView = contiguous_numpy_span(resolution);
+    auto resolutionView = Numpy_span(resolution);
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-          module_, degree, contiguous_numpy_span(ks), get_box_from_tensor(box), resolutionView, n_jobs);
+          module_, degree, Numpy_span(ks), get_box_from_tensor(box), resolutionView, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), resolutionView[0], resolutionView[1]);
   }
@@ -459,9 +447,9 @@ class Module_interface {
       nanobind::gil_scoped_release release;
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
-      for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
+      for (const auto &axis : grid) views.push_back(Numpy_span(axis));
       out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-          module_, degree, contiguous_numpy_span(ks), views, n_jobs);
+          module_, degree, Numpy_span(ks), views, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), grid[0].shape(0), grid[1].shape(0));
   }
@@ -484,8 +472,8 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_pixels(module_,
-                                                            contiguous_numpy_2d_span(coordinates),
-                                                            contiguous_numpy_span(degrees),
+                                                            Numpy_2d_span(coordinates),
+                                                            Numpy_span(degrees),
                                                             get_box_from_tensor(box),
                                                             delta,
                                                             p,
@@ -510,7 +498,7 @@ class Module_interface {
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_module_distances_to(
-          module_, contiguous_numpy_2d_span(pts), signed_distance, n_jobs);
+          module_, Numpy_2d_span(pts), signed_distance, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), pts.shape(0), module_.size());
   }
@@ -541,7 +529,7 @@ class Module_interface {
   nanobind::tuple get_flat_indices_in_grid(const std::vector<Tensor1D> &grid) {
     std::vector<Numpy_span<T>> views;
     views.reserve(grid.size());
-    for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
+    for (const auto &axis : grid) views.push_back(Numpy_span(axis));
     return _get_flat_indices_in_grid(views);
   }
 
@@ -607,7 +595,7 @@ class Module_interface {
   static Box<T> get_box_from_tensor(Tensor2D box) {
     if (box.shape(0) != 2) throw std::invalid_argument("Box has to be represented by two corners.");
 
-    auto boxView = contiguous_numpy_2d_span(box);
+    auto boxView = Numpy_2d_span(box);
     auto lowerView = boxView[0];
     auto upperView = boxView[1];
     return {lowerView.begin(), lowerView.end(), upperView.begin(), upperView.end()};
@@ -621,7 +609,7 @@ class Module_interface {
   static Box_t get_flat_box_from_tensor(Tensor2D box) {
     if (box.shape(0) != 2) throw std::invalid_argument("Box has to be represented by two corners.");
 
-    auto boxView = contiguous_numpy_2d_span(box);
+    auto boxView = Numpy_2d_span(box);
     auto lowerView = boxView[0];
     auto upperView = boxView[1];
     Box_t fb(lowerView.begin(), lowerView.end());
