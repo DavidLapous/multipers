@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -37,8 +38,8 @@ namespace Gudhi {
 namespace multi_persistence {
 namespace detail {
 
-template <typename T, typename... Ts>
-inline constexpr bool _all_same_v = (std::is_same_v<T, Ts> && ...);
+// template <typename T, typename... Ts>
+// inline constexpr bool _all_same_v = (std::is_same_v<T, Ts> && ...);
 
 enum class Array_dtype : std::uint8_t { INT32, INT64, FLOAT32, FLOAT64, EMPTY, UNKNOWN };
 
@@ -78,16 +79,14 @@ inline Array_dtype _get_dtype(nanobind::handle obj) {
 }
 
 template <typename F>
-inline auto _dispatch_dtype(nanobind::handle data, F &&func) {
+inline auto _dispatch_int_dtype(nanobind::handle data, F &&func) {
   using R_int32 = decltype(func.template operator()<std::int32_t>());
   using R_int64 = decltype(func.template operator()<std::int64_t>());
-  using R_float32 = decltype(func.template operator()<float>());
-  using R_float64 = decltype(func.template operator()<double>());
 
-  // the case were some are equal but not all should not happen in our use case
-  using Union = std::conditional_t<_all_same_v<R_int32, R_int64, R_float32, R_float64>,
+  using Union = std::conditional_t</* _all_same_v<R_int32, R_int64>, */
+                                   std::is_same_v<R_int32, R_int64>,
                                    R_int32,
-                                   std::variant<R_int32, R_int64, R_float32, R_float64>>;
+                                   std::variant<R_int32, R_int64>>;
 
   Array_dtype dtype = _get_dtype(data);
   switch (dtype) {
@@ -95,46 +94,77 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func) {
       return Union(std::forward<F>(func).template operator()<std::int32_t>());
     case Array_dtype::INT64:
       return Union(std::forward<F>(func).template operator()<std::int64_t>());
+    case Array_dtype::EMPTY:
+      // type does not matter for now then
+      return Union(std::forward<F>(func).template operator()<std::int32_t>());
+    default:
+      throw nanobind::type_error("Unsupported element type.");
+  }
+}
+
+template <typename F>
+inline auto _dispatch_float_dtype(nanobind::handle data, F &&func) {
+  using R_float32 = decltype(func.template operator()<float>());
+  using R_float64 = decltype(func.template operator()<double>());
+
+  using Union = std::conditional_t</* _all_same_v<R_float32, R_float64>, */
+                                   std::is_same_v<R_float32, R_float64>,
+                                   R_float32,
+                                   std::variant<R_float32, R_float64>>;
+
+  Array_dtype dtype = _get_dtype(data);
+  switch (dtype) {
     case Array_dtype::FLOAT32:
       return Union(std::forward<F>(func).template operator()<float>());
     case Array_dtype::FLOAT64:
       return Union(std::forward<F>(func).template operator()<double>());
     case Array_dtype::EMPTY:
       // type does not matter for now then
-      return Union(std::forward<F>(func).template operator()<double>());
+      return Union(std::forward<F>(func).template operator()<float>());
     default:
       throw nanobind::type_error("Unsupported element type.");
   }
 }
 
+// uncommenting in the _get_compatible_* methods gives much more possibilities, but it also takes much more
+// compile time (and binary size). I had to split the _dispatch_dtype method into a int and a float version
+// for the same reason
+
 inline auto _get_compatible_generator_maps(nanobind::iterable maps) {
-  return _dispatch_dtype(maps, [&]<typename U>() {
-    return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
-        std::vector<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>,
-        std::vector<std::vector<U>>>(
-        maps, "Generator maps must be either iterable[iterable[U]] or iterable[ndarray[U, ndim=1]] (contiguous).");
+  return _dispatch_int_dtype(maps, [&]<typename U>() {
+    // return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
+    //     std::vector<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>,
+    //     std::vector<std::vector<U>>>(
+    //     maps, "Generator maps must be either iterable[iterable[U]] or iterable[ndarray[U, ndim=1]] (contiguous).");
+    std::vector<std::vector<U>> res;
+    if (nanobind::try_cast(maps, res, false)) return res;
+    throw std::invalid_argument("Generator maps must be iterable[iterable[U]].");
   });
 }
 
 inline auto _get_compatible_generator_dimensions(nanobind::iterable dimensions) {
-  return _dispatch_dtype(dimensions, [&]<typename U>() {
-    return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
-        nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>,
-        std::vector<U>>(dimensions,
-                        "Generator dimensions must be either iterable[U] or ndarray[U, ndim=1] (contiguous).");
+  return _dispatch_int_dtype(dimensions, [&]<typename U>() {
+    // return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
+    //     nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>,
+    //     std::vector<U>>(dimensions,
+    //                     "Generator dimensions must be either iterable[U] or ndarray[U, ndim=1] (contiguous).");
+    nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig> res;
+    if (nanobind::try_cast(dimensions, res, false)) return Numpy_span(res);
+    throw std::invalid_argument("Generator dimensions must be ndarray[U, ndim=1] (contiguous).");
   });
 }
 
 inline auto _get_compatible_filtration_values(nanobind::iterable filts) {
-  return _dispatch_dtype(filts, [&]<typename U>() {
-    using Seq1_t = std::vector<std::vector<U>>;
-    using Seq2_t = std::vector<std::vector<std::vector<U>>>;
+  return _dispatch_float_dtype(filts, [&]<typename U>() {
+    // using Seq1_t = std::vector<std::vector<U>>;
+    // using Seq2_t = std::vector<std::vector<std::vector<U>>>;
     using Ten1_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>;
     using Ten2_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<2>>>;
-    return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten1_t, Ten2_t, Seq1_t, Seq2_t>(
+    return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten1_t, Ten2_t /* , Seq1_t, Seq2_t */>(
         filts,
-        "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
-        "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]].");
+        // "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
+        // "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
+        "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, ndim=2]].");
   });
 }
 

@@ -209,7 +209,7 @@ def _current_bc(
 ):
     bcs = tuple(np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode())
     if not keep_inf:
-        inf_value = type(self)._inf_value()
+        inf_value = type(self)._inf_value
         bcs = tuple(
             np.asarray(
                 [a for a in stuff if a[0] < inf_value],
@@ -243,7 +243,7 @@ def _barcode_coordinates_to_values(
     self, barcode, line_values, line_coordinates, api, keep_inf
 ):
     coord_values = api.set_at(line_values * 0, line_coordinates, line_values)
-    inf_coord = type(self)._inf_value()
+    inf_coord = type(self)._inf_value
     out = []
     for dim_barcode in barcode:
         coords = np.asarray(dim_barcode, dtype=np.int64)

@@ -29,6 +29,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 
+#include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/construction_utils.h>
 
 #include "slicer_interface_helpers.h"
@@ -44,7 +45,7 @@ struct Generator_basis_data {
   int degree = -1;
   std::vector<std::vector<Index>> columns;
   std::vector<std::vector<Index>> rowBoundaries;
-  std::vector<std::pair<Grade, Grade>> rowGrades;
+  std::vector<std::pair<Grade, Grade>> rowGrades; // change pair to array<Grade, 2>?
   std::vector<std::pair<Grade, Grade>> columnGrades;
 
   Generator_basis_data() = default;
@@ -94,7 +95,26 @@ struct Generator_basis_data {
     }
   }
 
-  std::vector<std::vector<Index>> expand_cycle(const std::vector<Index>& cycle) {
+  nanobind::object operator[](std::string_view key) const {
+    if (key == "degree") return nanobind::cast(degree);
+    if (key == "columns") return nanobind::cast(columns);
+    if (key == "row_boundaries") return nanobind::cast(rowBoundaries);
+    if (key == "row_grades") return nanobind::cast(rowGrades);
+    if (key == "column_grades") return nanobind::cast(columnGrades);
+
+    throw nanobind::key_error("Invalid `_GeneratorBasis` key.");
+  }
+
+  static bool is_key(std::string_view key) {
+    return key == "degree" || key == "columns" || key == "row_boundaries" || key == "row_grades" ||
+           key == "column_grades";
+  }
+
+  static nanobind::tuple get_keys() {
+    return nanobind::make_tuple("degree", "columns", "row_boundaries", "row_grades", "column_grades");
+  }
+
+  std::vector<std::vector<Index>> expand_cycle(const std::vector<Index>& cycle) const {
     std::vector<std::uint8_t> activeRows(rowBoundaries.size(), 0);
     for (Index genIdx : cycle) {
       if (genIdx >= columns.size()) {
@@ -116,7 +136,68 @@ struct Generator_basis_data {
     }
     return out;
   }
+
+  [[nodiscard]] std::string to_str() const {
+    return "_GeneratorBasis(degree=" + std::to_string(degree) + ", columns=" + std::to_string(columns.size()) +
+           ", row_boundaries=" + std::to_string(rowBoundaries.size()) + ")";
+  }
+
+  /**
+   * @brief Serialize given value into the buffer at given pointer.
+   *
+   * @param value Value to serialize.
+   * @param start Pointer to the start of the space in the buffer where to store the serialization.
+   * @return End position of the serialization in the buffer.
+   */
+  friend char* serialize_value_to_char_buffer(const Generator_basis_data& value, char* start) {
+    char* curr = start;
+    curr = serialize_value_to_char_buffer(value.degree, curr);
+    curr = serialize_value_to_char_buffer(value.columns, curr);
+    curr = serialize_value_to_char_buffer(value.rowBoundaries, curr);
+    curr = serialize_value_to_char_buffer(value.rowGrades, curr);
+    curr = serialize_value_to_char_buffer(value.columnGrades, curr);
+    return curr;
+  }
+
+  /**
+   * @brief Deserialize the value from a buffer at given pointer and stores it in given value.
+   *
+   * @param value Value to fill with the deserialized summand.
+   * @param start Pointer to the start of the space in the buffer where the serialization is stored.
+   * @return End position of the serialization in the buffer.
+   */
+  friend const char* deserialize_value_from_char_buffer(Generator_basis_data& value, const char* start) {
+    const char* curr = start;
+    curr = deserialize_value_from_char_buffer(value.degree, curr);
+    curr = deserialize_value_from_char_buffer(value.columns, curr);
+    curr = deserialize_value_from_char_buffer(value.rowBoundaries, curr);
+    curr = deserialize_value_from_char_buffer(value.rowGrades, curr);
+    curr = deserialize_value_from_char_buffer(value.columnGrades, curr);
+    return curr;
+  }
+
+  /**
+   * @brief Returns the serialization size of the given summand.
+   */
+  friend std::size_t get_serialization_size_of(const Generator_basis_data& value) {
+    std::size_t size = get_serialization_size_of(value.degree);
+    size += get_serialization_size_of(value.columns);
+    size += get_serialization_size_of(value.rowBoundaries);
+    size += get_serialization_size_of(value.rowGrades);
+    size += get_serialization_size_of(value.columnGrades);
+    return size;
+  }
 };
+
+Generator_basis_data deserialize_gen_basis_from_python(
+    nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state) {
+  Generator_basis_data basis;
+  {
+    nanobind::gil_scoped_release release;
+    deserialize_value_from_char_buffer(basis, state.data());
+  }
+  return basis;
+}
 
 struct Compacted_squeezed_filtration_grid {
   using Index = std::int64_t;
@@ -134,7 +215,7 @@ struct Compacted_squeezed_filtration_grid {
     // special case of ndarray should be more efficient then general nanobind::iterable
     if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
       if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      _dispatch_dtype(
+      _dispatch_float_dtype(
           grid, [&]<typename U>() { return _get_compact_grid<U>(nanobind::ndarray<const U, nanobind::ndim<2>>(arr)); });
       return;
     }
@@ -300,10 +381,10 @@ class Representative_cycle_intersection {
     }
 
     bool intersects = false;
-    if (dimensions_[cell] == 0) {
+    if ((*dimensions_)[cell] == 0) {
       intersects = points_->find(cell) != points_->end();
     } else {
-      for (auto face : boundaries_[cell]) {
+      for (auto face : (*boundaries_)[cell]) {
         if (_cell_intersects(face)) {
           intersects = true;
           break;

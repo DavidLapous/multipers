@@ -549,33 +549,22 @@ class Module_interface {
 
   friend char *serialize_value_to_char_buffer(const Module_interface &value, char *start) {
     char *curr = start;
-    const std::size_t length = value.box_.size();
-    const std::size_t argSize = sizeof(T) * length;
-    const std::size_t typeSize = sizeof(std::size_t);
-    memcpy(curr, &length, typeSize);
-    curr += typeSize;
-    memcpy(curr, value.box_.data(), argSize);
-    curr += argSize;
     curr = serialize_value_to_char_buffer(value.module_, curr);
+    curr = serialize_value_to_char_buffer(value.box_, curr);
     return curr;
   }
 
   friend const char *deserialize_value_from_char_buffer(Module_interface &value, const char *start) {
     const char *curr = start;
-    const std::size_t typeSize = sizeof(std::size_t);
-    std::size_t length;
-    memcpy(&length, curr, typeSize);
-    curr += typeSize;
-    std::size_t argSize = sizeof(T) * length;
-    value.box_.resize(length);
-    memcpy(value.box_.data(), curr, argSize);
-    curr += argSize;
     curr = deserialize_value_from_char_buffer(value.module_, curr);
+    curr = deserialize_value_from_char_buffer(value.box_, curr);
     return curr;
   }
 
   friend std::size_t get_serialization_size_of(const Module_interface &value) {
-    return sizeof(std::size_t) + (sizeof(T) * value.box_.size()) + get_serialization_size_of(value.module_);
+    std::size_t size = get_serialization_size_of(value.module_);
+    size += get_serialization_size_of(value.box_);
+    return size;
   }
 
   friend void swap(Module_interface &mod1, Module_interface &mod2) noexcept {
