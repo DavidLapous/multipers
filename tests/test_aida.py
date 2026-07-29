@@ -7,6 +7,8 @@ from multipers.tests import assert_sm
 import pytest
 import sys
 from typing import Any
+import numpy as np
+
 
 mpfree_flag = _mpfree_interface.available()
 pytestmark = pytest.mark.skipif(
@@ -22,8 +24,8 @@ else:
 
 def test_indecomposable():
     B = [[], [], [0, 1]]
-    D = [7, 7, 8]
-    F = [[0, 1], [1, 0], [2, 2]]
+    D = np.asarray([7, 7, 8])
+    F = np.asarray([[0, 1], [1, 0], [2, 2]], dtype=float)
 
     # an indecomposable
     s = mp.Slicer(return_type_only=True)(B, D, F)

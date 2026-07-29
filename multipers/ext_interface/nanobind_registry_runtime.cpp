@@ -23,7 +23,7 @@ inline bool is_canonical_kcontiguous_f64_slicer_object(const nb::handle& input) 
 
 inline nb::object slicer_class_from_template_id(int template_id) {
   return dispatch_slicer_by_template_id(template_id, [&]<typename Desc>() -> nb::object {
-    return nb::borrow<nb::object>(nb::type<typename Desc::wrapper>());
+    return nb::borrow<nb::object>(nb::type<typename Desc::interface>());
   });
 }
 
@@ -35,9 +35,9 @@ inline nb::object simplextree_class_from_template_id(int template_id) {
 
 template <typename CanonicalSlicer>
 void copy_into_canonical_slicer_impl(const nb::handle& input, CanonicalSlicer& output) {
-  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
+  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::interface& source) {
     nb::gil_scoped_release release;
-    output = CanonicalSlicer(source.truc);
+    output = CanonicalSlicer(source.get_slicer());
   });
 }
 
@@ -49,9 +49,8 @@ nb::object ensure_canonical_slicer_object_impl(const nb::object& input, IsCanoni
 
   nb::object out = nb::borrow<nb::object>(nb::type<CanonicalWrapper>())();
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
-  copy_into_canonical_slicer_impl(input, out_wrapper.truc);
-  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::wrapper& source) {
-    copy_slicer_python_state(out_wrapper, source);
+  visit_const_slicer_wrapper(input, [&]<typename Desc>(const typename Desc::interface& source) {
+    out_wrapper = typename Desc::interface(source);
   });
   return out;
 }

@@ -100,8 +100,8 @@ def test_hook_decomposition():
     from multipers.point_measure import rectangle_to_hook_minimal_signed_barcode
 
     B = [[], [0]]
-    D = [0, 1]
-    F = [[0, 0], [1, 1]]
+    D = np.asarray([0, 1])
+    F = np.asarray([[0, 0], [1, 1]], dtype=float)
     s = mp.Slicer(return_type_only=True)(B, D, F)
     (sm_rank,) = mp.signed_measure(
         s,
@@ -113,8 +113,8 @@ def test_hook_decomposition():
     assert np.array_equal(pts_hook, [[0, 0, 1, 1]]), pts_hook
     assert np.array_equal(w_hook, [1]), w_hook
     B = [[], [0], [0]]
-    D = [0, 1, 1]
-    F = [[0, 0], [1, 0], [0, 1]]
+    D = np.asarray([0, 1, 1])
+    F = np.asarray([[0, 0], [1, 0], [0, 1]], dtype=float)
     s = mp.Slicer(return_type_only=True)(B, D, F)
     (sm_rank,) = mp.signed_measure(
         s,
@@ -128,15 +128,9 @@ def test_hook_decomposition():
     )
     assert np.array_equal(w_hook, [1, 1, -1]), w_hook
 
-    B = [
-        [],
-        [0],
-    ]
-    D = [
-        0,
-        1,
-    ]
-    F = [[0, 0], [1, 0]]
+    B = [[], [0]]
+    D = np.asarray([0, 1])
+    F = np.asarray([[0, 0], [1, 0]], dtype=float)
     s = mp.Slicer(return_type_only=True)(B, D, F)
     (sm_rank,) = mp.signed_measure(
         s,
@@ -149,8 +143,8 @@ def test_hook_decomposition():
     assert np.array_equal(w_hook, [1]), w_hook
 
     B = [[], [0]]
-    D = [0, 1]
-    F = [[0, 0], [0, 1]]
+    D = np.asarray([0, 1])
+    F = np.asarray([[0, 0], [0, 1]], dtype=float)
     s = mp.Slicer(return_type_only=True)(B, D, F)
     (sm_rank,) = mp.signed_measure(
         s,

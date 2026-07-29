@@ -378,7 +378,7 @@ def _render_slicer_nanobind_registry(
             [
                 f"struct SlicerDesc_{index} {{",
                 f"  using concrete = {slicer['TRUC_TYPE']};",
-                "  using wrapper = PySlicer<concrete>;",
+                "  using interface = PySlicer<concrete>;",
                 f"  using value_type = {slicer['C_VALUE_TYPE']};",
                 f"  using coarsened_concrete = {coarsened['TRUC_TYPE']};",
                 "  using coarsened_wrapper = PySlicer<coarsened_concrete>;",

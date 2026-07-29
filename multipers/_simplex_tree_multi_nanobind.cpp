@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "ext_interface/nanobind_registry_helpers.hpp"
+#include "interface_helper_structs.h"
 #include "simplextree_conversion_core.hpp"
 #include "nanobind_array_utils.hpp"
 #include "nanobind_object_utils.hpp"
@@ -39,7 +40,6 @@ using signed_measure_type = std::pair<std::vector<std::vector<indices_type>>, st
 
 using multipers::core::SimplexTreeConversion;
 using multipers::nanobind_helpers::cast_squeezed_coordinate_grid;
-using multipers::nanobind_helpers::compact_squeezed_filtration_grid;
 using multipers::nanobind_helpers::copy_simplextree_python_state;
 using multipers::nanobind_helpers::dispatch_simplextree_by_template_id;
 using multipers::nanobind_helpers::has_nonempty_filtration_grid;
@@ -50,7 +50,6 @@ using multipers::nanobind_helpers::reset_simplextree_python_state;
 using multipers::nanobind_helpers::simplextree_wrapper_t;
 using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::SlicerDescriptorList;
-using multipers::nanobind_helpers::squeezed_raw_index_from_value;
 using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_helpers::visit_const_simplextree_wrapper;
 using multipers::nanobind_helpers::visit_const_slicer_wrapper;
@@ -327,10 +326,10 @@ void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSli
 }
 
 template <typename Desc, typename Wrapper, typename Interface>
-void build_from_slicer_desc(Wrapper& self, const typename Desc::wrapper& source, int max_dim) {
+void build_from_slicer_desc(Wrapper& self, const typename Desc::interface& source, int max_dim) {
   {
     nb::gil_scoped_release release;
-    copy_simplicial_slicer_to_simplextree<Interface>(self.tree, source.truc, max_dim);
+    copy_simplicial_slicer_to_simplextree<Interface>(self.tree, source.get_slicer(), max_dim);
   }
   reset_simplextree_python_state(self);
 }
@@ -340,7 +339,7 @@ bool try_build_from_slicer(Wrapper& self, nb::handle source, int max_dim) {
   if (!is_slicer_object(source)) {
     return false;
   }
-  visit_const_slicer_wrapper(source, [&]<typename D>(const typename D::wrapper& wrapper) {
+  visit_const_slicer_wrapper(source, [&]<typename D>(const typename D::interface& wrapper) {
     build_from_slicer_desc<D, Wrapper, Interface>(self, wrapper, max_dim);
   });
   return true;
@@ -731,33 +730,20 @@ bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
 }
 
 template <typename Wrapper>
-std::vector<std::vector<int64_t>> collect_used_squeezed_coordinates(Wrapper& self) {
-  std::vector<std::vector<int64_t>> used_coordinates(static_cast<size_t>(self.tree.num_parameters()));
-  for (auto simplex_handle : self.tree.complex_simplex_range()) {
-    auto pair = self.tree.get_simplex_and_filtration(simplex_handle);
-    const auto& filtration = *pair.second;
-    for (size_t generator = 0; generator < filtration.num_generators(); ++generator) {
-      for (size_t parameter = 0; parameter < used_coordinates.size(); ++parameter) {
-        used_coordinates[parameter].push_back(
-            squeezed_raw_index_from_value(static_cast<double>(filtration(generator, parameter)), parameter));
-      }
-    }
-  }
-  return used_coordinates;
-}
-
-template <typename Wrapper>
 Wrapper& clean_squeezed_filtration_grid_inplace(Wrapper& self) {
   if (!has_nonempty_filtration_grid(self.filtration_grid)) {
     throw std::runtime_error("No grid to clean.");
   }
-  auto compacted = compact_squeezed_filtration_grid(self.filtration_grid, collect_used_squeezed_coordinates(self));
-  auto coordinate_grid = cast_squeezed_coordinate_grid<double>(compacted.coordinates);
+  auto usedCoordinates =
+      Gudhi::multi_persistence::detail::Compacted_squeezed_filtration_grid::collect_used_squeezed_coordinates(self);
+  Gudhi::multi_persistence::detail::Compacted_squeezed_filtration_grid compact(self.filtration_grid, usedCoordinates);
+
+  auto coordinate_grid = cast_squeezed_coordinate_grid<double>(compact.coordinates);
   {
     nb::gil_scoped_release release;
     self.tree.squeeze_filtration_inplace(coordinate_grid, true);
   }
-  self.filtration_grid = compacted.filtration_grid;
+  self.filtration_grid = compact.filtrationGrid;
   return self;
 }
 
@@ -773,7 +759,7 @@ PySimplexTree<typename TargetDesc::interface_type, typename TargetDesc::value_ty
 
 template <typename TargetDesc, typename SourceDesc>
 PySimplexTree<typename TargetDesc::interface_type, typename TargetDesc::value_type> construct_from_slicer_wrapper(
-    const typename SourceDesc::wrapper& source,
+    const typename SourceDesc::interface& source,
     int max_dim) {
   using Wrapper = PySimplexTree<typename TargetDesc::interface_type, typename TargetDesc::value_type>;
   using Interface = typename TargetDesc::interface_type;
@@ -793,7 +779,7 @@ void bind_simplextree_source_constructors(Class& cls, type_list<SourceDesc...>) 
 
 template <typename TargetDesc, typename Class, typename... SourceDesc>
 void bind_slicer_source_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(nb::new_([](const typename SourceDesc::wrapper& source, int max_dim) {
+  (cls.def(nb::new_([](const typename SourceDesc::interface& source, int max_dim) {
              return construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim);
            }),
            "source"_a,

@@ -132,9 +132,9 @@ nb::object graph_mph0_slicer_output(multipers::contiguous_f64_complex&& complex,
   auto& wrapper = nb::cast<Wrapper&>(out);
   {
     nb::gil_scoped_release release;
-    multipers::build_slicer_from_complex(wrapper.truc, complex);
+    multipers::build_slicer_from_complex(wrapper.get_slicer(), complex);
   }
-  multipers::nanobind_helpers::mark_slicer_minpres(wrapper, degree, is_minres);
+  wrapper.set_min_pres_degree(degree, is_minres);
   return out;
 }
 
@@ -211,18 +211,18 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
     if constexpr (Desc::is_kcritical) {
       throw std::invalid_argument("graph requires a one-critical filtration");
     } else {
-      if (has_nonempty_filtration_grid(wrapper.filtration_grid)) {
+      if (has_nonempty_filtration_grid(wrapper.get_filtration_grid())) {
         throw std::invalid_argument("graph expects unsqueezed filtration coordinates");
       }
-      if (wrapper.truc.get_number_of_parameters() != 2) {
+      if (wrapper.get_slicer().get_number_of_parameters() != 2) {
         throw std::invalid_argument("graph requires exactly two filtration parameters");
       }
 
       auto complex = [&] {
         nb::gil_scoped_release release;
-        const auto& dimensions = wrapper.truc.get_dimensions();
-        const auto& boundaries = wrapper.truc.get_boundaries();
-        const auto& filtrations = wrapper.truc.get_filtration_values();
+        const auto& dimensions = wrapper.get_slicer().get_dimensions();
+        const auto& boundaries = wrapper.get_slicer().get_boundaries();
+        const auto& filtrations = wrapper.get_slicer().get_filtration_values();
         auto input = build_graph_mph0_input(
             dimensions.size(),
             degree,
@@ -287,7 +287,7 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
       if (full_resolution) {
         return graph_mph0_slicer_output<ContiguousF64MatrixSlicerWrapper>(std::move(complex), degree, true);
       }
-      return graph_mph0_slicer_output<typename ContiguousF64GraphSlicerDesc::wrapper>(
+      return graph_mph0_slicer_output<typename ContiguousF64GraphSlicerDesc::interface>(
           std::move(complex), degree, false);
     }
   });

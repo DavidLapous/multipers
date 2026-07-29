@@ -37,11 +37,11 @@ nb::object minimal_presentation_for_target(nb::object target,
       "mpfree",
       [&] {
         return multipers::mpfree_minpres_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, verbose);
+            input_wrapper.get_slicer(), degree, full_resolution, use_chunk, use_clearing, verbose);
       },
       [&] {
         return multipers::mpfree_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc, degree, full_resolution, use_chunk, use_clearing, verbose);
+            input_wrapper.get_slicer(), degree, full_resolution, use_chunk, use_clearing, verbose);
       });
 }
 

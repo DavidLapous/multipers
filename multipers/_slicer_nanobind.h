@@ -1,6 +1,7 @@
 #ifndef MP_PY_SLICER_NANOBIND_H_INCLUDED
 #define MP_PY_SLICER_NANOBIND_H_INCLUDED
 
+#include <cstdint>
 #include <utility>
 #include <string>
 #include <vector>
@@ -14,10 +15,8 @@
 #include <nanobind/stl/optional.h>
 
 #include "ext_interface/nanobind_registry_helpers.hpp"
-#include "ext_interface/nanobind_wrapper_types.hpp"
 #include "nanobind_object_utils.hpp"
 #include "gudhi/interface_helper_structs.h"
-#include "gudhi/Slicer_interface.h"
 
 namespace mpnb {
 
@@ -78,10 +77,7 @@ inline void bind_generator_basis(nanobind::module_& m) {
 
 template <typename Class, typename... SourceDesc>
 inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(
-       nanobind::init<const Gudhi::multi_persistence::Slicer_interface<typename SourceDesc::concrete::Filtration_value,
-                                                                       typename SourceDesc::concrete::Persistence>&>()),
-   ...);
+  (cls.def(nanobind::init<const typename SourceDesc::interface&>()), ...);
 }
 
 template <typename Class, typename... SourceDesc>
@@ -94,11 +90,7 @@ template <class Target, typename Class, typename... SourceDesc>
 inline void bind_slicer_eq(Class& cls, type_list<SourceDesc...>) {
   (cls.def(
        "__eq__",
-       [](const Target& a,
-          const Gudhi::multi_persistence::Slicer_interface<typename SourceDesc::concrete::Filtration_value,
-                                                           typename SourceDesc::concrete::Persistence>& b) {
-         return a == b;
-       },
+       [](const Target& a, const typename SourceDesc::interface& b) { return a == b; },
        nanobind::is_operator()),
    ...);
 }
@@ -106,9 +98,7 @@ inline void bind_slicer_eq(Class& cls, type_list<SourceDesc...>) {
 template <class Target, typename Class, typename... SourceDesc>
 inline void bind_from_slicer_copy(Class& cls, type_list<SourceDesc...>) {
   (cls.def("_copy_from_any",
-           nanobind::overload_cast<
-               const Gudhi::multi_persistence::Slicer_interface<typename SourceDesc::concrete::Filtration_value,
-                                                                typename SourceDesc::concrete::Persistence>&>(
+           nanobind::overload_cast<const typename SourceDesc::interface&>(
                &Target::template copy<typename SourceDesc::concrete::Filtration_value,
                                       typename SourceDesc::concrete::Persistence>)),
    ...);
@@ -116,10 +106,10 @@ inline void bind_from_slicer_copy(Class& cls, type_list<SourceDesc...>) {
 
 template <class Target, typename Class, typename... SourceDesc>
 inline void bind_from_simplex_tree_copy(Class& cls, type_list<SourceDesc...>) {
-  (cls.def("_copy_from_any",
-           nanobind::overload_cast<
-               PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
-               &Target::template copy<typename SourceDesc::filtration_type>)),
+  (cls.def(
+       "_copy_from_any",
+       nanobind::overload_cast<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
+           &Target::template copy<typename SourceDesc::filtration_type>)),
    ...);
 }
 
@@ -147,7 +137,35 @@ inline void bind_slicer_constructors(Class& cls) {
           "is_reversed"_a = false);
 
   // from containers
-  cls.def(nanobind::init<nanobind::iterable, nanobind::iterable, nanobind::iterable>());
+  // allowing all combinations of tensor/sequence and dtype multiplies by more than 5 the compile time...
+  // so generator_maps will automatically convert to std::vector<std::vector<Index>> and as a copy is made
+  // anyway, it can directly be copied into the Index type
+  // generator_dimensions is restricted to tensor types, but is allowed every dtype. But tensors of dtypes
+  // which are not uint32, int32, uint64 or int64 will be copied
+  // filtration_values is given the most freedom. The only real restriction is that the dtype has to be
+  // uint32, int32, uint64 or int64 if the Slicer dtype is integer and float or double if the Slicer dtype
+  // is floating point.
+  cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                         nanobind::ndarray<const std::uint32_t, nanobind::ndim<1>, nanobind::any_contig>,
+                         nanobind::iterable>(),
+          "generator_maps"_a,
+          "generator_dimensions"_a.noconvert(),
+          "filtration_values"_a)
+      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                          nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
+                          nanobind::iterable>(),
+           "generator_maps"_a,
+           "generator_dimensions"_a.noconvert(),
+           "filtration_values"_a)
+      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                          nanobind::ndarray<const std::uint64_t, nanobind::ndim<1>, nanobind::any_contig>,
+                          nanobind::iterable>(),
+           "generator_maps"_a,
+           "generator_dimensions"_a.noconvert(),
+           "filtration_values"_a)
+      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                          nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
+                          nanobind::iterable>());
 
   // handles None case, has to be bind last
   cls.def("__init__", [](Slicer* self, nanobind::handle arg) {
@@ -158,8 +176,7 @@ inline void bind_slicer_constructors(Class& cls) {
 
 template <class Slicer, typename Class>
 inline void bind_slicer_dunders(Class& cls) {
-  cls.def("__repr__", &Slicer::to_string)
-      .def("__len__", &Slicer::size)
+  cls.def("__len__", &Slicer::size)
       .def("__getstate__",
            [](const Slicer& self) -> nanobind::tuple {
              std::size_t buffer_size;
@@ -229,10 +246,10 @@ inline void bind_slicer_properties(Class& cls) {
       .def("get_filtration",
            &Slicer::get_filtration_value,
            "idx"_a,
-           "copy_only_when_necessary"_a = false,
+           "copy_only_when_necessary"_a = true,
            "raw"_a = false)
       .def("get_filtrations_values",
-           [](const Slicer& self) -> nanobind::ndarray<nanobind::numpy, typename Slicer::value_type> {
+           [](Slicer& self) -> nanobind::ndarray<nanobind::numpy, typename Slicer::value_type> {
              return nanobind::cast<nanobind::ndarray<nanobind::numpy, typename Slicer::value_type>>(
                  self.get_all_filtration_values(true, false, false)[1]);
            })
@@ -332,10 +349,7 @@ inline void bind_slicer_io(Class& cls) {
 
 template <typename Desc>
 inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_slicers) {
-  using Slicer_t = typename Desc::concrete;
-  using MultiFiltrationValue = Slicer_t::Filtration_value;
-  using PersistenceAlgorithm = Slicer_t::Persistence;
-  using Slicer = Gudhi::multi_persistence::Slicer_interface<MultiFiltrationValue, PersistenceAlgorithm>;
+  using Slicer = typename Desc::interface;
 
   auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data());
 

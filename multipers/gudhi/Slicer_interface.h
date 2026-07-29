@@ -115,27 +115,24 @@ class Slicer_interface {
     }
   }
 
-  Slicer_interface(nanobind::iterable generator_maps,
-                   nanobind::iterable generator_dimensions,
+  template <typename U>
+  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
+                   Tensor1D<U> generator_dimensions,
                    nanobind::iterable filtration_values)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    auto filts = detail::_get_compatible_filtration_values<value_type>(filtration_values);
     {
       nanobind::gil_scoped_release release;
-      auto maps = detail::_get_compatible_generator_maps(generator_maps);
-      auto dims = detail::_get_compatible_generator_dimensions(generator_dimensions);
-      auto filts = detail::_get_compatible_filtration_values(filtration_values);
 
       std::visit(
-          [&](auto &m, auto &d, auto &f_var) {
+          [&](auto &f_var) {
             std::visit(
                 [&](auto &f) {
-                  Complex cpx(m, d, f);
+                  Complex cpx(generator_maps, Numpy_span(generator_dimensions), f);
                   slicer_ = Slicer_t(std::move(cpx));
                 },
                 f_var);
           },
-          maps,
-          dims,
           filts);
     }
   }
@@ -173,6 +170,8 @@ class Slicer_interface {
     return *this;
   }
 
+  Slicer_t &get_slicer() { return slicer_; }
+
   const Slicer_t &get_slicer() const { return slicer_; }
 
   [[nodiscard]] nanobind::object get_filtration_grid() const { return filtrationGrid_; }
@@ -209,6 +208,11 @@ class Slicer_interface {
       return;
     }
     generatorBasis_ = detail::Generator_basis_data(basis);
+  }
+
+  template <class Complex, class GeneratorMatrix>
+  void set_generator_basis(const Complex &complex, int degree, GeneratorMatrix &generatorMatrix) {
+    generatorBasis_ = detail::Generator_basis_data(complex, degree, generatorMatrix);
   }
 
   [[nodiscard]] int get_min_pres_degree() const { return isMinPres_ ? presDegree_ : -1; }
@@ -251,17 +255,17 @@ class Slicer_interface {
     return nanobind::int_(dim);
   }
 
-  [[nodiscard]] nanobind::ndarray<const Dimension, nanobind::numpy> get_dimensions() const {
+  [[nodiscard]] auto get_dimensions() const {
     const auto &dims = slicer_.get_dimensions();
     // no transfer of ownership, dies together with the slicer
-    return nanobind::ndarray<const Dimension, nanobind::numpy>(dims.data(), {dims.size()});
+    return _wrap_view_as_numpy_array(nanobind::find(this), dims.data(), dims.size());
   }
 
   [[nodiscard]] nanobind::tuple get_boundaries() const {
     const auto &boundaries = slicer_.get_boundaries();
-    return Gudhi::python::_build_tuple(boundaries.size(), [&boundaries](std::size_t b) {
+    return Gudhi::python::_build_tuple(boundaries.size(), [&](std::size_t b) {
       // no transfer of ownership, dies together with the slicer
-      return nanobind::ndarray<const Index, nanobind::numpy>(boundaries[b].data(), {boundaries[b].size()});
+      return _wrap_view_as_numpy_array(nanobind::find(this), boundaries[b].data(), boundaries[b].size());
     });
   }
 
@@ -286,12 +290,12 @@ class Slicer_interface {
                                 _wrap_as_numpy_array(std::move(boundaries), boundaries.size()));
   }
 
-  [[nodiscard]] nanobind::object get_filtration_value(int index, bool viewIfPossible = true, bool raw = false) const {
+  [[nodiscard]] nanobind::object get_filtration_value(int index, bool viewIfPossible = true, bool raw = false) {
     int size = slicer_.get_number_of_cycle_generators();
     if (index < 0) index += size;
     if (index < 0 || index >= size) throw std::out_of_range("Generator index out of range.");
 
-    const auto &f = slicer_.get_filtration_value(index);
+    auto &f = slicer_.get_filtration_value(index);
 
     if (raw) return detail::_get_raw_filtration_data(f, !viewIfPossible);
 
@@ -304,8 +308,8 @@ class Slicer_interface {
 
   [[nodiscard]] nanobind::object get_all_filtration_values(bool compact,
                                                            bool viewIfPossible = true,
-                                                           bool raw = false) const {
-    const auto &filts = slicer_.get_filtration_values();
+                                                           bool raw = false) {
+    auto &filts = slicer_.get_filtration_values();
 
     // view not possible for compact
     if (compact) {
@@ -331,10 +335,10 @@ class Slicer_interface {
     return _get_filtration_array(filts, slicer_.get_number_of_parameters());
   }
 
-  [[nodiscard]] nanobind::ndarray<const value_type, nanobind::numpy> get_current_slice() const {
+  [[nodiscard]] auto get_current_slice() const {
     const auto &slice = slicer_.get_slice();
     // no transfer of ownership, dies together with the slicer
-    return nanobind::ndarray<const value_type, nanobind::numpy>(slice.data(), {slice.size()});
+    return _wrap_view_as_numpy_array(nanobind::find(this), slice.data(), slice.size());
   }
 
   template <typename U>
@@ -507,6 +511,8 @@ class Slicer_interface {
     const std::size_t nx = xView.shape(0);
     const std::size_t ny = yView.shape(0);
 
+    if (get_number_of_parameters() != 2)
+      throw nanobind::value_error("Landscapes can only be computed for bi-filtrations.");
     if (nx == 0 || ny == 0) throw nanobind::value_error("Landscape grid axes must be non-empty.");
     if (direction.shape(0) != 2) throw nanobind::value_error("Landscape direction must be two-dimensional.");
     if (xStride == 0 || yStride == 0) throw nanobind::value_error("Landscape grid strides must be strictly positive.");
@@ -640,6 +646,17 @@ class Slicer_interface {
     return *this;
   }
 
+  Slicer_interface &sort_slicer_co_lexically() {
+    std::pair<Slicer_t, std::vector<Index>> outSlicer;
+    {
+      nanobind::gil_scoped_release release;
+      outSlicer = build_permuted_slicer(slicer_);
+    }
+    // TODO: complex has an internal sort, could be worth interfacing to avoid copy?
+    slicer_ = outSlicer.first;
+    return *this;
+  }
+
   [[nodiscard]] nanobind::object build_colexical_permuted_slicer(bool returnPermutation) const {
     std::pair<Slicer_t, std::vector<Index>> outSlicer;
     {
@@ -706,9 +723,8 @@ class Slicer_interface {
       // but that adds even more annoying complexity
       res = (slicer_.get_dimensions() == other.get_slicer().get_dimensions() &&
              slicer_.get_boundaries() == other.get_slicer().get_boundaries());
-      if (res) res = _has_same_filtration_values(other);
     }
-    return res;
+    return res && _has_same_filtration_values(other);
   }
 
   friend char *serialize_value_to_char_buffer(const Slicer_interface &value, char *start) {
@@ -768,7 +784,11 @@ class Slicer_interface {
         }
       }
     }
-    return _wrap_as_numpy_array(std::move(values), f.num_generators(), f.num_parameters());
+    if constexpr (MultiFiltrationValue::ensures_1_criticality()) {
+      return _wrap_as_numpy_array(std::move(values), f.num_parameters());
+    } else {
+      return _wrap_as_numpy_array(std::move(values), f.num_generators(), f.num_parameters());
+    }
   }
 
   static nanobind::tuple _get_compact_filtration_array(const typename Complex::Filtration_value_container &filts,
@@ -786,7 +806,7 @@ class Slicer_interface {
         const auto &f = filts[i];
         if (numParam != f.num_parameters())
           throw std::runtime_error("Inconsistent number of parameters in stored filtration values");
-        Gudhi::Simple_mdspan view(&values[startIndices[i]], f.num_generators(), numParam);
+        Gudhi::Simple_mdspan view(&values[startIndices[i] * numParam], f.num_generators(), numParam);
         for (std::size_t g = 0; g < f.num_generators(); ++g) {
           for (std::size_t p = 0; p < numParam; ++p) {
             view(g, p) = f(g, p);
@@ -900,7 +920,12 @@ class Slicer_interface {
 
     if (filtsA.size() != filtsB.size()) return false;
 
-    if (filtrationGrid_.is_none() && other.get_filtration_grid().is_none()) return are_equal(filtsA, filtsB);
+    nanobind::object otherGrid = other.get_filtration_grid();
+
+    if (filtrationGrid_.is_none() && otherGrid.is_none()) {
+      nanobind::gil_scoped_release release;
+      return are_equal(filtsA, filtsB);
+    }
 
     // if filtrationGrid_ is not None for one of them, the filtration values to compare are in the grid
     // as two different grids can still yield the same filtration values, it is not sufficient to compare the grids
@@ -912,8 +937,9 @@ class Slicer_interface {
 
     if (filtrationGrid_.is_none()) {
       std::vector<std::vector<double>> grid;
-      bool success = nanobind::try_cast<std::vector<std::vector<double>>>(other.get_filtration_grid(), grid);
-      if (!success) throw std::runtime_error("Stored filtration grid in other did not have a valid format.");
+      if (!nanobind::try_cast<std::vector<std::vector<double>>>(otherGrid, grid))
+        throw std::runtime_error("Stored filtration grid in other did not have a valid format.");
+      nanobind::gil_scoped_release release;
       transB.reserve(filtsB.size());
       for (const auto &f : filtsB) {
         transB.push_back(evaluate_coordinates_in_grid(f, grid));
@@ -921,10 +947,11 @@ class Slicer_interface {
       return are_equal(filtsA, transB);
     }
 
-    if (other.get_filtration_grid().is_none()) {
+    if (otherGrid.is_none()) {
       std::vector<std::vector<double>> grid;
-      bool success = nanobind::try_cast<std::vector<std::vector<double>>>(filtrationGrid_, grid);
-      if (!success) throw std::runtime_error("Stored filtration grid did not have a valid format.");
+      if (!nanobind::try_cast<std::vector<std::vector<double>>>(filtrationGrid_, grid))
+        throw std::runtime_error("Stored filtration grid did not have a valid format.");
+      nanobind::gil_scoped_release release;
       transA.reserve(filtsA.size());
       for (const auto &f : filtsA) {
         transA.push_back(evaluate_coordinates_in_grid(f, grid));
@@ -934,10 +961,11 @@ class Slicer_interface {
 
     std::vector<std::vector<double>> gridA;
     std::vector<std::vector<double>> gridB;
-    bool success = nanobind::try_cast<std::vector<std::vector<double>>>(filtrationGrid_, gridA);
-    if (!success) throw std::runtime_error("Stored filtration grid did not have a valid format.");
-    success = nanobind::try_cast<std::vector<std::vector<double>>>(other.get_filtration_grid(), gridB);
-    if (!success) throw std::runtime_error("Stored filtration grid in other did not have a valid format.");
+    if (!nanobind::try_cast<std::vector<std::vector<double>>>(filtrationGrid_, gridA))
+      throw std::runtime_error("Stored filtration grid did not have a valid format.");
+    if (!nanobind::try_cast<std::vector<std::vector<double>>>(otherGrid, gridB))
+      throw std::runtime_error("Stored filtration grid in other did not have a valid format.");
+    nanobind::gil_scoped_release release;
     for (std::size_t i = 0; i < filtsA.size(); ++i) {
       transA.push_back(evaluate_coordinates_in_grid(filtsA[i], gridA));
       transB.push_back(evaluate_coordinates_in_grid(filtsB[i], gridB));
@@ -949,14 +977,13 @@ class Slicer_interface {
     // special case of ndarray is more efficient then general nanobind::iterable
     if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
       if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      return detail::_dispatch_float_dtype(grid,
-                                           [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); });
+      return detail::_dispatch_dtype(grid, [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); });
     }
 
     if (!nanobind::isinstance<nanobind::iterable>(grid))
       throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
 
-    return detail::_dispatch_float_dtype(
+    return detail::_dispatch_dtype(
         grid, [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); });
   }
 
@@ -1108,12 +1135,12 @@ class Slicer_interface {
 };
 
 template <class SlicerInterface>
-SlicerInterface deserialize_slicer_from_python(nanobind::tuple state) {
+inline SlicerInterface deserialize_slicer_from_python(nanobind::tuple state) {
   SlicerInterface slicer;
+  auto data = nanobind::cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[1]);
   {
     nanobind::gil_scoped_release release;
-    deserialize_value_from_char_buffer(
-        slicer, nanobind::cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[1]).data());
+    deserialize_value_from_char_buffer(slicer, data.data());
   }
   slicer.set_filtration_grid(state[0]);
   return slicer;

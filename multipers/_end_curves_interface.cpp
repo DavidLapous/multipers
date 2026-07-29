@@ -184,11 +184,11 @@ inline index_curves birth_curve_indices(const CanonicalWrapper& wrapper,
   if (inf_indices.size() != 2) {
     throw std::invalid_argument("birth_curves expects two infinity sentinel indices.");
   }
-  const int degree = multipers::nanobind_helpers::slicer_minpres_degree(wrapper);
+  const int degree = wrapper.get_min_pres_degree();
   if (degree < 0) {
     throw std::runtime_error("birth_curves expects a minimal presentation.");
   }
-  if (wrapper.truc.get_number_of_parameters() != 2) {
+  if (wrapper.get_number_of_parameters() != 2) {
     throw std::runtime_error("birth_curves is only compatible with 2-parameter minimal presentations.");
   }
 
@@ -276,16 +276,16 @@ inline index_curves death_curve_indices(const CanonicalWrapper& wrapper,
   if (inf_indices.size() != 2) {
     throw std::invalid_argument("death_curves expects two infinity sentinel indices.");
   }
-  auto complex = multipers::persistence_algebra_death_curve_contiguous_interface(wrapper.truc, degree);
+  auto complex = multipers::persistence_algebra_death_curve_contiguous_interface(wrapper.get_slicer(), degree);
   CanonicalWrapper death_wrapper;
-  multipers::build_slicer_from_complex(death_wrapper.truc, complex);
-  multipers::nanobind_helpers::mark_slicer_minpres(death_wrapper, degree);
-  death_wrapper.filtration_grid = wrapper.filtration_grid;
+  multipers::build_slicer_from_complex(death_wrapper.get_slicer(), complex);
+  death_wrapper.set_min_pres_degree(degree);
+  death_wrapper.set_filtration_grid(wrapper.get_filtration_grid());
   if (aida_sort) {
-    death_wrapper = multipers::nanobind_helpers::colexical_slicer_copy(death_wrapper);
+    death_wrapper.sort_slicer_co_lexically();
   }
 
-  const auto& dimensions = death_wrapper.truc.get_dimensions();
+  const auto& dimensions = death_wrapper.get_slicer().get_dimensions();
   if (std::find(dimensions.begin(), dimensions.end(), degree) == dimensions.end()) {
     return {};
   }
@@ -358,8 +358,7 @@ NB_MODULE(_end_curves_interface, m) {
 #else
         nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
         if (aida_sort) {
-          target = nb::cast(multipers::nanobind_helpers::colexical_slicer_copy(
-              nb::cast<const mpendcurves::CanonicalWrapper&>(target)));
+          nb::cast<mpendcurves::CanonicalWrapper&>(target).sort_slicer_co_lexically();
         }
         return mpendcurves::birth_curve_indices(nb::cast<const mpendcurves::CanonicalWrapper&>(target),
                                                 inf_indices,

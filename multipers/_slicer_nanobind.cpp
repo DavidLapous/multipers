@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "ext_interface/backend_log_policy.hpp"
-#include "ext_interface/nanobind_registry_helpers.hpp"
 #include "graph_mph0/nanobind_interface.hpp"
 #include "gudhi/Multi_persistence/Box.h"
 #include <python_interfaces/numpy_utils.h>

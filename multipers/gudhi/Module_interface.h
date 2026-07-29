@@ -110,24 +110,28 @@ class Module_interface {
   }
 
   auto get_box_lower_corner_view() const {
-    // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<const T, nanobind::numpy>(box_.data(), {box_.size() / 2});
+    // no transfer of ownership, dies together with the module
+    // careful: can invalidate if box_ gets reallocated by some modifications
+    return _wrap_view_as_numpy_array(nanobind::find(this), box_.data(), box_.size() / 2);
   }
 
   auto get_box_upper_corner_view() const {
     auto shift = box_.size() / 2;
-    // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<const T, nanobind::numpy>(box_.data() + shift, {shift});
+    // no transfer of ownership, dies together with the module
+    // careful: can invalidate if box_ gets reallocated by some modifications
+    return _wrap_view_as_numpy_array(nanobind::find(this), box_.data() + shift, shift);
   }
 
   auto get_box_view_ro() const {
-    // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<const T, nanobind::numpy>(box_.data(), {2, box_.size() / 2});
+    // no transfer of ownership, dies together with the module
+    // careful: can invalidate if box_ gets reallocated by some modifications
+    return _wrap_view_as_numpy_array(nanobind::find(this), box_.data(), 2, box_.size() / 2);
   }
 
   auto get_box_view() {
-    // no transfer of ownership, dies together with the box
-    return nanobind::ndarray<T, nanobind::numpy>(box_.data(), {2, box_.size() / 2});
+    // no transfer of ownership, dies together with the module
+    // careful: can invalidate if box_ gets reallocated by some modifications
+    return _wrap_view_as_numpy_array<false>(nanobind::find(this), box_.data(), 2, box_.size() / 2);
   }
 
   Module_interface &set_box(const Box<value_type> &box) {
@@ -746,7 +750,7 @@ class Module_interface {
 };
 
 template <typename T>
-Module_interface<T> deserialize_module_from_python(
+inline Module_interface<T> deserialize_module_from_python(
     const nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> &state) {
   Module_interface<T> mod;
   {

@@ -466,35 +466,35 @@ def _looks_like_serialized_state(state) -> bool:
     return arr.ndim == 1 and arr.dtype == np.uint8
 
 
-def _setstate(self, dump):
-    explicit_is_minres = None
-    pres_degree = -1
-    if isinstance(dump, tuple) and len(dump) == 6 and _looks_like_serialized_state(dump[0]):
-        serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres, pres_degree = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
-        serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 4:
-        serialized, filtration_grid, generator_basis, minpres_degree = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 3:
-        serialized, filtration_grid, minpres_degree = dump
-        generator_basis = None
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    else:
-        generator_basis = None
-        boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
-        self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
-        serialized_is_minres = False
-    if explicit_is_minres is not None:
-        serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
-    if pres_degree < 0 and minpres_degree >= 0:
-        pres_degree = minpres_degree
-    self._mark_pres(pres_degree)
-    self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
-    self.filtration_grid = filtration_grid
-    self._generator_basis = generator_basis
+# def _setstate(self, dump):
+#     explicit_is_minres = None
+#     pres_degree = -1
+#     if isinstance(dump, tuple) and len(dump) == 6 and _looks_like_serialized_state(dump[0]):
+#         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres, pres_degree = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
+#         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 4:
+#         serialized, filtration_grid, generator_basis, minpres_degree = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 3:
+#         serialized, filtration_grid, minpres_degree = dump
+#         generator_basis = None
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     else:
+#         generator_basis = None
+#         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
+#         self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
+#         serialized_is_minres = False
+#     if explicit_is_minres is not None:
+#         serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
+#     if pres_degree < 0 and minpres_degree >= 0:
+#         pres_degree = minpres_degree
+#     self._mark_pres(pres_degree)
+#     self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
+#     self.filtration_grid = filtration_grid
+#     self._generator_basis = generator_basis
 
 
 def _bc_to_full(bcs, basepoint, direction=None):
@@ -775,7 +775,7 @@ from multipers._slicer_algorithms import _hilbert_signed_measure, _rank_from_sli
 def _install_python_api():
     for cls in available_slicers:
         cls.__repr__ = _repr
-        cls.__setstate__ = _setstate
+        # cls.__setstate__ = _setstate
         cls.astype = _astype
         cls.get_filtrations = _get_filtrations
         cls.compute_persistence = _compute_persistence

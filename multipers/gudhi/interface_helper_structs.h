@@ -29,9 +29,11 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 
+#include <gudhi/Slicer.h>
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/construction_utils.h>
 
+#include "ext_interface/nanobind_wrapper_types.hpp"
 #include "slicer_interface_helpers.h"
 
 namespace Gudhi {
@@ -60,6 +62,62 @@ struct Generator_basis_data {
         rowBoundaries(std::move(rowBoundaries_)),
         rowGrades(std::move(rowGrades_)),
         columnGrades(std::move(columnGrades_)) {}
+
+  template <class Complex, class GeneratorMatrix>
+  Generator_basis_data(const Complex& complex, int degree_, GeneratorMatrix& generatorMatrix)
+      : degree(degree_),
+        columns(generatorMatrix.columns.size()),
+        rowBoundaries(generatorMatrix.row_indices.size()),
+        rowGrades(generatorMatrix.row_grades),
+        columnGrades(generatorMatrix.column_grades) {
+    nanobind::gil_scoped_release release;
+    const auto& dimensions = complex.get_dimensions();
+    const auto& boundaries = complex.get_boundaries();
+    const auto& filtrations = complex.get_filtration_values();
+    std::vector<std::size_t> degreeIndices;
+    degreeIndices.reserve(dimensions.size());
+    for (std::size_t i = 0; i < dimensions.size(); ++i) {
+      if (dimensions[i] == degree) {
+        degreeIndices.push_back(i);
+      }
+    }
+    std::stable_sort(degreeIndices.begin(), degreeIndices.end(), [&](std::size_t a, std::size_t b) {
+      const auto& fa = filtrations[a];
+      const auto& fb = filtrations[b];
+      return fa(0, 1) < fb(0, 1) || (fa(0, 1) == fb(0, 1) && fa(0, 0) < fb(0, 0));
+    });
+
+    for (std::size_t i = 0; i < generatorMatrix.row_indices.size(); ++i) {
+      const auto row_idx = static_cast<std::size_t>(generatorMatrix.row_indices[i]);
+      if (row_idx >= degreeIndices.size()) {
+        throw std::runtime_error("generator-basis extraction failed: row index out of range.");
+      }
+      const auto& filtration = filtrations[degreeIndices[row_idx]];
+      const auto& grade = generatorMatrix.row_grades[i];
+      if (filtration(0, 0) != grade.first || filtration(0, 1) != grade.second) {
+        throw std::runtime_error(
+            "generator-basis extraction failed: row grades do not match the original degree block.");
+      }
+    }
+
+    for (std::size_t i = 0; i < generatorMatrix.columns.size(); ++i) {
+      columns[i].reserve(generatorMatrix.columns[i].size());
+      for (const auto row_idx : generatorMatrix.columns[i]) {
+        columns[i].push_back(Gudhi::python::_cast_to_int<Index>(
+            row_idx, "generator-basis extraction failed: column support index does not fit into uint32."));
+      }
+    }
+
+    for (std::size_t i = 0; i < generatorMatrix.row_indices.size(); ++i) {
+      const auto rowIdx = static_cast<std::size_t>(generatorMatrix.row_indices[i]);
+      const auto idx = degreeIndices[rowIdx];
+      rowBoundaries[i].reserve(boundaries[idx].size());
+      for (auto value : boundaries[idx]) {
+        rowBoundaries[i].push_back(Gudhi::python::_cast_to_int<Index>(
+            value, "generator-basis extraction failed: row boundary index does not fit into uint32."));
+      }
+    }
+  }
 
   Generator_basis_data(nanobind::dict basis) {
     if (basis.is_none()) return;
@@ -189,7 +247,7 @@ struct Generator_basis_data {
   }
 };
 
-Generator_basis_data deserialize_gen_basis_from_python(
+inline Generator_basis_data deserialize_gen_basis_from_python(
     nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state) {
   Generator_basis_data basis;
   {
@@ -207,11 +265,11 @@ struct Compacted_squeezed_filtration_grid {
   std::vector<std::vector<Index>> coordinates;
   squeezed_coordinate_remap remap;
 
-  Compacted_squeezed_filtration_grid() : filtrationGrid(nanobind::none()) {}
+  Compacted_squeezed_filtration_grid() = default;
 
   Compacted_squeezed_filtration_grid(const nanobind::object& grid,
                                      const std::vector<std::vector<Index>>& usedCoordinates)
-      : filtrationGrid(nanobind::none()), coordinates(usedCoordinates), remap(usedCoordinates.size()) {
+      : coordinates(usedCoordinates), remap(usedCoordinates.size()) {
     // special case of ndarray should be more efficient then general nanobind::iterable
     if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
       if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
@@ -235,19 +293,62 @@ struct Compacted_squeezed_filtration_grid {
         "Expected integer squeezed filtration coordinates for parameter " + std::to_string(parameter) + ".")));
   }
 
-  template <class Slicer>
-  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(const Slicer& slicer) {
+  template <class MultiFiltrationValue, class PersistenceAlgorithm>
+  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(
+      const Gudhi::multi_persistence::Slicer<MultiFiltrationValue, PersistenceAlgorithm>& slicer) {
     const auto numParam = slicer.get_number_of_parameters();
     std::vector<std::vector<Index>> usedCoordinates(numParam);
     {
       nanobind::gil_scoped_release release;
       for (const auto& f : slicer.get_filtration_values()) {
-        for (size_t g = 0; g < f.num_generators(); ++g) {
-          for (size_t p = 0; p < numParam; ++p) {
+        for (std::size_t g = 0; g < f.num_generators(); ++g) {
+          for (std::size_t p = 0; p < numParam; ++p) {
             usedCoordinates[p].push_back(python::_cast_to_int<Index>(
-                f(g, p), "Expected integer squeezed filtration coordinates for parameter " + std::to_string(p) + "."));
+                f(g, p),
+                "Expected slicer integer squeezed filtration coordinates for parameter " + std::to_string(p) + "."));
           }
         }
+      }
+    }
+    return usedCoordinates;
+  }
+
+  template <typename Interface, typename T>
+  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(
+      multipers::nanobind_helpers::PySimplexTree<Interface, T>& simplexTree) {
+    const auto numParam = simplexTree.tree.num_parameters();
+    std::vector<std::vector<Index>> usedCoordinates(numParam);
+    {
+      nanobind::gil_scoped_release release;
+      for (auto simplex_handle : simplexTree.tree.complex_simplex_range()) {
+        auto pair = simplexTree.tree.get_simplex_and_filtration(simplex_handle);
+        const auto& f = *pair.second;
+        for (std::size_t g = 0; g < f.num_generators(); ++g) {
+          for (std::size_t p = 0; p < numParam; ++p) {
+            usedCoordinates[p].push_back(python::_cast_to_int<Index>(
+                f(g, p),
+                "Expected simplex tree integer squeezed filtration coordinates for parameter " + std::to_string(p) +
+                    "."));
+          }
+        }
+      }
+    }
+    return usedCoordinates;
+  }
+
+  template <typename T>
+  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(
+      const std::vector<std::pair<T, T>>& biFiltrationValues) {
+    std::vector<std::vector<Index>> usedCoordinates(2);
+    {
+      nanobind::gil_scoped_release release;
+      usedCoordinates[0].reserve(biFiltrationValues.size());
+      usedCoordinates[1].reserve(biFiltrationValues.size());
+      for (const auto& degree : biFiltrationValues) {
+        usedCoordinates[0].push_back(python::_cast_to_int<Index>(
+            degree.first, "Expected integer squeezed filtration coordinates for parameter 0."));
+        usedCoordinates[1].push_back(python::_cast_to_int<Index>(
+            degree.second, "Expected integer squeezed filtration coordinates for parameter 1."));
       }
     }
     return usedCoordinates;
@@ -289,15 +390,17 @@ struct Compacted_squeezed_filtration_grid {
         const Index normalized = normalize_squeezed_index_or_sentinel(rawIdx, rowSize, p);
         m.emplace(rawIdx, i);
         if (normalized != rowSize) {
-          selection.append(view(p, normalized));
+          selection.append(normalized);
         }
       }
-      return selection;
+
+      nanobind::object gridTmp = nanobind::cast(grid);
+      auto rowTmp = gridTmp.attr("__getitem__")(p);
+      return rowTmp.attr("__getitem__")(selection);
     });
   }
 
   void _get_compact_grid(nanobind::iterable grid) {
-    auto itGrid = grid.begin();
     filtrationGrid = Gudhi::python::_build_tuple(coordinates.size(), [&](std::size_t p) {
       auto& currentCoordinates = coordinates[p];
       std::ranges::sort(currentCoordinates);
@@ -306,22 +409,26 @@ struct Compacted_squeezed_filtration_grid {
 
       nanobind::list selection;
       auto& m = remap[p];
-      nanobind::list row(*itGrid);
-      const auto rowSize = static_cast<Index>(row.size());
+      if (!nanobind::hasattr(grid[p], "__getitem__"))
+        throw nanobind::type_error("Grid rows have to support subscripting.");
+      nanobind::object row = nanobind::cast(grid[p]);
+      Index rowSize;
+      if (nanobind::hasattr(row, "__len__"))
+        rowSize = static_cast<Index>(nanobind::len(row));
+      else
+        rowSize = static_cast<Index>(nanobind::list(row).size());
       for (std::size_t i = 0; i < currentCoordinates.size(); ++i) {
         const Index rawIdx = currentCoordinates[i];
         const Index normalized = normalize_squeezed_index_or_sentinel(rawIdx, rowSize, p);
         m.emplace(rawIdx, i);
         if (normalized != rowSize) {
-          selection.append(row[normalized]);
+          selection.append(normalized);
         }
       }
-      ++itGrid;
 
-      if (itGrid == grid.end() && p + 1 != coordinates.size())
-        throw std::invalid_argument("Grid size and number of coordinates do not match.");
+      if (p + 1 > rowSize) throw std::invalid_argument("Grid size and number of coordinates do not match.");
 
-      return selection;
+      return row.attr("__getitem__")(selection);
     });
   }
 };
