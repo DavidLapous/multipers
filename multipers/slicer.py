@@ -679,10 +679,38 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         )
         new_filtrations = evaluate_in_grid(filtrations, grid)
 
+    # is len(grid) == 0 even possible here? I had the impression that evaluate_in_grid just assumes len(grid) > 0
+    # and will throw an out-of-bound exception if not (i.e. this part is never reached in that case)
     real_dtype = np.asarray(grid[0]).dtype.type if len(grid) else self.dtype
     if not np.dtype(real_dtype) in {np.dtype(dtype) for dtype in available_dtype}:
-        float_dtypes = [np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)]
-        real_dtype = float_dtypes[0] if float_dtypes else self.dtype
+        if np.issubdtype(real_dtype, np.floating):
+            float_dtypes = [
+                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)
+            ]
+            if float_dtypes:
+                real_dtype = float_dtypes[0]
+            else:
+                warn(
+                    "Grid has floating point dtype, but no floating point dtype is available for this build."
+                    " Casting into integer type instead.",
+                    UserWarning,
+                )
+                real_dtype = self.dtype
+                new_filtrations = np.asarray(new_filtrations, dtype=real_type)
+        else:
+            int_dtypes = [
+                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.integer)
+            ]
+            if int_dtypes:
+                real_dtype = int_dtypes[0]
+            else:
+                warn(
+                    "Grid has integer dtype, but no integer dtype is available for this build."
+                    " Casting into floating point type instead.",
+                    UserWarning,
+                )
+                real_dtype = self.dtype
+                new_filtrations = np.asarray(new_filtrations, dtype=real_type)
 
     new_slicer = get_matrix_slicer(
         self.is_vine,

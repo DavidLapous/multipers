@@ -374,7 +374,7 @@ struct Compacted_squeezed_filtration_grid {
     auto view = grid.view();
     const Index rowSize = view.shape(1);
 
-    if (view.shape(0) != coordinates.size())
+    if (view.shape(0) < coordinates.size())
       throw std::invalid_argument("Grid size and number of coordinates do not match.");
 
     filtrationGrid = Gudhi::python::_build_tuple(coordinates.size(), [&](std::size_t p) {
@@ -401,6 +401,15 @@ struct Compacted_squeezed_filtration_grid {
   }
 
   void _get_compact_grid(nanobind::iterable grid) {
+    if (!nanobind::hasattr(grid, "__getitem__")) throw nanobind::type_error("Grid has to support subscripting.");
+    Index gridSize = 0;
+    if (nanobind::hasattr(grid, "__len__")) {
+      gridSize = static_cast<Index>(nanobind::len(grid));
+    } else {
+      for (auto it = grid.begin(); it != grid.end(); ++it) ++gridSize;
+    }
+    if (gridSize < coordinates.size()) throw std::invalid_argument("Grid size and number of coordinates do not match.");
+
     filtrationGrid = Gudhi::python::_build_tuple(coordinates.size(), [&](std::size_t p) {
       auto& currentCoordinates = coordinates[p];
       std::ranges::sort(currentCoordinates);
@@ -425,8 +434,6 @@ struct Compacted_squeezed_filtration_grid {
           selection.append(normalized);
         }
       }
-
-      if (p + 1 > rowSize) throw std::invalid_argument("Grid size and number of coordinates do not match.");
 
       return row.attr("__getitem__")(selection);
     });
