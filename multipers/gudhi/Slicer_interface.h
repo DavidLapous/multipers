@@ -137,6 +137,31 @@ class Slicer_interface {
     }
   }
 
+  template <typename I1, typename I2, typename F>
+  Slicer_interface(Tensor1D<I1> boundary_indptr,
+                   Tensor1D<I2> boundary_flat,
+                   Tensor1D<I2> generator_dimensions,
+                   Tensor2D<F> grades_flat)
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    auto boundaryDelimitersView = boundary_indptr.view();
+    auto boundariesView = boundary_flat.view();
+    auto dimensionsView = generator_dimensions.view();
+    auto filValuesView = grades_flat.view();
+
+    std::size_t numGen = boundaryDelimitersView.shape(0) - 1;
+    if (boundaryDelimitersView(numGen) > boundariesView.shape(0))
+      throw std::invalid_argument("Boundary index ptr and flat boundaries are not coherent.");
+    if (dimensionsView.shape(0) != numGen || filValuesView.shape(0) != numGen)
+      throw std::invalid_argument("Invalid packed input, shapes do not coincide.");
+
+    detail::Flat_2D_array_span boundaries(boundary_indptr, boundary_flat);
+    Numpy_span dimensions(generator_dimensions);
+    Numpy_2d_span filValues(grades_flat);
+
+    Complex cpx(boundaries, dimensions, filValues);
+    slicer_ = Slicer_t(std::move(cpx));
+  }
+
   // std::vector<unsigned int> imposed by Gudhi::cubical_complex::Bitmap_cubical_complex
   Slicer_interface(Tensor2D<value_type> image, const std::vector<unsigned int> &shape)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {

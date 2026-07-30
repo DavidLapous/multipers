@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -325,13 +326,34 @@ inline nanobind::tuple _get_compact_filtration_data(
     values.resize(startIndices.back());
     for (std::size_t i = 0; i < filts.size(); ++i) {
       const auto &f = filts[i];
-      std::copy(&f(0, 0), &f(0, f.num_parameters() - 1), values.begin() + startIndices[i]);
+      std::copy(f.begin(), f.end(), values.begin() + startIndices[i]);
     }
   }
 
   return nanobind::make_tuple(_wrap_as_numpy_array(std::move(startIndices), startIndices.size()),
                               _wrap_as_numpy_array(std::move(values), startIndices.back()));
 }
+
+template <typename T, typename U>
+struct Flat_2D_array_span {
+  using Del_array = nanobind::ndarray<const T, nanobind::ndim<1>, nanobind::any_contig>;
+  using Data_array = nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>;
+  using Del_view = decltype(std::declval<Del_array>().view());
+  using Data_view = decltype(std::declval<Data_array>().view());
+
+  Flat_2D_array_span(Del_array delimiters, Data_array flatData)
+      : delimiters_(delimiters.view()), flatData_(flatData.view()) {}
+
+  std::size_t size() const { return delimiters_.shape(0) - 1; }
+
+  auto operator[](std::size_t i) const {
+    if (i >= size()) throw std::out_of_range("Index is out of range for flat 2D range.");
+    return Numpy_span(&flatData_(delimiters_(i)), &flatData_(delimiters_(i + 1)));
+  }
+
+  Del_view delimiters_;
+  Data_view flatData_;
+};
 
 }  // namespace detail
 }  // namespace multi_persistence

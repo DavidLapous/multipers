@@ -167,6 +167,12 @@ inline void bind_slicer_constructors(Class& cls) {
                           nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
                           nanobind::iterable>());
 
+  // flat containers
+  cls.def(nanobind::init<nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
+                         nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
+                         nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
+                         nanobind::ndarray<const double, nanobind::ndim<2>>>());
+
   // handles None case, has to be bind last
   cls.def("__init__", [](Slicer* self, nanobind::handle arg) {
     if (!arg.is_none()) throw nanobind::next_overload();
