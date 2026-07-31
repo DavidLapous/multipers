@@ -273,8 +273,11 @@ struct Compacted_squeezed_filtration_grid {
     // special case of ndarray should be more efficient then general nanobind::iterable
     if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
       if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      _dispatch_float_dtype(
-          grid, [&]<typename U>() { return _get_compact_grid<U>(nanobind::ndarray<const U, nanobind::ndim<2>>(arr)); });
+      _dispatch_dtype(
+          grid,
+          [&]<typename U>() -> void { _get_compact_grid<U>(nanobind::ndarray<const U, nanobind::ndim<2>>(arr)); },
+          []() -> void {},
+          []() -> void { throw nanobind::type_error("Unsupported element type."); });
       return;
     }
 

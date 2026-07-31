@@ -20,7 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <sstream>
+// #include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -81,80 +81,80 @@ inline Array_dtype _get_dtype(nanobind::handle obj) {
   return Array_dtype::UNKNOWN;
 }
 
-template <typename F>
-inline auto _dispatch_int_dtype(nanobind::handle data, F &&func) {
-  using R_int32 = decltype(func.template operator()<std::int32_t>());
-  using R_int64 = decltype(func.template operator()<std::int64_t>());
-  using R_uint32 = decltype(func.template operator()<std::uint32_t>());
-  using R_uint64 = decltype(func.template operator()<std::uint64_t>());
+// template <typename F>
+// inline auto _dispatch_int_dtype(nanobind::handle data, F &&func) {
+//   using R_int32 = decltype(func.template operator()<std::int32_t>());
+//   using R_int64 = decltype(func.template operator()<std::int64_t>());
+//   using R_uint32 = decltype(func.template operator()<std::uint32_t>());
+//   using R_uint64 = decltype(func.template operator()<std::uint64_t>());
 
-  using Union = std::conditional_t<_all_same_v<R_int32, R_int64, R_uint32, R_uint64>,
-                                   R_uint32,
-                                   std::variant<R_int32, R_int64, R_uint32, R_uint64>>;
+//   using Union = std::conditional_t<_all_same_v<R_int32, R_int64, R_uint32, R_uint64>,
+//                                    R_uint32,
+//                                    std::variant<R_int32, R_int64, R_uint32, R_uint64>>;
 
-  Array_dtype dtype = _get_dtype(data);
-  switch (dtype) {
-    case Array_dtype::INT32:
-      return Union(std::forward<F>(func).template operator()<std::int32_t>());
-    case Array_dtype::UINT32:
-      return Union(std::forward<F>(func).template operator()<std::uint32_t>());
-    case Array_dtype::INT64:
-      return Union(std::forward<F>(func).template operator()<std::int64_t>());
-    case Array_dtype::UINT64:
-      return Union(std::forward<F>(func).template operator()<std::uint64_t>());
-    case Array_dtype::EMPTY:
-      // type does not matter for now then
-      return Union(std::forward<F>(func).template operator()<std::uint32_t>());
-    default:
-      std::stringstream errMsg;
-      errMsg << "Unsupported integer type: ";
-      if (dtype == Array_dtype::FLOAT32)
-        errMsg << "FLOAT32";
-      else if (dtype == Array_dtype::FLOAT64)
-        errMsg << "FLOAT64";
-      else
-        errMsg << "UNKNOWN";
-      errMsg << ".";
-      throw nanobind::type_error(errMsg.str().c_str());
-  }
-}
+//   Array_dtype dtype = _get_dtype(data);
+//   switch (dtype) {
+//     case Array_dtype::INT32:
+//       return Union(std::forward<F>(func).template operator()<std::int32_t>());
+//     case Array_dtype::UINT32:
+//       return Union(std::forward<F>(func).template operator()<std::uint32_t>());
+//     case Array_dtype::INT64:
+//       return Union(std::forward<F>(func).template operator()<std::int64_t>());
+//     case Array_dtype::UINT64:
+//       return Union(std::forward<F>(func).template operator()<std::uint64_t>());
+//     case Array_dtype::EMPTY:
+//       // type does not matter for now then
+//       return Union(std::forward<F>(func).template operator()<std::uint32_t>());
+//     default:
+//       std::stringstream errMsg;
+//       errMsg << "Unsupported integer type: ";
+//       if (dtype == Array_dtype::FLOAT32)
+//         errMsg << "FLOAT32";
+//       else if (dtype == Array_dtype::FLOAT64)
+//         errMsg << "FLOAT64";
+//       else
+//         errMsg << "UNKNOWN";
+//       errMsg << ".";
+//       throw nanobind::type_error(errMsg.str().c_str());
+//   }
+// }
 
-template <typename F>
-inline auto _dispatch_float_dtype(nanobind::handle data, F &&func) {
-  using R_float32 = decltype(func.template operator()<float>());
-  using R_float64 = decltype(func.template operator()<double>());
+// template <typename F>
+// inline auto _dispatch_float_dtype(nanobind::handle data, F &&func) {
+//   using R_float32 = decltype(func.template operator()<float>());
+//   using R_float64 = decltype(func.template operator()<double>());
 
-  using Union = std::conditional_t<std::is_same_v<R_float32, R_float64>, R_float32, std::variant<R_float32, R_float64>>;
+//   using Union = std::conditional_t<std::is_same_v<R_float32, R_float64>, R_float32, std::variant<R_float32, R_float64>>;
 
-  Array_dtype dtype = _get_dtype(data);
-  switch (dtype) {
-    case Array_dtype::FLOAT32:
-      return Union(std::forward<F>(func).template operator()<float>());
-    case Array_dtype::FLOAT64:
-      return Union(std::forward<F>(func).template operator()<double>());
-    case Array_dtype::EMPTY:
-      // type does not matter for now then
-      return Union(std::forward<F>(func).template operator()<float>());
-    default:
-      std::stringstream errMsg;
-      errMsg << "Unsupported floating point type: ";
-      if (dtype == Array_dtype::INT32)
-        errMsg << "INT32";
-      else if (dtype == Array_dtype::INT64)
-        errMsg << "INT64";
-      else if (dtype == Array_dtype::UINT32)
-        errMsg << "UINT32";
-      else if (dtype == Array_dtype::UINT64)
-        errMsg << "UINT64";
-      else
-        errMsg << "UNKNOWN";
-      errMsg << ".";
-      throw nanobind::type_error(errMsg.str().c_str());
-  }
-}
+//   Array_dtype dtype = _get_dtype(data);
+//   switch (dtype) {
+//     case Array_dtype::FLOAT32:
+//       return Union(std::forward<F>(func).template operator()<float>());
+//     case Array_dtype::FLOAT64:
+//       return Union(std::forward<F>(func).template operator()<double>());
+//     case Array_dtype::EMPTY:
+//       // type does not matter for now then
+//       return Union(std::forward<F>(func).template operator()<float>());
+//     default:
+//       std::stringstream errMsg;
+//       errMsg << "Unsupported floating point type: ";
+//       if (dtype == Array_dtype::INT32)
+//         errMsg << "INT32";
+//       else if (dtype == Array_dtype::INT64)
+//         errMsg << "INT64";
+//       else if (dtype == Array_dtype::UINT32)
+//         errMsg << "UINT32";
+//       else if (dtype == Array_dtype::UINT64)
+//         errMsg << "UINT64";
+//       else
+//         errMsg << "UNKNOWN";
+//       errMsg << ".";
+//       throw nanobind::type_error(errMsg.str().c_str());
+//   }
+// }
 
-template <typename F>
-inline auto _dispatch_dtype(nanobind::handle data, F &&func) {
+template <typename F, typename F_empty, typename F_unknown>
+inline auto _dispatch_dtype(nanobind::handle data, F &&func, F_empty &&funcEmpty, F_unknown &&funcUnkown) {
   using R_int32 = decltype(func.template operator()<std::int32_t>());
   using R_int64 = decltype(func.template operator()<std::int64_t>());
   using R_uint32 = decltype(func.template operator()<std::uint32_t>());
@@ -181,10 +181,9 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func) {
     case Array_dtype::FLOAT64:
       return Union(std::forward<F>(func).template operator()<double>());
     case Array_dtype::EMPTY:
-      // type does not matter for now then
-      return Union(std::forward<F>(func).template operator()<std::uint32_t>());
+      return Union(std::forward<F_empty>(funcEmpty)());
     default:
-      throw nanobind::type_error("Unsupported integer type: UNKNOWN.");
+      Union(std::forward<F_unknown>(funcUnkown)());
   }
 }
 
@@ -215,26 +214,35 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func) {
 //   });
 // }
 
-template <typename T>
-inline auto _get_compatible_filtration_values(nanobind::iterable filts) {
-  auto convert = [&]<typename U>() {
-    using Seq1_t = std::vector<std::vector<U>>;
-    using Seq2_t = std::vector<std::vector<std::vector<U>>>;
-    using Ten1_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>;
-    using Ten2_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<2>>>;
-    return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten1_t, Ten2_t, Seq1_t, Seq2_t>(
-          filts,
-          "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
-          "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
-          /* "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, "
-          "ndim=2]]." */);
-  };
-  if constexpr (std::is_floating_point_v<T>) {
-    return _dispatch_float_dtype(filts, convert);
-  } else {
-    return _dispatch_int_dtype(filts, convert);
-  }
-}
+// template <typename T, bool is_kcritical>
+// inline auto _get_compatible_filtration_values(nanobind::iterable filts) {
+//   auto convert = [&]<typename U>() {
+//     if constexpr (is_kcritical) {
+//       using Seq2_t = std::vector<std::vector<std::vector<U>>>;
+//       using Ten2_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<2>>>;
+//       return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten2_t, Seq2_t>(
+//             filts,
+//             "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
+//             "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
+//             /* "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, "
+//             "ndim=2]]." */);
+//     } else {
+//       using Seq1_t = std::vector<std::vector<U>>;
+//       using Ten1_t = nanobind::ndarray<const U, nanobind::ndim<2>>;
+//       return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten1_t, Seq1_t>(
+//             filts,
+//             "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
+//             "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
+//             /* "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, "
+//             "ndim=2]]." */);
+//     }
+//   };
+//   if constexpr (std::is_floating_point_v<T>) {
+//     return _dispatch_float_dtype(filts, convert);
+//   } else {
+//     return _dispatch_int_dtype(filts, convert);
+//   }
+// }
 
 template <class MultiFiltrationValue>
 constexpr bool _is_degree_rips() {

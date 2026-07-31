@@ -115,25 +115,64 @@ class Slicer_interface {
     }
   }
 
-  template <typename U>
   Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
-                   Tensor1D<U> generator_dimensions,
-                   nanobind::iterable filtration_values)
+                   const std::vector<Index> &generator_dimensions,
+                   const std::vector<std::vector<value_type>> &filtration_values)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
-    auto filts = detail::_get_compatible_filtration_values<value_type>(filtration_values);
-    {
-      nanobind::gil_scoped_release release;
+    static_assert(MultiFiltrationValue::ensures_1_criticality(),
+                  "Slicer constructor only available for 1-critical filtration values. Use sequence[sequence[U]] for "
+                  "filtration value type.");
+    _build_slicer(generator_maps, generator_dimensions, filtration_values);
+  }
 
-      std::visit(
-          [&](auto &f_var) {
-            std::visit(
-                [&](auto &f) {
-                  Complex cpx(generator_maps, Numpy_span(generator_dimensions), f);
-                  slicer_ = Slicer_t(std::move(cpx));
-                },
-                f_var);
-          },
-          filts);
+  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
+                   const std::vector<Index> &generator_dimensions,
+                   const std::vector<std::vector<std::vector<value_type>>> &filtration_values)
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    static_assert(!MultiFiltrationValue::ensures_1_criticality(),
+                  "Slicer constructor only available for k-critical filtration values. Use "
+                  "sequence[sequence[sequence[U]]] for filtration value type.");
+    _build_slicer(generator_maps, generator_dimensions, filtration_values);
+  }
+
+  template <typename I>
+  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
+                   Tensor1D<I> generator_dimensions,
+                   nanobind::object filtration_values)
+      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    if constexpr (MultiFiltrationValue::ensures_1_criticality()) {
+      auto cast_as_vector = [&]() -> void {
+        std::vector<std::vector<value_type>> val;
+        if (!nanobind::try_cast<std::vector<std::vector<value_type>>>(filtration_values, val))
+          throw std::invalid_argument("Filtration values must be either iterable[iterable[U]] or ndarray[U, ndim=2].");
+        _build_slicer(generator_maps, Numpy_span(generator_dimensions), val);
+      };
+      auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
+        if (Tensor2D<U> val; nanobind::try_cast<Tensor2D<U>>(filtration_values, val, false)) {
+          _build_slicer(generator_maps, Numpy_span(generator_dimensions), Numpy_2d_span(val));
+          return;
+        }
+        cast_as_vector();
+      };
+      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, []() -> void {}, cast_as_vector);
+    } else {
+      auto cast_as_vector = [&]() -> void {
+        std::vector<std::vector<std::vector<value_type>>> val;
+        if (!nanobind::try_cast<std::vector<std::vector<std::vector<value_type>>>>(filtration_values, val))
+          throw std::invalid_argument(
+              "Filtration values must be either iterable[iterable[iterable[U]]] or iterable[ndarray[U, ndim=2]].");
+        _build_slicer(generator_maps, Numpy_span(generator_dimensions), val);
+      };
+      auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
+        if (std::vector<Tensor2D<U>> val; nanobind::try_cast<std::vector<Tensor2D<U>>>(filtration_values, val, false)) {
+          // Tensors have to stay alive to use Numpy_2d_span, so val is necessary
+          std::vector<Numpy_2d_span<U>> fils(val.begin(), val.end());
+          _build_slicer(generator_maps, Numpy_span(generator_dimensions), fils);
+          return;
+        }
+        cast_as_vector();
+      };
+      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, []() -> void {}, cast_as_vector);
     }
   }
 
@@ -158,8 +197,7 @@ class Slicer_interface {
     Numpy_span dimensions(generator_dimensions);
     Numpy_2d_span filValues(grades_flat);
 
-    Complex cpx(boundaries, dimensions, filValues);
-    slicer_ = Slicer_t(std::move(cpx));
+    _build_slicer(boundaries, dimensions, filValues);
   }
 
   // std::vector<unsigned int> imposed by Gudhi::cubical_complex::Bitmap_cubical_complex
@@ -927,6 +965,15 @@ class Slicer_interface {
     return hasNonEmptyRows;  // returns false if the grid is valid but empty
   }
 
+  template <class B, class D, class F>
+  void _build_slicer(const B &boundaries, const D &dimensions, const F &filValues) {
+    {
+      nanobind::gil_scoped_release release;
+      Complex cpx(boundaries, dimensions, filValues);
+      slicer_ = Slicer_t(std::move(cpx));
+    }
+  }
+
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
   bool _has_same_filtration_values(
       const Slicer_interface<OtherMultiFiltrationValue, OtherPersistenceAlgorithm> &other) const {
@@ -1002,14 +1049,21 @@ class Slicer_interface {
     // special case of ndarray is more efficient then general nanobind::iterable
     if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
       if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      return detail::_dispatch_dtype(grid, [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); });
+      return detail::_dispatch_dtype(
+          grid,
+          [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); },
+          []() { return true; },
+          []() -> bool { throw nanobind::type_error("Unsupported element type."); });
     }
 
     if (!nanobind::isinstance<nanobind::iterable>(grid))
       throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
 
     return detail::_dispatch_dtype(
-        grid, [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); });
+        grid,
+        [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); },
+        []() { return true; },
+        []() -> bool { throw nanobind::type_error("Unsupported element type."); });
   }
 
   void _get_cycle_boundary(std::vector<std::vector<Index>> &outCycle, const std::vector<Index> &cycle, int dim) const {

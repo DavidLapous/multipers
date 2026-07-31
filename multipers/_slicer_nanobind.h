@@ -5,9 +5,11 @@
 #include <utility>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/operators.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 // #include <nanobind/stl/tuple.h>
@@ -75,56 +77,119 @@ inline void bind_generator_basis(nanobind::module_& m) {
            });
 }
 
-template <typename Class, typename... SourceDesc>
-inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(nanobind::init<const typename SourceDesc::interface&>()), ...);
+template <class Target, typename Class, typename... SourceDesc1, typename... SourceDesc2>
+inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>, type_list<SourceDesc2...>) {
+  // (cls.def(nanobind::init<const typename SourceDesc1::interface&>()), ...);
+  // (cls.def(nanobind::init<PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>&>()),
+  //  ...);
+
+  using CtorFn = void (*)(Target*, PyObject*);
+
+  cls.def("__init__", [](Target* self, nanobind::object b) {
+    if (b.is_none()) {
+      new (self) Target();
+      return;
+    }
+
+    // Built once (magic static), reused for the process lifetime.
+    static const std::unordered_map<PyTypeObject*, CtorFn> table = [] {
+      std::unordered_map<PyTypeObject*, CtorFn> t;
+
+      // Pack 1: direct interface types.
+      (t.emplace((PyTypeObject*)nanobind::type<typename SourceDesc1::interface>().ptr(),
+                 +[](Target* self, PyObject* obj) {
+                   using Interface = typename SourceDesc1::interface;
+                   const Interface& b = *nanobind::inst_ptr<Interface>(obj);
+                   new (self) Target(b);
+                 }),
+       ...);
+
+      // Pack 2: PySimplexTree<interface_type, value_type> wrapper types.
+      (t.emplace(
+           (PyTypeObject*)
+               nanobind::type<PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>>()
+                   .ptr(),
+           +[](Target* self, PyObject* obj) {
+             using Wrapper = PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>;
+             Wrapper& b = *nanobind::inst_ptr<Wrapper>(obj);
+             new (self) Target(b);
+           }),
+       ...);
+
+      return t;
+    }();
+
+    auto it = table.find(Py_TYPE(b.ptr()));
+    if (it == table.end()) {
+      throw nanobind::type_error("unsupported argument type for constructor");
+    }
+    it->second(self, b.ptr());
+  });
 }
 
-template <typename Class, typename... SourceDesc>
-inline void bind_from_simplex_tree_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(nanobind::init<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>()),
-   ...);
-}
+// template <typename Class, typename... SourceDesc>
+// inline void bind_from_simplex_tree_constructors(Class& cls, type_list<SourceDesc...>) {
+//   (cls.def(nanobind::init<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>()),
+//    ...);
+// }
 
 template <class Target, typename Class, typename... SourceDesc>
 inline void bind_slicer_eq(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(
-       "__eq__",
-       [](const Target& a, const typename SourceDesc::interface& b) { return a == b; },
-       nanobind::is_operator()),
-   ...);
+  // (cls.def(
+  //      "__eq__",
+  //      [](const Target& a, const typename SourceDesc::interface& b) { return a == b; },
+  //      nanobind::is_operator()),
+  //  ...);
+  using CmpFn = bool (*)(const Target&, PyObject*);
+
+  cls.def("__eq__", [](const Target& a, nanobind::object b) -> nanobind::object {
+    // Built once (magic static), reused for the process lifetime.
+    static const std::unordered_map<PyTypeObject*, CmpFn> table = [] {
+      std::unordered_map<PyTypeObject*, CmpFn> t;
+      (t.emplace((PyTypeObject*)nanobind::type<typename SourceDesc::interface>().ptr(),
+                 +[](const Target& a, PyObject* obj) -> bool {
+                   // Exact type already confirmed by the table lookup,
+                   // so an unchecked pointer cast is safe here.
+                   using Interface = typename SourceDesc::interface;
+                   const Interface& b = *nanobind::inst_ptr<Interface>(obj);
+                   return a == b;
+                 }),
+       ...);
+      return t;
+    }();
+
+    auto it = table.find(Py_TYPE(b.ptr()));
+    if (it == table.end()) return nanobind::borrow(Py_NotImplemented);
+
+    return nanobind::cast(it->second(a, b.ptr()));
+  });
 }
 
-template <class Target, typename Class, typename... SourceDesc>
-inline void bind_from_slicer_copy(Class& cls, type_list<SourceDesc...>) {
-  (cls.def("_copy_from_any",
-           nanobind::overload_cast<const typename SourceDesc::interface&>(
-               &Target::template copy<typename SourceDesc::concrete::Filtration_value,
-                                      typename SourceDesc::concrete::Persistence>)),
-   ...);
-}
+// template <class Target, typename Class, typename... SourceDesc>
+// inline void bind_from_slicer_copy(Class& cls, type_list<SourceDesc...>) {
+//   (cls.def("_copy_from_any",
+//            nanobind::overload_cast<const typename SourceDesc::interface&>(
+//                &Target::template copy<typename SourceDesc::concrete::Filtration_value,
+//                                       typename SourceDesc::concrete::Persistence>)),
+//    ...);
+// }
 
-template <class Target, typename Class, typename... SourceDesc>
-inline void bind_from_simplex_tree_copy(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(
-       "_copy_from_any",
-       nanobind::overload_cast<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
-           &Target::template copy<typename SourceDesc::filtration_type>)),
-   ...);
-}
+// template <class Target, typename Class, typename... SourceDesc>
+// inline void bind_from_simplex_tree_copy(Class& cls, type_list<SourceDesc...>) {
+//   (cls.def(
+//        "_copy_from_any",
+//        nanobind::overload_cast<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
+//            &Target::template copy<typename SourceDesc::filtration_type>)),
+//    ...);
+// }
 
-template <class Slicer, typename Class>
+template <class Slicer, typename Desc, typename Class>
 inline void bind_slicer_constructors(Class& cls) {
   using T = typename Slicer::value_type;
   using Tensor2D = nanobind::ndarray<const T, nanobind::ndim<2>>;
 
   // default constructor
   cls.def(nanobind::init<>());
-
-  // constructors from all available slicers
-  bind_from_slicer_constructors(cls, SlicerDescriptorList{});
-  // constructors from all available simplex trees
-  bind_from_simplex_tree_constructors(cls, SimplexTreeDescriptorList{});
 
   // from cubical image
   cls.def(nanobind::init<Tensor2D, const std::vector<unsigned int>&>());
@@ -146,26 +211,23 @@ inline void bind_slicer_constructors(Class& cls) {
   // uint32, int32, uint64 or int64 if the Slicer dtype is integer and float or double if the Slicer dtype
   // is floating point.
   cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                         nanobind::ndarray<const std::uint32_t, nanobind::ndim<1>, nanobind::any_contig>,
+                         nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
                          nanobind::iterable>(),
           "generator_maps"_a,
           "generator_dimensions"_a.noconvert(),
           "filtration_values"_a)
       .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                          nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>(),
-           "generator_maps"_a,
-           "generator_dimensions"_a.noconvert(),
-           "filtration_values"_a)
-      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                          nanobind::ndarray<const std::uint64_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>(),
-           "generator_maps"_a,
-           "generator_dimensions"_a.noconvert(),
-           "filtration_values"_a)
-      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                           nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
                           nanobind::iterable>());
+  if constexpr (Desc::is_kcritical) {
+    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                           const std::vector<typename Slicer::Index>&,
+                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>());
+  } else {
+    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
+                           const std::vector<typename Slicer::Index>&,
+                           const std::vector<std::vector<typename Slicer::value_type>>&>());
+  }
 
   // flat containers
   cls.def(nanobind::init<nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
@@ -173,11 +235,17 @@ inline void bind_slicer_constructors(Class& cls) {
                          nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
                          nanobind::ndarray<const double, nanobind::ndim<2>>>());
 
-  // handles None case, has to be bind last
-  cls.def("__init__", [](Slicer* self, nanobind::handle arg) {
-    if (!arg.is_none()) throw nanobind::next_overload();
-    new (self) Slicer();
-  });
+  // constructors from all available slicers and simplex trees
+  // to make no problems with other possible single argument constructors, it always has to be last!
+  bind_from_slicer_constructors<Slicer>(cls, SlicerDescriptorList{}, SimplexTreeDescriptorList{});
+  // // constructors from all available simplex trees
+  // bind_from_simplex_tree_constructors(cls, SimplexTreeDescriptorList{});
+
+  // // handles None case, has to be bind last
+  // cls.def("__init__", [](Slicer* self, nanobind::handle arg) {
+  //   if (!arg.is_none()) throw nanobind::next_overload();
+  //   new (self) Slicer();
+  // });
 }
 
 template <class Slicer, typename Class>
@@ -205,8 +273,7 @@ inline void bind_slicer_dunders(Class& cls) {
 
 template <class Slicer, typename Desc, typename Class>
 inline void bind_slicer_properties(Class& cls) {
-  cls.def_prop_rw(
-         "filtration_grid", &Slicer::get_filtration_grid, &Slicer::set_filtration_grid, nanobind::arg("value").none())
+  cls.def_prop_rw("filtration_grid", &Slicer::get_filtration_grid, &Slicer::set_filtration_grid, "value"_a.none())
       .def_prop_rw("minpres_degree",
                    &Slicer::get_min_pres_degree,
                    [](Slicer& self, int degree) { self.set_min_pres_degree(degree, self.is_min_res()); })
@@ -222,7 +289,7 @@ inline void bind_slicer_properties(Class& cls) {
             self.set_generator_basis(
                 nanobind::cast<std::optional<Gudhi::multi_persistence::detail::Generator_basis_data>>(value));
           },
-          nanobind::arg("value").none())
+          "value"_a.none())
       .def_prop_ro("is_pres", &Slicer::is_pres)
       .def_prop_ro("pres_degree", &Slicer::get_pres_degree)
       .def_prop_ro("is_minpres", &Slicer::is_min_pres)
@@ -312,13 +379,14 @@ inline void bind_slicer_modifiers(Class& cls) {
            "box"_a = nanobind::none())
       .def("_clean_filtration_grid_raw", &Slicer::clean_filtration_grid);
 
-  bind_from_slicer_copy<Slicer>(cls, SlicerDescriptorList{});
-  bind_from_simplex_tree_copy<Slicer>(cls, SimplexTreeDescriptorList{});
+  // bind_from_slicer_copy<Slicer>(cls, SlicerDescriptorList{});
+  // bind_from_simplex_tree_copy<Slicer>(cls, SimplexTreeDescriptorList{});
   cls.def("copy", [](const Slicer& self) -> Slicer { return Slicer(self); });
 
   if constexpr (Desc::has_grid_methods) {
     cls.def("coarsen_on_grid_copy", &Slicer::template build_coarsen_on_grid<T>)
-        .def("compute_kernel_projective_cover", &Slicer::build_from_projective_cover_kernel, "dim"_a = nb::none());
+        .def(
+            "compute_kernel_projective_cover", &Slicer::build_from_projective_cover_kernel, "dim"_a = nanobind::none());
   }
 
   if constexpr (Desc::is_vine) {
@@ -359,7 +427,7 @@ inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_sl
 
   auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data());
 
-  bind_slicer_constructors<Slicer>(cls);
+  bind_slicer_constructors<Slicer, Desc>(cls);
   bind_slicer_dunders<Slicer>(cls);
   bind_slicer_properties<Slicer, Desc>(cls);
   bind_slicer_modifiers<Slicer, Desc>(cls);
