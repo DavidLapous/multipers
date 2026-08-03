@@ -14,7 +14,7 @@ from multipers.invariants.landscapes import persistence_landscape
 from multipers.multiparameter_module_approximation import module_approximation
 from multipers.point_measure import barcode_from_rank_sm as barcode_from_rank_signed_measure
 from ._utils import _as_slicer, _normalize_degrees
-from .end_curves import birth_curves, death_curves, end_curves
+from .end_curves import birth_curves, death_curves
 from .projected_barcode import projected_barcode
 from .skyscraper import SkyscraperInvariant, skyscraper_invariant
 
@@ -744,7 +744,6 @@ __all__ = [
     "betti_table",
     "birth_curves",
     "death_curves",
-    "end_curves",
     "fibered_barcode",
     "fibered_barcodes",
     "graphcode",
