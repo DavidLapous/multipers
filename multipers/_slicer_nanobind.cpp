@@ -62,6 +62,7 @@ using multipers::core::SlicerConversion;
 using multipers::nanobind_dense_utils::matrix_from_array;
 using multipers::nanobind_dense_utils::vector_from_array;
 using multipers::nanobind_helpers::cast_squeezed_coordinate_grid;
+using multipers::nanobind_helpers::clear_slicer_current_line;
 using multipers::nanobind_helpers::colexical_slicer_copy;
 using multipers::nanobind_helpers::colexical_slicer_copy_with_permutation;
 using multipers::nanobind_helpers::compact_squeezed_filtration_grid;
@@ -89,6 +90,27 @@ using multipers::nanobind_utils::owned_array;
 using multipers::nanobind_utils::template_id_of;
 using multipers::nanobind_utils::tuple_from_size;
 using multipers::nanobind_utils::view_array;
+
+template <typename Persistence, typename = void>
+inline constexpr bool is_graph_persistence_v = false;
+
+template <typename Persistence>
+inline constexpr bool is_graph_persistence_v<Persistence, std::void_t<decltype(Persistence::is_graph)>> =
+    Persistence::is_graph;
+
+template <typename Concrete, typename Complex>
+void validate_complex_if_needed(const Complex& complex) {
+  if constexpr (is_graph_persistence_v<typename Concrete::Persistence>) {
+    multipers::graph_mph0::validate_graph_shape(complex.get_dimensions(), complex.get_boundaries());
+  }
+}
+
+template <typename Concrete>
+void validate_slicer_if_needed(const Concrete& slicer) {
+  if constexpr (is_graph_persistence_v<typename Concrete::Persistence>) {
+    validate_complex_if_needed<Concrete>(slicer.get_filtered_complex());
+  }
+}
 
 template <typename Desc>
 inline constexpr bool is_kcritical_contiguous_f64_matrix_slicer_v =
@@ -276,6 +298,7 @@ void build_from_simplextree_desc(Wrapper& self, simplextree_wrapper_t<Desc>& sou
     nb::gil_scoped_release release;
     self.truc = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Concrete>(source.tree);
   }
+  validate_slicer_if_needed(self.truc);
   self.filtration_grid = source.filtration_grid;
   self.generator_basis = nb::none();
   multipers::nanobind_helpers::mark_slicer_pres(self, -1);
@@ -756,6 +779,7 @@ bool try_copy_from_existing(TargetWrapper& self, const nb::handle& source) {
       nb::gil_scoped_release release;
       self.truc = SlicerConversion<TargetConcrete, typename D::concrete>::run(other.truc);
     }
+    validate_slicer_if_needed(self.truc);
     copy_slicer_python_state(self, other);
   });
   return true;
@@ -770,6 +794,7 @@ typename TargetDesc::wrapper construct_from_slicer_wrapper(const typename Source
     nb::gil_scoped_release release;
     out.truc = SlicerConversion<Concrete, typename SourceDesc::concrete>::run(source.truc);
   }
+  validate_slicer_if_needed(out.truc);
   copy_slicer_python_state(out, source);
   return out;
 }
@@ -814,6 +839,7 @@ Wrapper construct_from_scc_file(const std::string& path, int shift_dimension) {
     nb::gil_scoped_release release;
     out.truc = Gudhi::multi_persistence::build_slicer_from_scc_file<Concrete>(path, false, false, shift_dimension);
   }
+  validate_slicer_if_needed(out.truc);
   reset_slicer_python_state(out);
   return out;
 }
@@ -1027,7 +1053,7 @@ multipers::nanobind_helpers::GeneratorBasisData extract_generator_basis(const Wr
 inline std::vector<std::vector<uint32_t>> expand_cycle_in_generator_basis(
     const std::vector<uint32_t>& cycle,
     const multipers::nanobind_helpers::GeneratorBasisData& basis) {
-  std::vector<uint8_t> active_rows(basis.row_boundaries.size(), 0);
+  std::unordered_set<uint32_t> active_rows;
   for (uint32_t generator_idx : cycle) {
     if (generator_idx >= basis.columns.size()) {
       throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
@@ -1036,22 +1062,63 @@ inline std::vector<std::vector<uint32_t>> expand_cycle_in_generator_basis(
       if (row_idx >= basis.row_boundaries.size()) {
         throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_boundaries`.");
       }
-      active_rows[row_idx] ^= 1;
+      auto [it, inserted] = active_rows.insert(row_idx);
+      if (!inserted) {
+        active_rows.erase(it);
+      }
     }
   }
 
+  std::vector<uint32_t> rows(active_rows.begin(), active_rows.end());
+  std::sort(rows.begin(), rows.end());
   std::vector<std::vector<uint32_t>> out;
-  for (size_t row_idx = 0; row_idx < active_rows.size(); ++row_idx) {
-    if (active_rows[row_idx] != 0) {
-      out.push_back(basis.row_boundaries[row_idx]);
+  out.reserve(rows.size());
+  for (uint32_t row_idx : rows) {
+    out.push_back(basis.row_boundaries[row_idx]);
+  }
+  return out;
+}
+
+inline std::vector<uint32_t> expand_cycle_cell_ids_in_generator_basis(
+    const std::vector<uint32_t>& cycle,
+    const multipers::nanobind_helpers::GeneratorBasisData& basis) {
+  if (basis.row_cell_indices.size() != basis.row_boundaries.size()) {
+    throw std::runtime_error(
+        "`_generator_basis` does not contain complete `row_cell_indices`; "
+        "use `expand_generator_basis=False` or rebuild it with the current Multipers version.");
+  }
+
+  std::unordered_set<uint32_t> active_rows;
+  for (uint32_t generator_idx : cycle) {
+    if (generator_idx >= basis.columns.size()) {
+      throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
     }
+    for (uint32_t row_idx : basis.columns[generator_idx]) {
+      if (row_idx >= basis.row_cell_indices.size()) {
+        throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_cell_indices`.");
+      }
+      auto [it, inserted] = active_rows.insert(row_idx);
+      if (!inserted) {
+        active_rows.erase(it);
+      }
+    }
+  }
+
+  std::vector<uint32_t> out;
+  out.reserve(active_rows.size());
+  for (uint32_t row_idx : active_rows) {
+    out.push_back(basis.row_cell_indices[row_idx]);
+  }
+  std::sort(out.begin(), out.end());
+  if (std::adjacent_find(out.begin(), out.end()) != out.end()) {
+    throw std::runtime_error("`_generator_basis.row_cell_indices` must identify distinct source cells.");
   }
   return out;
 }
 
 inline bool is_generator_basis_key(std::string_view key) {
   return key == "degree" || key == "columns" || key == "row_boundaries" || key == "row_grades" ||
-         key == "column_grades";
+         key == "column_grades" || key == "row_cell_indices";
 }
 
 inline nb::object generator_basis_value_for_key(const multipers::nanobind_helpers::GeneratorBasisData& self,
@@ -1071,6 +1138,9 @@ inline nb::object generator_basis_value_for_key(const multipers::nanobind_helper
   if (key == "column_grades") {
     return nb::cast(self.column_grades);
   }
+  if (key == "row_cell_indices") {
+    return nb::cast(self.row_cell_indices);
+  }
   throw nb::key_error("Invalid `_GeneratorBasis` key.");
 }
 
@@ -1082,17 +1152,20 @@ inline void bind_generator_basis(nb::module_& m) {
                     std::vector<std::vector<uint32_t>>,
                     std::vector<std::vector<uint32_t>>,
                     std::vector<std::pair<double, double>>,
-                    std::vector<std::pair<double, double>>>(),
+                    std::vector<std::pair<double, double>>,
+                    std::vector<uint32_t>>(),
            "degree"_a,
            "columns"_a,
            "row_boundaries"_a,
            "row_grades"_a = std::vector<std::pair<double, double>>{},
-           "column_grades"_a = std::vector<std::pair<double, double>>{})
+           "column_grades"_a = std::vector<std::pair<double, double>>{},
+           "row_cell_indices"_a = std::vector<uint32_t>{})
       .def_prop_ro("degree", [](const GeneratorBasisData& self) { return self.degree; })
       .def_prop_ro("columns", [](const GeneratorBasisData& self) { return self.columns; })
       .def_prop_ro("row_boundaries", [](const GeneratorBasisData& self) { return self.row_boundaries; })
       .def_prop_ro("row_grades", [](const GeneratorBasisData& self) { return self.row_grades; })
       .def_prop_ro("column_grades", [](const GeneratorBasisData& self) { return self.column_grades; })
+      .def_prop_ro("row_cell_indices", [](const GeneratorBasisData& self) { return self.row_cell_indices; })
       .def("__getitem__",
            [](const GeneratorBasisData& self, const std::string& key) {
              return generator_basis_value_for_key(self, key);
@@ -1101,18 +1174,24 @@ inline void bind_generator_basis(nb::module_& m) {
            [](const GeneratorBasisData&, const std::string& key) { return is_generator_basis_key(key); })
       .def("keys",
            [](const GeneratorBasisData&) {
-             return nb::make_tuple("degree", "columns", "row_boundaries", "row_grades", "column_grades");
+             return nb::make_tuple(
+                 "degree", "columns", "row_boundaries", "row_grades", "column_grades", "row_cell_indices");
            })
       .def("__reduce__",
            [](const GeneratorBasisData& self) {
-             return nb::make_tuple(
-                 nb::borrow<nb::object>(nb::type<GeneratorBasisData>()),
-                 nb::make_tuple(self.degree, self.columns, self.row_boundaries, self.row_grades, self.column_grades));
+             return nb::make_tuple(nb::borrow<nb::object>(nb::type<GeneratorBasisData>()),
+                                   nb::make_tuple(self.degree,
+                                                  self.columns,
+                                                  self.row_boundaries,
+                                                  self.row_grades,
+                                                  self.column_grades,
+                                                  self.row_cell_indices));
            })
       .def("__repr__", [](const GeneratorBasisData& self) {
         return "_GeneratorBasis(degree=" + std::to_string(self.degree) +
                ", columns=" + std::to_string(self.columns.size()) +
-               ", row_boundaries=" + std::to_string(self.row_boundaries.size()) + ")";
+               ", row_boundaries=" + std::to_string(self.row_boundaries.size()) +
+               ", row_cell_indices=" + std::to_string(self.row_cell_indices.size()) + ")";
       });
 }
 
@@ -1173,6 +1252,7 @@ Wrapper construct_from_generator_data(nb::object generator_maps,
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
       std::move(boundaries), std::move(dims), std::move(c_filtrations));
+  validate_complex_if_needed<Concrete>(cpx);
   out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
@@ -1222,6 +1302,7 @@ Wrapper construct_from_dense_generator_data(nb::iterable generator_maps,
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
       std::move(boundaries), std::move(dims), std::move(c_filtrations));
+  validate_complex_if_needed<Concrete>(cpx);
   out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
@@ -1352,6 +1433,7 @@ Wrapper construct_kcritical_from_packed(
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
       std::move(boundaries), std::move(dims), std::move(filtrations));
+  validate_complex_if_needed<Concrete>(cpx);
   out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
@@ -1409,6 +1491,7 @@ Wrapper construct_contiguous_from_packed(
 
   Gudhi::multi_persistence::Multi_parameter_filtered_complex<typename Concrete::Filtration_value> cpx(
       std::move(boundaries), std::move(dims), std::move(filtrations));
+  validate_complex_if_needed<Concrete>(cpx);
   out.truc = Concrete(std::move(cpx));
   reset_slicer_python_state(out);
   return out;
@@ -1435,6 +1518,11 @@ void bind_grid_methods(Class& cls) {
         .def(
             "compute_kernel_projective_cover",
             [](Wrapper& self, nb::object dim_obj) {
+              if (!self.generator_basis.is_none()) {
+                throw nb::value_error(
+                    "compute_kernel_projective_cover does not transport `_generator_basis`; "
+                    "discard the basis explicitly before this transformation.");
+              }
               Wrapper out;
               if (self.truc.get_number_of_cycle_generators() == 0) {
                 copy_slicer_python_state(out, self);

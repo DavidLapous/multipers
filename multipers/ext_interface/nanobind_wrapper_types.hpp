@@ -131,17 +131,28 @@ inline std::vector<std::vector<Value>> cast_squeezed_coordinate_grid(
 struct PySlicerPythonState {
   nanobind::object filtration_grid;
   nanobind::object generator_basis;
+  std::vector<double> current_line_basepoint;
+  std::vector<double> current_line_direction;
   int pres_degree;
   bool is_minpres;
   bool is_minres;
+  bool has_current_line;
 
   PySlicerPythonState()
       : filtration_grid(nanobind::none()),
         generator_basis(nanobind::none()),
         pres_degree(-1),
         is_minpres(false),
-        is_minres(false) {}
+        is_minres(false),
+        has_current_line(false) {}
 };
+
+template <typename State>
+inline void clear_slicer_current_line(State& state) {
+  state.current_line_basepoint.clear();
+  state.current_line_direction.clear();
+  state.has_current_line = false;
+}
 
 template <typename State>
 inline int slicer_minpres_degree(const State& state) {
@@ -166,15 +177,19 @@ template <typename TargetState, typename SourceState>
 inline void copy_slicer_python_state(TargetState& target, const SourceState& source) {
   target.filtration_grid = source.filtration_grid;
   target.generator_basis = source.generator_basis;
+  target.current_line_basepoint = source.current_line_basepoint;
+  target.current_line_direction = source.current_line_direction;
   target.pres_degree = source.pres_degree;
   target.is_minpres = source.is_minpres;
   target.is_minres = source.is_minres;
+  target.has_current_line = source.has_current_line;
 }
 
 template <typename State>
 inline void reset_slicer_python_state(State& state) {
   state.filtration_grid = nanobind::none();
   state.generator_basis = nanobind::none();
+  clear_slicer_current_line(state);
   mark_slicer_pres(state, -1);
 }
 

@@ -74,11 +74,6 @@ def Slicer(
         filtration_container = (
             "contiguous" if filtration_container is None else filtration_container
         )
-    if backend == "graph" and is_kcritical:
-        raise ValueError(
-            "Graph backend requires kcritical=False (a one-critical filtration)."
-        )
-
     if is_slicer(st, allow_minpres=False):
         requested_vineyard = st.is_vine if vineyard is None else vineyard
         vineyard = requested_vineyard

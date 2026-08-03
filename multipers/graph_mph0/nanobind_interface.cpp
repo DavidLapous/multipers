@@ -22,7 +22,6 @@ namespace nb = nanobind;
 namespace mpnb {
 namespace {
 
-using multipers::nanobind_helpers::has_nonempty_filtration_grid;
 using multipers::nanobind_helpers::is_slicer_object;
 using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
@@ -33,6 +32,26 @@ struct Graph_mph0_input {
   multipers::graph_mph0::Graph graph;
   std::vector<multipers::graph_mph0::Grade> zero_relations;
 };
+
+template <typename Value>
+double graph_grade_coordinate(Value value) {
+  if constexpr (std::is_integral_v<Value>) {
+    if (value == std::numeric_limits<Value>::max()) {
+      throw std::invalid_argument("graph requires finite filtration values");
+    }
+    if constexpr (std::numeric_limits<Value>::digits > std::numeric_limits<double>::digits) {
+      constexpr std::uint64_t max_exact = std::uint64_t{1} << std::numeric_limits<double>::digits;
+      if constexpr (std::is_signed_v<Value>) {
+        if (value < -static_cast<Value>(max_exact) || value > static_cast<Value>(max_exact)) {
+          throw std::invalid_argument("graph requires integer filtration values exactly representable as float64");
+        }
+      } else if (value > static_cast<Value>(max_exact)) {
+        throw std::invalid_argument("graph requires integer filtration values exactly representable as float64");
+      }
+    }
+  }
+  return static_cast<double>(value);
+}
 
 template <class DimensionAt, class BoundaryAt, class GradeAt>
 Graph_mph0_input build_graph_mph0_input(std::size_t num_generators,
@@ -93,41 +112,48 @@ Graph_mph0_input build_graph_mph0_input(std::size_t num_generators,
   return out;
 }
 
-template <typename Desc>
-inline constexpr bool is_contiguous_f64_graph_slicer_v =
-    std::is_same_v<typename Desc::value_type, double> && Desc::is_vine && !Desc::is_kcritical &&
-    !Desc::is_degree_rips && Desc::column_type == std::string_view("UNORDERED_SET") &&
-    Desc::backend_type == std::string_view("Graph") && Desc::filtration_container == std::string_view("Contiguous");
+template <typename Desc, typename Value>
+inline constexpr bool is_contiguous_graph_slicer_v =
+    std::is_same_v<typename Desc::value_type, Value> && Desc::is_vine && !Desc::is_kcritical && !Desc::is_degree_rips &&
+    Desc::column_type == std::string_view("UNORDERED_SET") && Desc::backend_type == std::string_view("Graph") &&
+    Desc::filtration_container == std::string_view("Contiguous");
 
-template <typename List>
-struct contiguous_f64_graph_slicer_desc_impl;
+template <typename Value, typename List>
+struct contiguous_graph_slicer_desc_impl;
 
-template <>
-struct contiguous_f64_graph_slicer_desc_impl<type_list<>> {
+template <typename Value>
+struct contiguous_graph_slicer_desc_impl<Value, type_list<>> {
   using type = void;
   static constexpr bool found = false;
   static constexpr int matches = 0;
 };
 
-template <typename Head, typename... Tail>
-struct contiguous_f64_graph_slicer_desc_impl<type_list<Head, Tail...>> {
-  using tail = contiguous_f64_graph_slicer_desc_impl<type_list<Tail...>>;
-  static constexpr bool is_match = is_contiguous_f64_graph_slicer_v<Head>;
+template <typename Value, typename Head, typename... Tail>
+struct contiguous_graph_slicer_desc_impl<Value, type_list<Head, Tail...>> {
+  using tail = contiguous_graph_slicer_desc_impl<Value, type_list<Tail...>>;
+  static constexpr bool is_match = is_contiguous_graph_slicer_v<Head, Value>;
   static constexpr bool found = is_match || tail::found;
   static constexpr int matches = tail::matches + (is_match ? 1 : 0);
   using type = std::conditional_t<is_match, Head, typename tail::type>;
 };
 
-using ContiguousF64GraphSlicerDesc = typename contiguous_f64_graph_slicer_desc_impl<SlicerDescriptorList>::type;
+using ContiguousF64GraphSlicerDesc = typename contiguous_graph_slicer_desc_impl<double, SlicerDescriptorList>::type;
+using ContiguousI32GraphSlicerDesc =
+    typename contiguous_graph_slicer_desc_impl<std::int32_t, SlicerDescriptorList>::type;
 using ContiguousF64MatrixSlicerWrapper = multipers::nanobind_helpers::PySlicer<multipers::contiguous_f64_slicer>;
+using ContiguousI32MatrixSlicerWrapper = multipers::nanobind_helpers::PySlicer<multipers::contiguous_i32_slicer>;
 
 static_assert(!std::is_void_v<ContiguousF64GraphSlicerDesc>,
               "Expected exactly one one-critical contiguous float64 Graph slicer template.");
-static_assert(contiguous_f64_graph_slicer_desc_impl<SlicerDescriptorList>::matches == 1,
+static_assert(contiguous_graph_slicer_desc_impl<double, SlicerDescriptorList>::matches == 1,
               "One-critical contiguous float64 Graph slicer template must be unique.");
+static_assert(!std::is_void_v<ContiguousI32GraphSlicerDesc>,
+              "Expected exactly one one-critical contiguous int32 Graph slicer template.");
+static_assert(contiguous_graph_slicer_desc_impl<std::int32_t, SlicerDescriptorList>::matches == 1,
+              "One-critical contiguous int32 Graph slicer template must be unique.");
 
-template <typename Wrapper>
-nb::object graph_mph0_slicer_output(multipers::contiguous_f64_complex&& complex, std::int32_t degree, bool is_minres) {
+template <typename Wrapper, typename Complex>
+nb::object graph_mph0_slicer_output(Complex&& complex, std::int32_t degree, bool is_minres) {
   nb::object out = nb::type<Wrapper>()();
   auto& wrapper = nb::cast<Wrapper&>(out);
   {
@@ -211,13 +237,12 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
     if constexpr (Desc::is_kcritical) {
       throw std::invalid_argument("graph requires a one-critical filtration");
     } else {
-      if (has_nonempty_filtration_grid(wrapper.filtration_grid)) {
-        throw std::invalid_argument("graph expects unsqueezed filtration coordinates");
-      }
       if (wrapper.truc.get_number_of_parameters() != 2) {
         throw std::invalid_argument("graph requires exactly two filtration parameters");
       }
 
+      using Output_value =
+          std::conditional_t<std::is_same_v<typename Desc::value_type, std::int32_t>, std::int32_t, double>;
       auto complex = [&] {
         nb::gil_scoped_release release;
         const auto& dimensions = wrapper.truc.get_dimensions();
@@ -229,8 +254,8 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
             [&](std::size_t generator) { return static_cast<std::int32_t>(dimensions[generator]); },
             [&](std::size_t generator) -> const auto& { return boundaries[generator]; },
             [&](std::size_t generator) {
-              return multipers::graph_mph0::Grade{static_cast<double>(filtrations[generator](0, 0)),
-                                                  static_cast<double>(filtrations[generator](0, 1))};
+              return multipers::graph_mph0::Grade{graph_grade_coordinate(filtrations[generator](0, 0)),
+                                                  graph_grade_coordinate(filtrations[generator](0, 1))};
             },
             false);
         auto result =
@@ -243,7 +268,7 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
           throw std::overflow_error("graph output exceeds uint32 generator capacity");
         }
         const std::size_t num_generators = result.beta_0.size() + result.beta_1.size() + result.beta_2.size();
-        std::vector<double> grades;
+        std::vector<Output_value> grades;
         std::vector<std::vector<std::uint32_t>> output_boundaries;
         std::vector<int> output_dimensions;
         grades.reserve(2 * num_generators);
@@ -252,8 +277,8 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
         output_dimensions.reserve(num_generators);
         auto append_grades = [&](const auto& values, int dimension) {
           for (const auto& grade : values) {
-            grades.push_back(grade[0]);
-            grades.push_back(grade[1]);
+            grades.push_back(static_cast<Output_value>(grade[0]));
+            grades.push_back(static_cast<Output_value>(grade[1]));
             output_dimensions.push_back(dimension);
           }
         };
@@ -280,15 +305,23 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
             boundary.push_back(static_cast<std::uint32_t>(result.beta_0.size() + relation));
           }
         }
-        return multipers::build_contiguous_f64_slicer_from_output(
-            grades, std::size_t(2), output_boundaries, output_dimensions);
+        return multipers::build_contiguous_slicer_from_owned_output<Output_value>(
+            grades, std::size_t(2), std::move(output_boundaries), std::move(output_dimensions));
       }();
 
-      if (full_resolution) {
-        return graph_mph0_slicer_output<ContiguousF64MatrixSlicerWrapper>(std::move(complex), degree, true);
+      if constexpr (std::is_same_v<Output_value, std::int32_t>) {
+        if (full_resolution) {
+          return graph_mph0_slicer_output<ContiguousI32MatrixSlicerWrapper>(std::move(complex), degree, true);
+        }
+        return graph_mph0_slicer_output<typename ContiguousI32GraphSlicerDesc::wrapper>(
+            std::move(complex), degree, false);
+      } else {
+        if (full_resolution) {
+          return graph_mph0_slicer_output<ContiguousF64MatrixSlicerWrapper>(std::move(complex), degree, true);
+        }
+        return graph_mph0_slicer_output<typename ContiguousF64GraphSlicerDesc::wrapper>(
+            std::move(complex), degree, false);
       }
-      return graph_mph0_slicer_output<typename ContiguousF64GraphSlicerDesc::wrapper>(
-          std::move(complex), degree, false);
     }
   });
 }

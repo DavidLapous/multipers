@@ -1,11 +1,13 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -13,11 +15,46 @@
 
 #include <gudhi/persistence_interval.h>
 
+#include "link_cut_forest.h"
+
 namespace multipers::graph_mph0 {
 
-// Graph-specialized H0/H1 persistence backend. Updates replay the same adjacent
-// filtration swaps as matrix vineyards and preserve barcode slot identities.
-template <class Structure>
+template <typename Dimensions, typename Boundaries>
+void validate_graph_shape(const Dimensions& dimensions, const Boundaries& boundaries) {
+  if (boundaries.size() != dimensions.size()) throw std::invalid_argument("Graph backend malformed boundaries");
+  if (dimensions.size() > std::numeric_limits<std::uint32_t>::max()) {
+    throw std::overflow_error("Graph backend supports at most uint32 generator indices");
+  }
+  if (dimensions.empty()) return;
+
+  const auto base_degree = *std::min_element(dimensions.begin(), dimensions.end());
+  if (base_degree < 0) throw std::invalid_argument("Graph backend dimensions must be nonnegative");
+  for (std::size_t generator = 0; generator < dimensions.size(); ++generator) {
+    if (dimensions[generator] == base_degree) {
+      if (!boundaries[generator].empty()) throw std::invalid_argument("Graph vertex boundary must be empty");
+      continue;
+    }
+    if (dimensions[generator] != base_degree + 1) {
+      throw std::invalid_argument("Graph backend requires two adjacent generator dimensions");
+    }
+    if (boundaries[generator].empty()) continue;
+    if (boundaries[generator].size() != 2) {
+      throw std::invalid_argument("Graph nonempty relation boundary must contain exactly two generators");
+    }
+    if (boundaries[generator][0] == boundaries[generator][1]) {
+      throw std::invalid_argument("Graph relation endpoints must be distinct");
+    }
+    for (const auto vertex : boundaries[generator]) {
+      if (vertex >= generator || dimensions[vertex] != base_degree) {
+        throw std::invalid_argument("Graph edge endpoint is invalid");
+      }
+    }
+  }
+}
+
+// Graph-specialized H0/H1 persistence backend. The vineyard specialization
+// replays matrix-vineyard swaps and preserves barcode slot identities.
+template <class Structure, bool Vineyard>
 class Slicer_backend {
  public:
   using Dimension = int;
@@ -26,10 +63,11 @@ class Slicer_backend {
   using Cycle = std::vector<Index>;
   using Map = std::vector<Index>;
   template <class Complex>
-  using As_type = Slicer_backend<Complex>;
+  using As_type = Slicer_backend<Complex, Vineyard>;
 
   static constexpr auto nullDeath = Bar::inf;
-  static constexpr bool is_vine = true;
+  static constexpr bool is_vine = Vineyard;
+  static constexpr bool is_graph = true;
   static constexpr bool has_rep_cycles = false;
 
   Slicer_backend() = default;
@@ -41,13 +79,23 @@ class Slicer_backend {
 
   template <class Complex, class Filtration_range>
   void initialize(const Complex& complex, const Filtration_range& values, bool = false) {
+    const auto& dimensions = complex.get_dimensions();
+    const auto& boundaries = complex.get_boundaries();
+    validate_graph_shape(dimensions, boundaries);
+
     Slicer_backend replacement;
-    replacement.dimensions_.assign(complex.get_dimensions().begin(), complex.get_dimensions().end());
-    replacement.boundaries_.reserve(replacement.dimensions_.size());
-    for (const auto& boundary : complex.get_boundaries()) {
-      replacement.boundaries_.emplace_back(boundary.begin(), boundary.end());
+    replacement.dimensions_.assign(dimensions.begin(), dimensions.end());
+    replacement.boundaries_.resize(replacement.dimensions_.size());
+    for (std::size_t generator = 0; generator < boundaries.size(); ++generator) {
+      const auto& boundary = boundaries[generator];
+      if (!boundary.empty()) {
+        replacement.boundaries_[generator].endpoints = {static_cast<Index>(boundary[0]),
+                                                        static_cast<Index>(boundary[1])};
+      }
     }
-    replacement.validate();
+    if (!replacement.dimensions_.empty()) {
+      replacement.base_degree_ = *std::min_element(replacement.dimensions_.begin(), replacement.dimensions_.end());
+    }
     replacement.update(values);
     *this = std::move(replacement);
   }
@@ -55,16 +103,19 @@ class Slicer_backend {
   template <class Filtration_range>
   void update(const Filtration_range& values, bool = false) {
     if (values.size() != dimensions_.size()) throw std::invalid_argument("Graph backend filtration size mismatch");
+    if constexpr (!Vineyard) initialized_ = false;
     if (!initialized_) {
       order_.resize(dimensions_.size());
       std::iota(order_.begin(), order_.end(), 0);
       std::sort(order_.begin(), order_.end(), [&](Index a, Index b) {
         if (dimensions_[a] != dimensions_[b]) return dimensions_[a] < dimensions_[b];
-        return values[a] < values[b];
+        if (values[a] < values[b]) return true;
+        if (values[b] < values[a]) return false;
+        return a < b;
       });
       bars_ = compute_bars();
       std::sort(bars_.begin(), bars_.end(), bar_less);
-      initialize_vineyard_state();
+      if constexpr (Vineyard) initialize_vineyard_state();
       initialized_ = true;
       return;
     }
@@ -101,33 +152,19 @@ class Slicer_backend {
   }
 
  private:
-  void validate() {
-    if (boundaries_.size() != dimensions_.size()) throw std::invalid_argument("Graph backend malformed boundaries");
-    if (dimensions_.empty()) return;
-    base_degree_ = *std::min_element(dimensions_.begin(), dimensions_.end());
-    if (base_degree_ < 0) throw std::invalid_argument("Graph backend dimensions must be nonnegative");
-    for (Index generator = 0; generator < dimensions_.size(); ++generator) {
-      if (dimensions_[generator] == base_degree_) {
-        if (!boundaries_[generator].empty()) throw std::invalid_argument("Graph vertex boundary must be empty");
-        continue;
-      }
-      if (dimensions_[generator] != base_degree_ + 1) {
-        throw std::invalid_argument("Graph backend requires two adjacent generator dimensions");
-      }
-      if (boundaries_[generator].empty()) continue;
-      if (boundaries_[generator].size() != 2) {
-        throw std::invalid_argument("Graph nonempty relation boundary must contain exactly two generators");
-      }
-      if (boundaries_[generator][0] == boundaries_[generator][1]) {
-        throw std::invalid_argument("Graph relation endpoints must be distinct");
-      }
-      for (Index vertex : boundaries_[generator]) {
-        if (vertex >= generator || dimensions_[vertex] != base_degree_) {
-          throw std::invalid_argument("Graph edge endpoint is invalid");
-        }
-      }
-    }
-  }
+  struct Boundary {
+    static constexpr Index empty_endpoint = std::numeric_limits<Index>::max();
+
+    std::array<Index, 2> endpoints = {empty_endpoint, empty_endpoint};
+
+    [[nodiscard]] bool empty() const { return endpoints[0] == empty_endpoint; }
+
+    [[nodiscard]] const Index& operator[](std::size_t index) const { return endpoints[index]; }
+
+    [[nodiscard]] auto begin() const { return endpoints.begin(); }
+
+    [[nodiscard]] auto end() const { return empty() ? endpoints.begin() : endpoints.end(); }
+  };
 
   static bool bar_less(const Bar& a, const Bar& b) {
     return std::tie(a.dim, a.birth, a.death) < std::tie(b.dim, b.birth, b.death);
@@ -189,17 +226,6 @@ class Slicer_backend {
     return bars;
   }
 
-  static bool endpoint_matches(Index old_endpoint, Index new_endpoint, Index first, Index second) {
-    const bool old_swapped = old_endpoint == first || old_endpoint == second;
-    const bool new_swapped = new_endpoint == first || new_endpoint == second;
-    return old_swapped ? new_swapped : !new_swapped && old_endpoint == new_endpoint;
-  }
-
-  static bool same_external_endpoints(const Bar& old_bar, const Bar& new_bar, Index first, Index second) {
-    return old_bar.dim == new_bar.dim && endpoint_matches(old_bar.birth, new_bar.birth, first, second) &&
-           endpoint_matches(old_bar.death, new_bar.death, first, second);
-  }
-
   void initialize_vineyard_state() {
     const std::size_t no_slot = std::numeric_limits<std::size_t>::max();
     const Index count = dimensions_.size();
@@ -207,6 +233,7 @@ class Slicer_backend {
     vertex_number_.assign(count, count);
     positive_edges_.assign(count, false);
     death_by_birth_.assign(count, Bar::inf);
+    birth_by_death_.assign(count, Bar::inf);
     h0_slot_by_birth_.assign(count, no_slot);
     h1_slot_by_edge_.assign(count, no_slot);
 
@@ -221,6 +248,7 @@ class Slicer_backend {
       const Bar& bar = bars_[slot];
       if (bar.dim == base_degree_) {
         death_by_birth_[bar.birth] = bar.death;
+        if (bar.death != Bar::inf) birth_by_death_[bar.death] = bar.birth;
         h0_slot_by_birth_[bar.birth] = slot;
       } else {
         positive_edges_[bar.birth] = true;
@@ -228,182 +256,203 @@ class Slicer_backend {
       }
     }
 
-    tree_edges_.clear();
+    tree_forest_.reset(number_of_vertices_);
     for (Index generator = 0; generator < count; ++generator) {
       if (dimensions_[generator] == base_degree_ + 1 && !boundaries_[generator].empty() &&
           !positive_edges_[generator]) {
-        tree_edges_.push_back(generator);
+        tree_forest_.link(generator,
+                          vertex_number_[boundaries_[generator][0]],
+                          vertex_number_[boundaries_[generator][1]],
+                          order_position_[generator]);
       }
     }
-  }
 
-  bool path_uses_tree_edge(Index positive_edge, Index tree_edge) const {
-    std::vector<Index> parent(number_of_vertices_);
-    std::iota(parent.begin(), parent.end(), 0);
-    auto root = [&](Index vertex) {
-      while (parent[vertex] != vertex) {
-        parent[vertex] = parent[parent[vertex]];
-        vertex = parent[vertex];
+    // The graph's connected components do not depend on filtration order.
+    // Cache them once so dynamic-tree path queries can skip connectivity work.
+    component_id_.resize(number_of_vertices_);
+    std::iota(component_id_.begin(), component_id_.end(), 0);
+    auto component_root = [&](Index vertex) {
+      while (component_id_[vertex] != vertex) {
+        component_id_[vertex] = component_id_[component_id_[vertex]];
+        vertex = component_id_[vertex];
       }
       return vertex;
     };
-    for (Index edge : tree_edges_) {
-      if (edge == tree_edge) continue;
-      Index u = root(vertex_number_[boundaries_[edge][0]]);
-      Index v = root(vertex_number_[boundaries_[edge][1]]);
-      if (u != v) parent[v] = u;
-    }
-    return root(vertex_number_[boundaries_[positive_edge][0]]) != root(vertex_number_[boundaries_[positive_edge][1]]);
-  }
-
-  std::vector<Index> compute_h0_deaths(const std::vector<Index>& tree_edges) const {
-    const Index count = dimensions_.size();
-    std::vector<Index> deaths(count, Bar::inf);
-    std::vector<Index> parent(number_of_vertices_);
-    std::vector<Index> component_birth(number_of_vertices_, count);
-    std::iota(parent.begin(), parent.end(), 0);
     for (Index generator = 0; generator < count; ++generator) {
-      if (dimensions_[generator] == base_degree_) component_birth[vertex_number_[generator]] = generator;
+      if (dimensions_[generator] != base_degree_ + 1 || boundaries_[generator].empty()) continue;
+      const Index first = component_root(vertex_number_[boundaries_[generator][0]]);
+      const Index second = component_root(vertex_number_[boundaries_[generator][1]]);
+      if (first != second) component_id_[second] = first;
     }
-    auto root = [&](Index vertex) {
-      Index current = vertex;
-      while (parent[current] != current) current = parent[current];
-      while (parent[vertex] != vertex) {
-        const Index next = parent[vertex];
-        parent[vertex] = current;
-        vertex = next;
-      }
-      return current;
-    };
-
-    std::vector<Index> ordered_tree_edges = tree_edges;
-    std::sort(ordered_tree_edges.begin(), ordered_tree_edges.end(), [&](Index a, Index b) {
-      return order_position_[a] < order_position_[b];
-    });
-    for (Index edge : ordered_tree_edges) {
-      Index ru = root(vertex_number_[boundaries_[edge][0]]);
-      Index rv = root(vertex_number_[boundaries_[edge][1]]);
-      if (ru == rv) throw std::logic_error("Graph vineyard tree edge created a cycle");
-      if (order_position_[component_birth[rv]] < order_position_[component_birth[ru]]) std::swap(ru, rv);
-      deaths[component_birth[rv]] = edge;
-      parent[rv] = ru;
+    for (Index vertex = 0; vertex < number_of_vertices_; ++vertex) {
+      component_id_[vertex] = component_root(vertex);
     }
-    return deaths;
   }
 
-  void transport_h0(const std::vector<Index>& new_deaths, Index first, Index second) {
-    const std::size_t no_slot = std::numeric_limits<std::size_t>::max();
-    std::vector<std::size_t> new_slots(dimensions_.size(), no_slot);
-    std::vector<bool> consumed(dimensions_.size(), false);
-    std::vector<Index> changed_births;
-    std::vector<std::pair<std::size_t, Bar>> updates;
-    updates.reserve(number_of_vertices_);
+  [[nodiscard]] bool is_tree_edge(Index edge) const { return !boundaries_[edge].empty() && !positive_edges_[edge]; }
 
-    for (Index birth = 0; birth < dimensions_.size(); ++birth) {
-      if (dimensions_[birth] != base_degree_) continue;
-      if (death_by_birth_[birth] == new_deaths[birth]) {
-        const std::size_t slot = h0_slot_by_birth_[birth];
-        if (slot == no_slot) throw std::logic_error("Missing Graph vineyard H0 slot");
-        updates.emplace_back(slot, Bar(birth, new_deaths[birth], base_degree_));
-        new_slots[birth] = slot;
-        consumed[birth] = true;
-      } else {
-        changed_births.push_back(birth);
+  void swap_order(Index position, Index first, Index second) {
+    std::swap(order_[position], order_[position + 1]);
+    order_position_[first] = position + 1;
+    order_position_[second] = position;
+  }
+
+  std::optional<typename Link_cut_forest<Index>::Edge> path_bottleneck(Index first_vertex, Index second_vertex) {
+    const Index first = vertex_number_[first_vertex];
+    const Index second = vertex_number_[second_vertex];
+    if (first == second || component_id_[first] != component_id_[second]) return std::nullopt;
+    return tree_forest_.path_bottleneck_assuming_connected(first, second);
+  }
+
+  void swap_vertices(Index position, Index first, Index second) {
+    const auto merge = path_bottleneck(first, second);
+    const Index first_death = death_by_birth_[first];
+    const Index second_death = death_by_birth_[second];
+    const bool exchange =
+        merge && second_death == merge->id && (first_death == Bar::inf || order_position_[first_death] > merge->weight);
+    if (exchange) {
+      const std::size_t first_slot = h0_slot_by_birth_[first];
+      const std::size_t second_slot = h0_slot_by_birth_[second];
+      if (first_slot == std::numeric_limits<std::size_t>::max() ||
+          second_slot == std::numeric_limits<std::size_t>::max()) {
+        throw std::logic_error("Missing Graph vineyard H0 slot");
       }
+
+      death_by_birth_[first] = second_death;
+      death_by_birth_[second] = first_death;
+      birth_by_death_[second_death] = first;
+      if (first_death != Bar::inf) birth_by_death_[first_death] = second;
+      bars_[first_slot] = Bar(second, first_death, base_degree_);
+      bars_[second_slot] = Bar(first, second_death, base_degree_);
+      std::swap(h0_slot_by_birth_[first], h0_slot_by_birth_[second]);
+    }
+    swap_order(position, first, second);
+  }
+
+  bool path_reaches_before(Index source, Index target, Index edge_position) {
+    if (source == target) return true;
+    const auto maximum = path_bottleneck(source, target);
+    return maximum && maximum->weight < edge_position;
+  }
+
+  void swap_tree_edges(Index position, Index first, Index second) {
+    const Index first_birth = birth_by_death_[first];
+    const Index second_birth = birth_by_death_[second];
+    if (first_birth == Bar::inf || second_birth == Bar::inf) {
+      throw std::logic_error("Missing Graph vineyard H0 death inverse");
     }
 
-    for (Index old_birth : changed_births) {
-      const Bar old_bar(old_birth, death_by_birth_[old_birth], base_degree_);
-      Index match = dimensions_.size();
-      for (Index new_birth = 0; new_birth < dimensions_.size(); ++new_birth) {
-        if (dimensions_[new_birth] != base_degree_ || consumed[new_birth]) continue;
-        if (same_external_endpoints(old_bar, Bar(new_birth, new_deaths[new_birth], base_degree_), first, second)) {
-          if (match != dimensions_.size()) throw std::logic_error("Ambiguous Graph vineyard H0 transport");
-          match = new_birth;
-        }
+    bool attaches_to_first_birth = false;
+    for (Index endpoint : boundaries_[second]) {
+      if (path_reaches_before(first_birth, endpoint, position)) {
+        attaches_to_first_birth = true;
+        break;
       }
-      if (match == dimensions_.size()) throw std::logic_error("Missing Graph vineyard H0 transport");
-      const std::size_t slot = h0_slot_by_birth_[old_birth];
-      if (slot == no_slot) throw std::logic_error("Missing Graph vineyard H0 slot");
-      updates.emplace_back(slot, Bar(match, new_deaths[match], base_degree_));
-      new_slots[match] = slot;
-      consumed[match] = true;
+    }
+    bool exchange = false;
+    if (attaches_to_first_birth) {
+      const auto merge = path_bottleneck(first_birth, second_birth);
+      if (!merge) throw std::logic_error("Graph vineyard tree births are disconnected");
+      exchange =
+          merge->id == first || (merge->id == second && order_position_[first_birth] > order_position_[second_birth]);
     }
 
-    for (Index birth = 0; birth < dimensions_.size(); ++birth) {
-      if (dimensions_[birth] == base_degree_ && !consumed[birth]) {
-        throw std::logic_error("Incomplete Graph vineyard H0 transport");
-      }
+    if (exchange) {
+      death_by_birth_[first_birth] = second;
+      death_by_birth_[second_birth] = first;
+      birth_by_death_[first] = second_birth;
+      birth_by_death_[second] = first_birth;
+      bars_[h0_slot_by_birth_[first_birth]] = Bar(first_birth, second, base_degree_);
+      bars_[h0_slot_by_birth_[second_birth]] = Bar(second_birth, first, base_degree_);
     }
-    for (const auto& [slot, bar] : updates) bars_[slot] = bar;
-    death_by_birth_ = new_deaths;
-    h0_slot_by_birth_ = std::move(new_slots);
+    tree_forest_.update_weight(first, position + 1);
+    tree_forest_.update_weight(second, position);
+    swap_order(position, first, second);
+  }
+
+  bool positive_path_uses_tree_edge(Index positive_edge, Index tree_edge) {
+    const auto maximum = path_bottleneck(boundaries_[positive_edge][0], boundaries_[positive_edge][1]);
+    return maximum && maximum->id == tree_edge;
+  }
+
+  void exchange_tree_and_positive(Index position, Index tree_edge, Index positive_edge) {
+    const Index birth = birth_by_death_[tree_edge];
+    const std::size_t h0_slot = birth == Bar::inf ? std::numeric_limits<std::size_t>::max() : h0_slot_by_birth_[birth];
+    const std::size_t h1_slot = h1_slot_by_edge_[positive_edge];
+    if (h0_slot == std::numeric_limits<std::size_t>::max()) {
+      throw std::logic_error("Missing Graph vineyard H0 slot");
+    }
+    if (h1_slot == std::numeric_limits<std::size_t>::max()) {
+      throw std::logic_error("Missing Graph vineyard H1 slot");
+    }
+
+    tree_forest_.cut(tree_edge);
+    try {
+      tree_forest_.link(positive_edge,
+                        vertex_number_[boundaries_[positive_edge][0]],
+                        vertex_number_[boundaries_[positive_edge][1]],
+                        position);
+    } catch (...) {
+      tree_forest_.link(
+          tree_edge, vertex_number_[boundaries_[tree_edge][0]], vertex_number_[boundaries_[tree_edge][1]], position);
+      throw;
+    }
+
+    death_by_birth_[birth] = positive_edge;
+    birth_by_death_[tree_edge] = Bar::inf;
+    birth_by_death_[positive_edge] = birth;
+    bars_[h0_slot] = Bar(birth, positive_edge, base_degree_);
+
+    positive_edges_[tree_edge] = true;
+    positive_edges_[positive_edge] = false;
+    h1_slot_by_edge_[positive_edge] = std::numeric_limits<std::size_t>::max();
+    h1_slot_by_edge_[tree_edge] = h1_slot;
+    bars_[h1_slot] = Bar(tree_edge, Bar::inf, base_degree_ + 1);
+    swap_order(position, tree_edge, positive_edge);
+  }
+
+  void swap_edges(Index position, Index first, Index second) {
+    const bool first_tree = is_tree_edge(first);
+    const bool second_tree = is_tree_edge(second);
+    if (first_tree && second_tree) {
+      swap_tree_edges(position, first, second);
+      return;
+    }
+    if (first_tree && !boundaries_[second].empty() && positive_path_uses_tree_edge(second, first)) {
+      exchange_tree_and_positive(position, first, second);
+      return;
+    }
+
+    // The persistence pairing is unchanged. Keep the dynamic forest's edge
+    // ranks synchronized with the new filtration order.
+    if (first_tree) tree_forest_.update_weight(first, position + 1);
+    if (second_tree) tree_forest_.update_weight(second, position);
+    swap_order(position, first, second);
   }
 
   void vine_swap(Index position) {
     const Index first = order_[position];
     const Index second = order_[position + 1];
-    bool replace_tree_edge = false;
-    std::vector<Index> new_tree_edges;
-    if (dimensions_[first] == base_degree_ + 1) {
-      if (boundaries_[first].empty() || boundaries_[second].empty() || positive_edges_[first]) {
-        std::swap(order_[position], order_[position + 1]);
-        order_position_[first] = position + 1;
-        order_position_[second] = position;
-        return;
-      }
-      if (positive_edges_[second]) {
-        if (!path_uses_tree_edge(second, first)) {
-          std::swap(order_[position], order_[position + 1]);
-          order_position_[first] = position + 1;
-          order_position_[second] = position;
-          return;
-        }
-        new_tree_edges = tree_edges_;
-        const auto tree_edge = std::find(new_tree_edges.begin(), new_tree_edges.end(), first);
-        if (tree_edge == new_tree_edges.end()) throw std::logic_error("Missing Graph vineyard tree edge");
-        *tree_edge = second;
-        if (h1_slot_by_edge_[second] == std::numeric_limits<std::size_t>::max()) {
-          throw std::logic_error("Missing Graph vineyard H1 slot");
-        }
-        replace_tree_edge = true;
-      }
-    }
-
-    std::swap(order_[position], order_[position + 1]);
-    order_position_[first] = position + 1;
-    order_position_[second] = position;
-    try {
-      transport_h0(compute_h0_deaths(replace_tree_edge ? new_tree_edges : tree_edges_), first, second);
-    } catch (...) {
-      std::swap(order_[position], order_[position + 1]);
-      order_position_[first] = position;
-      order_position_[second] = position + 1;
-      throw;
-    }
-
-    if (replace_tree_edge) {
-      tree_edges_ = std::move(new_tree_edges);
-      positive_edges_[first] = true;
-      positive_edges_[second] = false;
-      const std::size_t h1_slot = h1_slot_by_edge_[second];
-      h1_slot_by_edge_[second] = std::numeric_limits<std::size_t>::max();
-      h1_slot_by_edge_[first] = h1_slot;
-      bars_[h1_slot] = Bar(first, Bar::inf, base_degree_ + 1);
+    if (dimensions_[first] == base_degree_) {
+      swap_vertices(position, first, second);
+    } else {
+      swap_edges(position, first, second);
     }
   }
 
   std::vector<Dimension> dimensions_;
-  std::vector<std::vector<Index>> boundaries_;
+  std::vector<Boundary> boundaries_;
   Map order_;
   Map order_position_;
   Map vertex_number_;
-  std::vector<Index> tree_edges_;
+  Map component_id_;
   std::vector<Index> death_by_birth_;
+  std::vector<Index> birth_by_death_;
   std::vector<Bar> bars_;
   std::vector<bool> positive_edges_;
   std::vector<std::size_t> h0_slot_by_birth_;
   std::vector<std::size_t> h1_slot_by_edge_;
+  Link_cut_forest<Index> tree_forest_;
   Index number_of_vertices_ = 0;
   Dimension base_degree_ = 0;
   bool initialized_ = false;

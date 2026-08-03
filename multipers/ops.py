@@ -8,25 +8,52 @@ from multipers.slicer import is_slicer
 from multipers.simplex_tree_multi import is_simplextree_multi
 
 
-def _graph_mph0_minimal_presentation(slicer, degree, full_resolution):
+def _graph_mph0_minimal_presentation(slicer, degree, full_resolution, auto_clean=True):
     if is_simplextree_multi(slicer):
         from multipers import Slicer
 
         slicer = Slicer(slicer)
     if not is_slicer(slicer):
         raise ValueError(f"Expected a Slicer or SimplexTreeMulti, got {type(slicer)=}.")
-    if slicer.is_kcritical:
-        raise ValueError("graph requires a one-critical filtration.")
+    if len(slicer) == 0:
+        out = slicer.astype(
+            vineyard=not full_resolution,
+            pers_backend="Matrix" if full_resolution else "Graph",
+        )
+        out._mark_minpres(degree, is_minres=full_resolution)
+        return out
     if slicer.num_parameters != 2:
         raise ValueError("graph requires exactly two filtration parameters.")
+
+    filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
     if slicer.is_squeezed:
-        slicer = slicer.unsqueeze()
+        dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
+        used = (dimensions == degree) | (dimensions == degree + 1)
+        if np.any(used):
+            raw_filtrations = np.asarray(
+                slicer.get_filtrations(), dtype=np.int64
+            )[used]
+            grid_sizes = np.asarray(
+                [len(axis) for axis in filtration_grid], dtype=np.int64
+            )
+            if np.any((raw_filtrations < 0) | (raw_filtrations >= grid_sizes)):
+                raise ValueError("graph requires finite filtration values")
+            physical_filtrations = slicer.get_filtrations(unsqueeze=True)
+            api = api_from_tensors(physical_filtrations)
+            physical_filtrations = api.asnumpy(physical_filtrations)
+            if not np.all(np.isfinite(physical_filtrations[used])):
+                raise ValueError("graph requires finite filtration values")
 
     from multipers import _slicer_nanobind
 
-    return _slicer_nanobind._graph_mph0_minimal_presentation(
+    out = _slicer_nanobind._graph_mph0_minimal_presentation(
         slicer, degree, full_resolution
     )
+    if filtration_grid is not None:
+        out.filtration_grid = filtration_grid
+        if auto_clean:
+            out = out._clean_filtration_grid()
+    return out
 
 
 def _normalize_degree(source, target, degree):
@@ -308,10 +335,15 @@ def _minimal_presentation_from_slicer(
     use_chunk=True,
     keep_generators=False,
 ):
+
+    if slicer.is_kcritical:
+        raise ValueError("Free presentation / 1-critical is expected. Run `mp.ops.one_criticalify` first.")
     if backend == "graph":
         if keep_generators:
             raise ValueError("graph does not support keep_generators.")
-        return _graph_mph0_minimal_presentation(slicer, degree, full_resolution)
+        return _graph_mph0_minimal_presentation(
+            slicer, degree, full_resolution, auto_clean=auto_clean
+        )
 
     if backend == "muphasa":
         from multipers import _muphasa_interface

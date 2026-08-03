@@ -24,6 +24,7 @@ struct GeneratorBasisData {
   std::vector<std::vector<uint32_t>> row_boundaries;
   std::vector<std::pair<double, double>> row_grades;
   std::vector<std::pair<double, double>> column_grades;
+  std::vector<uint32_t> row_cell_indices;
 
   GeneratorBasisData() = default;
 
@@ -31,13 +32,15 @@ struct GeneratorBasisData {
                      std::vector<std::vector<uint32_t>> columns_,
                      std::vector<std::vector<uint32_t>> row_boundaries_,
                      std::vector<std::pair<double, double>> row_grades_ = {},
-                     std::vector<std::pair<double, double>> column_grades_ = {})
+                     std::vector<std::pair<double, double>> column_grades_ = {},
+                     std::vector<uint32_t> row_cell_indices_ = {})
       : active(true),
         degree(degree_),
         columns(std::move(columns_)),
         row_boundaries(std::move(row_boundaries_)),
         row_grades(std::move(row_grades_)),
-        column_grades(std::move(column_grades_)) {}
+        column_grades(std::move(column_grades_)),
+        row_cell_indices(std::move(row_cell_indices_)) {}
 };
 
 template <typename Index>
@@ -87,6 +90,9 @@ inline GeneratorBasisData generator_basis_from_legacy_dict(const nanobind::dict&
   }
   if (basis.contains("column_grades")) {
     out.column_grades = nanobind::cast<std::vector<std::pair<double, double>>>(basis["column_grades"]);
+  }
+  if (basis.contains("row_cell_indices")) {
+    out.row_cell_indices = nanobind::cast<std::vector<uint32_t>>(basis["row_cell_indices"]);
   }
   return out;
 }
@@ -155,6 +161,7 @@ GeneratorBasisData generator_basis_from_degree_rows(const Wrapper& input_wrapper
   basis.column_grades = generator_matrix.column_grades;
   basis.columns = convert_generator_columns(generator_matrix.columns, error_prefix, "column support");
   basis.row_boundaries.reserve(generator_matrix.row_indices.size());
+  basis.row_cell_indices.reserve(generator_matrix.row_indices.size());
   for (auto raw_row_idx : generator_matrix.row_indices) {
     const auto row_idx = static_cast<size_t>(raw_row_idx);
     const auto idx = degree_indices[row_idx];
@@ -164,6 +171,7 @@ GeneratorBasisData generator_basis_from_degree_rows(const Wrapper& input_wrapper
       boundary.push_back(checked_uint32_index(value, error_prefix, "row boundary"));
     }
     basis.row_boundaries.push_back(std::move(boundary));
+    basis.row_cell_indices.push_back(checked_uint32_index(idx, error_prefix, "row cell"));
   }
 
   return basis;

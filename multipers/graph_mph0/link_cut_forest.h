@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -40,46 +39,54 @@ class Link_cut_forest {
     check_vertex(u);
     check_vertex(v);
     if (u == v || same_component(u, v)) throw std::invalid_argument("link-cut link would create a cycle");
-    if (edges_.contains(id)) throw std::invalid_argument("link-cut edge id already exists");
+    link_impl(id, u, v, weight);
+  }
 
-    const std::size_t node = nodes_.size();
-    Node edge_node;
-    edge_node.is_edge = true;
-    edge_node.edge_id = id;
-    edge_node.weight = weight;
-    edge_node.maximum = node;
-    nodes_.push_back(edge_node);
-    edges_.emplace(id, Edge_record{u, v, node, true});
-    link_nodes(u, node);
-    link_nodes(node, v);
+  // Precondition: u and v are distinct vertices in different trees.
+  void link_assuming_disconnected(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
+    check_vertex(u);
+    check_vertex(v);
+    if (u == v) throw std::invalid_argument("link-cut link would create a cycle");
+    link_impl(id, u, v, weight);
   }
 
   void cut(std::size_t id) {
-    auto it = edges_.find(id);
-    if (it == edges_.end() || !it->second.active) throw std::invalid_argument("link-cut edge is not active");
-    cut_nodes(it->second.u, it->second.node);
-    cut_nodes(it->second.node, it->second.v);
-    it->second.active = false;
+    auto& record = active_edge_record(id);
+    cut_nodes(record.u, record.node);
+    cut_nodes(record.node, record.v);
+    record.active = false;
   }
 
   void update_weight(std::size_t id, Weight weight) {
-    auto it = edges_.find(id);
-    if (it == edges_.end() || !it->second.active) throw std::invalid_argument("link-cut edge is not active");
-    access(it->second.node);
-    nodes_[it->second.node].weight = weight;
-    pull(it->second.node);
+    const auto& record = active_edge_record(id);
+    access(record.node);
+    nodes_[record.node].weight = weight;
+    pull(record.node);
   }
 
   std::optional<Edge> path_bottleneck(std::size_t u, std::size_t v) {
     check_vertex(u);
     check_vertex(v);
     if (u == v || !same_component(u, v)) return std::nullopt;
+    return path_bottleneck_assuming_connected(u, v);
+  }
+
+  // Faster path query for callers that maintain connectivity separately.
+  // Precondition: u and v are distinct vertices in the same tree.
+  std::optional<Edge> path_bottleneck_assuming_connected(std::size_t u, std::size_t v) {
+    check_vertex(u);
+    check_vertex(v);
+    if (u == v) return std::nullopt;
     make_root(u);
     access(v);
     const std::size_t node = nodes_[v].maximum;
     if (!nodes_[node].is_edge) throw std::logic_error("link-cut path has no edge maximum");
-    const auto& record = edges_.at(nodes_[node].edge_id);
-    return Edge{nodes_[node].edge_id, record.u, record.v, nodes_[node].weight};
+    const std::size_t edge_id = nodes_[node].edge_id;
+    if (edge_id >= edges_.size() || !edges_[edge_id].present || !edges_[edge_id].active) {
+      throw std::logic_error("link-cut path maximum is not an active edge");
+    }
+    const auto& record = edges_[edge_id];
+    return Edge{edge_id, record.u, record.v, nodes_[node].weight};
   }
 
   std::vector<std::size_t> path_edges(std::size_t u, std::size_t v) {
@@ -117,15 +124,49 @@ class Link_cut_forest {
   };
 
   struct Edge_record {
-    std::size_t u;
-    std::size_t v;
-    std::size_t node;
-    bool active;
+    std::size_t u = null;
+    std::size_t v = null;
+    std::size_t node = null;
+    bool present = false;
+    bool active = false;
   };
 
   std::size_t vertices_ = 0;
   std::vector<Node> nodes_;
-  std::unordered_map<std::size_t, Edge_record> edges_;
+  std::vector<Edge_record> edges_;
+
+  void link_impl(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
+    std::size_t node;
+    if (id < edges_.size() && edges_[id].present) {
+      auto& record = edges_[id];
+      if (record.active) throw std::invalid_argument("link-cut edge id already exists");
+      if (!((record.u == u && record.v == v) || (record.u == v && record.v == u))) {
+        throw std::invalid_argument("link-cut edge id endpoints changed");
+      }
+      node = record.node;
+    } else {
+      if (id >= edges_.size()) edges_.resize(id + 1);
+      node = nodes_.size();
+      nodes_.emplace_back();
+    }
+
+    Node edge_node;
+    edge_node.is_edge = true;
+    edge_node.edge_id = id;
+    edge_node.weight = weight;
+    edge_node.maximum = node;
+    nodes_[node] = edge_node;
+    edges_[id] = Edge_record{u, v, node, true, true};
+    link_nodes_assuming_disconnected(u, node);
+    link_nodes_assuming_disconnected(node, v);
+  }
+
+  Edge_record& active_edge_record(std::size_t id) {
+    if (id >= edges_.size() || !edges_[id].present || !edges_[id].active) {
+      throw std::invalid_argument("link-cut edge is not active");
+    }
+    return edges_[id];
+  }
 
   void check_vertex(std::size_t v) const {
     if (v >= vertices_) throw std::out_of_range("link-cut vertex is out of range");
@@ -227,9 +268,9 @@ class Link_cut_forest {
     return x;
   }
 
-  void link_nodes(std::size_t u, std::size_t v) {
+  // Both public link entry points establish that these trees are disjoint.
+  void link_nodes_assuming_disconnected(std::size_t u, std::size_t v) {
     make_root(u);
-    if (find_root(v) == u) throw std::logic_error("link-cut internal cycle");
     nodes_[u].parent = v;
   }
 
