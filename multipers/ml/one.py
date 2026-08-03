@@ -196,7 +196,7 @@ class Dgms2SignedMeasureImage(BaseEstimator, TransformerMixin):
 		smi = np.concatenate(
 				[
 					KernelDensity(bandwidth=self.bandwidth, kernel=self.kernel).fit(dgm[:,[0]]).score_samples(range)
-					- KernelDensity(bandwidth=self.bandwidth).fit(dgm[:,[1]]).score_samples(range)
+					- KernelDensity(bandwidth=self.bandwidth, kernel=self.kernel).fit(dgm[:,[1]]).score_samples(range)
 					for dgm, range in zip(dgms, self.ranges)
 				],
 			axis=0)
@@ -469,4 +469,3 @@ class Dgms2Image(BaseEstimator, TransformerMixin):
 	def transform(self,X):
 		if len(X) == 0:	return []
 		return np.concatenate([pers_image.transform([dgms[degree] for dgms in X]) for degree, pers_image in enumerate(self.PI)], axis=1)
-

@@ -22,6 +22,12 @@ from multipers.filtrations import (
 from multipers.array_api import api_from_tensor
 
 
+def _as_parameter_list(value):
+    if value is None:
+        return []
+    return np.asarray(value).reshape(-1)
+
+
 class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
     def __init__(
         self,
@@ -78,9 +84,9 @@ class PointCloud2FilteredComplex(BaseEstimator, TransformerMixin):
         A list of filtered complexes whose first parameter is a rips and the second is the codensity.
         """
         super().__init__()
-        self.bandwidths = [] if bandwidths is None else bandwidths
-        self.masses = [] if masses is None else masses
-        self.knns = [] if knns is None else knns
+        self.bandwidths = _as_parameter_list(bandwidths)
+        self.masses = _as_parameter_list(masses)
+        self.knns = _as_parameter_list(knns)
         self.kernel = kernel
         self.log_density = log_density
         self.progress = progress
