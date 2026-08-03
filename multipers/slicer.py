@@ -131,6 +131,8 @@ def _get_filtrations(
     return evaluate_in_grid(
         np.asarray(out, dtype=np.int32).clip(None, grid_size - 1), grid
     )
+
+
 def _compute_persistence(
     self, one_filtration=None, ignore_infinite_filtration_values=True, verbose=False
 ):
@@ -157,6 +159,8 @@ def _compute_persistence(
         return out[0] if squeeze else out
     self.initialize_persistence_computation(ignore_infinite_filtration_values)
     return self.get_barcode()
+
+
 def _filtration_bounds(self, finite=False):
     values = np.asarray(self.get_filtrations_values(), dtype=self.dtype)
     if values.size == 0:
@@ -269,7 +273,7 @@ def _coordinate_persistence_on_lines(
     keep_inf,
     full,
     ignore_infinite_filtration_values,
-): 
+):
     dims = np.asarray(self.get_dimensions(), dtype=np.int32)
     dim_values = np.arange(dims[0], dims[-1] + 1, dtype=dims.dtype)
     starts = np.searchsorted(dims, dim_values, side="left")
