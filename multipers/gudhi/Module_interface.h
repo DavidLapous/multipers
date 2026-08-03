@@ -46,6 +46,8 @@
 #include <python_interfaces/numpy_utils.h>
 #include <python_interfaces/construction_utils.h>
 
+#include "gudhi/module_landscapes.hpp"
+
 namespace Gudhi {
 namespace multi_persistence {
 
@@ -441,7 +443,7 @@ class Module_interface {
     auto resolutionView = contiguous_numpy_span(resolution);
     {
       nanobind::gil_scoped_release release;
-      out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
+      out = multipers::detail::compute_module_landscapes(
           module_, degree, contiguous_numpy_span(ks), get_box_from_tensor(box), resolutionView, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), resolutionView[0], resolutionView[1]);
@@ -460,8 +462,7 @@ class Module_interface {
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
       for (const auto &axis : grid) views.push_back(contiguous_numpy_span(axis));
-      out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-          module_, degree, contiguous_numpy_span(ks), views, n_jobs);
+      out = multipers::detail::compute_module_landscapes(module_, degree, contiguous_numpy_span(ks), views, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), grid[0].shape(0), grid[1].shape(0));
   }
