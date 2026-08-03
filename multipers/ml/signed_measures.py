@@ -67,11 +67,12 @@ def sm2deep(signed_measure, api=None):
         api = api_from_tensor(signed_measure[0])
     dirac_positions, dirac_signs = signed_measure
     dtype = dirac_positions.dtype
+    device = api.device(dirac_positions)
     new_shape = list(dirac_positions.shape)
     new_shape[1] += 1
-    c = api.empty(new_shape, dtype=dtype)
+    c = api.empty(new_shape, dtype=dtype, device=device)
     c[:, :-1] = dirac_positions
-    c[:, -1] = api.astensor(dirac_signs)
+    c[:, -1] = api.astensor(dirac_signs, dtype=dtype, device=device)
     return c
 
 
@@ -86,7 +87,11 @@ def deep_unrag(sms, api=None):
     dtype = first.dtype
     deep_sms = tuple(sm2deep(sm, api=api) for sm in sms)
     max_num_pts = np.max([sm[0].shape[0] for sm in sms])
-    unragged_sms = api.zeros((num_sm, max_num_pts, num_parameters + 1), dtype=dtype)
+    unragged_sms = api.zeros(
+        (num_sm, max_num_pts, num_parameters + 1),
+        dtype=dtype,
+        device=api.device(first),
+    )
 
     for data in range(num_sm):
         sm = deep_sms[data]
@@ -243,7 +248,8 @@ class FilteredComplex2SignedMeasure(BaseEstimator, TransformerMixin):
 
     def _infer_filtration(self, X):
         self._num_parameters = X[0][0].num_parameters
-        indices = np.random.choice(
+        rng = np.random.default_rng(self.seed)
+        indices = rng.choice(
             len(X), min(int(self.fit_fraction * len(X)) + 1, len(X)), replace=False
         )
         ## ax, num_x
@@ -859,11 +865,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
             filtration_values = [
                 np.concatenate(
                     [
-                        (
-                            stuff
-                            if isinstance(stuff := x[ax][degree][0], np.ndarray)
-                            else stuff.detach().numpy()
-                        )
+                        self._api.asnumpy(x[ax][degree][0])
                         for x in X
                         for degree in range(self._num_degrees)
                     ]
@@ -1058,6 +1060,7 @@ class SignedMeasureFormatter(BaseEstimator, TransformerMixin):
                         num_parameters,
                     ),
                     dtype=dtype,
+                    device=self._api.device(X[0][0]),
                 )
                 for ax in range(num_axis_degree):
                     for data in range(num_data):
