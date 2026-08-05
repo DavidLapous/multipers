@@ -90,10 +90,6 @@ std::vector<double> copy(const F64Vector& input) {
   return std::vector<double>(input.data(), input.data() + input.shape(0));
 }
 
-std::vector<std::size_t> copy(const U64Vector& input) {
-  return std::vector<std::size_t>(input.data(), input.data() + input.shape(0));
-}
-
 std::vector<double> doubles(const nb::object& numpy, const nb::object& input, const char* name) {
   try {
     return copy(nb::cast<F64Vector>(array(numpy, input, "float64")));
@@ -424,16 +420,17 @@ NB_MODULE(_skyscraper_interface, m) {
              const nb::object& corner_offsets,
              const nb::object& corners,
              const nb::dict& input_metadata) {
-            SkyscraperInvariant value{result_from_arrays(x_grid,
-                                                         y_grid,
-                                                         box,
-                                                         source_offsets,
-                                                         slopes,
-                                                         factor_ranks,
-                                                         factor_group_ids,
-                                                         staircase_offsets,
-                                                         corner_offsets,
-                                                         corners)};
+             SkyscraperInvariant value;
+             value.result = result_from_arrays(x_grid,
+                                               y_grid,
+                                               box,
+                                               source_offsets,
+                                               slopes,
+                                               factor_ranks,
+                                               factor_group_ids,
+                                               staircase_offsets,
+                                               corner_offsets,
+                                               corners);
             apply_metadata(value, input_metadata);
             new (self) SkyscraperInvariant(std::move(value));
           },

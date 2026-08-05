@@ -39,12 +39,17 @@ jobs:
         tar -tf dist/*.tar.gz
   cmake_smoke:
     name: CMake configure smoke
+    needs: create_sources
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/download-artifact@v6
       with:
-        submodules: recursive
-        persist-credentials: false
+        name: sources-sdist
+    - name: Extract source distribution
+      shell: bash
+      run: |
+        tar -xvf multipers-*.tar.gz
+        mv multipers-*/* .
     - uses: mamba-org/setup-micromamba@v2
       with:
         micromamba-version: "latest"
@@ -80,7 +85,6 @@ jobs:
       shell: bash -el {0}
       run: |
         micromamba activate cmake
-        trap 'git checkout -- options.py tools/codegen/_registry.py tools/codegen/query_config.py' EXIT
         for watched in options.py tools/codegen/_registry.py tools/codegen/query_config.py; do
           before=$(stat -c %Y build/cmake-all-off/CMakeCache.txt)
           sleep 1
@@ -91,7 +95,7 @@ jobs:
         done
   build:
     name: Build
-    needs: create_sources
+    needs: cmake_smoke
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
