@@ -1,0 +1,6 @@
+include("${CMAKE_CURRENT_LIST_DIR}/BackendHelpers.cmake")
+multipers_create_backend(persistence_algebra)
+if(MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA)
+  multipers_backend_include(${MULTIPERS_BACKEND_TARGET} "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include")
+  target_link_libraries(${MULTIPERS_BACKEND_TARGET} INTERFACE multipers::openmp multipers::tbb)
+endif()

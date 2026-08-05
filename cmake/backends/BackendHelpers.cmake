@@ -1,0 +1,22 @@
+include_guard(GLOBAL)
+
+function(multipers_create_backend backend_name)
+  set(_target "multipers_backend_${backend_name}")
+  if(NOT TARGET ${_target})
+    add_library(${_target} INTERFACE)
+    add_library(multipers::backend_${backend_name} ALIAS ${_target})
+  endif()
+  set(MULTIPERS_BACKEND_TARGET "${_target}" PARENT_SCOPE)
+endfunction()
+
+function(multipers_backend_include target_name)
+  target_include_directories(${target_name} SYSTEM INTERFACE ${ARGN})
+endfunction()
+
+function(multipers_backend_depends target_name)
+  foreach(_dependency IN LISTS ARGN)
+    if(TARGET ${_dependency})
+      add_dependencies(${target_name} ${_dependency})
+    endif()
+  endforeach()
+endfunction()

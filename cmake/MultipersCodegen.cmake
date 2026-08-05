@@ -1,8 +1,5 @@
 include_guard(GLOBAL)
 
-set(MULTIPERS_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
-set(MULTIPERS_CODEGEN_CACHE_DIR "${CMAKE_BINARY_DIR}/tmp")
-
 set(MULTIPERS_CORE_GENERATED_FILES
   "${MULTIPERS_GENERATED_ROOT}/tools/core/filtrations_instantiations.inc"
   "${MULTIPERS_GENERATED_ROOT}/tools/core/simplextree_instantiations.inc"
@@ -19,47 +16,42 @@ set(MULTIPERS_CORE_GENERATED_FILES
 )
 
 set(MULTIPERS_CODEGEN_DRIVER "${CMAKE_SOURCE_DIR}/tools/tempita_grid_gen.py")
+set(MULTIPERS_CODEGEN_QUERY "${CMAKE_SOURCE_DIR}/tools/codegen/query_config.py")
 
 execute_process(
   COMMAND
-    "${Python3_EXECUTABLE}" "-c"
-    "import importlib.util, pathlib; spec = importlib.util.spec_from_file_location('multipers_user_options', pathlib.Path(r'${CMAKE_SOURCE_DIR}') / 'options.py'); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); print('1' if 'Degree_rips_bifiltration' in getattr(mod, 'FILTRATION_CONTAINERS', ()) else '0')"
+    "${Python_EXECUTABLE}"
+    "${MULTIPERS_CODEGEN_QUERY}"
+    --format cmake
   RESULT_VARIABLE MULTIPERS_FLAT_CONTAINER_DETECT_RESULT
   OUTPUT_VARIABLE MULTIPERS_HAS_FLAT_CONTAINER_RAW
   OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_VARIABLE MULTIPERS_FLAT_CONTAINER_DETECT_ERROR
 )
-
 if(NOT MULTIPERS_FLAT_CONTAINER_DETECT_RESULT EQUAL 0)
-  message(
-    FATAL_ERROR
-      "Failed to detect FILTRATION_CONTAINERS from options.py: ${MULTIPERS_FLAT_CONTAINER_DETECT_ERROR}"
-  )
+  message(FATAL_ERROR "Failed to detect FILTRATION_CONTAINERS from options.py: ${MULTIPERS_FLAT_CONTAINER_DETECT_ERROR}")
 endif()
 
 set(MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER OFF)
 if(MULTIPERS_HAS_FLAT_CONTAINER_RAW STREQUAL "1")
   set(MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER ON)
 endif()
+message(STATUS "MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER=${MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER}")
 
-message(
-  STATUS
-    "MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER=${MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER}"
-)
-
-option(
-  MULTIPERS_CODEGEN_VERBOSE
-  "Enable verbose generated-registry/codegen logs"
-  OFF
-)
-
+option(MULTIPERS_CODEGEN_VERBOSE "Enable verbose generated-registry/codegen logs" OFF)
 if(MULTIPERS_CODEGEN_VERBOSE)
   set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "1")
 else()
   set(MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE "0")
 endif()
 
-# Generate the native registry / instantiation files used by the active build.
+target_include_directories(
+  multipers_project_options
+  BEFORE INTERFACE
+    "${MULTIPERS_GENERATED_ROOT}/multipers"
+    "${MULTIPERS_GENERATED_ROOT}/multipers/gudhi"
+    "${MULTIPERS_GENERATED_ROOT}/tools/core"
+)
 
 add_custom_command(
   OUTPUT ${MULTIPERS_CORE_GENERATED_FILES}
@@ -70,9 +62,10 @@ add_custom_command(
     "MULTIPERS_TEMPITA_GRID_VERBOSE=${MULTIPERS_TEMPITA_GRID_VERBOSE_VALUE}"
     "MULTIPERS_TEMPITA_GRID_OUTPUT_ROOT=${MULTIPERS_GENERATED_ROOT}"
     "MULTIPERS_TEMPITA_CACHE_DIR=${MULTIPERS_CODEGEN_CACHE_DIR}"
-    "${Python3_EXECUTABLE}" "${MULTIPERS_CODEGEN_DRIVER}"
+    "${Python_EXECUTABLE}" "${MULTIPERS_CODEGEN_DRIVER}"
   DEPENDS
     "${MULTIPERS_CODEGEN_DRIVER}"
+    "${MULTIPERS_CODEGEN_QUERY}"
     "${CMAKE_SOURCE_DIR}/options.py"
     "${CMAKE_SOURCE_DIR}/tools/codegen/_registry.py"
   WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

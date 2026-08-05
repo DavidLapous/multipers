@@ -37,6 +37,58 @@ jobs:
       shell: bash -el {0}
       run: |
         tar -tf dist/*.tar.gz
+  cmake_smoke:
+    name: CMake configure smoke
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: recursive
+        persist-credentials: false
+    - uses: mamba-org/setup-micromamba@v2
+      with:
+        micromamba-version: "latest"
+        init-shell: bash
+        condarc: |
+          channels:
+            - conda-forge
+    - name: dependencies
+      shell: bash -el {0}
+      run: |
+        micromamba create -n cmake python=3.13 numpy tbb tbb-devel libboost libboost-devel llvm-openmp cgal-cpp gmp mpfr eigen cmake c-compiler cxx-compiler clang clangxx ninja nanobind -c conda-forge
+        micromamba activate cmake
+    - name: configure default and all-off builds
+      shell: bash -el {0}
+      run: |
+        micromamba activate cmake
+        cmake -S . -B build/cmake-default -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake -S . -B build/cmake-all-off -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DMULTIPERS_ENABLE_MPFREE=OFF \
+          -DMULTIPERS_ENABLE_MUPHASA=OFF \
+          -DMULTIPERS_ENABLE_FUNCTION_DELAUNAY=OFF \
+          -DMULTIPERS_ENABLE_GRAPHCODE=OFF \
+          -DMULTIPERS_ENABLE_DEG_RIPS=OFF \
+          -DMULTIPERS_ENABLE_MULTI_CRITICAL=OFF \
+          -DMULTIPERS_ENABLE_RHOMBOID_TILING=OFF \
+          -DMULTIPERS_ENABLE_2PAC=OFF \
+          -DMULTIPERS_ENABLE_AIDA=OFF \
+          -DMULTIPERS_ENABLE_HERA=OFF \
+          -DMULTIPERS_ENABLE_PERSISTENCE_ALGEBRA=OFF \
+          -DMULTIPERS_ENABLE_SKYSCRAPER=OFF
+        cmake --build build/cmake-all-off --target multipers_codegen
+    - name: verify configure dependencies
+      shell: bash -el {0}
+      run: |
+        micromamba activate cmake
+        trap 'git checkout -- options.py tools/codegen/_registry.py tools/codegen/query_config.py' EXIT
+        for watched in options.py tools/codegen/_registry.py tools/codegen/query_config.py; do
+          before=$(stat -c %Y build/cmake-all-off/CMakeCache.txt)
+          sleep 1
+          touch "$watched"
+          cmake --build build/cmake-all-off --target multipers_codegen >/dev/null
+          after=$(stat -c %Y build/cmake-all-off/CMakeCache.txt)
+          test "$after" -gt "$before"
+        done
   build:
     name: Build
     needs: create_sources
