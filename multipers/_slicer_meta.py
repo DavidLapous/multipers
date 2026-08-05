@@ -13,30 +13,6 @@ from multipers.slicer import (
     is_slicer,
 )
 
-
-def _slicer_from_simplextree(st, backend, vineyard):
-    backend = backend.lower() if isinstance(backend, str) else backend
-    if vineyard:
-        if backend == "matrix":
-            slicer = mps._SlicerVineSimplicial(st)
-        elif backend == "clement":
-            raise ValueError("This one takes a minpres")
-        elif backend == "graph":
-            slicer = mps._SlicerVineGraph(st)
-        else:
-            raise ValueError(f"Inimplemented backend {backend}.")
-    else:
-        if backend == "matrix":
-            slicer = mps._SlicerNoVineSimplicial(st)
-        elif backend == "clement":
-            raise ValueError("Clement is Vineyard")
-        elif backend == "graph":
-            raise ValueError("Graph is Vineyard")
-        else:
-            raise ValueError(f"Inimplemented backend {backend}.")
-    return slicer
-
-
 def _default_pers_backend(vineyard: bool) -> str:
     return "Matrix" if vineyard else "GudhiCohomology"
 
@@ -83,6 +59,7 @@ def Slicer(
         )
     if max_dim is not None:
         raise DeprecationWarning("deprecated parameter.")
+    backend = backend.lower() if isinstance(backend, str) else backend
     if is_slicer(st, allow_minpres=False) or is_simplextree_multi(st):
         dtype = st.dtype if dtype is None else dtype
         is_kcritical = st.is_kcritical if kcritical is None else kcritical
@@ -97,7 +74,6 @@ def Slicer(
         filtration_container = (
             "contiguous" if filtration_container is None else filtration_container
         )
-
     if is_slicer(st, allow_minpres=False):
         requested_vineyard = st.is_vine if vineyard is None else vineyard
         vineyard = requested_vineyard
@@ -128,16 +104,11 @@ def Slicer(
         return _Slicer()
     elif mps.is_slicer(st):
         slicer = _Slicer(st)
-    elif is_simplextree_multi(st) and backend == "graph":
-        slicer = _slicer_from_simplextree(st, backend, vineyard)
-        if st.is_squeezed:
-            slicer.filtration_grid = st.filtration_grid
-
     elif isinstance(st, str) or isinstance(st, os.PathLike):
         slicer = _Slicer(os.fspath(st), _shift_dimension)
     elif is_simplextree_multi(st):
         slicer = _Slicer(st)
-    elif backend == "Graph":
+    elif backend == "graph":
         raise ValueError(
             """
 Graph is simplicial, incompatible with minpres.

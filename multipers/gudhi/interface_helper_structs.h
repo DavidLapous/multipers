@@ -47,8 +47,9 @@ struct Generator_basis_data {
   int degree = -1;
   std::vector<std::vector<Index>> columns;
   std::vector<std::vector<Index>> rowBoundaries;
-  std::vector<std::pair<Grade, Grade>> rowGrades; // change pair to array<Grade, 2>?
+  std::vector<std::pair<Grade, Grade>> rowGrades;  // change pair to array<Grade, 2>?
   std::vector<std::pair<Grade, Grade>> columnGrades;
+  std::vector<Index> rowCellIndices;
 
   Generator_basis_data() = default;
 
@@ -56,12 +57,14 @@ struct Generator_basis_data {
                        std::vector<std::vector<Index>> columns_,
                        std::vector<std::vector<Index>> rowBoundaries_,
                        std::vector<std::pair<Grade, Grade>> rowGrades_ = {},
-                       std::vector<std::pair<Grade, Grade>> columnGrades_ = {})
+                       std::vector<std::pair<Grade, Grade>> columnGrades_ = {},
+                       std::vector<Index> rowCellIndices_ = {})
       : degree(degree_),
         columns(std::move(columns_)),
         rowBoundaries(std::move(rowBoundaries_)),
         rowGrades(std::move(rowGrades_)),
-        columnGrades(std::move(columnGrades_)) {}
+        columnGrades(std::move(columnGrades_)),
+        rowCellIndices(std::move(rowCellIndices_)) {}
 
   template <class Complex, class GeneratorMatrix>
   Generator_basis_data(const Complex& complex, int degree_, GeneratorMatrix& generatorMatrix)
@@ -69,7 +72,8 @@ struct Generator_basis_data {
         columns(generatorMatrix.columns.size()),
         rowBoundaries(generatorMatrix.row_indices.size()),
         rowGrades(generatorMatrix.row_grades),
-        columnGrades(generatorMatrix.column_grades) {
+        columnGrades(generatorMatrix.column_grades),
+        rowCellIndices(generatorMatrix.row_indices.size()) {
     nanobind::gil_scoped_release release;
     const auto& dimensions = complex.get_dimensions();
     const auto& boundaries = complex.get_boundaries();
@@ -116,6 +120,8 @@ struct Generator_basis_data {
         rowBoundaries[i].push_back(Gudhi::python::_cast_to_int<Index>(
             value, "generator-basis extraction failed: row boundary index does not fit into uint32."));
       }
+      rowCellIndices[i] = Gudhi::python::_cast_to_int<Index>(
+          idx, "generator-basis extraction failed: row cell index does not fit into uint32.");
     }
   }
 
@@ -151,6 +157,12 @@ struct Generator_basis_data {
         throw std::invalid_argument("_generator_basis['column_grades'] has to be an iterable of pairs of float.");
       }
     }
+    if (basis.contains("row_cell_indices")) {
+      success = nanobind::try_cast<std::vector<std::uint32_t>>(basis["row_cell_indices"], rowCellIndices);
+      if (!success) {
+        throw std::invalid_argument("_generator_basis['row_cell_indices'] has to be an iterable of int.");
+      }
+    }
   }
 
   nanobind::object operator[](std::string_view key) const {
@@ -159,21 +171,23 @@ struct Generator_basis_data {
     if (key == "row_boundaries") return nanobind::cast(rowBoundaries);
     if (key == "row_grades") return nanobind::cast(rowGrades);
     if (key == "column_grades") return nanobind::cast(columnGrades);
+    if (key == "row_cell_indices") return nanobind::cast(rowCellIndices);
 
     throw nanobind::key_error("Invalid `_GeneratorBasis` key.");
   }
 
   static bool is_key(std::string_view key) {
     return key == "degree" || key == "columns" || key == "row_boundaries" || key == "row_grades" ||
-           key == "column_grades";
+           key == "column_grades" || key == "row_cell_indices";
   }
 
   static nanobind::tuple get_keys() {
-    return nanobind::make_tuple("degree", "columns", "row_boundaries", "row_grades", "column_grades");
+    return nanobind::make_tuple(
+        "degree", "columns", "row_boundaries", "row_grades", "column_grades", "row_cell_indices");
   }
 
   std::vector<std::vector<Index>> expand_cycle(const std::vector<Index>& cycle) const {
-    std::vector<std::uint8_t> activeRows(rowBoundaries.size(), 0);
+    std::unordered_set<Index> activeRows;
     for (Index genIdx : cycle) {
       if (genIdx >= columns.size()) {
         throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
@@ -182,22 +196,60 @@ struct Generator_basis_data {
         if (rowIdx >= rowBoundaries.size()) {
           throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_boundaries`.");
         }
-        activeRows[rowIdx] ^= 1;
+        auto [it, inserted] = activeRows.insert(rowIdx);
+        if (!inserted) {
+          activeRows.erase(it);
+        }
       }
     }
 
     std::vector<std::vector<Index>> out;
-    for (std::size_t rowIdx = 0; rowIdx < activeRows.size(); ++rowIdx) {
-      if (activeRows[rowIdx] != 0) {
-        out.push_back(rowBoundaries[rowIdx]);
+    out.reserve(activeRows.size());
+    for (Index rowIdx : activeRows) {
+      out.push_back(rowBoundaries[rowIdx]);
+    }
+    return out;
+  }
+
+  std::vector<Index> expand_cycle_cell_ids(const std::vector<Index>& cycle) {
+    if (rowCellIndices.size() != rowBoundaries.size()) {
+      throw std::runtime_error(
+          "`_generator_basis` does not contain complete `row_cell_indices`; "
+          "use `expand_generator_basis=False` or rebuild it with the current Multipers version.");
+    }
+
+    std::unordered_set<Index> activeRows;
+    for (Index genIdx : cycle) {
+      if (genIdx >= columns.size()) {
+        throw std::runtime_error("Representative cycle refers to a generator outside `_generator_basis`.");
       }
+      for (Index rowIdx : columns[genIdx]) {
+        if (rowIdx >= rowCellIndices.size()) {
+          throw std::runtime_error("`_generator_basis` column support refers to a row outside `row_cell_indices`.");
+        }
+        auto [it, inserted] = activeRows.insert(rowIdx);
+        if (!inserted) {
+          activeRows.erase(it);
+        }
+      }
+    }
+
+    std::vector<Index> out;
+    out.reserve(activeRows.size());
+    for (Index row_idx : activeRows) {
+      out.push_back(rowCellIndices[row_idx]);
+    }
+    std::sort(out.begin(), out.end());
+    if (std::adjacent_find(out.begin(), out.end()) != out.end()) {
+      throw std::runtime_error("`_generator_basis.row_cell_indices` must identify distinct source cells.");
     }
     return out;
   }
 
   [[nodiscard]] std::string to_str() const {
     return "_GeneratorBasis(degree=" + std::to_string(degree) + ", columns=" + std::to_string(columns.size()) +
-           ", row_boundaries=" + std::to_string(rowBoundaries.size()) + ")";
+           ", row_boundaries=" + std::to_string(rowBoundaries.size()) +
+           ", row_cell_indices=" + std::to_string(rowCellIndices.size()) + ")";
   }
 
   /**
@@ -214,6 +266,7 @@ struct Generator_basis_data {
     curr = serialize_value_to_char_buffer(value.rowBoundaries, curr);
     curr = serialize_value_to_char_buffer(value.rowGrades, curr);
     curr = serialize_value_to_char_buffer(value.columnGrades, curr);
+    curr = serialize_value_to_char_buffer(value.rowCellIndices, curr);
     return curr;
   }
 
@@ -231,6 +284,7 @@ struct Generator_basis_data {
     curr = deserialize_value_from_char_buffer(value.rowBoundaries, curr);
     curr = deserialize_value_from_char_buffer(value.rowGrades, curr);
     curr = deserialize_value_from_char_buffer(value.columnGrades, curr);
+    curr = deserialize_value_from_char_buffer(value.rowCellIndices, curr);
     return curr;
   }
 
@@ -243,6 +297,7 @@ struct Generator_basis_data {
     size += get_serialization_size_of(value.rowBoundaries);
     size += get_serialization_size_of(value.rowGrades);
     size += get_serialization_size_of(value.columnGrades);
+    size += get_serialization_size_of(value.rowCellIndices);
     return size;
   }
 };

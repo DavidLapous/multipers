@@ -10,36 +10,6 @@ from multipers.grids import Lstrategies, compute_grid
 from ._utils import _as_slicer
 
 
-def end_curves(*args, **kwargs):
-    """Two-parameter end-curve invariant, not implemented yet.
-
-    End-curves collect both birth-curves and death-curves.  In the 2-parameter
-    theory these curves determine Betti tables and give a positive curve count
-    for finite-grid modules.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the future paired end-curve API.
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised until the invariant is implemented.
-
-    Output
-    ------
-    None
-        No value is returned because this invariant is not implemented yet.
-
-    References
-    ----------
-    Brüstle, Oudot, Scoccola, and Thomas, "Counts and end-curves in
-    two-parameter persistence", arXiv:2505.13412, 2025.
-    """
-    raise NotImplementedError("end_curves is not implemented yet.")
-
-
 def _grid_inf_indices(grid) -> np.ndarray:
     lengths = np.fromiter((len(axis) for axis in grid), dtype=np.int64)
     has_inf = np.fromiter(

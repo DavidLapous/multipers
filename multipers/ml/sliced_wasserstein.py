@@ -39,7 +39,7 @@ def _ot_distance(meas1, meas2, ground_norm=1, epsilon=1.0):
     cost = api.cdist(meas_t1, meas_t2, p=ground_norm)
     if epsilon > 0:
         wass = ot.sinkhorn2(weights, weights, cost, epsilon)
-        return wass[0]
+        return wass[0] if isinstance(wass, tuple) else wass
     return ot.lp.emd2(weights, weights, cost)
 
 
@@ -207,13 +207,16 @@ class SlicedWassersteinDistance(BaseEstimator, TransformerMixin):
         Returns:
             float: sliced Wasserstein distance.
         """
-        return sm_distance(
-            meas1,
-            meas2,
-            sliced=True,
+        api = getattr(self, "_api", None) or api_from_tensor(meas1[0])
+        return pairwise_signed_measure_distances(
+            [meas1],
+            [meas2],
+            metric="sliced_wasserstein",
             num_directions=self.num_directions,
+            scales=self.scales,
             seed=self.seed,
-        )
+            api=api,
+        )[0, 0]
 
 
 class WassersteinDistance(BaseEstimator, TransformerMixin):

@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <numeric>
+#include <span>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_set>
@@ -20,14 +20,31 @@ bool equal(const Grade& a, const Grade& b) { return a[0] == b[0] && a[1] == b[1]
 
 bool strictly_above(const Grade& a, const Grade& b) { return !equal(a, b) && b[0] <= a[0] && b[1] <= a[1]; }
 
-std::vector<std::vector<std::size_t>> adjacency(const Graph& graph) {
-  std::vector<std::vector<std::size_t>> out(graph.vertices.size());
-  for (std::size_t i = 0; i < graph.edges.size(); ++i) {
-    out[graph.edges[i].u].push_back(i);
-    if (graph.edges[i].u != graph.edges[i].v) out[graph.edges[i].v].push_back(i);
+class Csr_adjacency {
+ public:
+  explicit Csr_adjacency(const Graph& graph) : offsets_(graph.vertices.size() + 1) {
+    for (const auto& edge : graph.edges) {
+      ++offsets_[edge.u + 1];
+      if (edge.u != edge.v) ++offsets_[edge.v + 1];
+    }
+    std::partial_sum(offsets_.begin(), offsets_.end(), offsets_.begin());
+    edge_ids_.resize(offsets_.back());
+    auto next = offsets_;
+    for (std::size_t edge_id = 0; edge_id < graph.edges.size(); ++edge_id) {
+      const auto& edge = graph.edges[edge_id];
+      edge_ids_[next[edge.u]++] = edge_id;
+      if (edge.u != edge.v) edge_ids_[next[edge.v]++] = edge_id;
+    }
   }
-  return out;
-}
+
+  [[nodiscard]] std::span<const std::size_t> operator[](std::size_t vertex) const {
+    return std::span<const std::size_t>(edge_ids_).subspan(offsets_[vertex], offsets_[vertex + 1] - offsets_[vertex]);
+  }
+
+ private:
+  std::vector<std::size_t> offsets_;
+  std::vector<std::size_t> edge_ids_;
+};
 
 Graph compact(const Graph& graph, std::vector<std::size_t> representative, const std::vector<bool>& removed_edges) {
   for (std::size_t i = 0; i < representative.size(); ++i) {
@@ -60,7 +77,7 @@ Graph compact(const Graph& graph, std::vector<std::size_t> representative, const
 }
 
 Graph collapse_local_edges(const Graph& graph) {
-  const auto adj = adjacency(graph);
+  const Csr_adjacency adj(graph);
   std::vector<bool> visited(graph.vertices.size(), false);
   std::vector<bool> removed(graph.edges.size(), false);
   std::vector<std::size_t> representative(graph.vertices.size());
@@ -98,7 +115,7 @@ Graph collapse_local_edges(const Graph& graph) {
 
 Graph collapse_to_vertex_minimal(const Graph& input) {
   Graph graph = collapse_local_edges(input);
-  const auto adj = adjacency(graph);
+  const Csr_adjacency adj(graph);
   std::vector<bool> visited(graph.vertices.size(), false);
   std::vector<bool> removed(graph.edges.size(), false);
   std::vector<std::size_t> representative(graph.vertices.size());
@@ -209,22 +226,22 @@ Result compute(const Graph& input, Compute_options options) {
       if (options.h1_betti) out.beta_0_h1.push_back(edge.grade);
       continue;
     }
-    const double merge = forest.time_of_merge(edge.u, edge.v);
-    if (merge <= edge.grade[1]) {
+    const auto bottleneck = forest.merge_bottleneck(edge.u, edge.v);
+    if (bottleneck && bottleneck->weight <= edge.grade[1]) {
       if (options.h1_betti) out.beta_0_h1.push_back(edge.grade);
       continue;
     }
     std::vector<std::size_t> syzygy;
-    if (options.full_resolution && merge != std::numeric_limits<double>::max()) {
+    if (options.full_resolution && bottleneck) {
       syzygy = forest.path_edges(edge.u, edge.v);
       syzygy.push_back(out.beta_1.size());
       std::sort(syzygy.begin(), syzygy.end());
     }
-    forest.merge_at_time(edge.u, edge.v, edge.grade[1]);
+    forest.merge_at_time(edge.u, edge.v, edge.grade[1], bottleneck);
     out.beta_1.push_back(edge.grade);
     out.relations.push_back({row[edge.u], row[edge.v]});
-    if (merge != std::numeric_limits<double>::max()) {
-      const Grade witness{edge.grade[0], merge};
+    if (bottleneck) {
+      const Grade witness{edge.grade[0], bottleneck->weight};
       if (options.full_resolution) {
         out.beta_2.push_back(witness);
         out.syzygies.push_back(std::move(syzygy));

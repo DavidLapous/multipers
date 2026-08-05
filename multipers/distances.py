@@ -1265,6 +1265,7 @@ def _matching_distance_scalar_prepared(
     hera_initialization_depth: int,
     hera_bound_strategy,
     hera_traverse_strategy,
+    hera_n_jobs: int,
     hera_tolerate_max_iter_exceeded: bool,
     hera_stop_asap: bool,
     return_stats: bool,
@@ -1382,6 +1383,7 @@ def _matching_distance_scalar_prepared(
                         _MATCHING_DISTANCE_TRAVERSE_STRATEGIES,
                         "Hera traverse strategy",
                     ),
+                    n_jobs=int(hera_n_jobs),
                     tolerate_max_iter_exceeded=bool(hera_tolerate_max_iter_exceeded),
                     stop_asap=bool(hera_stop_asap),
                     return_stats=bool(return_stats),
@@ -1415,6 +1417,7 @@ def matching_distance(
     hera_initialization_depth: int = 2,
     hera_bound_strategy: str = "local_combined",
     hera_traverse_strategy: str = "breadth_first",
+    hera_n_jobs: int = 0,
     hera_tolerate_max_iter_exceeded: bool = False,
     hera_stop_asap: bool = True,
     return_stats: bool = False,
@@ -1496,6 +1499,10 @@ def matching_distance(
         Order in which the exact `"hera"` backend explores candidate dual cells
         during refinement. String values are mapped to Hera's
         `TraverseStrategy` enum; integer enum values are also accepted.
+    hera_n_jobs : int, default=0
+        Native worker count for Hera adaptive matching distance. `hera_n_jobs <= 0`
+        uses backend default concurrency. Currently only breadth-first adaptive
+        line evaluations are parallelized; other traversals remain serial.
     hera_tolerate_max_iter_exceeded : bool, default=False
         Forwarded to Hera's internal bottleneck computations in the exact
         `"hera"` backend. If `True`, the current estimate is accepted when
@@ -1617,6 +1624,7 @@ def matching_distance(
                 hera_initialization_depth=hera_initialization_depth,
                 hera_bound_strategy=hera_bound_strategy,
                 hera_traverse_strategy=hera_traverse_strategy,
+                hera_n_jobs=hera_n_jobs,
                 hera_tolerate_max_iter_exceeded=hera_tolerate_max_iter_exceeded,
                 hera_stop_asap=hera_stop_asap,
                 return_stats=return_stats,

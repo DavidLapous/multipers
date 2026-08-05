@@ -38,6 +38,7 @@
 
 #include <gudhi/Debug_utils.h>
 #include <gudhi/simple_mdspan.h>
+#include <gudhi/multi_persistence_landscapes.h>
 #include <gudhi/Multi_persistence/Module.h>
 #include <gudhi/Multi_persistence/module_helpers.h>
 #include <gudhi/Multi_persistence/Line.h>
@@ -428,13 +429,20 @@ class Module_interface {
         module_.get_number_of_parameters() != box.shape(1))
       throw std::invalid_argument(
           "The given box has not the same number of coordinates than parameters in the stored module");
+    auto ksView = Numpy_span(ks);
+    for (auto k : ksView) {
+      if (k < 0) throw std::invalid_argument("Landscape indices must be positive.");
+      if (static_cast<std::size_t>(k) == std::numeric_limits<std::size_t>::max())
+        throw std::invalid_argument("Landscape index is too large.");
+    }
 
     std::vector<maybe_make_signed_t<T>> out;
     auto resolutionView = Numpy_span(resolution);
+    if (resolutionView.size() < 2) throw std::invalid_argument("Not enough resolution values.");
     {
       nanobind::gil_scoped_release release;
       out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-          module_, degree, Numpy_span(ks), get_box_from_tensor(box), resolutionView, n_jobs);
+          module_, degree, ksView, get_box_from_tensor(box), resolutionView, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), resolutionView[0], resolutionView[1]);
   }
@@ -445,6 +453,13 @@ class Module_interface {
                                     const std::vector<Tensor1D> &grid,
                                     int n_jobs) {
     if (degree < 0) throw std::invalid_argument("Landscape dimension has to be positive.");
+    auto ksView = Numpy_span(ks);
+    for (auto k : ksView) {
+      if (k < 0) throw std::invalid_argument("Landscape indices must be positive.");
+      if (static_cast<std::size_t>(k) == std::numeric_limits<std::size_t>::max())
+        throw std::invalid_argument("Landscape index is too large.");
+    }
+    if (grid.size() < 2) throw std::invalid_argument("First axis of the grid has not enough values.");
 
     std::vector<maybe_make_signed_t<T>> out;
     {
@@ -452,8 +467,7 @@ class Module_interface {
       std::vector<Numpy_span<T>> views;
       views.reserve(grid.size());
       for (const auto &axis : grid) views.push_back(Numpy_span(axis));
-      out = Gudhi::multi_persistence::compute_set_of_module_landscapes(
-          module_, degree, Numpy_span(ks), views, n_jobs);
+      out = Gudhi::multi_persistence::compute_set_of_module_landscapes(module_, degree, ksView, views, n_jobs);
     }
     return _wrap_as_numpy_array(std::move(out), ks.shape(0), grid[0].shape(0), grid[1].shape(0));
   }

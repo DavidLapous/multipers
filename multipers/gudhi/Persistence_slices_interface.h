@@ -116,8 +116,11 @@ using MatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineya
 
 template <Available_columns col>
 using ClementMatrixBackendVine = Gudhi::multi_persistence::Persistence_interface_vineyard<Multi_persistence_vineyard_chain_options<col>>;
+template <typename Filtration, bool is_vine>
+using GraphBackend = multipers::graph_mph0::Slicer_backend<StructureStuff<Filtration>, is_vine>;
+
 template <typename Filtration>
-using GraphBackendVine = multipers::graph_mph0::Slicer_backend<StructureStuff<Filtration>>;
+using GraphBackendVine = GraphBackend<Filtration, true>;
 
 template <typename value_type = float>
 using Filtration_value = Gudhi::multi_filtration::Multi_parameter_filtration<value_type, false, true>;
@@ -188,8 +191,7 @@ struct PersBackendOptsImpl<BackendsEnum::GudhiCohomology, is_vine, col, Filtrati
 
 template <bool is_vine, Available_columns col, typename Filtration>
 struct PersBackendOptsImpl<BackendsEnum::Graph, is_vine, col, Filtration> {
-  static_assert(is_vine, "Graph backend requires is_vine to be true");
-  using type = GraphBackendVine<Filtration>;
+  using type = GraphBackend<Filtration, is_vine>;
 };
 
 // Helper alias to extract the type

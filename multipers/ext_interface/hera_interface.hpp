@@ -25,6 +25,7 @@ struct hera_interface_params {
   int traverse_strategy = 1;
   bool tolerate_max_iter_exceeded = false;
   bool stop_asap = true;
+  int n_jobs = 0;
 };
 
 struct hera_interface_result {
@@ -189,6 +190,7 @@ hera_interface_result hera_matching_distance(const hera_module_presentation_inpu
   calc_params.initialization_depth = params.initialization_depth;
   calc_params.bound_strategy = detail::hera_bound_strategy_from_int(params.bound_strategy);
   calc_params.traverse_strategy = detail::hera_traverse_strategy_from_int(params.traverse_strategy);
+  calc_params.n_jobs = params.n_jobs;
   calc_params.tolerate_max_iter_exceeded = params.tolerate_max_iter_exceeded;
   calc_params.stop_asap = params.stop_asap;
 

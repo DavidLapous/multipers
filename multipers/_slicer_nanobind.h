@@ -40,17 +40,20 @@ inline void bind_generator_basis(nanobind::module_& m) {
                           std::vector<std::vector<Index>>,
                           std::vector<std::vector<Index>>,
                           std::vector<std::pair<Grade, Grade>>,
-                          std::vector<std::pair<Grade, Grade>>>(),
+                          std::vector<std::pair<Grade, Grade>>,
+                          std::vector<Index>>(),
            "degree"_a,
            "columns"_a,
            "row_boundaries"_a,
            "row_grades"_a = std::vector<std::pair<Grade, Grade>>{},
-           "column_grades"_a = std::vector<std::pair<Grade, Grade>>{})
+           "column_grades"_a = std::vector<std::pair<Grade, Grade>>{},
+           "row_cell_indices"_a = std::vector<Index>{})
       .def_prop_ro("degree", [](const Generator_basis_data& self) { return self.degree; })
       .def_prop_ro("columns", [](const Generator_basis_data& self) { return self.columns; })
       .def_prop_ro("row_boundaries", [](const Generator_basis_data& self) { return self.rowBoundaries; })
       .def_prop_ro("row_grades", [](const Generator_basis_data& self) { return self.rowGrades; })
       .def_prop_ro("column_grades", [](const Generator_basis_data& self) { return self.columnGrades; })
+      .def_prop_ro("row_cell_indices", [](const Generator_basis_data& self) { return self.rowCellIndices; })
       .def("keys", &Generator_basis_data::get_keys)
       .def("__getitem__",
            [](const Generator_basis_data& self, const std::string& key) -> nanobind::object { return self[key]; })

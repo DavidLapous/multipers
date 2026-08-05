@@ -488,7 +488,8 @@ inline nb::object matching_distance_binding(nb::object left,
                                             int traverse_strategy,
                                             bool tolerate_max_iter_exceeded,
                                             bool stop_asap,
-                                            bool return_stats) {
+                                            bool return_stats,
+                                            int n_jobs) {
 #if MULTIPERS_DISABLE_HERA_INTERFACE
   static_cast<void>(left);
   static_cast<void>(right);
@@ -498,6 +499,7 @@ inline nb::object matching_distance_binding(nb::object left,
   static_cast<void>(initialization_depth);
   static_cast<void>(bound_strategy);
   static_cast<void>(traverse_strategy);
+  static_cast<void>(n_jobs);
   static_cast<void>(tolerate_max_iter_exceeded);
   static_cast<void>(stop_asap);
   static_cast<void>(return_stats);
@@ -515,9 +517,14 @@ inline nb::object matching_distance_binding(nb::object left,
   params.initialization_depth = initialization_depth;
   params.bound_strategy = bound_strategy;
   params.traverse_strategy = traverse_strategy;
+  params.n_jobs = n_jobs;
   params.tolerate_max_iter_exceeded = tolerate_max_iter_exceeded;
   params.stop_asap = stop_asap;
-  auto result = multipers::hera_matching_distance(left_input, right_input, params);
+  multipers::hera_interface_result result;
+  {
+    nb::gil_scoped_release release;
+    result = multipers::hera_matching_distance(left_input, right_input, params);
+  }
   if (return_stats) {
     nb::dict stats;
     stats["actual_error"] = result.actual_error;
@@ -711,7 +718,8 @@ NB_MODULE(_hera_interface, m) {
          int traverse_strategy,
          bool tolerate_max_iter_exceeded,
          bool stop_asap,
-         bool return_stats) -> nb::object {
+         bool return_stats,
+         int n_jobs) -> nb::object {
         return mphera::matching_distance_binding(left,
                                                  right,
                                                  hera_epsilon,
@@ -722,7 +730,8 @@ NB_MODULE(_hera_interface, m) {
                                                  traverse_strategy,
                                                  tolerate_max_iter_exceeded,
                                                  stop_asap,
-                                                 return_stats);
+                                                 return_stats,
+                                                 n_jobs);
       },
       "left"_a,
       "right"_a,
@@ -734,7 +743,8 @@ NB_MODULE(_hera_interface, m) {
       "traverse_strategy"_a = 1,
       "tolerate_max_iter_exceeded"_a = false,
       "stop_asap"_a = true,
-      "return_stats"_a = false);
+      "return_stats"_a = false,
+      "n_jobs"_a = 0);
 
   m.def(
       "bottleneck_distance",

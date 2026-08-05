@@ -40,12 +40,12 @@
 #include <gudhi/simple_mdspan.h>
 #include <gudhi/slicer_helpers.h>
 #include <gudhi/Slicer.h>
+#include <gudhi/multi_persistence_landscapes.h>
 #include <gudhi/Degree_rips_bifiltration.h>
 #include <gudhi/Multi_persistence/Line.h>
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/numpy_utils.h>
 
-#include "Virtual_slicer_interface.h"
 #include "Simplex_tree_multi_interface.h"
 #include "python_interfaces/construction_utils.h"
 #include "slicer_interface_helpers.h"
@@ -189,11 +189,22 @@ class Slicer_interface {
     auto dimensionsView = generator_dimensions.view();
     auto filValuesView = grades_flat.view();
 
+    if (boundaryDelimitersView.shape(0) == 0) {
+      if (boundariesView.shape(0) != 0 || dimensionsView.shape(0) != 0 || filValuesView.shape(0) != 0)
+        throw std::invalid_argument("Invalid packed input, shapes do not coincide.");
+      return;
+    }
     std::size_t numGen = boundaryDelimitersView.shape(0) - 1;
     if (boundaryDelimitersView(numGen) > boundariesView.shape(0))
       throw std::invalid_argument("Boundary index ptr and flat boundaries are not coherent.");
     if (dimensionsView.shape(0) != numGen || filValuesView.shape(0) != numGen)
       throw std::invalid_argument("Invalid packed input, shapes do not coincide.");
+
+    // do we really want to test here if the values of boundary_indptr are positive and increasing integers,
+    // and the values of boundary_flat and generator_dimensions positive integers ?
+    // those testes are not that cheap anymore and do not guarantee no crashes as there still will be some
+    // if the boundaries are not valid boundaries or the filtration values do not yield a valid filtration order etc.
+    // At some point, the user has to take responsibilities...
 
     detail::Flat_2D_array_span boundaries(boundary_indptr, boundary_flat);
     Numpy_span dimensions(generator_dimensions);
@@ -672,6 +683,7 @@ class Slicer_interface {
       cycleIdx = slicer_.get_n_most_persistent_cycles(dim, n, update);
 
       if (!idx && !cycleIdx.empty()) {
+        out.resize(cycleIdx.size());
         tbb::parallel_for(std::size_t(0), cycleIdx.size(), [&](std::size_t idx) {
           _get_cycle_boundary(out[idx], cycleIdx[idx], dim);
         });
@@ -760,6 +772,12 @@ class Slicer_interface {
   }
 
   [[nodiscard]] Slicer_interface build_from_projective_cover_kernel(std::optional<int> dimension) const {
+    if (generatorBasis_.has_value()) {
+      throw nanobind::value_error(
+          "compute_kernel_projective_cover does not transport `_generator_basis`;"
+          " discard the basis explicitly before this transformation.");
+    }
+
     Slicer_t outSlicer;
 
     if (slicer_.get_number_of_cycle_generators() == 0) return {*this, std::move(outSlicer)};

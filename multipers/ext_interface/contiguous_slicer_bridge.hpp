@@ -62,12 +62,12 @@ struct packed_morphism_columns {
   std::size_t indices_size = 0;
 };
 
-template <typename value_type, typename index_type>
-inline contiguous_complex<value_type> build_contiguous_slicer_from_output(
+template <typename value_type>
+inline contiguous_complex<value_type> build_contiguous_slicer_from_owned_output(
     const std::vector<value_type>& filtration_values,
     std::size_t num_parameters,
-    const std::vector<std::vector<index_type>>& boundaries,
-    const std::vector<int>& dimensions) {
+    std::vector<std::vector<std::uint32_t>>&& boundaries,
+    std::vector<int>&& dimensions) {
   const std::size_t num_generators = dimensions.size();
   if (boundaries.size() != num_generators) {
     throw std::invalid_argument("Invalid interface output: sizes of filtrations, boundaries and dimensions differ.");
@@ -85,7 +85,30 @@ inline contiguous_complex<value_type> build_contiguous_slicer_from_output(
     }
   }
 
-  std::vector<std::vector<uint32_t>> c_boundaries;
+  std::vector<contiguous_filtration<value_type>> c_filtrations;
+  c_filtrations.reserve(num_generators);
+  const auto grades = Gudhi::Simple_mdspan<const value_type, Gudhi::dextents<std::size_t, 2>>(
+      filtration_values.data(), num_generators, num_parameters);
+  for (std::size_t i = 0; i < num_generators; ++i) {
+    const value_type* row_begin = grades.data_handle() + i * grades.stride(0);
+    c_filtrations.emplace_back(row_begin, row_begin + num_parameters);
+  }
+
+  return contiguous_complex<value_type>(std::move(boundaries), std::move(dimensions), std::move(c_filtrations));
+}
+
+template <typename value_type, typename index_type>
+inline contiguous_complex<value_type> build_contiguous_slicer_from_output(
+    const std::vector<value_type>& filtration_values,
+    std::size_t num_parameters,
+    const std::vector<std::vector<index_type>>& boundaries,
+    const std::vector<int>& dimensions) {
+  const std::size_t num_generators = dimensions.size();
+  if (boundaries.size() != num_generators) {
+    throw std::invalid_argument("Invalid interface output: sizes of filtrations, boundaries and dimensions differ.");
+  }
+
+  std::vector<std::vector<std::uint32_t>> c_boundaries;
   c_boundaries.resize(num_generators);
   for (std::size_t i = 0; i < num_generators; ++i) {
     c_boundaries[i].reserve(boundaries[i].size());
@@ -100,17 +123,8 @@ inline contiguous_complex<value_type> build_contiguous_slicer_from_output(
     }
   }
 
-  std::vector<contiguous_filtration<value_type>> c_filtrations;
-  c_filtrations.reserve(num_generators);
-  const auto grades = Gudhi::Simple_mdspan<const value_type, Gudhi::dextents<std::size_t, 2>>(
-      filtration_values.data(), num_generators, num_parameters);
-  for (std::size_t i = 0; i < num_generators; ++i) {
-    const value_type* row_begin = grades.data_handle() + i * grades.stride(0);
-    c_filtrations.emplace_back(row_begin, row_begin + num_parameters);
-  }
-
-  std::vector<int> c_dimensions = dimensions;
-  return contiguous_complex<value_type>(c_boundaries, c_dimensions, c_filtrations);
+  return build_contiguous_slicer_from_owned_output<value_type>(
+      filtration_values, num_parameters, std::move(c_boundaries), std::vector<int>(dimensions));
 }
 
 template <typename index_type>

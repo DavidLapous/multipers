@@ -35,7 +35,7 @@ class DistanceList2DistanceMatrix(BaseEstimator, TransformerMixin):
     def transform(self, X):
         api = api_from_tensor(X)
         X = api.astensor(X)
-        index_list = api.int32(X[:, 0]) + 1
+        index_list = api.astype(X[:, 0], api.int64) + 1
         return X[:, index_list]
 
 
@@ -173,6 +173,14 @@ class DistanceMatrix2Kernel(BaseEstimator, TransformerMixin):
             raise ValueError(
                 f"Number of weights ({len(self.weights_)}) has to be the same as the number of degrees ({self._num_degrees})"
             )
+        if isinstance(self.sigma, float) or isinstance(self.sigma, int):
+            self.sigma_ = [self.sigma] * self._num_degrees
+        else:
+            self.sigma_ = list(self.sigma)
+        if len(self.sigma_) != self._num_degrees:
+            raise ValueError(
+                f"Number of sigmas ({len(self.sigma_)}) has to be the same as the number of degrees ({self._num_degrees})"
+            )
         return self
 
     def transform(self, X):
@@ -184,8 +192,8 @@ class DistanceMatrix2Kernel(BaseEstimator, TransformerMixin):
             X = X[self.axis_]
         kernels = api.stack(
             [
-                api.exp(-distance_matrix / (2 * self.sigma**2)) * weight
-                for distance_matrix, weight in zip(X, self.weights_)
+                api.exp(-distance_matrix / (2 * sigma**2)) * weight
+                for distance_matrix, weight, sigma in zip(X, self.weights_, self.sigma_, strict=True)
             ]
         )
         return api.mean(kernels, axis=0)

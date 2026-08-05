@@ -64,10 +64,9 @@ REAL_VALUE_TYPE = "float64"
 #   - explicit key: "backend=Graph|Clement"
 RULES = [
     "Degree_rips_bifiltration => kcritical=True",
-    "Graph|Clement => vine=True",
+    "Clement => vine=True",
     "GudhiCohomology => vine=False",
     f"Graph|GudhiCohomology => column={COLUMNS[0]}",
-    "Graph => kcritical=False",
     "Graph => value_type=int32|float64",
     "Graph => filtration_container=Multi_parameter_filtration",
 ]
@@ -81,6 +80,4 @@ REQUIRED_SLICER_COMBINATIONS = [
     f"backend=Matrix, vine=False, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
     f"backend=Matrix, vine=False, kcritical=True, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
     f"backend=Matrix, vine=False, kcritical=True, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
-    f"backend=Graph, vine=True, kcritical=False, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
-    f"backend=Graph, vine=True, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
 ]
