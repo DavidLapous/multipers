@@ -55,7 +55,8 @@ NB_MODULE(_mpfree_interface, m) {
   m.def("require", [available]() {
     if (!available()) {
       throw std::runtime_error(
-          "mpfree interface is not available in this build. Rebuild multipers with mpfree support to enable this backend.");
+          "mpfree interface is not available in this build. Rebuild multipers with mpfree support to enable this "
+          "backend.");
     }
   });
   m.def(
@@ -68,15 +69,22 @@ NB_MODULE(_mpfree_interface, m) {
          bool keep_generators,
          bool verbose) {
 #if MULTIPERS_DISABLE_MPFREE_INTERFACE
+        (void)slicer;
+        (void)degree;
+        (void)full_resolution;
+        (void)use_clearing;
+        (void)use_chunk;
+        (void)keep_generators;
+        (void)verbose;
         throw std::runtime_error("mpfree interface is disabled at compile time.");
 #else
         if (!multipers::mpfree_interface_available()) {
           throw std::runtime_error("mpfree interface is not available.");
         }
         return multipers::nanobind_helpers::run_with_canonical_contiguous_f64_slicer_output(
-            slicer,
-            [&](const nb::object& target) {
-              return mpmi::minimal_presentation_for_target(target, degree, full_resolution, use_clearing, use_chunk, verbose, keep_generators);
+            slicer, [&](const nb::object& target) {
+              return mpmi::minimal_presentation_for_target(
+                  target, degree, full_resolution, use_clearing, use_chunk, verbose, keep_generators);
             });
 #endif
       },
