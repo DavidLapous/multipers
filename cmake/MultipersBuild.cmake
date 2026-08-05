@@ -279,8 +279,20 @@ multipers_add_core_object_library(
 )
 
 multipers_add_core_object_library(
-  multipers_core_slicer_obj
-  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core.cc"
+  multipers_core_slicer_obj1
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core1.cc"
+  multipers_core_filtrations_obj
+)
+
+multipers_add_core_object_library(
+  multipers_core_slicer_obj2
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core2.cc"
+  multipers_core_filtrations_obj
+)
+
+multipers_add_core_object_library(
+  multipers_core_slicer_obj3
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core3.cc"
   multipers_core_filtrations_obj
 )
 
@@ -308,7 +320,9 @@ add_library(
   $<TARGET_OBJECTS:multipers_core_backend_log_policy_obj>
   $<TARGET_OBJECTS:multipers_core_filtrations_obj>
   $<TARGET_OBJECTS:multipers_core_simplextree_obj>
-  $<TARGET_OBJECTS:multipers_core_slicer_obj>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj1>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj2>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj3>
   $<TARGET_OBJECTS:multipers_core_hera_obj>
   $<TARGET_OBJECTS:multipers_core_graph_mph0_obj>
 )

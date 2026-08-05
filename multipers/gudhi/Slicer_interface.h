@@ -27,7 +27,6 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include <nanobind/nanobind.h>
@@ -35,6 +34,8 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
+
+#include <oneapi/tbb/parallel_for.h>
 
 #include <gudhi/simple_mdspan.h>
 #include <gudhi/slicer_helpers.h>
@@ -44,6 +45,7 @@
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/numpy_utils.h>
 
+#include "Virtual_slicer_interface.h"
 #include "Simplex_tree_multi_interface.h"
 #include "python_interfaces/construction_utils.h"
 #include "slicer_interface_helpers.h"
@@ -893,7 +895,7 @@ class Slicer_interface {
           const auto &f = filts[i];
           if (numParam != f.num_parameters())
             throw std::runtime_error("Inconsistent number of parameters in stored filtration values");
-          for (std::size_t p = 0; p < numParam; ++p) {
+          for (int p = 0; p < numParam; ++p) {
             view(i, p) = f(0, p);
           }
         }
@@ -911,7 +913,7 @@ class Slicer_interface {
           values[i].resize(f.num_generators() * numParam);
           Gudhi::Simple_mdspan view(values[i].data(), f.num_generators(), numParam);
           for (std::size_t g = 0; g < f.num_generators(); ++g) {
-            for (std::size_t p = 0; p < numParam; ++p) {
+            for (int p = 0; p < numParam; ++p) {
               view(g, p) = f(g, p);
             }
           }
@@ -1102,11 +1104,11 @@ class Slicer_interface {
       nanobind::gil_scoped_release release;
       auto cycleIdx = slicer_.get_representative_cycles(update);
       out.resize(cycleIdx.size());
-      std::vector<std::array<std::size_t, 3>> blocks;
+      std::vector<std::array<std::int64_t, 3>> blocks;
 
       if (barcodeIndices.has_value()) {
         Numpy_2d_span view(*barcodeIndices);
-        std::vector<std::size_t> sizeByDim(cycleIdx.size(), 0);
+        std::vector<std::int64_t> sizeByDim(cycleIdx.size(), 0);
         for (std::int64_t barDim : view) ++sizeByDim[barDim];
         for (std::size_t dim = 0; dim < cycleIdx.size(); ++dim) {
           out[dim].resize(sizeByDim[dim]);
@@ -1119,9 +1121,9 @@ class Slicer_interface {
           ++sizeByDim[barIdx[0]];
         }
       } else {
-        for (std::size_t dim = 0; dim < cycleIdx.size(); ++dim) {
+        for (std::int64_t dim = 0; dim < static_cast<std::int64_t>(cycleIdx.size()); ++dim) {
           out[dim].resize(cycleIdx[dim].size());
-          for (std::size_t c = 0; c < cycleIdx[dim].size(); ++c) {
+          for (std::int64_t c = 0; c < static_cast<std::int64_t>(cycleIdx[dim].size()); ++c) {
             blocks.push_back({dim, c, c});
           }
         }
