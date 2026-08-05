@@ -86,12 +86,12 @@ jobs:
       run: |
         micromamba activate cmake
         for watched in options.py tools/codegen/_registry.py tools/codegen/query_config.py; do
-          before=$(stat -c %Y build/cmake-all-off/CMakeCache.txt)
+          echo "Checking CMake configure dependency: $watched"
           sleep 1
           touch "$watched"
-          cmake --build build/cmake-all-off --target multipers_codegen >/dev/null
-          after=$(stat -c %Y build/cmake-all-off/CMakeCache.txt)
-          test "$after" -gt "$before"
+          output=$(cmake --build build/cmake-all-off --target multipers_codegen 2>&1)
+          printf '%s\n' "$output"
+          grep -q "Re-running CMake" <<< "$output"
         done
   build:
     name: Build
