@@ -47,10 +47,9 @@ struct multipers_function_delaunay_timer_stub {
   times elapsed() const { return {}; }
 };
 
-static multipers_function_delaunay_timer_stub test_timer_1;
-static multipers_function_delaunay_timer_stub test_timer_2;
-static multipers_function_delaunay_timer_stub test_timer_3;
-static multipers_function_delaunay_timer_stub test_timer_4;
+[[maybe_unused]] static multipers_function_delaunay_timer_stub test_timer_2;
+[[maybe_unused]] static multipers_function_delaunay_timer_stub test_timer_3;
+[[maybe_unused]] static multipers_function_delaunay_timer_stub test_timer_4;
 #endif
 
 namespace multipers {
@@ -423,7 +422,7 @@ inline Gudhi::Simplex_tree<> relabel_simplex_tree_vertices(const Gudhi::Simplex_
 
   std::vector<simplex_record> simplices;
   simplices.reserve(simplex_tree.num_simplices());
-  for (const auto simplex_handle : simplex_tree.complex_simplex_range()) {
+  for (const auto& simplex_handle : simplex_tree.complex_simplex_range()) {
     simplex_record record;
     record.filtration = simplex_tree.filtration(simplex_handle);
     for (const auto vertex : simplex_tree.simplex_vertex_range(simplex_handle)) {

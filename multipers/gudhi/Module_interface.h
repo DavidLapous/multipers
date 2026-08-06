@@ -146,7 +146,7 @@ class Module_interface {
 
   Module_interface &set_box(Tensor2D box) {
     if (module_.get_number_of_parameters() != get_null_value<int>() &&
-        module_.get_number_of_parameters() != box.shape(1))
+        static_cast<std::size_t>(module_.get_number_of_parameters()) != box.shape(1))
       throw std::invalid_argument(
           "The given box has not the same number of coordinates than parameters in the stored module");
     box_ = get_flat_box_from_tensor(box);
@@ -158,7 +158,7 @@ class Module_interface {
     if (box[0].size() != box[1].size())
       throw std::invalid_argument("Both corners defining the box must have same dimension.");
     if (module_.get_number_of_parameters() != get_null_value<int>() &&
-        module_.get_number_of_parameters() != box[0].size())
+        static_cast<std::size_t>(module_.get_number_of_parameters()) != box[0].size())
       throw std::invalid_argument(
           "The given box has not the same number of coordinates than parameters in the stored module");
     box_ = Box_t(box[0].begin(), box[0].end());
@@ -179,7 +179,7 @@ class Module_interface {
         GUDHI_CHECK(births.num_parameters() == numParam,
                     std::runtime_error("Upset number of parameters is not coherent."));
         for (int p = 0; p < numParam; ++p) {
-          for (std::size_t g = 0; g < summand.get_number_of_birth_corners(); ++g) {
+          for (std::size_t g = 0; g < static_cast<std::size_t>(summand.get_number_of_birth_corners()); ++g) {
             const T v = births(g, p);
             // in the original, infinite values were never copied
             // but if unique is false, I think it makes more sense to keep a bijection on the indices, no?
@@ -191,7 +191,7 @@ class Module_interface {
         GUDHI_CHECK(deaths.num_parameters() == numParam,
                     std::runtime_error("Downset number of parameters is not coherent."));
         for (int p = 0; p < numParam; ++p) {
-          for (std::size_t g = 0; g < summand.get_number_of_death_corners(); ++g) {
+          for (std::size_t g = 0; g < static_cast<std::size_t>(summand.get_number_of_death_corners()); ++g) {
             const T v = deaths(g, p);
             // same question then for births
             if (!unique || (v != T_inf && v != T_m_inf)) values[p].push_back(v);
@@ -426,7 +426,7 @@ class Module_interface {
                                    int n_jobs) {
     if (degree < 0) throw std::invalid_argument("Landscape dimension has to be positive.");
     if (module_.get_number_of_parameters() != get_null_value<int>() &&
-        module_.get_number_of_parameters() != box.shape(1))
+        static_cast<std::size_t>(module_.get_number_of_parameters()) != box.shape(1))
       throw std::invalid_argument(
           "The given box has not the same number of coordinates than parameters in the stored module");
     auto ksView = Numpy_span(ks);
@@ -481,7 +481,7 @@ class Module_interface {
                       bool normalize,
                       int n_jobs) {
     if (module_.get_number_of_parameters() != get_null_value<int>() &&
-        module_.get_number_of_parameters() != box.shape(1) && box.shape(1) != 0)
+        static_cast<std::size_t>(module_.get_number_of_parameters()) != box.shape(1) && box.shape(1) != 0)
       throw std::invalid_argument(
           "The given box is neither trivial nor has not the same number of coordinates than parameters in the stored "
           "module");
@@ -532,7 +532,7 @@ class Module_interface {
 
   auto compute_interleavings_from_box(Tensor2D box) {
     if (module_.get_number_of_parameters() != get_null_value<int>() &&
-        module_.get_number_of_parameters() != box.shape(1))
+        static_cast<std::size_t>(module_.get_number_of_parameters()) != box.shape(1))
       throw std::invalid_argument(
           "The given box has not the same number of coordinates than parameters in the stored module");
 
@@ -737,7 +737,7 @@ class Module_interface {
                                   _wrap_as_numpy_array(std::move(deathCoordinates), 0, grid.size()));
     }
 
-    if (grid.size() != numParam)
+    if (grid.size() != static_cast<std::size_t>(numParam))
       throw std::invalid_argument(
           "Given grid does not have the same number of rows as number of parameters in the module.");
 

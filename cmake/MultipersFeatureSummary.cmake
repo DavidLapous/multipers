@@ -1,0 +1,160 @@
+include_guard(GLOBAL)
+
+set(MULTIPERS_FEATURE_MPFREE ${MULTIPERS_ENABLE_MPFREE})
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/mpfree/include/mpfree/mpfree.h")
+  set(MULTIPERS_FEATURE_MPFREE OFF)
+endif()
+
+set(MULTIPERS_FEATURE_MUPHASA ${MULTIPERS_ENABLE_MUPHASA})
+if(NOT EXISTS "${MULTIPERS_MUPHASA_SOURCE_DIR}/mph/main.cpp")
+  set(MULTIPERS_FEATURE_MUPHASA OFF)
+endif()
+
+set(MULTIPERS_FEATURE_FUNCTION_DELAUNAY ${MULTIPERS_ENABLE_FUNCTION_DELAUNAY})
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h")
+  set(MULTIPERS_FEATURE_FUNCTION_DELAUNAY OFF)
+endif()
+
+set(MULTIPERS_FEATURE_GRAPHCODE ${MULTIPERS_ENABLE_GRAPHCODE})
+if(NOT EXISTS "${MULTIPERS_GRAPHCODE_SOURCE_DIR}/include/graphcode/Graphcode.h")
+  set(MULTIPERS_FEATURE_GRAPHCODE OFF)
+endif()
+
+set(MULTIPERS_FEATURE_DEG_RIPS ${MULTIPERS_ENABLE_DEG_RIPS})
+if(NOT EXISTS "${MULTIPERS_DEG_RIPS_SOURCE_DIR}/include/deg_rips/build_complex.h")
+  set(MULTIPERS_FEATURE_DEG_RIPS OFF)
+endif()
+
+set(MULTIPERS_FEATURE_MULTI_CRITICAL ${MULTIPERS_ENABLE_MULTI_CRITICAL})
+if(NOT MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/multi_critical/include/multi_critical/basic.h")
+  set(MULTIPERS_FEATURE_MULTI_CRITICAL OFF)
+endif()
+
+set(MULTIPERS_FEATURE_2PAC ${MULTIPERS_ENABLE_2PAC})
+if(NOT EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/matrices.hpp" OR NOT EXISTS "${MULTIPERS_2PAC_SOURCE_DIR}/lw.cpp")
+  set(MULTIPERS_FEATURE_2PAC OFF)
+endif()
+
+set(MULTIPERS_FEATURE_AIDA ${MULTIPERS_ENABLE_AIDA})
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/src/aida_decompose.cpp"
+   OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/AIDA/include/aida_interface.hpp"
+   OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include/grlina/graded_matrix.hpp")
+  set(MULTIPERS_FEATURE_AIDA OFF)
+endif()
+
+set(MULTIPERS_FEATURE_RHOMBOID_TILING ${MULTIPERS_ENABLE_RHOMBOID_TILING})
+if(NOT CGAL_FOUND
+   OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/rhomboid.cpp"
+   OR NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/rhomboidtiling_newer_cgal_version/src/utils.cpp")
+  set(MULTIPERS_FEATURE_RHOMBOID_TILING OFF)
+endif()
+
+set(MULTIPERS_FEATURE_HERA ${MULTIPERS_ENABLE_HERA})
+if(NOT EXISTS "${MULTIPERS_HERA_SOURCE_DIR}/include/hera/matching_distance.h")
+  set(MULTIPERS_FEATURE_HERA OFF)
+endif()
+
+set(MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA ${MULTIPERS_ENABLE_PERSISTENCE_ALGEBRA})
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include/grlina/r2graded_matrix.hpp")
+  set(MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA OFF)
+endif()
+
+set(MULTIPERS_FEATURE_SKYSCRAPER ${MULTIPERS_ENABLE_SKYSCRAPER})
+if(NOT MULTIPERS_FEATURE_AIDA
+   OR NOT MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA
+   OR NOT EXISTS "${MULTIPERS_SKYSCRAPER_SOURCE_DIR}/include/skyscraper_core.hpp")
+  set(MULTIPERS_FEATURE_SKYSCRAPER OFF)
+endif()
+
+if(WIN32)
+  set(MULTIPERS_FEATURE_MPFREE OFF)
+  set(MULTIPERS_FEATURE_MUPHASA OFF)
+  set(MULTIPERS_FEATURE_FUNCTION_DELAUNAY OFF)
+  set(MULTIPERS_FEATURE_GRAPHCODE OFF)
+  set(MULTIPERS_FEATURE_DEG_RIPS OFF)
+  set(MULTIPERS_FEATURE_MULTI_CRITICAL OFF)
+  set(MULTIPERS_FEATURE_RHOMBOID_TILING OFF)
+  set(MULTIPERS_FEATURE_2PAC OFF)
+  set(MULTIPERS_FEATURE_AIDA OFF)
+  set(MULTIPERS_FEATURE_HERA OFF)
+  set(MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA OFF)
+  set(MULTIPERS_FEATURE_SKYSCRAPER OFF)
+endif()
+
+set(MULTIPERS_INTERFACE_DISABLE_FLAGS
+  MULTIPERS_DISABLE_MPFREE_INTERFACE
+  MULTIPERS_DISABLE_MUPHASA_INTERFACE
+  MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+  MULTIPERS_DISABLE_GRAPHCODE_INTERFACE
+  MULTIPERS_DISABLE_DEG_RIPS_INTERFACE
+  MULTIPERS_DISABLE_2PAC_INTERFACE
+  MULTIPERS_DISABLE_AIDA_INTERFACE
+  MULTIPERS_DISABLE_MULTI_CRITICAL_INTERFACE
+  MULTIPERS_DISABLE_RHOMBOID_TILING_INTERFACE
+  MULTIPERS_DISABLE_HERA_INTERFACE
+  MULTIPERS_DISABLE_PERSISTENCE_ALGEBRA_INTERFACE
+  MULTIPERS_DISABLE_SKYSCRAPER_INTERFACE
+)
+set(_multipers_feature_names
+  MPFREE
+  MUPHASA
+  FUNCTION_DELAUNAY
+  GRAPHCODE
+  DEG_RIPS
+  2PAC
+  AIDA
+  MULTI_CRITICAL
+  RHOMBOID_TILING
+  HERA
+  PERSISTENCE_ALGEBRA
+  SKYSCRAPER
+)
+list(LENGTH MULTIPERS_INTERFACE_DISABLE_FLAGS _multipers_disable_count)
+list(LENGTH _multipers_feature_names _multipers_feature_count)
+if(NOT _multipers_disable_count EQUAL _multipers_feature_count)
+  message(FATAL_ERROR "Feature compatibility lists are out of sync")
+endif()
+
+set(MULTIPERS_INTERFACE_DISABLE_DEFINITIONS "")
+list(LENGTH _multipers_feature_names _multipers_last_feature)
+math(EXPR _multipers_last_feature "${_multipers_last_feature} - 1")
+foreach(_index RANGE ${_multipers_last_feature})
+  list(GET _multipers_feature_names ${_index} _feature_name)
+  list(GET MULTIPERS_INTERFACE_DISABLE_FLAGS ${_index} _disable_name)
+  set(_feature_value "MULTIPERS_FEATURE_${_feature_name}")
+  if(${_feature_value})
+    set(_disable_value 0)
+    set(_has_value 1)
+  else()
+    set(_disable_value 1)
+    set(_has_value 0)
+  endif()
+  set(${_disable_name} ${_disable_value})
+  set(MULTIPERS_HAS_${_feature_name}_INTERFACE ${_has_value})
+  list(APPEND MULTIPERS_INTERFACE_DISABLE_DEFINITIONS
+    "${_disable_name}=${_disable_value}"
+    "MULTIPERS_HAS_${_feature_name}_INTERFACE=${_has_value}"
+  )
+endforeach()
+
+target_compile_definitions(
+  multipers_project_options
+  INTERFACE
+    MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER=$<BOOL:${MULTIPERS_HAS_FLAT_FILTRATION_CONTAINER}>
+    ${MULTIPERS_INTERFACE_DISABLE_DEFINITIONS}
+)
+
+file(MAKE_DIRECTORY "${MULTIPERS_GENERATED_ROOT}/multipers")
+configure_file(
+  "${CMAKE_SOURCE_DIR}/cmake/multipers_build_config.hpp.in"
+  "${MULTIPERS_GENERATED_ROOT}/multipers/build_config.hpp"
+  @ONLY
+)
+
+foreach(_feature_name IN LISTS _multipers_feature_names)
+  if(MULTIPERS_FEATURE_${_feature_name})
+    message(STATUS "[${_feature_name}] enabled")
+  else()
+    message(STATUS "[${_feature_name}] disabled")
+  endif()
+endforeach()

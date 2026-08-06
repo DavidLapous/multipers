@@ -391,7 +391,7 @@ inline std::vector<Graded_matrix> compute_free_resolution_matrices(
     const multi_critical_interface_input<index_type>& input,
     bool use_logpath,
     bool use_multi_chunk,
-    bool verbose_output) {
+    bool /*verbose_output*/) {
   if (input.filtration_values.empty()) {
     return std::vector<Graded_matrix>();
   }

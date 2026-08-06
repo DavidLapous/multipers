@@ -59,13 +59,13 @@ minimum-version = "build-system.requires"
 cmake.version = ">=3.27"
 ninja.version = ">=1.11"
 # cmake.build-type = "Release"
-build-dir = "build"
+build-dir = "build/{wheel_tag}"
 
 [tool.scikit-build.cmake.define]
 CMAKE_COLOR_DIAGNOSTICS = "ON"
 
 [tool.scikit-build.wheel]
-packages = []
+packages = ["multipers"]
 exclude = [
   "**/*.pyx",
   "**/*.pxd",
@@ -140,10 +140,10 @@ exclude = [
 include = [
   "CMakeLists.txt",
   "cmake/**",
-  "multipers/",
   "multipers/tests",
   "tools/tempita_grid_gen.py",
   "tools/codegen/_registry.py",
+  "tools/codegen/query_config.py",
   "tools/core/**",
   # BEGIN GENERATED SDIST EXT INCLUDE
   # Generated from `ninja -C build -t deps` plus config-only ext checks; update with
@@ -657,3 +657,4 @@ tracker = "https://github.com/DavidLapous/multipers/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "chatty_tests"]
+addopts = ["--import-mode=importlib"]

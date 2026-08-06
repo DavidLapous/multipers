@@ -119,6 +119,13 @@ NB_MODULE(_function_delaunay_interface, m) {
          bool recover_ids,
          bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+        (void)slicer;
+        (void)point_cloud;
+        (void)function_values;
+        (void)degree;
+        (void)multi_chunk;
+        (void)recover_ids;
+        (void)verbose;
         throw std::runtime_error("function_delaunay interface is disabled at compile time.");
 #else
         auto input = mpfd::build_input(point_cloud, function_values, recover_ids);
@@ -144,6 +151,11 @@ NB_MODULE(_function_delaunay_interface, m) {
          bool recover_ids,
          bool verbose) {
 #if MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
+        (void)simplextree;
+        (void)point_cloud;
+        (void)function_values;
+        (void)recover_ids;
+        (void)verbose;
         throw std::runtime_error("function_delaunay interface is disabled at compile time.");
 #else
         if (!mpfd::is_simplextree_object(simplextree)) {
