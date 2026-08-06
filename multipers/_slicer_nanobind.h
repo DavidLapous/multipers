@@ -264,7 +264,9 @@ inline void bind_slicer_dunders(Class& cls) {
                buffer = new char[buffer_size];
                serialize_value_to_char_buffer(self, buffer);
              }
-             return nanobind::make_tuple(self.get_filtration_grid(), _wrap_as_numpy_array(buffer, buffer_size));
+             return nanobind::make_tuple(Slicer::SERIALIZATION_VERSION,
+                                         self.get_filtration_grid(),
+                                         _wrap_as_numpy_array(buffer, buffer_size));
            })
       .def("__setstate__", [](Slicer& self, nanobind::tuple state) {
         new (&self) Slicer(Gudhi::multi_persistence::deserialize_slicer_from_python<Slicer>(state));

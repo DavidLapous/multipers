@@ -71,6 +71,9 @@ class Slicer_interface {
   template <typename U>
   using Tensor2D = nanobind::ndarray<const U, nanobind::ndim<2>>;
 
+  // as this needs to be updated only when the serialization strategy changes, 255 updates should be enough?
+  static constexpr std::uint8_t SERIALIZATION_VERSION = 0;
+
   static constexpr value_type T_inf = MultiFiltrationValue::T_inf;     /**< Infinity. */
   static constexpr value_type T_m_inf = MultiFiltrationValue::T_m_inf; /**< Minus infinity. */
 
@@ -1235,13 +1238,27 @@ class Slicer_interface {
 
 template <class SlicerInterface>
 inline SlicerInterface deserialize_slicer_from_python(nanobind::tuple state) {
+  if (nanobind::len(state) != 3)
+    throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
+  std::uint8_t version;
+  if (!nanobind::try_cast<std::uint8_t>(state[0], version, false))
+    throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
+  if (version < SlicerInterface::SERIALIZATION_VERSION)
+    throw std::invalid_argument(
+        "Given state to deserialize is not compatible with current multipers version: try an older release");
+  if (version > SlicerInterface::SERIALIZATION_VERSION)
+    throw std::invalid_argument(
+        "Given state to deserialize is not compatible with current multipers version: try an newer release");
+
+  nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> data;
+  if (!nanobind::try_cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[2], data, false))
+    throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
   SlicerInterface slicer;
-  auto data = nanobind::cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[1]);
   {
     nanobind::gil_scoped_release release;
     deserialize_value_from_char_buffer(slicer, data.data());
   }
-  slicer.set_filtration_grid(state[0]);
+  slicer.set_filtration_grid(state[1]);
   return slicer;
 }
 
