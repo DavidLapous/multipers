@@ -15,11 +15,11 @@ add_dependencies(
 target_link_libraries(
   multipers_nanobind_runtime_obj
   PRIVATE
+    multipers::gudhi
+    multipers::phat
     multipers::project_options
     multipers::project_warnings
     multipers::python
-    multipers::gudhi
-    multipers::phat
     multipers::backend_mpfree
     multipers::backend_muphasa
     multipers::backend_function_delaunay
@@ -71,10 +71,10 @@ function(multipers_add_extension)
   target_link_libraries(
     ${_target_name}
     PRIVATE
+      multipers::gudhi
       multipers::project_options
       multipers::project_warnings
       multipers::python
-      multipers::gudhi
   )
   if(NOT ARG_PHAT_MODE OR NOT ARG_PHAT_MODE STREQUAL "NONE")
     target_link_libraries(${_target_name} PRIVATE multipers::phat)

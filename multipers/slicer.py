@@ -213,7 +213,7 @@ def _current_bc(
 ):
     bcs = tuple(np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode())
     if not keep_inf:
-        inf_value = type(self)._inf_value()
+        inf_value = type(self)._inf_value
         bcs = tuple(
             np.asarray(
                 [a for a in stuff if a[0] < inf_value],
@@ -247,7 +247,7 @@ def _barcode_coordinates_to_values(
     self, barcode, line_values, line_coordinates, api, keep_inf
 ):
     coord_values = api.set_at(line_values * 0, line_coordinates, line_values)
-    inf_coord = type(self)._inf_value()
+    inf_coord = type(self)._inf_value
     out = []
     for dim_barcode in barcode:
         coords = np.asarray(dim_barcode, dtype=np.int64)
@@ -470,35 +470,35 @@ def _looks_like_serialized_state(state) -> bool:
     return arr.ndim == 1 and arr.dtype == np.uint8
 
 
-def _setstate(self, dump):
-    explicit_is_minres = None
-    pres_degree = -1
-    if isinstance(dump, tuple) and len(dump) == 6 and _looks_like_serialized_state(dump[0]):
-        serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres, pres_degree = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
-        serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 4:
-        serialized, filtration_grid, generator_basis, minpres_degree = dump
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    elif isinstance(dump, tuple) and len(dump) == 3:
-        serialized, filtration_grid, minpres_degree = dump
-        generator_basis = None
-        serialized_is_minres = bool(self._deserialize_state(serialized))
-    else:
-        generator_basis = None
-        boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
-        self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
-        serialized_is_minres = False
-    if explicit_is_minres is not None:
-        serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
-    if pres_degree < 0 and minpres_degree >= 0:
-        pres_degree = minpres_degree
-    self._mark_pres(pres_degree)
-    self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
-    self.filtration_grid = filtration_grid
-    self._generator_basis = generator_basis
+# def _setstate(self, dump):
+#     explicit_is_minres = None
+#     pres_degree = -1
+#     if isinstance(dump, tuple) and len(dump) == 6 and _looks_like_serialized_state(dump[0]):
+#         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres, pres_degree = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 5 and _looks_like_serialized_state(dump[0]):
+#         serialized, filtration_grid, generator_basis, minpres_degree, explicit_is_minres = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 4:
+#         serialized, filtration_grid, generator_basis, minpres_degree = dump
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     elif isinstance(dump, tuple) and len(dump) == 3:
+#         serialized, filtration_grid, minpres_degree = dump
+#         generator_basis = None
+#         serialized_is_minres = bool(self._deserialize_state(serialized))
+#     else:
+#         generator_basis = None
+#         boundaries, dimensions, filtrations, filtration_grid, minpres_degree = dump
+#         self._copy_from_any(type(self)(boundaries, dimensions, filtrations))
+#         serialized_is_minres = False
+#     if explicit_is_minres is not None:
+#         serialized_is_minres = serialized_is_minres or bool(explicit_is_minres)
+#     if pres_degree < 0 and minpres_degree >= 0:
+#         pres_degree = minpres_degree
+#     self._mark_pres(pres_degree)
+#     self._mark_minpres(minpres_degree, is_minres=serialized_is_minres)
+#     self.filtration_grid = filtration_grid
+#     self._generator_basis = generator_basis
 
 
 def _bc_to_full(bcs, basepoint, direction=None):
@@ -683,10 +683,38 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
         )
         new_filtrations = evaluate_in_grid(filtrations, grid)
 
+    # is len(grid) == 0 even possible here? I had the impression that evaluate_in_grid just assumes len(grid) > 0
+    # and will throw an out-of-bound exception if not (i.e. this part is never reached in that case)
     real_dtype = np.asarray(grid[0]).dtype.type if len(grid) else self.dtype
     if not np.dtype(real_dtype) in {np.dtype(dtype) for dtype in available_dtype}:
-        float_dtypes = [np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)]
-        real_dtype = float_dtypes[0] if float_dtypes else self.dtype
+        if np.issubdtype(real_dtype, np.floating):
+            float_dtypes = [
+                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)
+            ]
+            if float_dtypes:
+                real_dtype = float_dtypes[0]
+            else:
+                warn(
+                    "Grid has floating point dtype, but no floating point dtype is available for this build."
+                    " Casting into integer type instead.",
+                    UserWarning,
+                )
+                real_dtype = self.dtype
+                new_filtrations = np.asarray(new_filtrations, dtype=real_type)
+        else:
+            int_dtypes = [
+                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.integer)
+            ]
+            if int_dtypes:
+                real_dtype = int_dtypes[0]
+            else:
+                warn(
+                    "Grid has integer dtype, but no integer dtype is available for this build."
+                    " Casting into floating point type instead.",
+                    UserWarning,
+                )
+                real_dtype = self.dtype
+                new_filtrations = np.asarray(new_filtrations, dtype=real_type)
 
     new_slicer = get_matrix_slicer(
         self.is_vine,
@@ -779,7 +807,7 @@ from multipers._slicer_algorithms import _hilbert_signed_measure, _rank_from_sli
 def _install_python_api():
     for cls in available_slicers:
         cls.__repr__ = _repr
-        cls.__setstate__ = _setstate
+        # cls.__setstate__ = _setstate
         cls.astype = _astype
         cls.get_filtrations = _get_filtrations
         cls.compute_persistence = _compute_persistence

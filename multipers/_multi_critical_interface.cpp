@@ -381,9 +381,9 @@ nb::object output_to_slicer(int target_template_id,
   auto complex = multipers::build_contiguous_f64_slicer_from_output(output.filtration_values, output.boundaries, dims);
   nb::object canonical_out = nb::borrow<nb::object>(nb::type<CanonicalWrapper>())();
   auto& canonical_wrapper = nb::cast<CanonicalWrapper&>(canonical_out);
-  multipers::build_slicer_from_complex(canonical_wrapper.truc, complex);
+  multipers::build_slicer_from_complex(canonical_wrapper.get_slicer(), complex);
   if (mark_minpres) {
-    multipers::nanobind_helpers::mark_slicer_minpres(canonical_wrapper, degree);
+    canonical_wrapper.set_min_pres_degree(degree);
   }
   return multipers::nanobind_helpers::astype_slicer_to_template_id(canonical_out, target_template_id);
 }
@@ -449,7 +449,7 @@ NB_MODULE(_multi_critical_interface, m) {
           {
             nb::gil_scoped_release release;
             auto input =
-                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.get_slicer());
             out = multipers::multi_critical_resolution_interface<int>(input, use_logpath, true, verbose);
           }
           return mpmc::output_to_slicer(target_template_id, out, false, -1);
@@ -459,7 +459,7 @@ NB_MODULE(_multi_critical_interface, m) {
           {
             nb::gil_scoped_release release;
             auto input =
-                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+                multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.get_slicer());
             outs = multipers::multi_critical_minpres_all_interface<int>(input, use_logpath, true, verbose, swedish);
           }
           return nb::object(mpmc::tuple_from_size(outs.size(), [&](size_t i) -> nb::object {
@@ -471,7 +471,7 @@ NB_MODULE(_multi_critical_interface, m) {
         {
           nb::gil_scoped_release release;
           auto input =
-              multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.truc);
+              multipers::multi_critical_detail::multi_critical_input_from_kcontiguous_slicer(input_wrapper.get_slicer());
           out =
               multipers::multi_critical_minpres_interface<int>(input, degree + 1, use_logpath, true, verbose, swedish);
         }

@@ -3,17 +3,19 @@
 #include <nanobind/nanobind.h>
 
 #include <optional>
-#include <type_traits>
 #include <utility>
 
-#include "Persistence_slices_interface.h"
-#include "Simplex_tree_multi_interface.h"
 #include "nanobind_wrapper_types.hpp"
 #include "nanobind_object_utils.hpp"
+#include "../gudhi/Slicer_interface.h"
 
 namespace nb = nanobind;
 
 namespace multipers::nanobind_helpers {
+
+template <typename Slicer>
+using PySlicer =
+    Gudhi::multi_persistence::Slicer_interface<typename Slicer::Filtration_value, typename Slicer::Persistence>;
 
 template <typename... Types>
 struct type_list {};
@@ -80,7 +82,7 @@ inline bool is_known_simplextree_template_id(int template_id) {
 template <typename Func>
 decltype(auto) visit_slicer_wrapper(const nb::handle& input, Func&& func) {
   return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    auto& wrapper = nb::cast<typename Desc::wrapper&>(input);
+    auto& wrapper = nb::cast<typename Desc::interface&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -88,7 +90,7 @@ decltype(auto) visit_slicer_wrapper(const nb::handle& input, Func&& func) {
 template <typename Func>
 decltype(auto) visit_const_slicer_wrapper(const nb::handle& input, Func&& func) {
   return dispatch_slicer_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    const auto& wrapper = nb::cast<const typename Desc::wrapper&>(input);
+    const auto& wrapper = nb::cast<const typename Desc::interface&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -156,7 +158,7 @@ bool has_slicer_filtration_container(type_list<Ds...>, std::string filtration_co
 }
 
 inline int related_slicer_template_id(const nb::handle& source, bool is_kcritical, const std::string& filtration_container) {
-  return visit_const_slicer_wrapper(source, [&]<typename Desc>(const typename Desc::wrapper&) -> int {
+  return visit_const_slicer_wrapper(source, [&]<typename Desc>(const typename Desc::interface&) -> int {
     return select_slicer_template_id(SlicerDescriptorList{},
                                      Desc::is_vine,
                                      is_kcritical,
@@ -173,7 +175,7 @@ inline bool is_slicer_object(const nb::handle& input) {
     return false;
   }
   return dispatch_slicer_by_template_id(
-      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<typename Desc::wrapper>(input); });
+      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<typename Desc::interface>(input); });
 }
 
 inline bool is_simplextree_object(const nb::handle& input) {

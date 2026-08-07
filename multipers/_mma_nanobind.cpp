@@ -103,9 +103,9 @@ void bind_float_module_methods(Class& cls) {
              "directions"_a = nb::none(),
              "degree"_a = -1,
              "keep_inf"_a = true)
-        // .def("evaluate_in_grid", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::evaluate_in_grid))
-        .def("evaluate_in_grid", nb::overload_cast<const std::vector<NDArray1>&>(&Module::evaluate_in_grid))
         .def("evaluate_in_grid", nb::overload_cast<NDArray2>(&Module::evaluate_in_grid))
+        .def("evaluate_in_grid", nb::overload_cast<const std::vector<NDArray1>&>(&Module::evaluate_in_grid))
+        // .def("evaluate_in_grid", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::evaluate_in_grid))
         .def("_compute_landscapes_box",
              &Module::template compute_landscapes_from_box<std::int32_t>,
              "degree"_a,
@@ -150,8 +150,8 @@ void bind_float_module_methods(Class& cls) {
              "p"_a,
              "normalize"_a = false,
              "n_jobs"_a = 0)
-        // .def("distance_to", &Module::compute_distance_to_iterable, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
         .def("distance_to", &Module::compute_distance_to_tensor, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
+        // .def("distance_to", &Module::compute_distance_to_iterable, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
         .def("get_interleavings", &Module::compute_interleavings)
         .def("get_interleavings", &Module::compute_interleavings_from_box);
   }

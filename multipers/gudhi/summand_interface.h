@@ -33,7 +33,7 @@ namespace multi_persistence {
  * @private
  */
 template <typename T, class Corners>
-auto compute_flat_corners(const Corners& corners) {
+inline auto compute_flat_corners(const Corners& corners) {
   std::vector<T> res(corners.num_generators() * corners.num_parameters());
   {
     nanobind::gil_scoped_release release;
@@ -51,7 +51,7 @@ auto compute_flat_corners(const Corners& corners) {
  * @private
  */
 template <typename T>
-Summand<T> deserialize_summand_from_python(
+inline Summand<T> deserialize_summand_from_python(
     const nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>& state) {
   Summand<T> sum;
   {

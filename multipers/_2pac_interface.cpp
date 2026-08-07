@@ -47,7 +47,7 @@ nb::object minimal_presentation_for_target(nb::object target,
       backend_name,
       [&] {
         return multipers::twopac_minpres_contiguous_interface(
-            input_wrapper.truc,
+            input_wrapper.get_slicer(),
             degree,
             full_resolution,
             use_chunk,
@@ -57,7 +57,7 @@ nb::object minimal_presentation_for_target(nb::object target,
       },
       [&] {
         return multipers::twopac_minpres_with_generators_contiguous_interface(
-            input_wrapper.truc,
+            input_wrapper.get_slicer(),
             degree,
             full_resolution,
             use_chunk,

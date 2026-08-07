@@ -2,13 +2,11 @@
 
 #include <Persistence_slices_interface.h>
 #include <filtrations_extern_templates.h>
-#include <slicer_conversion_core.hpp>
 
-#include <slicer_instantiations.inc>
-#include <slicer_conversion_instantiations.inc>
+#include <slicer_instantiations2.inc>
 
 namespace multipers::core {
 
-void slicer_core_anchor() {}
+void slicer_core2_anchor() {}
 
 }  // namespace multipers::core
