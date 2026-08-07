@@ -205,14 +205,6 @@ inline void bind_slicer_constructors(Class& cls) {
           "is_reversed"_a = false);
 
   // from containers
-  // allowing all combinations of tensor/sequence and dtype multiplies by more than 5 the compile time...
-  // so generator_maps will automatically convert to std::vector<std::vector<Index>> and as a copy is made
-  // anyway, it can directly be copied into the Index type
-  // generator_dimensions is restricted to tensor types, but is allowed every dtype. But tensors of dtypes
-  // which are not uint32, int32, uint64 or int64 will be copied
-  // filtration_values is given the most freedom. The only real restriction is that the dtype has to be
-  // uint32, int32, uint64 or int64 if the Slicer dtype is integer and float or double if the Slicer dtype
-  // is floating point.
   cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                          nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
                          nanobind::iterable>(),
@@ -286,8 +278,8 @@ inline void bind_slicer_properties(Class& cls) {
       .def_prop_rw(
           "_generator_basis",
           &Slicer::get_generator_basis,
-          [](Slicer& self, nanobind::object value) {
-            if (value.is_none() || nanobind::isinstance<nanobind::dict>(value)) {
+          [](Slicer& self, nanobind::object value) -> void {
+            if (nanobind::isinstance<nanobind::dict>(value)) {
               self.set_generator_basis(nanobind::cast<nanobind::dict>(value));
               return;
             }

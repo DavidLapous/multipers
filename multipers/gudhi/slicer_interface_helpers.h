@@ -72,9 +72,9 @@ inline Array_dtype _get_dtype(nanobind::handle obj) {
 
   // recursion on first element
   if (nanobind::isinstance<nanobind::iterable>(obj)) {
-    auto it = nanobind::cast<nanobind::iterable>(obj);
-    auto begin = it.begin();
-    if (begin != it.end()) return _get_dtype(*begin);
+    if (!nanobind::hasattr(obj, "__getitem__")) throw nanobind::type_error("Container has to support subscripting.");
+    if (!nanobind::hasattr(obj, "__len__")) throw nanobind::type_error("Container has to support __len__.");
+    if (nanobind::len(obj) != 0) return _get_dtype(obj[0]);
     return Array_dtype::EMPTY;
   }
 
@@ -339,7 +339,7 @@ inline nanobind::tuple _get_compact_filtration_data(
   }
 
   return nanobind::make_tuple(_wrap_as_numpy_array(std::move(startIndices), startIndices.size()),
-                              _wrap_as_numpy_array(std::move(values), startIndices.back()));
+                              _wrap_as_numpy_array(std::move(values), values.size()));
 }
 
 template <typename T, typename U>

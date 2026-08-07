@@ -1130,14 +1130,23 @@ class Slicer_interface {
       if (barcodeIndices.has_value()) {
         Numpy_2d_span view(*barcodeIndices);
         std::vector<std::int64_t> sizeByDim(cycleIdx.size(), 0);
-        for (std::int64_t barDim : view) ++sizeByDim[barDim];
+        for (Index i = 0; i < view.size(); ++i) {
+          auto bar = view[i];
+          if (bar.size() != 2) throw std::invalid_argument("`barcode_indices` has to be of shape (*, 2).");
+          auto barDim = bar[0];
+          auto barIdx = bar[1];
+          if (barDim < 0 || barDim >= sizeByDim.size())
+            throw std::invalid_argument("Given dimension in `idx` is not valid or out of bound.");
+          if (barIdx < 0 || barIdx >= cycleIdx[barDim].size())
+            throw std::invalid_argument("Given bar index in `idx` is not valid or out of bound.");
+          ++sizeByDim[barDim];
+        }
         for (std::size_t dim = 0; dim < cycleIdx.size(); ++dim) {
           out[dim].resize(sizeByDim[dim]);
           sizeByDim[dim] = 0;
         }
         for (Index i = 0; i < view.size(); ++i) {
           auto barIdx = view[i];
-          if (barIdx.size() != 2) throw std::invalid_argument("`barcode_indices` has to be of shape (*, 2).");
           blocks.push_back({barIdx[0], barIdx[1], sizeByDim[barIdx[0]]});
           ++sizeByDim[barIdx[0]];
         }
