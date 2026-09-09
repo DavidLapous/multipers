@@ -32,8 +32,8 @@ inline multipers::packed_morphism_columns packed_columns(
 
 void require_grid_squeezed_integer_slicer(const nb::object& slicer) {
   multipers::nanobind_helpers::visit_const_slicer_wrapper(
-      slicer, []<typename Desc>(const typename Desc::wrapper& wrapper) {
-        if (!multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.filtration_grid)) {
+      slicer, []<typename Desc>(const typename Desc::interface& wrapper) {
+        if (!multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.get_filtration_grid())) {
           throw std::invalid_argument("Muphasa backend expects a grid-squeezed slicer.");
         }
         if constexpr (std::is_floating_point_v<typename Desc::value_type>) {
@@ -51,8 +51,8 @@ nb::object minimal_presentation_for_target(nb::object target, int degree, bool f
     nb::gil_scoped_release release;
     try {
       auto complex =
-          multipers::muphasa_minpres_contiguous_interface(input_wrapper.truc, degree, full_resolution, verbose);
-      multipers::build_slicer_from_complex(out_wrapper.truc, complex);
+          multipers::muphasa_minpres_contiguous_interface(input_wrapper.get_slicer(), degree, full_resolution, verbose);
+      multipers::build_slicer_from_complex(out_wrapper.get_slicer(), complex);
     } catch (const std::exception& exc) {
       error = exc.what();
     } catch (...) {
@@ -76,8 +76,8 @@ nb::object algebra_operation_for_targets(CanonicalWrapper& source_wrapper,
   {
     nb::gil_scoped_release release;
     try {
-      auto source_input = multipers::muphasa_detail::convert_contiguous_slicer_to_input<int>(source_wrapper.truc);
-      auto target_input = multipers::muphasa_detail::convert_contiguous_slicer_to_input<int>(target_wrapper.truc);
+      auto source_input = multipers::muphasa_detail::convert_contiguous_slicer_to_input<int>(source_wrapper.get_slicer());
+      auto target_input = multipers::muphasa_detail::convert_contiguous_slicer_to_input<int>(target_wrapper.get_slicer());
       if (source_input.num_parameters != target_input.num_parameters) {
         throw std::invalid_argument("Muphasa source/target parameter counts must agree.");
       }
@@ -86,7 +86,7 @@ nb::object algebra_operation_for_targets(CanonicalWrapper& source_wrapper,
       auto converted = multipers::muphasa_detail::convert_raw_to_output<int>(std::move(raw), degree);
       auto complex = multipers::build_contiguous_i32_slicer_from_output<int>(
           converted.filtration_values, converted.boundaries, converted.dimensions);
-      multipers::build_slicer_from_complex(out_wrapper.truc, complex);
+      multipers::build_slicer_from_complex(out_wrapper.get_slicer(), complex);
     } catch (const std::exception& exc) {
       error = exc.what();
     } catch (...) {

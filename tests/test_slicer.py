@@ -116,8 +116,8 @@ def test_make_filtration_non_decreasing_propagates_transitively():
 
 def test_rank_custom():
     B = [[], [0], [0], [0], [0]]
-    F = [[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]]
-    D = [0, 1, 1, 1, 1]
+    F = np.asarray([[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]], dtype=np.uint32)
+    D = np.asarray([0, 1, 1, 1, 1])
     s = mp.Slicer(return_type_only=True, dtype=np.int32)(B, D, F)
     ((pts, w),) = mp.signed_measure(s, invariant="rank", degree=0)
     assert np.array_equal(
@@ -132,8 +132,8 @@ def test_rank_custom():
     )
     assert np.array_equal(w, [-1, 1, -1, 1, 1])
     B = [[]]
-    D = [0]
-    F = [[0, 0]]
+    D = np.asarray([0])
+    F = np.asarray([[0, 0]], dtype=float)
     s = mp.Slicer(return_type_only=True)(B, D, F)
     ((a, b),) = mp.signed_measure(
         s,
@@ -171,7 +171,7 @@ def test_representative_cycles():
     slicer = mp.slicer._ContiguousSlicer_Matrix0_vine_f64(
         truc,
         np.array([max(len(x) - 1, 0) for x in truc]),
-        np.array([list(range(len(truc))), list(range(len(truc)))]).T,
+        np.array([list(range(len(truc))), list(range(len(truc)))], dtype=np.double).T,
     )
     slicer.compute_persistence(one_filtration=list(range(len(truc))))
     cycles = slicer.get_representative_cycles()
@@ -214,16 +214,16 @@ def test_representative_cycles_intersect_points_descends_boundaries():
     )
     slicer.compute_persistence(one_filtration=filtration)
 
-    assert len(slicer.get_representative_cycles(intersect_points=[4])[0]) == 1
-    assert slicer.get_representative_cycles(intersect_points=[100])[0] == []
+    assert len(slicer.get_representative_cycles(intersect_points=np.asarray([4], dtype=np.uint32))[0]) == 1
+    assert slicer.get_representative_cycles(intersect_points=np.asarray([100], dtype=np.uint32))[0] == []
 
     cycles = slicer.get_representative_cycles()[2]
     assert len(cycles) == 1
-    filtered = slicer.get_representative_cycles(intersect_points=[0])[2]
+    filtered = slicer.get_representative_cycles(intersect_points=np.asarray([0], dtype=np.uint32))[2]
     assert len(filtered) == 1
     assert [boundary.tolist() for boundary in filtered[0]] == [boundary.tolist() for boundary in cycles[0]]
-    assert slicer.get_representative_cycles(intersect_points=[4])[2] == []
-    assert slicer.get_representative_cycles(intersect_points=[100])[2] == []
+    assert slicer.get_representative_cycles(intersect_points=np.asarray([4], dtype=np.uint32))[2] == []
+    assert slicer.get_representative_cycles(intersect_points=np.asarray([100], dtype=np.uint32))[2] == []
 
 
 # def test_pruning():
@@ -319,7 +319,7 @@ def test_get_filtrations_view_flag_one_critical():
     copied_alias = s.get_filtrations(copy=True)
     viewed_alias = s.get_filtrations(copy=False)
     assert isinstance(copied_alias, np.ndarray)
-    assert isinstance(viewed_alias, list)
+    assert isinstance(viewed_alias, tuple)
 
 
 def test_get_filtration_single_view_one_critical():

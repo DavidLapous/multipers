@@ -87,7 +87,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
 namespace multipers {
 
 using function_delaunay_simplextree_filtration =
-    Gudhi::multi_filtration::Multi_parameter_filtration<double, false, !false>;
+    tmp_interface::Multi_parameter_filtration<double, false, !false>;
 using function_delaunay_simplextree_interface_output =
     Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<function_delaunay_simplextree_filtration,
                                                                           double>;

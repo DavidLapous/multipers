@@ -4,12 +4,12 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
-#include <cstdint>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "ext_interface/aida_interface.hpp"
+#include "interface_helper_structs.h"
 
 #if !MULTIPERS_DISABLE_AIDA_INTERFACE
 #include "ext_interface/nanobind_registry_runtime.hpp"
@@ -28,15 +28,15 @@ inline nb::object ensure_supported_target(nb::object slicer) {
 }
 
 inline nb::object to_colexical_target(const nb::object& target) {
-  return nb::cast(multipers::nanobind_helpers::colexical_slicer_copy(nb::cast<const CanonicalWrapper&>(target)));
+  return nb::cast<const CanonicalWrapper&>(target).build_colexical_permuted_slicer(false);
 }
 
 multipers::nanobind_helpers::BifiltrationMinpresDegreeBlock build_input_from_slicer(const CanonicalWrapper& wrapper) {
-  const int degree = multipers::nanobind_helpers::slicer_minpres_degree(wrapper);
+  const int degree = wrapper.get_min_pres_degree();
   if (degree < 0) {
     throw std::runtime_error("AIDA takes a minimal presentation as an input.");
   }
-  if (wrapper.truc.get_number_of_parameters() != 2) {
+  if (wrapper.get_number_of_parameters() != 2) {
     throw std::runtime_error("AIDA is only compatible with 2-parameter minimal presentations.");
   }
   return multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(wrapper, degree);
@@ -64,19 +64,14 @@ nb::object summand_to_slicer(nb::object target,
 
   nb::object compact_grid = nb::none();
   if (is_squeezed) {
-    std::vector<std::vector<int64_t>> used_coordinates(2);
-    used_coordinates[0].reserve(filtration_values.size());
-    used_coordinates[1].reserve(filtration_values.size());
-    for (const auto& degree : filtration_values) {
-      used_coordinates[0].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.first, 0));
-      used_coordinates[1].push_back(multipers::nanobind_helpers::squeezed_raw_index_from_value(degree.second, 1));
-    }
-    auto compacted =
-        multipers::nanobind_helpers::compact_squeezed_filtration_grid(filtration_grid, std::move(used_coordinates));
-    compact_grid = compacted.filtration_grid;
+    auto usedCoordinates =
+        Gudhi::multi_persistence::detail::Compacted_squeezed_filtration_grid::collect_used_squeezed_coordinates(
+            filtration_values);
+    Gudhi::multi_persistence::detail::Compacted_squeezed_filtration_grid compact(filtration_grid, usedCoordinates);
+    compact_grid = compact.filtrationGrid;
     for (auto& degree : filtration_values) {
-      degree.first = multipers::nanobind_helpers::remap_squeezed_coordinate(degree.first, 0, compacted.remap);
-      degree.second = multipers::nanobind_helpers::remap_squeezed_coordinate(degree.second, 1, compacted.remap);
+      degree.first = compact.remap_squeezed_coordinate(degree.first, 0);
+      degree.second = compact.remap_squeezed_coordinate(degree.second, 1);
     }
   }
 
@@ -85,9 +80,9 @@ nb::object summand_to_slicer(nb::object target,
   nb::object out =
       multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
   auto& out_wrapper = nb::cast<CanonicalWrapper&>(out);
-  multipers::nanobind_helpers::mark_slicer_minpres(out_wrapper, degree);
+  out_wrapper.set_min_pres_degree(degree);
   if (is_squeezed) {
-    out_wrapper.filtration_grid = compact_grid;
+    out_wrapper.set_filtration_grid(compact_grid);
   }
   return out;
 }

@@ -20,7 +20,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", choices=("cmake",), required=True)
     args = parser.parse_args()
-    has_flat = "Degree_rips_bifiltration" in getattr(load_options(), "FILTRATION_CONTAINERS", ())
+    has_flat = "Degree_rips" in getattr(load_options(), "FILTRATION_CONTAINERS", ())
     print("1" if has_flat else "0")
 
 

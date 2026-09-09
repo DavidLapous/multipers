@@ -286,17 +286,17 @@ def _render_instantiations_include_slicer(type_names: list[str]) -> str:
         if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(
+        f"template<> std::vector<{type_name}::Cycle> {type_name}::get_n_most_persistent_cycles({type_name}::Dimension, {type_name}::Index, bool) = delete;"
+        for type_name in type_names
+        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
+    )
+    lines.extend(
         f"template<> std::vector<std::vector<{type_name}::Cycle>> {type_name}::get_representative_cycles(bool) = delete;"
         for type_name in type_names
         if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
     lines.extend(
         f"template<> std::vector<{type_name}::Cycle> {type_name}::get_representative_cycles_in_dim({type_name}::Dimension, bool) = delete;"
-        for type_name in type_names
-        if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
-    )
-    lines.extend(
-        f"template<> std::vector<{type_name}::Cycle> {type_name}::get_n_most_persistent_cycles({type_name}::Dimension, {type_name}::Index, bool) = delete;"
         for type_name in type_names
         if "GudhiCohomology" in type_name or "BackendsEnum::Graph" in type_name
     )
@@ -378,7 +378,7 @@ def _render_slicer_nanobind_registry(
             [
                 f"struct SlicerDesc_{index} {{",
                 f"  using concrete = {slicer['TRUC_TYPE']};",
-                "  using wrapper = PySlicer<concrete>;",
+                "  using interface = PySlicer<concrete>;",
                 f"  using value_type = {slicer['C_VALUE_TYPE']};",
                 f"  using coarsened_concrete = {coarsened['TRUC_TYPE']};",
                 "  using coarsened_wrapper = PySlicer<coarsened_concrete>;",
@@ -570,7 +570,18 @@ required_slicer_combination_specs = [
 
 
 def get_cfiltration_type(container, dtype, is_kcritical, co=False):
-    return f"Gudhi::multi_filtration::{container}<{dtype[0]},false,!{str(is_kcritical).lower()}>"
+    # cannot use the aliases of Persistence_slices_interface.h here because templated aliases are
+    # not allowed when doing "template class Some_class<T1, ...>;" declarations
+    if container == "Degree_rips":
+        f_type = "Gudhi::multi_filtration::Degree_bifiltration"
+    elif container == "Flat_container":
+        f_type = "Gudhi::multi_filtration::Flat_array_filtration"
+    elif container == "Nested_container":
+        f_type = "Gudhi::multi_filtration::Nested_array_filtration"
+    else:
+        raise RuntimeError("Unknown cfiltration type")
+
+    return f"Gudhi::multi_filtration::Multi_parameter_filtration_value<{f_type}<{dtype[0]}>,false,!{str(is_kcritical).lower()}>"
 
 
 def get_python_filtration_type(container, dtype, is_kcritical, co=False):
@@ -943,12 +954,6 @@ _write_text_if_changed(
     _render_extern_templates_header(slicer_instantiation_types),
 )
 _write_text_if_changed(
-    OUTPUT_ROOT / "multipers/gudhi/slicer_conversion_extern_templates.h",
-    _render_pairwise_template_header(
-        "SlicerConversion", slicer_instantiation_types, slicer_instantiation_types
-    ),
-)
-_write_text_if_changed(
     OUTPUT_ROOT / "multipers/gudhi/simplextree_conversion_extern_templates.h",
     _render_pairwise_template_header(
         "SimplexTreeConversion",
@@ -964,15 +969,20 @@ _write_text_if_changed(
     OUTPUT_ROOT / "tools/core/simplextree_instantiations.inc",
     _render_instantiations_include_simplextree(simplextree_instantiation_types),
 )
+slicer_instantiation_types1 = [slicer for slicer in slicer_instantiation_types if "Flat_container" in slicer]
+slicer_instantiation_types2 = [slicer for slicer in slicer_instantiation_types if "Nested_container" in slicer]
+slicer_instantiation_types3 = [slicer for slicer in slicer_instantiation_types if "Degree_rips" in slicer]
 _write_text_if_changed(
-    OUTPUT_ROOT / "tools/core/slicer_instantiations.inc",
-    _render_instantiations_include_slicer(slicer_instantiation_types),
+    OUTPUT_ROOT / "tools/core/slicer_instantiations1.inc",
+    _render_instantiations_include_slicer(slicer_instantiation_types1),
 )
 _write_text_if_changed(
-    OUTPUT_ROOT / "tools/core/slicer_conversion_instantiations.inc",
-    _render_pairwise_instantiations_include(
-        "SlicerConversion", slicer_instantiation_types, slicer_instantiation_types
-    ),
+    OUTPUT_ROOT / "tools/core/slicer_instantiations2.inc",
+    _render_instantiations_include_slicer(slicer_instantiation_types2),
+)
+_write_text_if_changed(
+    OUTPUT_ROOT / "tools/core/slicer_instantiations3.inc",
+    _render_instantiations_include_slicer(slicer_instantiation_types3),
 )
 _write_text_if_changed(
     OUTPUT_ROOT / "tools/core/simplextree_conversion_instantiations.inc",
@@ -1000,6 +1010,5 @@ print(
     f"filtration_instantiations={len(filtration_instantiation_types)} "
     f"slicer_instantiations={len(slicer_instantiation_types)} "
     f"simplextree_instantiations={len(simplextree_instantiation_types)} "
-    f"slicer_conversion_instantiations={slicer_conversion_instantiation_count} "
     f"simplextree_conversion_instantiations={simplextree_conversion_instantiation_count}"
 )

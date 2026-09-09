@@ -23,11 +23,11 @@ using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_s
 inline multipers::graphcode_interface_input input_from_slicer(nb::object slicer) {
   nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
   const auto& wrapper = nb::cast<const CanonicalWrapper&>(target);
-  const int degree = multipers::nanobind_helpers::slicer_minpres_degree(wrapper);
+  const int degree = wrapper.get_min_pres_degree();
   if (degree < 0) {
     throw std::runtime_error("graphcode expects a minimal-presentation slicer.");
   }
-  if (wrapper.truc.get_number_of_parameters() != 2) {
+  if (wrapper.get_slicer().get_number_of_parameters() != 2) {
     throw std::runtime_error("graphcode expects a 2-parameter minimal-presentation slicer.");
   }
 

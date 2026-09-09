@@ -180,12 +180,12 @@ template <bool IsKcritical, typename Func>
 decltype(auto) with_native_f64_slicer(const nb::handle& input, Func&& func) {
   using NativeSlicer = native_f64_slicer_t<IsKcritical>;
   return multipers::nanobind_helpers::visit_const_slicer_wrapper(
-      input, [&]<typename Desc>(const typename Desc::wrapper& wrapper) -> decltype(auto) {
+      input, [&]<typename Desc>(const typename Desc::interface& wrapper) -> decltype(auto) {
         // Monte Carlo fast path always runs on non-vine float64 matrix slicers.
         if constexpr (std::is_same_v<typename Desc::concrete, NativeSlicer>) {
-          return std::forward<Func>(func)(wrapper.truc);
+          return std::forward<Func>(func)(wrapper.get_slicer());
         } else {
-          NativeSlicer copy(wrapper.truc);
+          NativeSlicer copy(wrapper.get_slicer());
           return std::forward<Func>(func)(copy);
         }
       });
@@ -198,8 +198,8 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
     throw std::runtime_error("Input has to be a slicer.");
   }
   return multipers::nanobind_helpers::visit_const_slicer_wrapper(
-      slicer, [&]<typename Desc>(const typename Desc::wrapper& wrapper) {
-        if (wrapper.truc.get_number_of_parameters() != 2) {
+      slicer, [&]<typename Desc>(const typename Desc::interface& wrapper) {
+        if (wrapper.get_slicer().get_number_of_parameters() != 2) {
           throw std::runtime_error("Matching distance only supports 2-parameter slicers.");
         }
         if constexpr (Desc::is_kcritical) {
@@ -207,7 +207,7 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
         }
 
         auto block = multipers::nanobind_helpers::extract_bifiltration_minpres_degree_block(
-            wrapper, multipers::nanobind_helpers::slicer_minpres_degree(wrapper));
+            wrapper, wrapper.get_min_pres_degree());
 
         multipers::hera_module_presentation_input<int> out;
         out.generator_grades = std::move(block.row_grades);
@@ -225,11 +225,11 @@ multipers::hera_module_presentation_input<int> module_input_from_slicer(nb::obje
 
 inline monte_carlo_slicer_metadata metadata_from_slicer(nb::handle input) {
   return multipers::nanobind_helpers::visit_const_slicer_wrapper(
-      input, [&]<typename Desc>(const typename Desc::wrapper& wrapper) {
+      input, [&]<typename Desc>(const typename Desc::interface& wrapper) {
         monte_carlo_slicer_metadata out;
         out.is_kcritical = Desc::is_kcritical;
-        out.is_squeezed = multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.filtration_grid);
-        out.num_parameters = static_cast<std::size_t>(wrapper.truc.get_number_of_parameters());
+        out.is_squeezed = multipers::nanobind_helpers::has_nonempty_filtration_grid(wrapper.get_filtration_grid());
+        out.num_parameters = static_cast<std::size_t>(wrapper.get_number_of_parameters());
         return out;
       });
 }

@@ -15,7 +15,7 @@ namespace multipers {
 
 template <typename value_type>
 using contiguous_filtration = multipers::tmp_interface::filtration_options<
-    multipers::tmp_interface::Filtration_containers_strs::Multi_parameter_filtration,
+    multipers::tmp_interface::Filtration_containers_strs::Flat_container,
     false,
     value_type>;
 
@@ -24,7 +24,7 @@ using contiguous_i32_filtration = contiguous_filtration<std::int32_t>;
 using contiguous_f64_filtration = contiguous_filtration<double>;
 
 using kcontiguous_f64_filtration = multipers::tmp_interface::
-    filtration_options<multipers::tmp_interface::Filtration_containers_strs::Multi_parameter_filtration, true, double>;
+    filtration_options<multipers::tmp_interface::Filtration_containers_strs::Flat_container, true, double>;
 
 template <typename value_type>
 using contiguous_slicer = multipers::tmp_interface::TrucPythonInterface<
@@ -33,7 +33,7 @@ using contiguous_slicer = multipers::tmp_interface::TrucPythonInterface<
     false,
     value_type,
     multipers::tmp_interface::Available_columns::UNORDERED_SET,
-    multipers::tmp_interface::Filtration_containers_strs::Multi_parameter_filtration>;
+    multipers::tmp_interface::Filtration_containers_strs::Flat_container>;
 
 using contiguous_i32_slicer = contiguous_slicer<std::int32_t>;
 
@@ -45,7 +45,7 @@ using kcontiguous_f64_slicer = multipers::tmp_interface::TrucPythonInterface<
     true,
     double,
     multipers::tmp_interface::Available_columns::UNORDERED_SET,
-    multipers::tmp_interface::Filtration_containers_strs::Multi_parameter_filtration>;
+    multipers::tmp_interface::Filtration_containers_strs::Flat_container>;
 
 template <typename value_type>
 using contiguous_complex =

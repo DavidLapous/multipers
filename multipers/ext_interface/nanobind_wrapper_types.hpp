@@ -2,25 +2,10 @@
 
 #include <nanobind/nanobind.h>
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace multipers::nanobind_helpers {
-
-using squeezed_coordinate_remap = std::vector<std::unordered_map<int64_t, int64_t>>;
-
-struct CompactedSqueezedFiltrationGrid {
-  nanobind::object filtration_grid;
-  std::vector<std::vector<int64_t>> coordinates;
-  squeezed_coordinate_remap remap;
-
-  CompactedSqueezedFiltrationGrid() : filtration_grid(nanobind::none()) {}
-};
 
 inline bool has_nonempty_filtration_grid(const nanobind::handle& grid) {
   if (!grid.is_valid() || grid.is_none() || !nanobind::hasattr(grid, "__len__") || nanobind::len(grid) == 0) {
@@ -31,86 +16,6 @@ inline bool has_nonempty_filtration_grid(const nanobind::handle& grid) {
     return nanobind::hasattr(row, "__len__") && nanobind::len(row) > 0;
   }
   return false;
-}
-
-inline int64_t squeezed_raw_index_from_value(double value, size_t parameter) {
-  if (!std::isfinite(value)) {
-    throw std::runtime_error("Expected finite squeezed filtration coordinates for parameter " +
-                             std::to_string(parameter) + ".");
-  }
-  const double rounded = std::round(value);
-  if (std::fabs(value - rounded) > 1e-9) {
-    throw std::runtime_error("Expected integer squeezed filtration coordinates for parameter " +
-                             std::to_string(parameter) + ".");
-  }
-  return static_cast<int64_t>(rounded);
-}
-
-inline int64_t normalized_squeezed_index(int64_t raw_index, int64_t row_size, size_t parameter) {
-  int64_t normalized = raw_index;
-  if (normalized < 0) {
-    normalized += row_size;
-  }
-  if (normalized < 0 || normalized >= row_size) {
-    throw std::runtime_error("Squeezed filtration coordinate is outside the filtration grid for parameter " +
-                             std::to_string(parameter) + ".");
-  }
-  return normalized;
-}
-
-inline int64_t normalized_squeezed_index_or_sentinel(int64_t raw_index, int64_t row_size, size_t parameter) {
-  int64_t normalized = raw_index;
-  if (normalized < 0) {
-    normalized += row_size;
-  }
-  if (normalized == row_size) {
-    return normalized;
-  }
-  return normalized_squeezed_index(raw_index, row_size, parameter);
-}
-
-inline CompactedSqueezedFiltrationGrid compact_squeezed_filtration_grid(
-    const nanobind::object& filtration_grid,
-    std::vector<std::vector<int64_t>> used_coordinates) {
-  const size_t num_parameters = used_coordinates.size();
-  auto compact_grid = nanobind::steal<nanobind::tuple>(PyTuple_New(static_cast<Py_ssize_t>(num_parameters)));
-  if (!compact_grid.is_valid()) {
-    throw nanobind::python_error();
-  }
-
-  CompactedSqueezedFiltrationGrid out;
-  out.coordinates = std::move(used_coordinates);
-  out.remap.resize(num_parameters);
-
-  for (size_t parameter = 0; parameter < num_parameters; ++parameter) {
-    auto& current_coordinates = out.coordinates[parameter];
-    std::sort(current_coordinates.begin(), current_coordinates.end());
-    current_coordinates.erase(std::unique(current_coordinates.begin(), current_coordinates.end()),
-                              current_coordinates.end());
-
-    nanobind::object row = filtration_grid[parameter];
-    const int64_t row_size = static_cast<int64_t>(nanobind::len(row));
-    nanobind::list selection;
-    auto& remap = out.remap[parameter];
-    for (size_t i = 0; i < current_coordinates.size(); ++i) {
-      const int64_t raw_index = current_coordinates[i];
-      const int64_t normalized = normalized_squeezed_index_or_sentinel(raw_index, row_size, parameter);
-      remap.emplace(raw_index, static_cast<int64_t>(i));
-      if (normalized != row_size) {
-        selection.append(nanobind::int_(raw_index));
-      }
-    }
-
-    nanobind::object compact_row = row.attr("__getitem__")(selection);
-    PyTuple_SET_ITEM(compact_grid.ptr(), static_cast<Py_ssize_t>(parameter), compact_row.release().ptr());
-  }
-
-  out.filtration_grid = compact_grid;
-  return out;
-}
-
-inline double remap_squeezed_coordinate(double value, size_t parameter, const squeezed_coordinate_remap& remap) {
-  return static_cast<double>(remap.at(parameter).at(squeezed_raw_index_from_value(value, parameter)));
 }
 
 template <typename Value>
@@ -127,76 +32,6 @@ inline std::vector<std::vector<Value>> cast_squeezed_coordinate_grid(
   }
   return out;
 }
-
-struct PySlicerPythonState {
-  nanobind::object filtration_grid;
-  nanobind::object generator_basis;
-  std::vector<double> current_line_basepoint;
-  std::vector<double> current_line_direction;
-  int pres_degree;
-  bool is_minpres;
-  bool is_minres;
-  bool has_current_line;
-
-  PySlicerPythonState()
-      : filtration_grid(nanobind::none()),
-        generator_basis(nanobind::none()),
-        pres_degree(-1),
-        is_minpres(false),
-        is_minres(false),
-        has_current_line(false) {}
-};
-
-template <typename State>
-inline void clear_slicer_current_line(State& state) {
-  state.current_line_basepoint.clear();
-  state.current_line_direction.clear();
-  state.has_current_line = false;
-}
-
-template <typename State>
-inline int slicer_minpres_degree(const State& state) {
-  return state.is_minpres ? state.pres_degree : -1;
-}
-
-template <typename State>
-inline void mark_slicer_minpres(State& state, int degree, bool is_minres = false) {
-  state.is_minpres = degree >= 0;
-  if (state.is_minpres) state.pres_degree = degree;
-  state.is_minres = state.is_minpres && is_minres;
-}
-
-template <typename State>
-inline void mark_slicer_pres(State& state, int degree) {
-  state.pres_degree = degree;
-  state.is_minpres = false;
-  state.is_minres = false;
-}
-
-template <typename TargetState, typename SourceState>
-inline void copy_slicer_python_state(TargetState& target, const SourceState& source) {
-  target.filtration_grid = source.filtration_grid;
-  target.generator_basis = source.generator_basis;
-  target.current_line_basepoint = source.current_line_basepoint;
-  target.current_line_direction = source.current_line_direction;
-  target.pres_degree = source.pres_degree;
-  target.is_minpres = source.is_minpres;
-  target.is_minres = source.is_minres;
-  target.has_current_line = source.has_current_line;
-}
-
-template <typename State>
-inline void reset_slicer_python_state(State& state) {
-  state.filtration_grid = nanobind::none();
-  state.generator_basis = nanobind::none();
-  clear_slicer_current_line(state);
-  mark_slicer_pres(state, -1);
-}
-
-template <typename Slicer>
-struct PySlicer : PySlicerPythonState {
-  Slicer truc;
-};
 
 struct PySimplexTreePythonState {
   nanobind::object filtration_grid;

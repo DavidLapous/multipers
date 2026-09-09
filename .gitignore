@@ -56,3 +56,6 @@ docs/notebooks/**/*.py
 *.png
 *.svg
 *.csv
+
+## misc
+vscode_build/*

@@ -16,8 +16,8 @@ namespace function_rips {
 
 using value_type = typename python_interface::interface_std::Filtration_value;
 // using _multifiltration = multipers::tmp_interface::Filtration_value<value_type>;
-using flat_multifiltration = Gudhi::multi_filtration::Degree_rips_bifiltration<value_type>;
-using _multifiltration = Gudhi::multi_filtration::Degree_rips_bifiltration<value_type>;
+using flat_multifiltration = multipers::tmp_interface::Degree_rips_bifiltration<value_type>;
+using _multifiltration = multipers::tmp_interface::Degree_rips_bifiltration<value_type>;
 using _multi_st = python_interface::Simplex_tree_multi_interface<flat_multifiltration>;
 using flat_multi_st = python_interface::Simplex_tree_multi_interface<flat_multifiltration>;
 using mult_opt = Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<flat_multifiltration>;

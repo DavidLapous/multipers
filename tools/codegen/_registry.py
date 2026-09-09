@@ -34,7 +34,7 @@ BACKEND_REGISTRY = (
 
 # Container ID -> short name used in generated class names
 FILTRATION_CONTAINER_SHORT_NAMES = {
-    "Dynamic_multi_parameter_filtration": "Dynamic",
-    "Degree_rips_bifiltration": "Flat",
-    "Multi_parameter_filtration": "Contiguous",
+    "Nested_container": "Dynamic",
+    "Degree_rips": "Flat",
+    "Flat_container": "Contiguous",
 }

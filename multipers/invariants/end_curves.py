@@ -118,9 +118,16 @@ def _birth_curve_presentation(presentation, inf_indices: np.ndarray):
             filtrations[relations]
         )
 
-    from multipers._slicer_nanobind import build_contiguous_f64_slicer_from_packed_f64
+    from multipers.slicer import get_matrix_slicer
 
-    return build_contiguous_f64_slicer_from_packed_f64(
+    return get_matrix_slicer(
+        is_vineyard=False,
+        is_k_critical=False,
+        dtype=np.double,
+        col="UNORDERED_SET",
+        pers_backend="Matrix",
+        filtration_container="Contiguous",
+    )(
         new_boundary_indptr,
         new_boundary_flat,
         new_dimensions,

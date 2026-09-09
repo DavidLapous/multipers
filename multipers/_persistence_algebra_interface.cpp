@@ -51,7 +51,7 @@ inline nb::list cast_columns(const Matrix& matrix) {
 inline nb::object minimal_presentation_for_target(nb::object target, int degree, bool full_resolution) {
   auto& input_wrapper = nb::cast<CanonicalWrapper&>(target);
   auto complex =
-      multipers::persistence_algebra_minpres_contiguous_interface(input_wrapper.truc, degree, full_resolution);
+      multipers::persistence_algebra_minpres_contiguous_interface(input_wrapper.get_slicer(), degree, full_resolution);
   return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(target, complex);
 }
 
@@ -65,22 +65,22 @@ inline nb::object algebra_operation_for_target(nb::object source,
   auto& target_wrapper = nb::cast<CanonicalWrapper&>(target);
   if (op == "kernel") {
     auto complex = multipers::persistence_algebra_kernel_contiguous_interface(
-        source_wrapper.truc, target_wrapper.truc, columns, degree);
+        source_wrapper.get_slicer(), target_wrapper.get_slicer(), columns, degree);
     return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
   }
   if (op == "image") {
     auto complex = multipers::persistence_algebra_image_contiguous_interface(
-        source_wrapper.truc, target_wrapper.truc, columns, degree);
+        source_wrapper.get_slicer(), target_wrapper.get_slicer(), columns, degree);
     return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
   }
   if (op == "cokernel") {
     auto complex = multipers::persistence_algebra_cokernel_contiguous_interface(
-        source_wrapper.truc, target_wrapper.truc, columns, degree);
+        source_wrapper.get_slicer(), target_wrapper.get_slicer(), columns, degree);
     return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
   }
   if (op == "coimage") {
     auto complex = multipers::persistence_algebra_coimage_contiguous_interface(
-        source_wrapper.truc, target_wrapper.truc, columns, degree);
+        source_wrapper.get_slicer(), target_wrapper.get_slicer(), columns, degree);
     return multipers::nanobind_helpers::build_canonical_contiguous_f64_slicer_object_from_complex(owner, complex);
   }
   throw std::invalid_argument("Unknown Persistence-Algebra operation.");
@@ -111,8 +111,8 @@ NB_MODULE(_persistence_algebra_interface, m) {
 #if MULTIPERS_HAS_PERSISTENCE_ALGEBRA_INTERFACE
         nb::object target = multipers::nanobind_helpers::ensure_canonical_contiguous_f64_slicer_object(slicer);
         auto& input_wrapper = nb::cast<mppai::CanonicalWrapper&>(target);
-        auto first = multipers::persistence_algebra_detail::build_boundary_matrix(input_wrapper.truc, degree);
-        auto second = multipers::persistence_algebra_detail::build_boundary_matrix(input_wrapper.truc, degree + 1);
+        auto first = multipers::persistence_algebra_detail::build_boundary_matrix(input_wrapper.get_slicer(), degree);
+        auto second = multipers::persistence_algebra_detail::build_boundary_matrix(input_wrapper.get_slicer(), degree + 1);
         auto first_sorted = first;
         first_sorted.sort_rows_lexicographically();
         const auto relation_row_permutation = first_sorted.sort_columns_lexicographically_with_output();
