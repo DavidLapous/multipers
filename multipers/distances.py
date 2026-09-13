@@ -2,7 +2,6 @@ import importlib
 import re
 
 import numpy as np
-import ot
 from joblib import Parallel, delayed
 
 import multipers as mp
@@ -101,6 +100,8 @@ def _compute_signed_measure_projections(
         if dtype is not None:
             tensor = api.astype(tensor, dtype)
         return api.to_device(tensor, device)
+
+    import ot
 
     lines = ot.sliced.get_random_projections(
         dimension,
@@ -648,6 +649,8 @@ def sm_distance(
     Multiparameter Persistent Homology Using Signed Barcodes as Measures",
     Advances in Neural Information Processing Systems, 2023.
     """
+    import ot
+
     if api is None:
         api = api_from_tensor(sm1[0])
     x, y = sm2diff(sm1, sm2, threshold=threshold, api=api)
