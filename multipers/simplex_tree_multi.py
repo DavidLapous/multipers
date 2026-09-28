@@ -193,7 +193,10 @@ def _filtration(self, simplex):
 
 
 def _getitem(self, simplex):
-    return _normalize_filtration_value(self, self._get_filtration(simplex), copy=False)
+    s = np.asarray(simplex, dtype=np.intc)
+    if s.ndim != 1:
+        raise ValueError("simplex has to be a 1D array.")
+    return _normalize_filtration_value(self, self._get_filtration(s), copy=False)
 
 
 def _iter(self):
@@ -274,7 +277,7 @@ def _assign_filtration(self, simplex, filtration):
     filtration = np.asarray(filtration, dtype=self.dtype)
     if self.is_kcritical and filtration.ndim == 1:
         filtration = filtration[None, :]
-    self._assign_filtration(np.asarray(simplex, dtype=np.int32), filtration)
+    self._assign_filtration(np.asarray(simplex, dtype=np.intc), filtration)
     return self
 
 

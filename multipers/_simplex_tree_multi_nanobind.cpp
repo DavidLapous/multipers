@@ -227,8 +227,8 @@ Wrapper& normalize_filtrations_inplace(Wrapper& self, nb::object box_obj) {
 //       nb::type<Wrapper>(), name, PythonIterator(&self, begin, end), PythonIterator(nullptr, end, end));
 // }
 
-template <typename Filtration, typename T, bool IsKCritical>
-nb::object filtration_to_python(const Filtration& filtration, nb::handle owner = nb::handle());
+// template <typename Filtration, typename T, bool IsKCritical>
+// nb::object filtration_to_python(const Filtration& filtration, nb::handle owner = nb::handle());
 
 // template <typename Filtration, typename T, bool IsKCritical, bool SortRows>
 // nb::object normalized_filtration_to_python(const Filtration& filtration, nb::handle owner = nb::handle()) {
@@ -537,21 +537,21 @@ void bind_simplex_array_overloads(Class& cls) {
     //     "simplex"_a,
     //     "filtration"_a);
 
-    cls.def(
-        "_assign_filtration",
-        [](Wrapper& self,
-           nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
-           nb::ndarray<nb::numpy, const Value, nb::ndim<1>, nb::c_contig> filtration) -> Wrapper& {
-          auto simplex_vector = simplex_from_array(simplex);
-          check_simplex_exists(self.tree, simplex_vector);
-          {
-            nb::gil_scoped_release release;
-            self.tree.assign_simplex_filtration(simplex_vector,
-                                                one_critical_filtration_from_array<Filtration, Value>(filtration));
-          }
-          return self;
-        },
-        nb::rv_policy::reference_internal);
+    // cls.def(
+    //     "_assign_filtration",
+    //     [](Wrapper& self,
+    //        nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
+    //        nb::ndarray<nb::numpy, const Value, nb::ndim<1>, nb::c_contig> filtration) -> Wrapper& {
+    //       auto simplex_vector = simplex_from_array(simplex);
+    //       check_simplex_exists(self.tree, simplex_vector);
+    //       {
+    //         nb::gil_scoped_release release;
+    //         self.tree.assign_simplex_filtration(simplex_vector,
+    //                                             one_critical_filtration_from_array<Filtration, Value>(filtration));
+    //       }
+    //       return self;
+    //     },
+    //     nb::rv_policy::reference_internal);
   } else {
     // cls.def(
     //     "_insert_simplex",
@@ -613,68 +613,68 @@ void bind_simplex_array_overloads(Class& cls) {
     //     "simplex"_a,
     //     "filtration"_a);
 
-    cls.def(
-        "_assign_filtration",
-        [](Wrapper& self,
-           nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
-           nb::ndarray<nb::numpy, const Value, nb::ndim<1>, nb::c_contig> filtration) -> Wrapper& {
-          auto simplex_vector = simplex_from_array(simplex);
-          check_simplex_exists(self.tree, simplex_vector);
-          {
-            nb::gil_scoped_release release;
-            self.tree.assign_simplex_filtration(
-                simplex_vector,
-                kcritical_filtration_from_array<Filtration, Value>(filtration, self.tree.num_parameters()));
-          }
-          return self;
-        },
-        nb::rv_policy::reference_internal);
+    // cls.def(
+    //     "_assign_filtration",
+    //     [](Wrapper& self,
+    //        nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
+    //        nb::ndarray<nb::numpy, const Value, nb::ndim<1>, nb::c_contig> filtration) -> Wrapper& {
+    //       auto simplex_vector = simplex_from_array(simplex);
+    //       check_simplex_exists(self.tree, simplex_vector);
+    //       {
+    //         nb::gil_scoped_release release;
+    //         self.tree.assign_simplex_filtration(
+    //             simplex_vector,
+    //             kcritical_filtration_from_array<Filtration, Value>(filtration, self.tree.num_parameters()));
+    //       }
+    //       return self;
+    //     },
+    //     nb::rv_policy::reference_internal);
 
-    cls.def(
-        "_assign_filtration",
-        [](Wrapper& self,
-           nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
-           nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> filtration) -> Wrapper& {
-          auto simplex_vector = simplex_from_array(simplex);
-          check_simplex_exists(self.tree, simplex_vector);
-          {
-            nb::gil_scoped_release release;
-            self.tree.assign_simplex_filtration(
-                simplex_vector,
-                kcritical_filtration_from_array<Filtration, Value>(filtration, self.tree.num_parameters()));
-          }
-          return self;
-        },
-        nb::rv_policy::reference_internal);
+    // cls.def(
+    //     "_assign_filtration",
+    //     [](Wrapper& self,
+    //        nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex,
+    //        nb::ndarray<nb::numpy, const Value, nb::ndim<2>, nb::c_contig> filtration) -> Wrapper& {
+    //       auto simplex_vector = simplex_from_array(simplex);
+    //       check_simplex_exists(self.tree, simplex_vector);
+    //       {
+    //         nb::gil_scoped_release release;
+    //         self.tree.assign_simplex_filtration(
+    //             simplex_vector,
+    //             kcritical_filtration_from_array<Filtration, Value>(filtration, self.tree.num_parameters()));
+    //       }
+    //       return self;
+    //     },
+    //     nb::rv_policy::reference_internal);
   }
 
-  cls.def("_get_filtration", [](Wrapper& self, nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex) {
-    auto simplex_vector = simplex_from_array(simplex);
-    check_simplex_exists(self.tree, simplex_vector);
-    return filtration_to_python<Filtration, Value, IsKCritical>(self.tree.simplex_filtration(simplex_vector),
-                                                                nb::find(self));
-  });
+  // cls.def("_get_filtration", [](Wrapper& self, nb::ndarray<nb::numpy, const Index, nb::ndim<1>, nb::c_contig> simplex) {
+  //   auto simplex_vector = simplex_from_array(simplex);
+  //   check_simplex_exists(self.tree, simplex_vector);
+  //   return filtration_to_python<Filtration, Value, IsKCritical>(self.tree.simplex_filtration(simplex_vector),
+  //                                                               nb::find(self));
+  // });
 }
 
-template <typename Filtration, typename T, bool IsKCritical>
-nb::object filtration_to_python(const Filtration& filtration, nb::handle owner) {
-  if constexpr (IsKCritical) {
-    nb::list out;
-    const int k = static_cast<int>(filtration.num_generators());
-    const int p = static_cast<int>(filtration.num_parameters());
-    for (int i = 0; i < k; ++i) {
-      std::vector<T> row(p);
-      for (int j = 0; j < p; ++j) {
-        row[j] = filtration(i, j);
-      }
-      out.append(owned_array<T>(std::move(row), {static_cast<size_t>(p)}));
-    }
-    return out;
-  } else {
-    const int p = static_cast<int>(filtration.num_parameters());
-    return nb::cast(view_array(const_cast<T*>(&filtration(0, 0)), {static_cast<size_t>(p)}, owner));
-  }
-}
+// template <typename Filtration, typename T, bool IsKCritical>
+// nb::object filtration_to_python(const Filtration& filtration, nb::handle owner) {
+//   if constexpr (IsKCritical) {
+//     nb::list out;
+//     const int k = static_cast<int>(filtration.num_generators());
+//     const int p = static_cast<int>(filtration.num_parameters());
+//     for (int i = 0; i < k; ++i) {
+//       std::vector<T> row(p);
+//       for (int j = 0; j < p; ++j) {
+//         row[j] = filtration(i, j);
+//       }
+//       out.append(owned_array<T>(std::move(row), {static_cast<size_t>(p)}));
+//     }
+//     return out;
+//   } else {
+//     const int p = static_cast<int>(filtration.num_parameters());
+//     return nb::cast(view_array(const_cast<T*>(&filtration(0, 0)), {static_cast<size_t>(p)}, owner));
+//   }
+// }
 
 // template <typename Wrapper, typename Filtration, typename T, bool IsKCritical, bool SortRows, typename SimplexHandle>
 // nb::tuple simplex_entry_to_python(Wrapper& self, SimplexHandle sh) {
@@ -1074,25 +1074,19 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
               },
               "simplex"_a,
               "filtration"_a = nb::none())
-          .def(
-              "_assign_filtration",
-              [](Wrapper& self, nb::handle simplex_handle, nb::handle filtration_handle) -> Wrapper& {
-                auto simplex = vector_from_handle<int>(simplex_handle);
-                auto filtration = filtration_from_handle<Filtration, Value, k_is_kcritical>(filtration_handle,
-                                                                                            self.tree.num_parameters());
-                check_simplex_exists(self.tree, simplex);
-                {
-                  nb::gil_scoped_release release;
-                  self.tree.assign_simplex_filtration(simplex, filtration);
-                }
-                return self;
+          .def("_assign_filtration",
+               [](Wrapper& self,
+                  nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> vertices,
+                  nanobind::object filtrationValues) -> Wrapper& {
+                 self.tree.assign_simplex_filtration(vertices, filtrationValues);
+                 return self;
               },
               nb::rv_policy::reference_internal);
 
   // bind_insert_batch_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int32_t>(cls);
   // bind_insert_batch_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int64_t>(cls);
-  bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int32_t>(cls);
-  bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int64_t>(cls);
+  // bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int32_t>(cls);
+  // bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int64_t>(cls);
 
   cls.def(
          "_insert_batch",
@@ -1138,11 +1132,8 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
          },
          nb::rv_policy::reference_internal)
       .def("_get_filtration",
-           [](Wrapper& self, nb::handle simplex_handle) {
-             auto simplex = vector_from_handle<int>(simplex_handle);
-             check_simplex_exists(self.tree, simplex);
-             return filtration_to_python<Filtration, Value, k_is_kcritical>(self.tree.simplex_filtration(simplex),
-                                                                            nb::find(self));
+           [](Wrapper& self, nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> vertices) {
+             return self.tree.get_simplex_filtration_value(vertices);
            })
       .def(
           "_iter_simplices",

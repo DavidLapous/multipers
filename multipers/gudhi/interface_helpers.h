@@ -197,6 +197,99 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func, F_empty &&funcEmpty
   }
 }
 
+// Number of items of a sequence (uses __len__).
+inline std::size_t _sequence_size(nanobind::handle obj) {
+  Py_ssize_t n = PySequence_Size(obj.ptr());
+  if (n < 0) {
+    PyErr_Clear();
+    throw std::invalid_argument("Expected a sequence (with __len__ and __getitem__), got object of type '" +
+                                std::string(nanobind::type_name(obj.type()).c_str()) + "'.");
+  }
+  return static_cast<std::size_t>(n);
+}
+
+// It is only a hint: ragged or malformed input gives a wrong estimate and should be reported later
+// uses __len__ and __getitem__
+template <typename U>
+static std::size_t _estimate_flat_sequence_size(nanobind::handle values, int dim) {
+  if (dim <= 0) return 0;
+
+  std::size_t total = 1;
+  nanobind::object current = nanobind::borrow(values);
+  for (int level = 0; level < dim; ++level) {
+    Py_ssize_t n = PySequence_Size(current.ptr());
+    if (n < 0) {
+      // no __len__
+      PyErr_Clear();
+      return 0;
+    }
+    total *= static_cast<std::size_t>(n);
+    if (n == 0 || level + 1 == dim) return total;  // empty, or deepest level reached
+
+    PyObject *raw_first = PySequence_GetItem(current.ptr(), 0);
+    if (!raw_first) {
+      // when there is no __getitem__ but there was a __len__ so n >= 0
+      // or __getitem__ does not accept 0 as key etc.
+      PyErr_Clear();
+      return total;
+    }
+    current = nanobind::steal(raw_first);
+    if (U scalar; nanobind::try_cast<U>(current, scalar)) return total;  // leaf reached
+  }
+  return total;
+}
+
+// Calls fun(nanobind::object item) for every item of a sequence, by index.
+// No iterator object is created, and lists/tuples skip the generic call machinery.
+template <typename F>
+inline void _for_each_sequence_item(nanobind::handle obj, F &&fun) {
+  PyObject *p = obj.ptr();
+  // str/bytes problematic, better to reject directly
+  if (PyUnicode_Check(p) || PyBytes_Check(p) || PyByteArray_Check(p))
+    throw std::invalid_argument("Expected a numeric sequence, got a string/bytes object.");
+
+  // List + Tuple special case
+  // Size is re-read every iteration and items are (cheaply) borrowed, so a callback
+  // that runs Python code and mutates the container cannot cause dangling pointers.
+  if (PyList_CheckExact(p)) {
+    for (Py_ssize_t i = 0; i < PyList_GET_SIZE(p); ++i) fun(nanobind::borrow(PyList_GET_ITEM(p, i)));
+    return;
+  }
+  if (PyTuple_CheckExact(p)) {
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(p); ++i) fun(nanobind::borrow(PyTuple_GET_ITEM(p, i)));
+    return;
+  }
+
+  // Generic sequence: __len__ once, then __getitem__(i). No copy into a temporary list.
+  const std::size_t n = _sequence_size(obj);
+  for (std::size_t i = 0; i < n; ++i) {
+    PyObject *item = PySequence_GetItem(p, static_cast<Py_ssize_t>(i));
+    if (!item) throw nanobind::python_error();
+    fun(nanobind::steal(item));
+  }
+}
+
+// Calls fun for every item of the iterable obj (does not assume __len__ and __getitem__, just __iter__)
+template <typename F>
+inline void _for_each_python_item(nanobind::handle obj, F &&fun) {
+  PyObject *raw_iter = PyObject_GetIter(obj.ptr());
+  if (!raw_iter) {
+    PyErr_Clear();
+    throw std::runtime_error("Expected an iterable, got object of type '" +
+                             std::string(nanobind::type_name(obj.type()).c_str()) + "'.");
+  }
+  nanobind::object iter = nanobind::steal(raw_iter);
+
+  while (true) {
+    PyObject *item = PyIter_Next(iter.ptr());
+    if (!item) {
+      if (PyErr_Occurred()) throw nanobind::python_error();
+      break;
+    }
+    fun(nanobind::steal(item));
+  }
+}
+
 // uncommenting in the _get_compatible_* methods gives much more possibilities, but it also takes much more
 // compile time (and binary size). I had to split the _dispatch_dtype method into a int and a float version
 // for the same reason

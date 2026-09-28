@@ -108,7 +108,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return result.second;
   }
 
-  bool insert_single_simplex(Tensor1D<int> vertices, nanobind::object filtrationValue) {
+  bool insert_single_simplex(Tensor1D<Vertex_handle> vertices, nanobind::object filtrationValue) {
     std::pair<Simplex_handle, bool> result;
 
     if (filtrationValue.is_none()) {
@@ -145,8 +145,8 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return result.second;
   }
 
-  Multi_simplex_tree_interface& insert_batch(Tensor1D<int> vertices,
-                                             Tensor2D<int> vertex_array,
+  Multi_simplex_tree_interface& insert_batch(Tensor1D<Vertex_handle> vertices,
+                                             Tensor2D<Vertex_handle> vertex_array,
                                              nanobind::object filtrationValues) {
     auto v_view = vertex_array.view();
     const std::size_t dim = v_view.shape(0) - 1;
@@ -161,7 +161,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     if (fils.empty()) {
       {
         nanobind::gil_scoped_release release;
-        Base::insert_batch_vertices(Numpy_span<int>(vertices), Filtration_value::minus_inf(Base::num_parameters()));
+        Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::minus_inf(Base::num_parameters()));
         if (dim > 0) {
           for (std::size_t i = 0; i < numSimplices; ++i) {
             Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW,
@@ -178,7 +178,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     {
       nanobind::gil_scoped_release release;
-      Base::insert_batch_vertices(Numpy_span<int>(vertices), Filtration_value::inf(Base::num_parameters()));
+      Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::inf(Base::num_parameters()));
       for (std::size_t i = 0; i < numSimplices; ++i) {
         // TODO: insert_simplex_and_subfaces calls unify_lifetimes which calls add_generator which assumes filtration
         // is simplified. As simplify is not exactly cheap, we could also only call it when we not know if it is
@@ -197,22 +197,41 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     Base::clear_filtration();
   }
 
-  // TODO: numpy view here?
-  Filtration_value& simplex_filtration(const Simplex& simplex) {
-    return Base::get_filtration_value(Base::find(simplex));
-  }
-
-  // TODO: numpy view here?
-  const Filtration_value& simplex_filtration(const Simplex& simplex) const {
-    return Base::get_filtration_value(Base::find(simplex));
-  }
-
-  void assign_simplex_filtration(const Simplex& simplex, const Filtration_value& filtration) {
-    Simplex_handle sh = Base::find(simplex);
+  nanobind::object get_simplex_filtration_value(Tensor1D<Vertex_handle> simplex,
+                                                bool viewIfPossible = true,
+                                                bool raw = false) {
+    Simplex_handle sh = Base::find(Numpy_span(simplex));
     if (sh == Base::null_simplex())
-      throw std::invalid_argument("Cannot assign a filtration to a simplex that is not in the complex");
-    Base::assign_filtration(sh, filtration);
-    Base::clear_filtration();
+      throw std::invalid_argument("Cannot return the filtration value of a simplex that is not in the complex");
+    auto& f = Base::get_filtration_value(sh);
+
+    if (raw) return detail::_get_raw_filtration_data(f, !viewIfPossible);
+
+    // view not possible for Degree_rips_bifiltration
+    if constexpr (!detail::_is_degree_rips<MultiFiltrationValue>()) {
+      if (viewIfPossible) return detail::_get_raw_filtration_data(f, false);
+    }
+    return nanobind::cast(detail::_get_filtration_array(f));
+  }
+
+  Multi_simplex_tree_interface& assign_simplex_filtration(Tensor1D<Vertex_handle> vertices,
+                                                          nanobind::object filtrationValue) {
+    Filtration_value fil = Filtration_value::minus_inf(Base::num_parameters());
+    if (!filtrationValue.is_none()) {
+      fil = _cast_to_filtration_value(filtrationValue, Base::num_parameters());
+    }
+
+    {
+      nanobind::gil_scoped_release release;
+      Simplex_handle sh = Base::find(Numpy_span(vertices));
+      if (sh == Base::null_simplex())
+        throw std::invalid_argument("Cannot assign a filtration to a simplex that is not in the complex");
+
+      Base::assign_filtration(sh, fil);
+      Base::clear_filtration();
+    }
+
+    return *this;
   }
 
   // TODO: remove
@@ -519,26 +538,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     Multi_simplex_tree_interface const* tree_;
   };
 
-  template <typename F>
-  static void _for_each_python_item(nanobind::handle obj, F&& fun) {
-    PyObject* raw_iter = PyObject_GetIter(obj.ptr());
-    if (!raw_iter) {
-      PyErr_Clear();
-      throw std::runtime_error("Expected an iterable, got object of type '" +
-                               std::string(nanobind::type_name(obj.type()).c_str()) + "'.");
-    }
-    nanobind::object iter = nanobind::steal(raw_iter);
-
-    while (true) {
-      PyObject* item = PyIter_Next(iter.ptr());
-      if (!item) {
-        if (PyErr_Occurred()) throw nanobind::python_error();
-        break;
-      }
-      fun(nanobind::steal(item));
-    }
-  }
-
   template <typename U>
   static Filtration_value _cast_to_filtration_value(Tensor1D<U> values) {
     Numpy_span<U> view(values);
@@ -564,42 +563,42 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   static Filtration_value _cast_to_filtration_value(nanobind::object values, int defaultNumParam) {
     auto cast_as_vector = [&]() -> Filtration_value {
       std::vector<value_type> gens;
-      auto rec_flatten = [](const auto& self, nanobind::object obj, std::vector<value_type>& out, int maxDepth) -> int {
-        if (maxDepth < 0)
+      auto rec_flatten = [](const auto& self, nanobind::handle obj, std::vector<value_type>& out, int maxDepth) -> int {
+        if (maxDepth < 1)
           throw std::invalid_argument("Filtration value has to be 1D when 1-critical and max 2D when k-critical.");
-        value_type scalar;
-        if (nanobind::try_cast<value_type>(obj, scalar)) {
-          out.push_back(scalar);
-          return -1;
-        }
+
         int count = 0;
-        bool sawScalar = false, sawIterable = false;
-        _for_each_python_item(obj, [&](nanobind::object item) {
-          int c = self(self, item, out, maxDepth - 1);
-          if (c < 0) {
+        bool first = true, leaf = false;
+        detail::_for_each_sequence_item(obj, [&](nanobind::object item) {
+          value_type v;
+          if (first) leaf = nanobind::try_cast<value_type>(item, v);
+          if (leaf) {
+            if (!first && !nanobind::try_cast<value_type>(item, v))
+              throw std::invalid_argument(
+                  "Ragged array: mixed scalars and nested sequences at the same level for filtration value.");
+            out.push_back(v);
             ++count;
-            sawScalar = true;
           } else {
-            if (sawIterable && count != c) {
+            int c = self(self, item, out, maxDepth - 1);
+            if (!first && c != count)
               throw std::invalid_argument("Ragged array: inconsistent row lengths for filtration value (" +
                                           std::to_string(count) + " vs " + std::to_string(c) + ").");
-            }
-            sawIterable = true;
             count = c;
           }
+          first = false;
         });
-        if (sawScalar && sawIterable)
-          throw std::runtime_error(
-              "Ragged array: mixed scalars and nested iterables at the same level for filtration value.");
         return count;
       };
+
+      if (value_type scalar; nanobind::try_cast<value_type>(values, scalar))
+        throw std::invalid_argument("Filtration value has to be at least 1-dimensional.");
 
       int depth = 2;
       if constexpr (Filtration_value::ensures_1_criticality()) {
         depth = 1;
       }
+      gens.reserve(detail::_estimate_flat_sequence_size<value_type>(values, depth));
       int numParam = rec_flatten(rec_flatten, values, gens, depth);
-      if (numParam < 0) throw std::invalid_argument("Filtration value has to be at least 1-dimensional.");
       return Filtration_value(gens.begin(), gens.end(), numParam);
     };
     auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> Filtration_value {
@@ -644,8 +643,9 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   static std::vector<Filtration_value> _cast_to_filtration_value_array(nanobind::object values, int defaultNumParam) {
     auto cast_as_vector = [&]() -> std::vector<Filtration_value> {
       std::vector<Filtration_value> out;
+      out.reserve(detail::_sequence_size(values));
       int numParam = -1;
-      _for_each_python_item(values, [&](nanobind::object item) {
+      detail::_for_each_sequence_item(values, [&](nanobind::object item) {
         Filtration_value f = _cast_to_filtration_value(item, defaultNumParam);
         if (numParam != -1 && static_cast<int>(f.num_parameters()) != numParam)
           throw std::invalid_argument("Inconsistent number of parameters in filtration value array.");
