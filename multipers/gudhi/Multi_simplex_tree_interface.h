@@ -27,6 +27,7 @@
 #include <nanobind/make_iterator.h>
 
 #include <gudhi/Simplex_tree.h>
+#include <gudhi/Slicer.h>
 #include <gudhi/simple_mdspan.h>
 #include <python_interfaces/numpy_utils.h>
 #include <python_interfaces/Simplex_tree_interface.h>
@@ -35,6 +36,7 @@
 #include <gudhi/Multi_parameter_filtration_value.h>
 
 #include "interface_helpers.h"
+#include "interface_helper_structs.h"
 
 namespace Gudhi {
 namespace multi_persistence {
@@ -66,17 +68,19 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   template <typename U>
   using Tensor3D = nanobind::ndarray<const U, nanobind::ndim<3>>;
 
-  Multi_simplex_tree_interface() = default;
-  Multi_simplex_tree_interface(const Base& st) : Base(st) {};
-  Multi_simplex_tree_interface(Base&& st) : Base(std::move(st)) {};
+  Multi_simplex_tree_interface() : Base(), filtrationGrid_(nanobind::none()) {};
+  Multi_simplex_tree_interface(const Base& st) : Base(st), filtrationGrid_(nanobind::none()) {};
+  Multi_simplex_tree_interface(Base&& st) : Base(std::move(st)), filtrationGrid_(nanobind::none()) {};
 
   Multi_simplex_tree_interface& operator=(const Base& st) {
     Base::operator=(st);
+    // do we want to reset the filtration grid here?
     return *this;
   }
 
   Multi_simplex_tree_interface& operator=(Base&& st) {
     Base::operator=(std::move(st));
+    // do we want to reset the filtration grid here?
     return *this;
   }
 
@@ -90,6 +94,32 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   void copy_from(const Multi_simplex_tree_interface<OtherMultiFiltrationValue>& other) {
     Base::clear();
     Base::copy_from(other, [](const auto& fil) { return fil.template as_type<Filtration_value>(); });
+    filtrationGrid_ = other.get_filtration_grid();
+  }
+
+  template <class OtherMultiFiltrationValue, class PersistenceAlgorithm>
+  void copy_from(const Slicer<OtherMultiFiltrationValue, PersistenceAlgorithm>& other) {
+    Base::clear();
+    filtrationGrid_ = nanobind::none();
+    
+  }
+
+  [[nodiscard]] nanobind::object get_filtration_grid() const { return filtrationGrid_; }
+
+  void set_filtration_grid(nanobind::object grid) {
+    if (grid.is_none()) {
+      filtrationGrid_ = nanobind::none();
+      return;
+    }
+
+    // throws if it does not pass the check
+    // returns false if valid but empty
+    if (_verify_grid_validity(grid)) {
+      filtrationGrid_ = grid;
+      return;
+    }
+
+    filtrationGrid_ = nanobind::none();
   }
 
   bool find_simplex(const Simplex& simplex) const { return (Base::find(simplex) != Base::null_simplex()); }
@@ -112,33 +142,10 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     std::pair<Simplex_handle, bool> result;
 
     if (filtrationValue.is_none()) {
-      {
-        nanobind::gil_scoped_release release;
-        result = Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW,
-                                                   Numpy_span(vertices),
-                                                   Filtration_value::minus_inf(Base::num_parameters()));
-      }
+      result = _insert_single_simplex(Numpy_span(vertices));
     } else {
       Filtration_value fil = _cast_to_filtration_value(filtrationValue, Base::num_parameters());
-      {
-        nanobind::gil_scoped_release release;
-        // I still don't understand why 1-critical and k-critical simplices are not inserted with the same strategy.
-        // That just feels inconsistent. If they are not used in the same situation, you could allow to pass
-        // the strategy instead to make sense, no? In particular when the user could have completely different
-        // use cases than the examples here.
-        if constexpr (Filtration_value::ensures_1_criticality()) {
-          result =
-              Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, Numpy_span(vertices), fil);
-        } else {
-          // TODO: insert_simplex_and_subfaces calls unify_lifetimes which calls add_generator which assumes filtration
-          // is simplified. As simplify is not exactly cheap, we could also only call it when we not know if it is
-          // simplified higher in the call chain. That is, add the simplify for external inserts and not use it for
-          // internal inserts when we know for sure that it is already simplified.
-          fil.simplify();
-          result =
-              Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::LOWER_EXISTING, Numpy_span(vertices), fil);
-        }
-      }
+      result = _insert_single_simplex(Numpy_span(vertices), fil);
     }
 
     if (result.first != Base::null_simplex()) Base::clear_filtration();
@@ -164,9 +171,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
         Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::minus_inf(Base::num_parameters()));
         if (dim > 0) {
           for (std::size_t i = 0; i < numSimplices; ++i) {
-            Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW,
-                                              make_element_range(&v_view(0, i), v_view, false),
-                                              Filtration_value::minus_inf(Base::num_parameters()));
+            _insert_single_simplex(make_element_range(&v_view(0, i), v_view, false));
           }
         }
       }
@@ -180,13 +185,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       nanobind::gil_scoped_release release;
       Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::inf(Base::num_parameters()));
       for (std::size_t i = 0; i < numSimplices; ++i) {
-        // TODO: insert_simplex_and_subfaces calls unify_lifetimes which calls add_generator which assumes filtration
-        // is simplified. As simplify is not exactly cheap, we could also only call it when we not know if it is
-        // simplified higher in the call chain. That is, add the simplify for external inserts and not use it for
-        // internal inserts when we know for sure that it is already simplified.
-        fils[i].simplify();
-        Base::insert_simplex_and_subfaces(
-            Base::Filtration_maintenance::LOWER_EXISTING, make_element_range(&v_view(0, i), v_view, false), fils[i]);
+        _insert_single_simplex(make_element_range(&v_view(0, i), v_view, false), fils[i]);
       }
     }
     return *this;
@@ -464,14 +463,51 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     }
   }
 
-  template <typename OneDimArray>
-  void coarsen_on_grid(const std::vector<OneDimArray>& grid, bool coordinate = true) {
+  // template <typename OneDimArray>
+  // void coarsen_on_grid(const std::vector<OneDimArray>& grid, bool coordinate = true) {
+  //   if (static_cast<int>(grid.size()) < Base::num_parameters()) {
+  //     throw std::invalid_argument("Grid and simplex tree do not agree on number of parameters.");
+  //   }
+  //   for (auto sh : Base::complex_simplex_range()) {
+  //     Base::get_filtration_value(sh).project_onto_grid(grid, coordinate);
+  //   }
+  // }
+
+  template <typename U>
+  Multi_simplex_tree_interface& coarsen_on_grid(const std::vector<std::vector<U>>& grid, bool coordinates = true) {
     if (static_cast<int>(grid.size()) < Base::num_parameters()) {
       throw std::invalid_argument("Grid and simplex tree do not agree on number of parameters.");
     }
-    for (auto sh : Base::complex_simplex_range()) {
-      Base::get_filtration_value(sh).project_onto_grid(grid, coordinate);
+    {
+      nanobind::gil_scoped_release release;
+      for (auto sh : Base::complex_simplex_range()) {
+        Base::get_filtration_value(sh).project_onto_grid(grid, coordinates);
+      }
     }
+    return *this;
+  }
+
+  template <typename U>
+  Multi_simplex_tree_interface& coarsen_on_grid(const std::vector<Tensor1D<U>>& grid, bool coordinates = true) {
+    std::vector<Numpy_span<U>> views(grid.begin(), grid.end());
+    if (static_cast<int>(grid.size()) < Base::num_parameters()) {
+      throw std::invalid_argument("Grid and simplex tree do not agree on number of parameters.");
+    }
+    {
+      nanobind::gil_scoped_release release;
+      for (auto sh : Base::complex_simplex_range()) {
+        Base::get_filtration_value(sh).project_onto_grid(views, coordinates);
+      }
+    }
+    return *this;
+  }
+
+  Multi_simplex_tree_interface& clean_filtration_grid() {
+    if (filtrationGrid_.is_none()) throw std::runtime_error("No grid to clean.");
+    auto usedCoordinates = detail::Compacted_squeezed_filtration_grid::collect_used_squeezed_coordinates(*this);
+    detail::Compacted_squeezed_filtration_grid compact(filtrationGrid_, usedCoordinates);
+    filtrationGrid_ = compact.filtrationGrid;
+    return coarsen_on_grid(compact.coordinates, true);
   }
 
   Multi_simplex_tree_interface& simplify_all_filtration_values() {
@@ -496,6 +532,45 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return out;
   }
 
+  template <typename U>
+  Multi_simplex_tree_interface build_bifiltration_from_edges(const Multi_simplex_tree_interface& st,
+                                                             Tensor2D<U> edges,
+                                                             int expansionDimension) const {
+    auto edgeView = edges.view();
+    if (edgeView.shape(1) != 4) {
+      throw std::invalid_argument("Expected edge array with shape (n_edges, 4). Got (" +
+                                  std::to_string(edgeView.shape(0)) + ", " + std::to_string(edgeView.shape(1)) + ").");
+    }
+
+    Multi_simplex_tree_interface out;
+    out.set_num_parameters(2);
+    out.filtrationGrid_ = st.get_filtration_grid();
+    {
+      nanobind::gil_scoped_release release;
+      for (auto sh : st.skeleton_simplex_range(0)) {
+        auto& fil = st.get_filtration_value(sh);
+        // or better just throw if fil.num_parameters() != 2 ?
+        auto fil2param = fil.num_parameters() == 2 ? fil : fil.copy(2, fil.num_generators());
+        out._insert_single_simplex(st.simplex_vertex_range(sh), fil2param);
+      }
+
+      std::array<Vertex_handle, 2> edge;
+      Filtration_value fil(2);
+      for (std::size_t i = 0; i < edgeView.shape(0); ++i) {
+        edge[0] = static_cast<Vertex_handle>(edgeView(i, 0));
+        edge[1] = static_cast<Vertex_handle>(edgeView(i, 1));
+        fil(0, 0) = static_cast<value_type>(edgeView(i, 2));
+        fil(0, 1) = static_cast<value_type>(edgeView(i, 3));
+        out._insert_single_simplex(edge, fil);
+      }
+
+      if (expansionDimension > 0) {
+        out.expansion(expansionDimension);
+      }
+    }
+    return out;
+  }
+
   void from_std(char* buffer_start, std::size_t buffer_size, int dimension, const Filtration_value& default_values) {
     Gudhi::Simplex_tree_interface st;
     st.deserialize(buffer_start, buffer_size);
@@ -511,7 +586,37 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return buffer;
   }
 
+  nanobind::tuple serialize() const {
+    std::size_t buffer_size;
+    char* buffer;
+    {
+      nanobind::gil_scoped_release release;
+      buffer_size = Base::get_serialization_size();
+      buffer = new char[buffer_size];
+      // also adds version
+      Base::serialize(buffer, buffer_size);
+    }
+    return nanobind::make_tuple(filtrationGrid_, _wrap_as_numpy_array(buffer, buffer_size));
+  }
+
+  void deserialize(nanobind::tuple state) {
+    if (nanobind::len(state) != 2)
+      throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
+
+    nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> data;
+    if (!nanobind::try_cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[1], data, false))
+      throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
+    {
+      nanobind::gil_scoped_release release;
+      // also checks version
+      Base::deserialize(data.data(), data.size());
+    }
+    set_filtration_grid(state[0]);
+  }
+
  private:
+  nanobind::object filtrationGrid_;
+
   template <class Iterator>
   class Simplex_filtration_iterator : public boost::iterator_facade<Simplex_filtration_iterator<Iterator>,
                                                                     nanobind::tuple,
@@ -668,6 +773,96 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
         cast_as_vector);
   }
 
+  // TODO: factorize with Slicer
+  template <typename U>
+  static bool _check_has_sorted_rows(Tensor2D<U> grid) {
+    auto view = grid.view();
+    std::size_t rows = view.shape(0), cols = view.shape(1);
+
+    for (std::size_t i = 0; i < rows; ++i)
+      for (std::size_t j = 1; j < cols; ++j)
+        if (view(i, j - 1) > view(i, j))
+          throw nanobind::type_error("Expected grid rows to be sorted by increasing values.");
+
+    return rows != 0 && cols != 0;  // returns false if the grid is valid but empty
+  }
+
+  // TODO: factorize with Slicer
+  template <typename U>
+  static bool _check_has_sorted_rows(nanobind::iterable grid) {
+    bool hasNonEmptyRows = false;
+    for (nanobind::handle row : grid) {
+      if (!nanobind::isinstance<nanobind::iterable>(row))
+        throw nanobind::type_error("Expected each row to be iterable.");
+
+      bool hasPrev = false;
+      U prev = 0;
+
+      for (nanobind::handle elem : nanobind::cast<nanobind::iterable>(row)) {
+        U val;
+        if (!nanobind::try_cast<U>(elem, val)) throw nanobind::type_error("Expected arithmetic elements in the grid.");
+
+        if (hasPrev && val < prev)
+          throw nanobind::type_error("Expected rows of the grid to be ordered by increasing value.");
+
+        prev = val;
+        hasPrev = true;
+      }
+      hasNonEmptyRows |= hasPrev;
+    }
+
+    return hasNonEmptyRows;  // returns false if the grid is valid but empty
+  }
+
+  // TODO: factorize with Slicer
+  [[nodiscard]] bool _verify_grid_validity(nanobind::object grid) const {
+    // special case of ndarray is more efficient then general nanobind::iterable
+    if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
+      if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
+      return detail::_dispatch_dtype(
+          grid,
+          [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); },
+          []() { return true; },
+          []() -> bool { throw nanobind::type_error("Unsupported element type."); });
+    }
+
+    if (!nanobind::isinstance<nanobind::iterable>(grid))
+      throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
+
+    return detail::_dispatch_dtype(
+        grid,
+        [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); },
+        []() { return true; },
+        []() -> bool { throw nanobind::type_error("Unsupported element type."); });
+  }
+
+  template <class VertexRange>
+  std::pair<Simplex_handle, bool> _insert_single_simplex(const VertexRange& vertices) {
+    nanobind::gil_scoped_release release;
+    return Base::insert_simplex_and_subfaces(
+        Base::Filtration_maintenance::INCREASE_NEW, vertices, Filtration_value::minus_inf(Base::num_parameters()));
+  }
+
+  template <class VertexRange>
+  std::pair<Simplex_handle, bool> _insert_single_simplex(const VertexRange& vertices,
+                                                         Filtration_value& filtrationValue) {
+    nanobind::gil_scoped_release release;
+    // I still don't understand why 1-critical and k-critical simplices are not inserted with the same strategy.
+    // That just feels inconsistent. If they are not used in the same situation, you could allow to pass
+    // the strategy instead to make sense, no? In particular when the user could have completely different
+    // use cases than the examples here.
+    if constexpr (Filtration_value::ensures_1_criticality()) {
+      return Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, vertices, filtrationValue);
+    } else {
+      // TODO: insert_simplex_and_subfaces calls unify_lifetimes which calls add_generator which assumes filtration
+      // is simplified. As simplify is not exactly cheap, we could also only call it when we not know if it is
+      // simplified higher in the call chain. That is, add the simplify for external inserts and not use it for
+      // internal inserts when we know for sure that it is already simplified.
+      filtrationValue.simplify();
+      return Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::LOWER_EXISTING, vertices, filtrationValue);
+    }
+  }
+
   nanobind::tuple _get_simplex_and_filtration(Simplex_handle sh) const {
     Simplex simplex;
     for (auto vertex : Base::simplex_vertex_range(sh)) {
@@ -722,28 +917,9 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
 template <class MultiSimplexTreeInterface>
 inline MultiSimplexTreeInterface deserialize_multi_simplex_tree_from_python(nanobind::tuple state) {
-  // if (nanobind::len(state) != 3)
-  //   throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
-  // std::uint8_t version;
-  // if (!nanobind::try_cast<std::uint8_t>(state[0], version, false))
-  //   throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
-  // if (version < SlicerInterface::SERIALIZATION_VERSION)
-  //   throw std::invalid_argument(
-  //       "Given state to deserialize is not compatible with current multipers version: try an older release");
-  // if (version > SlicerInterface::SERIALIZATION_VERSION)
-  //   throw std::invalid_argument(
-  //       "Given state to deserialize is not compatible with current multipers version: try an newer release");
-
-  // nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> data;
-  // if (!nanobind::try_cast<nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy>>(state[2], data, false))
-  //   throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
-  // SlicerInterface slicer;
-  // {
-  //   nanobind::gil_scoped_release release;
-  //   deserialize_value_from_char_buffer(slicer, data.data());
-  // }
-  // slicer.set_filtration_grid(state[1]);
-  // return slicer;
+  MultiSimplexTreeInterface st;
+  st.deserialize(state);
+  return st;
 }
 
 }  // namespace multi_persistence

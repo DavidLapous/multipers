@@ -451,15 +451,15 @@ def _persistence_on_line(
     return out[0]
 
 
-def _getstate(self):
-    return (
-        self._serialize_state(),
-        self.filtration_grid,
-        getattr(self, "_generator_basis", None),
-        self.minpres_degree,
-        self.is_minres,
-        self.pres_degree,
-    )
+# def _getstate(self):
+#     return (
+#         self._serialize_state(),
+#         self.filtration_grid,
+#         getattr(self, "_generator_basis", None),
+#         self.minpres_degree,
+#         self.is_minres,
+#         self.pres_degree,
+#     )
 
 
 def _looks_like_serialized_state(state) -> bool:

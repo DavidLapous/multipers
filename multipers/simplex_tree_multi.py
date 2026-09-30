@@ -203,17 +203,17 @@ def _iter(self):
     yield from self.get_simplices()
 
 
-def _getstate(self):
-    return self._serialize_state(), self.filtration_grid
+# def _getstate(self):
+#     return self._serialize_state(), self.filtration_grid
 
 
-def _setstate(self, state):
-    if isinstance(state, tuple) and len(state) == 2:
-        serialized, filtration_grid = state
-    else:
-        serialized, filtration_grid = state, None
-    self._deserialize_state(serialized)
-    self.filtration_grid = filtration_grid
+# def _setstate(self, state):
+#     if isinstance(state, tuple) and len(state) == 2:
+#         serialized, filtration_grid = state
+#     else:
+#         serialized, filtration_grid = state, None
+#     self._deserialize_state(serialized)
+#     self.filtration_grid = filtration_grid
 
 
 def _reconstruct_from_pickle(cls, state):
@@ -805,7 +805,7 @@ def _install_python_api():
         cls.__repr__ = _repr
         cls.__len__ = _len
         cls.__deepcopy__ = _deepcopy
-        cls.__setstate__ = _setstate
+        # cls.__setstate__ = _setstate
         cls.copy = _copy
         cls.filtration = _filtration
         cls.__getitem__ = _getitem

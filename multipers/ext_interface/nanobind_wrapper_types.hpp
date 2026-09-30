@@ -51,6 +51,10 @@ inline void reset_simplextree_python_state(State& state) {
 
 template <typename Interface>
 struct PySimplexTree : PySimplexTreePythonState {
+  PySimplexTree() = default;
+  PySimplexTree(const Interface& st) : tree(st) {}
+  PySimplexTree(Interface&& st) : tree(std::move(st)) {}
+
   Interface tree;
 };
 
