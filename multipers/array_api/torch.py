@@ -15,6 +15,9 @@ _has_jit = False
 LazyTensor = cast(Any, None)
 _is_keops_available = None
 int64 = _torch.int64
+float32 = _torch.float32
+float64 = _torch.float64
+finfo = _torch.finfo
 inf = float("inf")
 
 ones = _torch.ones
@@ -46,6 +49,9 @@ sqrt = _torch.sqrt
 matmul = _torch.matmul
 einsum = _torch.einsum
 moveaxis = _torch.moveaxis
+maximum = _torch.maximum
+isfinite = _torch.isfinite
+solve = _torch.linalg.solve
 from_numpy = _torch.from_numpy
 
 
@@ -106,6 +112,15 @@ def norm(x, axis=None, dim=None, **kwargs):
     if dim is None:
         dim = axis
     return _torch.norm(x, dim=dim, **kwargs)
+
+
+def amax(x, axis=None, keepdims=False):
+    """Reduce maxima, sharing gradients equally between tied entries."""
+    return _torch.amax(x, dim=axis, keepdim=keepdims)
+
+
+def diagonal(x, offset=0, axis1=0, axis2=1):
+    return _torch.diagonal(x, offset=offset, dim1=axis1, dim2=axis2)
 
 
 def astype(x, dtype):
@@ -246,6 +261,11 @@ def minvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
         dim = axis
     if keepdim is None:
         keepdim = keepdims
+    if isinstance(dim, (tuple, list)):
+        dims = sorted((d if d >= 0 else d + x.ndim for d in dim), reverse=True)
+        for d in dims:
+            x = _torch.min(x, d, bool(keepdim)).values
+        return x
     if dim is not None:
         keepdim = bool(keepdim)
         return _torch.min(x, dim, keepdim).values
@@ -257,6 +277,11 @@ def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
         dim = axis
     if keepdim is None:
         keepdim = keepdims
+    if isinstance(dim, (tuple, list)):
+        dims = sorted((d if d >= 0 else d + x.ndim for d in dim), reverse=True)
+        for d in dims:
+            x = _torch.max(x, d, bool(keepdim)).values
+        return x
     if dim is not None:
         keepdim = bool(keepdim)
         return _torch.max(x, dim, keepdim).values

@@ -252,7 +252,7 @@ multipers_add_optional_patch_overlay(
 )
 multipers_add_optional_patch_overlay(
   MULTIPERS_FEATURE_FUNCTION_DELAUNAY multipers_function_delaunay_log_overlay function_delaunay
-  "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE}" ext/function_delaunay MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
+  "${MULTIPERS_FUNCTION_DELAUNAY_LOG_PATCH_FILE};${MULTIPERS_EXT_PATCH_DIR}/function_delaunay_supports.patch" ext/function_delaunay MULTIPERS_FUNCTION_DELAUNAY_PATCH_OVERLAY_ROOT
   include mpfree_mod/include multi_chunk_mod/include
 )
 multipers_add_optional_patch_overlay(

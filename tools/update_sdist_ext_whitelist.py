@@ -37,6 +37,7 @@ def _config_only_ext_files(root: Path) -> set[str]:
         "ext/patches/muphasa_runtime_logs.patch",
         "ext/patches/multi_critical_features.patch",
         "ext/patches/multi_critical_runtime_logs.patch",
+        "ext/patches/function_delaunay_supports.patch",
     }
 
     overlay_source_dirs = (

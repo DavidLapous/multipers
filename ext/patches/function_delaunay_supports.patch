@@ -1,0 +1,159 @@
+--- a/ext/function_delaunay/include/function_delaunay/compute_meb_radii_of_simplex_tree.h
++++ b/ext/function_delaunay/include/function_delaunay/compute_meb_radii_of_simplex_tree.h
+@@ -22,14 +22,25 @@
+ 
+ #include <function_delaunay/Meb_accessors.h>
+ #include <CGAL/Epick_d.h>
++#include <functional>
+ 
+ #define COMPUTE_MEB_DIMENSION_DISPATCH(d)				\
+     typedef CGAL::Epick_d<CGAL::Dimension_tag<d> > Kernel;		\
+     typedef Meb_accessor_CGAL<Kernel,d> Meb_functor;			\
+     Meb_functor meb_accesor;						\
+-    _compute_meb_radii_of_simplex_tree<SimplexTree,Meb_functor>(simplex_tree,meb_accesor,input_points);
++    _compute_meb_radii_of_simplex_tree<SimplexTree,Meb_functor>(simplex_tree,meb_accesor,input_points,record,point_indices);
+ 
+ namespace function_delaunay {
++    using Meb_support_recorder = std::function<void(const std::vector<int>&, const std::vector<int>&)>;
++
++    template<typename SimplexTree, typename Handle>
++    void record_meb_support(SimplexTree& tree, Handle simplex,
++                            const std::vector<int>& support, const Meb_support_recorder& record) {
++        if (!record) return;
++        auto vertices = tree.simplex_vertex_range(simplex);
++        record(std::vector<int>(vertices.begin(), vertices.end()), support);
++    }
++
+ 
+     bool contains(std::vector<int>& v, int x) {
+ 	auto it= std::lower_bound(v.begin(),v.end(),x);
+@@ -39,7 +50,7 @@
+     template<typename SimplexTree,typename SimplexKey> void _assign_filtration_values_in_interval(SimplexTree &simplex_tree,
+ 												  SimplexKey upper,
+ 												  std::vector<int> &lower,
+-												  double meb_radius) {
++												  double meb_radius, const Meb_support_recorder& record) {
+ 	/*
+ 	  std::cout << "Start recursion: \n";
+ 	  auto vertices = simplex_tree.simplex_vertex_range(upper);
+@@ -74,7 +85,8 @@
+ 		  std::cout << std::endl;
+ 		*/
+ 		simplex_tree.assign_filtration(bd_simp,meb_radius);
+-		_assign_filtration_values_in_interval(simplex_tree,bd_simp,lower,meb_radius);
++        record_meb_support(simplex_tree, bd_simp, lower, record);
++		_assign_filtration_values_in_interval(simplex_tree,bd_simp,lower,meb_radius,record);
+ 	    }
+ 	}
+     
+@@ -91,7 +103,7 @@
+ 
+     template<typename SimplexTree,typename MebAccessor> void _compute_meb_radii_of_simplex_tree(SimplexTree &simplex_tree,
+ 												MebAccessor &meb_accessor,
+-												const std::vector<Point_with_densities> &input_points) {
++												const std::vector<Point_with_densities> &input_points, const Meb_support_recorder& record = {}, const std::vector<int>* point_indices = nullptr) {
+ 
+ 
+ #if FUNCTION_DELAUNAY_SMART_MEB_TRAVERSAL
+@@ -117,7 +129,7 @@
+ 		    //std::cout << "Simplex has key " << simplex_tree.key(*it) << std::endl;
+ 		    for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+ 			//std::cout << *vit << " ";
+-			points.push_back(input_points[*vit].x);
++			points.push_back(input_points[point_indices ? (*point_indices)[*vit] : *vit].x);
+ 		    }
+ 		    meb_accessor.new_meb(points.begin(), points.end());
+ 		    number_of_meb_computations++;
+@@ -151,10 +163,11 @@
+ 		      }
+ 		    */
+ 		    simplex_tree.assign_filtration(*it,meb_radius);
++        record_meb_support(simplex_tree, *it, lower, record);
+ 		    //std::cout << "Computed meb of " << points.size() << " points and received " << support.size() << " support points" << std::endl;
+ 		    std::sort(lower.begin(),lower.end());	
+ 		    if(points.size()>lower.size()) {
+-			_assign_filtration_values_in_interval<SimplexTree>(simplex_tree,*it,lower,meb_radius);
++			_assign_filtration_values_in_interval<SimplexTree>(simplex_tree,*it,lower,meb_radius,record);
+ 		    }
+ 		}
+ 	    }
+@@ -174,11 +187,17 @@
+ 	    //std::cout << "Simplex has key " << simplex_tree.key(*it) << std::endl;
+ 	    for(auto vit=vertices.begin();vit!=vertices.end();vit++) {
+ 		//std::cout << *vit << " ";
+-		points.push_back(input_points[*vit].x);
++		points.push_back(input_points[point_indices ? (*point_indices)[*vit] : *vit].x);
+ 	    }
+ 	    //std::cout << std::endl;
+ 	    meb_accessor.new_meb(points.begin(), points.end());
+ 	    double meb_radius = meb_accessor.get_radius();
++        if (record) {
++            std::vector<int> indices, support, vertex_ids(vertices.begin(), vertices.end());
++            meb_accessor.get_indices_of_support(indices);
++            for (int i : indices) support.push_back(vertex_ids[i]);
++            record_meb_support(simplex_tree, *it, support, record);
++        }
+ 	    //std::cout << "Meb is " << meb_radius << std::endl;
+ 	    simplex_tree.assign_filtration(*it,meb_radius);
+ 	}
+@@ -259,7 +278,7 @@
+     
+ 
+     template<typename SimplexTree> void compute_meb_radii_of_simplex_tree(SimplexTree &simplex_tree,
+-									  const std::vector<Point_with_densities> &input_points) {
++									  const std::vector<Point_with_densities> &input_points, const Meb_support_recorder& record = {}, const std::vector<int>* point_indices = nullptr) {
+ 	if(input_points.size()==0) {
+ 	    return;
+ 	}
+@@ -297,9 +316,9 @@
+ 		// If you really want this, use Miniball
+ 		typedef Meb_accessor_Miniball Meb_accessor;
+ 		Meb_accessor meb_accessor;
+-		_compute_meb_radii_of_simplex_tree<SimplexTree,Meb_accessor>(simplex_tree,meb_accessor,input_points);
+-	    }
+-	}
+-    
+-
+-    }
++		_compute_meb_radii_of_simplex_tree<SimplexTree,Meb_accessor>(simplex_tree,meb_accessor,input_points,record,point_indices);
++	    }
++	}
++    
++
++    }
+--- a/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h
++++ b/ext/function_delaunay/include/function_delaunay/function_delaunay_with_meb.h
+@@ -64,7 +64,7 @@
+     // Return the complex as a Gudhi::Simplex_tree instance
+     void incremental_delaunay_complex(std::vector<Point_with_densities> &input_points,
+ 				      Gudhi::Simplex_tree<>& simplex_tree,
+-				      bool only_return_complex_size=false) {
++				      bool only_return_complex_size=false, const Meb_support_recorder& record = {}, const std::vector<int>* vertex_ids = nullptr) {
+ 
+ 	if(input_points.size()==0) {
+ 	    return;
+@@ -85,6 +85,15 @@
+ 
+     
+ 	get_simplices_from_triangulation(input_points,simplices);
++        // Triangulation uses density order; tree labels and MEB lookup must agree.
++        std::vector<int> point_indices;
++        if (vertex_ids) {
++            point_indices.resize(input_points.size());
++            for (std::size_t i = 0; i < vertex_ids->size(); ++i)
++                point_indices[(*vertex_ids)[i]] = static_cast<int>(i);
++            for (auto& simplex : simplices)
++                for (auto& vertex : simplex) vertex = (*vertex_ids)[vertex];
++        }
+         
+ #if FUNCTION_DELAUNAY_TIMERS
+ 	complex_timer.stop();
+@@ -126,7 +135,7 @@
+ 	meb_timer.start();
+ #endif
+ 
+-	compute_meb_radii_of_simplex_tree(simplex_tree,input_points);
++	compute_meb_radii_of_simplex_tree(simplex_tree,input_points,record,vertex_ids ? &point_indices : nullptr);
+ 
+ 	std::cout << "Computed all meb values, now sorting" << std::endl;
+ 

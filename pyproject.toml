@@ -594,7 +594,7 @@ include = [
   "ext/muphasa/mph/signatureColumn.h",
   "ext/muphasa/mph/utils.h",
   "ext/patches/deg_rips_edge_copy_reducer.patch",
-  "ext/patches/function_delaunay_runtime_logs.patch",
+  "ext/patches/function_delaunay_supports.patch",
   "ext/patches/generate_ext_patches.py",
   "ext/patches/mpfree_runtime_logs.patch",
   "ext/patches/multi_critical_features.patch",

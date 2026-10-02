@@ -14,6 +14,9 @@ backend = _jnp
 name = "jax"
 _has_jit = True
 int64 = _jnp.int64
+float32 = _jnp.float32
+float64 = _jnp.float64
+finfo = _jnp.finfo
 ones = _jnp.ones
 reshape = _jnp.reshape
 arange = _jnp.arange
@@ -42,6 +45,11 @@ sinc = _jnp.sinc
 sqrt = _jnp.sqrt
 matmul = _jnp.matmul
 einsum = _jnp.einsum
+maximum = _jnp.maximum
+isfinite = _jnp.isfinite
+solve = _jnp.linalg.solve
+amax = _jnp.amax
+diagonal = _jnp.diagonal
 
 
 def argsort(x, axis=-1):
@@ -120,7 +128,8 @@ def copy(x):
 
 
 def device(x):
-    return getattr(x, 'device', None)
+    return getattr(x, "device", None)
+
 
 def sort(x, axis=-1):
     return _jnp.sort(x, axis=axis)
