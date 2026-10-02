@@ -71,7 +71,6 @@ NB_MODULE(_function_rips_nanobind, m) {
         mpfrn::visit_simplextree_wrapper(target, [&]<typename Desc>(auto& wrapper) {
           using Interface = typename Desc::interface_type;
           if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
-            nb::gil_scoped_release release;
             Gudhi::multiparameter::function_rips::get_degree_rips_st_python(
                 reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), wrapper.tree, degree_vector);
           } else {

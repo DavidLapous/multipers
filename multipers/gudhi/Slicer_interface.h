@@ -127,7 +127,11 @@ class Slicer_interface {
   template <class OtherMultiFiltrationValue>
   Slicer_interface(multipers::nanobind_helpers::PySimplexTree<
                    Gudhi::multi_persistence::Multi_simplex_tree_interface<OtherMultiFiltrationValue>> &simplexTree)
-      : slicer_(), filtrationGrid_(simplexTree.filtration_grid), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+      : slicer_(),
+        filtrationGrid_(simplexTree.tree.get_filtration_grid()),
+        presDegree_(-1),
+        isMinPres_(false),
+        isMinRes_(false) {
     nanobind::gil_scoped_release release;
     slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree.tree);
   }

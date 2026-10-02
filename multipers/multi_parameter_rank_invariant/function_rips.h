@@ -48,7 +48,7 @@ std::pair<std::map<value_type, unsigned int>, std::vector<value_type>> inline ra
 // axis is the rips, and the others are the filtrations of the node at each
 // degree in degrees Assumes that the degrees are sorted, and unique
 // also return max_degree,filtration_values
-inline flat_multi_st get_degree_filtrations(multi_persistence::Simplex_tree_std &st, const std::vector<int> &degrees) {
+inline flat_multi_st::Base get_degree_filtrations(multi_persistence::Simplex_tree_std &st, const std::vector<int> &degrees) {
   constexpr const bool verbose = false;
   using filtration_lists = std::vector<std::vector<value_type>>;
 
@@ -58,7 +58,7 @@ inline flat_multi_st get_degree_filtrations(multi_persistence::Simplex_tree_std 
   unsigned int num_degrees = degrees.size();
   // puts the st filtration in axis 0 + fitrations for each degrees afterward
   flat_multifiltration default_f(static_cast<int>(num_degrees), 0);
-  flat_multi_st st_multi(Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0));
+  flat_multi_st::Base st_multi = Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0);
 
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
@@ -258,9 +258,13 @@ inline void get_degree_rips_st_python(const char *buffer_start,
                                       const std::size_t buffer_size,
                                       simplex_tree_type &st_multi_python_container,
                                       const std::vector<int> &degrees) {
-  multi_persistence::Simplex_tree_std st_std;
-  st_std.deserialize(buffer_start, buffer_size);
-  auto st_multi = get_degree_filtrations(st_std, degrees);
+  flat_multi_st::Base st_multi;
+  {
+    nanobind::gil_scoped_release release;
+    multi_persistence::Simplex_tree_std st_std;
+    st_std.deserialize(buffer_start, buffer_size);
+    st_multi = get_degree_filtrations(st_std, degrees);
+  }
   st_multi_python_container = std::move(st_multi);
 }
 

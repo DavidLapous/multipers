@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backend_log_policy.hpp"
+#include "nanobind/nanobind.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -447,11 +448,10 @@ inline Gudhi::Simplex_tree<> relabel_simplex_tree_vertices(const Gudhi::Simplex_
   return out;
 }
 
-inline function_delaunay_simplextree_interface_output convert_simplex_tree(Gudhi::Simplex_tree<>& simplex_tree,
-                                                                           const std::vector<double>& lowerstar_values,
-                                                                           std::size_t num_function_parameters) {
-  function_delaunay_simplextree_interface_output out;
-
+inline function_delaunay_simplextree_interface_output::Base convert_simplex_tree(
+    Gudhi::Simplex_tree<>& simplex_tree,
+    const std::vector<double>& lowerstar_values,
+    std::size_t num_function_parameters) {
   if (num_function_parameters == 0) {
     throw std::invalid_argument("function_delaunay simplex interface expects at least one function parameter.");
   }
@@ -462,16 +462,10 @@ inline function_delaunay_simplextree_interface_output convert_simplex_tree(Gudhi
   const auto lowerstar_view = Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
       lowerstar_values.data(), num_vertices, num_function_parameters);
 
-  const std::size_t serialized_size = simplex_tree.get_serialization_size();
-  std::vector<char> serialized_simplextree(serialized_size);
-  if (serialized_size > 0) {
-    simplex_tree.serialize(serialized_simplextree.data(), serialized_size);
-  }
-
   std::vector<double> default_values(1 + num_function_parameters, -std::numeric_limits<double>::infinity());
-  if (serialized_size > 0) {
-    out.from_std(serialized_simplextree.data(), serialized_size, 0, default_values);
-  }
+  function_delaunay_simplextree_interface_output::Base out =
+      Gudhi::multi_persistence::make_multi_dimensional<function_delaunay_simplextree_interface_output::Options>(
+          simplex_tree, default_values, 0);
 
   for (std::size_t parameter = 0; parameter < num_function_parameters; ++parameter) {
     std::vector<double> column_values;
@@ -571,29 +565,40 @@ template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>& input,
     bool verbose_output) {
-  std::optional<std::lock_guard<std::mutex> > global_state_lock;
-  if (detail::function_delaunay_interface_needs_global_state_lock()) {
-    global_state_lock.emplace(detail::function_delaunay_interface_mutex());
+  {
+    nanobind::gil_scoped_release release;
+    // ???
+    std::optional<std::lock_guard<std::mutex> > global_state_lock;
+    if (detail::function_delaunay_interface_needs_global_state_lock()) {
+      global_state_lock.emplace(detail::function_delaunay_interface_mutex());
+    }
   }
 
-  if (input.num_points == 0) {
-    return function_delaunay_simplextree_interface_output();
+  if (input.num_points == 0) return {};
+
+  function_delaunay_simplextree_interface_output::Base outSt;
+
+  {
+    nanobind::gil_scoped_release release;
+    std::size_t num_function_parameters = 0;
+    Gudhi::Simplex_tree<> simplex_tree;
+    auto points = detail::make_sorted_function_delaunay_points(input, &num_function_parameters);
+    const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
+    (void)verbose_output;
+    detail::stream_silencer silencer(false);
+    function_delaunay::incremental_delaunay_complex(points, simplex_tree, false);
+
+    if (input.recover_ids) {
+      simplex_tree = detail::relabel_simplex_tree_vertices(simplex_tree, sorted_to_original);
+      nanobind::gil_scoped_acquire acquire;
+      outSt = detail::convert_simplex_tree(simplex_tree, input.function_values, num_function_parameters);
+    } else {
+      outSt = detail::convert_simplex_tree(
+          simplex_tree, detail::lowerstar_values_from_points(points, num_function_parameters), num_function_parameters);
+    }
   }
 
-  std::size_t num_function_parameters = 0;
-  auto points = detail::make_sorted_function_delaunay_points(input, &num_function_parameters);
-  const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
-
-  (void)verbose_output;
-  detail::stream_silencer silencer(false);
-  Gudhi::Simplex_tree<> simplex_tree;
-  function_delaunay::incremental_delaunay_complex(points, simplex_tree, false);
-  if (input.recover_ids) {
-    simplex_tree = detail::relabel_simplex_tree_vertices(simplex_tree, sorted_to_original);
-    return detail::convert_simplex_tree(simplex_tree, input.function_values, num_function_parameters);
-  }
-  return detail::convert_simplex_tree(
-      simplex_tree, detail::lowerstar_values_from_points(points, num_function_parameters), num_function_parameters);
+  return {std::move(outSt)};
 }
 
 template <typename index_type>

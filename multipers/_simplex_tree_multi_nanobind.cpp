@@ -259,77 +259,78 @@ Wrapper& normalize_filtrations_inplace(Wrapper& self, nb::object box_obj) {
 //   }
 // }
 
-template <typename TargetInterface, typename SourceSlicer>
-void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSlicer& slicer, int max_dim) {
-  using TargetFiltration = typename TargetInterface::Filtration_value;
-  using TargetVertex = typename TargetInterface::Vertex_handle;
-  using TargetSimplex = typename TargetInterface::Simplex;
-  using namespace Gudhi::multi_filtration;
+// template <typename TargetInterface, typename SourceSlicer>
+// void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSlicer& slicer, int max_dim) {
+//   using TargetFiltration = typename TargetInterface::Filtration_value;
+//   using TargetVertex = typename TargetInterface::Vertex_handle;
+//   using TargetSimplex = typename TargetInterface::Simplex;
+//   using namespace Gudhi::multi_filtration;
 
-  out.clear();
-  out.set_num_parameters(slicer.get_number_of_parameters());
+//   out.clear();
+//   out.set_num_parameters(slicer.get_number_of_parameters());
 
-  const auto& dims = slicer.get_dimensions();
-  const auto& boundaries = slicer.get_boundaries();
-  const auto& filtrations = slicer.get_filtration_values();
+//   const auto& dims = slicer.get_dimensions();
+//   const auto& boundaries = slicer.get_boundaries();
+//   const auto& filtrations = slicer.get_filtration_values();
 
-  std::vector<std::vector<TargetVertex>> simplex_vertices(dims.size());
-  // std::vector<TargetSimplex> simplices;
-  // std::vector<TargetFiltration> converted_filtrations;
-  // simplices.reserve(dims.size());
-  // converted_filtrations.reserve(dims.size());
+//   std::vector<std::vector<TargetVertex>> simplex_vertices(dims.size());
+//   // std::vector<TargetSimplex> simplices;
+//   // std::vector<TargetFiltration> converted_filtrations;
+//   // simplices.reserve(dims.size());
+//   // converted_filtrations.reserve(dims.size());
 
-  int next_vertex = 0;
-  int previous_dim = -1;
-  for (size_t i = 0; i < dims.size(); ++i) {
-    int dim = dims[i];
-    if (dim < previous_dim) {
-      throw std::invalid_argument("Dims is not sorted.");
-    }
-    previous_dim = dim;
-    if (max_dim >= 0 && dim > max_dim) {
-      break;
-    }
+//   int next_vertex = 0;
+//   int previous_dim = -1;
+//   for (size_t i = 0; i < dims.size(); ++i) {
+//     int dim = dims[i];
+//     if (dim < previous_dim) {
+//       throw std::invalid_argument("Dims is not sorted.");
+//     }
+//     previous_dim = dim;
+//     if (max_dim >= 0 && dim > max_dim) {
+//       break;
+//     }
 
-    auto& vertices = simplex_vertices[i];
-    if (dim == 0) {
-      vertices.push_back(static_cast<TargetVertex>(next_vertex++));
-    } else {
-      for (auto face_idx : boundaries[i]) {
-        if (static_cast<size_t>(face_idx) >= i) {
-          throw std::invalid_argument("Invalid boundary in slicer.");
-        }
-        const auto& face_vertices = simplex_vertices[face_idx];
-        vertices.insert(vertices.end(), face_vertices.begin(), face_vertices.end());
-      }
-      std::sort(vertices.begin(), vertices.end());
-      vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
-      if (vertices.size() != static_cast<size_t>(dim + 1)) {
-        throw std::invalid_argument("Input slicer is not simplicial.");
-      }
-    }
+//     auto& vertices = simplex_vertices[i];
+//     if (dim == 0) {
+//       vertices.push_back(static_cast<TargetVertex>(next_vertex++));
+//     } else {
+//       for (auto face_idx : boundaries[i]) {
+//         if (static_cast<size_t>(face_idx) >= i) {
+//           throw std::invalid_argument("Invalid boundary in slicer.");
+//         }
+//         const auto& face_vertices = simplex_vertices[face_idx];
+//         vertices.insert(vertices.end(), face_vertices.begin(), face_vertices.end());
+//       }
+//       std::sort(vertices.begin(), vertices.end());
+//       vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
+//       if (vertices.size() != static_cast<size_t>(dim + 1)) {
+//         throw std::invalid_argument("Input slicer is not simplicial.");
+//       }
+//     }
 
-    // simplices.emplace_back(vertices.begin(), vertices.end());
-    if constexpr (std::is_same_v<TargetFiltration, typename SourceSlicer::Filtration_value>) {
-      out.insert_force(vertices, filtrations[i]);
-    } else {
-      out.insert_force(vertices, filtrations[i].template as_type<TargetFiltration>());
-    }
-  }
+//     // simplices.emplace_back(vertices.begin(), vertices.end());
+//     if constexpr (std::is_same_v<TargetFiltration, typename SourceSlicer::Filtration_value>) {
+//       out.insert_force(vertices, filtrations[i]);
+//     } else {
+//       out.insert_force(vertices, filtrations[i].template as_type<TargetFiltration>());
+//     }
+//   }
 
-  // for (size_t i = 0; i < simplices.size(); ++i) {
-  //   out.assign_simplex_filtration(simplices[i], converted_filtrations[i]);
-  // }
-}
+//   // for (size_t i = 0; i < simplices.size(); ++i) {
+//   //   out.assign_simplex_filtration(simplices[i], converted_filtrations[i]);
+//   // }
+// }
 
-template <typename Desc, typename Wrapper, typename Interface>
-void build_from_slicer_desc(Wrapper& self, const typename Desc::interface& source, int max_dim) {
-  {
-    nb::gil_scoped_release release;
-    copy_simplicial_slicer_to_simplextree<Interface>(self.tree, source.get_slicer(), max_dim);
-  }
-  reset_simplextree_python_state(self);
-}
+// template <typename Desc, typename Wrapper, typename Interface>
+// void build_from_slicer_desc(Wrapper& self, const typename Desc::interface& source, int max_dim) {
+//   // {
+//   //   nb::gil_scoped_release release;
+//   //   copy_simplicial_slicer_to_simplextree<Interface>(self.tree, source.get_slicer(), max_dim);
+//   // }
+//   // reset_simplextree_python_state(self);
+//   self.tree.copy_from(source.get_slicer(), max_dim);
+// }
 
 // template <typename Wrapper, typename Interface>
 // bool try_build_from_slicer(Wrapper& self, nb::handle source, int max_dim) {
@@ -714,11 +715,11 @@ void bind_simplex_array_overloads(Class& cls) {
 
 template <typename Desc, typename TargetWrapper, typename TargetInterface>
 void copy_from_desc(TargetWrapper& self, const simplextree_wrapper_t<Desc>& source) {
-  {
-    nb::gil_scoped_release release;
+  // {
+    // nb::gil_scoped_release release;
     SimplexTreeConversion<TargetInterface, typename Desc::interface_type>::run(self.tree, source.tree);
-  }
-  copy_simplextree_python_state(self, source);
+  // }
+  // copy_simplextree_python_state(self, source);
 }
 
 template <typename TargetWrapper, typename TargetInterface>
@@ -732,14 +733,14 @@ bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
   return true;
 }
 
-template <typename Wrapper, typename U>
-Wrapper &coarsen_on_grid(Wrapper& self, const std::vector<std::vector<U>> &grid, bool coordinates) {
-  {
-    nanobind::gil_scoped_release release;
-    self.tree.coarsen_on_grid(grid, coordinates);
-  }
-  return self;
-}
+// template <typename Wrapper, typename U>
+// Wrapper &coarsen_on_grid(Wrapper& self, const std::vector<std::vector<U>> &grid, bool coordinates) {
+//   {
+//     nanobind::gil_scoped_release release;
+//     self.tree.coarsen_on_grid(grid, coordinates);
+//   }
+//   return self;
+// }
 
 // template <typename Wrapper, typename U>
 // Wrapper &coarsen_on_grid(const std::vector<Tensor1D<U>> &grid, bool coordinates) {
@@ -791,26 +792,37 @@ PySimplexTree<typename TargetDesc::interface_type> construct_from_slicer_wrapper
     const typename SourceDesc::interface& source,
     int max_dim) {
   using Wrapper = PySimplexTree<typename TargetDesc::interface_type>;
-  using Interface = typename TargetDesc::interface_type;
+  // using Interface = typename TargetDesc::interface_type;
   Wrapper out;
-  build_from_slicer_desc<SourceDesc, Wrapper, Interface>(out, source, max_dim);
+  out.tree.copy_from(source.get_slicer(), max_dim);
+  // build_from_slicer_desc<SourceDesc, Wrapper, Interface>(out, source, max_dim);
   return out;
 }
 
 template <typename TargetDesc, typename Class, typename... SourceDesc>
 void bind_simplextree_source_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(nb::new_([](const simplextree_wrapper_t<SourceDesc>& source) {
-             return construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source);
-           }),
+  using Interface = typename TargetDesc::interface_type;
+  using Wrapper = PySimplexTree<Interface>;
+  (cls.def("__init__", [](Wrapper* self, const simplextree_wrapper_t<SourceDesc>& source) {
+             new (self) Wrapper(construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source));
+           },
+    // nb::new_([](const simplextree_wrapper_t<SourceDesc>& source) {
+    //          return construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source);
+    //        }),
            "source"_a),
    ...);
 }
 
 template <typename TargetDesc, typename Class, typename... SourceDesc>
 void bind_slicer_source_constructors(Class& cls, type_list<SourceDesc...>) {
-  (cls.def(nb::new_([](const typename SourceDesc::interface& source, int max_dim) {
-             return construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim);
-           }),
+  using Interface = typename TargetDesc::interface_type;
+  using Wrapper = PySimplexTree<Interface>;
+  (cls.def("__init__", [](Wrapper* self, const typename SourceDesc::interface& source, int max_dim) {
+             new (self) Wrapper(construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim));
+           },
+    // nb::new_([](const typename SourceDesc::interface& source, int max_dim) {
+    //          return construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim);
+    //        }),
            "source"_a,
            "max_dim"_a = -1),
    ...);
@@ -980,13 +992,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
   auto cls =
       nb::class_<Wrapper>(m, Desc::python_name.data())
           .def(nb::init<>())
-          .def(nb::new_([](int num_parameters) {
-                 Wrapper out;
-                 int n = num_parameters <= 0 ? 2 : num_parameters;
-                 //  out.tree.resize_all_filtrations(n);
-                 out.tree.set_num_parameters(n);
-                 return out;
-               }),
+          .def(nb::init<int>(),
                "num_parameters"_a = -1)
           .def_prop_rw(
               "filtration_grid",
@@ -1035,11 +1041,12 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           .def("__getstate__", [](Wrapper& self) -> nanobind::tuple { return self.tree.serialize(); })
           .def("__setstate__",
                [](Wrapper& self, nanobind::tuple state) {
-                 new (&self)
-                     Wrapper(Gudhi::multi_persistence::deserialize_multi_simplex_tree_from_python<Interface>(state));
+                 auto st = Gudhi::multi_persistence::deserialize_multi_simplex_tree_from_python<Interface>(state);
+                 new (&self) Wrapper(std::move(st));
                })
           // .def("__getstate__",
-          //      [](Wrapper& self) -> nb::tuple { return nb::make_tuple(serialized_state(self), self.filtration_grid); })
+          //      [](Wrapper& self) -> nb::tuple { return nb::make_tuple(serialized_state(self), self.filtration_grid);
+          //      })
           // .def("__reduce__",
           //      [](Wrapper& self) -> nb::tuple {
           //        return nb::make_tuple(nb::borrow<nb::object>(nb::type<Wrapper>()),
@@ -1212,11 +1219,11 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           "_squeeze_inplace",
           [](Wrapper& self, nb::handle grid_handle, bool coordinate_values) -> Wrapper& {
             auto grid = matrix_from_handle<Value>(grid_handle);
-            {
-              nb::gil_scoped_release release;
+            // {
+            //   nb::gil_scoped_release release;
               // self.tree.squeeze_filtration_inplace(grid, coordinate_values);
               self.tree.coarsen_on_grid(grid, coordinate_values);
-            }
+            // }
             return self;
           },
           nb::rv_policy::reference_internal)

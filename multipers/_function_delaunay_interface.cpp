@@ -32,7 +32,7 @@ void build_function_delaunay_simplextree(Wrapper& wrapper,
   using Interface = multipers::function_delaunay_simplextree_interface_output;
   Interface output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
   {
-    nb::gil_scoped_release release;
+    // nb::gil_scoped_release release;
     wrapper.tree.copy_from(output);
   }
 }
@@ -80,14 +80,11 @@ nb::object function_delaunay_to_slicer_for_target(nb::object target,
 nb::object function_delaunay_to_simplextree_for_target(nb::object target,
                                                        const multipers::function_delaunay_interface_input<int>& input,
                                                        bool verbose) {
-  multipers::function_delaunay_simplextree_interface_output output;
-  {
-    nb::gil_scoped_release release;
-    output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
-  }
+  multipers::function_delaunay_simplextree_interface_output output =
+      multipers::function_delaunay_simplextree_interface<int>(input, verbose);
   nb::object out = target.type()();
   visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) {
-    nb::gil_scoped_release release;
+    // nb::gil_scoped_release release;
     wrapper.tree.copy_from(output);
   });
   return out;

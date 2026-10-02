@@ -69,6 +69,9 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   using Tensor3D = nanobind::ndarray<const U, nanobind::ndim<3>>;
 
   Multi_simplex_tree_interface() : Base(), filtrationGrid_(nanobind::none()) {};
+  Multi_simplex_tree_interface(int numParam) : Base(), filtrationGrid_(nanobind::none()) {
+    Base::set_num_parameters(numParam <= 0 ? 2 : numParam);
+  };
   Multi_simplex_tree_interface(const Base& st) : Base(st), filtrationGrid_(nanobind::none()) {};
   Multi_simplex_tree_interface(Base&& st) : Base(std::move(st)), filtrationGrid_(nanobind::none()) {};
 
@@ -85,23 +88,31 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   }
 
   // makes the method public
-  template <typename OtherSimplexTreeOptions, typename F>
-  void copy_from(const Simplex_tree<OtherSimplexTreeOptions>& complex_source, F&& translate_filtration_value) {
-    Base::copy_from(complex_source, std::forward<F>(translate_filtration_value));
-  }
+  // template <typename OtherSimplexTreeOptions, typename F>
+  // void copy_from(const Simplex_tree<OtherSimplexTreeOptions>& complex_source, F&& translate_filtration_value) {
+  //   Base::copy_from(complex_source, std::forward<F>(translate_filtration_value));
+  // }
 
   template <typename OtherMultiFiltrationValue>
   void copy_from(const Multi_simplex_tree_interface<OtherMultiFiltrationValue>& other) {
-    Base::clear();
-    Base::copy_from(other, [](const auto& fil) { return fil.template as_type<Filtration_value>(); });
+    {
+      nanobind::gil_scoped_release release;
+      Base::clear();
+      Base::copy_from(other, [](const auto& fil) { return fil.template as_type<Filtration_value>(); });
+    }
     filtrationGrid_ = other.get_filtration_grid();
   }
 
   template <class OtherMultiFiltrationValue, class PersistenceAlgorithm>
-  void copy_from(const Slicer<OtherMultiFiltrationValue, PersistenceAlgorithm>& other) {
-    Base::clear();
+  void copy_from(const Slicer<OtherMultiFiltrationValue, PersistenceAlgorithm>& other, int maxDim = -1) {
     filtrationGrid_ = nanobind::none();
-    
+    Base st;
+    {
+      nanobind::gil_scoped_release release;
+      Base::clear();
+      st = build_simplex_tree_from_complex<Options>(other.get_filtered_complex(), maxDim);
+    }
+    *this = std::move(st);
   }
 
   [[nodiscard]] nanobind::object get_filtration_grid() const { return filtrationGrid_; }
@@ -142,9 +153,11 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     std::pair<Simplex_handle, bool> result;
 
     if (filtrationValue.is_none()) {
+      nanobind::gil_scoped_release release;
       result = _insert_single_simplex(Numpy_span(vertices));
     } else {
       Filtration_value fil = _cast_to_filtration_value(filtrationValue, Base::num_parameters());
+      nanobind::gil_scoped_release release;
       result = _insert_single_simplex(Numpy_span(vertices), fil);
     }
 
@@ -183,7 +196,10 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     {
       nanobind::gil_scoped_release release;
-      Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::inf(Base::num_parameters()));
+      if constexpr (!Filtration_value::ensures_1_criticality()) {
+        // small optimisation, but don't work in both cases because of weird insertion strategy
+        Base::insert_batch_vertices(Numpy_span(vertices), Filtration_value::inf(Base::num_parameters()));
+      }
       for (std::size_t i = 0; i < numSimplices; ++i) {
         _insert_single_simplex(make_element_range(&v_view(0, i), v_view, false), fils[i]);
       }
@@ -522,14 +538,14 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
   template <typename OneDimArray>
   Multi_simplex_tree_interface build_unsqueezed_from(const std::vector<OneDimArray>& grid) const {
-    Multi_simplex_tree_interface out;
+    Base out;
     {
       nanobind::gil_scoped_release release;
-      out.copy_from(*this, [&](const Filtration_value& fil) -> Filtration_value {
+      out = Base(*this, [&](const Filtration_value& fil) -> Filtration_value {
         return evaluate_coordinates_in_grid<value_type>(fil, grid);
       });
     }
-    return out;
+    return {std::move(out)};
   }
 
   template <typename U>
@@ -838,7 +854,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
   template <class VertexRange>
   std::pair<Simplex_handle, bool> _insert_single_simplex(const VertexRange& vertices) {
-    nanobind::gil_scoped_release release;
     return Base::insert_simplex_and_subfaces(
         Base::Filtration_maintenance::INCREASE_NEW, vertices, Filtration_value::minus_inf(Base::num_parameters()));
   }
@@ -846,7 +861,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   template <class VertexRange>
   std::pair<Simplex_handle, bool> _insert_single_simplex(const VertexRange& vertices,
                                                          Filtration_value& filtrationValue) {
-    nanobind::gil_scoped_release release;
     // I still don't understand why 1-critical and k-critical simplices are not inserted with the same strategy.
     // That just feels inconsistent. If they are not used in the same situation, you could allow to pass
     // the strategy instead to make sense, no? In particular when the user could have completely different
