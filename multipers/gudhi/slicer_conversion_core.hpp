@@ -6,7 +6,15 @@ namespace multipers::core {
 
 template <class TargetSlicer, class SourceSlicer>
 struct SlicerConversion {
-  static TargetSlicer run(const SourceSlicer& source) { return TargetSlicer(source); }
+  static TargetSlicer run(const SourceSlicer& source) {
+    if constexpr (std::is_same_v<TargetSlicer, SourceSlicer>) {
+      return source;
+    } else if constexpr (std::is_constructible_v<typename TargetSlicer::Complex, const typename SourceSlicer::Complex&>) {
+      return TargetSlicer(source);
+    } else {
+      throw std::runtime_error("Unsupported slicer conversion.");
+    }
+  }
 };
 
 }  // namespace multipers::core
