@@ -12,10 +12,10 @@ function(multipers_add_core_object_library target_name source_file)
   target_link_libraries(
     ${target_name}
     PRIVATE
-      multipers::project_options
-      multipers::project_warnings
       multipers::gudhi
       multipers::phat
+      multipers::project_options
+      multipers::project_warnings
   )
   multipers_apply_common_build_flags(${target_name})
 endfunction()
@@ -34,8 +34,18 @@ multipers_add_core_object_library(
   multipers_core_filtrations_obj
 )
 multipers_add_core_object_library(
-  multipers_core_slicer_obj
-  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core.cc"
+  multipers_core_slicer_obj1
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core1.cc"
+  multipers_core_filtrations_obj
+)
+multipers_add_core_object_library(
+  multipers_core_slicer_obj2
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core2.cc"
+  multipers_core_filtrations_obj
+)
+multipers_add_core_object_library(
+  multipers_core_slicer_obj3
+  "${CMAKE_SOURCE_DIR}/tools/core/slicer_core3.cc"
   multipers_core_filtrations_obj
 )
 multipers_add_core_object_library(
@@ -65,7 +75,7 @@ if(MULTIPERS_BUILD_GRAPH_MPH0_BENCHMARK)
   )
   target_link_libraries(
     multipers_benchmark_graph_mph0
-    PRIVATE multipers::project_options multipers::project_warnings multipers::gudhi
+    PRIVATE multipers::gudhi multipers::project_options multipers::project_warnings
   )
   multipers_apply_common_build_flags(multipers_benchmark_graph_mph0)
 endif()
@@ -76,7 +86,9 @@ add_library(
   $<TARGET_OBJECTS:multipers_core_backend_log_policy_obj>
   $<TARGET_OBJECTS:multipers_core_filtrations_obj>
   $<TARGET_OBJECTS:multipers_core_simplextree_obj>
-  $<TARGET_OBJECTS:multipers_core_slicer_obj>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj1>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj2>
+  $<TARGET_OBJECTS:multipers_core_slicer_obj3>
   $<TARGET_OBJECTS:multipers_core_hera_obj>
   $<TARGET_OBJECTS:multipers_core_graph_mph0_obj>
 )
@@ -84,9 +96,9 @@ add_dependencies(multipers_core_shared multipers_codegen)
 target_link_libraries(
   multipers_core_shared
   PRIVATE
-    multipers::project_options
     multipers::gudhi
     multipers::phat
+    multipers::project_options
     multipers::backend_hera
     multipers::tbb
     multipers::openmp

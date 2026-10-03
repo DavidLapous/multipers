@@ -48,7 +48,7 @@ template <class simplextree_std, class simplextree_multi>
 void linear_projection(simplextree_std &st, simplextree_multi &st_multi, const std::vector<double> &linear_form) {
   static_assert(
       std::is_arithmetic_v<typename simplextree_std::Filtration_value> &&
-          Gudhi::multi_filtration::RangeTraits<typename simplextree_multi::Filtration_value>::is_multi_filtration,
+          Gudhi::multi_filtration::detail::RangeTraits<typename simplextree_multi::Filtration_value>::is_multi_filtration,
       "Can only convert multiparameter to non-multiparameter simplextree.");
   auto sh = st.complex_simplex_range().begin();
   auto sh_multi = st_multi.complex_simplex_range().begin();
@@ -344,11 +344,7 @@ class Simplex_tree_multi_interface
     if (num < 0) return;
     for (const auto &SimplexHandle : Base::complex_simplex_range()) {
       auto &f = Base::get_filtration_value(SimplexHandle);
-      if (f.num_parameters() == static_cast<unsigned int>(num)) {
-        if constexpr (Gudhi::multi_filtration::RangeTraits<Filtration_value>::is_dynamic_multi_filtration) {
-          for (unsigned int g = 0; g < f.num_generators(); ++g) f.force_generator_size_to_number_of_parameters(g);
-        }
-      } else {
+      if (f.num_parameters() != static_cast<unsigned int>(num)) {
         std::vector<typename Filtration_value::value_type> values(num * f.num_generators());
         unsigned int i = 0;
         for (unsigned int g = 0; g < f.num_generators(); ++g) {
@@ -441,8 +437,7 @@ class Simplex_tree_multi_interface
   void copy_from_interface_object(const Simplex_tree_multi_interface<OtherFiltrationValue, OtherValueType> &other) {
     Base::clear();
     Base::set_num_parameters(other.num_parameters());
-    Base::copy_from(other,
-                    [](const auto &fil) { return as_type<Filtration_value>(fil); });
+    Base::copy_from(other, [](const auto &fil) { return fil.template as_type<Filtration_value>(); });
   }
 
   template <typename OtherFiltrationValue>
@@ -493,8 +488,10 @@ class Simplex_tree_multi_interface
   void squeeze_filtration_to(OutSimplexTree &out, const std::vector<std::vector<double>> &grid) {
     out.clear();
     out.set_num_parameters(Base::num_parameters());
-    out.copy_from(
-        *this, [&](const auto &simplex_filtration) { return compute_coordinates_in_grid(simplex_filtration, grid); });
+    out.copy_from(*this, [&](const auto &simplex_filtration) {
+      return compute_coordinates_in_grid<typename OutSimplexTree::Filtration_value::value_type>(simplex_filtration,
+                                                                                                grid);
+    });
   }
 
   void squeeze_filtration(const intptr_t outptr, const std::vector<std::vector<double>> &grid) {

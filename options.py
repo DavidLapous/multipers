@@ -48,9 +48,9 @@ KCRITICAL = [
 
 # Filtration container IDs
 FILTRATION_CONTAINERS = [
-    "Degree_rips_bifiltration",  # needed for DegreeRips
-    "Multi_parameter_filtration",
-    # "Dynamic_multi_parameter_filtration",
+    "Degree_rips",  # needed for DegreeRips
+    "Flat_container",
+    # "Nested_container",
 ]
 
 # Aliases used by generated Python wrappers
@@ -63,12 +63,12 @@ REAL_VALUE_TYPE = "float64"
 #   - short tokens: "Graph|Clement"
 #   - explicit key: "backend=Graph|Clement"
 RULES = [
-    "Degree_rips_bifiltration => kcritical=True",
+    "Degree_rips => kcritical=True",
     "Clement => vine=True",
     "GudhiCohomology => vine=False",
     f"Graph|GudhiCohomology => column={COLUMNS[0]}",
     "Graph => value_type=int32|float64",
-    "Graph => filtration_container=Multi_parameter_filtration",
+    "Graph => filtration_container=Flat_container",
 ]
 
 # Hard requirements validated after RULES are applied.
@@ -76,8 +76,8 @@ RULES = [
 # This keeps bridge/coarsening assumptions explicit and editable from this file.
 DEFAULT_BRIDGE_COLUMN = COLUMNS[0] if COLUMNS else "INTRUSIVE_LIST"
 REQUIRED_SLICER_COMBINATIONS = [
-    f"backend=Matrix, vine=False, kcritical=False, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
-    f"backend=Matrix, vine=False, kcritical=False, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
-    f"backend=Matrix, vine=False, kcritical=True, value_type=float64, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
-    f"backend=Matrix, vine=False, kcritical=True, value_type=int32, filtration_container=Multi_parameter_filtration, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=False, value_type=float64, filtration_container=Flat_container, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=False, value_type=int32, filtration_container=Flat_container, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=True, value_type=float64, filtration_container=Flat_container, column={DEFAULT_BRIDGE_COLUMN}",
+    f"backend=Matrix, vine=False, kcritical=True, value_type=int32, filtration_container=Flat_container, column={DEFAULT_BRIDGE_COLUMN}",
 ]

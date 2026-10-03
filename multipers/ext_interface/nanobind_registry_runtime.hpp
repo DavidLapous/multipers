@@ -10,6 +10,7 @@
 
 #include "contiguous_slicer_bridge.hpp"
 #include "nanobind_wrapper_types.hpp"
+#include "nanobind_registry_helpers.hpp"
 
 namespace multipers::nanobind_helpers {
 
@@ -37,18 +38,18 @@ BifiltrationMinpresDegreeBlock extract_bifiltration_minpres_degree_block(const W
   if (degree < 0) {
     throw std::runtime_error("Expected a minimal-presentation slicer.");
   }
-  if (wrapper.truc.get_number_of_parameters() != 2) {
+  if (wrapper.get_slicer().get_number_of_parameters() != 2) {
     throw std::runtime_error("Only 2-parameter minimal-presentation slicers are supported.");
   }
 
   BifiltrationMinpresDegreeBlock out;
   out.degree = degree;
-  out.filtration_grid = wrapper.filtration_grid;
-  out.is_squeezed = has_nonempty_filtration_grid(wrapper.filtration_grid);
+  out.filtration_grid = wrapper.get_filtration_grid();
+  out.is_squeezed = has_nonempty_filtration_grid(wrapper.get_filtration_grid());
 
-  const auto& dimensions = wrapper.truc.get_dimensions();
-  const auto& filtrations = wrapper.truc.get_filtration_values();
-  const auto& boundaries = wrapper.truc.get_boundaries();
+  const auto& dimensions = wrapper.get_slicer().get_dimensions();
+  const auto& filtrations = wrapper.get_slicer().get_filtration_values();
+  const auto& boundaries = wrapper.get_slicer().get_boundaries();
 
   out.row_begin = std::lower_bound(dimensions.begin(), dimensions.end(), degree) - dimensions.begin();
   out.row_end = std::lower_bound(dimensions.begin(), dimensions.end(), degree + 1) - dimensions.begin();
@@ -98,45 +99,8 @@ nanobind::object build_canonical_contiguous_f64_slicer_object_from_complex(const
   auto& out_wrapper = nanobind::cast<canonical_contiguous_f64_slicer_wrapper&>(out);
   {
     nanobind::gil_scoped_release release;
-    build_slicer_from_complex(out_wrapper.truc, complex);
+    build_slicer_from_complex(out_wrapper.get_slicer(), complex);
   }
-  return out;
-}
-
-template <typename Wrapper>
-Wrapper colexical_slicer_copy(const Wrapper& source) {
-  decltype(build_permuted_slicer(source.truc)) stuff;
-  {
-    nanobind::gil_scoped_release release;
-    stuff = build_permuted_slicer(source.truc);
-  }
-  Wrapper out;
-  out.truc = std::move(stuff.first);
-  copy_slicer_python_state(out, source);
-  return out;
-}
-
-template <typename Wrapper>
-std::pair<Wrapper, std::vector<uint32_t>> colexical_slicer_copy_with_permutation(const Wrapper& source) {
-  decltype(build_permuted_slicer(source.truc)) stuff;
-  {
-    nanobind::gil_scoped_release release;
-    stuff = build_permuted_slicer(source.truc);
-  }
-  Wrapper out;
-  out.truc = std::move(stuff.first);
-  copy_slicer_python_state(out, source);
-  return {std::move(out), std::vector<uint32_t>(stuff.second.begin(), stuff.second.end())};
-}
-
-template <typename Wrapper>
-Wrapper permuted_slicer_copy(const Wrapper& source, const std::vector<uint32_t>& permutation) {
-  Wrapper out;
-  {
-    nanobind::gil_scoped_release release;
-    out.truc = build_permuted_slicer(source.truc, permutation);
-  }
-  copy_slicer_python_state(out, source);
   return out;
 }
 

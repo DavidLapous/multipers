@@ -708,8 +708,7 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
     If autodiff-tracked input is detected, image values are first pushed to a
     discrete filtration grid and that grid is attached to the returned object.
     """
-    from multipers import Slicer, _slicer_nanobind as mps
-    from multipers.slicer import available_dtype
+    from multipers import Slicer
 
     verbose = bool(slicer_kwargs.pop("verbose", False))
     api = api_from_tensor(image)
@@ -755,18 +754,12 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
             )
 
         _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
-        builder_name = f"_build_bitmap_{np.dtype(dtype).name.replace('float64', 'f64').replace('int32', 'i32')}"
-        if not hasattr(mps, builder_name):
-            raise ValueError(
-                f"Invalid dtype. Got {bitmap.dtype=}, was expecting {available_dtype=}."
-            )
         timing.substep("resolved_builder")
 
         flattened = np.ascontiguousarray(bitmap.reshape(-1, bitmap.shape[-1]))
         shape = np.ascontiguousarray(bitmap.shape[:-1], dtype=np.uint32)
         timing.substep("prepared_bitmap")
-        base = getattr(mps, builder_name)(flattened, shape)
-        slicer = base if type(base) is _Slicer else _Slicer(base)
+        slicer = _Slicer(flattened, shape)
         timing.substep("built_bitmap")
 
         if grid is not None:

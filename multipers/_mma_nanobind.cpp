@@ -75,7 +75,9 @@ void bind_summand_class(nb::module_& m) {
                nb::gil_scoped_release release;
                buffer_size = get_serialization_size_of(self);
                buffer = new char[buffer_size];
-               serialize_value_to_char_buffer(self, buffer);
+               const char *end = serialize_value_to_char_buffer(self, buffer);
+               if (static_cast<std::size_t>(end - buffer) != buffer_size)
+                 throw std::runtime_error("Invalid summand serialization.");
              }
              return _wrap_as_numpy_array(buffer, buffer_size);
            })
@@ -103,9 +105,9 @@ void bind_float_module_methods(Class& cls) {
              "directions"_a = nb::none(),
              "degree"_a = -1,
              "keep_inf"_a = true)
-        // .def("evaluate_in_grid", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::evaluate_in_grid))
-        .def("evaluate_in_grid", nb::overload_cast<const std::vector<NDArray1>&>(&Module::evaluate_in_grid))
         .def("evaluate_in_grid", nb::overload_cast<NDArray2>(&Module::evaluate_in_grid))
+        .def("evaluate_in_grid", nb::overload_cast<const std::vector<NDArray1>&>(&Module::evaluate_in_grid))
+        // .def("evaluate_in_grid", nb::overload_cast<const std::vector<std::vector<T>>&>(&Module::evaluate_in_grid))
         .def("_compute_landscapes_box",
              &Module::template compute_landscapes_from_box<std::int32_t>,
              "degree"_a,
@@ -150,8 +152,8 @@ void bind_float_module_methods(Class& cls) {
              "p"_a,
              "normalize"_a = false,
              "n_jobs"_a = 0)
-        // .def("distance_to", &Module::compute_distance_to_iterable, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
         .def("distance_to", &Module::compute_distance_to_tensor, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
+        // .def("distance_to", &Module::compute_distance_to_iterable, "pts"_a, "signed"_a = false, "n_jobs"_a = 0)
         .def("get_interleavings", &Module::compute_interleavings)
         .def("get_interleavings", &Module::compute_interleavings_from_box);
   }
@@ -207,19 +209,25 @@ void bind_module_class(nb::module_& m) {
                        })
           .def("set_box",
                [](Module& self, NDArray2 box) {
-                 PyErr_WarnEx(PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1);
+                 if (PyErr_WarnEx(
+                         PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1) < 0)
+                   return self;
                  return self.set_box(box);
                })
           .def("set_box",
                [](Module& self, const std::vector<std::vector<T>>& box) {
-                 PyErr_WarnEx(PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1);
+                 if (PyErr_WarnEx(
+                         PyExc_DeprecationWarning, "set_box() is deprecated, use the .box property instead", 1) < 0)
+                   return self;
                  return self.set_box(box);
                })
           .def("get_bottom", &Module::get_box_lower_corner_view)
           .def("get_top", &Module::get_box_upper_corner_view)
           .def("get_box",
-               [](const Module& self) {
-                 PyErr_WarnEx(PyExc_DeprecationWarning, "get_box() is deprecated, use the .box property instead", 1);
+               [](const Module& self) -> nanobind::ndarray<nanobind::numpy, const T> {
+                 if (PyErr_WarnEx(
+                         PyExc_DeprecationWarning, "get_box() is deprecated, use the .box property instead", 1) < 0)
+                   return {};
                  return self.get_box_view_ro();
                })
           .def("get_bounds", &Module::compute_bounds)
@@ -252,7 +260,9 @@ void bind_module_class(nb::module_& m) {
                    nb::gil_scoped_release release;
                    buffer_size = get_serialization_size_of(self);
                    buffer = new char[buffer_size];
-                   serialize_value_to_char_buffer(self, buffer);
+                   const char* end = serialize_value_to_char_buffer(self, buffer);
+                   if (static_cast<std::size_t>(end - buffer) != buffer_size)
+                     throw std::runtime_error("Invalid module serialization.");
                  }
                  return _wrap_as_numpy_array(buffer, buffer_size);
                })
