@@ -72,8 +72,8 @@ index_curve spread_support_vertices(const Summand& summand,
   index_curve points = rows;
   std::vector<std::array<bool, 2>> terminated(rows.size(), {false, false});
 
-  for (std::size_t relation_id = 0; relation_id < summand.matrix.size(); ++relation_id) {
-    const auto& relation = summand.matrix[relation_id];
+  for (std::size_t relation_id = 0; relation_id < summand.data.size(); ++relation_id) {
+    const auto& relation = summand.data[relation_id];
     if (relation.empty()) {
       continue;
     }
@@ -169,9 +169,8 @@ inline auto aida_decomposition(const CanonicalWrapper& wrapper,
   functor.config.sort_output = false;
   functor.config.sort = aida_sort;
   functor.config.progress = progress;
-  auto input =
-      aida::multipers_interface_input<int>(prepared.relation_grades, prepared.row_grades, prepared.relation_boundaries);
-  return functor.multipers_interface(input);
+  return multipers::decompose_aida(
+      functor, prepared.relation_grades, prepared.row_grades, prepared.relation_boundaries);
 }
 
 inline index_curves birth_curve_indices(const CanonicalWrapper& wrapper,
@@ -195,8 +194,8 @@ inline index_curves birth_curve_indices(const CanonicalWrapper& wrapper,
   const auto output = aida_decomposition(wrapper, degree, aida_sort, verbose, progress);
   const std::array<std::int64_t, 2> sentinel = {inf_indices[0], inf_indices[1]};
   index_curves out;
-  out.reserve(output.summands.size());
-  for (const auto& summand : output.summands) {
+  out.reserve(output.size());
+  for (const auto& summand : output) {
     append_curve(out, spread_support_vertices(summand, sentinel, include_infinite), sort);
   }
   return out;
@@ -293,8 +292,8 @@ inline index_curves death_curve_indices(const CanonicalWrapper& wrapper,
   const auto output = aida_decomposition(death_wrapper, degree, aida_sort, verbose, progress);
   const std::array<std::int64_t, 2> sentinel = {inf_indices[0], inf_indices[1]};
   index_curves out;
-  out.reserve(output.summands.size());
-  for (const auto& summand : output.summands) {
+  out.reserve(output.size());
+  for (const auto& summand : output) {
     auto curve = death_boundary_vertices(spread_support_vertices(summand, sentinel, true), sentinel, include_infinite);
     append_curve(out, std::move(curve), sort);
   }

@@ -53,8 +53,8 @@ nb::object summand_to_slicer(nb::object target,
   std::fill(dimensions.begin() + static_cast<std::ptrdiff_t>(summand.row_degrees.size()), dimensions.end(), degree + 1);
 
   std::vector<std::vector<int>> boundaries(dimensions.size());
-  for (std::size_t i = 0; i < summand.matrix.size(); ++i) {
-    boundaries[summand.row_degrees.size() + i] = summand.matrix[i];
+  for (std::size_t i = 0; i < summand.data.size(); ++i) {
+    boundaries[summand.row_degrees.size() + i] = summand.data[i];
   }
 
   std::vector<std::pair<double, double>> filtration_values;
@@ -125,12 +125,11 @@ NB_MODULE(_aida_interface, m) {
         functor.config.sort_output = false;
         functor.config.sort = sort;
         functor.config.progress = progress;
-        auto input = aida::multipers_interface_input<int>(
-            prepared.relation_grades, prepared.row_grades, prepared.relation_boundaries);
-        auto output = functor.multipers_interface(input);
+        auto output = multipers::decompose_aida(
+            functor, prepared.relation_grades, prepared.row_grades, prepared.relation_boundaries);
 
         nb::list out;
-        for (const auto& summand : output.summands) {
+        for (const auto& summand : output) {
           nb::object slicer = mpaida::summand_to_slicer(
               target, summand, prepared.degree, prepared.is_squeezed, prepared.filtration_grid);
           slicer = multipers::nanobind_helpers::rewrap_slicer_output_to_original_type(s, target, slicer);

@@ -30,8 +30,8 @@ namespace multipers {
 
 template <typename index_type>
 struct persistence_algebra_interface_output {
-  std::vector<std::pair<double, double>> filtration_values;
-  std::vector<std::vector<index_type>> boundaries;
+  std::vector<std::pair<double, double> > filtration_values;
+  std::vector<std::vector<index_type> > boundaries;
   std::vector<int> dimensions;
 };
 
@@ -230,8 +230,7 @@ inline std::vector<pa_index> normalize_f2_column(std::vector<pa_index> column) {
   return out;
 }
 
-inline std::vector<pa_index> xor_sorted_columns(const std::vector<pa_index>& left,
-                                                const std::vector<pa_index>& right) {
+inline std::vector<pa_index> xor_sorted_columns(const std::vector<pa_index>& left, const std::vector<pa_index>& right) {
   std::vector<pa_index> out;
   out.reserve(left.size() + right.size());
   auto l = left.begin();
@@ -249,7 +248,7 @@ inline std::vector<pa_index> xor_sorted_columns(const std::vector<pa_index>& lef
   return out;
 }
 
-using f2_sparse_basis = std::map<pa_index, std::vector<pa_index>>;
+using f2_sparse_basis = std::map<pa_index, std::vector<pa_index> >;
 
 inline void add_to_f2_basis(std::vector<pa_index> column, f2_sparse_basis& basis) {
   while (!column.empty()) {
@@ -328,20 +327,23 @@ inline void validate_packed_morphism(const packed_morphism_columns& columns, std
 
 inline pa_matrix build_morphism_matrix(const pa_matrix& source_presentation,
                                        const pa_matrix& target_presentation,
-                                       const packed_morphism_columns& columns) {
+                                       const packed_morphism_columns& columns,
+                                       const std::vector<pa_index>& source_new_to_old,
+                                       const std::vector<pa_index>& target_old_to_new) {
   const auto num_columns = static_cast<std::size_t>(source_presentation.get_num_rows());
   validate_packed_morphism(columns, num_columns);
   graded_linalg::array<pa_index> data(num_columns);
   for (std::size_t col = 0; col < num_columns; ++col) {
-    const auto begin = columns.indptr[col];
-    const auto end = columns.indptr[col + 1];
+    const auto original_col = source_new_to_old[col];
+    const auto begin = columns.indptr[original_col];
+    const auto end = columns.indptr[original_col + 1];
     data[col].reserve(static_cast<std::size_t>(end - begin));
     for (std::uint64_t idx = begin; idx < end; ++idx) {
       const auto row = columns.indices[idx];
       if (static_cast<std::uint64_t>(row) >= static_cast<std::uint64_t>(target_presentation.get_num_rows())) {
         throw std::invalid_argument("Persistence-Algebra morphism row indices are outside target generators.");
       }
-      data[col].push_back(static_cast<pa_index>(row));
+      data[col].push_back(target_old_to_new[row]);
     }
     data[col] = normalize_f2_column(std::move(data[col]));
     for (const auto row : data[col]) {
@@ -349,8 +351,8 @@ inline pa_matrix build_morphism_matrix(const pa_matrix& source_presentation,
         throw std::invalid_argument("Persistence-Algebra morphism entry is not coordinatewise grade-compatible.");
       }
     }
-    data[col] = reduce_by_target_relations(
-        std::move(data[col]), target_presentation, source_presentation.row_degrees[col]);
+    data[col] =
+        reduce_by_target_relations(std::move(data[col]), target_presentation, source_presentation.row_degrees[col]);
   }
   for (pa_index rel = 0; rel < source_presentation.get_num_cols(); ++rel) {
     std::vector<pa_index> image;
@@ -373,6 +375,7 @@ inline pa_matrix build_morphism_matrix(const pa_matrix& source_presentation,
 inline pa_matrix empty_submodule(const pa_matrix& presentation) {
   pa_matrix out(0, presentation.get_num_rows());
   out.row_degrees = presentation.row_degrees;
+  out.inherit_compatible_sorting(presentation);
   return out;
 }
 
@@ -401,6 +404,7 @@ inline pa_matrix build_minimal_presentation(contiguous_slicer_type& slicer, int 
   auto cycles = first.graded_kernel();
   pa_matrix ambient(0, cycles.get_num_rows());
   ambient.row_degrees = cycles.row_degrees;
+  ambient.refresh_compatible_sorted();
 
   auto cycles_for_presentation = cycles;
   auto kernel_presentation = cycles_for_presentation.presentation_of_submodule(ambient);
@@ -434,7 +438,11 @@ inline contiguous_f64_complex algebra_operation(contiguous_slicer_type& source,
                                                 Fn&& fn) {
   auto source_presentation = build_module_presentation(source, degree);
   auto target_presentation = build_module_presentation(target, degree);
-  auto morphism = build_morphism_matrix(source_presentation, target_presentation, columns);
+  // CSR entries refer to the caller's bases, not the canonical PA ordering.
+  const auto source_order = source_presentation.sort_rows_with_permutation();
+  const auto target_order = target_presentation.sort_rows_with_permutation();
+  auto morphism = build_morphism_matrix(
+      source_presentation, target_presentation, columns, source_order.new_to_old, target_order.old_to_new);
   auto result = finalize_minimize(fn(source_presentation, target_presentation, morphism));
   auto out = convert_minpres_to_output<int>(std::move(result), degree, false);
   return build_contiguous_f64_slicer_from_output<int>(out.filtration_values, out.boundaries, out.dimensions);
@@ -466,6 +474,7 @@ inline contiguous_f64_complex persistence_algebra_death_curve_contiguous_interfa
   persistence_algebra_detail::pa_matrix zero(0, presentation.get_num_rows());
   zero.col_degrees = {};
   zero.row_degrees = presentation.row_degrees;
+  zero.inherit_compatible_sorting(presentation);
   auto shifted =
       graded_linalg::shifted_identity<persistence_algebra_detail::pa_degree, persistence_algebra_detail::pa_matrix>(
           presentation.row_degrees, step);
@@ -480,11 +489,10 @@ inline contiguous_f64_complex persistence_algebra_death_curve_contiguous_interfa
 }
 
 template <typename contiguous_slicer_type>
-inline contiguous_f64_complex persistence_algebra_kernel_contiguous_interface(
-    contiguous_slicer_type& source,
-    contiguous_slicer_type& target,
-    const packed_morphism_columns& columns,
-    int degree) {
+inline contiguous_f64_complex persistence_algebra_kernel_contiguous_interface(contiguous_slicer_type& source,
+                                                                              contiguous_slicer_type& target,
+                                                                              const packed_morphism_columns& columns,
+                                                                              int degree) {
   return persistence_algebra_detail::algebra_operation(
       source, target, columns, degree, [](auto& source_presentation, auto& target_presentation, auto& morphism) {
         auto zero = persistence_algebra_detail::empty_submodule(target_presentation);
@@ -494,11 +502,10 @@ inline contiguous_f64_complex persistence_algebra_kernel_contiguous_interface(
 }
 
 template <typename contiguous_slicer_type>
-inline contiguous_f64_complex persistence_algebra_image_contiguous_interface(
-    contiguous_slicer_type& source,
-    contiguous_slicer_type& target,
-    const packed_morphism_columns& columns,
-    int degree) {
+inline contiguous_f64_complex persistence_algebra_image_contiguous_interface(contiguous_slicer_type& source,
+                                                                             contiguous_slicer_type& target,
+                                                                             const packed_morphism_columns& columns,
+                                                                             int degree) {
   return persistence_algebra_detail::algebra_operation(
       source, target, columns, degree, [](auto&, auto& target_presentation, auto& morphism) {
         return morphism.presentation_of_submodule(target_presentation);
@@ -506,11 +513,10 @@ inline contiguous_f64_complex persistence_algebra_image_contiguous_interface(
 }
 
 template <typename contiguous_slicer_type>
-inline contiguous_f64_complex persistence_algebra_cokernel_contiguous_interface(
-    contiguous_slicer_type& source,
-    contiguous_slicer_type& target,
-    const packed_morphism_columns& columns,
-    int degree) {
+inline contiguous_f64_complex persistence_algebra_cokernel_contiguous_interface(contiguous_slicer_type& source,
+                                                                                contiguous_slicer_type& target,
+                                                                                const packed_morphism_columns& columns,
+                                                                                int degree) {
   return persistence_algebra_detail::algebra_operation(
       source, target, columns, degree, [](auto&, auto& target_presentation, auto& morphism) {
         morphism.column_reduction_graded_w_deletion();
@@ -520,11 +526,10 @@ inline contiguous_f64_complex persistence_algebra_cokernel_contiguous_interface(
 }
 
 template <typename contiguous_slicer_type>
-inline contiguous_f64_complex persistence_algebra_coimage_contiguous_interface(
-    contiguous_slicer_type& source,
-    contiguous_slicer_type& target,
-    const packed_morphism_columns& columns,
-    int degree) {
+inline contiguous_f64_complex persistence_algebra_coimage_contiguous_interface(contiguous_slicer_type& source,
+                                                                               contiguous_slicer_type& target,
+                                                                               const packed_morphism_columns& columns,
+                                                                               int degree) {
   return persistence_algebra_detail::algebra_operation(
       source, target, columns, degree, [](auto& source_presentation, auto& target_presentation, auto& morphism) {
         auto zero = persistence_algebra_detail::empty_submodule(target_presentation);
