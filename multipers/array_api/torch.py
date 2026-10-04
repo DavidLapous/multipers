@@ -128,9 +128,7 @@ def astype(x, dtype):
 
 
 def astensor(x, contiguous=False, dtype=None, device=None):
-    out = _torch.as_tensor(x, dtype=dtype)
-    if device is not None:
-        out = out.to(device=device)
+    out = _torch.as_tensor(x, dtype=dtype, device=device)
     if contiguous:
         out = out.contiguous()
     return out

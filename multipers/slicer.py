@@ -11,7 +11,12 @@ import numpy as np
 import multipers
 import multipers.logs as _mp_logs
 from multipers import _slicer_nanobind as _nb
-from multipers.array_api import api_from_tensor, api_from_tensors
+from multipers.array_api import (
+    _looks_like_jax,
+    _looks_like_torch,
+    api_from_tensor,
+    api_from_tensors,
+)
 import multipers.array_api.numpy as npapi
 from multipers.grids import (
     _grid_normalization_box,
@@ -814,8 +819,70 @@ def get_matrix_slicer(
 
 
 from multipers._slicer_algorithms import _hilbert_signed_measure, _rank_from_slicer  # noqa: E402
+
+
+def _constructor_to_cpu(value):
+    if np.isscalar(value):
+        return value
+    is_sequence = isinstance(value, (list, tuple))
+    if not is_sequence:
+        if npapi.is_tensor(value) or _looks_like_torch(value) or _looks_like_jax(value):
+            api = api_from_tensor(value, strict=True)
+            return api.to_device(value, "cpu")
+
+    prepared = None if is_sequence else []
+    # Keep each original child alive through normalization and the next lookup.
+    for index, child in enumerate(value):
+        cpu_child = _constructor_to_cpu(child)
+        if prepared is None and cpu_child is not child:
+            prepared = (
+                list(value[:index]) if isinstance(value, tuple) else value[:index]
+            )
+        if prepared is not None:
+            prepared.append(cpu_child)
+    if prepared is None:
+        return value
+    return tuple(prepared) if isinstance(value, tuple) else prepared
+
+
 def _install_python_api():
+    def with_cpu_inputs(native_init):
+        numerical_names = (
+            "generator_maps",
+            "generator_dimensions",
+            "filtration_values",
+        )
+
+        def __init__(self, *args, **kwargs):
+            numerical_args = len(args) > 1 and not isinstance(
+                args[0], (str, os.PathLike)
+            )
+            if numerical_args or any(name in kwargs for name in numerical_names):
+                args = tuple(_constructor_to_cpu(value) for value in args)
+                kwargs = {
+                    name: _constructor_to_cpu(value)
+                    if name in numerical_names
+                    else value
+                    for name, value in kwargs.items()
+                }
+            native_init(self, *args, **kwargs)
+
+        return __init__
+
+    def with_cpu_grid(native_coarsen):
+        def coarsen_on_grid(self, grid, /, *args, **kwargs):
+            grid = _constructor_to_cpu(grid)
+            if len(grid) < self.num_parameters:
+                raise ValueError("Grid has fewer axes than filtration parameters.")
+            return native_coarsen(self, grid, *args, **kwargs)
+
+        return coarsen_on_grid
+
     for cls in available_slicers:
+        cls.__init__ = with_cpu_inputs(cls.__init__)
+        cls.coarsen_on_grid_inplace = with_cpu_grid(cls.coarsen_on_grid_inplace)
+        if hasattr(cls, "coarsen_on_grid_copy"):
+            cls.coarsen_on_grid_copy = with_cpu_grid(cls.coarsen_on_grid_copy)
         cls.__repr__ = _repr
         # cls.__setstate__ = _setstate
         cls.astype = _astype

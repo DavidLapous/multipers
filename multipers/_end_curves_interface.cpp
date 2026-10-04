@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "ext_interface/aida_interface.hpp"
-#include "ext_interface/persistence_algebra_interface.hpp"
 
 #if !MULTIPERS_DISABLE_AIDA_INTERFACE
+#include "ext_interface/persistence_algebra_interface.hpp"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 

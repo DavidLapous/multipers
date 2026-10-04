@@ -99,8 +99,9 @@ def astype(x, dtype):
 
 
 def astensor(x, contiguous=False, dtype=None, device=None):
-    out = _jnp.asarray(x, dtype=dtype)
-    return to_device(out, device)
+    if isinstance(device, str):
+        device = _jax.devices(device)[0]
+    return _jnp.asarray(x, dtype=dtype, device=device)
 
 
 def zeros(shape, dtype=None, device=None):

@@ -40,6 +40,17 @@ namespace Gudhi {
 namespace multi_persistence {
 namespace detail {
 
+inline constexpr bool _is_host_device_type(int device_type) {
+  return device_type == nanobind::device::cpu::value || device_type == nanobind::device::cuda_host::value ||
+         device_type == nanobind::device::rocm_host::value;
+}
+
+template <typename... Args>
+inline void _require_cpu_array(const nanobind::ndarray<Args...> &array) {
+  if (!_is_host_device_type(array.device_type()))
+    throw nanobind::type_error("Native persistence inputs must be CPU arrays.");
+}
+
 template <typename T, typename... Ts>
 inline constexpr bool _all_same_v = (std::is_same_v<T, Ts> && ...);
 

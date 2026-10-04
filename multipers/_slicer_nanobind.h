@@ -225,15 +225,24 @@ inline void bind_slicer_constructors(Class& cls) {
           "filtration_values"_a)
       .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                           nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>());
+                          nanobind::iterable>(),
+           "generator_maps"_a,
+           "generator_dimensions"_a,
+           "filtration_values"_a);
   if constexpr (Desc::is_kcritical) {
     cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                            const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>());
+                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>(),
+            "generator_maps"_a,
+            "generator_dimensions"_a,
+            "filtration_values"_a);
   } else {
     cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                            const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<typename Slicer::value_type>>&>());
+                           const std::vector<std::vector<typename Slicer::value_type>>&>(),
+            "generator_maps"_a,
+            "generator_dimensions"_a,
+            "filtration_values"_a);
   }
 
   // flat containers
@@ -353,9 +362,11 @@ inline void bind_slicer_modifiers(Class& cls) {
 
   cls.def("prune_above_dimension", &Slicer::prune_above_dimension)
       .def("coarsen_on_grid_inplace",
-           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Slicer::template coarsen_on_grid<T>))
+           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Slicer::template coarsen_on_grid<T>),
+           nanobind::rv_policy::reference_internal)
       .def("coarsen_on_grid_inplace",
-           nanobind::overload_cast<const std::vector<std::vector<T>>&, bool>(&Slicer::template coarsen_on_grid<T>))
+           nanobind::overload_cast<const std::vector<std::vector<T>>&, bool>(&Slicer::template coarsen_on_grid<T>),
+           nanobind::rv_policy::reference_internal)
       .def("to_colexical", &Slicer::build_colexical_permuted_slicer, "return_permutation"_a = false)
       .def("permute_generators", &Slicer::build_slicer_as_permutation)
       .def("push_to_line", &Slicer::template push_to_line<T>, "basepoint"_a, "direction"_a = nanobind::none())
@@ -436,7 +447,10 @@ template <typename Desc>
 inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_slicers) {
   using Slicer = typename Desc::interface;
 
-  auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data());
+  // Disable nanobind's cached constructor call so Python's __init__ prepares inputs.
+  // Py_tp_vectorcall is slot 82; nanobind supports it before CPython exposes the name.
+  static constexpr PyType_Slot type_slots[] = {{82, nullptr}, {0, nullptr}};
+  auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data(), nanobind::type_slots(type_slots));
 
   bind_slicer_constructors<Slicer, Desc>(cls);
   bind_slicer_dunders<Slicer>(cls);

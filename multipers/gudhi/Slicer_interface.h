@@ -165,6 +165,9 @@ class Slicer_interface {
                    Tensor1D<I> generator_dimensions,
                    nanobind::object filtration_values)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    detail::_require_cpu_array(generator_dimensions);
+    if (nanobind::ndarray<> values; nanobind::try_cast(filtration_values, values, false))
+      detail::_require_cpu_array(values);
     if constexpr (MultiFiltrationValue::ensures_1_criticality()) {
       auto cast_as_vector = [&]() -> void {
         std::vector<std::vector<value_type>> val;
@@ -174,6 +177,7 @@ class Slicer_interface {
       };
       auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
         if (Tensor2D<U> val; nanobind::try_cast<Tensor2D<U>>(filtration_values, val, false)) {
+          detail::_require_cpu_array(val);
           _build_slicer(generator_maps, Numpy_span(generator_dimensions), Numpy_2d_span(val));
           return;
         }
@@ -190,6 +194,7 @@ class Slicer_interface {
       };
       auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
         if (std::vector<Tensor2D<U>> val; nanobind::try_cast<std::vector<Tensor2D<U>>>(filtration_values, val, false)) {
+          for (const auto &grades : val) detail::_require_cpu_array(grades);
           // Tensors have to stay alive to use Numpy_2d_span, so val is necessary
           std::vector<Numpy_2d_span<U>> fils(val.begin(), val.end());
           _build_slicer(generator_maps, Numpy_span(generator_dimensions), fils);
@@ -207,6 +212,10 @@ class Slicer_interface {
                    Tensor1D<I2> generator_dimensions,
                    Tensor2D<F> grades_flat)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    detail::_require_cpu_array(boundary_indptr);
+    detail::_require_cpu_array(boundary_flat);
+    detail::_require_cpu_array(generator_dimensions);
+    detail::_require_cpu_array(grades_flat);
     auto boundaryDelimitersView = boundary_indptr.view();
     auto boundariesView = boundary_flat.view();
     auto dimensionsView = generator_dimensions.view();
@@ -239,6 +248,7 @@ class Slicer_interface {
   // std::vector<unsigned int> imposed by Gudhi::cubical_complex::Bitmap_cubical_complex
   Slicer_interface(Tensor2D<value_type> image, const std::vector<unsigned int> &shape)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+    detail::_require_cpu_array(image);
     Numpy_2d_span imageView(image);
     if (imageView.size() == 0 || shape.size() == 0 || shape[0] == 0) return;
     {
@@ -466,6 +476,8 @@ class Slicer_interface {
 
   template <typename U>
   Slicer_interface &push_to_line(Tensor1D<U> basepoint, std::optional<Tensor1D<U>> direction) {
+    detail::_require_cpu_array(basepoint);
+    if (direction.has_value()) detail::_require_cpu_array(*direction);
     {
       nanobind::gil_scoped_release release;
       Numpy_span baseView(basepoint);
@@ -517,6 +529,7 @@ class Slicer_interface {
 
   template <typename U>
   Slicer_interface &coarsen_on_grid(const std::vector<Tensor1D<U>> &grid, bool coordinates) {
+    for (const auto &axis : grid) detail::_require_cpu_array(axis);
     std::vector<Numpy_span<U>> views(grid.begin(), grid.end());
     {
       nanobind::gil_scoped_release release;
@@ -532,6 +545,7 @@ class Slicer_interface {
     } else if constexpr (!std::is_floating_point_v<value_type>) {
       throw nanobind::type_error("Normalize filtration requires a floating-point dtype for slicers.");
     } else {
+      if (box.has_value()) detail::_require_cpu_array(*box);
       {
         nanobind::gil_scoped_release release;
         if (box.has_value()) {
@@ -574,6 +588,7 @@ class Slicer_interface {
   }
 
   nanobind::tuple compute_persistence_on_slices(Tensor2D<value_type> slices, bool ignoreInf) {
+    detail::_require_cpu_array(slices);
     std::vector<typename Slicer_t::template Multi_dimensional_flat_barcode<value_type>> barcodes;
     {
       nanobind::gil_scoped_release release;
@@ -622,6 +637,10 @@ class Slicer_interface {
                                   Tensor1D<std::int32_t> ks,
                                   int n_jobs,
                                   bool ignoreInf = true) {
+    detail::_require_cpu_array(xGrid);
+    detail::_require_cpu_array(yGrid);
+    detail::_require_cpu_array(direction);
+    detail::_require_cpu_array(ks);
     auto xView = xGrid.view();
     auto yView = yGrid.view();
     auto dirView = direction.view();
@@ -679,6 +698,7 @@ class Slicer_interface {
                                                            const std::optional<Dimension> &dimension,
                                                            nanobind::object barcodeIndices,
                                                            const std::optional<Tensor1D<Index>> &pointsToIntersect) {
+    if (pointsToIntersect.has_value()) detail::_require_cpu_array(*pointsToIntersect);
     auto get_cycle_list = [](auto &cycles) {
       nanobind::list outCycles;
       for (auto &c : cycles) {
@@ -699,6 +719,7 @@ class Slicer_interface {
               "When dimension is specified, barcode_indices has to be either None or a 1D numpy array.");
         indices = std::move(tmp);
       }
+      if (indices.has_value()) detail::_require_cpu_array(*indices);
       auto cycles = _get_cycle_boundaries(update, *dimension, indices, pointsToIntersect);
       return get_cycle_list(cycles);
     }
@@ -711,6 +732,7 @@ class Slicer_interface {
             "When dimension is not specified, barcode_indices has to be either None or a 2D numpy array.");
       indices = std::move(tmp);
     }
+    if (indices.has_value()) detail::_require_cpu_array(*indices);
     auto cycles = _get_cycle_boundaries(update, indices, pointsToIntersect);
     return Gudhi::python::_build_tuple(cycles.size(), [&](std::size_t dim) { return get_cycle_list(cycles[dim]); });
   }

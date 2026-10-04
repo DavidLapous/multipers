@@ -9,9 +9,9 @@
 #include <vector>
 
 #include "ext_interface/aida_interface.hpp"
-#include "interface_helper_structs.h"
 
 #if !MULTIPERS_DISABLE_AIDA_INTERFACE
+#include "interface_helper_structs.h"
 #include "ext_interface/nanobind_registry_runtime.hpp"
 #endif
 
