@@ -116,6 +116,16 @@ def SimplexTreeMulti(
     return_type_only: bool = False,
     **kwargs,
 ) -> SimplexTreeMulti_type:
+    """Construct a multiparameter simplex tree.
+
+    For a Slicer input, the prefix retained by ``max_dim`` must form a complete
+    simplicial complex with unique simplices in nonnegative, nondecreasing
+    dimension order. Vertices must have empty boundaries; each nonvertex must
+    list all distinct codimension-one faces as earlier indices. Only this
+    prefix is validated. Nonsimplicial inputs raise ``ValueError``.
+    Grade values are copied after target-type conversion without repairing
+    nonmonotone filtrations; target storage may expose implicit empty slots.
+    """
     cls = _get_class(dtype, kcritical, ftype)
     if return_type_only:
         return cls

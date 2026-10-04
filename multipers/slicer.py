@@ -734,6 +734,16 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
 
 
 def to_simplextree(s: Slicer_type, max_dim: int = -1):
+    """Copy the validated simplicial prefix to a simplex tree.
+
+    The prefix retained by ``max_dim`` must have nonnegative, nondecreasing
+    dimensions, unique simplices, empty vertex boundaries, and complete
+    distinct facet boundaries referencing earlier generators. Invalid
+    retained inputs raise ``ValueError``; higher dimensions are not validated.
+    Source dtype, filtration container, criticality, and grade values are
+    preserved without repairing nonmonotone grades. Flat storage may expose
+    empty implicit degree slots rather than only finite support grades.
+    """
     from multipers.simplex_tree_multi import SimplexTreeMulti
 
     return SimplexTreeMulti(

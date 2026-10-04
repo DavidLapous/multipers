@@ -265,7 +265,6 @@ template <typename TargetInterface, typename SourceSlicer>
 void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSlicer& slicer, int max_dim) {
   using TargetFiltration = typename TargetInterface::Filtration_value;
   using TargetVertex = typename TargetInterface::Vertex_handle;
-  using TargetSimplex = typename TargetInterface::Simplex;
   using namespace Gudhi::multi_filtration;
 
   out.clear();
@@ -276,10 +275,6 @@ void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSli
   const auto& filtrations = slicer.get_filtration_values();
 
   std::vector<std::vector<TargetVertex>> simplex_vertices(dims.size());
-  std::vector<TargetSimplex> simplices;
-  std::vector<TargetFiltration> converted_filtrations;
-  simplices.reserve(dims.size());
-  converted_filtrations.reserve(dims.size());
 
   int next_vertex = 0;
   int previous_dim = -1;
@@ -292,36 +287,50 @@ void copy_simplicial_slicer_to_simplextree(TargetInterface& out, const SourceSli
     if (max_dim >= 0 && dim > max_dim) {
       break;
     }
+    if (dim < 0) {
+      throw std::invalid_argument("Input slicer is not simplicial.");
+    }
 
     auto& vertices = simplex_vertices[i];
+    const auto& boundary = boundaries[i];
     if (dim == 0) {
+      if (!boundary.empty()) {
+        throw std::invalid_argument("Input slicer is not simplicial.");
+      }
       vertices.push_back(static_cast<TargetVertex>(next_vertex++));
     } else {
-      for (auto face_idx : boundaries[i]) {
+      // Distinct codimension-one faces with a dim+1 vertex union exhaust all facets.
+      if (boundary.size() != static_cast<size_t>(dim) + 1) {
+        throw std::invalid_argument("Input slicer is not simplicial.");
+      }
+      for (auto face = boundary.begin(); face != boundary.end(); ++face) {
+        auto face_idx = *face;
         if (static_cast<size_t>(face_idx) >= i) {
           throw std::invalid_argument("Invalid boundary in slicer.");
+        }
+        if (dims[face_idx] != dim - 1 || std::find(boundary.begin(), face, face_idx) != face) {
+          throw std::invalid_argument("Input slicer is not simplicial.");
         }
         const auto& face_vertices = simplex_vertices[face_idx];
         vertices.insert(vertices.end(), face_vertices.begin(), face_vertices.end());
       }
       std::sort(vertices.begin(), vertices.end());
       vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
-      if (vertices.size() != static_cast<size_t>(dim + 1)) {
+      if (vertices.size() != static_cast<size_t>(dim) + 1) {
         throw std::invalid_argument("Input slicer is not simplicial.");
       }
     }
 
-    simplices.emplace_back(vertices.begin(), vertices.end());
+    // All proper faces are present; copy source grades even when nonmonotone.
+    bool inserted;
     if constexpr (std::is_same_v<TargetFiltration, typename SourceSlicer::Filtration_value>) {
-      converted_filtrations.push_back(filtrations[i]);
+      inserted = out.insert_force(vertices, filtrations[i]);
     } else {
-      converted_filtrations.push_back(filtrations[i].template as_type<TargetFiltration>());
+      inserted = out.insert_force(vertices, filtrations[i].template as_type<TargetFiltration>());
     }
-    out.insert(simplices.back(), converted_filtrations.back());
-  }
-
-  for (size_t i = 0; i < simplices.size(); ++i) {
-    out.assign_simplex_filtration(simplices[i], converted_filtrations[i]);
+    if (!inserted) {
+      throw std::invalid_argument("Input slicer has duplicate simplices.");
+    }
   }
 }
 
