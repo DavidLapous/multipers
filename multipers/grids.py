@@ -28,7 +28,7 @@ Lstrategies = Literal[
 ]
 
 
-def sanitize_grid(grid, numpyfy=False, add_inf=False, api = None):
+def sanitize_grid(grid, numpyfy=False, add_inf=False, api=None):
     num_parameters = len(grid)
     if num_parameters == 0:
         raise ValueError("empty filtration grid")
@@ -37,9 +37,7 @@ def sanitize_grid(grid, numpyfy=False, add_inf=False, api = None):
         grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = [
-            api.astensor(grid[i], contiguous=True) for i in range(num_parameters)
-        ]
+        grid = [api.astensor(grid[i], contiguous=True) for i in range(num_parameters)]
     if add_inf:
         api = api_from_tensors(grid[0])
         inf = api.astensor(_inf_value(grid[0]))
@@ -366,7 +364,6 @@ def _todo_regular_left(f, r, unique, api):
     return f_regular_closest
 
 
-
 def _todo_partition(x, resolution, unique, api):
     if api.has_grad(x):
         _mp_logs.warn_autodiff(
@@ -425,10 +422,14 @@ def _grid_normalization_box(grid):
         has_finite = api.any(finite)
         zero = api.zeros((), dtype=values.dtype, device=device)
         lower.append(
-            api.where(has_finite, api.minvalues(api.where(finite, values, api.inf)), zero)
+            api.where(
+                has_finite, api.minvalues(api.where(finite, values, api.inf)), zero
+            )
         )
         upper.append(
-            api.where(has_finite, api.maxvalues(api.where(finite, values, -api.inf)), zero + 1)
+            api.where(
+                has_finite, api.maxvalues(api.where(finite, values, -api.inf)), zero + 1
+            )
         )
     return api.stack((api.stack(lower), api.stack(upper)))
 
@@ -530,7 +531,12 @@ def _inf_value(array):
 
 
 def evaluate_in_grid(
-    pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None, api=None,
+    pts,
+    grid,
+    mass_default=None,
+    input_inf_value=None,
+    output_inf_value=None,
+    api=None,
 ):
     """
     Input
@@ -665,7 +671,9 @@ def sms_in_grid(sms, grid, mass_default=None):
     return sms
 
 
-def _push_pts_to_line(pts, basepoint, direction=None, api=None, return_coordinate=False):
+def _push_pts_to_line(
+    pts, basepoint, direction=None, api=None, return_coordinate=False
+):
     basepoint = api_from_tensors(basepoint).astensor(basepoint)
     if basepoint.ndim != 1:
         raise ValueError(

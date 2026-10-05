@@ -296,6 +296,11 @@ def minvalues(x: _np.ndarray, **kwargs):
     return _np.min(x, **kwargs)
 
 
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments along the leading axis."""
+    return _np.minimum.reduceat(x, indptr[:-1], axis=0)
+
+
 def maxvalues(x: _np.ndarray, **kwargs):
     return _np.max(x, **kwargs)
 

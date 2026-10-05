@@ -270,6 +270,36 @@ def minvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     return _torch.min(x)
 
 
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments; tied minima select the first entry."""
+    num_segments = len(indptr) - 1
+    counts = _torch.as_tensor(_np.diff(indptr), device=x.device)
+    segments = _torch.repeat_interleave(
+        _torch.arange(num_segments, device=x.device), counts, output_size=x.shape[0]
+    )
+    index_shape = (-1,) + (1,) * (x.ndim - 1)
+    index = segments.reshape(index_shape).expand_as(x)
+    output_shape = (num_segments,) + x.shape[1:]
+    with _torch.no_grad():
+        is_nan = x.isnan()
+        # Do not feed NaNs to floating-point atomic minima on MPS.
+        values = _torch.where(is_nan, _torch.inf, x) if x.is_floating_point() else x
+        minima = _torch.empty(output_shape, dtype=x.dtype, device=x.device)
+        minima.scatter_reduce_(0, index, values, reduce="amin", include_self=False)
+        matches = x == minima[segments]
+        positions = _torch.arange(x.shape[0], device=x.device).reshape(index_shape)
+        candidates = _torch.where(
+            is_nan,
+            positions,
+            _torch.where(matches, positions + x.shape[0], 2 * x.shape[0]),
+        )
+        first = _torch.full(
+            output_shape, 2 * x.shape[0], dtype=_torch.int64, device=x.device
+        )
+        first.scatter_reduce_(0, index, candidates, reduce="amin", include_self=False)
+    return x.gather(0, first.remainder(x.shape[0]))
+
+
 def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
     if dim is None:
         dim = axis

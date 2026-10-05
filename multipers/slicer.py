@@ -172,7 +172,9 @@ def _filtration_bounds(self, finite=False):
         return np.empty((2, 0), dtype=self.dtype)
     if finite:
         values = np.where(np.isfinite(values), values, np.nan)
-        return np.asarray([np.nanmin(values, axis=0), np.nanmax(values, axis=0)], dtype=self.dtype)
+        return np.asarray(
+            [np.nanmin(values, axis=0), np.nanmax(values, axis=0)], dtype=self.dtype
+        )
     return np.asarray([values.min(axis=0), values.max(axis=0)], dtype=self.dtype)
 
 
@@ -184,7 +186,11 @@ def _get_filtration_grid(self, grid_strategy="exact", **infer_grid_kwargs):
 
 def _normalize_filtrations(self, box=None):
     if self.is_squeezed:
-        box = _grid_normalization_box(self.filtration_grid) if box is None else _normalization_box(box, self.num_parameters)
+        box = (
+            _grid_normalization_box(self.filtration_grid)
+            if box is None
+            else _normalization_box(box, self.num_parameters)
+        )
         self.filtration_grid = _normalize_grid(self.filtration_grid, box)
         return self
 
@@ -195,7 +201,7 @@ def _normalize_filtrations(self, box=None):
 def _bp_dir_to_2d(basepoints, directions, api):
     basepoints = api.astensor(basepoints)
     if basepoints.ndim == 1:
-        basepoints = basepoints.reshape(1,-1)
+        basepoints = basepoints.reshape(1, -1)
 
     if basepoints.ndim != 2:
         raise ValueError(
@@ -213,15 +219,13 @@ def _bp_dir_to_2d(basepoints, directions, api):
     return basepoints, directions
 
 
-def _current_bc(
-    self, keep_inf=True, full=False, basepoint=None, direction=None
-):
+def _current_bc(self, keep_inf=True, full=False, basepoint=None, direction=None):
     bcs = tuple(np.asarray(stuff, dtype=self.dtype) for stuff in self.get_barcode())
     if not keep_inf:
         inf_value = type(self)._inf_value
         bcs = tuple(
             np.asarray(
-                [a for a in stuff if a[0] < inf_value],
+                [a for a in stuff if a[1] < inf_value],
                 dtype=np.dtype((self.dtype, 2)),
             )
             for stuff in bcs
@@ -229,6 +233,8 @@ def _current_bc(
     if full:
         bcs = _bc_to_full(bcs, basepoint, direction)
     return bcs
+
+
 def _pers_on_line(
     self,
     basepoint,
@@ -251,20 +257,30 @@ def _pers_on_line(
 def _barcode_coordinates_to_values(
     self, barcode, line_values, line_coordinates, api, keep_inf
 ):
-    coord_values = api.set_at(line_values * 0, line_coordinates, line_values)
+    coord_values = api.set_at(
+        api.zeros(
+            line_values.shape, dtype=line_values.dtype, device=api.device(line_values)
+        ),
+        line_coordinates,
+        line_values,
+    )
     inf_coord = type(self)._inf_value
     out = []
     for dim_barcode in barcode:
-        coords = np.asarray(dim_barcode, dtype=np.int64)
+        raw_coords = np.asarray(dim_barcode)
+        # Native floating slicers return +inf even for an integer-ranked slice.
+        # Map its sentinel before casting; -1 is outside the nonnegative ranks.
+        with np.errstate(invalid="raise"):
+            coords = np.where(raw_coords == inf_coord, -1, raw_coords).astype(np.int64)
         current = evaluate_in_grid(
             coords,
             (coord_values, coord_values),
-            input_inf_value=inf_coord,
+            input_inf_value=-1,
             output_inf_value=api.inf,
             api=api,
         )
         if not keep_inf:
-            current = current[current[:, 0] < api.inf]
+            current = current[current[:, 1] < api.inf]
         out.append(current)
     return tuple(out)
 
@@ -315,6 +331,40 @@ def _coordinate_persistence_on_lines(
     return out
 
 
+def _coordinate_persistence_on_kcritical_lines(
+    self,
+    filtration_points,
+    filtration_indptr,
+    basepoints,
+    directions,
+    api,
+    keep_inf,
+    full,
+    ignore_infinite_filtration_values,
+):
+    projected = _push_pts_to_lines(filtration_points, basepoints, directions, api=api)
+    fil = api.segment_min(projected.T, filtration_indptr).T
+    order = np.argsort(api.asnumpy(fil, contiguous=True), axis=1, kind="stable")
+    coords = np.empty_like(order)
+    coords[np.arange(order.shape[0])[:, None], order] = np.arange(
+        order.shape[1], dtype=order.dtype
+    )
+    coords = api.to_device(api.astensor(coords, dtype=api.int64), api.device(fil))
+    coord_barcodes = self.compute_persistence(
+        coords,
+        ignore_infinite_filtration_values=ignore_infinite_filtration_values,
+    )
+    out = tuple(
+        _barcode_coordinates_to_values(
+            self, barcode, line_values, line_coordinates, api, keep_inf
+        )
+        for barcode, line_values, line_coordinates in zip(coord_barcodes, fil, coords)
+    )
+    if full:
+        out = _bc_to_full(out, basepoints, directions)
+    return out
+
+
 def _persistence_on_lines(
     self,
     basepoints,
@@ -331,6 +381,31 @@ def _persistence_on_lines(
             api = api_from_tensors(basepoints, *self.filtration_grid)
         basepoints, directions = _bp_dir_to_2d(basepoints, directions, api)
 
+        if self.is_kcritical:
+            filtration_indptr, points = self.get_filtrations(packed=True)
+            if np.any(filtration_indptr[1:] == filtration_indptr[:-1]):
+                raise ValueError("Multicritical generators must have a critical grade.")
+            coordinate_inf = len(self.filtration_grid[0])
+            if self.filtration_container == "Flat":
+                missing_radius = np.isposinf(points[:, 0])
+                if missing_radius.any():
+                    points[missing_radius, 0] = coordinate_inf
+            fil = evaluate_in_grid(
+                points.astype(np.int64, copy=False),
+                self.filtration_grid,
+                input_inf_value=coordinate_inf,
+            )
+            return _coordinate_persistence_on_kcritical_lines(
+                self,
+                fil,
+                filtration_indptr,
+                basepoints,
+                directions,
+                api,
+                keep_inf,
+                full,
+                ignore_infinite_filtration_values,
+            )
         fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
         return _coordinate_persistence_on_lines(
             self,
@@ -363,6 +438,12 @@ def _persistence_on_lines(
             ),
             ignore_infinite_filtration_values=ignore_infinite_filtration_values,
         )
+        if not keep_inf:
+            inf_value = type(self)._inf_value
+            out = tuple(
+                tuple(stuff[stuff[:, 1] < inf_value] for stuff in barcode)
+                for barcode in out
+            )
         if full:
             out = _bc_to_full(out, basepoints, directions)
         return out
@@ -573,7 +654,9 @@ def _grid_squeeze(
     c_grid = (
         []
         if api is None
-        else [api.asnumpy(g, dtype=self.dtype, contiguous=True) for g in filtration_grid]
+        else [
+            api.asnumpy(g, dtype=self.dtype, contiguous=True) for g in filtration_grid
+        ]
     )
     pres_degree = self.pres_degree
     minpres_degree = self.minpres_degree
@@ -677,9 +760,7 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
 
     if self.is_kcritical:
         indptr, grades_flat = self.get_filtrations(packed=True, raw=True)
-        grades_flat = np.asarray(grades_flat, dtype=np.int32).clip(
-            None, grid_size - 1
-        )
+        grades_flat = np.asarray(grades_flat, dtype=np.int32).clip(None, grid_size - 1)
         evaluated_flat = evaluate_in_grid(grades_flat, grid)
         new_filtrations = np.split(evaluated_flat, indptr[1:-1])
     else:
@@ -694,7 +775,9 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
     if not np.dtype(real_dtype) in {np.dtype(dtype) for dtype in available_dtype}:
         if np.issubdtype(real_dtype, np.floating):
             float_dtypes = [
-                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.floating)
+                np.dtype(d)
+                for d in available_dtype
+                if np.issubdtype(np.dtype(d), np.floating)
             ]
             if float_dtypes:
                 real_dtype = float_dtypes[0]
@@ -708,7 +791,9 @@ def _unsqueeze(self, grid=None, inf_overflow=True):
                 new_filtrations = np.asarray(new_filtrations, dtype=real_dtype)
         else:
             int_dtypes = [
-                np.dtype(d) for d in available_dtype if np.issubdtype(np.dtype(d), np.integer)
+                np.dtype(d)
+                for d in available_dtype
+                if np.issubdtype(np.dtype(d), np.integer)
             ]
             if int_dtypes:
                 real_dtype = int_dtypes[0]

@@ -574,10 +574,18 @@ def _filtration_bounds(self, degrees=None, q=0, split_dimension=False):
 
 
 def _normalize_filtrations(self, box=None):
-    from multipers.grids import _grid_normalization_box, _normalization_box, _normalize_grid
+    from multipers.grids import (
+        _grid_normalization_box,
+        _normalization_box,
+        _normalize_grid,
+    )
 
     if self.is_squeezed:
-        box = _grid_normalization_box(self.filtration_grid) if box is None else _normalization_box(box, self.num_parameters)
+        box = (
+            _grid_normalization_box(self.filtration_grid)
+            if box is None
+            else _normalization_box(box, self.num_parameters)
+        )
         self.filtration_grid = _normalize_grid(self.filtration_grid, box)
         return self
 
@@ -724,7 +732,11 @@ def _collapse_edges(
     from multipers.multiparameter_edge_collapse import _collapse_edge_list
 
     edges = _collapse_edge_list(
-        _edge_array_to_nested_list(self.get_edge_list()), num=num, full=full, strong=strong, progress=progress
+        _edge_array_to_nested_list(self.get_edge_list()),
+        num=num,
+        full=full,
+        strong=strong,
+        progress=progress,
     )
     self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
     if self.is_squeezed and auto_clean:

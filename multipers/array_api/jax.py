@@ -198,6 +198,43 @@ def minvalues(x, **kwargs):
     return _jnp.min(x, **kwargs)
 
 
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments; tied-min gradients are shared."""
+    segments = _np.repeat(_np.arange(len(indptr) - 1), _np.diff(indptr))
+    return _segment_min(x, segments, len(indptr) - 1)
+
+
+@partial(_jax.custom_jvp, nondiff_argnums=(2,))
+def _segment_min(x, segments, num_segments):
+    return _jax.ops.segment_min(
+        x, segments, num_segments=num_segments, indices_are_sorted=True
+    )
+
+
+@_segment_min.defjvp
+def _segment_min_jvp(num_segments, primals, tangents):
+    x, segments = primals
+    tangent, _ = tangents
+    minima = _segment_min(x, segments, num_segments)
+    matches = x == minima[segments]
+    counts = _jax.ops.segment_sum(
+        matches.astype(_jnp.int32),
+        segments,
+        num_segments=num_segments,
+        indices_are_sorted=True,
+    )
+    # Count actual critical grades, not the scatter reduction's +inf identity.
+    # A NaN minimum has no matches: 0/0 preserves native min's NaN derivative.
+    weights = matches.astype(x.dtype) / counts[segments]
+    reduced_tangent = _jax.ops.segment_sum(
+        weights * tangent,
+        segments,
+        num_segments=num_segments,
+        indices_are_sorted=True,
+    )
+    return minima, reduced_tangent
+
+
 def maxvalues(x, **kwargs):
     return _jnp.max(x, **kwargs)
 
