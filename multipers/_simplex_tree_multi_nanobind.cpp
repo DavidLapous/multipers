@@ -714,10 +714,10 @@ void bind_simplex_array_overloads(Class& cls) {
 // }
 
 template <typename Desc, typename TargetWrapper, typename TargetInterface>
-void copy_from_desc(TargetWrapper& self, const simplextree_wrapper_t<Desc>& source) {
+void copy_from_desc(TargetWrapper& self, const simplextree_wrapper_t<Desc>& source, int numParam = -1) {
   // {
     // nb::gil_scoped_release release;
-    SimplexTreeConversion<TargetInterface, typename Desc::interface_type>::run(self.tree, source.tree);
+    SimplexTreeConversion<TargetInterface, typename Desc::interface_type>::run(self.tree, source.tree, numParam);
   // }
   // copy_simplextree_python_state(self, source);
 }
@@ -779,22 +779,22 @@ bool try_copy_from_any(TargetWrapper& self, nb::handle source) {
 
 template <typename TargetDesc, typename SourceDesc>
 PySimplexTree<typename TargetDesc::interface_type> construct_from_simplextree_wrapper(
-    const simplextree_wrapper_t<SourceDesc>& source) {
+    const simplextree_wrapper_t<SourceDesc>& source, int numParam) {
   using Wrapper = PySimplexTree<typename TargetDesc::interface_type>;
   using Interface = typename TargetDesc::interface_type;
   Wrapper out;
-  copy_from_desc<SourceDesc, Wrapper, Interface>(out, source);
+  copy_from_desc<SourceDesc, Wrapper, Interface>(out, source, numParam);
   return out;
 }
 
 template <typename TargetDesc, typename SourceDesc>
 PySimplexTree<typename TargetDesc::interface_type> construct_from_slicer_wrapper(
     const typename SourceDesc::interface& source,
-    int max_dim) {
+    int max_dim, int numParam = -1) {
   using Wrapper = PySimplexTree<typename TargetDesc::interface_type>;
   // using Interface = typename TargetDesc::interface_type;
   Wrapper out;
-  out.tree.copy_from(source.get_slicer(), max_dim);
+  out.tree.copy_from(source.get_slicer(), max_dim, numParam);
   // build_from_slicer_desc<SourceDesc, Wrapper, Interface>(out, source, max_dim);
   return out;
 }
@@ -803,13 +803,14 @@ template <typename TargetDesc, typename Class, typename... SourceDesc>
 void bind_simplextree_source_constructors(Class& cls, type_list<SourceDesc...>) {
   using Interface = typename TargetDesc::interface_type;
   using Wrapper = PySimplexTree<Interface>;
-  (cls.def("__init__", [](Wrapper* self, const simplextree_wrapper_t<SourceDesc>& source) {
-             new (self) Wrapper(construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source));
+  (cls.def("__init__", [](Wrapper* self, const simplextree_wrapper_t<SourceDesc>& source, int numParam) {
+             new (self) Wrapper(construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source, numParam));
            },
     // nb::new_([](const simplextree_wrapper_t<SourceDesc>& source) {
     //          return construct_from_simplextree_wrapper<TargetDesc, SourceDesc>(source);
     //        }),
-           "source"_a),
+           "source"_a,
+          "num_parameters"_a = -1),
    ...);
 }
 
@@ -817,14 +818,15 @@ template <typename TargetDesc, typename Class, typename... SourceDesc>
 void bind_slicer_source_constructors(Class& cls, type_list<SourceDesc...>) {
   using Interface = typename TargetDesc::interface_type;
   using Wrapper = PySimplexTree<Interface>;
-  (cls.def("__init__", [](Wrapper* self, const typename SourceDesc::interface& source, int max_dim) {
-             new (self) Wrapper(construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim));
+  (cls.def("__init__", [](Wrapper* self, const typename SourceDesc::interface& source, int max_dim, int numParam) {
+             new (self) Wrapper(construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim, numParam));
            },
     // nb::new_([](const typename SourceDesc::interface& source, int max_dim) {
     //          return construct_from_slicer_wrapper<TargetDesc, SourceDesc>(source, max_dim);
     //        }),
            "source"_a,
-           "max_dim"_a = -1),
+           "max_dim"_a = -1,
+           "num_parameters"_a = -1),
    ...);
 }
 
@@ -992,8 +994,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
   auto cls =
       nb::class_<Wrapper>(m, Desc::python_name.data())
           .def(nb::init<>())
-          .def(nb::init<int>(),
-               "num_parameters"_a = -1)
+          .def(nb::init<int>(), "num_parameters"_a = -1)
           .def_prop_rw(
               "filtration_grid",
               [](Wrapper& self) -> nb::object { return self.tree.get_filtration_grid(); },
@@ -1021,23 +1022,15 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           //     "slicer"_a,
           //     "max_dim"_a = -1,
           //     nb::rv_policy::reference_internal)
-          .def(
-              "_from_gudhi_state",
-              [](Wrapper& self, nb::handle state, int num_parameters, nb::handle default_values) -> Wrapper& {
-                auto buffer = vector_from_handle<int8_t>(state);
-                auto default_filtration =
-                    default_filtration_from_handle<Filtration, Value>(default_values, num_parameters);
-                {
-                  nb::gil_scoped_release release;
-                  if (!buffer.empty()) {
-                    self.tree.from_std(reinterpret_cast<char*>(buffer.data()), buffer.size(), 0, default_filtration);
-                  }
-                  // self.tree.resize_all_filtrations(num_parameters);
-                  // self.tree.set_num_parameters(num_parameters);
-                }
-                return self;
-              },
-              nb::rv_policy::reference_internal)
+          .def("_from_gudhi_state",
+               [](Wrapper& self,
+                  nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state,
+                  int dimension,
+                  int num_parameters,
+                  nb::object default_values) -> Wrapper& {
+                 self.tree.from_std(state, dimension, num_parameters, default_values);
+                 return self;
+               })
           .def("__getstate__", [](Wrapper& self) -> nanobind::tuple { return self.tree.serialize(); })
           .def("__setstate__",
                [](Wrapper& self, nanobind::tuple state) {
@@ -1095,64 +1088,63 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
                 self.tree.assign_simplex_filtration(vertices, filtrationValues);
                 return self;
               },
-              nb::rv_policy::reference_internal);
+              "vertices"_a,
+              "filtration"_a = nb::none());
 
   // bind_insert_batch_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int32_t>(cls);
   // bind_insert_batch_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int64_t>(cls);
   // bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int32_t>(cls);
   // bind_simplex_array_overloads<decltype(cls), Wrapper, Filtration, Value, k_is_kcritical, int64_t>(cls);
 
-  cls.def(
-         "_insert_batch",
-         //  [](Wrapper& self, nb::handle vertex_array_handle, nb::handle filtrations_handle) -> Wrapper& {
-         //    auto vertex_array = matrix_from_handle<int>(vertex_array_handle);
-         //    auto simplices = simplices_from_vertex_rows(vertex_array);
-         //    if (simplices.empty()) {
-         //      return self;
-         //    }
-         //    bool empty_filtration =
-         //        filtrations_handle.is_none() ||
-         //        (nb::hasattr(filtrations_handle, "size") && nb::cast<size_t>(filtrations_handle.attr("size")) == 0);
+  cls.def("_insert_batch",
+          //  [](Wrapper& self, nb::handle vertex_array_handle, nb::handle filtrations_handle) -> Wrapper& {
+          //    auto vertex_array = matrix_from_handle<int>(vertex_array_handle);
+          //    auto simplices = simplices_from_vertex_rows(vertex_array);
+          //    if (simplices.empty()) {
+          //      return self;
+          //    }
+          //    bool empty_filtration =
+          //        filtrations_handle.is_none() ||
+          //        (nb::hasattr(filtrations_handle, "size") && nb::cast<size_t>(filtrations_handle.attr("size")) == 0);
 
-         //    if constexpr (!k_is_kcritical) {
-         //      std::vector<Filtration> filtrations;
-         //      if (!empty_filtration) {
-         //        filtrations =
-         //            one_critical_filtrations_from_rows<Filtration,
-         //            Value>(matrix_from_handle<Value>(filtrations_handle));
-         //      }
-         //      return insert_batch_simplices<Wrapper, Filtration, Value, false>(
-         //          self, simplices, filtrations, empty_filtration);
-         //    } else {
-         //      std::vector<Filtration> filtrations;
-         //      if (!empty_filtration) {
-         //        filtrations.reserve(simplices.num_simplices);
-         //        for (nb::handle row_handle : nb::iter(filtrations_handle)) {
-         //          filtrations.push_back(
-         //              filtration_from_handle<Filtration, Value, k_is_kcritical>(row_handle,
-         //              self.tree.num_parameters()));
-         //        }
-         //      }
-         //      return insert_batch_simplices<Wrapper, Filtration, Value, true>(
-         //          self, simplices, filtrations, empty_filtration);
-         //    }
-         //  },
-         [](Wrapper& self,
-            nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> vertices,
-            nanobind::ndarray<const int, nanobind::ndim<2>> vertex_array,
-            nanobind::object filtrationValues) -> Wrapper& {
-           self.tree.insert_batch(vertices, vertex_array, filtrationValues);
-           return self;
-         },
-         nb::rv_policy::reference_internal)
+          //    if constexpr (!k_is_kcritical) {
+          //      std::vector<Filtration> filtrations;
+          //      if (!empty_filtration) {
+          //        filtrations =
+          //            one_critical_filtrations_from_rows<Filtration,
+          //            Value>(matrix_from_handle<Value>(filtrations_handle));
+          //      }
+          //      return insert_batch_simplices<Wrapper, Filtration, Value, false>(
+          //          self, simplices, filtrations, empty_filtration);
+          //    } else {
+          //      std::vector<Filtration> filtrations;
+          //      if (!empty_filtration) {
+          //        filtrations.reserve(simplices.num_simplices);
+          //        for (nb::handle row_handle : nb::iter(filtrations_handle)) {
+          //          filtrations.push_back(
+          //              filtration_from_handle<Filtration, Value, k_is_kcritical>(row_handle,
+          //              self.tree.num_parameters()));
+          //        }
+          //      }
+          //      return insert_batch_simplices<Wrapper, Filtration, Value, true>(
+          //          self, simplices, filtrations, empty_filtration);
+          //    }
+          //  },
+          [](Wrapper& self,
+             nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> vertices,
+             nanobind::ndarray<const int, nanobind::ndim<2>> vertex_array,
+             nanobind::object filtrationValues) -> Wrapper& {
+            self.tree.insert_batch(vertices, vertex_array, filtrationValues);
+            return self;
+          })
       .def("_get_filtration",
            [](Wrapper& self, nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> vertices) {
              return self.tree.get_simplex_filtration_value(vertices);
            })
-      .def(
-          "_iter_simplices",
-          [](Wrapper& self) { return self.tree.get_simplex_python_iterator(); },
-          nb::keep_alive<0, 1>())
+      // .def(
+      //     "_iter_simplices",
+      //     [](Wrapper& self) { return self.tree.get_simplex_python_iterator(); },
+      //     nb::keep_alive<0, 1>())
       .def(
           "get_simplices",
           [](Wrapper& self) { return self.tree.get_simplex_python_iterator(); },
@@ -1166,11 +1158,7 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
           nb::keep_alive<0, 1>())
       .def(
           "get_boundaries",
-          [](Wrapper& self, nb::handle simplex_handle) {
-            auto simplex = vector_from_handle<int>(simplex_handle);
-            return self.tree.get_boundary_python_iterator(simplex);
-          },
-          "simplex"_a,
+          [](Wrapper& self, nb::object simplex) { return self.tree.get_boundary_python_iterator(simplex); },
           nb::keep_alive<0, 1>())
       // .def("_get_skeleton",
       //      [](Wrapper& self, int dimension) {
@@ -1182,29 +1170,21 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
       //            self, vector_from_handle<int>(simplex_handle));
       //      })
       .def("_get_filtration_values",
-           [](Wrapper& self, nb::handle degrees_handle) {
-             auto degrees = vector_from_handle<int>(degrees_handle);
+           [](Wrapper& self, nanobind::ndarray<const int, nanobind::ndim<1>, nanobind::any_contig> degrees) {
              return self.tree.get_filtration_values(degrees);
            })
       .def(
           "_normalize_filtrations_raw",
-          [](Wrapper& self, nb::object box) -> Wrapper& {
-            return normalize_filtrations_inplace<Wrapper, Value>(self, box);
+          [](Wrapper& self, const std::optional<nanobind::ndarray<const Value, nanobind::ndim<2>>>& box) -> Wrapper& {
+            self.tree.template normalize_filtration_values<Value>(box);
+            return self;
           },
-          "box"_a = nb::none(),
-          nb::rv_policy::reference_internal)
+          "box"_a = nb::none())
       .def("_get_to_std_state",
-           [](Wrapper& self, nb::handle basepoint_handle, nb::handle direction_handle, int parameter) {
-             auto basepoint = vector_from_handle<double>(basepoint_handle);
-             auto direction = vector_from_handle<double>(direction_handle);
-             Gudhi::multi_persistence::Line<double> line(basepoint, direction);
-             std::vector<char> serialized;
-             {
-               nb::gil_scoped_release release;
-               serialized = self.tree.project_on_line_to_std(line, parameter);
-             }
-             return owned_array<char>(std::move(serialized), {serialized.size()});
-           })
+           [](Wrapper& self,
+              nanobind::ndarray<const double, nanobind::ndim<1>, nanobind::any_contig> basepoint,
+              nanobind::ndarray<const double, nanobind::ndim<1>, nanobind::any_contig> direction,
+              int parameter) { return self.tree.project_on_line_to_std(basepoint, direction, parameter); })
       // .def("_get_to_std_linear_projection_state",
       //      [](Wrapper& self, nb::handle linear_form_handle) {
       //        auto linear_form = vector_from_handle<double>(linear_form_handle);
@@ -1215,18 +1195,18 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
       //        }
       //        return owned_array<char>(std::move(serialized), {serialized.size()});
       //      })
-      .def(
-          "_squeeze_inplace",
-          [](Wrapper& self, nb::handle grid_handle, bool coordinate_values) -> Wrapper& {
-            auto grid = matrix_from_handle<Value>(grid_handle);
-            // {
-            //   nb::gil_scoped_release release;
-              // self.tree.squeeze_filtration_inplace(grid, coordinate_values);
-              self.tree.coarsen_on_grid(grid, coordinate_values);
-            // }
-            return self;
-          },
-          nb::rv_policy::reference_internal)
+      .def("_squeeze_inplace",
+           [](Wrapper& self,
+              const std::vector<nanobind::ndarray<const Value, nanobind::ndim<1>, nanobind::any_contig>>& grid,
+              bool coordinate_values) -> Wrapper& {
+             self.tree.coarsen_on_grid(grid, coordinate_values);
+             return self;
+           })
+      .def("_squeeze_inplace",
+           [](Wrapper& self, const std::vector<std::vector<Value>>& grid, bool coordinate_values) -> Wrapper& {
+             self.tree.coarsen_on_grid(grid, coordinate_values);
+             return self;
+           })
       .def("_clean_filtration_grid_raw",
            [](Wrapper& self) -> Wrapper& {
              self.tree.clean_filtration_grid();
@@ -1241,119 +1221,107 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
       //        }
       //      })
       .def("_unsqueeze_to",
-           [](Wrapper& self, Wrapper& out, nb::handle grid_handle) {
-             auto grid = matrix_from_handle<double>(grid_handle);
-             out.tree = self.tree.build_unsqueezed_from(grid);
+           [](Wrapper& self, const std::vector<std::vector<Value>>& grid) -> Wrapper {
+             auto st = self.tree.build_unsqueezed_from(grid);
+             return Wrapper(std::move(st));
            })
-      .def("num_vertices", [](Wrapper& self) -> int { return self.tree.num_vertices(); })
-      .def("num_simplices", [](Wrapper& self) -> int { return self.tree.num_simplices(); })
-      .def("dimension", [](Wrapper& self) -> int { return self.tree.dimension(); })
-      .def("upper_bound_dimension", [](Wrapper& self) -> int { return self.tree.upper_bound_dimension(); })
+      .def(
+          "num_vertices",
+          [](Wrapper& self) -> int { return self.tree.num_vertices(); },
+          nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "num_simplices",
+          [](Wrapper& self) -> int { return self.tree.num_simplices(); },
+          nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "dimension",
+          [](Wrapper& self) -> int { return self.tree.dimension(); },
+          nb::call_guard<nb::gil_scoped_release>())
+      .def(
+          "upper_bound_dimension",
+          [](Wrapper& self) -> int { return self.tree.upper_bound_dimension(); },
+          nb::call_guard<nb::gil_scoped_release>())
       // .def("simplex_dimension",
       //      [](Wrapper& self, nb::handle simplex_handle) {
       //        return self.tree.simplex_dimension(vector_from_handle<int>(simplex_handle));
       //      })
       .def("find_simplex",
-           [](Wrapper& self, nb::handle simplex_handle) {
-             auto simplex = vector_from_handle<int>(simplex_handle);
-             return self.tree.find_simplex(simplex);
+           [](Wrapper& self, nb::object simplex_handle) -> bool { return self.tree.find_simplex(simplex_handle); })
+      .def("remove_maximal_simplex",
+           [](Wrapper& self, nb::object simplex_handle) -> Wrapper& {
+             self.tree.remove_maximal_simplex(simplex_handle);
+             return self;
            })
       .def(
-          "remove_maximal_simplex",
-          [](Wrapper& self, nb::handle simplex_handle) -> Wrapper& {
-            auto simplex = vector_from_handle<int>(simplex_handle);
-            {
-              nb::gil_scoped_release release;
-              self.tree.remove_maximal_simplex(simplex);
-            }
-            return self;
-          },
-          nb::rv_policy::reference_internal)
-      .def("prune_above_dimension",
-           [](Wrapper& self, int dimension) {
-             bool out;
-             {
-               nb::gil_scoped_release release;
-               out = self.tree.prune_above_dimension(dimension);
-             }
-             return out;
+          "prune_above_dimension",
+          [](Wrapper& self, int dimension) -> bool { return self.tree.prune_above_dimension(dimension); },
+          nb::call_guard<nb::gil_scoped_release>())
+      .def("expansion",
+           [](Wrapper& self, int max_dim) -> Wrapper& {
+             self.tree.expand(max_dim);
+             return self;
            })
       .def(
-          "expansion",
-          [](Wrapper& self, int max_dim) -> Wrapper& {
-            {
-              nb::gil_scoped_release release;
-              self.tree.expansion(max_dim);
-              self.tree.make_filtration_non_decreasing();
-            }
-            return self;
-          },
-          nb::rv_policy::reference_internal)
-      .def("make_filtration_non_decreasing",
-           [](Wrapper& self) -> bool {
-             bool out;
-             {
-               nb::gil_scoped_release release;
-               out = self.tree.make_filtration_non_decreasing();
-             }
-             return out;
+          "make_filtration_non_decreasing",
+          [](Wrapper& self) -> bool { return self.tree.make_filtration_non_decreasing(); },
+          nb::call_guard<nb::gil_scoped_release>())
+      .def("_simplify_filtration_raw",
+           [](Wrapper& self) -> Wrapper& {
+             self.tree.simplify_all_filtration_values();
+             return self;
+           })
+      // .def(
+      //     "reset_filtration",
+      //     [](Wrapper& self, nb::handle filtration_handle, int min_dim) -> Wrapper& {
+      //       auto filtration = filtration_from_handle<Filtration, Value, k_is_kcritical>(filtration_handle,
+      //                                                                                   self.tree.num_parameters());
+      //       {
+      //         nb::gil_scoped_release release;
+      //         self.tree.reset_filtration(filtration, min_dim);
+      //       }
+      //       return self;
+      //     },
+      //     "filtration"_a,
+      //     "min_dim"_a = 0,
+      //     nb::rv_policy::reference_internal)
+      .def("fill_lowerstar",
+           [](Wrapper& self, nb::object values_handle, int axis) -> Wrapper& {
+             self.tree.fill_lowerstar(values_handle, axis);
+             return self;
            })
       .def(
-          "_simplify_filtration_raw",
-          [](Wrapper& self) -> Wrapper& {
-            {
-              nb::gil_scoped_release release;
-              self.tree.simplify_all_filtration_values();
-            }
+          "_fill_distance_matrix",
+          [](Wrapper& self, nanobind::ndarray<const Value, nanobind::ndim<2>> distanceMatrix, int axis, Value nodeValue)
+              -> Wrapper& {
+            self.tree.fill_distance_matrix(distanceMatrix, nodeValue, axis);
             return self;
           },
-          nb::rv_policy::reference_internal)
-      .def(
-          "reset_filtration",
-          [](Wrapper& self, nb::handle filtration_handle, int min_dim) -> Wrapper& {
-            auto filtration = filtration_from_handle<Filtration, Value, k_is_kcritical>(filtration_handle,
-                                                                                        self.tree.num_parameters());
-            {
-              nb::gil_scoped_release release;
-              self.tree.reset_filtration(filtration, min_dim);
-            }
-            return self;
-          },
-          "filtration"_a,
-          "min_dim"_a = 0,
-          nb::rv_policy::reference_internal)
-      .def(
-          "fill_lowerstar",
-          [](Wrapper& self, nb::object values_handle, int axis) -> Wrapper& {
-            self.tree.fill_lowerstar(values_handle, axis);
-            return self;
-          },
-          nb::rv_policy::reference_internal)
+          "distance_matrix"_a,
+          "parameter"_a,
+          "node_value"_a = 0)
       .def("get_simplices_of_dimension",
            [](Wrapper& self, int dim) { return self.tree.get_simplices_of_dimension(dim); })
       .def("get_edge_list", [](Wrapper& self) -> nb::ndarray<nb::numpy, Value> { return self.tree.get_edge_list(); })
       .def(
           "_reconstruct_from_edge_array",
           [](Wrapper& self, nanobind::ndarray<const Value, nanobind::ndim<2>> edges, int expand_dimension) -> Wrapper {
-            Wrapper out;
-            out.tree = self.tree.build_bifiltration_from_edges(self.tree, edges, expand_dimension);
-            return out;
+            auto st = self.tree.build_bifiltration_from_edges(self.tree, edges, expand_dimension);
+            return Wrapper(std::move(st));
           },
           "edges"_a,
           "expand_dimension"_a = 0)
       .def("pts_to_indices",
-           [](Wrapper& self, nb::handle pts_handle, nb::handle dims_handle) {
-             auto pts = matrix_from_handle<Value>(pts_handle);
-             auto dims = vector_from_handle<int>(dims_handle);
-             return self.tree.get_point_indices(pts, dims);
-           })
-      .def(
-          "set_dimension",
-          [](Wrapper& self, int value) -> Wrapper& {
-            self.tree.set_dimension(value);
-            return self;
-          },
-          nb::rv_policy::reference_internal)
+           [](Wrapper& self,
+              nanobind::ndarray<const Value, nanobind::ndim<2>> pts_handle,
+              nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig> dims_handle)
+               -> nanobind::tuple { return self.tree.get_point_indices(pts_handle, dims_handle); })
+      // .def(
+      //     "set_dimension",
+      //     [](Wrapper& self, int value) -> Wrapper& {
+      //       self.tree.set_dimension(value);
+      //       return self;
+      //     },
+      //     nb::rv_policy::reference_internal)
       // .def(
       //     "set_key",
       //     [](Wrapper& self, nb::handle simplex_handle, int key) -> Wrapper& {
@@ -1379,17 +1347,17 @@ void bind_simplextree_class(nb::module_& m, nb::list& available_simplextrees) {
       //       return self;
       //     },
       //     nb::rv_policy::reference_internal)
-      .def(
-          "set_num_parameter",
-          [](Wrapper& self, int num) -> Wrapper& {
-            {
-              nb::gil_scoped_release release;
-              self.tree.resize_all_filtrations(num);
-              self.tree.set_num_parameters(num);
-            }
-            return self;
-          },
-          nb::rv_policy::reference_internal)
+      // .def(
+      //     "set_num_parameter",
+      //     [](Wrapper& self, int num) -> Wrapper& {
+      //       {
+      //         nb::gil_scoped_release release;
+      //         self.tree.resize_all_filtrations(num);
+      //         self.tree.set_num_parameters(num);
+      //       }
+      //       return self;
+      //     },
+      //     nb::rv_policy::reference_internal)
       .def("__eq__", [](Wrapper& self, Wrapper& other) { return self.tree == other.tree; })
       .def_prop_ro("num_parameters", [](const Wrapper& self) -> int { return self.tree.num_parameters(); })
       .def_prop_ro("is_kcritical", [](const Wrapper&) -> bool { return k_is_kcritical; })

@@ -9,8 +9,8 @@ namespace multipers::core {
 
 template <class TargetInterface, class SourceInterface>
 struct SimplexTreeConversion {
-  static void run(TargetInterface& target, const SourceInterface& source) {
-    target.copy_from(source);
+  static void run(TargetInterface& target, const SourceInterface& source, int numParam = -1) {
+    target.copy_from(source, numParam);
   }
 };
 

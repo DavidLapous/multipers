@@ -19,6 +19,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <vector>
 
@@ -33,6 +34,7 @@
 #include <python_interfaces/Simplex_tree_interface.h>
 #include <gudhi/multi_simplex_tree_helpers.h>
 #include <gudhi/Multi_persistence/Line.h>
+#include <gudhi/Multi_persistence/utils.h>
 #include <gudhi/Multi_parameter_filtration_value.h>
 
 #include "interface_helpers.h"
@@ -94,25 +96,59 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   // }
 
   template <typename OtherMultiFiltrationValue>
-  void copy_from(const Multi_simplex_tree_interface<OtherMultiFiltrationValue>& other) {
+  void copy_from(const Multi_simplex_tree_interface<OtherMultiFiltrationValue>& other, int numParam = -1) {
     {
       nanobind::gil_scoped_release release;
       Base::clear();
-      Base::copy_from(other, [](const auto& fil) { return fil.template as_type<Filtration_value>(); });
+      Base::copy_from(other, [numParam](const auto& fil) -> Filtration_value {
+        if constexpr (std::is_same_v<Filtration_value, OtherMultiFiltrationValue>) {
+          if (numParam >= 0 && numParam != fil.num_parameters()) {
+            return fil.copy(numParam, fil.num_generators());
+          } else {
+            return fil;
+          }
+        } else {
+          if (numParam >= 0 && numParam != fil.num_parameters()) {
+            return fil.copy(numParam, fil.num_generators()).template as_type<Filtration_value>();
+          } else {
+            return fil.template as_type<Filtration_value>();
+          }
+        }
+      });
+      if (numParam >= 0) Base::set_num_parameters(numParam);
     }
     filtrationGrid_ = other.get_filtration_grid();
   }
 
   template <class OtherMultiFiltrationValue, class PersistenceAlgorithm>
-  void copy_from(const Slicer<OtherMultiFiltrationValue, PersistenceAlgorithm>& other, int maxDim = -1) {
+  void copy_from(const Slicer<OtherMultiFiltrationValue, PersistenceAlgorithm>& other,
+                 int maxDim = -1,
+                 int numParam = -1) {
     filtrationGrid_ = nanobind::none();
     Base st;
     {
       nanobind::gil_scoped_release release;
       Base::clear();
-      st = build_simplex_tree_from_complex<Options>(other.get_filtered_complex(), maxDim);
+      st = build_simplex_tree_from_complex<Options>(other.get_filtered_complex(), maxDim, numParam);
     }
     *this = std::move(st);
+  }
+
+  Multi_simplex_tree_interface& from_std(nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state,
+                                         int dimension,
+                                         int num_parameters,
+                                         nanobind::object default_values) {
+    if (state.size() != 0) {
+      Filtration_value fil = _cast_to_filtration_value(default_values, num_parameters);
+      {
+        nanobind::gil_scoped_release release;
+        char const* buffer_start = state.data();
+        Gudhi::Simplex_tree_interface st;
+        st.deserialize(buffer_start, state.size());
+        *this = Gudhi::multi_persistence::make_multi_dimensional<Options>(st, fil, dimension);
+      }
+    }
+    return *this;
   }
 
   [[nodiscard]] nanobind::object get_filtration_grid() const { return filtrationGrid_; }
@@ -133,7 +169,9 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     filtrationGrid_ = nanobind::none();
   }
 
-  bool find_simplex(const Simplex& simplex) const { return (Base::find(simplex) != Base::null_simplex()); }
+  bool find_simplex(nanobind::object simplex) const {
+    return (_get_handle_from_vertices(simplex) != Base::null_simplex());
+  }
 
   // TODO: move to private?
   bool insert(const Simplex& simplex, const Filtration_value& filtration) {
@@ -207,9 +245,23 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  void remove_maximal_simplex(const Simplex& simplex) {
-    Base::remove_maximal_simplex(Base::find(simplex));
-    Base::clear_filtration();
+  Multi_simplex_tree_interface& remove_maximal_simplex(nanobind::object simplex) {
+    auto sh = _get_handle_from_vertices(simplex);
+    {
+      nanobind::gil_scoped_release release;
+      Base::remove_maximal_simplex(sh);
+      Base::clear_filtration();
+    }
+    return *this;
+  }
+
+  Multi_simplex_tree_interface& expand(int max_dim) {
+    {
+      nanobind::gil_scoped_release release;
+      Base::expansion(max_dim);
+      Base::make_filtration_non_decreasing();
+    }
+    return *this;
   }
 
   nanobind::object get_simplex_filtration_value(Tensor1D<Vertex_handle> simplex,
@@ -322,22 +374,22 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return _make_iterator("skeleton_iterator", Skeleton_simplex_iterator(this, dimension), Skeleton_simplex_iterator());
   }
 
-  auto get_boundary_python_iterator(const Simplex& simplex) {
-    auto bd_sh = Base::find(simplex);
+  auto get_boundary_python_iterator(nanobind::object simplex) {
+    auto bd_sh = _get_handle_from_vertices(simplex);
     if (bd_sh == Base::null_simplex()) throw std::runtime_error("simplex not found - cannot find boundaries");
     return _make_iterator("boundary_iterator", Boundary_simplex_iterator(this, bd_sh), Boundary_simplex_iterator(this));
   }
 
   // TODO: homogenize format with Slicer
-  nanobind::tuple get_filtration_values(std::vector<int> degrees) const {
-    std::sort(degrees.begin(), degrees.end());
-    degrees.erase(std::unique(degrees.begin(), degrees.end()), degrees.end());
+  nanobind::tuple get_filtration_values(Tensor1D<int> degrees) const {
+    // assumes degrees has no duplicates and is sorted
+    auto view = degrees.view();
     std::vector<std::vector<value_type>> values;
     std::size_t numParam = Base::num_parameters();
     {
       nanobind::gil_scoped_release release;
 
-      std::vector<int> degreeIndex(std::max(std::min(Base::dimension(), degrees.back()), -1) + 1, -1);
+      std::vector<int> degreeIndex(std::max(std::min(Base::dimension(), view(view.shape(0) - 1)), -1) + 1, -1);
       if (degreeIndex.empty()) {
         std::size_t numSimplices = 0;
         for (const auto& sh : Base::complex_simplex_range()) {
@@ -366,10 +418,10 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
           const std::size_t dim = Base::dimension(sh);
           if (dim < degreeIndex.size()) numSimplices[dim] += f.num_generators();
         }
-        while (degrees[searchStart] < 0) ++searchStart;  // if all are negative, we are not in this case
+        while (view(searchStart) < 0) ++searchStart;  // if all are negative, we are not in this case
         values.resize(degrees.size() - searchStart);
         for (std::size_t i = searchStart; i < degrees.size(); ++i) {
-          const auto d = static_cast<std::size_t>(degrees[i]);
+          const auto d = static_cast<std::size_t>(view(i));
           if (d < degreeIndex.size()) {
             degreeIndex[d] = i - searchStart;
             values[i - searchStart].resize(numSimplices[d] * numParam);
@@ -379,7 +431,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
         for (const auto& sh : Base::complex_simplex_range()) {
           const auto& f = Base::get_filtration_value(sh);
           const auto dim = Base::dimension(sh);
-          if (std::find(degrees.begin() + searchStart, degrees.end(), dim) != degrees.end()) {
+          if (std::find(view.data() + searchStart, view.data() + view.shape(0), dim) != view.data() + view.shape(0)) {
             Gudhi::Simple_mdspan view(values[degreeIndex[dim]].data(), numParam, numSimplices[dim]);
             auto& i = currState[degreeIndex[dim]];
             for (std::size_t g = 0; g < f.num_generators(); ++g) {
@@ -396,10 +448,10 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     });
   }
 
-  nanobind::tuple get_point_indices(const std::vector<std::vector<value_type>>& pts,
-                                    const std::vector<int>& dims) const {
+  nanobind::tuple get_point_indices(Tensor2D<value_type> pts, Tensor1D<std::int32_t> dims) const {
     auto map = _build_idx_map(dims);
 
+    auto viewPts = pts.view();
     std::size_t numParam = map.size();
     std::vector<std::int32_t> indices(pts.size() * numParam, -1);
     std::vector<std::array<std::int32_t, 2>> unmappedValues;
@@ -407,12 +459,11 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     {
       nanobind::gil_scoped_release release;
 
-      Gudhi::Simple_mdspan indexView(indices.data(), pts.size(), numParam);
-      for (std::size_t i = 0; i < pts.size(); ++i) {
-        auto& point = pts[i];
+      Gudhi::Simple_mdspan indexView(indices.data(), viewPts.shape(0), numParam);
+      for (std::size_t i = 0; i < viewPts.shape(0); ++i) {
         for (std::size_t p = 0; p < numParam; ++p) {
           const auto& paramMap = map[p];
-          auto it = paramMap.find(point[p]);
+          auto it = paramMap.find(viewPts(i, p));
           if (it == paramMap.end()) {
             unmappedValues.push_back({static_cast<std::int32_t>(i), static_cast<std::int32_t>(p)});
           } else {
@@ -422,7 +473,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       }
     }
 
-    return nanobind::make_tuple(_wrap_as_numpy_array(std::move(indices), pts.size(), numParam),
+    return nanobind::make_tuple(_wrap_as_numpy_array(std::move(indices), viewPts.shape(0), numParam),
                                 _wrap_as_numpy_array(std::move(unmappedValues)));
   }
 
@@ -468,16 +519,36 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  // TODO: remove and directly integrate set_num_parameter to constructor
-  void resize_all_filtrations(int num) {
-    if (num < 0) return;
-    for (const auto& sh : Base::complex_simplex_range()) {
-      auto& f = Base::get_filtration_value(sh);
-      if (f.num_parameters() != static_cast<unsigned int>(num)) {
-        f = f.copy(num, f.num_generators());
-      }
+  Multi_simplex_tree_interface& fill_distance_matrix(Tensor2D<value_type> distanceMatrix,
+                                                     value_type nodeValue,
+                                                     int axis) {
+    // assuming Base::num_parameters() was properly set
+    if (axis < 0) axis += Base::num_parameters();
+    if (axis < 0 || axis >= Base::num_parameters()) throw std::invalid_argument("Axis is not a valid parameter index.");
+
+    if (distanceMatrix.ndim() != 2 || distanceMatrix.shape(0) < Base::num_vertices() ||
+        distanceMatrix.shape(1) < Base::num_vertices())
+      throw std::invalid_argument(
+          "Distance matrix has to be a squared 2-dimensional matrix with entries for at least all vertices in the "
+          "simplex tree.");
+    {
+      nanobind::gil_scoped_release release;
+      Gudhi::multi_persistence::fill_axis_with_distance_matrix(
+          *this, Numpy_2d_span(distanceMatrix), nodeValue, static_cast<std::size_t>(axis));
     }
+    return *this;
   }
+
+  // // TODO: remove and directly integrate set_num_parameter to constructor
+  // void resize_all_filtrations(int num) {
+  //   if (num < 0) return;
+  //   for (const auto& sh : Base::complex_simplex_range()) {
+  //     auto& f = Base::get_filtration_value(sh);
+  //     if (f.num_parameters() != static_cast<unsigned int>(num)) {
+  //       f = f.copy(num, f.num_generators());
+  //     }
+  //   }
+  // }
 
   // template <typename OneDimArray>
   // void coarsen_on_grid(const std::vector<OneDimArray>& grid, bool coordinate = true) {
@@ -536,8 +607,38 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  template <typename OneDimArray>
-  Multi_simplex_tree_interface build_unsqueezed_from(const std::vector<OneDimArray>& grid) const {
+  template <typename U>
+  Multi_simplex_tree_interface& normalize_filtration_values(const std::optional<Tensor2D<U>>& box) {
+    if constexpr (MultiFiltrationValue::Storage_policy::has_an_implicit_axis) {
+      throw nanobind::type_error("Degree-Rips slicers cannot be affinely normalized.");
+    } else if constexpr (!std::is_floating_point_v<value_type>) {
+      throw nanobind::type_error("Normalize filtration requires a floating-point dtype for slicers.");
+    } else {
+      {
+        nanobind::gil_scoped_release release;
+        auto for_each = [this](auto&& to_apply) {
+          Base::for_each_simplex([this, &to_apply](Simplex_handle sh, [[maybe_unused]] int dim) {
+            auto& f = Base::get_filtration_value(sh);
+            to_apply(f);
+          });
+        };
+        if (box.has_value()) {
+          if (box->shape(0) != 2 || box->shape(1) != Base::num_parameters())
+            throw std::invalid_argument("Box must have shape (2, num_parameters).");
+          auto boxView = Numpy_2d_span(*box);
+          auto lowerView = boxView[0];
+          auto upperView = boxView[1];
+          normalize_filtration_values_in_complex(
+              *this, for_each, {lowerView.begin(), lowerView.end(), upperView.begin(), upperView.end()});
+        } else {
+          normalize_filtration_values_in_complex(*this, for_each);
+        }
+      }
+      return *this;
+    }
+  }
+
+  Multi_simplex_tree_interface build_unsqueezed_from(const std::vector<std::vector<value_type>>& grid) const {
     Base out;
     {
       nanobind::gil_scoped_release release;
@@ -587,19 +688,21 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return out;
   }
 
-  void from_std(char* buffer_start, std::size_t buffer_size, int dimension, const Filtration_value& default_values) {
-    Gudhi::Simplex_tree_interface st;
-    st.deserialize(buffer_start, buffer_size);
-    *this = Gudhi::multi_persistence::make_multi_dimensional<Options>(st, default_values, dimension);
-  }
-
-  std::vector<char> project_on_line_to_std(const Line<double>& line, int dimension) const {
-    auto st =
-        Gudhi::multi_persistence::make_one_dimensional<Gudhi::Simplex_tree_options_for_python>(*this, line, dimension);
-    // serialize to be able to transfer it to a python simplex tree imported from gudhi and not multipers
-    std::vector<char> buffer(st.get_serialization_size());
-    st.serialize(buffer.data(), buffer.size());
-    return buffer;
+  template <typename U>
+  auto project_on_line_to_std(Tensor1D<U> basepoint, Tensor1D<U> direction, int dimension) const {
+    std::vector<char> buffer;
+    {
+      nanobind::gil_scoped_release release;
+      Numpy_span baseView(basepoint);
+      Numpy_span dirView(direction);
+      Line<U> line = Line<U>(baseView.begin(), baseView.end(), dirView.begin(), dirView.end());
+      auto st = Gudhi::multi_persistence::make_one_dimensional<Gudhi::Simplex_tree_options_for_python>(
+          *this, line, dimension);
+      // serialize to be able to transfer it to a python simplex tree imported from gudhi and not multipers
+      buffer.resize(st.get_serialization_size());
+      st.serialize(buffer.data(), buffer.size());
+    }
+    return _wrap_as_numpy_array(std::move(buffer), buffer.size());
   }
 
   nanobind::tuple serialize() const {
@@ -877,6 +980,25 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     }
   }
 
+  Simplex_handle _get_handle_from_vertices(nanobind::object simplex) const {
+    auto cast_as_iterable = [&]() -> Simplex_handle {
+      nanobind::gil_scoped_release release;
+      return Base::find(detail::as_cpp_range<Vertex_handle>(simplex));
+    };
+    auto cast_first_as_tensor_then_as_iterable = [&]<typename U>() -> Simplex_handle {
+      if (Tensor1D<U> val; nanobind::try_cast<Tensor1D<U>>(simplex, val, false)) {
+        nanobind::gil_scoped_release release;
+        return Base::find(Numpy_span(val));
+      }
+      return cast_as_iterable();
+    };
+    return detail::_dispatch_dtype(
+        simplex,
+        cast_first_as_tensor_then_as_iterable,
+        []() -> Simplex_handle { return Base::null_simplex(); },
+        []() -> Simplex_handle { throw std::invalid_argument("Simplex has to be an iterable of int or float."); });
+  }
+
   nanobind::tuple _get_simplex_and_filtration(Simplex_handle sh) const {
     Simplex simplex;
     for (auto vertex : Base::simplex_vertex_range(sh)) {
@@ -896,12 +1018,13 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
                                    Simplex_filtration_iterator<Iterator>(end));
   }
 
-  std::vector<std::map<value_type, std::int32_t>> _build_idx_map(const std::vector<int>& dimensionsByParam) const {
+  std::vector<std::map<value_type, std::int32_t>> _build_idx_map(Tensor1D<std::int32_t> dimensionsByParam) const {
+    auto viewDims = dimensionsByParam.view();
     std::size_t numParam = Base::num_parameters();
-    if (dimensionsByParam.size() < numParam) throw std::invalid_argument("Not enough dimensions for all parameters.");
+    if (viewDims.shape(0) < numParam) throw std::invalid_argument("Not enough dimensions for all parameters.");
 
-    int maxDim = *std::ranges::max_element(dimensionsByParam.begin(), dimensionsByParam.end());
-    int minDim = *std::ranges::min_element(dimensionsByParam.begin(), dimensionsByParam.end());
+    std::int32_t maxDim = *std::ranges::max_element(viewDims.data(), viewDims.data() + viewDims.shape(0));
+    std::int32_t minDim = *std::ranges::min_element(viewDims.data(), viewDims.data() + viewDims.shape(0));
     // if there is at least one -1, we have to test for every parameter
     maxDim = minDim >= 0 ? maxDim : Base::dimension();
 
@@ -913,10 +1036,10 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       if (fil.num_generators() > 1) throw std::invalid_argument("Multicritical not supported yet");
       if (numParam != fil.num_parameters())
         throw std::runtime_error("Inconsistent number of parameters in stored filtration values");
-      const auto dim = Base::dimension(sh);
+      const std::int32_t dim = Base::dimension(sh);
       if (dim <= maxDim) {
         for (std::size_t p = 0; p < numParam; ++p) {
-          if (dimensionsByParam[p] == -1 || dimensionsByParam[p] == dim) {
+          if (viewDims(p) == -1 || viewDims(p) == dim) {
             // stores only the first encountered filtration value element with that value
             map[p].try_emplace(fil(0, p), idx);
           }

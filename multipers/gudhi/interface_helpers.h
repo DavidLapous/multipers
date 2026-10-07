@@ -28,6 +28,9 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
+#include <boost/iterator/iterator_facade.hpp>
+#include <boost/range/iterator_range.hpp>
+
 #include <gudhi/Slicer.h>
 #include <gudhi/Multi_filtration/Flat_array_filtration.h>
 #include <gudhi/Multi_filtration/Nested_array_filtration.h>
@@ -172,6 +175,7 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func, F_empty &&funcEmpty
   using R_float32 = decltype(func.template operator()<float>());
   using R_float64 = decltype(func.template operator()<double>());
 
+  // Only allow _all_same_v to be true to avoid std::variant compilation overhead?
   using Union = std::conditional_t<_all_same_v<R_int32, R_int64, R_uint32, R_uint64, R_float32, R_float64>,
                                    R_uint32,
                                    std::variant<R_int32, R_int64, R_uint32, R_uint64, R_float32, R_float64>>;
@@ -488,6 +492,52 @@ struct Flat_2D_array_span {
   Del_view delimiters_;
   Data_view flatData_;
 };
+
+// careful: single pass
+template <typename T>
+class Py_iterable_iterator
+    : public boost::iterator_facade<Py_iterable_iterator<T>, T, boost::single_pass_traversal_tag, T> {
+ public:
+  Py_iterable_iterator() = default;
+
+  explicit Py_iterable_iterator(nanobind::handle iterable) {
+    PyObject *it = PyObject_GetIter(iterable.ptr());
+    if (!it) {
+      PyErr_Format(
+          PyExc_TypeError, "Expected an iterable of numerical, got '%.200s'.", Py_TYPE(iterable.ptr())->tp_name);
+      throw nanobind::python_error();
+    }
+    it_ = nanobind::steal(it);
+    advance();
+  }
+
+ private:
+  friend class boost::iterator_core_access;
+
+  nanobind::object it_;   // shared between copies
+  nanobind::object cur_;  // null object == end
+
+  void advance() {
+    PyObject *next = PyIter_Next(it_.ptr());
+    if (next) {
+      cur_ = nanobind::steal(next);
+    } else {
+      cur_ = nanobind::object();
+      if (PyErr_Occurred()) throw nanobind::python_error();
+    }
+  }
+
+  T dereference() const { return nanobind::cast<T>(cur_); }
+
+  void increment() { advance(); }
+
+  bool equal(const Py_iterable_iterator &o) const { return cur_.is_valid() == o.cur_.is_valid(); }
+};
+
+template <typename T>
+inline boost::iterator_range<Py_iterable_iterator<T>> as_cpp_range(nanobind::handle iterable) {
+  return {Py_iterable_iterator<T>(iterable), Py_iterable_iterator<T>()};
+}
 
 }  // namespace detail
 }  // namespace multi_persistence
