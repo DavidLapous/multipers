@@ -1,3 +1,5 @@
+"""Array dispatch and shared NumPy, Torch, and JAX operations."""
+
 from typing import Any, Literal, cast
 import multipers.array_api.numpy as npapi
 
@@ -38,7 +40,9 @@ def is_jax_api(api):
     return api is jaxapi
 
 
-def api_from_tensor(x, *, verbose: bool = False, strict=False, jit_promote: bool = False):
+def api_from_tensor(
+    x, *, verbose: bool = False, strict=False, jit_promote: bool = False
+):
     from importlib.util import find_spec
 
     if strict:
@@ -145,6 +149,16 @@ def api_from_tensors(*args, jit_promote: bool = False):
             if has_jax_tensor:
                 return jaxapi
     raise ValueError(f"Incompatible types got {[type(x) for x in args]=}.")
+
+
+def promote_floating(x, api):
+    """Widen sub-float32 arrays with the selected backend; preserve other dtypes."""
+    if not api.is_float(x):
+        return x
+    info = api.finfo(x.dtype)
+    if info.min >= 0 and api.has_grad(x):
+        raise TypeError("Autodiff requires signed floating point inputs.")
+    return api.astype(x, api.float32) if info.bits < 32 else x
 
 
 def to_numpy(x, dtype=None, contiguous=False):

@@ -15,6 +15,9 @@ _has_jit = False
 LazyTensor = cast(Any, None)
 _is_keops_available = None
 int64 = _torch.int64
+float32 = _torch.float32
+float64 = _torch.float64
+finfo = _torch.finfo
 inf = float("inf")
 
 ones = _torch.ones
@@ -46,6 +49,9 @@ sqrt = _torch.sqrt
 matmul = _torch.matmul
 einsum = _torch.einsum
 moveaxis = _torch.moveaxis
+maximum = _torch.maximum
+isfinite = _torch.isfinite
+solve = _torch.linalg.solve
 from_numpy = _torch.from_numpy
 
 
@@ -108,14 +114,21 @@ def norm(x, axis=None, dim=None, **kwargs):
     return _torch.norm(x, dim=dim, **kwargs)
 
 
+def amax(x, axis=None, keepdims=False):
+    """Reduce maxima, sharing gradients equally between tied entries."""
+    return _torch.amax(x, dim=axis, keepdim=keepdims)
+
+
+def diagonal(x, offset=0, axis1=0, axis2=1):
+    return _torch.diagonal(x, offset=offset, dim1=axis1, dim2=axis2)
+
+
 def astype(x, dtype):
     return astensor(x).to(dtype=dtype)
 
 
 def astensor(x, contiguous=False, dtype=None, device=None):
-    out = _torch.as_tensor(x, dtype=dtype)
-    if device is not None:
-        out = out.to(device=device)
+    out = _torch.as_tensor(x, dtype=dtype, device=device)
     if contiguous:
         out = out.contiguous()
     return out
@@ -246,10 +259,45 @@ def minvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
         dim = axis
     if keepdim is None:
         keepdim = keepdims
+    if isinstance(dim, (tuple, list)):
+        dims = sorted((d if d >= 0 else d + x.ndim for d in dim), reverse=True)
+        for d in dims:
+            x = _torch.min(x, d, bool(keepdim)).values
+        return x
     if dim is not None:
         keepdim = bool(keepdim)
         return _torch.min(x, dim, keepdim).values
     return _torch.min(x)
+
+
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments; tied minima select the first entry."""
+    num_segments = len(indptr) - 1
+    counts = _torch.as_tensor(_np.diff(indptr), device=x.device)
+    segments = _torch.repeat_interleave(
+        _torch.arange(num_segments, device=x.device), counts, output_size=x.shape[0]
+    )
+    index_shape = (-1,) + (1,) * (x.ndim - 1)
+    index = segments.reshape(index_shape).expand_as(x)
+    output_shape = (num_segments,) + x.shape[1:]
+    with _torch.no_grad():
+        is_nan = x.isnan()
+        # Do not feed NaNs to floating-point atomic minima on MPS.
+        values = _torch.where(is_nan, _torch.inf, x) if x.is_floating_point() else x
+        minima = _torch.empty(output_shape, dtype=x.dtype, device=x.device)
+        minima.scatter_reduce_(0, index, values, reduce="amin", include_self=False)
+        matches = x == minima[segments]
+        positions = _torch.arange(x.shape[0], device=x.device).reshape(index_shape)
+        candidates = _torch.where(
+            is_nan,
+            positions,
+            _torch.where(matches, positions + x.shape[0], 2 * x.shape[0]),
+        )
+        first = _torch.full(
+            output_shape, 2 * x.shape[0], dtype=_torch.int64, device=x.device
+        )
+        first.scatter_reduce_(0, index, candidates, reduce="amin", include_self=False)
+    return x.gather(0, first.remainder(x.shape[0]))
 
 
 def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
@@ -257,6 +305,11 @@ def maxvalues(x, axis=None, dim=None, keepdims=False, keepdim=None):
         dim = axis
     if keepdim is None:
         keepdim = keepdims
+    if isinstance(dim, (tuple, list)):
+        dims = sorted((d if d >= 0 else d + x.ndim for d in dim), reverse=True)
+        for d in dims:
+            x = _torch.max(x, d, bool(keepdim)).values
+        return x
     if dim is not None:
         keepdim = bool(keepdim)
         return _torch.max(x, dim, keepdim).values

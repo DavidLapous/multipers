@@ -1,6 +1,6 @@
 #pragma once
 
-#include "backend_log_policy.hpp"
+// #include "backend_log_policy.hpp"
 #include "nanobind/nanobind.h"
 
 #include <algorithm>
@@ -8,7 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
-#include <numeric>
+// #include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -64,14 +64,13 @@ struct function_delaunay_interface_input {
   std::size_t num_point_coordinates = 0;
   std::vector<double> function_values;
   std::size_t num_function_parameters = 0;
-  bool recover_ids = false;
 };
 
 template <typename index_type>
 struct function_delaunay_interface_output {
   std::vector<double> filtration_values;
   std::size_t num_parameters = 0;
-  std::vector<std::vector<index_type> > boundaries;
+  std::vector<std::vector<index_type>> boundaries;
   std::vector<int> dimensions;
 };
 
@@ -94,6 +93,8 @@ using function_delaunay_simplextree_filtration =
 using function_delaunay_simplextree_interface_output =
     Gudhi::multi_persistence::Multi_simplex_tree_interface<function_delaunay_simplextree_filtration>;
 
+using function_delaunay_support_records = std::vector<std::pair<std::vector<int>, std::vector<int>>>;
+
 template <typename index_type>
 contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
     const function_delaunay_interface_input<index_type>& input,
@@ -104,7 +105,8 @@ contiguous_f64_complex function_delaunay_interface_contiguous_slicer(
 template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>& input,
-    bool verbose_output = false);
+    bool verbose_output = false,
+    function_delaunay_support_records* supports = nullptr);
 
 }  // namespace multipers
 #endif
@@ -226,16 +228,16 @@ inline std::size_t validate_function_delaunay_input(const function_delaunay_inte
 }
 
 template <typename index_type>
-inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> > point_cloud_view(
+inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2>> point_cloud_view(
     const function_delaunay_interface_input<index_type>& input) {
-  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2>>(
       input.points.data(), input.num_points, input.num_point_coordinates);
 }
 
 template <typename index_type>
-inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> > function_values_view(
+inline Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2>> function_values_view(
     const function_delaunay_interface_input<index_type>& input) {
-  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+  return Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2>>(
       input.function_values.data(), input.num_points, input.num_function_parameters);
 }
 
@@ -301,7 +303,7 @@ inline void recover_vertex_ids(function_delaunay_interface_output<index_type>& o
   }
 
   std::vector<double> vertex_filtrations(num_vertices * out.num_parameters);
-  std::vector<std::vector<index_type> > vertex_boundaries(num_vertices);
+  std::vector<std::vector<index_type>> vertex_boundaries(num_vertices);
   std::vector<uint8_t> seen(num_vertices, 0);
   for (std::size_t sorted_idx = 0; sorted_idx < num_vertices; ++sorted_idx) {
     if (out.dimensions[sorted_idx] != 0) {
@@ -398,56 +400,6 @@ inline function_delaunay_interface_output<index_type> convert_chain_complex(
   return out;
 }
 
-inline std::vector<double> lowerstar_values_from_points(
-    const std::vector<function_delaunay::Point_with_densities>& points,
-    std::size_t num_function_parameters) {
-  std::vector<double> lowerstar_values;
-  lowerstar_values.reserve(points.size() * num_function_parameters);
-  for (const auto& point : points) {
-    if (point.densities.empty()) {
-      throw std::runtime_error("function_delaunay simplex interface expects one function value per point.");
-    }
-    if (point.densities.size() != num_function_parameters) {
-      throw std::runtime_error("function_delaunay simplex interface got inconsistent function dimensions.");
-    }
-    lowerstar_values.insert(lowerstar_values.end(), point.densities.begin(), point.densities.end());
-  }
-  return lowerstar_values;
-}
-
-inline Gudhi::Simplex_tree<> relabel_simplex_tree_vertices(const Gudhi::Simplex_tree<>& simplex_tree,
-                                                           const std::vector<int>& sorted_to_original) {
-  struct simplex_record {
-    std::vector<int> simplex;
-    double filtration;
-  };
-
-  std::vector<simplex_record> simplices;
-  simplices.reserve(simplex_tree.num_simplices());
-  for (const auto& simplex_handle : simplex_tree.complex_simplex_range()) {
-    simplex_record record;
-    record.filtration = simplex_tree.filtration(simplex_handle);
-    for (const auto vertex : simplex_tree.simplex_vertex_range(simplex_handle)) {
-      if (vertex < 0 || static_cast<std::size_t>(vertex) >= sorted_to_original.size()) {
-        throw std::runtime_error("function_delaunay simplex interface recovered vertex id out of range.");
-      }
-      record.simplex.push_back(sorted_to_original[vertex]);
-    }
-    std::sort(record.simplex.begin(), record.simplex.end());
-    simplices.push_back(std::move(record));
-  }
-
-  std::stable_sort(simplices.begin(), simplices.end(), [](const simplex_record& a, const simplex_record& b) {
-    return a.simplex.size() < b.simplex.size();
-  });
-
-  Gudhi::Simplex_tree<> out;
-  for (const auto& record : simplices) {
-    out.insert_simplex(record.simplex, record.filtration);
-  }
-  return out;
-}
-
 inline function_delaunay_simplextree_interface_output::Base convert_simplex_tree(
     Gudhi::Simplex_tree<>& simplex_tree,
     const std::vector<double>& lowerstar_values,
@@ -459,7 +411,7 @@ inline function_delaunay_simplextree_interface_output::Base convert_simplex_tree
     throw std::invalid_argument("function_delaunay simplex interface got malformed function values.");
   }
   const std::size_t num_vertices = lowerstar_values.size() / num_function_parameters;
-  const auto lowerstar_view = Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2> >(
+  const auto lowerstar_view = Gudhi::Simple_mdspan<const double, Gudhi::dextents<std::size_t, 2>>(
       lowerstar_values.data(), num_vertices, num_function_parameters);
 
   std::vector<double> default_values(1 + num_function_parameters, -std::numeric_limits<double>::infinity());
@@ -513,7 +465,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
     int degree,
     bool use_multi_chunk,
     bool verbose_output) {
-  std::optional<std::lock_guard<std::mutex> > global_state_lock;
+  std::optional<std::lock_guard<std::mutex>> global_state_lock;
   if (detail::function_delaunay_interface_needs_global_state_lock()) {
     global_state_lock.emplace(detail::function_delaunay_interface_mutex());
   }
@@ -523,9 +475,6 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
   }
 
   auto points = detail::make_sorted_function_delaunay_points(input);
-  if (degree >= 0 && input.recover_ids) {
-    throw std::invalid_argument("function_delaunay recover_ids=True is only supported for full-complex outputs.");
-  }
   const auto sorted_to_original = detail::sorted_to_original_vertex_ids<index_type>(points);
 
   (void)verbose_output;
@@ -554,9 +503,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
   }
 
   auto out = detail::convert_chain_complex<index_type>(matrices);
-  if (input.recover_ids) {
-    detail::recover_vertex_ids(out, sorted_to_original);
-  }
+  detail::recover_vertex_ids(out, sorted_to_original);
   return out;
 }
 
@@ -564,11 +511,12 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
 template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>& input,
-    bool verbose_output) {
+    bool verbose_output,
+    function_delaunay_support_records* supports) {
   {
     nanobind::gil_scoped_release release;
     // ???
-    std::optional<std::lock_guard<std::mutex> > global_state_lock;
+    std::optional<std::lock_guard<std::mutex>> global_state_lock;
     if (detail::function_delaunay_interface_needs_global_state_lock()) {
       global_state_lock.emplace(detail::function_delaunay_interface_mutex());
     }
@@ -581,21 +529,23 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
   {
     nanobind::gil_scoped_release release;
     std::size_t num_function_parameters = 0;
-    Gudhi::Simplex_tree<> simplex_tree;
     auto points = detail::make_sorted_function_delaunay_points(input, &num_function_parameters);
     const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
     (void)verbose_output;
     detail::stream_silencer silencer(false);
-    function_delaunay::incremental_delaunay_complex(points, simplex_tree, false);
-
-    if (input.recover_ids) {
-      simplex_tree = detail::relabel_simplex_tree_vertices(simplex_tree, sorted_to_original);
-      nanobind::gil_scoped_acquire acquire;
-      outSt = detail::convert_simplex_tree(simplex_tree, input.function_values, num_function_parameters);
-    } else {
-      outSt = detail::convert_simplex_tree(
-          simplex_tree, detail::lowerstar_values_from_points(points, num_function_parameters), num_function_parameters);
+    Gudhi::Simplex_tree<> simplex_tree;
+    function_delaunay::Meb_support_recorder record;
+    if (supports) {
+      record = [&](const std::vector<int>& simplex, const std::vector<int>& support) {
+        auto vertices = simplex;
+        auto original_support = support;
+        std::sort(vertices.begin(), vertices.end());
+        std::sort(original_support.begin(), original_support.end());
+        supports->emplace_back(std::move(vertices), std::move(original_support));
+      };
     }
+    function_delaunay::incremental_delaunay_complex(points, simplex_tree, false, record, &sorted_to_original);
+    outSt = detail::convert_simplex_tree(simplex_tree, input.function_values, num_function_parameters);
   }
 
   return {std::move(outSt)};
@@ -633,7 +583,8 @@ function_delaunay_interface_contiguous_slicer(const function_delaunay_interface_
 template <typename index_type>
 function_delaunay_simplextree_interface_output function_delaunay_simplextree_interface(
     const function_delaunay_interface_input<index_type>&,
-    bool) {
+    bool,
+    function_delaunay_support_records*) {
   throw std::runtime_error(
       "function_delaunay interface is not available at compile time. Install/checkout headers and rebuild.");
 }

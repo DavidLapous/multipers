@@ -43,6 +43,17 @@ namespace Gudhi {
 namespace multi_persistence {
 namespace detail {
 
+inline constexpr bool _is_host_device_type(int device_type) {
+  return device_type == nanobind::device::cpu::value || device_type == nanobind::device::cuda_host::value ||
+         device_type == nanobind::device::rocm_host::value;
+}
+
+template <typename... Args>
+inline void _require_cpu_array(const nanobind::ndarray<Args...> &array) {
+  if (!_is_host_device_type(array.device_type()))
+    throw nanobind::type_error("Native persistence inputs must be CPU arrays.");
+}
+
 template <typename T, typename... Ts>
 inline constexpr bool _all_same_v = (std::is_same_v<T, Ts> && ...);
 
@@ -65,7 +76,7 @@ inline Array_dtype _get_dtype(const nanobind::dlpack::dtype &dt) {
 }
 
 inline Array_dtype _get_dtype(nanobind::handle obj, int depth = 0) {
-  constexpr int maxRecursionDepth = 32; // same limit than for numpy, seems reasonable
+  constexpr int maxRecursionDepth = 32;  // same limit than for numpy, seems reasonable
   if (depth > maxRecursionDepth) {
     throw nanobind::value_error("Exceeded maximum nesting depth while inferring dtype.");
   }
@@ -137,7 +148,8 @@ inline Array_dtype _get_dtype(nanobind::handle obj, int depth = 0) {
 //   using R_float32 = decltype(func.template operator()<float>());
 //   using R_float64 = decltype(func.template operator()<double>());
 
-//   using Union = std::conditional_t<std::is_same_v<R_float32, R_float64>, R_float32, std::variant<R_float32, R_float64>>;
+//   using Union = std::conditional_t<std::is_same_v<R_float32, R_float64>, R_float32, std::variant<R_float32,
+//   R_float64>>;
 
 //   Array_dtype dtype = _get_dtype(data);
 //   switch (dtype) {
@@ -377,6 +389,7 @@ constexpr bool _is_flat() {
 
 template <typename T, bool Co, bool OneCritical>
 inline nanobind::object _get_raw_filtration_data(
+    nanobind::handle owner,
     multi_filtration::Multi_parameter_filtration_value<multi_filtration::Nested_array_filtration<T>, Co, OneCritical>
         &f,
     bool copy) {
@@ -385,20 +398,21 @@ inline nanobind::object _get_raw_filtration_data(
       std::vector<T> copy(f.begin(0), f.end(0));
       return nanobind::cast(_wrap_as_numpy_array(std::move(copy), f.num_parameters()));
     }
-    return nanobind::cast(_wrap_view_as_numpy_array<false>(&f(0, 0), f.num_parameters()));
+    return nanobind::cast(_wrap_view_as_numpy_array<false>(owner, &f(0, 0), f.num_parameters()));
   } else {
     return Gudhi::python::_build_tuple(f.num_generators(), [&](std::size_t g) -> nanobind::object {
       if (copy) {
         std::vector<T> copy(f.begin(g), f.end(g));
         return nanobind::cast(_wrap_as_numpy_array(std::move(copy), f.num_parameters()));
       }
-      return nanobind::cast(_wrap_view_as_numpy_array<false>(&f(g, 0), f.num_parameters()));
+      return nanobind::cast(_wrap_view_as_numpy_array<false>(owner, &f(g, 0), f.num_parameters()));
     });
   }
 }
 
 template <typename T, bool Co, bool OneCritical>
 inline nanobind::object _get_raw_filtration_data(
+    nanobind::handle owner,
     multi_filtration::Multi_parameter_filtration_value<multi_filtration::Flat_array_filtration<T>, Co, OneCritical> &f,
     bool copy) {
   auto &container = f.get_underlying_container();
@@ -407,18 +421,20 @@ inline nanobind::object _get_raw_filtration_data(
       std::vector<T> copy(container.begin(), container.end());
       return nanobind::cast(_wrap_as_numpy_array(std::move(copy), f.num_parameters()));
     }
-    return nanobind::cast(_wrap_view_as_numpy_array<false>(container.data(), f.num_parameters()));
+    return nanobind::cast(_wrap_view_as_numpy_array<false>(owner, container.data(), f.num_parameters()));
   } else {
     if (copy) {
       std::vector<T> copy(container.begin(), container.end());
       return nanobind::cast(_wrap_as_numpy_array(std::move(copy), f.num_generators(), f.num_parameters()));
     }
-    return nanobind::cast(_wrap_view_as_numpy_array<false>(container.data(), f.num_generators(), f.num_parameters()));
+    return nanobind::cast(
+        _wrap_view_as_numpy_array<false>(owner, container.data(), f.num_generators(), f.num_parameters()));
   }
 }
 
 template <typename T, bool Co, bool OneCritical>
 inline nanobind::object _get_raw_filtration_data(
+    nanobind::handle owner,
     multi_filtration::Multi_parameter_filtration_value<multi_filtration::Degree_bifiltration<T>, Co, OneCritical> &f,
     bool copy) {
   auto &container = f.get_underlying_container();
@@ -426,7 +442,7 @@ inline nanobind::object _get_raw_filtration_data(
     std::vector<T> copy(container.begin(), container.end());
     return nanobind::cast(_wrap_as_numpy_array(std::move(copy), f.num_generators()));
   }
-  return nanobind::cast(_wrap_view_as_numpy_array<false>(container.data(), f.num_generators()));
+  return nanobind::cast(_wrap_view_as_numpy_array<false>(owner, container.data(), f.num_generators()));
 }
 
 template <typename T, bool Co, bool OneCritical>

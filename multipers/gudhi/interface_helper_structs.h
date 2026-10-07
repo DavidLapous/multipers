@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <cstdint>
+#include <cstring>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -39,6 +40,58 @@
 namespace Gudhi {
 namespace multi_persistence {
 namespace detail {
+
+// Bounds-only cursor for the current native slicer and generator-basis state formats.
+class Native_slicer_state_cursor {
+ public:
+  Native_slicer_state_cursor(const char* data, std::size_t size) : current_(data), remaining_(size) {}
+
+  const char* take(std::size_t bytes) {
+    if (bytes > remaining_) throw std::runtime_error("Invalid serialized slicer state.");
+    const char* start = current_;
+    if (bytes != 0) current_ += bytes;
+    remaining_ -= bytes;
+    return start;
+  }
+
+  std::size_t read_size() {
+    std::size_t count;
+    std::memcpy(&count, take(sizeof(count)), sizeof(count));
+    return count;
+  }
+
+  std::size_t skip_array(std::size_t width) {
+    const auto count = read_size();
+    if (count > remaining_ / width) throw std::runtime_error("Invalid serialized slicer state.");
+    take(count * width);
+    return count;
+  }
+
+  std::size_t skip_rows(std::size_t width) {
+    const auto count = read_size();
+    if (count > remaining_ / sizeof(std::size_t)) throw std::runtime_error("Invalid serialized slicer state.");
+    for (std::size_t i = 0; i < count; ++i) skip_array(width);
+    return count;
+  }
+
+  bool read_bool() {
+    const bool no = false, yes = true;
+    const char* start = take(sizeof(bool));
+    if (std::memcmp(start, &no, sizeof(bool)) == 0) return false;
+    if (std::memcmp(start, &yes, sizeof(bool)) == 0) return true;
+    throw std::runtime_error("Invalid serialized slicer state.");
+  }
+
+  std::size_t remaining() const { return remaining_; }
+
+  void finish() const {
+    if (remaining_ != 0) throw std::runtime_error("Invalid serialized slicer state.");
+  }
+
+ private:
+  const char* current_;
+  std::size_t remaining_;
+};
 
 struct Generator_basis_data {
   using Index = std::uint32_t;
@@ -302,13 +355,29 @@ struct Generator_basis_data {
   }
 };
 
+inline void validate_serialized_generator_basis(Native_slicer_state_cursor& cursor) {
+  cursor.take(sizeof(int));
+  cursor.skip_rows(sizeof(Generator_basis_data::Index));
+  cursor.skip_rows(sizeof(Generator_basis_data::Index));
+  cursor.skip_array(2 * sizeof(Generator_basis_data::Grade));
+  cursor.skip_array(2 * sizeof(Generator_basis_data::Grade));
+  cursor.skip_array(sizeof(Generator_basis_data::Index));
+}
+
 inline Generator_basis_data deserialize_gen_basis_from_python(
     nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state) {
+  if (state.device_type() != nanobind::device::cpu::value || (state.size() > 1 && state.stride(0) != 1))
+    throw std::invalid_argument("Invalid serialized slicer state.");
+  std::vector<char> buffer(state.size());
+  if (!buffer.empty()) std::memcpy(buffer.data(), state.data(), buffer.size());
   Generator_basis_data basis;
   {
     nanobind::gil_scoped_release release;
-    const char* end = deserialize_value_from_char_buffer(basis, state.data());
-    if (static_cast<std::size_t>(end - state.data()) != state.size())
+    Native_slicer_state_cursor cursor(buffer.data(), buffer.size());
+    validate_serialized_generator_basis(cursor);
+    cursor.finish();
+    const char* end = deserialize_value_from_char_buffer(basis, buffer.data());
+    if (static_cast<std::size_t>(end - buffer.data()) != buffer.size())
       throw std::runtime_error("Invalid serialized slicer state.");
   }
   return basis;

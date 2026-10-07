@@ -14,6 +14,9 @@ backend = _jnp
 name = "jax"
 _has_jit = True
 int64 = _jnp.int64
+float32 = _jnp.float32
+float64 = _jnp.float64
+finfo = _jnp.finfo
 ones = _jnp.ones
 reshape = _jnp.reshape
 arange = _jnp.arange
@@ -42,6 +45,11 @@ sinc = _jnp.sinc
 sqrt = _jnp.sqrt
 matmul = _jnp.matmul
 einsum = _jnp.einsum
+maximum = _jnp.maximum
+isfinite = _jnp.isfinite
+solve = _jnp.linalg.solve
+amax = _jnp.amax
+diagonal = _jnp.diagonal
 
 
 def argsort(x, axis=-1):
@@ -91,8 +99,9 @@ def astype(x, dtype):
 
 
 def astensor(x, contiguous=False, dtype=None, device=None):
-    out = _jnp.asarray(x, dtype=dtype)
-    return to_device(out, device)
+    if isinstance(device, str):
+        device = _jax.devices(device)[0]
+    return _jnp.asarray(x, dtype=dtype, device=device)
 
 
 def zeros(shape, dtype=None, device=None):
@@ -120,7 +129,8 @@ def copy(x):
 
 
 def device(x):
-    return getattr(x, 'device', None)
+    return getattr(x, "device", None)
+
 
 def sort(x, axis=-1):
     return _jnp.sort(x, axis=axis)
@@ -186,6 +196,43 @@ def quantile_closest(x, q, axis=None):
 
 def minvalues(x, **kwargs):
     return _jnp.min(x, **kwargs)
+
+
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments; tied-min gradients are shared."""
+    segments = _np.repeat(_np.arange(len(indptr) - 1), _np.diff(indptr))
+    return _segment_min(x, segments, len(indptr) - 1)
+
+
+@partial(_jax.custom_jvp, nondiff_argnums=(2,))
+def _segment_min(x, segments, num_segments):
+    return _jax.ops.segment_min(
+        x, segments, num_segments=num_segments, indices_are_sorted=True
+    )
+
+
+@_segment_min.defjvp
+def _segment_min_jvp(num_segments, primals, tangents):
+    x, segments = primals
+    tangent, _ = tangents
+    minima = _segment_min(x, segments, num_segments)
+    matches = x == minima[segments]
+    counts = _jax.ops.segment_sum(
+        matches.astype(_jnp.int32),
+        segments,
+        num_segments=num_segments,
+        indices_are_sorted=True,
+    )
+    # Count actual critical grades, not the scatter reduction's +inf identity.
+    # A NaN minimum has no matches: 0/0 preserves native min's NaN derivative.
+    weights = matches.astype(x.dtype) / counts[segments]
+    reduced_tangent = _jax.ops.segment_sum(
+        weights * tangent,
+        segments,
+        num_segments=num_segments,
+        indices_are_sorted=True,
+    )
+    return minima, reduced_tangent
 
 
 def maxvalues(x, **kwargs):

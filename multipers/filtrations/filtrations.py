@@ -8,7 +8,12 @@ from typing import Optional
 import numpy as np
 from numpy.typing import ArrayLike
 
-from multipers.array_api import api_from_tensor, api_from_tensors, check_keops
+from multipers.array_api import (
+    api_from_tensor,
+    api_from_tensors,
+    check_keops,
+    promote_floating,
+)
 import multipers.logs as _mp_logs
 from multipers.filtrations.density import DTM, available_kernels
 from multipers.grids import compute_grid, get_exact_grid, push_to_grid
@@ -38,7 +43,12 @@ def _rhomboid_tiling_to_slicer(
     with _mp_logs.timings(
         "rhomboid_tiling",
         enabled=verbose,
-        details={"backend": "rhomboid_tiling", "mode": "cpp_interface", "degree": degree, "k_max": k_max},
+        details={
+            "backend": "rhomboid_tiling",
+            "mode": "cpp_interface",
+            "degree": degree,
+            "k_max": k_max,
+        },
     ) as timing:
         out = _rhomboid_tiling_interface.rhomboid_tiling_to_slicer(
             slicer,
@@ -167,7 +177,9 @@ def RipsLowerstar(
         if threshold_radius is None:
             threshold_radius = api.min(api.maxvalues(D, axis=1))
         if sparse:
-            _mp_logs.ExperimentalWarning("Sparse-RipsLowerstar has no known good property.")
+            _mp_logs.ExperimentalWarning(
+                "Sparse-RipsLowerstar has no known good property."
+            )
             st = gd.RipsComplex(
                 distance_matrix=api.asnumpy(D),
                 max_edge_length=threshold_radius,
@@ -263,6 +275,80 @@ def RipsCodensity(
     )
 
 
+def _delaunay_filtration(tree, points, function, metadata, api):
+    """Reconstruct MEB grades on the native, fixed support branch."""
+    from multipers._function_delaunay_interface import _assign_filtrations
+
+    support_groups, simplices, owners, faces = metadata
+    if not simplices:
+        tree.set_num_parameter(1 + function.shape[1])
+        tree.filtration_grid = [
+            api.sum(points, axis=1),
+            *[function[:, i] for i in range(function.shape[1])],
+        ]
+        return tree
+    # Preserve floating input precision; integer coordinates need real arithmetic.
+    x = points if api.is_float(points) else api.astype(points, api.float64)
+    device = api.device(x)
+    # Integer labels must not be rounded to float32 when grades are combined.
+    f = api.to_device(function, device)
+    if api.is_int(f):
+        f = api.astype(f, api.float64)
+
+    def indices(values):
+        return api.astensor(values, dtype=api.int64, device=device)
+
+    radii = []
+    for support in support_groups:
+        p = x[indices(support)]
+        if support.shape[1] == 1:
+            r = p[:, 0, 0] * 0
+        elif support.shape[1] == 2:
+            r = api.norm(p[:, 1] - p[:, 0], axis=-1) / 2
+        else:
+            e = p[:, 1:] - p[:, :1]
+            gram = e @ api.moveaxis(e, -1, -2)
+            q = api.diagonal(gram, axis1=-2, axis2=-1) / 2
+            a = api.solve(gram, q[..., None])[..., 0]
+            r = api.sqrt(api.sum(q * a, axis=-1))
+        radii.append(r)
+    support_radii = api.cat(radii)
+    grades = []
+    previous = None
+    for vertices, support_ids, boundary in zip(simplices, owners, faces):
+        radius = support_radii[indices(support_ids)]
+        if previous is not None:
+            radius = api.maximum(radius, api.amax(previous[indices(boundary)], axis=1))
+        previous = radius
+        values = api.amax(f[indices(vertices)], axis=1)
+        grades.append(api.cat((radius[:, None], values), 1))
+    values = api.cat(grades)
+    if api.any(~api.isfinite(values)):
+        raise ValueError("Non-finite Delaunay grades from MEB support reconstruction.")
+    grid = get_exact_grid([values[:, i] for i in range(values.shape[1])], api=api)
+    # Rank all grades together; transfer to the native CPU tree only once.
+    # Native and reconstructed radii can differ by an ulp, so rank the new values.
+    with api.no_grad():
+        ranks = api.asnumpy(
+            api.stack(
+                [
+                    api.searchsorted(axis, api.ascontiguous(values[:, i]))
+                    for i, axis in enumerate(grid)
+                ],
+                1,
+            ),
+            dtype=np.float64,
+            contiguous=True,
+        )
+    start = 0
+    for vertices in simplices:
+        end = start + len(vertices)
+        _assign_filtrations(tree, vertices, ranks[start:end])
+        start = end
+    tree.filtration_grid = grid
+    return tree
+
+
 def DelaunayLowerstar(
     points: ArrayLike,
     function: ArrayLike,
@@ -274,9 +360,7 @@ def DelaunayLowerstar(
     dtype=np.float64,
     verbose: bool = False,
     clear: bool = True,
-    flagify: bool = False,
     interlevel: bool = False,
-    recover_ids: Optional[bool] = None,
 ):
     """
     Build Delaunay-lower-star bifiltration for low-dimensional Euclidean data.
@@ -323,26 +407,38 @@ def DelaunayLowerstar(
         Emit timing / backend logs.
     clear:
         Compatibility flag, currently unused.
-    flagify:
-        Convert output to a flag complex after native construction. Required to
-        preserve point gradients through geometric scale values.
     interlevel:
         If `True`, require scalar vertex values and encode them as `(-f, f)`.
-    recover_ids:
-        Recover original vertex ordering in native output. Defaults to `True`
-        when `reduce_degree >= 0`.
 
     Notes
     -----
+    Original input vertex IDs are always preserved.
+
     When `reduce_degree` is left at its default value `-1`, this usually returns
     a `SimplexTreeMulti`. When `reduce_degree >= 0`, it returns a
     minimal-presentation `Slicer`.
+
+    Non-flagged Torch autodiff recomputes minimum-enclosing-ball radii from
+    native support vertices, without LibTorch or an all-pairs distance matrix.
+    Tensor reconstruction uses the selected array API. Grid ranks are computed
+    once per parameter and transferred to the native CPU tree in one buffer;
+    simplex assignment remains batched by dimension.
+    Gradients are conditional on the current triangulation, MEB supports, and
+    lower-star maxima; support changes and ties are nonsmooth. Differentiable
+    values are stored in `filtration_grid`.
+    Floating point inputs narrower than 32 bits are widened to float32 before
+    arithmetic and native export, including float16 and bfloat16. Tensor
+    geometry preserves float32 and float64 point precision. Gradient-bearing
+    inputs require signed floating point formats. Integer coordinates and
+    function values use float64. Grids share the promoted point/function dtype.
+    Unsupported dtype/device operations fail explicitly in the selected backend,
+    without a downcast or CPU fallback. Native triangulation still uses double
+    precision on CPU. Float32 can lose accuracy
+    near degenerate supports and select different gradients at ties. Singular
+    solves fail explicitly; no jitter or alternative filtration is substituted.
     """
     import multipers
     import multipers._function_delaunay_interface as _function_delaunay_interface
-
-    if recover_ids is None:
-        recover_ids = reduce_degree >= 0
 
     with _mp_logs.timings(
         "DelaunayLowerstar",
@@ -351,7 +447,6 @@ def DelaunayLowerstar(
             "backend": "function_delaunay",
             "mode": "cpp_interface",
             "reduce_degree": reduce_degree,
-            "flagify": flagify,
             "interlevel": interlevel,
         },
     ) as timing:
@@ -361,16 +456,19 @@ def DelaunayLowerstar(
             raise NotImplementedError("Delaunay with threshold not implemented yet.")
         api = api_from_tensors(points, function)
         timing.substep("resolved_backend")
-        if not flagify and (api.has_grad(points) or api.has_grad(function)):
-            _mp_logs.warn_autodiff(
-                "Cannot keep points gradient unless using `flagify=True`."
+        recover_indices = api.has_grad(points) or api.has_grad(function)
+        if recover_indices and api.name != "torch":
+            raise NotImplementedError(
+                "Non-flagged Delaunay autodiff currently requires Torch."
             )
         points = api.astensor(points)
         function = api.astensor(function)
         timing.substep("converted_inputs")
+        points = promote_floating(points, api)
+        function = promote_floating(function, api)
         if function.ndim == 1:
             scalar_function = api.reshape(function, (-1,))
-            function_matrix = (
+            function_ = (
                 api.cat([(-scalar_function)[:, None], scalar_function[:, None]], 1)
                 if interlevel
                 else scalar_function[:, None]
@@ -378,7 +476,7 @@ def DelaunayLowerstar(
         elif function.ndim == 2:
             if function.shape[1] == 1:
                 scalar_function = api.reshape(function, (-1,))
-                function_matrix = (
+                function_ = (
                     api.cat([(-scalar_function)[:, None], scalar_function[:, None]], 1)
                     if interlevel
                     else function
@@ -386,14 +484,14 @@ def DelaunayLowerstar(
             elif function.shape[1] == 2:
                 if interlevel:
                     raise ValueError("interlevel=True expects scalar function values.")
-                function_matrix = function
+                function_ = function
             else:
                 raise ValueError(
                     "Delaunay Lowerstar supports one or two function parameters."
                 )
         else:
             raise ValueError("function should be a 1d or 2d array.")
-        num_function_parameters = int(function_matrix.shape[1])
+        num_function_parameters = int(function_.shape[1])
         if reduce_degree >= 0 and num_function_parameters > 1:
             raise NotImplementedError(
                 "DelaunayLowerstar minimal presentations currently support only "
@@ -401,90 +499,36 @@ def DelaunayLowerstar(
                 "reduce_degree=-1 first."
             )
         points_np = api.asnumpy(points, dtype=np.float64, contiguous=True)
-        function_np = api.asnumpy(function_matrix, dtype=np.float64, contiguous=True)
+        function_np = api.asnumpy(function_, dtype=np.float64, contiguous=True)
         if points_np.ndim != 2:
-            raise ValueError(f"point_cloud should be a 2d array. Got {points_np.shape=}")
+            raise ValueError(
+                f"point_cloud should be a 2d array. Got {points_np.shape=}"
+            )
         if function_np.ndim != 2:
-            raise ValueError(f"function should be a 2d array after normalization. Got {function_np.shape=}")
+            raise ValueError(
+                f"function should be a 2d array after normalization. Got {function_np.shape=}"
+            )
         if points_np.shape[0] != function_np.shape[0]:
             raise ValueError(
                 f"point_cloud and function_values should have same number of points. "
                 f"Got {points_np.shape[0]} and {function_np.shape[0]}."
             )
         _function_delaunay_interface.require()
-        degree = -1 if flagify else reduce_degree
-        if degree < 0 or recover_ids:
-            from multipers.simplex_tree_multi import SimplexTreeMulti
+        from multipers.simplex_tree_multi import SimplexTreeMulti
 
-            if verbose:
-                _mp_logs.log_verbose(
-                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree=-1 multi_chunk=False recover_ids={recover_ids} function_parameters={num_function_parameters} interlevel={interlevel}",
-                    enabled=verbose,
-                )
-            slicer = _function_delaunay_interface.function_delaunay_to_simplextree(
-                SimplexTreeMulti(num_parameters=1 + num_function_parameters, dtype=dtype),
-                points_np,
-                function_np,
-                recover_ids,
-                verbose,
-            )
-            if degree >= 0:
-                slicer = multipers.Slicer(slicer, vineyard=vineyard, dtype=dtype)
-        else:
-            slicer = multipers.Slicer(None, backend=None, vineyard=vineyard, dtype=dtype)
-            if verbose:
-                _mp_logs.log_verbose(
-                    f"[multipers.backends] backend=function_delaunay mode=cpp_interface degree={degree} multi_chunk=False recover_ids={recover_ids} function_parameters={num_function_parameters} interlevel={interlevel}",
-                    enabled=verbose,
-                )
-            slicer = _function_delaunay_interface.function_delaunay_to_slicer(
-                slicer,
-                points_np,
-                function_np,
-                degree,
-                False,
-                recover_ids,
-                verbose,
-            )
-            slicer._mark_minpres(degree, is_minres=False)
+        slicer = _function_delaunay_interface.function_delaunay_to_simplextree(
+            SimplexTreeMulti(num_parameters=1 + num_function_parameters, dtype=dtype),
+            points_np,
+            function_np,
+            verbose=verbose,
+            recover_indices=recover_indices,
+        )
+        if recover_indices:
+            slicer, metadata = slicer
+            slicer = _delaunay_filtration(slicer, points, function_, metadata, api)
         timing.substep("built_function_delaunay")
-        if flagify:
-            from multipers.simplex_tree_multi import is_simplextree_multi
-            from multipers.slicer import to_simplextree
-
-            max_dim = -1 if reduce_degree == -1 else reduce_degree + 1
-            with timing.step("flagify") as flagify_timing:
-                if is_simplextree_multi(slicer):
-                    slicer = slicer.copy()
-                    if max_dim >= 0:
-                        slicer.prune_above_dimension(max_dim)
-                    flagify_timing.substep("copy+pruned")
-                else:
-                    slicer = to_simplextree(slicer, max_dim=max_dim)
-                    flagify_timing.substep("converted back to a simplextree")
-                slicer.flagify(2)
-                flagify_timing.substep("flagify")
-
-                if api.has_grad(points) or api.has_grad(function):
-                    distances = api.pdist(points) / 2
-                    zero = api.zeros(1, dtype=distances.dtype)
-                    zero = api.to_device(zero, api.device(distances))
-                    distance_values = api.cat([distances, zero])
-                    function_columns = [
-                        function_matrix[:, parameter]
-                        for parameter in range(num_function_parameters)
-                    ]
-                    grid = get_exact_grid([distance_values, *function_columns], api=api)
-                    flagify_timing.substep("recomputed pairwise dists")
-                    slicer = slicer.grid_squeeze(grid)
-                    flagify_timing.substep("stored cdist gradients")
-                    slicer = slicer._clean_filtration_grid()
-                    flagify_timing.substep("cleaned slicer")
-                if reduce_degree >= 0:
-                    from multipers import Slicer
-
-                    slicer = Slicer(slicer)
-                    flagify_timing.substep("converted to slicer for minpres")
+        if reduce_degree >= 0:
+            slicer = multipers.Slicer(slicer, vineyard=vineyard, dtype=dtype)
 
         if reduce_degree >= 0:
             # Force resolution to avoid confusion with hilbert.
@@ -576,7 +620,6 @@ def DelaunayCodensity(
     dtype=np.float64,
     verbose: bool = False,
     clear: bool = True,
-    flagify: bool = False,
 ):
     """
     Build Delaunay-codensity bifiltration.
@@ -603,7 +646,7 @@ def DelaunayCodensity(
         Kernel name for KDE.
     threshold_radius:
         Currently unsupported by `DelaunayLowerstar` backend.
-    reduce_degree, vineyard, dtype, verbose, clear, flagify:
+    reduce_degree, vineyard, dtype, verbose, clear:
         Forwarded to `DelaunayLowerstar`.
 
     Notes
@@ -628,7 +671,6 @@ def DelaunayCodensity(
         dtype=dtype,
         verbose=verbose,
         clear=clear,
-        flagify=flagify,
     )
 
 
@@ -666,8 +708,7 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
     If autodiff-tracked input is detected, image values are first pushed to a
     discrete filtration grid and that grid is attached to the returned object.
     """
-    from multipers import Slicer, _slicer_nanobind as mps
-    from multipers.slicer import available_dtype
+    from multipers import Slicer
 
     verbose = bool(slicer_kwargs.pop("verbose", False))
     api = api_from_tensor(image)
@@ -689,32 +730,35 @@ def Cubical(image: ArrayLike, **slicer_kwargs):
             img2 = image.reshape(-1, image.shape[-1]).T
             grid = compute_grid(img2)
             timing.substep("computed_autodiff_grid")
-            bitmap = push_to_grid(
-                image.reshape(-1, image.shape[-1]),
-                grid,
-                return_coordinate=True,
-            ).reshape(image.shape).astype(np.int32, copy=False)
+            bitmap = (
+                push_to_grid(
+                    image.reshape(-1, image.shape[-1]),
+                    grid,
+                    return_coordinate=True,
+                )
+                .reshape(image.shape)
+                .astype(np.int32, copy=False)
+            )
             timing.substep("pushed_to_grid")
 
-        bitmap = np.asarray(bitmap) if isinstance(bitmap, np.ndarray) else api.asnumpy(bitmap)
+        bitmap = (
+            np.asarray(bitmap)
+            if isinstance(bitmap, np.ndarray)
+            else api.asnumpy(bitmap)
+        )
         dtype = slicer_kwargs.get("dtype", bitmap.dtype)
         slicer_kwargs["dtype"] = dtype
         if bitmap.dtype != dtype:
-            raise ValueError(f"Invalid type matching. Got {dtype=} and {bitmap.dtype=}.")
+            raise ValueError(
+                f"Invalid type matching. Got {dtype=} and {bitmap.dtype=}."
+            )
 
         _Slicer = Slicer(return_type_only=True, **slicer_kwargs)
-        builder_name = f"_build_bitmap_{np.dtype(dtype).name.replace('float64', 'f64').replace('int32', 'i32')}"
-        # if not hasattr(mps, builder_name):
-        #     raise ValueError(
-        #         f"Invalid dtype. Got {bitmap.dtype=}, was expecting {available_dtype=}."
-        #     )
         timing.substep("resolved_builder")
 
         flattened = np.ascontiguousarray(bitmap.reshape(-1, bitmap.shape[-1]))
         shape = np.ascontiguousarray(bitmap.shape[:-1], dtype=np.uint32)
         timing.substep("prepared_bitmap")
-        # base = getattr(mps, builder_name)(flattened, shape)
-        # slicer = base if type(base) is _Slicer else _Slicer(flattened, shape)
         slicer = _Slicer(flattened, shape)
         timing.substep("built_bitmap")
 
@@ -824,7 +868,9 @@ def DegreeRips(
             f"Invalid DegreeRips backend {backend!r}. Expected 'multipers' or 'deg_rips'."
         )
     if backend == "deg_rips" and simplex_tree is not None:
-        raise ValueError("The 'deg_rips' DegreeRips backend only supports points= or distance_matrix= for now.")
+        raise ValueError(
+            "The 'deg_rips' DegreeRips backend only supports points= or distance_matrix= for now."
+        )
 
     with _mp_logs.timings(
         "DegreeRips",
@@ -832,9 +878,9 @@ def DegreeRips(
         details={
             "backend": backend,
             "mode": "python",
-            "input": "simplex_tree" if simplex_tree is not None else (
-                "distance_matrix" if distance_matrix is not None else "points"
-            ),
+            "input": "simplex_tree"
+            if simplex_tree is not None
+            else ("distance_matrix" if distance_matrix is not None else "points"),
             "squeeze": squeeze,
             "normalize": normalize,
             "collapse": collapse,
@@ -951,7 +997,9 @@ def DegreeRips(
         timing.substep("built_degree_rips")
         if squeeze:
             try:
-                radius_resolution = None if squeeze_resolution is None else squeeze_resolution[0]
+                radius_resolution = (
+                    None if squeeze_resolution is None else squeeze_resolution[0]
+                )
             except TypeError:
                 radius_resolution = squeeze_resolution
             radius_grid = compute_grid(
@@ -963,7 +1011,9 @@ def DegreeRips(
                 # Degree_rips_bifiltration stores generators on a compact 0-based
                 # degree axis; requested k-values are only external grid labels.
                 degree_grid = np.arange(ks_np.size, dtype=np.int32)
-                degree_labels = -ks_np[::-1] / num_vertices if normalize else -ks_np[::-1]
+                degree_labels = (
+                    -ks_np[::-1] / num_vertices if normalize else -ks_np[::-1]
+                )
             elif ks_np is None:
                 degree_values = []
                 for _, filtration in st_multi.get_skeleton(1):
@@ -1079,18 +1129,24 @@ def MultiscaleClusteringBifiltration(
     partitions_int = np.ascontiguousarray(partitions_int, dtype=np.int64)
 
     if filtration_indices is None:
-        filtration_indices_np = np.arange(1, partitions_int.shape[0] + 1, dtype=np.float64)
+        filtration_indices_np = np.arange(
+            1, partitions_int.shape[0] + 1, dtype=np.float64
+        )
     else:
         filtration_indices_np = np.asarray(filtration_indices, dtype=np.float64)
     if filtration_indices_np.ndim != 1:
         raise ValueError("filtration_indices must be a 1D array.")
     if filtration_indices_np.shape[0] != partitions_int.shape[0]:
-        raise ValueError("filtration_indices length must match the number of partitions.")
+        raise ValueError(
+            "filtration_indices length must match the number of partitions."
+        )
     if not np.all(np.isfinite(filtration_indices_np)):
         raise ValueError("filtration_indices must be finite.")
     if np.any(filtration_indices_np[1:] <= filtration_indices_np[:-1]):
         raise ValueError("filtration_indices must be strictly increasing.")
-    filtration_indices_np = np.ascontiguousarray(filtration_indices_np, dtype=np.float64)
+    filtration_indices_np = np.ascontiguousarray(
+        filtration_indices_np, dtype=np.float64
+    )
 
     try:
         max_dim_int = _index(max_dim)
@@ -1104,7 +1160,9 @@ def MultiscaleClusteringBifiltration(
         raise ValueError("method must be 'standard' or 'nerve'.")
     max_dim_build = min(
         max_dim_int,
-        partitions_int.shape[1] - 1 if method == "standard" else partitions_int.shape[0] - 1,
+        partitions_int.shape[1] - 1
+        if method == "standard"
+        else partitions_int.shape[0] - 1,
     )
 
     with _mp_logs.timings(
@@ -1266,7 +1324,9 @@ def CoreDelaunay(
     if np.any(ks[1:] <= ks[:-1]):
         raise ValueError("The values in ks must be strictly increasing.")
     if not np.isfinite(beta) or beta < 0:
-        raise ValueError(f"The parameter beta must be finite and nonnegative, got {beta}.")
+        raise ValueError(
+            f"The parameter beta must be finite and nonnegative, got {beta}."
+        )
     if np.isnan(max_alpha_square) or max_alpha_square < 0:
         raise ValueError("max_alpha_square must be nonnegative.")
     if precision not in ["safe", "exact", "fast"]:

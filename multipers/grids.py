@@ -28,7 +28,7 @@ Lstrategies = Literal[
 ]
 
 
-def sanitize_grid(grid, numpyfy=False, add_inf=False, api = None):
+def sanitize_grid(grid, numpyfy=False, add_inf=False, api=None):
     num_parameters = len(grid)
     if num_parameters == 0:
         raise ValueError("empty filtration grid")
@@ -37,9 +37,7 @@ def sanitize_grid(grid, numpyfy=False, add_inf=False, api = None):
         grid = tuple(api.asnumpy(grid[i]) for i in range(num_parameters))
     else:
         # copy here may not be necessary, but cheap
-        grid = [
-            api.astensor(grid[i], contiguous=True) for i in range(num_parameters)
-        ]
+        grid = [api.astensor(grid[i], contiguous=True) for i in range(num_parameters)]
     if add_inf:
         api = api_from_tensors(grid[0])
         inf = api.astensor(_inf_value(grid[0]))
@@ -366,7 +364,6 @@ def _todo_regular_left(f, r, unique, api):
     return f_regular_closest
 
 
-
 def _todo_partition(x, resolution, unique, api):
     if api.has_grad(x):
         _mp_logs.warn_autodiff(
@@ -425,10 +422,14 @@ def _grid_normalization_box(grid):
         has_finite = api.any(finite)
         zero = api.zeros((), dtype=values.dtype, device=device)
         lower.append(
-            api.where(has_finite, api.minvalues(api.where(finite, values, api.inf)), zero)
+            api.where(
+                has_finite, api.minvalues(api.where(finite, values, api.inf)), zero
+            )
         )
         upper.append(
-            api.where(has_finite, api.maxvalues(api.where(finite, values, -api.inf)), zero + 1)
+            api.where(
+                has_finite, api.maxvalues(api.where(finite, values, -api.inf)), zero + 1
+            )
         )
     return api.stack((api.stack(lower), api.stack(upper)))
 
@@ -530,7 +531,12 @@ def _inf_value(array):
 
 
 def evaluate_in_grid(
-    pts, grid, mass_default=None, input_inf_value=None, output_inf_value=None, api=None,
+    pts,
+    grid,
+    mass_default=None,
+    input_inf_value=None,
+    output_inf_value=None,
+    api=None,
 ):
     """
     Input
@@ -665,7 +671,9 @@ def sms_in_grid(sms, grid, mass_default=None):
     return sms
 
 
-def _push_pts_to_line(pts, basepoint, direction=None, api=None, return_coordinate=False):
+def _push_pts_to_line(
+    pts, basepoint, direction=None, api=None, return_coordinate=False
+):
     basepoint = api_from_tensors(basepoint).astensor(basepoint)
     if basepoint.ndim != 1:
         raise ValueError(
@@ -691,18 +699,26 @@ def _push_pts_to_line(pts, basepoint, direction=None, api=None, return_coordinat
     return projected[0], coordinates[0]
 
 
-def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordinate=False):
+def _push_pts_to_lines(
+    pts, basepoints, directions=None, api=None, return_coordinate=False
+):
+    """Auto-select a JIT backend on CPU; explicit APIs retain their device."""
+    device = None
     if api is None:
-        api = api_from_tensors(pts, basepoints, jit_promote=True)
+        tensors = (
+            (pts, basepoints) if directions is None else (pts, basepoints, directions)
+        )
+        api = api_from_tensors(*tensors, jit_promote=True)
+        device = "cpu"
 
-    pts = api.astensor(pts)
-    basepoints = api.astensor(basepoints)
+    pts = api.astensor(pts, device=device)
+    basepoints = api.astensor(basepoints, device=device)
 
     if directions is None:
         kernel = _get_push_pts_to_lines_kernel(api, with_directions=False)
         out = kernel(pts, basepoints)
     else:
-        directions = api.astensor(directions)
+        directions = api.astensor(directions, device=device)
         invalid_rows = api.sum(directions > 0, axis=1) <= 0
         if api.any(invalid_rows):
             invalid_direction = directions[invalid_rows][0]
@@ -719,8 +735,7 @@ def _push_pts_to_lines(pts, basepoints, directions=None, api=None, return_coordi
     coordinates[np.arange(order.shape[0])[:, None], order] = np.arange(
         order.shape[1], dtype=order.dtype
     )
-    coordinates = api.astensor(coordinates, dtype=api.int64)
-    coordinates = api.to_device(coordinates, api.device(out))
+    coordinates = api.astensor(coordinates, dtype=api.int64, device=api.device(out))
     return out, coordinates
 
 

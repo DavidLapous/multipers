@@ -19,6 +19,7 @@ if(MULTIPERS_FEATURE_AIDA)
       "${CMAKE_SOURCE_DIR}/ext/AIDA/src"
       "${CMAKE_SOURCE_DIR}/ext/Persistence-Algebra/include"
   )
+  target_compile_definitions(multipers_aida_static PRIVATE "AIDA_VERSION=\"0.9.0\"")
   target_link_libraries(multipers_aida_static PUBLIC multipers::boost multipers::gmp multipers::openmp multipers::tbb)
   multipers_apply_common_build_flags(multipers_aida_static)
   if(NOT MSVC)

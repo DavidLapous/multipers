@@ -50,7 +50,7 @@ keywords = ["TDA", "Persistence", "Multiparameter", "sklearn", "autodiff"]
 requires = [
   "scikit-build-core>=0.12",
   "numpy",
-  "nanobind",
+  "nanobind>=2.2.0",
 ]
 build-backend = "scikit_build_core.build"
 
@@ -110,8 +110,8 @@ exclude = [
   "*.sh",
   "**/.DS_Store",
   # scikit-build-core manual sdist mode is exclude-driven, not allowlist-driven.
-  # Exclude all vendored source first, then re-include the exact generated ext
-  # dependency closure in the include block below.
+  # Exclude all vendored source first, then re-include required public headers
+  # and the generated ext dependency closure in the include block below.
   "ext/**",
   "*.cff",
   "*.bin",
@@ -145,6 +145,8 @@ include = [
   "tools/codegen/_registry.py",
   "tools/codegen/query_config.py",
   "tools/core/**",
+  # Keep Persistence-Algebra's public-header closure independent of local Ninja deps.
+  "ext/Persistence-Algebra/include/grlina/*.hpp",
   # BEGIN GENERATED SDIST EXT INCLUDE
   # Generated from `ninja -C build -t deps` plus config-only ext checks; update with
   # `python tools/update_sdist_ext_whitelist.py --write`.
@@ -598,7 +600,7 @@ include = [
   "ext/muphasa/mph/signatureColumn.h",
   "ext/muphasa/mph/utils.h",
   "ext/patches/deg_rips_edge_copy_reducer.patch",
-  "ext/patches/function_delaunay_runtime_logs.patch",
+  "ext/patches/function_delaunay_supports.patch",
   "ext/patches/generate_ext_patches.py",
   "ext/patches/mpfree_runtime_logs.patch",
   "ext/patches/multi_critical_features.patch",

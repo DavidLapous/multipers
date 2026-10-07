@@ -46,6 +46,12 @@ def Slicer(
      - st : SimplexTreeMulti, slicer, or path to an SCC file
      - backend: slicer backend, e.g, "matrix", "clement", "graph"
      - vineyard: vineyard capable (may slow down computations if true)
+     - return_type_only: return the concrete slicer class instead of an instance.
+       Its numeric array inputs are prepared on CPU through the array API before
+       native conversion. Accelerator inputs are copied without moving or
+       mutating the originals. Boundary maps still require integer sequences.
+       Stored filtration grids retain their backend, device, and autodiff.
+       Grid coarsening raises ``ValueError`` if there are fewer axes than parameters.
     Output
     ------
     The corresponding slicer.

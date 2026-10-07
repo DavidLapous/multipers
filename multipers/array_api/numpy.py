@@ -15,8 +15,13 @@ backend = _np
 name = "numpy"
 _has_jit = _numba is not None
 int64 = _np.int64
+float32 = _np.float32
+float64 = _np.float64
+finfo = _np.finfo
 cat = _np.concatenate
 det = _np.linalg.det
+
+
 def asnumpy(x, dtype=None, contiguous=False):
     if contiguous:
         return _np.ascontiguousarray(x, dtype=dtype)
@@ -47,10 +52,16 @@ sinc = _np.sinc
 sqrt = _np.sqrt
 matmul = _np.matmul
 einsum = _np.einsum
+maximum = _np.maximum
+isfinite = _np.isfinite
+solve = _np.linalg.solve
+amax = _np.amax
+diagonal = _np.diagonal
 
 
 def jit(fn=None, **kwargs):
     if _numba is None:
+
         def decorator(func):
             @wraps(func)
             def wrapped(*args, **inner_kwargs):
@@ -283,6 +294,11 @@ def quantile_closest(x, q, axis=None):
 
 def minvalues(x: _np.ndarray, **kwargs):
     return _np.min(x, **kwargs)
+
+
+def segment_min(x, indptr):
+    """Reduce nonempty CSR segments along the leading axis."""
+    return _np.minimum.reduceat(x, indptr[:-1], axis=0)
 
 
 def maxvalues(x: _np.ndarray, **kwargs):

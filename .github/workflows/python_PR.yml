@@ -307,10 +307,14 @@ jobs:
       with:
         path: repo
         persist-credentials: false
+        sparse-checkout: |
+          /tests/
+          /pyproject.toml
+        sparse-checkout-cone-mode: false
     - name: clean install
       shell: bash -el {0}
       run: |
-        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout pytest-rerunfailures -c conda-forge
+        micromamba create -n test python=${{matrix.python-version}} pip pytest pytest-timeout -c conda-forge
         micromamba activate test
 
         if ! pip install --dry-run --only-binary=:all: 'gudhi>=3.13' >/dev/null 2>&1; then
@@ -504,6 +508,6 @@ jobs:
               export CXX=$(brew --prefix llvm)/bin/clang++
           fi
 
-          cd repo/tests
-          pytest -rv . --reruns 1 --reruns-delay 2 --timeout=120 --timeout-method=thread
+          cd repo
+          PYTHONPATH="" python -s -m pytest -rv tests --timeout=120 --timeout-method=thread
         fi

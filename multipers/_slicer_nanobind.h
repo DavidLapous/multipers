@@ -2,6 +2,7 @@
 #define MP_PY_SLICER_NANOBIND_H_INCLUDED
 
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <string>
 #include <vector>
@@ -16,18 +17,20 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
 
+#include <gudhi/interface_helper_structs.h>
+#include <python_interfaces/numpy_utils.h>
+
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "nanobind_object_utils.hpp"
-#include "gudhi/interface_helper_structs.h"
 
 namespace mpnb {
 
 using namespace nanobind::literals;  // for the "argname"_a
-using multipers::nanobind_helpers::type_list;
-using multipers::nanobind_helpers::simplextree_wrapper_t;
-using multipers::nanobind_helpers::SlicerDescriptorList;
-using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::PySimplexTree;
+using multipers::nanobind_helpers::simplextree_wrapper_t;
+using multipers::nanobind_helpers::SimplexTreeDescriptorList;
+using multipers::nanobind_helpers::SlicerDescriptorList;
+using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_utils::numpy_dtype_type;
 
 inline void bind_generator_basis(nanobind::module_& m) {
@@ -64,16 +67,16 @@ inline void bind_generator_basis(nanobind::module_& m) {
       .def("__getstate__",
            [](const Generator_basis_data& self) -> nanobind::ndarray<nanobind::numpy, char> {
              std::size_t buffer_size;
-             char* buffer;
+             std::unique_ptr<char[]> buffer;
              {
                nanobind::gil_scoped_release release;
                buffer_size = get_serialization_size_of(self);
-               buffer = new char[buffer_size];
-               const char* end = serialize_value_to_char_buffer(self, buffer);
-               if (static_cast<std::size_t>(end - buffer) != buffer_size)
+               buffer.reset(new char[buffer_size]);
+               const char* end = serialize_value_to_char_buffer(self, buffer.get());
+               if (static_cast<std::size_t>(end - buffer.get()) != buffer_size)
                  throw std::runtime_error("Invalid module serialization.");
              }
-             return _wrap_as_numpy_array(buffer, buffer_size);
+             return _wrap_as_numpy_array(std::move(buffer), buffer_size);
            })
       .def("__setstate__",
            [](Generator_basis_data& self, nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state) {
@@ -215,15 +218,24 @@ inline void bind_slicer_constructors(Class& cls) {
           "filtration_values"_a)
       .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                           nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>());
+                          nanobind::iterable>(),
+           "generator_maps"_a,
+           "generator_dimensions"_a,
+           "filtration_values"_a);
   if constexpr (Desc::is_kcritical) {
     cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                            const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>());
+                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>(),
+            "generator_maps"_a,
+            "generator_dimensions"_a,
+            "filtration_values"_a);
   } else {
     cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
                            const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<typename Slicer::value_type>>&>());
+                           const std::vector<std::vector<typename Slicer::value_type>>&>(),
+            "generator_maps"_a,
+            "generator_dimensions"_a,
+            "filtration_values"_a);
   }
 
   // flat containers
@@ -251,18 +263,18 @@ inline void bind_slicer_dunders(Class& cls) {
       .def("__getstate__",
            [](const Slicer& self) -> nanobind::tuple {
              std::size_t buffer_size;
-             char* buffer;
+             std::unique_ptr<char[]> buffer;
              {
                nanobind::gil_scoped_release release;
                buffer_size = get_serialization_size_of(self);
-               buffer = new char[buffer_size];
-               const char *end = serialize_value_to_char_buffer(self, buffer);
-               if (static_cast<std::size_t>(end - buffer) != buffer_size)
+               buffer.reset(new char[buffer_size]);
+               const char* end = serialize_value_to_char_buffer(self, buffer.get());
+               if (static_cast<std::size_t>(end - buffer.get()) != buffer_size)
                  throw std::runtime_error("Invalid slicer serialization.");
              }
              return nanobind::make_tuple(Slicer::SERIALIZATION_VERSION,
                                          self.get_filtration_grid(),
-                                         _wrap_as_numpy_array(buffer, buffer_size));
+                                         _wrap_as_numpy_array(std::move(buffer), buffer_size));
            })
       .def("__setstate__", [](Slicer& self, nanobind::tuple state) {
         new (&self) Slicer(Gudhi::multi_persistence::deserialize_slicer_from_python<Slicer>(state));
@@ -343,9 +355,11 @@ inline void bind_slicer_modifiers(Class& cls) {
 
   cls.def("prune_above_dimension", &Slicer::prune_above_dimension)
       .def("coarsen_on_grid_inplace",
-           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Slicer::template coarsen_on_grid<T>))
+           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Slicer::template coarsen_on_grid<T>),
+           nanobind::rv_policy::reference_internal)
       .def("coarsen_on_grid_inplace",
-           nanobind::overload_cast<const std::vector<std::vector<T>>&, bool>(&Slicer::template coarsen_on_grid<T>))
+           nanobind::overload_cast<const std::vector<std::vector<T>>&, bool>(&Slicer::template coarsen_on_grid<T>),
+           nanobind::rv_policy::reference_internal)
       .def("to_colexical", &Slicer::build_colexical_permuted_slicer, "return_permutation"_a = false)
       .def("permute_generators", &Slicer::build_slicer_as_permutation)
       .def("push_to_line", &Slicer::template push_to_line<T>, "basepoint"_a, "direction"_a = nanobind::none())
@@ -426,7 +440,10 @@ template <typename Desc>
 inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_slicers) {
   using Slicer = typename Desc::interface;
 
-  auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data());
+  // Disable nanobind's cached constructor call so Python's __init__ prepares inputs.
+  // Py_tp_vectorcall is slot 82; nanobind supports it before CPython exposes the name.
+  static constexpr PyType_Slot type_slots[] = {{82, nullptr}, {0, nullptr}};
+  auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data(), nanobind::type_slots(type_slots));
 
   bind_slicer_constructors<Slicer, Desc>(cls);
   bind_slicer_dunders<Slicer>(cls);

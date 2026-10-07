@@ -20,6 +20,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -102,13 +103,13 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       Base::clear();
       Base::copy_from(other, [numParam](const auto& fil) -> Filtration_value {
         if constexpr (std::is_same_v<Filtration_value, OtherMultiFiltrationValue>) {
-          if (numParam >= 0 && numParam != fil.num_parameters()) {
+          if (numParam >= 0 && static_cast<std::size_t>(numParam) != fil.num_parameters()) {
             return fil.copy(numParam, fil.num_generators());
           } else {
             return fil;
           }
         } else {
-          if (numParam >= 0 && numParam != fil.num_parameters()) {
+          if (numParam >= 0 && static_cast<std::size_t>(numParam) != fil.num_parameters()) {
             return fil.copy(numParam, fil.num_generators()).template as_type<Filtration_value>();
           } else {
             return fil.template as_type<Filtration_value>();
@@ -264,7 +265,9 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  nanobind::object get_simplex_filtration_value(Tensor1D<Vertex_handle> simplex,
+  // TODO: remove self after wrapping around interface is removed
+  nanobind::object get_simplex_filtration_value(nanobind::object self,
+                                                Tensor1D<Vertex_handle> simplex,
                                                 bool viewIfPossible = true,
                                                 bool raw = false) {
     Simplex_handle sh = Base::find(Numpy_span(simplex));
@@ -272,11 +275,13 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       throw std::invalid_argument("Cannot return the filtration value of a simplex that is not in the complex");
     auto& f = Base::get_filtration_value(sh);
 
-    if (raw) return detail::_get_raw_filtration_data(f, !viewIfPossible);
+    if (raw)
+      return detail::_get_raw_filtration_data(
+          /* nanobind::find(this) */ self, f, !viewIfPossible);
 
     // view not possible for Degree_rips_bifiltration
     if constexpr (!detail::_is_degree_rips<MultiFiltrationValue>()) {
-      if (viewIfPossible) return detail::_get_raw_filtration_data(f, false);
+      if (viewIfPossible) return detail::_get_raw_filtration_data(self, f, false);
     }
     return nanobind::cast(detail::_get_filtration_array(f));
   }
@@ -623,7 +628,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
           });
         };
         if (box.has_value()) {
-          if (box->shape(0) != 2 || box->shape(1) != Base::num_parameters())
+          if (box->shape(0) != 2 || box->shape(1) != static_cast<std::size_t>(Base::num_parameters()))
             throw std::invalid_argument("Box must have shape (2, num_parameters).");
           auto boxView = Numpy_2d_span(*box);
           auto lowerView = boxView[0];
@@ -707,15 +712,15 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
   nanobind::tuple serialize() const {
     std::size_t buffer_size;
-    char* buffer;
+    std::unique_ptr<char[]> buffer;
     {
       nanobind::gil_scoped_release release;
       buffer_size = Base::get_serialization_size();
-      buffer = new char[buffer_size];
+      buffer.reset(new char[buffer_size]);  // no leak in case serialize throws
       // also adds version
-      Base::serialize(buffer, buffer_size);
+      Base::serialize(buffer.get(), buffer_size);
     }
-    return nanobind::make_tuple(filtrationGrid_, _wrap_as_numpy_array(buffer, buffer_size));
+    return nanobind::make_tuple(filtrationGrid_, _wrap_as_numpy_array(std::move(buffer), buffer_size));
   }
 
   void deserialize(nanobind::tuple state) {

@@ -244,6 +244,7 @@ multipers_add_extension(
 multipers_add_extension(
   NAME _end_curves_interface
   SOURCE "${CMAKE_SOURCE_DIR}/multipers/_end_curves_interface.cpp"
+  FEATURE MULTIPERS_FEATURE_AIDA
   USE_CORE
   USE_NANOBIND_RUNTIME
   LINK multipers::backend_aida multipers::backend_persistence_algebra
@@ -251,6 +252,7 @@ multipers_add_extension(
 multipers_add_extension(
   NAME _persistence_algebra_interface
   SOURCE "${CMAKE_SOURCE_DIR}/multipers/_persistence_algebra_interface.cpp"
+  FEATURE MULTIPERS_FEATURE_PERSISTENCE_ALGEBRA
   USE_CORE
   USE_NANOBIND_RUNTIME
   LINK multipers::backend_persistence_algebra
