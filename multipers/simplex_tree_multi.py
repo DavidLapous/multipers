@@ -24,9 +24,7 @@ for _cls in available_simplextrees:
     globals()[_cls.__name__] = _cls
 
 available_dtype = {cls().dtype for cls in available_simplextrees}
-SimplexTreeMulti_type = (
-    reduce(or_, available_simplextrees) if available_simplextrees else Any
-)
+SimplexTreeMulti_type = reduce(or_, available_simplextrees) if available_simplextrees else Any
 
 
 def _t_minus_inf(dtype):
@@ -58,36 +56,6 @@ def _normalize_filtration_value(self, filtration, *, copy=False):
     if self.filtration_container != "Flat":
         rows.sort(key=lambda row: tuple(row.tolist()))
     return [np.array(row, copy=True) for row in rows] if copy else rows
-
-
-def _coords_from_filtration(filtration, grid, dtype=np.int32):
-    arr = np.asarray(filtration, dtype=float)
-    original_ndim = arr.ndim
-    if original_ndim == 1:
-        arr = arr[None, :]
-    out = np.empty(arr.shape, dtype=dtype)
-    for p, g in enumerate(grid):
-        values = arr[:, p]
-        coords = np.searchsorted(np.asarray(g), values, side="left")
-        coords = coords.astype(dtype, copy=False)
-        coords[np.isneginf(values)] = -1
-        coords[np.isposinf(values)] = len(g)
-        out[:, p] = coords
-    return out[0] if original_ndim == 1 else out
-
-
-def _values_from_coords(filtration, grid, dtype=np.float64):
-    arr = np.asarray(filtration, dtype=np.int64)
-    original_ndim = arr.ndim
-    if original_ndim == 1:
-        arr = arr[None, :]
-    out = np.empty(arr.shape, dtype=dtype)
-    for p, g in enumerate(grid):
-        values = arr[:, p]
-        out[:, p] = np.asarray(g, dtype=dtype)[np.clip(values, 0, len(g) - 1)]
-        out[values < 0, p] = -np.inf
-        out[values >= len(g), p] = np.inf
-    return out[0] if original_ndim == 1 else out
 
 
 def _get_class(dtype, kcritical=False, ftype="Contiguous"):
@@ -160,9 +128,7 @@ def SimplexTreeMulti(
         if num_parameters <= 0:
             num_parameters = 1
         if default_values is None:
-            default_values = np.asarray(
-                [_t_minus_inf(dtype)] * num_parameters, dtype=dtype
-            )
+            default_values = np.asarray([_t_minus_inf(dtype)] * num_parameters, dtype=dtype)
             default_values[0] = dtype(0)
         else:
             default_values = np.asarray(default_values, dtype=dtype)
@@ -214,41 +180,12 @@ def _getitem(self, simplex):
     return _normalize_filtration_value(self, self._get_filtration(s), copy=False)
 
 
-def _iter(self):
-    yield from self.get_simplices()
-
-
-# def _getstate(self):
-#     return self._serialize_state(), self.filtration_grid
-
-
-# def _setstate(self, state):
-#     if isinstance(state, tuple) and len(state) == 2:
-#         serialized, filtration_grid = state
-#     else:
-#         serialized, filtration_grid = state, None
-#     self._deserialize_state(serialized)
-#     self.filtration_grid = filtration_grid
-
-
-def _reconstruct_from_pickle(cls, state):
-    obj = cls()
-    obj.__setstate__(state)
-    return obj
-
-
-def _reduce(self):
-    return (_reconstruct_from_pickle, (type(self), self.__getstate__()))
-
-
 def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=None):
     dtype = self.dtype if dtype is None else dtype
     kcritical = self.is_kcritical if kcritical is None else kcritical
     if filtration_container is not None and ftype is not None:
         if str(filtration_container).lower() != str(ftype).lower():
-            raise ValueError(
-                "Got conflicting `ftype` and `filtration_container` arguments."
-            )
+            raise ValueError("Got conflicting `ftype` and `filtration_container` arguments.")
     if filtration_container is not None:
         ftype = filtration_container
     ftype = self.filtration_container if ftype is None else ftype
@@ -260,27 +197,14 @@ def _astype(self, dtype=None, kcritical=None, ftype=None, filtration_container=N
     return cls(self)
 
 
-# def _insert(self, simplex, filtration=None):
-#     num_parameters = self.num_parameters
-#     if filtration is None:
-#         if self.is_kcritical:
-#             return self._insert_simplex(
-#                 np.asarray(simplex, dtype=np.int32), None, False
-#             )
-#         filtration = np.array(
-#             [_t_minus_inf(self.dtype)] * num_parameters, dtype=self.dtype
-#         )
-#     filtration = np.asarray(filtration, dtype=self.dtype)
-#     return self._insert_simplex(np.asarray(simplex, dtype=np.int32), filtration, False)
-
-def _insert_simplex(self, simplex, filtration = None):
+def _insert_simplex(self, simplex, filtration=None):
     s = np.asarray(simplex, dtype=np.intc)
     if s.ndim != 1:
         raise ValueError("simplex has to be a 1D array.")
     return _insert_raw[type(self)](self, s, filtration)
 
 
-def _insert_batch(self, vertex_array, filtrations = None):
+def _insert_batch(self, vertex_array, filtrations=None):
     simplices = np.asarray(vertex_array, dtype=np.intc)
     if simplices.ndim != 2:
         raise ValueError("vertex_array has to be a 2D array.")
@@ -296,46 +220,8 @@ def _assign_filtration(self, simplex, filtration):
     return self
 
 
-# def _get_simplices(self):
-#     simplices = []
-#     for simplex, filtration in self._iter_simplices():
-#         simplices.append(
-#             (
-#                 np.asarray(simplex, dtype=np.int32),
-#                 _normalize_filtration_value(self, filtration, copy=True),
-#             )
-#         )
-#     return simplices
-
-
-# def _get_skeleton(self, dimension):
-#     simplices = []
-#     for simplex, filtration in self._get_skeleton(dimension):
-#         simplices.append(
-#             (
-#                 np.asarray(simplex, dtype=np.int32),
-#                 _normalize_filtration_value(self, filtration, copy=True),
-#             )
-#         )
-#     return simplices
-
-
-# def _get_boundaries(self, simplex):
-#     boundaries = []
-#     for face, filtration in self._get_boundaries(np.asarray(simplex, dtype=np.int32)):
-#         boundaries.append(
-#             (
-#                 np.asarray(face, dtype=np.int32),
-#                 _normalize_filtration_value(self, filtration, copy=True),
-#             )
-#         )
-#     return boundaries
-
-
 def _flagify(self, dim=2):
-    minus_inf = np.asarray(
-        [_t_minus_inf(self.dtype)] * self.num_parameters, dtype=self.dtype
-    )
+    minus_inf = np.asarray([_t_minus_inf(self.dtype)] * self.num_parameters, dtype=self.dtype)
     for simplex, filtration in list(self.get_simplices()):
         if len(simplex) - 1 >= dim:
             self._assign_filtration(simplex, minus_inf)
@@ -353,14 +239,6 @@ def _num_simplices_prop(self):
 
 def _dimension_prop(self):
     return _dimension_raw[type(self)](self)
-
-
-def _upper_bound_dimension(self):
-    return _upper_bound_dimension_raw[type(self)](self)
-
-
-# def _simplex_dimension(self, simplex):
-#     return _simplex_dimension_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
 
 
 def _contains(self, simplex):
@@ -392,29 +270,8 @@ def _make_filtration_non_decreasing(self):
     return _make_filtration_non_decreasing_raw[type(self)](self)
 
 
-# def _reset_filtration(self, filtration, min_dim=0):
-#     _reset_filtration_raw[type(self)](
-#         self, np.asarray(filtration, dtype=self.dtype), min_dim
-#     )
-#     return self
-
-
 def _get_simplices_of_dimension(self, dim):
     return _get_simplices_of_dimension_raw[type(self)](self, dim)
-
-
-# def _key(self, simplex):
-#     return _get_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32))
-
-
-# def _set_keys_to_enumerate(self):
-#     _set_keys_to_enumerate_raw[type(self)](self)
-#     return None
-
-
-# def _set_key(self, simplex, key):
-#     _set_key_raw[type(self)](self, np.asarray(simplex, dtype=np.int32), key)
-#     return None
 
 
 def _to_scc_file(
@@ -450,11 +307,7 @@ def _get_filtration_values(self, degrees=(-1,), inf_to_nan=False, return_raw=Fal
     degrees = np.unique(degrees)
     out = _get_filtration_values_raw[type(self)](self, degrees)
     filtrations_values = [np.asarray(filtration) for filtration in out]
-    if (
-        inf_to_nan
-        and filtrations_values
-        and np.dtype(filtrations_values[0].dtype).kind == "f"
-    ):
+    if inf_to_nan and filtrations_values and np.dtype(filtrations_values[0].dtype).kind == "f":
         for filtration in filtrations_values:
             filtration[filtration == np.inf] = np.nan
             filtration[filtration == -np.inf] = np.nan
@@ -515,9 +368,7 @@ def _grid_squeeze(
     **filtration_grid_kwargs,
 ):
     if grid_strategy is not None:
-        warn(
-            "`grid_strategy` is deprecated, use `strategy` instead.", DeprecationWarning
-        )
+        warn("`grid_strategy` is deprecated, use `strategy` instead.", DeprecationWarning)
         strategy = grid_strategy
     if self.is_squeezed:
         _mp_logs.warn_copy("Squeezing an already squeezed slicer.")
@@ -549,9 +400,7 @@ def _grid_squeeze(
                 f"Invalid grid to squeeze onto. Got {len(filtration_grid)=} != {self.num_parameters=}."
             )
     api = api_from_tensor(filtration_grid[0])
-    c_filtration_grid = tuple(
-        api.asnumpy(f).astype(np.float64) for f in filtration_grid
-    )
+    c_filtration_grid = tuple(api.asnumpy(f).astype(np.float64) for f in filtration_grid)
     if coordinate_values and inplace:
         self.filtration_grid = filtration_grid
     if inplace or not coordinate_values:
@@ -566,7 +415,6 @@ def _grid_squeeze(
 def _unsqueeze(self, grid=None):
     grid = self.filtration_grid if grid is None else grid
     cgrid = sanitize_grid(grid, numpyfy=True)
-    # new_st = type(self)()
     new_st = _unsqueeze_to_raw[type(self)](self, cgrid)
     return new_st
 
@@ -590,10 +438,7 @@ def _filtration_bounds(self, degrees=None, q=0, split_dimension=False):
     degrees = np.unique(degrees)
     filtrations_values = self._get_filtration_values(degrees, inf_to_nan=True)
     boxes = np.array(
-        [
-            np.nanquantile(filtration, [a, 1 - b], axis=1)
-            for filtration in filtrations_values
-        ],
+        [np.nanquantile(filtration, [a, 1 - b], axis=1) for filtration in filtrations_values],
         dtype=float,
     )
     if split_dimension:
@@ -628,16 +473,9 @@ def _fill_lowerstar(self, F, parameter):
 
 def _fill_distance_matrix(self, distance_matrix, parameter, node_value=0):
     assert parameter < self.num_parameters
-    # c_distance_matrix = np.asarray(distance_matrix, dtype=self.dtype)
-    # F = np.zeros(shape=self.num_vertices, dtype=self.dtype) + node_value
-    # self.fill_lowerstar(F, parameter)
-    # for simplex, filtration in self.get_skeleton(1):
-    #     if len(simplex) == 2:
-    #         filtration = np.asarray(filtration, dtype=self.dtype)
-    #         filtration[..., parameter] = c_distance_matrix[simplex[0], simplex[1]]
-    #         self._assign_filtration(simplex, filtration)
-    # self.make_filtration_non_decreasing()
-    _fill_distance_matrix_raw[type(self)](self, np.asarray(distance_matrix, dtype=self.dtype), parameter, node_value)
+    _fill_distance_matrix_raw[type(self)](
+        self, np.asarray(distance_matrix, dtype=self.dtype), parameter, node_value
+    )
     return self
 
 
@@ -658,18 +496,6 @@ def _project_on_line(self, parameter=0, basepoint=None, direction=None):
     return _reconstruct_gudhi_simplextree(serialized)
 
 
-# def _linear_projections(self, linear_forms: np.ndarray):
-#     linear_forms = np.asarray(linear_forms, dtype=np.float64)
-#     if linear_forms.size == 0:
-#         return []
-#     assert linear_forms.shape[1] == self.num_parameters
-#     out = []
-#     for linear_form in linear_forms:
-#         serialized = _to_std_linear_projection_state_raw[type(self)](self, linear_form)
-#         out.append(_reconstruct_gudhi_simplextree(serialized))
-#     return out
-
-
 def _eq(self, other):
     return _eq_raw[type(self)](self, other)
 
@@ -687,11 +513,6 @@ def _euler_characteristic(self, dtype=None):
     new_weights = np.fromiter(out.values(), dtype=np.int32, count=len(out))
     idx = np.nonzero(new_weights)
     return new_pts[idx], new_weights[idx]
-
-
-def _set_num_parameter(self, num):
-    _set_num_parameter_raw[type(self)](self, int(num))
-    return None
 
 
 def _pts_to_indices(self, pts, simplices_dimensions):
@@ -718,9 +539,7 @@ def _edge_array_to_nested_list(edges):
 
 
 def _edge_list_to_array(edges, dtype):
-    return np.asarray(
-        [(e[0][0], e[0][1], e[1][0], e[1][1]) for e in edges], dtype=dtype
-    )
+    return np.asarray([(e[0][0], e[0][1], e[1][0], e[1][1]) for e in edges], dtype=dtype)
 
 
 def _reconstruct_from_edge_list(self, edges, swap=True, expand_dimension=0):
@@ -776,28 +595,19 @@ def _collapse_edges(
 _num_vertices_raw = {}
 _num_simplices_raw = {}
 _dimension_raw = {}
-_upper_bound_dimension_raw = {}
-# _simplex_dimension_raw = {}
 _find_simplex_raw = {}
 _remove_maximal_simplex_raw = {}
 _prune_above_dimension_raw = {}
 _expansion_raw = {}
 _make_filtration_non_decreasing_raw = {}
-# _reset_filtration_raw = {}
 _get_simplices_of_dimension_raw = {}
-# _get_key_raw = {}
-# _set_key_raw = {}
-# _set_keys_to_enumerate_raw = {}
 _get_filtration_values_raw = {}
 _squeeze_inplace_raw = {}
-# _squeeze_to_raw = {}
 _unsqueeze_to_raw = {}
 _fill_lowerstar_raw = {}
 _fill_distance_matrix_raw = {}
 _to_std_state_raw = {}
-# _to_std_linear_projection_state_raw = {}
 _eq_raw = {}
-_set_num_parameter_raw = {}
 _pts_to_indices_raw = {}
 _get_edge_list_raw = {}
 _insert_batch_raw = {}
@@ -809,30 +619,19 @@ def _install_python_api():
         _num_vertices_raw[cls] = cls.num_vertices
         _num_simplices_raw[cls] = cls.num_simplices
         _dimension_raw[cls] = cls.dimension
-        _upper_bound_dimension_raw[cls] = cls.upper_bound_dimension
-        # _simplex_dimension_raw[cls] = cls.simplex_dimension
         _find_simplex_raw[cls] = cls.find_simplex
         _remove_maximal_simplex_raw[cls] = cls.remove_maximal_simplex
         _prune_above_dimension_raw[cls] = cls.prune_above_dimension
         _expansion_raw[cls] = cls.expansion
         _make_filtration_non_decreasing_raw[cls] = cls.make_filtration_non_decreasing
-        # _reset_filtration_raw[cls] = cls.reset_filtration
         _get_simplices_of_dimension_raw[cls] = cls.get_simplices_of_dimension
-        # _get_key_raw[cls] = cls.get_key
-        # _set_key_raw[cls] = cls.set_key
-        # _set_keys_to_enumerate_raw[cls] = cls.set_keys_to_enumerate
         _get_filtration_values_raw[cls] = cls._get_filtration_values
         _squeeze_inplace_raw[cls] = cls._squeeze_inplace
-        # _squeeze_to_raw[cls] = cls._squeeze_to
         _unsqueeze_to_raw[cls] = cls._unsqueeze_to
-        _fill_lowerstar_raw[cls] = cls.fill_lowerstar
+        _fill_lowerstar_raw[cls] = cls._fill_lowerstar
         _fill_distance_matrix_raw[cls] = cls._fill_distance_matrix
         _to_std_state_raw[cls] = cls._get_to_std_state
-        # _to_std_linear_projection_state_raw[cls] = (
-        #     cls._get_to_std_linear_projection_state
-        # )
         _eq_raw[cls] = cls.__eq__
-        # _set_num_parameter_raw[cls] = cls.set_num_parameter
         _pts_to_indices_raw[cls] = cls.pts_to_indices
         _get_edge_list_raw[cls] = cls.get_edge_list
         _insert_batch_raw[cls] = cls._insert_batch
@@ -841,7 +640,6 @@ def _install_python_api():
         cls.__repr__ = _repr
         cls.__len__ = _len
         cls.__deepcopy__ = _deepcopy
-        # cls.__setstate__ = _setstate
         cls.copy = _copy
         cls.filtration = _filtration
         cls.__getitem__ = _getitem
@@ -855,11 +653,7 @@ def _install_python_api():
         cls.prune_above_dimension = _prune_above_dimension
         cls.expansion = _expansion
         cls.make_filtration_non_decreasing = _make_filtration_non_decreasing
-        # cls.reset_filtration = _reset_filtration
         cls.get_simplices_of_dimension = _get_simplices_of_dimension
-        # cls.key = _key
-        # cls.set_key = _set_key
-        # cls.set_keys_to_enumerate = _set_keys_to_enumerate
         cls.to_scc = _to_scc_file
         cls._get_filtration_values = _get_filtration_values
         cls._clean_filtration_grid = _clean_filtration_grid
@@ -872,10 +666,8 @@ def _install_python_api():
         cls.fill_lowerstar = _fill_lowerstar
         cls.fill_distance_matrix = _fill_distance_matrix
         cls.project_on_line = _project_on_line
-        # cls.linear_projections = _linear_projections
         cls.__eq__ = _eq
         cls.euler_characteristic = _euler_characteristic
-        # cls.set_num_parameter = _set_num_parameter
         cls.pts_to_indices = _pts_to_indices
         cls.get_edge_list = _get_edge_list
         cls._reconstruct_from_edge_list = _reconstruct_from_edge_list

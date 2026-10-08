@@ -13,7 +13,6 @@
 #include <nanobind/operators.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
-// #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
 
@@ -26,8 +25,6 @@
 namespace mpnb {
 
 using namespace nanobind::literals;  // for the "argname"_a
-using multipers::nanobind_helpers::PySimplexTree;
-using multipers::nanobind_helpers::simplextree_wrapper_t;
 using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
@@ -88,7 +85,7 @@ inline void bind_generator_basis(nanobind::module_& m) {
 template <class Target, typename Class, typename... SourceDesc1, typename... SourceDesc2>
 inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>, type_list<SourceDesc2...>) {
   // (cls.def(nanobind::init<const typename SourceDesc1::interface&>()), ...);
-  // (cls.def(nanobind::init<PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>&>()),
+  // (cls.def(nanobind::init<typename SourceDesc2::interface_type&>()),
   //  ...);
 
   using CtorFn = void (*)(Target*, PyObject*);
@@ -112,14 +109,14 @@ inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>,
                  }),
        ...);
 
-      // Pack 2: PySimplexTree<interface_type, value_type> wrapper types.
+      // Pack 2: simplex tree interface_type wrapper types.
       (t.emplace(
            (PyTypeObject*)
-               nanobind::type<PySimplexTree<typename SourceDesc2::interface_type>>()
+               nanobind::type<typename SourceDesc2::interface_type>()
                    .ptr(),
            +[](Target* self, PyObject* obj) {
-             using Wrapper = PySimplexTree<typename SourceDesc2::interface_type>;
-             Wrapper& b = *nanobind::inst_ptr<Wrapper>(obj);
+             using Interface = typename SourceDesc2::interface_type;
+             Interface& b = *nanobind::inst_ptr<Interface>(obj);
              new (self) Target(b);
            }),
        ...);
@@ -137,7 +134,7 @@ inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>,
 
 // template <typename Class, typename... SourceDesc>
 // inline void bind_from_simplex_tree_constructors(Class& cls, type_list<SourceDesc...>) {
-//   (cls.def(nanobind::init<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>()),
+//   (cls.def(nanobind::init<typename SourceDesc::interface_type&>()),
 //    ...);
 // }
 
@@ -186,12 +183,12 @@ inline void bind_slicer_eq(Class& cls, type_list<SourceDesc...>) {
 // inline void bind_from_simplex_tree_copy(Class& cls, type_list<SourceDesc...>) {
 //   (cls.def(
 //        "_copy_from_any",
-//        nanobind::overload_cast<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
+//        nanobind::overload_cast<typename SourceDesc::interface_type>&>(
 //            &Target::template copy<typename SourceDesc::filtration_type>)),
 //    ...);
 // }
 
-template <class Slicer, typename Desc, typename Class>
+template <class Slicer, typename Class>
 inline void bind_slicer_constructors(Class& cls) {
   using T = typename Slicer::value_type;
   using Tensor2D = nanobind::ndarray<const T, nanobind::ndim<2>>;
@@ -210,33 +207,12 @@ inline void bind_slicer_constructors(Class& cls) {
           "is_reversed"_a = false);
 
   // from containers
-  cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                         nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
-                         nanobind::iterable>(),
+  cls.def(nanobind::init<std::vector<std::vector<typename Slicer::Index>>,
+                         std::vector<typename Slicer::Dimension>,
+                         nanobind::object>(),
           "generator_maps"_a,
-          "generator_dimensions"_a.noconvert(),
-          "filtration_values"_a)
-      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                          nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>(),
-           "generator_maps"_a,
-           "generator_dimensions"_a,
-           "filtration_values"_a);
-  if constexpr (Desc::is_kcritical) {
-    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                           const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>(),
-            "generator_maps"_a,
-            "generator_dimensions"_a,
-            "filtration_values"_a);
-  } else {
-    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                           const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<typename Slicer::value_type>>&>(),
-            "generator_maps"_a,
-            "generator_dimensions"_a,
-            "filtration_values"_a);
-  }
+          "generator_dimensions"_a,
+          "filtration_values"_a);
 
   // flat containers
   cls.def(nanobind::init<nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
@@ -445,7 +421,7 @@ inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_sl
   static constexpr PyType_Slot type_slots[] = {{82, nullptr}, {0, nullptr}};
   auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data(), nanobind::type_slots(type_slots));
 
-  bind_slicer_constructors<Slicer, Desc>(cls);
+  bind_slicer_constructors<Slicer>(cls);
   bind_slicer_dunders<Slicer>(cls);
   bind_slicer_properties<Slicer, Desc>(cls);
   bind_slicer_modifiers<Slicer, Desc>(cls);

@@ -12,13 +12,11 @@
 #include <iterator>
 #include <limits>
 #include <map>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-// #include "Simplex_tree_multi_interface.h"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 
 namespace nb = nanobind;
@@ -268,22 +266,19 @@ inline std::vector<double> rows_from_nerve_end_indices(const std::vector<size_t>
 
 template <typename Tree, typename Filtration>
 bool insert_kcritical_simplex(Tree& tree, const Simplex& simplex, const Filtration& filtration) {
-  using BaseTree = typename Tree::Base;
-  auto& base_tree = static_cast<BaseTree&>(tree);
   auto result =
-      base_tree.insert_simplex_and_subfaces(BaseTree::Filtration_maintenance::LOWER_EXISTING, simplex, filtration);
+      tree.insert_simplex_and_subfaces(Tree::Base::Filtration_maintenance::LOWER_EXISTING, simplex, filtration);
   return result.first != tree.null_simplex();
 }
 
-template <typename Wrapper>
-void fill_mcbif_simplextree(Wrapper& wrapper,
+template <typename Tree>
+void fill_mcbif_simplextree(Tree& wrapper,
                             const int64_t* partitions,
                             size_t num_partitions,
                             size_t num_points,
                             const double* filtration_indices,
                             int max_dim,
                             const std::string& method) {
-  using Tree = std::remove_reference_t<decltype(wrapper.tree)>;
   using Filtration = typename Tree::Filtration_value;
 
   std::vector<SimplexData> simplex_data;
@@ -302,8 +297,8 @@ void fill_mcbif_simplextree(Wrapper& wrapper,
     return left.simplex < right.simplex;
   });
 
-  wrapper.tree.clear();
-  wrapper.tree.set_num_parameters(2);
+  wrapper.clear();
+  wrapper.set_num_parameters(2);
 
   bool inserted = false;
   for (const auto& data : simplex_data) {
@@ -319,10 +314,10 @@ void fill_mcbif_simplextree(Wrapper& wrapper,
       continue;
     }
     Filtration filtration(flat_rows.begin(), flat_rows.end(), 2);
-    inserted |= insert_kcritical_simplex(wrapper.tree, data.simplex, filtration);
+    inserted |= insert_kcritical_simplex(wrapper, data.simplex, filtration);
   }
   if (inserted) {
-    wrapper.tree.clear_filtration();
+    wrapper.clear_filtration();
   }
 }
 

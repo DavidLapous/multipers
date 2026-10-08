@@ -18,7 +18,6 @@
 #include <CGAL/number_utils.h>
 #include <tbb/parallel_for.h>
 
-// #include "Simplex_tree_multi_interface.h"
 #include "gudhi/Multi_simplex_tree_interface.h"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "nanobind_dense_array_utils.hpp"
@@ -175,7 +174,6 @@ Tree fill_core_delaunay_simplextree(const AlphaTree& alpha_tree,
                                     const std::vector<int64_t>& ks,
                                     double beta,
                                     bool positive_degree) {
-  // using Tree = typename Wrapper::Interface::Base;
   using Filtration = typename Tree::Filtration_value;
   using Value = typename Filtration::value_type;
 
@@ -238,19 +236,6 @@ Tree fill_core_delaunay_simplextree(const AlphaTree& alpha_tree,
 
     st.get_filtration_value(*target_it) =
         Filtration(filtration_values.begin(), filtration_values.begin() + 2 * written, 2);
-
-    // for (size_t k_index = 0; k_index < num_ks; ++k_index) {
-    //   Value max_knn_distance = static_cast<Value>(0);
-    //   for (const double* row : knn_rows) {
-    //     max_knn_distance = std::max(max_knn_distance, static_cast<Value>(row[k_index]));
-    //   }
-    //   filtration_values[2 * k_index] = std::max(alpha, beta_value * max_knn_distance);
-    //   filtration_values[2 * k_index + 1] = second_parameter_values[k_index];
-    // }
-    // wrapper.tree.get_filtration_value(*target_it) = Filtration(filtration_values.begin(), filtration_values.end(), 2);
-    // // TODO: if std::max(alpha, beta_value * max_knn_distance) is a monotonously increasing/decreasing function
-    // // we can avoid the simplification by jumping over repeating values (at take the right second parameter)
-    // wrapper.tree.get_filtration_value(*target_it).simplify();
   }
   return st;
 }
@@ -276,7 +261,7 @@ void build_core_delaunay_dispatch(nb::object& out,
       throw nb::type_error(
           "build_core_delaunay_simplextree expects a float64 k-critical SimplexTreeMulti target.");
     }
-    wrapper.tree = std::move(st);
+    wrapper = std::move(st);
   });
 }
 
@@ -335,7 +320,7 @@ void build_periodic_core_delaunay_dispatch(
       throw nb::type_error(
           "build_core_delaunay_simplextree expects a float64 k-critical SimplexTreeMulti target.");
     }
-    wrapper.tree = std::move(st);
+    wrapper = std::move(st);
   });
 }
 

@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-// #include "Simplex_tree_multi_interface.h"
 #include "Multi_simplex_tree_interface.h"
 
 namespace multipers::core {

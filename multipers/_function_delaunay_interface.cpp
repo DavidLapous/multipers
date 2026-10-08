@@ -28,18 +28,6 @@ using CanonicalWrapper = multipers::nanobind_helpers::canonical_contiguous_f64_s
 using multipers::nanobind_helpers::is_simplextree_object;
 using multipers::nanobind_helpers::visit_simplextree_wrapper;
 
-// template <typename Wrapper>
-// void build_function_delaunay_simplextree(Wrapper& wrapper,
-//                                          const multipers::function_delaunay_interface_input<int>& input,
-//                                          bool verbose) {
-//   using Interface = multipers::function_delaunay_simplextree_interface_output;
-//   Interface output = multipers::function_delaunay_simplextree_interface<int>(input, verbose);
-//   {
-//     // nb::gil_scoped_release release;
-//     wrapper.tree.copy_from(output);
-//   }
-// }
-
 inline multipers::function_delaunay_interface_input<int> build_input(const F64Matrix& point_cloud,
                                                                      const F64Matrix& function_values) {
   const std::size_t num_points = point_cloud.shape(0);
@@ -133,7 +121,7 @@ nb::object function_delaunay_to_simplextree_for_target(nb::object target,
       multipers::function_delaunay_simplextree_interface<int>(input, verbose, recover_indices ? &supports : nullptr);
 
   nb::object out = target.type()();
-  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) { wrapper.tree.copy_from(output); });
+  visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) { wrapper.copy_from(output); });
   if (recover_indices) return nb::make_tuple(out, recover_delaunay_indices(supports));
   return out;
 }
@@ -164,19 +152,19 @@ NB_MODULE(_function_delaunay_interface, m) {
             if constexpr (Desc::is_kcritical) {
               throw nb::type_error("Delaunay grade assignment requires a one-critical tree.");
             } else {
-              if (grades.shape(1) != static_cast<std::size_t>(wrapper.tree.num_parameters()))
+              if (grades.shape(1) != static_cast<std::size_t>(wrapper.num_parameters()))
                 throw nb::value_error("Incorrect number of filtration parameters.");
               nb::gil_scoped_release release;
               std::vector<int> simplex(vertices.shape(1));
               // Invalidate once, including batches that fail after partial assignment.
-              wrapper.tree.clear_filtration();
+              wrapper.clear_filtration();
               for (std::size_t i = 0; i < vertices.shape(0); ++i) {
                 for (std::size_t j = 0; j < simplex.size(); ++j) simplex[j] = vertices(i, j);
-                const auto handle = wrapper.tree.find(simplex);
-                if (handle == wrapper.tree.null_simplex())
+                const auto handle = wrapper.find(simplex);
+                if (handle == wrapper.null_simplex())
                   throw std::invalid_argument("Cannot assign a missing Delaunay simplex.");
                 const auto* row = grades.data() + i * grades.shape(1);
-                wrapper.tree.assign_filtration(handle, typename Desc::filtration_type(row, row + grades.shape(1)));
+                wrapper.assign_filtration(handle, typename Desc::filtration_type(row, row + grades.shape(1)));
               }
             }
           });

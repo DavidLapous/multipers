@@ -90,12 +90,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  // makes the method public
-  // template <typename OtherSimplexTreeOptions, typename F>
-  // void copy_from(const Simplex_tree<OtherSimplexTreeOptions>& complex_source, F&& translate_filtration_value) {
-  //   Base::copy_from(complex_source, std::forward<F>(translate_filtration_value));
-  // }
-
   template <typename OtherMultiFiltrationValue>
   void copy_from(const Multi_simplex_tree_interface<OtherMultiFiltrationValue>& other, int numParam = -1) {
     {
@@ -140,7 +134,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
                                          int num_parameters,
                                          nanobind::object default_values) {
     if (state.size() != 0) {
-      Filtration_value fil = _cast_to_filtration_value(default_values, num_parameters);
+      Filtration_value fil = detail::_cast_to_filtration_value<Filtration_value>(default_values, num_parameters);
       {
         nanobind::gil_scoped_release release;
         char const* buffer_start = state.data();
@@ -162,7 +156,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     // throws if it does not pass the check
     // returns false if valid but empty
-    if (_verify_grid_validity(grid)) {
+    if (detail::_verify_grid_validity(grid)) {
       filtrationGrid_ = grid;
       return;
     }
@@ -174,20 +168,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return (_get_handle_from_vertices(simplex) != Base::null_simplex());
   }
 
-  // TODO: move to private?
-  bool insert(const Simplex& simplex, const Filtration_value& filtration) {
-    auto result = Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::INCREASE_NEW, simplex, filtration);
-    if (result.first != Base::null_simplex()) Base::clear_filtration();
-    return result.second;
-  }
-
-  // TODO: move to private?
-  bool insert_force(const Simplex& simplex, const Filtration_value& filtration) {
-    auto result = Base::insert_simplex_and_subfaces(Base::Filtration_maintenance::IGNORE_VALIDITY, simplex, filtration);
-    Base::clear_filtration();
-    return result.second;
-  }
-
   bool insert_single_simplex(Tensor1D<Vertex_handle> vertices, nanobind::object filtrationValue) {
     std::pair<Simplex_handle, bool> result;
 
@@ -195,7 +175,8 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       nanobind::gil_scoped_release release;
       result = _insert_single_simplex(Numpy_span(vertices));
     } else {
-      Filtration_value fil = _cast_to_filtration_value(filtrationValue, Base::num_parameters());
+      Filtration_value fil =
+          detail::_cast_to_filtration_value<Filtration_value>(filtrationValue, Base::num_parameters());
       nanobind::gil_scoped_release release;
       result = _insert_single_simplex(Numpy_span(vertices), fil);
     }
@@ -213,7 +194,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     std::vector<Filtration_value> fils;
     if (!filtrationValues.is_none()) {
-      fils = _cast_to_filtration_value_array(filtrationValues, Base::num_parameters());
+      fils = detail::_cast_to_filtration_value_array<Filtration_value>(filtrationValues, Base::num_parameters());
     }
     Base::clear_filtration();
 
@@ -265,9 +246,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  // TODO: remove self after wrapping around interface is removed
-  nanobind::object get_simplex_filtration_value(nanobind::object self,
-                                                Tensor1D<Vertex_handle> simplex,
+  nanobind::object get_simplex_filtration_value(Tensor1D<Vertex_handle> simplex,
                                                 bool viewIfPossible = true,
                                                 bool raw = false) {
     Simplex_handle sh = Base::find(Numpy_span(simplex));
@@ -277,11 +256,11 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     if (raw)
       return detail::_get_raw_filtration_data(
-          /* nanobind::find(this) */ self, f, !viewIfPossible);
+          viewIfPossible ? nanobind::find(this) : nanobind::handle(), f, !viewIfPossible);
 
     // view not possible for Degree_rips_bifiltration
     if constexpr (!detail::_is_degree_rips<MultiFiltrationValue>()) {
-      if (viewIfPossible) return detail::_get_raw_filtration_data(self, f, false);
+      if (viewIfPossible) return detail::_get_raw_filtration_data(nanobind::find(this), f, false);
     }
     return nanobind::cast(detail::_get_filtration_array(f));
   }
@@ -290,7 +269,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
                                                           nanobind::object filtrationValue) {
     Filtration_value fil = Filtration_value::minus_inf(Base::num_parameters());
     if (!filtrationValue.is_none()) {
-      fil = _cast_to_filtration_value(filtrationValue, Base::num_parameters());
+      fil = detail::_cast_to_filtration_value<Filtration_value>(filtrationValue, Base::num_parameters());
     }
 
     {
@@ -304,14 +283,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     }
 
     return *this;
-  }
-
-  // TODO: remove
-  auto get_simplex_and_filtration(Simplex_handle f_simplex) const {
-    auto it = Base::simplex_vertex_range(f_simplex);
-    Simplex simplex(it.begin(), it.end());
-    std::reverse(simplex.begin(), simplex.end());
-    return std::make_pair(std::move(simplex), &Base::get_filtration_value(f_simplex));
   }
 
   auto get_simplices_of_dimension(int dimension) const {
@@ -338,7 +309,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   }
 
   template <typename T = value_type>
-  auto get_edge_list() const {
+  nanobind::ndarray<nanobind::numpy, T> get_edge_list() const {
     // TODO: generalize for more parameters? As edges is already a std::vector, it should not be too difficult.
     if (Base::num_parameters() != 2) throw std::logic_error("Method only implemented for 2-parameter filtrations.");
 
@@ -544,27 +515,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return *this;
   }
 
-  // // TODO: remove and directly integrate set_num_parameter to constructor
-  // void resize_all_filtrations(int num) {
-  //   if (num < 0) return;
-  //   for (const auto& sh : Base::complex_simplex_range()) {
-  //     auto& f = Base::get_filtration_value(sh);
-  //     if (f.num_parameters() != static_cast<unsigned int>(num)) {
-  //       f = f.copy(num, f.num_generators());
-  //     }
-  //   }
-  // }
-
-  // template <typename OneDimArray>
-  // void coarsen_on_grid(const std::vector<OneDimArray>& grid, bool coordinate = true) {
-  //   if (static_cast<int>(grid.size()) < Base::num_parameters()) {
-  //     throw std::invalid_argument("Grid and simplex tree do not agree on number of parameters.");
-  //   }
-  //   for (auto sh : Base::complex_simplex_range()) {
-  //     Base::get_filtration_value(sh).project_onto_grid(grid, coordinate);
-  //   }
-  // }
-
   template <typename U>
   Multi_simplex_tree_interface& coarsen_on_grid(const std::vector<std::vector<U>>& grid, bool coordinates = true) {
     if (static_cast<int>(grid.size()) < Base::num_parameters()) {
@@ -654,10 +604,8 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return {std::move(out)};
   }
 
-  template <typename U>
-  Multi_simplex_tree_interface build_bifiltration_from_edges(const Multi_simplex_tree_interface& st,
-                                                             Tensor2D<U> edges,
-                                                             int expansionDimension) const {
+  template <typename U = value_type>
+  Multi_simplex_tree_interface build_bifiltration_from_edges(Tensor2D<U> edges, int expansionDimension) const {
     auto edgeView = edges.view();
     if (edgeView.shape(1) != 4) {
       throw std::invalid_argument("Expected edge array with shape (n_edges, 4). Got (" +
@@ -666,14 +614,14 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     Multi_simplex_tree_interface out;
     out.set_num_parameters(2);
-    out.filtrationGrid_ = st.get_filtration_grid();
+    out.filtrationGrid_ = get_filtration_grid();
     {
       nanobind::gil_scoped_release release;
-      for (auto sh : st.skeleton_simplex_range(0)) {
-        auto& fil = st.get_filtration_value(sh);
+      for (auto sh : Base::skeleton_simplex_range(0)) {
+        auto& fil = Base::get_filtration_value(sh);
         // or better just throw if fil.num_parameters() != 2 ?
         auto fil2param = fil.num_parameters() == 2 ? fil : fil.copy(2, fil.num_generators());
-        out._insert_single_simplex(st.simplex_vertex_range(sh), fil2param);
+        out._insert_single_simplex(Base::simplex_vertex_range(sh), fil2param);
       }
 
       std::array<Vertex_handle, 2> edge;
@@ -693,7 +641,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     return out;
   }
 
-  template <typename U>
+  template <typename U = value_type>
   auto project_on_line_to_std(Tensor1D<U> basepoint, Tensor1D<U> direction, int dimension) const {
     std::vector<char> buffer;
     {
@@ -766,199 +714,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     Iterator curr_;
     Multi_simplex_tree_interface const* tree_;
   };
-
-  template <typename U>
-  static Filtration_value _cast_to_filtration_value(Tensor1D<U> values) {
-    Numpy_span<U> view(values);
-    return Filtration_value(view.begin(), view.end());
-  }
-
-  template <typename U>
-  static Filtration_value _cast_to_filtration_value(Tensor2D<U> values) {
-    if constexpr (Filtration_value::ensures_1_criticality()) {
-      throw std::invalid_argument("A 1-critical filtration value has to be one dimensional.");
-    } else {
-      // could be not C-ordered, so we cannot just pass the data array to Filtration_value
-      auto view = values.view();
-      Filtration_value out(view.shape(1));
-      out.set_num_generators(view.shape(0));
-      for (std::size_t g = 0; g < view.shape(0); ++g) {
-        for (std::size_t p = 0; p < view.shape(1); ++p) out(g, p) = view(g, p);
-      }
-      return out;
-    }
-  }
-
-  static Filtration_value _cast_to_filtration_value(nanobind::object values, int defaultNumParam) {
-    auto cast_as_vector = [&]() -> Filtration_value {
-      std::vector<value_type> gens;
-      auto rec_flatten = [](const auto& self, nanobind::handle obj, std::vector<value_type>& out, int maxDepth) -> int {
-        if (maxDepth < 1)
-          throw std::invalid_argument("Filtration value has to be 1D when 1-critical and max 2D when k-critical.");
-
-        int count = 0;
-        bool first = true, leaf = false;
-        detail::_for_each_sequence_item(obj, [&](nanobind::object item) {
-          value_type v;
-          if (first) leaf = nanobind::try_cast<value_type>(item, v);
-          if (leaf) {
-            if (!first && !nanobind::try_cast<value_type>(item, v))
-              throw std::invalid_argument(
-                  "Ragged array: mixed scalars and nested sequences at the same level for filtration value.");
-            out.push_back(v);
-            ++count;
-          } else {
-            int c = self(self, item, out, maxDepth - 1);
-            if (!first && c != count)
-              throw std::invalid_argument("Ragged array: inconsistent row lengths for filtration value (" +
-                                          std::to_string(count) + " vs " + std::to_string(c) + ").");
-            count = c;
-          }
-          first = false;
-        });
-        return count;
-      };
-
-      if (value_type scalar; nanobind::try_cast<value_type>(values, scalar))
-        throw std::invalid_argument("Filtration value has to be at least 1-dimensional.");
-
-      int depth = 2;
-      if constexpr (Filtration_value::ensures_1_criticality()) {
-        depth = 1;
-      }
-      gens.reserve(detail::_estimate_flat_sequence_size<value_type>(values, depth));
-      int numParam = rec_flatten(rec_flatten, values, gens, depth);
-      return Filtration_value(gens.begin(), gens.end(), numParam);
-    };
-    auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> Filtration_value {
-      if (Tensor1D<U> val; nanobind::try_cast<Tensor1D<U>>(values, val, false)) return _cast_to_filtration_value(val);
-      if (Tensor2D<U> val; nanobind::try_cast<Tensor2D<U>>(values, val, false)) return _cast_to_filtration_value(val);
-      return cast_as_vector();
-    };
-    return detail::_dispatch_dtype(
-        values,
-        cast_first_as_tensor_then_as_vector,
-        [defaultNumParam]() -> Filtration_value { return Filtration_value(defaultNumParam); },
-        cast_as_vector);
-  }
-
-  template <typename U>
-  static std::vector<Filtration_value> _cast_to_filtration_value_array(Tensor2D<U> values) {
-    auto view = values.view();
-    std::vector<Filtration_value> out(view.shape(0), Filtration_value(view.shape(1)));
-    for (std::size_t i = 0; i < view.shape(0); ++i) {
-      for (std::size_t p = 0; p < view.shape(1); ++p) out[i](0, p) = view(i, p);
-    }
-    return out;
-  }
-
-  template <typename U>
-  static std::vector<Filtration_value> _cast_to_filtration_value_array(Tensor3D<U> values) {
-    if constexpr (Filtration_value::ensures_1_criticality()) {
-      throw std::invalid_argument("An array of 1-critical filtration values have to be two dimensional.");
-    } else {
-      auto view = values.view();
-      std::vector<Filtration_value> out(view.shape(0), Filtration_value(view.shape(2)));
-      for (std::size_t i = 0; i < view.shape(0); ++i) {
-        out[i].set_num_generators(view.shape(1));
-        for (std::size_t g = 0; g < view.shape(1); ++g) {
-          for (std::size_t p = 0; p < view.shape(2); ++p) out[i](g, p) = view(i, g, p);
-        }
-      }
-      return out;
-    }
-  }
-
-  static std::vector<Filtration_value> _cast_to_filtration_value_array(nanobind::object values, int defaultNumParam) {
-    auto cast_as_vector = [&]() -> std::vector<Filtration_value> {
-      std::vector<Filtration_value> out;
-      out.reserve(detail::_sequence_size(values));
-      int numParam = -1;
-      detail::_for_each_sequence_item(values, [&](nanobind::object item) {
-        Filtration_value f = _cast_to_filtration_value(item, defaultNumParam);
-        if (numParam != -1 && static_cast<int>(f.num_parameters()) != numParam)
-          throw std::invalid_argument("Inconsistent number of parameters in filtration value array.");
-        numParam = f.num_parameters();
-        out.push_back(std::move(f));
-      });
-      return out;
-    };
-    auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> std::vector<Filtration_value> {
-      if (Tensor2D<U> val; nanobind::try_cast<Tensor2D<U>>(values, val, false))
-        return _cast_to_filtration_value_array(val);
-      if (Tensor3D<U> val; nanobind::try_cast<Tensor3D<U>>(values, val, false))
-        return _cast_to_filtration_value_array(val);
-      return cast_as_vector();
-    };
-    return detail::_dispatch_dtype(
-        values,
-        cast_first_as_tensor_then_as_vector,
-        []() -> std::vector<Filtration_value> { return {}; },
-        cast_as_vector);
-  }
-
-  // TODO: factorize with Slicer
-  template <typename U>
-  static bool _check_has_sorted_rows(Tensor2D<U> grid) {
-    auto view = grid.view();
-    std::size_t rows = view.shape(0), cols = view.shape(1);
-
-    for (std::size_t i = 0; i < rows; ++i)
-      for (std::size_t j = 1; j < cols; ++j)
-        if (view(i, j - 1) > view(i, j))
-          throw nanobind::type_error("Expected grid rows to be sorted by increasing values.");
-
-    return rows != 0 && cols != 0;  // returns false if the grid is valid but empty
-  }
-
-  // TODO: factorize with Slicer
-  template <typename U>
-  static bool _check_has_sorted_rows(nanobind::iterable grid) {
-    bool hasNonEmptyRows = false;
-    for (nanobind::handle row : grid) {
-      if (!nanobind::isinstance<nanobind::iterable>(row))
-        throw nanobind::type_error("Expected each row to be iterable.");
-
-      bool hasPrev = false;
-      U prev = 0;
-
-      for (nanobind::handle elem : nanobind::cast<nanobind::iterable>(row)) {
-        U val;
-        if (!nanobind::try_cast<U>(elem, val)) throw nanobind::type_error("Expected arithmetic elements in the grid.");
-
-        if (hasPrev && val < prev)
-          throw nanobind::type_error("Expected rows of the grid to be ordered by increasing value.");
-
-        prev = val;
-        hasPrev = true;
-      }
-      hasNonEmptyRows |= hasPrev;
-    }
-
-    return hasNonEmptyRows;  // returns false if the grid is valid but empty
-  }
-
-  // TODO: factorize with Slicer
-  [[nodiscard]] bool _verify_grid_validity(nanobind::object grid) const {
-    // special case of ndarray is more efficient then general nanobind::iterable
-    if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
-      if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      return detail::_dispatch_dtype(
-          grid,
-          [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); },
-          []() { return true; },
-          []() -> bool { throw nanobind::type_error("Unsupported element type."); });
-    }
-
-    if (!nanobind::isinstance<nanobind::iterable>(grid))
-      throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
-
-    return detail::_dispatch_dtype(
-        grid,
-        [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::cast<nanobind::iterable>(grid)); },
-        []() { return true; },
-        []() -> bool { throw nanobind::type_error("Unsupported element type."); });
-  }
 
   template <class VertexRange>
   std::pair<Simplex_handle, bool> _insert_single_simplex(const VertexRange& vertices) {

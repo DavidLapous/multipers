@@ -5,6 +5,7 @@
  *    Copyright (C) 2026 Inria
  *
  *    Modification(s):
+ *      - 2026/10 David Loiseaux: add _is_host_device_type and _require_cpu_array
  *      - YYYY/MM Author: Description of the modification
  */
 
@@ -20,7 +21,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-// #include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -53,6 +53,8 @@ inline void _require_cpu_array(const nanobind::ndarray<Args...> &array) {
   if (!_is_host_device_type(array.device_type()))
     throw nanobind::type_error("Native persistence inputs must be CPU arrays.");
 }
+
+///////////////////// Array dtype dispatch helpers /////////////////////
 
 template <typename T, typename... Ts>
 inline constexpr bool _all_same_v = (std::is_same_v<T, Ts> && ...);
@@ -105,79 +107,6 @@ inline Array_dtype _get_dtype(nanobind::handle obj, int depth = 0) {
   return Array_dtype::UNKNOWN;
 }
 
-// template <typename F>
-// inline auto _dispatch_int_dtype(nanobind::handle data, F &&func) {
-//   using R_int32 = decltype(func.template operator()<std::int32_t>());
-//   using R_int64 = decltype(func.template operator()<std::int64_t>());
-//   using R_uint32 = decltype(func.template operator()<std::uint32_t>());
-//   using R_uint64 = decltype(func.template operator()<std::uint64_t>());
-
-//   using Union = std::conditional_t<_all_same_v<R_int32, R_int64, R_uint32, R_uint64>,
-//                                    R_uint32,
-//                                    std::variant<R_int32, R_int64, R_uint32, R_uint64>>;
-
-//   Array_dtype dtype = _get_dtype(data);
-//   switch (dtype) {
-//     case Array_dtype::INT32:
-//       return Union(std::forward<F>(func).template operator()<std::int32_t>());
-//     case Array_dtype::UINT32:
-//       return Union(std::forward<F>(func).template operator()<std::uint32_t>());
-//     case Array_dtype::INT64:
-//       return Union(std::forward<F>(func).template operator()<std::int64_t>());
-//     case Array_dtype::UINT64:
-//       return Union(std::forward<F>(func).template operator()<std::uint64_t>());
-//     case Array_dtype::EMPTY:
-//       // type does not matter for now then
-//       return Union(std::forward<F>(func).template operator()<std::uint32_t>());
-//     default:
-//       std::stringstream errMsg;
-//       errMsg << "Unsupported integer type: ";
-//       if (dtype == Array_dtype::FLOAT32)
-//         errMsg << "FLOAT32";
-//       else if (dtype == Array_dtype::FLOAT64)
-//         errMsg << "FLOAT64";
-//       else
-//         errMsg << "UNKNOWN";
-//       errMsg << ".";
-//       throw nanobind::type_error(errMsg.str().c_str());
-//   }
-// }
-
-// template <typename F>
-// inline auto _dispatch_float_dtype(nanobind::handle data, F &&func) {
-//   using R_float32 = decltype(func.template operator()<float>());
-//   using R_float64 = decltype(func.template operator()<double>());
-
-//   using Union = std::conditional_t<std::is_same_v<R_float32, R_float64>, R_float32, std::variant<R_float32,
-//   R_float64>>;
-
-//   Array_dtype dtype = _get_dtype(data);
-//   switch (dtype) {
-//     case Array_dtype::FLOAT32:
-//       return Union(std::forward<F>(func).template operator()<float>());
-//     case Array_dtype::FLOAT64:
-//       return Union(std::forward<F>(func).template operator()<double>());
-//     case Array_dtype::EMPTY:
-//       // type does not matter for now then
-//       return Union(std::forward<F>(func).template operator()<float>());
-//     default:
-//       std::stringstream errMsg;
-//       errMsg << "Unsupported floating point type: ";
-//       if (dtype == Array_dtype::INT32)
-//         errMsg << "INT32";
-//       else if (dtype == Array_dtype::INT64)
-//         errMsg << "INT64";
-//       else if (dtype == Array_dtype::UINT32)
-//         errMsg << "UINT32";
-//       else if (dtype == Array_dtype::UINT64)
-//         errMsg << "UINT64";
-//       else
-//         errMsg << "UNKNOWN";
-//       errMsg << ".";
-//       throw nanobind::type_error(errMsg.str().c_str());
-//   }
-// }
-
 template <typename F, typename F_empty, typename F_unknown>
 inline auto _dispatch_dtype(nanobind::handle data, F &&func, F_empty &&funcEmpty, F_unknown &&funcUnkown) {
   using R_int32 = decltype(func.template operator()<std::int32_t>());
@@ -212,6 +141,8 @@ inline auto _dispatch_dtype(nanobind::handle data, F &&func, F_empty &&funcEmpty
       return Union(std::forward<F_unknown>(funcUnkown)());
   }
 }
+
+///////////////////// Sequence iteration helpers /////////////////////
 
 // Number of items of a sequence (uses __len__).
 inline std::size_t _sequence_size(nanobind::handle obj) {
@@ -306,62 +237,141 @@ inline void _for_each_python_item(nanobind::handle obj, F &&fun) {
   }
 }
 
-// uncommenting in the _get_compatible_* methods gives much more possibilities, but it also takes much more
-// compile time (and binary size). I had to split the _dispatch_dtype method into a int and a float version
-// for the same reason
+template <typename T, typename U>
+struct Flat_2D_array_span {
+  using Del_array = nanobind::ndarray<const T, nanobind::ndim<1>, nanobind::any_contig>;
+  using Data_array = nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>;
+  using Del_view = decltype(std::declval<Del_array>().view());
+  using Data_view = decltype(std::declval<Data_array>().view());
 
-// inline auto _get_compatible_generator_maps(nanobind::iterable maps) {
-//   return _dispatch_int_dtype(maps, [&]<typename U>() {
-//     // return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
-//     //     std::vector<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>,
-//     //     std::vector<std::vector<U>>>(
-//     //     maps, "Generator maps must be either iterable[iterable[U]] or iterable[ndarray[U, ndim=1]]
-//     (contiguous)."); std::vector<std::vector<U>> res; if (nanobind::try_cast(maps, res, false)) return res; throw
-//     std::invalid_argument("Generator maps must be iterable[iterable[U]].");
-//   });
-// }
+  Flat_2D_array_span(Del_array delimiters, Data_array flatData)
+      : delimiters_(delimiters.view()), flatData_(flatData.view()) {}
 
-// inline auto _get_compatible_generator_dimensions(nanobind::iterable dimensions) {
-//   return _dispatch_int_dtype(dimensions, [&]<typename U>() {
-//     // return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<
-//     //     nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>,
-//     //     std::vector<U>>(dimensions,
-//     //                     "Generator dimensions must be either iterable[U] or ndarray[U, ndim=1] (contiguous).");
-//     nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig> res;
-//     if (nanobind::try_cast(dimensions, res, false)) return Numpy_span(res);
-//     throw std::invalid_argument("Generator dimensions must be ndarray[U, ndim=1] (contiguous).");
-//   });
-// }
+  std::size_t size() const { return delimiters_.shape(0) - 1; }
 
-// template <typename T, bool is_kcritical>
-// inline auto _get_compatible_filtration_values(nanobind::iterable filts) {
-//   auto convert = [&]<typename U>() {
-//     if constexpr (is_kcritical) {
-//       using Seq2_t = std::vector<std::vector<std::vector<U>>>;
-//       using Ten2_t = std::vector<nanobind::ndarray<const U, nanobind::ndim<2>>>;
-//       return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten2_t, Seq2_t>(
-//             filts,
-//             "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
-//             "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
-//             /* "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, "
-//             "ndim=2]]." */);
-//     } else {
-//       using Seq1_t = std::vector<std::vector<U>>;
-//       using Ten1_t = nanobind::ndarray<const U, nanobind::ndim<2>>;
-//       return Gudhi::python::_convert_iterable_to_cpp_type_and_wrap_ndarrays<Ten1_t, Seq1_t>(
-//             filts,
-//             "Filtration values must be one of: iterable[iterable[U]], iterable[iterable[iterable[U]]], "
-//             "iterable[ndarray[U, ndim=1]] (contiguous), or iterable[ndarray[U, ndim=2]]."
-//             /* "Filtration values must be either iterable[ndarray[U, ndim=1]] (contiguous) or iterable[ndarray[U, "
-//             "ndim=2]]." */);
-//     }
-//   };
-//   if constexpr (std::is_floating_point_v<T>) {
-//     return _dispatch_float_dtype(filts, convert);
-//   } else {
-//     return _dispatch_int_dtype(filts, convert);
-//   }
-// }
+  auto operator[](std::size_t i) const {
+    if (i >= size()) throw std::out_of_range("Index is out of range for flat 2D range.");
+    return Numpy_span(&flatData_(delimiters_(i)), &flatData_(delimiters_(i + 1)));
+  }
+
+  Del_view delimiters_;
+  Data_view flatData_;
+};
+
+// careful: single pass
+template <typename T>
+class Py_iterable_iterator
+    : public boost::iterator_facade<Py_iterable_iterator<T>, T, boost::single_pass_traversal_tag, T> {
+ public:
+  Py_iterable_iterator() = default;
+
+  explicit Py_iterable_iterator(nanobind::handle iterable) {
+    PyObject *it = PyObject_GetIter(iterable.ptr());
+    if (!it) {
+      PyErr_Format(
+          PyExc_TypeError, "Expected an iterable of numerical, got '%.200s'.", Py_TYPE(iterable.ptr())->tp_name);
+      throw nanobind::python_error();
+    }
+    it_ = nanobind::steal(it);
+    advance();
+  }
+
+ private:
+  friend class boost::iterator_core_access;
+
+  nanobind::object it_;   // shared between copies
+  nanobind::object cur_;  // null object == end
+
+  void advance() {
+    PyObject *next = PyIter_Next(it_.ptr());
+    if (next) {
+      cur_ = nanobind::steal(next);
+    } else {
+      cur_ = nanobind::object();
+      if (PyErr_Occurred()) throw nanobind::python_error();
+    }
+  }
+
+  T dereference() const { return nanobind::cast<T>(cur_); }
+
+  void increment() { advance(); }
+
+  bool equal(const Py_iterable_iterator &o) const { return cur_.is_valid() == o.cur_.is_valid(); }
+};
+
+template <typename T>
+inline boost::iterator_range<Py_iterable_iterator<T>> as_cpp_range(nanobind::handle iterable) {
+  return {Py_iterable_iterator<T>(iterable), Py_iterable_iterator<T>()};
+}
+
+///////////////////// Filtration grid helpers /////////////////////
+
+// TODO: could be part of a real filtration grid interface working as well with Slicer and Simplex_tree
+
+template <typename U>
+inline bool _check_has_sorted_rows(nanobind::ndarray<const U, nanobind::ndim<2>> grid) {
+  auto view = grid.view();
+  std::size_t rows = view.shape(0), cols = view.shape(1);
+
+  for (std::size_t i = 0; i < rows; ++i)
+    for (std::size_t j = 1; j < cols; ++j)
+      if (view(i, j - 1) > view(i, j))
+        throw nanobind::type_error("Expected grid rows to be sorted by increasing values.");
+
+  return rows != 0 && cols != 0;  // returns false if the grid is valid but empty
+}
+
+inline bool _check_has_sorted_rows(nanobind::iterable grid) {
+  bool hasNonEmptyRows = false;
+  for (nanobind::handle row : grid) {
+    if (!nanobind::isinstance<nanobind::iterable>(row)) throw nanobind::type_error("Expected each row to be iterable.");
+
+    bool hasPrev = false;
+    nanobind::object prev;
+
+    for (nanobind::handle elem : nanobind::cast<nanobind::iterable>(row)) {
+      nanobind::object val =
+          nanobind::hasattr(elem, "item") ? elem.attr("item")() : nanobind::borrow<nanobind::object>(elem);
+      if (!nanobind::isinstance<nanobind::int_>(val) && !nanobind::isinstance<nanobind::float_>(val))
+        throw nanobind::type_error("Expected arithmetic elements in the grid.");
+
+      if (hasPrev) {
+        int less = PyObject_RichCompareBool(val.ptr(), prev.ptr(), Py_LT);
+        if (less < 0) throw nanobind::python_error();
+        if (less) throw nanobind::type_error("Expected rows of the grid to be ordered by increasing value.");
+      }
+
+      prev = std::move(val);
+      hasPrev = true;
+    }
+    hasNonEmptyRows |= hasPrev;
+  }
+
+  return hasNonEmptyRows;  // returns false if the grid is valid but empty
+}
+
+inline bool _verify_grid_validity(nanobind::object grid) {
+  // special case of ndarray is more efficient then general nanobind::iterable
+  if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
+    if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
+    if (arr.device_type() == nanobind::device::cpu::value) {
+      return detail::_dispatch_dtype(
+          grid,
+          [&]<typename U>() { return _check_has_sorted_rows<U>(nanobind::ndarray<const U, nanobind::ndim<2>>(arr)); },
+          []() { return true; },
+          []() -> bool { throw nanobind::type_error("Unsupported element type."); });
+    }
+  }
+
+  if (!nanobind::isinstance<nanobind::iterable>(grid))
+    throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
+
+  return _check_has_sorted_rows(nanobind::cast<nanobind::iterable>(grid));
+}
+
+///////////////////// Filtration value helpers /////////////////////
+
+// TODO: Put in a separate file?
 
 template <class MultiFiltrationValue>
 constexpr bool _is_degree_rips() {
@@ -488,71 +498,158 @@ inline auto _get_filtration_array(const MultiFiltrationValue &f) {
   }
 }
 
-template <typename T, typename U>
-struct Flat_2D_array_span {
-  using Del_array = nanobind::ndarray<const T, nanobind::ndim<1>, nanobind::any_contig>;
-  using Data_array = nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>;
-  using Del_view = decltype(std::declval<Del_array>().view());
-  using Data_view = decltype(std::declval<Data_array>().view());
+template <class Filtration_value, typename U>
+inline Filtration_value _cast_to_filtration_value(
+    nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig> values) {
+  _require_cpu_array(values);
+  Numpy_span<U> view(values);
+  // nothing to simplify
+  return Filtration_value(view.begin(), view.end());
+}
 
-  Flat_2D_array_span(Del_array delimiters, Data_array flatData)
-      : delimiters_(delimiters.view()), flatData_(flatData.view()) {}
-
-  std::size_t size() const { return delimiters_.shape(0) - 1; }
-
-  auto operator[](std::size_t i) const {
-    if (i >= size()) throw std::out_of_range("Index is out of range for flat 2D range.");
-    return Numpy_span(&flatData_(delimiters_(i)), &flatData_(delimiters_(i + 1)));
-  }
-
-  Del_view delimiters_;
-  Data_view flatData_;
-};
-
-// careful: single pass
-template <typename T>
-class Py_iterable_iterator
-    : public boost::iterator_facade<Py_iterable_iterator<T>, T, boost::single_pass_traversal_tag, T> {
- public:
-  Py_iterable_iterator() = default;
-
-  explicit Py_iterable_iterator(nanobind::handle iterable) {
-    PyObject *it = PyObject_GetIter(iterable.ptr());
-    if (!it) {
-      PyErr_Format(
-          PyExc_TypeError, "Expected an iterable of numerical, got '%.200s'.", Py_TYPE(iterable.ptr())->tp_name);
-      throw nanobind::python_error();
+template <class Filtration_value, typename U>
+inline Filtration_value _cast_to_filtration_value(nanobind::ndarray<const U, nanobind::ndim<2>> values) {
+  _require_cpu_array(values);
+  if constexpr (Filtration_value::ensures_1_criticality()) {
+    throw std::invalid_argument("A 1-critical filtration value has to be one dimensional.");
+  } else {
+    // could be not C-ordered, so we cannot just pass the data array to Filtration_value
+    auto view = values.view();
+    Filtration_value out(view.shape(1));
+    out.set_num_generators(view.shape(0));
+    for (std::size_t g = 0; g < view.shape(0); ++g) {
+      for (std::size_t p = 0; p < view.shape(1); ++p) out(g, p) = view(g, p);
     }
-    it_ = nanobind::steal(it);
-    advance();
+    out.simplify();
+    return out;
   }
+}
 
- private:
-  friend class boost::iterator_core_access;
+template <class Filtration_value>
+inline Filtration_value _cast_to_filtration_value(nanobind::object values, int defaultNumParam) {
+  using value_type = typename Filtration_value::value_type;
 
-  nanobind::object it_;   // shared between copies
-  nanobind::object cur_;  // null object == end
+  auto cast_as_vector = [&]() -> Filtration_value {
+    std::vector<value_type> gens;
+    auto rec_flatten = [](const auto &self, nanobind::handle obj, std::vector<value_type> &out, int maxDepth) -> int {
+      if (maxDepth < 1)
+        throw std::invalid_argument("Filtration value has to be 1D when 1-critical and max 2D when k-critical.");
 
-  void advance() {
-    PyObject *next = PyIter_Next(it_.ptr());
-    if (next) {
-      cur_ = nanobind::steal(next);
-    } else {
-      cur_ = nanobind::object();
-      if (PyErr_Occurred()) throw nanobind::python_error();
+      int count = 0;
+      bool first = true, leaf = false;
+      detail::_for_each_sequence_item(obj, [&](nanobind::object item) {
+        value_type v;
+        if (first) leaf = nanobind::try_cast<value_type>(item, v);
+        if (leaf) {
+          if (!first && !nanobind::try_cast<value_type>(item, v))
+            throw std::invalid_argument(
+                "Ragged array: mixed scalars and nested sequences at the same level for filtration value.");
+          out.push_back(v);
+          ++count;
+        } else {
+          int c = self(self, item, out, maxDepth - 1);
+          if (!first && c != count)
+            throw std::invalid_argument("Ragged array: inconsistent row lengths for filtration value (" +
+                                        std::to_string(count) + " vs " + std::to_string(c) + ").");
+          count = c;
+        }
+        first = false;
+      });
+      return count;
+    };
+
+    if (value_type scalar; nanobind::try_cast<value_type>(values, scalar))
+      throw std::invalid_argument("Filtration value has to be at least 1-dimensional.");
+
+    int depth = 2;
+    if constexpr (Filtration_value::ensures_1_criticality()) {
+      depth = 1;
     }
+    gens.reserve(detail::_estimate_flat_sequence_size<value_type>(values, depth));
+    int numParam = rec_flatten(rec_flatten, values, gens, depth);
+    auto f = Filtration_value(gens.begin(), gens.end(), numParam);
+    f.simplify();
+    return f;
+  };
+  auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> Filtration_value {
+    if (nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig> val;
+        nanobind::try_cast<nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>>(values, val, false))
+      return _cast_to_filtration_value<Filtration_value>(val);
+    if (nanobind::ndarray<const U, nanobind::ndim<2>> val;
+        nanobind::try_cast<nanobind::ndarray<const U, nanobind::ndim<2>>>(values, val, false))
+      return _cast_to_filtration_value<Filtration_value>(val);
+    return cast_as_vector();
+  };
+  return detail::_dispatch_dtype(
+      values,
+      cast_first_as_tensor_then_as_vector,
+      [defaultNumParam]() -> Filtration_value { return Filtration_value(defaultNumParam); },
+      cast_as_vector);
+}
+
+template <class Filtration_value, typename U>
+inline std::vector<Filtration_value> _cast_to_filtration_value_array(
+    nanobind::ndarray<const U, nanobind::ndim<2>> values) {
+  _require_cpu_array(values);
+  auto view = values.view();
+  std::vector<Filtration_value> out(view.shape(0), Filtration_value(view.shape(1)));
+  for (std::size_t i = 0; i < view.shape(0); ++i) {
+    for (std::size_t p = 0; p < view.shape(1); ++p) out[i](0, p) = view(i, p);
   }
+  return out;
+}
 
-  T dereference() const { return nanobind::cast<T>(cur_); }
+template <class Filtration_value, typename U>
+inline std::vector<Filtration_value> _cast_to_filtration_value_array(
+    nanobind::ndarray<const U, nanobind::ndim<3>> values) {
+  _require_cpu_array(values);
+  if constexpr (Filtration_value::ensures_1_criticality()) {
+    throw std::invalid_argument("An array of 1-critical filtration values have to be two dimensional.");
+  } else {
+    auto view = values.view();
+    std::vector<Filtration_value> out(view.shape(0), Filtration_value(view.shape(2)));
+    for (std::size_t i = 0; i < view.shape(0); ++i) {
+      out[i].set_num_generators(view.shape(1));
+      for (std::size_t g = 0; g < view.shape(1); ++g) {
+        for (std::size_t p = 0; p < view.shape(2); ++p) out[i](g, p) = view(i, g, p);
+      }
+      out[i].simplify();
+    }
+    return out;
+  }
+}
 
-  void increment() { advance(); }
-
-  bool equal(const Py_iterable_iterator &o) const { return cur_.is_valid() == o.cur_.is_valid(); }
-};
-
-template <typename T>
-inline boost::iterator_range<Py_iterable_iterator<T>> as_cpp_range(nanobind::handle iterable) {
-  return {Py_iterable_iterator<T>(iterable), Py_iterable_iterator<T>()};
+template <class Filtration_value>
+inline std::vector<Filtration_value> _cast_to_filtration_value_array(nanobind::object values, int defaultNumParam) {
+  auto cast_as_vector = [&]() -> std::vector<Filtration_value> {
+    std::vector<Filtration_value> out;
+    out.reserve(detail::_sequence_size(values));
+    int numParam = -1;
+    detail::_for_each_sequence_item(values, [&](nanobind::object item) {
+      Filtration_value f = _cast_to_filtration_value<Filtration_value>(item, defaultNumParam);
+      if (numParam != -1 && static_cast<int>(f.num_parameters()) != numParam)
+        throw std::invalid_argument("Inconsistent number of parameters in filtration value array.");
+      numParam = f.num_parameters();
+      out.push_back(std::move(f));
+    });
+    return out;
+  };
+  auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> std::vector<Filtration_value> {
+    if (nanobind::ndarray<const U, nanobind::ndim<2>> val;
+        nanobind::try_cast<nanobind::ndarray<const U, nanobind::ndim<2>>>(values, val, false)) {
+      return _cast_to_filtration_value_array<Filtration_value>(val);
+    }
+    if (nanobind::ndarray<const U, nanobind::ndim<3>> val;
+        nanobind::try_cast<nanobind::ndarray<const U, nanobind::ndim<3>>>(values, val, false)) {
+      return _cast_to_filtration_value_array<Filtration_value>(val);
+    }
+    return cast_as_vector();
+  };
+  return detail::_dispatch_dtype(
+      values,
+      cast_first_as_tensor_then_as_vector,
+      []() -> std::vector<Filtration_value> { return {}; },
+      cast_as_vector);
 }
 
 }  // namespace detail

@@ -1,6 +1,5 @@
 #pragma once
 
-// #include "backend_log_policy.hpp"
 #include "nanobind/nanobind.h"
 
 #include <algorithm>
@@ -8,7 +7,6 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
-// #include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -27,7 +25,6 @@
 
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 #include "contiguous_slicer_bridge.hpp"
-// #include "Simplex_tree_multi_interface.h"
 #include "Multi_simplex_tree_interface.h"
 #endif
 
