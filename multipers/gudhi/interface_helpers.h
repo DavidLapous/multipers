@@ -396,20 +396,20 @@ struct Flat_2D_array_span {
   using Del_array = nanobind::ndarray<const T, nanobind::ndim<1>, nanobind::any_contig>;
   using Data_array = nanobind::ndarray<const U, nanobind::ndim<1>, nanobind::any_contig>;
   using Del_view = decltype(std::declval<Del_array>().view());
-  using Data_view = decltype(std::declval<Data_array>().view());
 
   Flat_2D_array_span(Del_array delimiters, Data_array flatData)
-      : delimiters_(delimiters.view()), flatData_(flatData.view()) {}
+      : delimiters_(delimiters.view()), flatData_(flatData.size() == 0 ? &emptyValue_ : flatData.data()) {}
 
   std::size_t size() const { return delimiters_.shape(0) - 1; }
 
   auto operator[](std::size_t i) const {
     if (i >= size()) throw std::out_of_range("Index is out of range for flat 2D range.");
-    return Numpy_span(&flatData_(delimiters_(i)), &flatData_(delimiters_(i + 1)));
+    return Numpy_span(flatData_ + delimiters_(i), flatData_ + delimiters_(i + 1));
   }
 
   Del_view delimiters_;
-  Data_view flatData_;
+  const U *flatData_;
+  static constexpr U emptyValue_ = U{};
 };
 
 }  // namespace detail

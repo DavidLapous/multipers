@@ -18,6 +18,7 @@
 #define MP_PY_SLICER_H_INCLUDED
 
 #include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -51,6 +52,7 @@
 #include "interface_helpers.h"
 #include "interface_helper_structs.h"
 #include "ext_interface/nanobind_wrapper_types.hpp"
+#include "graph_mph0/slicer_backend.h"
 
 namespace Gudhi {
 namespace multi_persistence {
@@ -90,6 +92,7 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = other.get_slicer();
     generatorBasis_ = other.get_generator_basis();
+    _validate_graph_shape();
   }
 
   Slicer_interface(Slicer_interface &&other) noexcept = default;
@@ -111,6 +114,7 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = other.get_slicer();
     generatorBasis_ = other.get_generator_basis();
+    _validate_graph_shape();
   }
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
@@ -121,7 +125,9 @@ class Slicer_interface {
         generatorBasis_(other.get_generator_basis()),
         presDegree_(other.get_pres_degree()),
         isMinPres_(other.is_min_pres()),
-        isMinRes_(other.is_min_res()) {}
+        isMinRes_(other.is_min_res()) {
+    _validate_graph_shape();
+  }
 
   // use Simplex_tree_multi_interface<OtherMultiFiltrationValue> instead once the weird wrapper thing is removed
   template <class OtherMultiFiltrationValue>
@@ -131,6 +137,7 @@ class Slicer_interface {
       : slicer_(), filtrationGrid_(simplexTree.filtration_grid), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
     nanobind::gil_scoped_release release;
     slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree.tree);
+    _validate_graph_shape();
   }
 
   Slicer_interface(const std::string &path, int shiftDimension, bool isRivetCompatible = false, bool isReversed = false)
@@ -138,6 +145,7 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = Gudhi::multi_persistence::build_slicer_from_scc_file<Slicer_t>(
         path, isRivetCompatible, isReversed, shiftDimension);
+    _validate_graph_shape();
   }
 
   Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
@@ -194,15 +202,21 @@ class Slicer_interface {
       };
       auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
         if (std::vector<Tensor2D<U>> val; nanobind::try_cast<std::vector<Tensor2D<U>>>(filtration_values, val, false)) {
-          for (const auto &grades : val) detail::_require_cpu_array(grades);
+          std::optional<std::size_t> numParameters;
+          for (const auto &grades : val) {
+            detail::_require_cpu_array(grades);
+            if (numParameters && *numParameters != grades.shape(1))
+              throw std::invalid_argument("Filtration values must have a common parameter count.");
+            numParameters = grades.shape(1);
+          }
           // Tensors have to stay alive to use Numpy_2d_span, so val is necessary
           std::vector<Numpy_2d_span<U>> fils(val.begin(), val.end());
-          _build_slicer(generator_maps, Numpy_span(generator_dimensions), fils);
+          _build_slicer(generator_maps, Numpy_span(generator_dimensions), fils, numParameters);
           return;
         }
         cast_as_vector();
       };
-      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, []() -> void {}, cast_as_vector);
+      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, cast_as_vector, cast_as_vector);
     }
   }
 
@@ -223,20 +237,44 @@ class Slicer_interface {
 
     if (boundaryDelimitersView.shape(0) == 0) {
       if (boundariesView.shape(0) != 0 || dimensionsView.shape(0) != 0 || filValuesView.shape(0) != 0)
-        throw std::invalid_argument("Invalid packed input, shapes do not coincide.");
+        throw std::invalid_argument(
+            "boundary_indptr cannot be empty when packed input contains generators or incidences.");
       return;
     }
-    std::size_t numGen = boundaryDelimitersView.shape(0) - 1;
-    if (static_cast<std::size_t>(boundaryDelimitersView(numGen)) > boundariesView.shape(0))
-      throw std::invalid_argument("Boundary index ptr and flat boundaries are not coherent.");
+    const std::size_t numGen = boundaryDelimitersView.shape(0) - 1;
+    if (numGen > std::numeric_limits<Index>::max())
+      throw std::overflow_error("Packed input exceeds the generator index capacity.");
     if (dimensionsView.shape(0) != numGen || filValuesView.shape(0) != numGen)
       throw std::invalid_argument("Invalid packed input, shapes do not coincide.");
-
-    // do we really want to test here if the values of boundary_indptr are positive and increasing integers,
-    // and the values of boundary_flat and generator_dimensions positive integers ?
-    // those testes are not that cheap anymore and do not guarantee no crashes as there still will be some
-    // if the boundaries are not valid boundaries or the filtration values do not yield a valid filtration order etc.
-    // At some point, the user has to take responsibilities...
+    if (boundaryDelimitersView(0) != 0) throw std::invalid_argument("boundary_indptr must start at zero.");
+    for (std::size_t i = 0; i <= numGen; ++i) {
+      const auto offset = boundaryDelimitersView(i);
+      if (!Gudhi::python::_is_and_fits_in_int<std::size_t>(offset) ||
+          static_cast<std::size_t>(offset) > boundariesView.shape(0) ||
+          (i != 0 && offset < boundaryDelimitersView(i - 1)))
+        throw std::invalid_argument("boundary_indptr must be nonnegative, nondecreasing and in range.");
+    }
+    if (static_cast<std::size_t>(boundaryDelimitersView(numGen)) != boundariesView.shape(0))
+      throw std::invalid_argument("boundary_indptr must span all of boundary_flat.");
+    if (numGen == 0) {
+      return;
+    }
+    for (std::size_t generator = 0; generator < numGen; ++generator) {
+      const auto dimension = dimensionsView(generator);
+      if (dimension < 0 || !Gudhi::python::_is_and_fits_in_int<Dimension>(dimension))
+        throw std::invalid_argument("Packed generator_dimensions must be nonnegative and representable.");
+      const auto start = static_cast<std::size_t>(boundaryDelimitersView(generator));
+      const auto end = static_cast<std::size_t>(boundaryDelimitersView(generator + 1));
+      if (dimension == 0 && start != end)
+        throw std::invalid_argument("A 0-dimensional generator must have an empty boundary.");
+      for (std::size_t incidence = start; incidence < end; ++incidence) {
+        const auto face = boundariesView(incidence);
+        if (!Gudhi::python::_is_and_fits_in_int<Index>(face) || static_cast<std::size_t>(face) >= generator)
+          throw std::invalid_argument("boundary_flat must reference earlier generators with representable indices.");
+        if (static_cast<std::int64_t>(dimensionsView(face)) + 1 != dimension)
+          throw std::invalid_argument("boundary_flat must lower the generator dimension by one.");
+      }
+    }
 
     detail::Flat_2D_array_span boundaries(boundary_indptr, boundary_flat);
     Numpy_span dimensions(generator_dimensions);
@@ -260,6 +298,7 @@ class Slicer_interface {
         vertices.emplace_back(rowView.begin(), rowView.end());
       }
       slicer_ = Gudhi::multi_persistence::build_slicer_from_bitmap<Slicer_t>(vertices, shape);
+      _validate_graph_shape();
     }
   }
 
@@ -270,7 +309,7 @@ class Slicer_interface {
       generatorBasis_ = other.generatorBasis_;
       presDegree_ = other.presDegree_;
       isMinPres_ = other.isMinPres_;
-      isMinRes_ = other.isMinPres_;
+      isMinRes_ = other.isMinRes_;
     }
     // TODO:
     // note that this a bit like a pointer copy, so problematic if the two slicers are supposed to work
@@ -312,9 +351,9 @@ class Slicer_interface {
       return;
     }
 
-    // throws if it does not pass the check
-    // returns false if valid but empty
-    if (_verify_grid_validity(grid)) {
+    // Empty axes still own an explicit parameter schema; only an empty outer
+    // container clears the grid. Validation throws before replacing the owner.
+    if (_verify_grid_validity(grid) || nanobind::len(grid) != 0) {
       filtrationGrid_ = grid;
       return;
     }
@@ -447,7 +486,7 @@ class Slicer_interface {
       if constexpr (detail::_is_degree_rips<MultiFiltrationValue>()) {
         if (raw) return detail::_get_compact_filtration_data(filts);
       }
-      return _get_compact_filtration_array(filts, slicer_.get_number_of_parameters());
+      return _get_compact_filtration_array(filts, get_number_of_parameters());
     }
 
     if (raw) {
@@ -465,7 +504,7 @@ class Slicer_interface {
             filts.size(), [&](std::size_t i) { return detail::_get_raw_filtration_data(owner, filts[i], false); });
       }
     }
-    return _get_filtration_array(filts, slicer_.get_number_of_parameters());
+    return _get_filtration_array(filts, get_number_of_parameters());
   }
 
   [[nodiscard]] auto get_current_slice() const {
@@ -1038,13 +1077,64 @@ class Slicer_interface {
   }
 
   template <class B, class D, class F>
-  void _build_slicer(const B &boundaries, const D &dimensions, const F &filValues) {
-    {
-      nanobind::gil_scoped_release release;
+  void _build_slicer(const B &boundaries,
+                     const D &dimensions,
+                     const F &filValues,
+                     std::optional<std::size_t> numParameters = std::nullopt) {
+    nanobind::gil_scoped_release release;
+    if (boundaries.size() != dimensions.size() || boundaries.size() != filValues.size())
+      throw std::invalid_argument("There must be one boundary and filtration value per dimension.");
+    _validate_graph_shape(boundaries, dimensions);
+    if constexpr (std::is_arithmetic_v<std::remove_cv_t<std::remove_reference_t<decltype(filValues[0][0])>>>) {
       Complex cpx(boundaries, dimensions, filValues);
+      slicer_ = Slicer_t(std::move(cpx));
+    } else {
+      // The upstream range constructor infers width only from the first lifetime,
+      // and drops every lifetime when that first row is empty.
+      if (!numParameters) {
+        for (std::size_t i = 0; i < filValues.size(); ++i) {
+          const auto &lifetime = filValues[i];
+          if (lifetime.size() != 0) {
+            numParameters = lifetime[0].size();
+            break;
+          }
+        }
+      }
+      const std::size_t width = numParameters.value_or(0);
+      if (width > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw std::overflow_error("Filtration parameter count exceeds int capacity.");
+      typename Complex::Filtration_value_container ownedFiltrations;
+      ownedFiltrations.reserve(filValues.size());
+      for (std::size_t i = 0; i < filValues.size(); ++i) {
+        const auto &lifetime = filValues[i];
+        auto &filtration = ownedFiltrations.emplace_back(MultiFiltrationValue::inf(static_cast<int>(width)));
+        for (std::size_t corner = 0; corner < lifetime.size(); ++corner) {
+          const auto &grade = lifetime[corner];
+          if (grade.size() != width)
+            throw std::invalid_argument("Filtration values must have a common parameter count.");
+          filtration.add_generator(grade.begin(), grade.end());
+        }
+      }
+      typename Complex::Boundary_container ownedBoundaries;
+      ownedBoundaries.reserve(boundaries.size());
+      for (std::size_t i = 0; i < boundaries.size(); ++i) {
+        const auto &boundary = boundaries[i];
+        ownedBoundaries.emplace_back(boundary.begin(), boundary.end());
+      }
+      typename Complex::Dimension_container ownedDimensions(dimensions.begin(), dimensions.end());
+      Complex cpx(std::move(ownedBoundaries), std::move(ownedDimensions), std::move(ownedFiltrations));
       slicer_ = Slicer_t(std::move(cpx));
     }
   }
+
+  template <class B, class D>
+  static void _validate_graph_shape(const B &boundaries, const D &dimensions) {
+    if constexpr (requires { PersistenceAlgorithm::is_graph; }) {
+      if constexpr (PersistenceAlgorithm::is_graph) multipers::graph_mph0::validate_graph_shape(dimensions, boundaries);
+    }
+  }
+
+  void _validate_graph_shape() const { _validate_graph_shape(slicer_.get_boundaries(), slicer_.get_dimensions()); }
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
   bool _has_same_filtration_values(

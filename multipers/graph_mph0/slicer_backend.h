@@ -26,15 +26,18 @@ void validate_graph_shape(const Dimensions& dimensions, const Boundaries& bounda
     throw std::overflow_error("Graph backend supports at most uint32 generator indices");
   }
   if (dimensions.empty()) return;
+  for (const auto dimension : dimensions) {
+    if (std::cmp_less(dimension, 0) || std::cmp_greater(dimension, std::numeric_limits<int>::max()))
+      throw std::invalid_argument("Graph backend dimensions must be nonnegative and representable as int32");
+  }
 
   const auto base_degree = *std::min_element(dimensions.begin(), dimensions.end());
-  if (base_degree < 0) throw std::invalid_argument("Graph backend dimensions must be nonnegative");
   for (std::size_t generator = 0; generator < dimensions.size(); ++generator) {
     if (dimensions[generator] == base_degree) {
       if (!boundaries[generator].empty()) throw std::invalid_argument("Graph vertex boundary must be empty");
       continue;
     }
-    if (dimensions[generator] != base_degree + 1) {
+    if (static_cast<std::int64_t>(dimensions[generator]) != static_cast<std::int64_t>(base_degree) + 1) {
       throw std::invalid_argument("Graph backend requires two adjacent generator dimensions");
     }
     if (boundaries[generator].empty()) continue;
@@ -136,7 +139,7 @@ class Slicer_backend {
 
   const Map& get_current_order() const { return order_; }
 
-  const std::vector<Bar>& get_barcode() { return bars_; }
+  [[nodiscard]] const std::vector<Bar>& get_barcode() const { return bars_; }
 
   std::vector<Cycle> get_all_representative_cycles(bool = true, Dimension = -1) {
     throw std::logic_error("Graph backend does not provide representative cycles");
@@ -152,6 +155,8 @@ class Slicer_backend {
   }
 
  private:
+  static constexpr std::size_t no_slot = std::numeric_limits<std::size_t>::max();
+
   struct Boundary {
     static constexpr Index empty_endpoint = std::numeric_limits<Index>::max();
 
@@ -227,7 +232,7 @@ class Slicer_backend {
   }
 
   void initialize_vineyard_state() {
-    const std::size_t no_slot = std::numeric_limits<std::size_t>::max();
+    constexpr std::size_t no_slot = Slicer_backend::no_slot;
     const Index count = dimensions_.size();
     order_position_.resize(count);
     vertex_number_.assign(count, count);
@@ -258,8 +263,7 @@ class Slicer_backend {
 
     tree_forest_.reset(number_of_vertices_);
     for (Index generator = 0; generator < count; ++generator) {
-      if (dimensions_[generator] == base_degree_ + 1 && !boundaries_[generator].empty() &&
-          !positive_edges_[generator]) {
+      if (dimensions_[generator] != base_degree_ && !boundaries_[generator].empty() && !positive_edges_[generator]) {
         tree_forest_.link(generator,
                           vertex_number_[boundaries_[generator][0]],
                           vertex_number_[boundaries_[generator][1]],
@@ -279,7 +283,7 @@ class Slicer_backend {
       return vertex;
     };
     for (Index generator = 0; generator < count; ++generator) {
-      if (dimensions_[generator] != base_degree_ + 1 || boundaries_[generator].empty()) continue;
+      if (dimensions_[generator] == base_degree_ || boundaries_[generator].empty()) continue;
       const Index first = component_root(vertex_number_[boundaries_[generator][0]]);
       const Index second = component_root(vertex_number_[boundaries_[generator][1]]);
       if (first != second) component_id_[second] = first;
@@ -301,7 +305,7 @@ class Slicer_backend {
     const Index first = vertex_number_[first_vertex];
     const Index second = vertex_number_[second_vertex];
     if (first == second || component_id_[first] != component_id_[second]) return std::nullopt;
-    return tree_forest_.path_bottleneck_assuming_connected(first, second);
+    return tree_forest_.path_bottleneck_trusted(first, second);
   }
 
   void swap_vertices(Index position, Index first, Index second) {
@@ -313,8 +317,7 @@ class Slicer_backend {
     if (exchange) {
       const std::size_t first_slot = h0_slot_by_birth_[first];
       const std::size_t second_slot = h0_slot_by_birth_[second];
-      if (first_slot == std::numeric_limits<std::size_t>::max() ||
-          second_slot == std::numeric_limits<std::size_t>::max()) {
+      if (first_slot == no_slot || second_slot == no_slot) {
         throw std::logic_error("Missing Graph vineyard H0 slot");
       }
 
@@ -365,8 +368,8 @@ class Slicer_backend {
       bars_[h0_slot_by_birth_[first_birth]] = Bar(first_birth, second, base_degree_);
       bars_[h0_slot_by_birth_[second_birth]] = Bar(second_birth, first, base_degree_);
     }
-    tree_forest_.update_weight(first, position + 1);
-    tree_forest_.update_weight(second, position);
+    tree_forest_.update_weight_trusted(first, position + 1);
+    tree_forest_.update_weight_trusted(second, position);
     swap_order(position, first, second);
   }
 
@@ -377,23 +380,25 @@ class Slicer_backend {
 
   void exchange_tree_and_positive(Index position, Index tree_edge, Index positive_edge) {
     const Index birth = birth_by_death_[tree_edge];
-    const std::size_t h0_slot = birth == Bar::inf ? std::numeric_limits<std::size_t>::max() : h0_slot_by_birth_[birth];
+    const std::size_t h0_slot = birth == Bar::inf ? no_slot : h0_slot_by_birth_[birth];
     const std::size_t h1_slot = h1_slot_by_edge_[positive_edge];
-    if (h0_slot == std::numeric_limits<std::size_t>::max()) {
+    if (h0_slot == no_slot) {
       throw std::logic_error("Missing Graph vineyard H0 slot");
     }
-    if (h1_slot == std::numeric_limits<std::size_t>::max()) {
+    if (h1_slot == no_slot) {
       throw std::logic_error("Missing Graph vineyard H1 slot");
     }
 
-    tree_forest_.cut(tree_edge);
+    // The immediately preceding positive-path query proved this active edge
+    // lies on the chord's path. Cutting it disconnects the chord's endpoints.
+    tree_forest_.cut_active_trusted(tree_edge);
     try {
-      tree_forest_.link(positive_edge,
-                        vertex_number_[boundaries_[positive_edge][0]],
-                        vertex_number_[boundaries_[positive_edge][1]],
-                        position);
+      tree_forest_.link_disconnected_trusted(positive_edge,
+                                             vertex_number_[boundaries_[positive_edge][0]],
+                                             vertex_number_[boundaries_[positive_edge][1]],
+                                             position);
     } catch (...) {
-      tree_forest_.link(
+      tree_forest_.link_disconnected_trusted(
           tree_edge, vertex_number_[boundaries_[tree_edge][0]], vertex_number_[boundaries_[tree_edge][1]], position);
       throw;
     }
@@ -405,7 +410,7 @@ class Slicer_backend {
 
     positive_edges_[tree_edge] = true;
     positive_edges_[positive_edge] = false;
-    h1_slot_by_edge_[positive_edge] = std::numeric_limits<std::size_t>::max();
+    h1_slot_by_edge_[positive_edge] = no_slot;
     h1_slot_by_edge_[tree_edge] = h1_slot;
     bars_[h1_slot] = Bar(tree_edge, Bar::inf, base_degree_ + 1);
     swap_order(position, tree_edge, positive_edge);
@@ -425,8 +430,8 @@ class Slicer_backend {
 
     // The persistence pairing is unchanged. Keep the dynamic forest's edge
     // ranks synchronized with the new filtration order.
-    if (first_tree) tree_forest_.update_weight(first, position + 1);
-    if (second_tree) tree_forest_.update_weight(second, position);
+    if (first_tree) tree_forest_.update_weight_trusted(first, position + 1);
+    if (second_tree) tree_forest_.update_weight_trusted(second, position);
     swap_order(position, first, second);
   }
 

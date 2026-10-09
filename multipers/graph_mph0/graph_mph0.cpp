@@ -8,7 +8,6 @@
 #include <tuple>
 #include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "graph_mph0/dynamic_merge_forest.h"
@@ -193,51 +192,55 @@ Result compute(const Graph& input, Compute_options options) {
   const Graph graph = collapse_to_vertex_minimal(input);
   Result out;
 
-  using Event = std::variant<std::size_t, const Edge*>;
+  struct Event {
+    Grade grade;
+    std::size_t generator;
+  };
+
   std::vector<Event> events;
   events.reserve(graph.vertices.size() + graph.edges.size());
-  for (std::size_t vertex = 0; vertex < graph.vertices.size(); ++vertex) events.emplace_back(vertex);
-  for (const auto& edge : graph.edges) events.emplace_back(&edge);
-  auto event_grade = [&](const Event& event) -> const Grade& {
-    if (const auto* vertex = std::get_if<std::size_t>(&event)) return graph.vertices[*vertex];
-    return std::get<const Edge*>(event)->grade;
-  };
-  std::sort(events.begin(), events.end(), [&](const Event& left, const Event& right) {
-    const Grade& a = event_grade(left);
-    const Grade& b = event_grade(right);
-    if (a[0] != b[0]) return a[0] < b[0];
-    if (a[1] != b[1]) return a[1] < b[1];
-    if (left.index() != right.index()) return left.index() < right.index();
-    if (const auto* vertex = std::get_if<std::size_t>(&left)) return *vertex < std::get<std::size_t>(right);
-    return std::get<const Edge*>(left)->id < std::get<const Edge*>(right)->id;
+  for (std::size_t vertex = 0; vertex < graph.vertices.size(); ++vertex) {
+    events.push_back({graph.vertices[vertex], vertex});
+  }
+  // compact() assigns edge IDs in storage order; the combined index is exactly
+  // the vertex-before-edge, then vertex/edge-ID tie key.
+  for (const auto& edge : graph.edges) {
+    events.push_back({edge.grade, graph.vertices.size() + edge.id});
+  }
+  std::sort(events.begin(), events.end(), [](const Event& left, const Event& right) {
+    if (left.grade[0] != right.grade[0]) return left.grade[0] < right.grade[0];
+    if (left.grade[1] != right.grade[1]) return left.grade[1] < right.grade[1];
+    return left.generator < right.generator;
   });
 
   Dynamic_merge_forest<double> forest(graph.vertices.size());
   std::vector<std::size_t> row(graph.vertices.size(), static_cast<std::size_t>(-1));
   for (const Event& event : events) {
-    if (const auto* vertex = std::get_if<std::size_t>(&event)) {
-      row[*vertex] = out.beta_0.size();
-      out.beta_0.push_back(graph.vertices[*vertex]);
+    if (event.generator < graph.vertices.size()) {
+      row[event.generator] = out.beta_0.size();
+      out.beta_0.push_back(event.grade);
       continue;
     }
 
-    const Edge& edge = **std::get_if<const Edge*>(&event);
+    const Edge& edge = graph.edges[event.generator - graph.vertices.size()];
     if (edge.u == edge.v) {
       if (options.h1_betti) out.beta_0_h1.push_back(edge.grade);
       continue;
     }
-    const auto bottleneck = forest.merge_bottleneck(edge.u, edge.v);
+    // validate() and compact() establish endpoint ranges; the loop branch above
+    // establishes distinctness. Only path enumeration intervenes before merge.
+    const auto bottleneck = forest.merge_bottleneck_trusted(edge.u, edge.v);
     if (bottleneck && bottleneck->weight <= edge.grade[1]) {
       if (options.h1_betti) out.beta_0_h1.push_back(edge.grade);
       continue;
     }
     std::vector<std::size_t> syzygy;
     if (options.full_resolution && bottleneck) {
-      syzygy = forest.path_edges(edge.u, edge.v);
+      syzygy = forest.path_edges_trusted(edge.u, edge.v);
       syzygy.push_back(out.beta_1.size());
       std::sort(syzygy.begin(), syzygy.end());
     }
-    forest.merge_at_time(edge.u, edge.v, edge.grade[1], bottleneck);
+    forest.merge_at_time_trusted(edge.u, edge.v, edge.grade[1], bottleneck);
     out.beta_1.push_back(edge.grade);
     out.relations.push_back({row[edge.u], row[edge.v]});
     if (bottleneck) {

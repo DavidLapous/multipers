@@ -124,7 +124,8 @@ NB_MODULE(_slicer_nanobind, m) {
         &mpnb::graph_mph0_minimal_presentation,
         "slicer"_a,
         "degree"_a,
-        "full_resolution"_a);
+        "full_resolution"_a,
+        "finite_grid_masks"_a = nb::none());
 
   m.def(
       "_compute_hilbert_signed_measure",

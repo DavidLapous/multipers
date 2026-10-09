@@ -133,6 +133,8 @@ def _get_filtrations(
             )
             for current in out
         ]
+    if len(out) == 0:
+        out = np.empty((0, len(grid)), dtype=np.int32)
     return evaluate_in_grid(
         np.asarray(out, dtype=np.int32).clip(None, grid_size - 1), grid
     )
@@ -380,16 +382,18 @@ def _persistence_on_lines(
         if api is None:
             api = api_from_tensors(basepoints, *self.filtration_grid)
         basepoints, directions = _bp_dir_to_2d(basepoints, directions, api)
+        coordinate_inf = np.asarray(
+            [len(axis) for axis in self.filtration_grid], dtype=np.int64
+        )
 
         if self.is_kcritical:
             filtration_indptr, points = self.get_filtrations(packed=True)
             if np.any(filtration_indptr[1:] == filtration_indptr[:-1]):
                 raise ValueError("Multicritical generators must have a critical grade.")
-            coordinate_inf = len(self.filtration_grid[0])
             if self.filtration_container == "Flat":
                 missing_radius = np.isposinf(points[:, 0])
                 if missing_radius.any():
-                    points[missing_radius, 0] = coordinate_inf
+                    points[missing_radius, 0] = coordinate_inf[0]
             fil = evaluate_in_grid(
                 points.astype(np.int64, copy=False),
                 self.filtration_grid,
@@ -406,7 +410,11 @@ def _persistence_on_lines(
                 full,
                 ignore_infinite_filtration_values,
             )
-        fil = evaluate_in_grid(np.asarray(self.get_filtrations()), self.filtration_grid)
+        fil = evaluate_in_grid(
+            np.asarray(self.get_filtrations(), dtype=np.int64),
+            self.filtration_grid,
+            input_inf_value=coordinate_inf,
+        )
         return _coordinate_persistence_on_lines(
             self,
             fil,
@@ -690,7 +698,7 @@ def _minpres(
     self,
     degree=-1,
     degrees=None,
-    backend="mpfree",
+    backend=None,
     force=True,
     auto_clean=True,
     full_resolution=True,
@@ -936,6 +944,9 @@ def _install_python_api():
             "generator_maps",
             "generator_dimensions",
             "filtration_values",
+            "boundary_indptr",
+            "boundary_flat",
+            "grades_flat",
         )
 
         def __init__(self, *args, **kwargs):
