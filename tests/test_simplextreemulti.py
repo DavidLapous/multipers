@@ -457,3 +457,12 @@ def test_5():
     for s, f in st5:
         assert len(f) == 5
     assert mp.SimplexTreeMulti(st5, num_parameters=3) == st3
+
+
+def test_python_simplex_iterables_preserve_lookup_and_boundaries():
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0, 1], [2.0, 3.0])
+    assert st.find_simplex([0])
+    assert not st.find_simplex([99])
+    boundaries = {tuple(simplex) for simplex, _ in st.get_boundaries([0, 1])}
+    assert boundaries == {(0,), (1,)}

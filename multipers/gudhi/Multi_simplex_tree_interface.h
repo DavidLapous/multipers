@@ -742,7 +742,6 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
   Simplex_handle _get_handle_from_vertices(nanobind::object simplex) const {
     auto cast_as_iterable = [&]() -> Simplex_handle {
-      nanobind::gil_scoped_release release;
       return Base::find(detail::as_cpp_range<Vertex_handle>(simplex));
     };
     auto cast_first_as_tensor_then_as_iterable = [&]<typename U>() -> Simplex_handle {
