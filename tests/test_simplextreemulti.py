@@ -511,6 +511,23 @@ def test_slicer_to_tree_parameter_override_preserves_schema(num_parameters, empt
             np.testing.assert_array_equal(grid[1], [2.0])
 
 
+@pytest.mark.parametrize("kcritical", [False, True])
+def test_empty_batch_filtration_retains_omitted_grade_semantics(kcritical):
+    if kcritical and not has_kcritical:
+        pytest.skip("kcritical simplextree not compiled")
+    tree = mp.SimplexTreeMulti(num_parameters=2, kcritical=kcritical)
+    shape = (2, 0, 2) if kcritical else (2, 0)
+    assert tree.insert_batch(
+        np.array([[0, 1]], dtype=np.int32),
+        np.empty(shape, dtype=np.float64),
+    ) is tree
+    expected = np.full((1, 2) if kcritical else (2,), -np.inf)
+    simplices = list(tree.get_simplices())
+    assert {tuple(simplex) for simplex, _ in simplices} == {(0,), (1,)}
+    for _, grade in simplices:
+        np.testing.assert_array_equal(grade, expected)
+
+
 def test_integer_tree_coarsens_against_real_grid():
     tree = mp.SimplexTreeMulti(num_parameters=1, dtype=np.int32)
     tree.insert([0], [1])
@@ -520,6 +537,14 @@ def test_integer_tree_coarsens_against_real_grid():
     np.testing.assert_array_equal(squeezed.filtration_grid[0], grid[0])
 
 
+@pytest.mark.parametrize("empty", [False, True])
+def test_empty_filtration_degree_selection(empty):
+    tree = mp.SimplexTreeMulti(num_parameters=2)
+    if not empty:
+        tree.insert([0], [1.0, 2.0])
+    assert tree._get_filtration_values(degrees=[]) == []
+
+
 def test_normalize_filtrations_preserves_identity():
     tree = mp.SimplexTreeMulti(num_parameters=2)
     tree.insert([0], [2.0, 4.0])
@@ -527,3 +552,12 @@ def test_normalize_filtrations_preserves_identity():
     assert tree.normalize_filtrations() is tree
     np.testing.assert_array_equal(tree[[0]], [0.0, 0.0])
     np.testing.assert_array_equal(tree[[1]], [1.0, 1.0])
+
+
+def test_empty_filtration_grid_preserves_object_until_explicit_clear():
+    tree = mp.SimplexTreeMulti(num_parameters=2)
+    grid = [np.empty(0), np.empty(0)]
+    tree.filtration_grid = grid
+    assert tree.filtration_grid is grid
+    tree.filtration_grid = None
+    assert tree.filtration_grid is None

@@ -72,9 +72,11 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   using Tensor3D = nanobind::ndarray<const U, nanobind::ndim<3>>;
 
   Multi_simplex_tree_interface() : Base(), filtrationGrid_(nanobind::none()) {};
+
   Multi_simplex_tree_interface(int numParam) : Base(), filtrationGrid_(nanobind::none()) {
     Base::set_num_parameters(numParam <= 0 ? 2 : numParam);
   };
+
   Multi_simplex_tree_interface(const Base& st) : Base(st), filtrationGrid_(nanobind::none()) {};
   Multi_simplex_tree_interface(Base&& st) : Base(std::move(st)), filtrationGrid_(nanobind::none()) {};
 
@@ -155,14 +157,8 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       return;
     }
 
-    // throws if it does not pass the check
-    // returns false if valid but empty
-    if (detail::_verify_grid_validity(grid)) {
-      filtrationGrid_ = grid;
-      return;
-    }
-
-    filtrationGrid_ = nanobind::none();
+    detail::_verify_grid_validity(grid);
+    filtrationGrid_ = grid;
   }
 
   bool find_simplex(nanobind::object simplex) const {
@@ -195,7 +191,12 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
     std::vector<Filtration_value> fils;
     if (!filtrationValues.is_none()) {
-      fils = detail::_cast_to_filtration_value_array<Filtration_value>(filtrationValues, Base::num_parameters());
+      nanobind::ndarray<> array;
+      if (nanobind::try_cast(filtrationValues, array, false) && array.size() == 0) {
+        detail::_require_cpu_array(array);
+      } else {
+        fils = detail::_cast_to_filtration_value_array<Filtration_value>(filtrationValues, Base::num_parameters());
+      }
     }
     Base::clear_filtration();
 
@@ -359,6 +360,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
 
   // TODO: homogenize format with Slicer
   nanobind::tuple get_filtration_values(Tensor1D<int> degrees) const {
+    if (degrees.size() == 0) return nanobind::tuple();
     // assumes degrees has no duplicates and is sorted
     auto view = degrees.view();
     std::vector<std::vector<value_type>> values;
