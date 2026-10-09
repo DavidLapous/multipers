@@ -110,6 +110,7 @@ target_link_libraries(
     multipers::backend_hera
     multipers::tbb
     multipers::openmp
+    Python::Module
     nanobind-static
 )
 set_target_properties(multipers_core_shared PROPERTIES OUTPUT_NAME "multipers_core")
@@ -119,6 +120,10 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
 )
+if(APPLE)
+  # belt and braces if Python::Module doesn't add it on the CMake version
+  target_link_options(multipers_core_shared PRIVATE "LINKER:-undefined,dynamic_lookup")
+endif()
 if(WIN32)
   set_target_properties(multipers_core_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
