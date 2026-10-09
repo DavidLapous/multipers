@@ -15,43 +15,41 @@ def _graph_mph0_minimal_presentation(slicer, degree, full_resolution, auto_clean
         slicer = Slicer(slicer)
     if not is_slicer(slicer):
         raise ValueError(f"Expected a Slicer or SimplexTreeMulti, got {type(slicer)=}.")
+    filtration_grid = slicer.filtration_grid
+    if filtration_grid is not None and len(filtration_grid) != 2:
+        raise ValueError("graph requires exactly two filtration grid axes.")
+    num_parameters = slicer.num_parameters
+    if num_parameters == 0 and filtration_grid is not None:
+        num_parameters = len(filtration_grid)
+    if num_parameters != 2:
+        raise ValueError("graph requires exactly two filtration parameters.")
     if len(slicer) == 0:
         out = slicer.astype(
             vineyard=not full_resolution,
             pers_backend="Matrix" if full_resolution else "Graph",
         )
+        if out is slicer:
+            out = out.copy()
         out._mark_minpres(degree, is_minres=full_resolution)
         return out
-    if slicer.num_parameters != 2:
-        raise ValueError("graph requires exactly two filtration parameters.")
 
-    filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-    if slicer.is_squeezed:
-        dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
-        used = (dimensions == degree) | (dimensions == degree + 1)
-        if np.any(used):
-            raw_filtrations = np.asarray(
-                slicer.get_filtrations(), dtype=np.int64
-            )[used]
-            grid_sizes = np.asarray(
-                [len(axis) for axis in filtration_grid], dtype=np.int64
+    finite_grid_masks = None
+    if filtration_grid is not None:
+        finite_grid_masks = tuple(
+            np.asarray(
+                np.isfinite(api_from_tensors(axis).asnumpy(axis)), dtype=np.uint8
             )
-            if np.any((raw_filtrations < 0) | (raw_filtrations >= grid_sizes)):
-                raise ValueError("graph requires finite filtration values")
-            physical_filtrations = slicer.get_filtrations(unsqueeze=True)
-            api = api_from_tensors(physical_filtrations)
-            physical_filtrations = api.asnumpy(physical_filtrations)
-            if not np.all(np.isfinite(physical_filtrations[used])):
-                raise ValueError("graph requires finite filtration values")
+            for axis in filtration_grid
+        )
 
     from multipers import _slicer_nanobind
 
     out = _slicer_nanobind._graph_mph0_minimal_presentation(
-        slicer, degree, full_resolution
+        slicer, degree, full_resolution, finite_grid_masks
     )
     if filtration_grid is not None:
         out.filtration_grid = filtration_grid
-        if auto_clean:
+        if auto_clean and len(out):
             out = out._clean_filtration_grid()
     return out
 
@@ -62,7 +60,9 @@ def _normalize_degree(source, target, degree):
         target_degree = _index(target.minpres_degree)
         if source_degree >= 0 and source_degree == target_degree:
             return source_degree
-        raise ValueError("Expected degree= unless source and target have the same minpres_degree.")
+        raise ValueError(
+            "Expected degree= unless source and target have the same minpres_degree."
+        )
     if isinstance(degree, bool):
         raise ValueError("Expected an integral non-bool degree.")
     try:
@@ -75,7 +75,9 @@ def _normalize_degree(source, target, degree):
 
 
 def _degree_block_filtrations(slicer, degree):
-    bounds = np.searchsorted(np.asarray(slicer.get_dimensions(), dtype=np.int32), [degree, degree + 1])
+    bounds = np.searchsorted(
+        np.asarray(slicer.get_dimensions(), dtype=np.int32), [degree, degree + 1]
+    )
     return np.asarray(slicer.get_filtrations())[bounds[0] : bounds[1]]
 
 
@@ -90,10 +92,16 @@ def _packed_block_boundaries(slicer, row_degree, col_degree):
     stop = indptr[col_bounds[1]]
     raw_indices = indices[start:stop]
     if np.any((raw_indices < row_bounds[0]) | (raw_indices >= row_bounds[1])):
-        raise ValueError("Morphism slicer boundaries must point from source generators to target generators.")
+        raise ValueError(
+            "Morphism slicer boundaries must point from source generators to target generators."
+        )
     return (
-        np.ascontiguousarray(indptr[col_bounds[0] : col_bounds[1] + 1] - start, dtype=np.uint64),
-        np.ascontiguousarray(raw_indices.astype(np.int64, copy=False) - row_bounds[0], dtype=np.uint32),
+        np.ascontiguousarray(
+            indptr[col_bounds[0] : col_bounds[1] + 1] - start, dtype=np.uint64
+        ),
+        np.ascontiguousarray(
+            raw_indices.astype(np.int64, copy=False) - row_bounds[0], dtype=np.uint32
+        ),
     )
 
 
@@ -105,9 +113,15 @@ def _packed_morphism_from_slicer(morphism, source, target, degree):
     map_rows = _degree_block_filtrations(morphism, degree)
     map_cols = _degree_block_filtrations(morphism, degree + 1)
     if len(map_rows) != len(target_grades) or len(map_cols) != len(source_grades):
-        raise ValueError("Morphism slicer must have target generators in degree and source generators in degree + 1.")
-    if not np.array_equal(map_rows, target_grades) or not np.array_equal(map_cols, source_grades):
-        raise ValueError("Morphism slicer grades must match target/source generator grades.")
+        raise ValueError(
+            "Morphism slicer must have target generators in degree and source generators in degree + 1."
+        )
+    if not np.array_equal(map_rows, target_grades) or not np.array_equal(
+        map_cols, source_grades
+    ):
+        raise ValueError(
+            "Morphism slicer grades must match target/source generator grades."
+        )
     return _packed_block_boundaries(morphism, degree, degree + 1)
 
 
@@ -124,7 +138,9 @@ def _same_local_relation_boundaries(source, target, degree):
         block_indices = indices[start:stop]
         if np.any((block_indices < row_bounds[0]) | (block_indices >= row_bounds[1])):
             return None
-        return indptr[col_bounds[0] : col_bounds[1] + 1] - start, block_indices.astype(np.int64) - row_bounds[0]
+        return indptr[col_bounds[0] : col_bounds[1] + 1] - start, block_indices.astype(
+            np.int64
+        ) - row_bounds[0]
 
     source_block = relation_block(source)
     target_block = relation_block(target)
@@ -137,13 +153,23 @@ def _same_local_relation_boundaries(source, target, degree):
 
 
 def _implicit_identity_columns(source, target, degree):
-    source_bounds = np.searchsorted(np.asarray(source.get_dimensions(), dtype=np.int32), [degree, degree + 1])
-    target_bounds = np.searchsorted(np.asarray(target.get_dimensions(), dtype=np.int32), [degree, degree + 1])
+    source_bounds = np.searchsorted(
+        np.asarray(source.get_dimensions(), dtype=np.int32), [degree, degree + 1]
+    )
+    target_bounds = np.searchsorted(
+        np.asarray(target.get_dimensions(), dtype=np.int32), [degree, degree + 1]
+    )
     rank = source_bounds[1] - source_bounds[0]
-    if rank != target_bounds[1] - target_bounds[0] or not _same_local_relation_boundaries(source, target, degree):
-        raise ValueError("Implicit identity morphism requires source and target to have the same boundary structure.")
+    if rank != target_bounds[1] - target_bounds[
+        0
+    ] or not _same_local_relation_boundaries(source, target, degree):
+        raise ValueError(
+            "Implicit identity morphism requires source and target to have the same boundary structure."
+        )
     if rank > np.iinfo(np.uint32).max:
-        raise ValueError("Implicit identity morphism rank exceeds supported uint32 range.")
+        raise ValueError(
+            "Implicit identity morphism rank exceeds supported uint32 range."
+        )
     return np.arange(rank + 1, dtype=np.uint64), np.arange(rank, dtype=np.uint32)
 
 
@@ -155,8 +181,12 @@ def _parse_morphism(morphism, source, target, degree):
         morphism = morphism.get("map", morphism.get("slicer"))
     if source is None or target is None:
         raise ValueError("Expected source= and target= for algebra operations.")
-    if not is_slicer(source, allow_minpres=False) or not is_slicer(target, allow_minpres=False):
-        raise ValueError("Expected source= and target= to be slicers for algebra operations.")
+    if not is_slicer(source, allow_minpres=False) or not is_slicer(
+        target, allow_minpres=False
+    ):
+        raise ValueError(
+            "Expected source= and target= to be slicers for algebra operations."
+        )
     degree = _normalize_degree(source, target, degree)
     _validate_algebra_inputs(source, target)
     if is_slicer(morphism, allow_minpres=False):
@@ -164,7 +194,9 @@ def _parse_morphism(morphism, source, target, degree):
     elif morphism is None:
         columns = _implicit_identity_columns(source, target, degree)
     else:
-        raise ValueError("Expected a morphism slicer, a dict with a map/slicer key, or morphism=None.")
+        raise ValueError(
+            "Expected a morphism slicer, a dict with a map/slicer key, or morphism=None."
+        )
     return source, target, degree, columns
 
 
@@ -187,9 +219,15 @@ def _validate_squeezed_grids(source, target):
     source_squeezed = bool(source.is_squeezed)
     target_squeezed = bool(target.is_squeezed)
     if source_squeezed != target_squeezed:
-        raise ValueError("Squeezed source/target grids must both be present and identical for algebra ops.")
-    if source_squeezed and not _same_grid(source.filtration_grid, target.filtration_grid):
-        raise ValueError("Squeezed source/target filtration grids must be identical for algebra ops.")
+        raise ValueError(
+            "Squeezed source/target grids must both be present and identical for algebra ops."
+        )
+    if source_squeezed and not _same_grid(
+        source.filtration_grid, target.filtration_grid
+    ):
+        raise ValueError(
+            "Squeezed source/target filtration grids must be identical for algebra ops."
+        )
 
 
 def _validate_free_slicers(source, target):
@@ -336,20 +374,24 @@ def _minimal_presentation_from_slicer(
     keep_generators=False,
 ):
 
-    if slicer.is_kcritical:
-        raise ValueError("Free presentation / 1-critical is expected. Run `mp.ops.one_criticalify` first.")
     if backend == "graph":
         if keep_generators:
             raise ValueError("graph does not support keep_generators.")
         return _graph_mph0_minimal_presentation(
             slicer, degree, full_resolution, auto_clean=auto_clean
         )
+    if slicer.is_kcritical:
+        raise ValueError(
+            "Free presentation / 1-critical is expected. Run `mp.ops.one_criticalify` first."
+        )
 
     if backend == "muphasa":
         from multipers import _muphasa_interface
 
         if full_resolution:
-            raise ValueError("Muphasa backend currently supports only full_resolution=False.")
+            raise ValueError(
+                "Muphasa backend currently supports only full_resolution=False."
+            )
         if keep_generators:
             raise ValueError("Muphasa backend does not support keep_generators yet.")
         if slicer.num_parameters < 2:
@@ -370,10 +412,9 @@ def _minimal_presentation_from_slicer(
                 keep_generators=False,
             )
             timing.substep("backend_call")
-        new_slicer._mark_minpres(degree, is_minres=False)
-        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-        if new_slicer.is_squeezed and auto_clean:
-            new_slicer = new_slicer._clean_filtration_grid()
+        new_slicer = _finalize_minimal_presentation(
+            new_slicer, slicer, degree, is_minres=False, auto_clean=auto_clean
+        )
         return new_slicer
 
     if backend == "mpfree":
@@ -395,10 +436,9 @@ def _minimal_presentation_from_slicer(
                 keep_generators=keep_generators,
             )
             timing.substep("backend_call")
-        new_slicer._mark_minpres(degree, is_minres=full_resolution)
-        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-        if new_slicer.is_squeezed and auto_clean:
-            new_slicer = new_slicer._clean_filtration_grid()
+        new_slicer = _finalize_minimal_presentation(
+            new_slicer, slicer, degree, is_minres=full_resolution, auto_clean=auto_clean
+        )
         return new_slicer
 
     if backend in {"2pac", "2pac-homology"}:
@@ -428,10 +468,9 @@ def _minimal_presentation_from_slicer(
                 use_cohomology=use_cohomology,
             )
             timing.substep("backend_call")
-        new_slicer._mark_minpres(degree, is_minres=full_resolution)
-        new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
-        if new_slicer.is_squeezed and auto_clean:
-            new_slicer = new_slicer._clean_filtration_grid()
+        new_slicer = _finalize_minimal_presentation(
+            new_slicer, slicer, degree, is_minres=full_resolution, auto_clean=auto_clean
+        )
         return new_slicer
 
     raise ValueError(
@@ -572,7 +611,7 @@ def one_criticalify(
         x.filtration_grid = F
         x._mark_minpres(i, is_minres=False)
         if reduce and force_resolution:
-            x = minimal_presentation(x, degree=i, force=True)
+            x = minimal_presentation(x, degree=i, force=True, backend="mpfree")
         return x
 
     if isinstance(out, tuple):
@@ -580,11 +619,32 @@ def one_criticalify(
     return _todo(out, degree)
 
 
+def _finalize_minimal_presentation(
+    new_slicer, slicer, degree, *, is_minres, auto_clean
+):
+    new_slicer._mark_minpres(degree, is_minres=is_minres)
+    new_slicer.filtration_grid = slicer.filtration_grid if slicer.is_squeezed else None
+    if new_slicer.is_squeezed and auto_clean:
+        new_slicer = new_slicer._clean_filtration_grid()
+    return new_slicer
+
+
 def minimal_presentation(
     slicer,
     degree=-1,
     degrees: Sequence[int] = (),
-    backend: Literal["mpfree", "muphasa", "2pac", "2pac-homology", "graph", ""] = "mpfree",
+    backend: Optional[
+        Literal[
+            "mpfree",
+            "muphasa",
+            "2pac",
+            "2pac-homology",
+            "graph",
+            "persistence-algebra",
+            "pa",
+            "",
+        ]
+    ] = None,
     n_jobs=-1,
     force=False,
     auto_clean=True,
@@ -610,8 +670,20 @@ def minimal_presentation(
     transpose route, with 2pac's bounded-support assumptions), and
     `2pac-homology` (the original direct homology route), and `graph` (for
     graph-shaped presentations).
+
+    ``backend=None`` selects ``graph`` for H0, ``mpfree`` for higher homology
+    or ``keep_generators=True``, and Persistence-Algebra for an existing Module.
+    Selection is per degree when ``degrees`` is supplied. The graph backend
+    accepts finite two-parameter graph-shaped one-critical or explicit
+    multicritical lifetimes directly, without ``one_criticalify``. Empty
+    lifetimes are absent; implicit Degree-Rips storage needs named corner
+    materialization. Non-graph incidence and ``keep_generators`` are rejected;
+    general algebraic presentations require an explicit compatible backend.
+    ``full_resolution=True`` remains the default; :func:`minimal_resolution`
+    names this request explicitly.
     """
     from joblib import Parallel, delayed
+
     full_resolution = bool(full_resolution)
 
     if is_simplextree_multi(slicer):
@@ -640,6 +712,20 @@ def minimal_presentation(
             )
         )
     assert degree >= 0, "Degree not provided."
+    if (
+        is_slicer(slicer)
+        and slicer.is_minpres
+        and not force
+        and backend != "graph"
+        and (not full_resolution or slicer.is_minres)
+    ):
+        _mp_logs.warn_superfluous_computation(
+            f"The slicer seems to be already reduced, "
+            f"from homology of degree {slicer.minpres_degree}."
+        )
+        return slicer
+    if backend is None:
+        backend = "graph" if degree == 0 and not keep_generators else "mpfree"
     if backend == "graph":
         return _minimal_presentation_from_slicer(
             slicer,
@@ -652,24 +738,62 @@ def minimal_presentation(
             use_clearing=use_clearing,
             keep_generators=keep_generators,
         )
-    if is_slicer(slicer) and slicer.is_minpres and not force and (not full_resolution or slicer.is_minres):
-        _mp_logs.warn_superfluous_computation(
-            f"The slicer seems to be already reduced, "
-            f"from homology of degree {slicer.minpres_degree}."
-        )
-        return slicer
     dimensions = np.asarray(slicer.get_dimensions(), dtype=np.int32)
     idx = np.searchsorted(dimensions, degree)
     if idx >= dimensions.shape[0] or dimensions[idx] != degree:
-        return type(slicer)()
+        out = type(slicer)()
+        out._mark_minpres(degree, is_minres=full_resolution)
+        if slicer.is_squeezed:
+            out.filtration_grid = slicer.filtration_grid
+        return out
 
-    return _minimal_presentation_from_slicer(
+    out = _minimal_presentation_from_slicer(
         slicer,
         degree=degree,
         backend=backend,
         auto_clean=auto_clean,
         verbose=verbose,
         full_resolution=full_resolution,
+        use_chunk=use_chunk,
+        use_clearing=use_clearing,
+        keep_generators=keep_generators,
+    )
+    if len(out) == 0:
+        if slicer.is_squeezed:
+            out.filtration_grid = slicer.filtration_grid
+    return out
+
+
+def minimal_resolution(
+    slicer,
+    degree=-1,
+    degrees: Sequence[int] = (),
+    backend=None,
+    n_jobs=-1,
+    force=False,
+    auto_clean=True,
+    verbose=False,
+    use_chunk=True,
+    use_clearing=True,
+    keep_generators: bool = False,
+):
+    """Compute a minimal free resolution, preserving the input domain.
+
+    Equivalent to :func:`minimal_presentation` with ``full_resolution=True``.
+    Filtration inputs compute the selected homology; Module inputs minimize and
+    resolve their existing PA module. Legacy inputs keep their Slicer output.
+    Backend restrictions and all other options are shared with that operation.
+    """
+    return minimal_presentation(
+        slicer,
+        degree=degree,
+        degrees=degrees,
+        backend=backend,
+        n_jobs=n_jobs,
+        force=force,
+        auto_clean=auto_clean,
+        verbose=verbose,
+        full_resolution=True,
         use_chunk=use_chunk,
         use_clearing=use_clearing,
         keep_generators=keep_generators,

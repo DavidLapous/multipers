@@ -7,6 +7,10 @@
 #include <vector>
 
 namespace multipers::graph_mph0 {
+template <class Weight>
+class Dynamic_merge_forest;
+template <class Structure, bool Vineyard>
+class Slicer_backend;
 
 // Edge-as-node link-cut forest. Path maxima use deterministic (weight, edge id) keys.
 template <class Weight>
@@ -32,21 +36,13 @@ class Link_cut_forest {
   bool same_component(std::size_t u, std::size_t v) {
     check_vertex(u);
     check_vertex(v);
-    return u == v || find_root(u) == find_root(v);
+    return same_component_trusted(u, v);
   }
 
   void link(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
     check_vertex(u);
     check_vertex(v);
-    if (u == v || same_component(u, v)) throw std::invalid_argument("link-cut link would create a cycle");
-    link_impl(id, u, v, weight);
-  }
-
-  // Precondition: u and v are distinct vertices in different trees.
-  void link_assuming_disconnected(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
-    check_vertex(u);
-    check_vertex(v);
-    if (u == v) throw std::invalid_argument("link-cut link would create a cycle");
+    if (u == v || same_component_trusted(u, v)) throw std::invalid_argument("link-cut link would create a cycle");
     link_impl(id, u, v, weight);
   }
 
@@ -58,28 +54,15 @@ class Link_cut_forest {
   }
 
   void update_weight(std::size_t id, Weight weight) {
-    const auto& record = active_edge_record(id);
-    access(record.node);
-    nodes_[record.node].weight = weight;
-    pull(record.node);
+    active_edge_record(id);
+    update_weight_trusted(id, weight);
   }
 
   std::optional<Edge> path_bottleneck(std::size_t u, std::size_t v) {
     check_vertex(u);
     check_vertex(v);
-    if (u == v || !same_component(u, v)) return std::nullopt;
-    return path_bottleneck_assuming_connected(u, v);
-  }
-
-  // Faster path query for callers that maintain connectivity separately.
-  // Precondition: u and v are distinct vertices in the same tree.
-  std::optional<Edge> path_bottleneck_assuming_connected(std::size_t u, std::size_t v) {
-    check_vertex(u);
-    check_vertex(v);
-    if (u == v) return std::nullopt;
-    make_root(u);
-    access(v);
-    const std::size_t node = nodes_[v].maximum;
+    if (u == v || !same_component_trusted(u, v)) return std::nullopt;
+    const std::size_t node = expose_path(u, v);
     if (!nodes_[node].is_edge) throw std::logic_error("link-cut path has no edge maximum");
     const std::size_t edge_id = nodes_[node].edge_id;
     if (edge_id >= edges_.size() || !edges_[edge_id].present || !edges_[edge_id].active) {
@@ -92,9 +75,27 @@ class Link_cut_forest {
   std::vector<std::size_t> path_edges(std::size_t u, std::size_t v) {
     check_vertex(u);
     check_vertex(v);
-    if (u == v || !same_component(u, v)) return {};
-    make_root(u);
-    access(v);
+    if (u == v || !same_component_trusted(u, v)) return {};
+    return path_edges_trusted(u, v);
+  }
+
+ private:
+  friend class Dynamic_merge_forest<Weight>;
+  template <class, bool>
+  friend class Slicer_backend;
+
+  bool same_component_trusted(std::size_t u, std::size_t v) { return u == v || find_root(u) == find_root(v); }
+
+  // Friends establish valid, distinct endpoints in the same tree.
+  Edge path_bottleneck_trusted(std::size_t u, std::size_t v) {
+    const std::size_t node = expose_path(u, v);
+    const std::size_t edge_id = nodes_[node].edge_id;
+    const auto& record = edges_[edge_id];
+    return Edge{edge_id, record.u, record.v, nodes_[node].weight};
+  }
+
+  std::vector<std::size_t> path_edges_trusted(std::size_t u, std::size_t v) {
+    expose_path(u, v);
 
     std::vector<std::size_t> out;
     std::vector<std::size_t> stack{v};
@@ -110,7 +111,6 @@ class Link_cut_forest {
     return out;
   }
 
- private:
   static constexpr std::size_t null = static_cast<std::size_t>(-1);
 
   struct Node {
@@ -136,14 +136,22 @@ class Link_cut_forest {
   std::vector<Edge_record> edges_;
 
   void link_impl(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
-    std::size_t node;
+    if (id == null) throw std::length_error("link-cut edge id is too large");
     if (id < edges_.size() && edges_[id].present) {
-      auto& record = edges_[id];
+      const auto& record = edges_[id];
       if (record.active) throw std::invalid_argument("link-cut edge id already exists");
       if (!((record.u == u && record.v == v) || (record.u == v && record.v == u))) {
         throw std::invalid_argument("link-cut edge id endpoints changed");
       }
-      node = record.node;
+    }
+    link_disconnected_trusted(id, u, v, weight);
+  }
+
+  // Friends prove disconnection and a fresh ID or fixed-endpoint inactive reuse.
+  void link_disconnected_trusted(std::size_t id, std::size_t u, std::size_t v, Weight weight) {
+    std::size_t node;
+    if (id < edges_.size() && edges_[id].present) {
+      node = edges_[id].node;
     } else {
       if (id >= edges_.size()) edges_.resize(id + 1);
       node = nodes_.size();
@@ -159,6 +167,22 @@ class Link_cut_forest {
     edges_[id] = Edge_record{u, v, node, true, true};
     link_nodes_assuming_disconnected(u, node);
     link_nodes_assuming_disconnected(node, v);
+  }
+
+  void cut_active_trusted(std::size_t id) {
+    auto& record = edges_[id];
+    expose_path(record.u, record.node);
+    detach_exposed_nodes(record.u, record.node);
+    expose_path(record.node, record.v);
+    detach_exposed_nodes(record.node, record.v);
+    record.active = false;
+  }
+
+  void update_weight_trusted(std::size_t id, Weight weight) {
+    const auto& record = edges_[id];
+    access(record.node);
+    nodes_[record.node].weight = weight;
+    pull(record.node);
   }
 
   Edge_record& active_edge_record(std::size_t id) {
@@ -178,8 +202,9 @@ class Link_cut_forest {
   }
 
   bool key_less(std::size_t a, std::size_t b) const {
-    if (a == null || !nodes_[a].is_edge) return b != null && nodes_[b].is_edge;
-    if (b == null || !nodes_[b].is_edge) return false;
+    // Subtree maxima are either null or edge nodes.
+    if (a == null) return b != null;
+    if (b == null) return false;
     return nodes_[a].weight < nodes_[b].weight ||
            (!(nodes_[b].weight < nodes_[a].weight) && nodes_[a].edge_id < nodes_[b].edge_id);
   }
@@ -223,12 +248,17 @@ class Link_cut_forest {
     nodes_[p].child[side] = middle;
     if (middle != null) nodes_[middle].parent = p;
     pull(p);
-    pull(x);
   }
 
+  template <bool refresh_maximum = true>
   void splay(std::size_t x) {
-    push_path(x);
-    while (!is_root(x)) {
+    if (is_root(x)) {
+      push(x);
+      return;
+    }
+    push_path(nodes_[x].parent);
+    push(x);
+    do {
       const std::size_t p = nodes_[x].parent;
       const std::size_t g = nodes_[p].parent;
       if (!is_root(p)) {
@@ -238,13 +268,17 @@ class Link_cut_forest {
           rotate(x);
       }
       rotate(x);
-    }
+    } while (!is_root(x));
+    // Rotations repair demoted nodes; the promoted root's maximum is only
+    // needed after the complete splay, not after each intermediate rotation.
+    if constexpr (refresh_maximum) pull(x);
   }
 
   void access(std::size_t x) {
     std::size_t previous = null;
     for (std::size_t y = x; y != null; y = nodes_[y].parent) {
-      splay(y);
+      // The right child changes next, so only its subsequent pull is needed.
+      splay<false>(y);
       nodes_[y].child[1] = previous;
       pull(y);
       previous = y;
@@ -268,21 +302,30 @@ class Link_cut_forest {
     return x;
   }
 
-  // Both public link entry points establish that these trees are disjoint.
+  // Admission (checked public or proven friend) establishes disjoint trees.
   void link_nodes_assuming_disconnected(std::size_t u, std::size_t v) {
     make_root(u);
     nodes_[u].parent = v;
   }
 
-  void cut_nodes(std::size_t u, std::size_t v) {
+  std::size_t expose_path(std::size_t u, std::size_t v) {
     make_root(u);
     access(v);
-    if (nodes_[v].child[0] != u || nodes_[u].child[1] != null) {
-      throw std::logic_error("link-cut endpoints are not adjacent");
-    }
+    return nodes_[v].maximum;
+  }
+
+  void detach_exposed_nodes(std::size_t u, std::size_t v) {
     nodes_[v].child[0] = null;
     nodes_[u].parent = null;
     pull(v);
+  }
+
+  void cut_nodes(std::size_t u, std::size_t v) {
+    expose_path(u, v);
+    if (nodes_[v].child[0] != u || nodes_[u].child[1] != null) {
+      throw std::logic_error("link-cut endpoints are not adjacent");
+    }
+    detach_exposed_nodes(u, v);
   }
 };
 

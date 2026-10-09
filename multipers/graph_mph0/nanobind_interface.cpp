@@ -1,21 +1,20 @@
 #include "graph_mph0/nanobind_interface.hpp"
 
-#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <nanobind/ndarray.h>
 
 #include "ext_interface/contiguous_slicer_bridge.hpp"
 #include "ext_interface/nanobind_registry_helpers.hpp"
-#include "graph_mph0/graph_mph0.h"
-#include "nanobind_array_utils.hpp"
+#include "graph_mph0/graph_input.h"
 
 namespace nb = nanobind;
 
@@ -26,91 +25,6 @@ using multipers::nanobind_helpers::is_slicer_object;
 using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_helpers::visit_const_slicer_wrapper;
-using multipers::nanobind_utils::owned_array;
-
-struct Graph_mph0_input {
-  multipers::graph_mph0::Graph graph;
-  std::vector<multipers::graph_mph0::Grade> zero_relations;
-};
-
-template <typename Value>
-double graph_grade_coordinate(Value value) {
-  if constexpr (std::is_integral_v<Value>) {
-    if (value == std::numeric_limits<Value>::max()) {
-      throw std::invalid_argument("graph requires finite filtration values");
-    }
-    if constexpr (std::numeric_limits<Value>::digits > std::numeric_limits<double>::digits) {
-      constexpr std::uint64_t max_exact = std::uint64_t{1} << std::numeric_limits<double>::digits;
-      if constexpr (std::is_signed_v<Value>) {
-        if (value < -static_cast<Value>(max_exact) || value > static_cast<Value>(max_exact)) {
-          throw std::invalid_argument("graph requires integer filtration values exactly representable as float64");
-        }
-      } else if (value > static_cast<Value>(max_exact)) {
-        throw std::invalid_argument("graph requires integer filtration values exactly representable as float64");
-      }
-    }
-  }
-  return static_cast<double>(value);
-}
-
-template <class DimensionAt, class BoundaryAt, class GradeAt>
-Graph_mph0_input build_graph_mph0_input(std::size_t num_generators,
-                                        std::int32_t degree,
-                                        DimensionAt&& dimension_at,
-                                        BoundaryAt&& boundary_at,
-                                        GradeAt&& grade_at,
-                                        bool collect_zero_relations = true) {
-  if (degree < 0) throw std::invalid_argument("graph degree must be nonnegative");
-  Graph_mph0_input out;
-  std::vector<std::size_t> vertex_number(num_generators, std::numeric_limits<std::size_t>::max());
-  std::size_t num_edges = 0;
-  for (std::size_t generator = 0; generator < num_generators; ++generator) {
-    const std::int32_t dimension = dimension_at(generator);
-    if (dimension < 0) throw std::invalid_argument("graph generator dimensions must be nonnegative");
-    if (dimension < degree || static_cast<std::int64_t>(dimension) > static_cast<std::int64_t>(degree) + 1) continue;
-    const auto grade = grade_at(generator);
-    if (!std::isfinite(grade[0]) || !std::isfinite(grade[1])) {
-      throw std::invalid_argument("graph requires finite filtration values");
-    }
-    auto&& boundary = boundary_at(generator);
-    if (dimension == degree) {
-      if (!boundary.empty()) throw std::invalid_argument("Graph presentation generators must have empty boundaries");
-      vertex_number[generator] = out.graph.vertices.size();
-      out.graph.vertices.push_back(grade);
-    } else if (boundary.empty()) {
-      if (collect_zero_relations) out.zero_relations.push_back(grade);
-    } else {
-      ++num_edges;
-    }
-  }
-
-  out.graph.edges.reserve(num_edges);
-  for (std::size_t generator = 0; generator < num_generators; ++generator) {
-    if (static_cast<std::int64_t>(dimension_at(generator)) != static_cast<std::int64_t>(degree) + 1) continue;
-    auto&& boundary = boundary_at(generator);
-    if (boundary.empty()) continue;
-    if (boundary.size() != 2) {
-      throw std::invalid_argument("Every nonempty graph relation must contain exactly two generators");
-    }
-    const std::size_t u = boundary[0];
-    const std::size_t v = boundary[1];
-    if (u >= num_generators || v >= num_generators) {
-      throw std::invalid_argument("Graph relation endpoint is out of range");
-    }
-    if (dimension_at(u) != degree || dimension_at(v) != degree) {
-      throw std::invalid_argument("Graph relations must reference generators in the requested degree");
-    }
-    if (u == v) throw std::invalid_argument("Graph relations must reference two distinct generators");
-    const auto grade = grade_at(generator);
-    const auto grade_u = grade_at(u);
-    const auto grade_v = grade_at(v);
-    if (grade[0] < grade_u[0] || grade[1] < grade_u[1] || grade[0] < grade_v[0] || grade[1] < grade_v[1]) {
-      throw std::invalid_argument("Graph relation grade must dominate both endpoint grades");
-    }
-    out.graph.edges.push_back({out.graph.edges.size(), vertex_number[u], vertex_number[v], grade});
-  }
-  return out;
-}
 
 template <typename Desc, typename Value>
 inline constexpr bool is_contiguous_graph_slicer_v =
@@ -166,78 +80,29 @@ nb::object graph_mph0_slicer_output(Complex&& complex, std::int32_t degree, bool
 
 }  // namespace
 
-nb::tuple graph_mph0_raw(nb::ndarray<nb::numpy, const std::uint64_t, nb::ndim<1>, nb::c_contig> boundary_indptr,
-                         nb::ndarray<nb::numpy, const std::uint32_t, nb::ndim<1>, nb::c_contig> boundary_indices,
-                         nb::ndarray<nb::numpy, const std::int32_t, nb::ndim<1>, nb::c_contig> dimensions,
-                         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> grades,
-                         std::int32_t degree) {
-  multipers::graph_mph0::Result result;
-  {
-    nb::gil_scoped_release release;
-    const std::size_t num_generators = dimensions.shape(0);
-    if (boundary_indptr.shape(0) != num_generators + 1 || grades.shape(0) != num_generators || grades.shape(1) != 2) {
-      throw std::invalid_argument("graph CSR dimensions and grades must describe the same generators");
-    }
-    if (boundary_indptr(0) != 0 || boundary_indptr(num_generators) != boundary_indices.shape(0)) {
-      throw std::invalid_argument("graph boundary indptr does not span boundary indices");
-    }
-    for (std::size_t generator = 0; generator < num_generators; ++generator) {
-      if (boundary_indptr(generator) > boundary_indptr(generator + 1) ||
-          boundary_indptr(generator + 1) > boundary_indices.shape(0)) {
-        throw std::invalid_argument("graph boundary indptr must be nondecreasing and in range");
-      }
-    }
-    auto input = build_graph_mph0_input(
-        num_generators,
-        degree,
-        [&](std::size_t generator) { return dimensions(generator); },
-        [&](std::size_t generator) {
-          const auto start = boundary_indptr(generator);
-          return std::span<const std::uint32_t>(boundary_indices.data() + start,
-                                                boundary_indptr(generator + 1) - start);
-        },
-        [&](std::size_t generator) {
-          return multipers::graph_mph0::Grade{grades(generator, 0), grades(generator, 1)};
-        });
-    result = multipers::graph_mph0::compute(input.graph);
-    result.beta_0_h1.insert(result.beta_0_h1.end(), input.zero_relations.begin(), input.zero_relations.end());
-    std::sort(result.beta_0_h1.begin(), result.beta_0_h1.end());
-  }
-  auto grades_array = [](std::vector<multipers::graph_mph0::Grade>&& grades) {
-    const std::size_t rows = grades.size();
-    std::vector<double> flat;
-    flat.reserve(2 * rows);
-    for (const auto& grade : grades) {
-      flat.push_back(grade[0]);
-      flat.push_back(grade[1]);
-    }
-    return owned_array<double>(std::move(flat), {rows, std::size_t(2)});
-  };
-  std::vector<std::int64_t> relations;
-  relations.reserve(2 * result.relations.size());
-  for (const auto& relation : result.relations) {
-    relations.push_back(static_cast<std::int64_t>(relation[0]));
-    relations.push_back(static_cast<std::int64_t>(relation[1]));
-  }
-  const std::size_t relation_count = result.relations.size();
-  return nb::make_tuple(grades_array(std::move(result.beta_0)),
-                        grades_array(std::move(result.beta_1)),
-                        grades_array(std::move(result.beta_2)),
-                        grades_array(std::move(result.beta_0_h1)),
-                        owned_array<std::int64_t>(std::move(relations), {relation_count, std::size_t(2)}));
-}
-
-nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_t degree, bool full_resolution) {
+nb::object graph_mph0_minimal_presentation(const nb::handle& slicer,
+                                           std::int32_t degree,
+                                           bool full_resolution,
+                                           const nb::handle& finite_grid_masks) {
   if (!is_slicer_object(slicer)) throw nb::type_error("graph expects a Slicer input");
   const std::int32_t dimension_margin = full_resolution ? 2 : 1;
   if (degree < 0 || degree > std::numeric_limits<std::int32_t>::max() - dimension_margin) {
     throw std::invalid_argument("graph degree exceeds output dimension range");
   }
+  using GridMask = nb::ndarray<nb::numpy, const std::uint8_t, nb::ndim<1>, nb::c_contig, nb::device::cpu>;
+  std::array<GridMask, 2> masks;
+  const bool indexed = !finite_grid_masks.is_none();
+  if (indexed) {
+    auto axes = nb::cast<nb::sequence>(finite_grid_masks);
+    if (nb::len(axes) != 2) throw std::invalid_argument("graph requires exactly two filtration grid axes");
+    for (std::size_t p = 0; p < masks.size(); ++p) masks[p] = nb::cast<GridMask>(axes[p], false);
+  }
   return visit_const_slicer_wrapper(slicer, [&]<typename Desc>(const auto& wrapper) -> nb::object {
-    if constexpr (Desc::is_kcritical) {
-      throw std::invalid_argument("graph requires a one-critical filtration");
+    if constexpr (Desc::is_degree_rips) {
+      throw std::invalid_argument("graph requires explicit lifetime corners, not implicit Degree-Rips storage");
     } else {
-      if (wrapper.get_slicer().get_number_of_parameters() != 2) {
+      const auto num_parameters = wrapper.get_slicer().get_number_of_parameters();
+      if (num_parameters != 2 && !(Desc::is_kcritical && indexed && num_parameters == 0)) {
         throw std::invalid_argument("graph requires exactly two filtration parameters");
       }
 
@@ -248,18 +113,42 @@ nb::object graph_mph0_minimal_presentation(const nb::handle& slicer, std::int32_
         const auto& dimensions = wrapper.get_slicer().get_dimensions();
         const auto& boundaries = wrapper.get_slicer().get_boundaries();
         const auto& filtrations = wrapper.get_slicer().get_filtration_values();
-        auto input = build_graph_mph0_input(
+        if (boundaries.size() != dimensions.size() || filtrations.size() != dimensions.size()) {
+          throw std::invalid_argument("graph requires one boundary and lifetime row per source cell");
+        }
+        auto input = multipers::graph_mph0::build_graph_mph0_input(
             dimensions.size(),
             degree,
             [&](std::size_t generator) { return static_cast<std::int32_t>(dimensions[generator]); },
             [&](std::size_t generator) -> const auto& { return boundaries[generator]; },
-            [&](std::size_t generator) {
-              return multipers::graph_mph0::Grade{graph_grade_coordinate(filtrations[generator](0, 0)),
-                                                  graph_grade_coordinate(filtrations[generator](0, 1))};
+            [&](std::size_t generator) -> std::size_t {
+              const auto& filtration = filtrations[generator];
+              if constexpr (Desc::is_kcritical) {
+                // Legacy construction encodes an empty MC lifetime by canonical +infinity.
+                if (filtration.is_plus_inf()) return 0;
+              }
+              return filtration.num_generators();
             },
-            false);
+            [&](std::size_t generator, std::size_t corner) -> std::optional<multipers::graph_mph0::Grade> {
+              if (filtrations[generator].num_parameters() != 2) {
+                throw std::invalid_argument("graph requires exactly two filtration parameters");
+              }
+              multipers::graph_mph0::Grade grade{
+                  multipers::graph_mph0::graph_grade_coordinate(filtrations[generator](corner, 0)),
+                  multipers::graph_mph0::graph_grade_coordinate(filtrations[generator](corner, 1))};
+              if (indexed) {
+                for (std::size_t p = 0; p < masks.size(); ++p) {
+                  if (!std::isfinite(grade[p]) || grade[p] != std::trunc(grade[p]) || grade[p] < 0 ||
+                      grade[p] >= masks[p].shape(0) || !masks[p].data()[static_cast<std::size_t>(grade[p])]) {
+                    throw std::invalid_argument("graph requires finite filtration values");
+                  }
+                }
+              }
+              return grade;
+            },
+            /*canonical_lifetimes=*/!Desc::is_kcritical);
         auto result =
-            multipers::graph_mph0::compute(input.graph, multipers::graph_mph0::Compute_options{full_resolution, false});
+            multipers::graph_mph0::compute(input, multipers::graph_mph0::Compute_options{full_resolution, false});
 
         constexpr std::size_t max_output_generators = std::numeric_limits<std::uint32_t>::max();
         if (result.beta_0.size() > max_output_generators ||
