@@ -466,3 +466,18 @@ def test_python_simplex_iterables_preserve_lookup_and_boundaries():
     assert not st.find_simplex([99])
     boundaries = {tuple(simplex) for simplex, _ in st.get_boundaries([0, 1])}
     assert boundaries == {(0,), (1,)}
+
+
+@pytest.mark.parametrize("parameter", [0, 1, -1])
+def test_distance_matrix_preserves_other_axis_and_fractional_vertex_values(parameter):
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    st.insert([0, 1], [10.0, 20.0])
+    st.fill_distance_matrix(
+        np.array([[0.0, 3.0], [3.0, 0.0]]), parameter=parameter, node_value=0.5
+    )
+    expected_edge = [10.0, 20.0]
+    expected_vertex = [10.0, 20.0]
+    expected_edge[parameter] = 3.0
+    expected_vertex[parameter] = 0.5
+    np.testing.assert_array_equal(st[[0, 1]], expected_edge)
+    np.testing.assert_array_equal(st[[0]], expected_vertex)

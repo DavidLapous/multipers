@@ -496,8 +496,8 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   }
 
   Multi_simplex_tree_interface& fill_distance_matrix(Tensor2D<value_type> distanceMatrix,
-                                                     value_type nodeValue,
-                                                     int axis) {
+                                                     int axis,
+                                                     value_type nodeValue) {
     // assuming Base::num_parameters() was properly set
     if (axis < 0) axis += Base::num_parameters();
     if (axis < 0 || axis >= Base::num_parameters()) throw std::invalid_argument("Axis is not a valid parameter index.");
