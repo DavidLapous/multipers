@@ -511,15 +511,6 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
     const function_delaunay_interface_input<index_type>& input,
     bool verbose_output,
     function_delaunay_support_records* supports) {
-  {
-    nanobind::gil_scoped_release release;
-    // ???
-    std::optional<std::lock_guard<std::mutex>> global_state_lock;
-    if (detail::function_delaunay_interface_needs_global_state_lock()) {
-      global_state_lock.emplace(detail::function_delaunay_interface_mutex());
-    }
-  }
-
   if (input.num_points == 0) {
     return function_delaunay_simplextree_interface_output(static_cast<int>(1 + input.num_function_parameters));
   }
@@ -528,6 +519,10 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
 
   {
     nanobind::gil_scoped_release release;
+    std::optional<std::lock_guard<std::mutex>> global_state_lock;
+    if (detail::function_delaunay_interface_needs_global_state_lock()) {
+      global_state_lock.emplace(detail::function_delaunay_interface_mutex());
+    }
     std::size_t num_function_parameters = 0;
     auto points = detail::make_sorted_function_delaunay_points(input, &num_function_parameters);
     const auto sorted_to_original = detail::sorted_to_original_vertex_ids<int>(points);
