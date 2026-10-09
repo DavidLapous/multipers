@@ -197,6 +197,32 @@ For theoretical references:
 
 
 
+Native input contracts
+======================
+
+Integer-valued simplex trees use real-valued arithmetic for line projection and
+real grid coordinates for coarsening. ``SimplexTreeMulti(slicer,
+num_parameters=P)`` applies the requested width to both the filtration values
+and tree metadata, including empty trees.
+
+Empty ``DelaunayLowerstar`` inputs retain one radius parameter plus the function
+parameters. Tensor outputs retain their empty filtration grids and support
+backward propagation to both input tensors when gradients are requested.
+Assigning a non-``None`` filtration grid retains that object even when every
+axis is empty; assigning ``None`` clears it.
+
+An omitted or zero-sized batch filtration in ``SimplexTreeMulti.insert_batch``
+uses minus-infinity grades. In contrast, an empty per-generator Slicer lifetime
+means absence (plus infinity); a later finite or explicitly shaped lifetime
+determines an otherwise unknown parameter width. A shaped multicritical array
+``(N, 0, P)`` retains ``P`` for its absent lifetimes. A genuinely empty Slicer
+still has the existing empty-complex parameter-width limitation.
+
+Nonempty multicritical corner sequences must have consistent row widths.
+Malformed empty-first corners such as ``[[], [0, 1]]`` raise ``ValueError``
+instead of silently dropping finite grades. Native constructors own normalized
+input data, including one-shot rows.
+
 Indices and tables
 ==================
 
