@@ -518,3 +518,12 @@ def test_integer_tree_coarsens_against_real_grid():
     squeezed = tree.grid_squeeze(filtration_grid=grid)
     np.testing.assert_array_equal(squeezed[[0]], [0])
     np.testing.assert_array_equal(squeezed.filtration_grid[0], grid[0])
+
+
+def test_normalize_filtrations_preserves_identity():
+    tree = mp.SimplexTreeMulti(num_parameters=2)
+    tree.insert([0], [2.0, 4.0])
+    tree.insert([1], [4.0, 8.0])
+    assert tree.normalize_filtrations() is tree
+    np.testing.assert_array_equal(tree[[0]], [0.0, 0.0])
+    np.testing.assert_array_equal(tree[[1]], [1.0, 1.0])

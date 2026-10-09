@@ -172,15 +172,17 @@ void bind_simplex_tree_constructors(Class& cls) {
   bind_simplextree_source_constructors<Interface>(cls, SimplexTreeDescriptorList{});
   bind_slicer_source_constructors<Interface>(cls, SlicerDescriptorList{});
 
-  cls.def("_copy_from_any",
-          [](Interface& self, nb::handle other) -> Interface& {
-            if (!try_copy_from_any<Interface>(self, other)) {
-              throw std::runtime_error("Unsupported SimplexTreeMulti input type. Got " +
-                                       std::string(nb::inst_name(other).c_str()) + ".");
-            }
-            return self;
-          })
-      .def("_from_gudhi_state", &Interface::from_std);
+  cls.def(
+         "_copy_from_any",
+         [](Interface& self, nb::handle other) -> Interface& {
+           if (!try_copy_from_any<Interface>(self, other)) {
+             throw std::runtime_error("Unsupported SimplexTreeMulti input type. Got " +
+                                      std::string(nb::inst_name(other).c_str()) + ".");
+           }
+           return self;
+         },
+         nb::rv_policy::reference_internal)
+      .def("_from_gudhi_state", &Interface::from_std, nb::rv_policy::reference_internal);
 }
 
 template <class Interface, typename Class>
@@ -236,19 +238,27 @@ void bind_simplex_tree_modifiers(Class& cls) {
   using Tensor1D = nanobind::ndarray<const double, nanobind::ndim<1>, nanobind::any_contig>;
 
   cls.def("_insert", &Interface::insert_single_simplex, "simplex"_a, "filtration"_a = nb::none())
-      .def("_insert_batch", &Interface::insert_batch)
-      .def("remove_maximal_simplex", &Interface::remove_maximal_simplex)
+      .def("_insert_batch", &Interface::insert_batch, nb::rv_policy::reference_internal)
+      .def("remove_maximal_simplex", &Interface::remove_maximal_simplex, nb::rv_policy::reference_internal)
       .def("prune_above_dimension", &Interface::prune_above_dimension, nb::call_guard<nb::gil_scoped_release>())
-      .def("expansion", &Interface::expand)
+      .def("expansion", &Interface::expand, nb::rv_policy::reference_internal)
       .def("make_filtration_non_decreasing",
            &Interface::make_filtration_non_decreasing,
            nb::call_guard<nb::gil_scoped_release>())
-      .def("_assign_filtration", &Interface::assign_simplex_filtration, "vertices"_a, "filtration"_a = nb::none())
-      .def("_normalize_filtrations_raw", &Interface::template normalize_filtration_values<Value>, "box"_a = nb::none())
-      .def("_simplify_filtration_raw", &Interface::simplify_all_filtration_values)
-      .def("_fill_lowerstar", &Interface::fill_lowerstar)
+      .def("_assign_filtration",
+           &Interface::assign_simplex_filtration,
+           nb::rv_policy::reference_internal,
+           "vertices"_a,
+           "filtration"_a = nb::none())
+      .def("_normalize_filtrations_raw",
+           &Interface::template normalize_filtration_values<Value>,
+           nb::rv_policy::reference_internal,
+           "box"_a = nb::none())
+      .def("_simplify_filtration_raw", &Interface::simplify_all_filtration_values, nb::rv_policy::reference_internal)
+      .def("_fill_lowerstar", &Interface::fill_lowerstar, nb::rv_policy::reference_internal)
       .def("_fill_distance_matrix",
            &Interface::fill_distance_matrix,
+           nb::rv_policy::reference_internal,
            "distance_matrix"_a,
            "parameter"_a,
            "node_value"_a = 0)
@@ -259,7 +269,7 @@ void bind_simplex_tree_modifiers(Class& cls) {
            nanobind::overload_cast<const std::vector<std::vector<double>>&, bool>(
                &Interface::template coarsen_on_grid<double>),
            nanobind::rv_policy::reference_internal)
-      .def("_clean_filtration_grid_raw", &Interface::clean_filtration_grid);
+      .def("_clean_filtration_grid_raw", &Interface::clean_filtration_grid, nb::rv_policy::reference_internal);
 
   cls.def("_get_to_std_state", &Interface::template project_on_line_to_std<double>)
       .def("_unsqueeze_to", &Interface::build_unsqueezed_from)
