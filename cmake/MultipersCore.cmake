@@ -35,12 +35,6 @@ multipers_add_core_object_library(
 )
 target_include_directories(multipers_core_simplextree_obj PRIVATE ${MULTIPERS_NANOBIND_INCLUDE_DIR} ${Python_INCLUDE_DIRS})
 target_link_libraries(multipers_core_simplextree_obj PRIVATE nanobind-static)
-if(NOT MSVC)
-  # -fvisibility=hidden matches nanobind's own NB_NAMESPACE hidden-visibility
-  # attribute (GCC/Clang only) and silences the resulting -Wattributes.
-  # MSVC has no equivalent flag or warning here
-  target_compile_options(multipers_core_simplextree_obj PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
-endif()
 multipers_add_core_object_library(
   multipers_core_slicer_obj1
   "${CMAKE_SOURCE_DIR}/tools/core/slicer_core1.cc"
