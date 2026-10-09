@@ -233,7 +233,7 @@ void bind_simplex_tree_properties(Class& cls) {
 template <class Interface, typename Class>
 void bind_simplex_tree_modifiers(Class& cls) {
   using Value = typename Interface::value_type;
-  using Tensor1D = nanobind::ndarray<const Value, nanobind::ndim<1>, nanobind::any_contig>;
+  using Tensor1D = nanobind::ndarray<const double, nanobind::ndim<1>, nanobind::any_contig>;
 
   cls.def("_insert", &Interface::insert_single_simplex, "simplex"_a, "filtration"_a = nb::none())
       .def("_insert_batch", &Interface::insert_batch)
@@ -253,15 +253,15 @@ void bind_simplex_tree_modifiers(Class& cls) {
            "parameter"_a,
            "node_value"_a = 0)
       .def("_squeeze_inplace",
-           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Interface::template coarsen_on_grid<Value>),
+           nanobind::overload_cast<const std::vector<Tensor1D>&, bool>(&Interface::template coarsen_on_grid<double>),
            nanobind::rv_policy::reference_internal)
       .def("_squeeze_inplace",
-           nanobind::overload_cast<const std::vector<std::vector<Value>>&, bool>(
-               &Interface::template coarsen_on_grid<Value>),
+           nanobind::overload_cast<const std::vector<std::vector<double>>&, bool>(
+               &Interface::template coarsen_on_grid<double>),
            nanobind::rv_policy::reference_internal)
       .def("_clean_filtration_grid_raw", &Interface::clean_filtration_grid);
 
-  cls.def("_get_to_std_state", &Interface::template project_on_line_to_std<>)
+  cls.def("_get_to_std_state", &Interface::template project_on_line_to_std<double>)
       .def("_unsqueeze_to", &Interface::build_unsqueezed_from)
       .def("_reconstruct_from_edge_array",
            &Interface::template build_bifiltration_from_edges<>,

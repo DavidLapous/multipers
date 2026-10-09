@@ -483,6 +483,15 @@ def test_distance_matrix_preserves_other_axis_and_fractional_vertex_values(param
     np.testing.assert_array_equal(st[[0]], expected_vertex)
 
 
+def test_integer_tree_projection_uses_real_line_arithmetic():
+    st = mp.SimplexTreeMulti(num_parameters=2, dtype=np.int32)
+    st.insert([0], [1, 0])
+    projected = st.project_on_line(
+        parameter=0, basepoint=[0, 0], direction=[2, 1]
+    )
+    assert projected.filtration([0]) == 1.0
+
+
 @pytest.mark.parametrize("num_parameters", [1, 3])
 @pytest.mark.parametrize("empty", [False, True])
 def test_slicer_to_tree_parameter_override_preserves_schema(num_parameters, empty):
@@ -500,3 +509,12 @@ def test_slicer_to_tree_parameter_override_preserves_schema(num_parameters, empt
         np.testing.assert_array_equal(grid[0], [1.0])
         if num_parameters == 3:
             np.testing.assert_array_equal(grid[1], [2.0])
+
+
+def test_integer_tree_coarsens_against_real_grid():
+    tree = mp.SimplexTreeMulti(num_parameters=1, dtype=np.int32)
+    tree.insert([0], [1])
+    grid = [np.array([0.6, 1.8])]
+    squeezed = tree.grid_squeeze(filtration_grid=grid)
+    np.testing.assert_array_equal(squeezed[[0]], [0])
+    np.testing.assert_array_equal(squeezed.filtration_grid[0], grid[0])
