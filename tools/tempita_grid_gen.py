@@ -416,9 +416,8 @@ def _render_slicer_nanobind_registry(
                 f"struct SimplexTreeDesc_{index} {{",
                 f"  using filtration_type = {simplextree['CFil']};",
                 f"  using value_type = {simplextree['CTYPE']};",
-                "  using interface_type = Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<",
-                "      filtration_type,",
-                "      value_type>;",
+                "  using interface_type = Gudhi::multi_persistence::Multi_simplex_tree_interface<",
+                "      filtration_type>;",
                 f"  static constexpr int template_id = {index};",
                 f"  static constexpr bool is_kcritical = {_bool_cpp(simplextree['IS_KCRITICAL'])};",
                 f"  static constexpr bool is_float = {_bool_cpp(simplextree['IS_FLOAT'])};",
@@ -826,7 +825,7 @@ def get_simplextree(is_kcritical, value_type, filtration_container):
         "COARSENNED_PY_CLASS_NAME": coarsenned_class_name,
         "REAL_PY_CLASS_NAME": real_class_name,
         "ST_INTERFACE": (
-            "Simplex_tree_multi_interface[" + python_filtration + ", " + ctype + "]"
+            "Multi_simplex_tree_interface[" + python_filtration + "]"
         ),
         "C2P_Fil": f"{python_filtration}_2_python",
         "P2C_Fil": f"python_2_{python_filtration}",
@@ -894,10 +893,8 @@ with (TEMPITA_CACHE_DIR / "_simplextrees_.pkl").open("wb") as f:
 
 simplextree_instantiation_types = _unique(
     [
-        "Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<"
+        "Gudhi::multi_persistence::Multi_simplex_tree_interface<"
         + st["CFil"]
-        + ", "
-        + st["CTYPE"]
         + ">"
         for st in st_list
     ]

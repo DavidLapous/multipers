@@ -18,7 +18,7 @@
 #include <CGAL/number_utils.h>
 #include <tbb/parallel_for.h>
 
-#include "Simplex_tree_multi_interface.h"
+#include "gudhi/Multi_simplex_tree_interface.h"
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "nanobind_dense_array_utils.hpp"
 
@@ -33,7 +33,7 @@ namespace mpcd {
 using SafeKernel = CGAL::Epeck_d<CGAL::Dynamic_dimension_tag>;
 using FastKernel = CGAL::Epick_d<CGAL::Dynamic_dimension_tag>;
 using SearchKernel = CGAL::Epick_d<CGAL::Dynamic_dimension_tag>;
-using AlphaTree = Gudhi::multiparameter::python_interface::interface_std;
+using AlphaTree = Gudhi::multi_persistence::Simplex_tree_std;
 
 using multipers::nanobind_dense_utils::cast_vector_from_array;
 using multipers::nanobind_helpers::is_simplextree_object;
@@ -168,14 +168,12 @@ void validate_periodic_input(
   }
 }
 
-template <typename Wrapper>
-void fill_core_delaunay_simplextree(Wrapper& wrapper,
-                                    const AlphaTree& alpha_tree,
+template <typename Tree>
+Tree fill_core_delaunay_simplextree(const AlphaTree& alpha_tree,
                                     const std::vector<double>& knn_distances,
                                     const std::vector<int64_t>& ks,
                                     double beta,
                                     bool positive_degree) {
-  using Tree = std::remove_reference_t<decltype(wrapper.tree)>;
   using Filtration = typename Tree::Filtration_value;
   using Value = typename Filtration::value_type;
 
@@ -186,11 +184,11 @@ void fill_core_delaunay_simplextree(Wrapper& wrapper,
   std::vector<int> simplex;
   std::vector<const double*> knn_rows;
 
-  wrapper.tree.clear();
-  wrapper.tree.copy_from(alpha_tree, [](const auto&) { return Filtration(); });
-  wrapper.tree.set_num_parameters(2);
+  Tree st(alpha_tree, [](const auto&) { return Filtration(); });
+  st.set_num_parameters(2);
 
   const Value top_degree = static_cast<Value>(ks.back());
+  
   for (size_t k_index = 0; k_index < num_ks; ++k_index) {
     second_parameter_values[k_index] = positive_degree
                                          ? top_degree - static_cast<Value>(ks[k_index])
@@ -198,7 +196,7 @@ void fill_core_delaunay_simplextree(Wrapper& wrapper,
   }
   auto source_it = alpha_tree.complex_simplex_range().begin();
   auto source_end = alpha_tree.complex_simplex_range().end();
-  auto target_it = wrapper.tree.complex_simplex_range().begin();
+  auto target_it = st.complex_simplex_range().begin();
   for (; source_it != source_end; ++source_it, ++target_it) {
     simplex.clear();
     knn_rows.clear();
@@ -213,17 +211,33 @@ void fill_core_delaunay_simplextree(Wrapper& wrapper,
     for (int vertex : simplex) {
       knn_rows.push_back(knn_distances.data() + static_cast<size_t>(vertex) * num_ks);
     }
+
+    size_t written = 0;
+
     for (size_t k_index = 0; k_index < num_ks; ++k_index) {
       Value max_knn_distance = static_cast<Value>(0);
       for (const double* row : knn_rows) {
         max_knn_distance = std::max(max_knn_distance, static_cast<Value>(row[k_index]));
       }
-      filtration_values[2 * k_index] = std::max(alpha, beta_value * max_knn_distance);
-      filtration_values[2 * k_index + 1] = second_parameter_values[k_index];
+
+      // monotonous
+      const Value radius = std::max(alpha, beta_value * max_knn_distance);
+
+      // Equal radius: the larger k has the smaller second coordinate,
+      // so overwrite the previous generator of this plateau.
+      if (written != 0 && filtration_values[2 * (written - 1)] == radius) {
+        --written;
+      }
+
+      filtration_values[2 * written] = radius;
+      filtration_values[2 * written + 1] = second_parameter_values[k_index];
+      ++written;
     }
-    wrapper.tree.get_filtration_value(*target_it) = Filtration(filtration_values.begin(), filtration_values.end(), 2);
+
+    st.get_filtration_value(*target_it) =
+        Filtration(filtration_values.begin(), filtration_values.begin() + 2 * written, 2);
   }
-  wrapper.tree.clear_filtration();
+  return st;
 }
 
 template <typename Kernel>
@@ -239,13 +253,15 @@ void build_core_delaunay_dispatch(nb::object& out,
   auto alpha_tree = build_alpha_tree<Kernel>(point_cloud, max_alpha_square, exact);
   auto knn_distances = compute_knn_selected(knn_point_cloud, ks);
   visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) {
+    typename Desc::interface_type::Base st;
     if constexpr (Desc::is_kcritical && std::is_same_v<typename Desc::value_type, double>) {
       nb::gil_scoped_release release;
-      fill_core_delaunay_simplextree(wrapper, alpha_tree, knn_distances, ks, beta, positive_degree);
+      st = fill_core_delaunay_simplextree<typename Desc::interface_type::Base>(alpha_tree, knn_distances, ks, beta, positive_degree);
     } else {
       throw nb::type_error(
           "build_core_delaunay_simplextree expects a float64 k-critical SimplexTreeMulti target.");
     }
+    wrapper = std::move(st);
   });
 }
 
@@ -296,14 +312,15 @@ void build_periodic_core_delaunay_dispatch(
     knn_distances = compute_periodic_knn_selected(ordered_points, ks, domain);
   }
   visit_simplextree_wrapper(out, [&]<typename Desc>(auto& wrapper) {
+    typename Desc::interface_type::Base st;
     if constexpr (Desc::is_kcritical && std::is_same_v<typename Desc::value_type, double>) {
       nb::gil_scoped_release release;
-      fill_core_delaunay_simplextree(
-          wrapper, alpha_tree, knn_distances, ks, beta, positive_degree);
+      st = fill_core_delaunay_simplextree<typename Desc::interface_type::Base>(alpha_tree, knn_distances, ks, beta, positive_degree);
     } else {
       throw nb::type_error(
           "build_core_delaunay_simplextree expects a float64 k-critical SimplexTreeMulti target.");
     }
+    wrapper = std::move(st);
   });
 }
 

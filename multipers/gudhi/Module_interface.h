@@ -176,7 +176,7 @@ class Module_interface {
       nanobind::gil_scoped_release release;
       for (const auto &summand : module_) {
         const auto &births = summand.get_upset();
-        GUDHI_CHECK(births.num_parameters() == numParam,
+        GUDHI_CHECK(static_cast<int>(births.num_parameters()) == numParam,
                     std::runtime_error("Upset number of parameters is not coherent."));
         for (int p = 0; p < numParam; ++p) {
           for (std::size_t g = 0; g < static_cast<std::size_t>(summand.get_number_of_birth_corners()); ++g) {
@@ -188,7 +188,7 @@ class Module_interface {
           }
         }
         const auto &deaths = summand.get_downset();
-        GUDHI_CHECK(deaths.num_parameters() == numParam,
+        GUDHI_CHECK(static_cast<int>(deaths.num_parameters()) == numParam,
                     std::runtime_error("Downset number of parameters is not coherent."));
         for (int p = 0; p < numParam; ++p) {
           for (std::size_t g = 0; g < static_cast<std::size_t>(summand.get_number_of_death_corners()); ++g) {

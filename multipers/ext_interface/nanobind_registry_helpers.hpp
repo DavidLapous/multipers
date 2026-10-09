@@ -5,9 +5,9 @@
 #include <optional>
 #include <utility>
 
-#include "nanobind_wrapper_types.hpp"
 #include "nanobind_object_utils.hpp"
 #include "../gudhi/Slicer_interface.h"
+#include "../gudhi/Persistence_slices_interface.h"  // for _slicer_nanobind_registry.inc
 
 namespace nb = nanobind;
 
@@ -25,9 +25,6 @@ struct type_list {};
 using multipers::nanobind_utils::has_template_id;
 using multipers::nanobind_utils::maybe_template_id_of;
 using multipers::nanobind_utils::template_id_of;
-
-template <typename Desc>
-using simplextree_wrapper_t = PySimplexTree<typename Desc::interface_type, typename Desc::value_type>;
 
 template <typename Func>
 decltype(auto) dispatch_slicer_by_template_id(int template_id, Func&& func) {
@@ -98,7 +95,7 @@ decltype(auto) visit_const_slicer_wrapper(const nb::handle& input, Func&& func) 
 template <typename Func>
 decltype(auto) visit_simplextree_wrapper(const nb::handle& input, Func&& func) {
   return dispatch_simplextree_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    auto& wrapper = nb::cast<simplextree_wrapper_t<Desc>&>(input);
+    auto& wrapper = nb::cast<typename Desc::interface_type&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -106,7 +103,7 @@ decltype(auto) visit_simplextree_wrapper(const nb::handle& input, Func&& func) {
 template <typename Func>
 decltype(auto) visit_const_simplextree_wrapper(const nb::handle& input, Func&& func) {
   return dispatch_simplextree_by_template_id(template_id_of(input), [&]<typename Desc>() -> decltype(auto) {
-    const auto& wrapper = nb::cast<const simplextree_wrapper_t<Desc>&>(input);
+    const auto& wrapper = nb::cast<const typename Desc::interface_type&>(input);
     return std::forward<Func>(func).template operator()<Desc>(wrapper);
   });
 }
@@ -184,7 +181,7 @@ inline bool is_simplextree_object(const nb::handle& input) {
     return false;
   }
   return dispatch_simplextree_by_template_id(
-      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<simplextree_wrapper_t<Desc>>(input); });
+      *template_id, [&]<typename Desc>() -> bool { return nb::isinstance<typename Desc::interface_type>(input); });
 }
 
 }  // namespace multipers::nanobind_helpers

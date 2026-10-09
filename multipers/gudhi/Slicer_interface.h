@@ -47,11 +47,10 @@
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/numpy_utils.h>
 
-#include "Simplex_tree_multi_interface.h"
+#include "Multi_simplex_tree_interface.h"
 #include "python_interfaces/construction_utils.h"
 #include "interface_helpers.h"
 #include "interface_helper_structs.h"
-#include "ext_interface/nanobind_wrapper_types.hpp"
 #include "graph_mph0/slicer_backend.h"
 
 namespace Gudhi {
@@ -129,14 +128,15 @@ class Slicer_interface {
     _validate_graph_shape();
   }
 
-  // use Simplex_tree_multi_interface<OtherMultiFiltrationValue> instead once the weird wrapper thing is removed
   template <class OtherMultiFiltrationValue>
-  Slicer_interface(multipers::nanobind_helpers::PySimplexTree<
-                   Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<OtherMultiFiltrationValue>,
-                   typename OtherMultiFiltrationValue::value_type> &simplexTree)
-      : slicer_(), filtrationGrid_(simplexTree.filtration_grid), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
+  Slicer_interface(Multi_simplex_tree_interface<OtherMultiFiltrationValue> &simplexTree)
+      : slicer_(),
+        filtrationGrid_(simplexTree.get_filtration_grid()),
+        presDegree_(-1),
+        isMinPres_(false),
+        isMinRes_(false) {
     nanobind::gil_scoped_release release;
-    slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree.tree);
+    slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree);
     _validate_graph_shape();
   }
 
@@ -148,75 +148,23 @@ class Slicer_interface {
     _validate_graph_shape();
   }
 
-  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
-                   const std::vector<Index> &generator_dimensions,
-                   const std::vector<std::vector<value_type>> &filtration_values)
-      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
-    static_assert(MultiFiltrationValue::ensures_1_criticality(),
-                  "Slicer constructor only available for 1-critical filtration values. Use sequence[sequence[U]] for "
-                  "filtration value type.");
-    _build_slicer(generator_maps, generator_dimensions, filtration_values);
-  }
-
-  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
-                   const std::vector<Index> &generator_dimensions,
-                   const std::vector<std::vector<std::vector<value_type>>> &filtration_values)
-      : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
-    static_assert(!MultiFiltrationValue::ensures_1_criticality(),
-                  "Slicer constructor only available for k-critical filtration values. Use "
-                  "sequence[sequence[sequence[U]]] for filtration value type.");
-    _build_slicer(generator_maps, generator_dimensions, filtration_values);
-  }
-
-  template <typename I>
-  Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
-                   Tensor1D<I> generator_dimensions,
+  // as generator_maps and generator_dimensions are moved afterwards, the copies here made by nanobind are
+  // fine and won't cost more than passing ndarrays
+  Slicer_interface(std::vector<std::vector<Index>> generator_maps,
+                   std::vector<Dimension> generator_dimensions,
                    nanobind::object filtration_values)
       : slicer_(), filtrationGrid_(nanobind::none()), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
-    detail::_require_cpu_array(generator_dimensions);
-    if (nanobind::ndarray<> values; nanobind::try_cast(filtration_values, values, false))
-      detail::_require_cpu_array(values);
-    if constexpr (MultiFiltrationValue::ensures_1_criticality()) {
-      auto cast_as_vector = [&]() -> void {
-        std::vector<std::vector<value_type>> val;
-        if (!nanobind::try_cast<std::vector<std::vector<value_type>>>(filtration_values, val))
-          throw std::invalid_argument("Filtration values must be either iterable[iterable[U]] or ndarray[U, ndim=2].");
-        _build_slicer(generator_maps, Numpy_span(generator_dimensions), val);
-      };
-      auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
-        if (Tensor2D<U> val; nanobind::try_cast<Tensor2D<U>>(filtration_values, val, false)) {
-          detail::_require_cpu_array(val);
-          _build_slicer(generator_maps, Numpy_span(generator_dimensions), Numpy_2d_span(val));
-          return;
-        }
-        cast_as_vector();
-      };
-      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, []() -> void {}, cast_as_vector);
-    } else {
-      auto cast_as_vector = [&]() -> void {
-        std::vector<std::vector<std::vector<value_type>>> val;
-        if (!nanobind::try_cast<std::vector<std::vector<std::vector<value_type>>>>(filtration_values, val))
-          throw std::invalid_argument(
-              "Filtration values must be either iterable[iterable[iterable[U]]] or iterable[ndarray[U, ndim=2]].");
-        _build_slicer(generator_maps, Numpy_span(generator_dimensions), val);
-      };
-      auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
-        if (std::vector<Tensor2D<U>> val; nanobind::try_cast<std::vector<Tensor2D<U>>>(filtration_values, val, false)) {
-          std::optional<std::size_t> numParameters;
-          for (const auto &grades : val) {
-            detail::_require_cpu_array(grades);
-            if (numParameters && *numParameters != grades.shape(1))
-              throw std::invalid_argument("Filtration values must have a common parameter count.");
-            numParameters = grades.shape(1);
-          }
-          // Tensors have to stay alive to use Numpy_2d_span, so val is necessary
-          std::vector<Numpy_2d_span<U>> fils(val.begin(), val.end());
-          _build_slicer(generator_maps, Numpy_span(generator_dimensions), fils, numParameters);
-          return;
-        }
-        cast_as_vector();
-      };
-      detail::_dispatch_dtype(filtration_values, cast_first_as_tensor_then_as_vector, cast_as_vector, cast_as_vector);
+    // only used if the arrays in filtration_values are empty, so the filtration values in the container will be
+    // filled with values with one generator, this number of parameters and values at +/-inf depending on Co/non-Co.
+    // should in reality never really happen
+    // could also be forbidden
+    const int defaultNumberOfParameters = 2;
+    std::vector<MultiFiltrationValue> fils =
+        detail::_cast_to_filtration_value_array<MultiFiltrationValue>(filtration_values, defaultNumberOfParameters);
+    {
+      nanobind::gil_scoped_release release;
+      Complex cpx(std::move(generator_maps), std::move(generator_dimensions), std::move(fils));
+      slicer_ = Slicer_t(std::move(cpx));
     }
   }
 
@@ -329,12 +277,8 @@ class Slicer_interface {
     return *this;
   }
 
-  // use Simplex_tree_multi_interface<OtherMultiFiltrationValue> instead once the weird wrapper thing is removed
   template <class OtherMultiFiltrationValue>
-  Slicer_interface &copy(
-      multipers::nanobind_helpers::PySimplexTree<
-          Gudhi::multiparameter::python_interface::Simplex_tree_multi_interface<OtherMultiFiltrationValue>,
-          typename OtherMultiFiltrationValue::value_type> &other) {
+  Slicer_interface &copy(Multi_simplex_tree_interface<OtherMultiFiltrationValue> &other) {
     *this = Slicer_interface(other);
     return *this;
   }
@@ -353,7 +297,7 @@ class Slicer_interface {
 
     // Empty axes still own an explicit parameter schema; only an empty outer
     // container clears the grid. Validation throws before replacing the owner.
-    if (_verify_grid_validity(grid) || nanobind::len(grid) != 0) {
+    if (detail::_verify_grid_validity(grid) || nanobind::len(grid) != 0) {
       filtrationGrid_ = grid;
       return;
     }
@@ -1033,49 +977,6 @@ class Slicer_interface {
     }
   }
 
-  template <typename U>
-  static bool _check_has_sorted_rows(Tensor2D<U> grid) {
-    auto view = grid.view();
-    std::size_t rows = view.shape(0), cols = view.shape(1);
-
-    for (std::size_t i = 0; i < rows; ++i)
-      for (std::size_t j = 1; j < cols; ++j)
-        if (view(i, j - 1) > view(i, j))
-          throw nanobind::type_error("Expected grid rows to be sorted by increasing values.");
-
-    return rows != 0 && cols != 0;  // returns false if the grid is valid but empty
-  }
-
-  static bool _check_has_sorted_rows(nanobind::iterable grid) {
-    bool hasNonEmptyRows = false;
-    for (nanobind::handle row : grid) {
-      if (!nanobind::isinstance<nanobind::iterable>(row))
-        throw nanobind::type_error("Expected each row to be iterable.");
-
-      bool hasPrev = false;
-      nanobind::object prev;
-
-      for (nanobind::handle elem : nanobind::cast<nanobind::iterable>(row)) {
-        nanobind::object val =
-            nanobind::hasattr(elem, "item") ? elem.attr("item")() : nanobind::borrow<nanobind::object>(elem);
-        if (!nanobind::isinstance<nanobind::int_>(val) && !nanobind::isinstance<nanobind::float_>(val))
-          throw nanobind::type_error("Expected arithmetic elements in the grid.");
-
-        if (hasPrev) {
-          int less = PyObject_RichCompareBool(val.ptr(), prev.ptr(), Py_LT);
-          if (less < 0) throw nanobind::python_error();
-          if (less) throw nanobind::type_error("Expected rows of the grid to be ordered by increasing value.");
-        }
-
-        prev = std::move(val);
-        hasPrev = true;
-      }
-      hasNonEmptyRows |= hasPrev;
-    }
-
-    return hasNonEmptyRows;  // returns false if the grid is valid but empty
-  }
-
   template <class B, class D, class F>
   void _build_slicer(const B &boundaries,
                      const D &dimensions,
@@ -1207,25 +1108,6 @@ class Slicer_interface {
     return are_equal(transA, transB);
   }
 
-  [[nodiscard]] bool _verify_grid_validity(nanobind::object grid) const {
-    // special case of ndarray is more efficient then general nanobind::iterable
-    if (nanobind::ndarray<> arr; nanobind::try_cast<nanobind::ndarray<>>(grid, arr, false)) {
-      if (arr.ndim() != 2) throw nanobind::type_error("Expected a 2D grid.");
-      if (arr.device_type() == nanobind::device::cpu::value) {
-        return detail::_dispatch_dtype(
-            grid,
-            [&]<typename U>() { return _check_has_sorted_rows<U>(Tensor2D<U>(arr)); },
-            []() { return true; },
-            []() -> bool { throw nanobind::type_error("Unsupported element type."); });
-      }
-    }
-
-    if (!nanobind::isinstance<nanobind::iterable>(grid))
-      throw nanobind::type_error("Expected a grid as a 2D array or an iterable of iterables.");
-
-    return _check_has_sorted_rows(nanobind::cast<nanobind::iterable>(grid));
-  }
-
   void _get_cycle_boundary(std::vector<std::vector<Index>> &outCycle, const std::vector<Index> &cycle, int dim) const {
     if (cycle.size() == 0) throw std::runtime_error("A cycle should not be empty");
     if (generatorBasis_.has_value() && dim == generatorBasis_->degree) {
@@ -1274,9 +1156,9 @@ class Slicer_interface {
           if (bar.size() != 2) throw std::invalid_argument("`barcode_indices` has to be of shape (*, 2).");
           auto barDim = bar[0];
           auto barIdx = bar[1];
-          if (barDim < 0 || barDim >= sizeByDim.size())
+          if (barDim < 0 || barDim >= static_cast<std::int64_t>(sizeByDim.size()))
             throw std::invalid_argument("Given dimension in `idx` is not valid or out of bound.");
-          if (barIdx < 0 || barIdx >= cycleIdx[barDim].size())
+          if (barIdx < 0 || barIdx >= static_cast<std::int64_t>(cycleIdx[barDim].size()))
             throw std::invalid_argument("Given bar index in `idx` is not valid or out of bound.");
           ++sizeByDim[barDim];
         }
@@ -1417,6 +1299,8 @@ inline SlicerInterface deserialize_slicer_from_python(nanobind::tuple state) {
           state[2], data, false))
     throw std::invalid_argument("Given state to deserialize is not compatible with current multipers version.");
   // The upstream reader is unbounded, so validate a stable snapshot in its current native format first.
+  // TODO: not so sure why a copy is needed here (or in the other deserialize methods)? The chance of data race once
+  // the gil is released in a serialization buffer is very unlikely and data can be a lot to copy...
   std::vector<char> buffer(data.size());
   if (!buffer.empty()) std::memcpy(buffer.data(), data.data(), buffer.size());
   SlicerInterface slicer;

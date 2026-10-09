@@ -6,7 +6,6 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <mutex>
@@ -248,7 +247,7 @@ inline bool fill_flat_filtration(const std::vector<std::pair<int, double> >& cri
   return !flat.empty();
 }
 
-template <typename Tree, typename Filtration, typename VertexRange>
+template <typename Filtration, typename Tree, typename VertexRange>
 inline bool emit_kcritical_simplex(Tree& tree,
                                    const VertexRange& vertices,
                                    const std::vector<std::pair<int, double> >& critical_grades,
@@ -258,10 +257,8 @@ inline bool emit_kcritical_simplex(Tree& tree,
     return false;
   }
   const Filtration filtration(flat_filtration.begin(), flat_filtration.end(), 2);
-  using BaseTree = typename Tree::Base_tree;
-  auto& base_tree = static_cast<BaseTree&>(tree);
   auto result =
-      base_tree.insert_simplex_and_subfaces(BaseTree::Filtration_maintenance::LOWER_EXISTING, vertices, filtration);
+      tree.insert_simplex_and_subfaces(Tree::Base::Filtration_maintenance::LOWER_EXISTING, vertices, filtration);
   return result.first != tree.null_simplex();
 }
 
@@ -350,8 +347,8 @@ deg_rips_stats degree_rips_build_simplextree(SimplexTreeWrapper& wrapper,
                                                    options.use_domination_for_whole_edge_removal,
                                                    options.use_domination_for_edge_copy_removal);
 
-    wrapper.tree.clear();
-    wrapper.tree.set_num_parameters(2);
+    wrapper.clear();
+    wrapper.set_num_parameters(2);
     bool inserted = false;
     std::vector<double> flat_filtration;
     std::vector<std::pair<int, double> > critical_grades;
@@ -362,8 +359,8 @@ deg_rips_stats degree_rips_build_simplextree(SimplexTreeWrapper& wrapper,
       critical_grades.clear();
       critical_grades.reserve(critical_values_of_vertices[static_cast<std::size_t>(i)].size());
       deg_rips::filter_critical_grades(critical_values_of_vertices[static_cast<std::size_t>(i)], critical_grades);
-      const bool did_insert = detail::emit_kcritical_simplex<decltype(wrapper.tree), Filtration>(
-          wrapper.tree, vertex_simplex, critical_grades, requested_degrees, flat_filtration);
+      const bool did_insert = detail::emit_kcritical_simplex<Filtration>(
+          wrapper, vertex_simplex, critical_grades, requested_degrees, flat_filtration);
       inserted |= did_insert;
       stats.inserted_vertices += did_insert ? 1 : 0;
     }
@@ -386,13 +383,13 @@ deg_rips_stats degree_rips_build_simplextree(SimplexTreeWrapper& wrapper,
       for (const auto& copy : curr.second) {
         critical_grades.emplace_back(-static_cast<int>(copy.g.x), static_cast<double>(copy.g.y));
       }
-      const bool did_insert = detail::emit_kcritical_simplex<decltype(wrapper.tree), Filtration>(
-          wrapper.tree, edge_simplex, critical_grades, requested_degrees, flat_filtration);
+      const bool did_insert = detail::emit_kcritical_simplex<Filtration>(
+          wrapper, edge_simplex, critical_grades, requested_degrees, flat_filtration);
       inserted |= did_insert;
       stats.inserted_edges += did_insert ? 1 : 0;
     }
     if (inserted) {
-      wrapper.tree.clear_filtration();
+      wrapper.clear_filtration();
     }
     return stats;
   } else {

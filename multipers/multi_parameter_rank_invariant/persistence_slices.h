@@ -21,16 +21,16 @@ struct Simplex_tree_float : Gudhi::Simplex_tree_options_default {  // smaller si
 // using Simplex_tree_float = Simplex_tree_options_fast_persistence;
 
 using Gudhi::multi_persistence::Box;
-using Simplex_tree_std = Simplex_tree<Simplex_tree_float>;
+using Simplex_tree_std_float = Simplex_tree<Simplex_tree_float>;
 
-using Barcode = std::vector<std::pair<Simplex_tree_std::Filtration_value, Simplex_tree_std::Filtration_value>>;
+using Barcode = std::vector<std::pair<Simplex_tree_std_float::Filtration_value, Simplex_tree_std_float::Filtration_value>>;
 
-inline Barcode compute_dgm(Simplex_tree_std &st, int degree) {
+inline Barcode compute_dgm(Simplex_tree_std_float &st, int degree) {
   st.initialize_filtration(true);
   constexpr int coeff_field_characteristic = 11;
-  constexpr Simplex_tree_std::Filtration_value min_persistence = 0;
+  constexpr Simplex_tree_std_float::Filtration_value min_persistence = 0;
   bool persistence_dim_max = st.dimension() == degree;
-  Gudhi::persistent_cohomology::Persistent_cohomology<Simplex_tree_std, Gudhi::persistent_cohomology::Field_Zp> pcoh(
+  Gudhi::persistent_cohomology::Persistent_cohomology<Simplex_tree_std_float, Gudhi::persistent_cohomology::Field_Zp> pcoh(
       st, persistence_dim_max);
   pcoh.init_coefficients(coeff_field_characteristic);
   pcoh.compute_persistent_cohomology(min_persistence);
