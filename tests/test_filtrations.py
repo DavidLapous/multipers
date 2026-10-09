@@ -233,3 +233,46 @@ def test_coredelaunay_matches_python_reference(positive_degree):
     assert got_filtrations.keys() == ref_filtrations.keys()
     for simplex in got_filtrations:
         assert np.allclose(got_filtrations[simplex], ref_filtrations[simplex])
+
+
+@pytest.mark.skipif(
+    not _function_delaunay_interface.available(),
+    reason="Skipped test because the function_delaunay backend is unavailable.",
+)
+@pytest.mark.parametrize("num_function_parameters", [1, 2])
+def test_empty_numpy_delaunay_lowerstar_preserves_parameter_schema(num_function_parameters):
+    points = np.empty((0, 2), dtype=np.float64)
+    function = np.empty((0, num_function_parameters), dtype=np.float64)
+    st = mpf.DelaunayLowerstar(points, function)
+    assert st.num_simplices == 0
+    assert st.num_parameters == 1 + num_function_parameters
+
+
+@pytest.mark.skipif(
+    not _function_delaunay_interface.available(),
+    reason="Skipped test because the function_delaunay backend is unavailable.",
+)
+@pytest.mark.parametrize("num_function_parameters", [1, 2])
+@pytest.mark.parametrize("requires_grad", [False, True])
+def test_empty_torch_delaunay_lowerstar_preserves_parameter_schema(
+    num_function_parameters, requires_grad
+):
+    torch = pytest.importorskip("torch")
+    points = torch.empty((0, 2), dtype=torch.float64, requires_grad=requires_grad)
+    function = torch.empty(
+        (0, num_function_parameters), dtype=torch.float64, requires_grad=requires_grad
+    )
+    st = mpf.DelaunayLowerstar(points, function)
+    assert st.num_simplices == 0
+    assert st.num_parameters == 1 + num_function_parameters
+    if requires_grad:
+        grid = st.filtration_grid
+        assert len(grid) == st.num_parameters
+        assert all(axis.numel() == 0 and axis.requires_grad for axis in grid)
+        sum(axis.sum() for axis in grid).backward()
+        assert points.grad is not None and points.grad.shape == points.shape
+        assert function.grad is not None and function.grad.shape == function.shape
+        st.filtration_grid = grid
+        assert st.filtration_grid is grid
+        st.filtration_grid = None
+        assert st.filtration_grid is None

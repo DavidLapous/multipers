@@ -85,8 +85,7 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
 #if !MULTIPERS_DISABLE_FUNCTION_DELAUNAY_INTERFACE
 namespace multipers {
 
-using function_delaunay_simplextree_filtration =
-    tmp_interface::Multi_parameter_filtration<double, false, !false>;
+using function_delaunay_simplextree_filtration = tmp_interface::Multi_parameter_filtration<double, false, !false>;
 using function_delaunay_simplextree_interface_output =
     Gudhi::multi_persistence::Multi_simplex_tree_interface<function_delaunay_simplextree_filtration>;
 
@@ -468,7 +467,9 @@ function_delaunay_interface_output<index_type> function_delaunay_interface(
   }
 
   if (input.num_points == 0) {
-    return function_delaunay_interface_output<index_type>();
+    function_delaunay_interface_output<index_type> out;
+    out.num_parameters = 1 + input.num_function_parameters;
+    return out;
   }
 
   auto points = detail::make_sorted_function_delaunay_points(input);
@@ -519,7 +520,9 @@ function_delaunay_simplextree_interface_output function_delaunay_simplextree_int
     }
   }
 
-  if (input.num_points == 0) return {};
+  if (input.num_points == 0) {
+    return function_delaunay_simplextree_interface_output(static_cast<int>(1 + input.num_function_parameters));
+  }
 
   function_delaunay_simplextree_interface_output::Base outSt;
 

@@ -281,7 +281,6 @@ def _delaunay_filtration(tree, points, function, metadata, api):
 
     support_groups, simplices, owners, faces = metadata
     if not simplices:
-        tree.set_num_parameter(1 + function.shape[1])
         tree.filtration_grid = [
             api.sum(points, axis=1),
             *[function[:, i] for i in range(function.shape[1])],
