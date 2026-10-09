@@ -125,6 +125,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       nanobind::gil_scoped_release release;
       Base::clear();
       st = build_simplex_tree_from_complex<Options>(other.get_filtered_complex(), maxDim, numParam);
+      st.set_num_parameters(numParam >= 0 ? numParam : other.get_number_of_parameters());
     }
     *this = std::move(st);
   }

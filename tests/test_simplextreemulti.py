@@ -481,3 +481,22 @@ def test_distance_matrix_preserves_other_axis_and_fractional_vertex_values(param
     expected_vertex[parameter] = 0.5
     np.testing.assert_array_equal(st[[0, 1]], expected_edge)
     np.testing.assert_array_equal(st[[0]], expected_vertex)
+
+
+@pytest.mark.parametrize("num_parameters", [1, 3])
+@pytest.mark.parametrize("empty", [False, True])
+def test_slicer_to_tree_parameter_override_preserves_schema(num_parameters, empty):
+    st = mp.SimplexTreeMulti(num_parameters=2)
+    if not empty:
+        st.insert([0, 1], [1.0, 2.0])
+    out = mp.SimplexTreeMulti(mp.Slicer(st), num_parameters=num_parameters)
+    assert out.num_parameters == num_parameters
+    assert out.num_simplices == st.num_simplices
+    if not empty:
+        expected = [1.0] if num_parameters == 1 else [1.0, 2.0, np.inf]
+        np.testing.assert_array_equal(out[[0, 1]], expected)
+        grid = out.get_filtration_grid()
+        assert len(grid) == num_parameters
+        np.testing.assert_array_equal(grid[0], [1.0])
+        if num_parameters == 3:
+            np.testing.assert_array_equal(grid[1], [2.0])
