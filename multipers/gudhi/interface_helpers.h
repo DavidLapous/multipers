@@ -21,6 +21,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -549,6 +551,7 @@ inline Filtration_value _cast_to_filtration_value(nanobind::ndarray<const U, nan
 template <class Filtration_value>
 inline Filtration_value _cast_to_filtration_value(nanobind::object values, int defaultNumParam) {
   using value_type = typename Filtration_value::value_type;
+  if (nanobind::ndarray<> array; nanobind::try_cast(values, array, false)) _require_cpu_array(array);
 
   auto cast_as_vector = [&]() -> Filtration_value {
     std::vector<value_type> gens;
@@ -604,7 +607,10 @@ inline Filtration_value _cast_to_filtration_value(nanobind::object values, int d
   return detail::_dispatch_dtype(
       values,
       cast_first_as_tensor_then_as_vector,
-      [defaultNumParam]() -> Filtration_value { return Filtration_value(defaultNumParam); },
+      [&]() -> Filtration_value {
+        if (_sequence_size(values) != 0) return cast_as_vector();
+        return Filtration_value(defaultNumParam);
+      },
       cast_as_vector);
 }
 
@@ -628,7 +634,8 @@ inline std::vector<Filtration_value> _cast_to_filtration_value_array(
     throw std::invalid_argument("An array of 1-critical filtration values have to be two dimensional.");
   } else {
     auto view = values.view();
-    std::vector<Filtration_value> out(view.shape(0), Filtration_value(view.shape(2)));
+    std::vector<Filtration_value> out(view.shape(0), Filtration_value::inf(view.shape(2)));
+    if (view.shape(1) == 0) return out;
     for (std::size_t i = 0; i < view.shape(0); ++i) {
       out[i].set_num_generators(view.shape(1));
       for (std::size_t g = 0; g < view.shape(1); ++g) {
@@ -642,17 +649,40 @@ inline std::vector<Filtration_value> _cast_to_filtration_value_array(
 
 template <class Filtration_value>
 inline std::vector<Filtration_value> _cast_to_filtration_value_array(nanobind::object values, int defaultNumParam) {
+  if (nanobind::ndarray<> array; nanobind::try_cast(values, array, false)) _require_cpu_array(array);
   auto cast_as_vector = [&]() -> std::vector<Filtration_value> {
     std::vector<Filtration_value> out;
     out.reserve(detail::_sequence_size(values));
-    int numParam = -1;
+    std::optional<std::size_t> numParam;
     detail::_for_each_sequence_item(values, [&](nanobind::object item) {
-      Filtration_value f = _cast_to_filtration_value<Filtration_value>(item, defaultNumParam);
-      if (numParam != -1 && static_cast<int>(f.num_parameters()) != numParam)
-        throw std::invalid_argument("Inconsistent number of parameters in filtration value array.");
-      numParam = f.num_parameters();
+      nanobind::ndarray<> array;
+      const bool isArray = nanobind::try_cast(item, array, false);
+      if (isArray) _require_cpu_array(array);
+      const bool unknownEmptyWidth = isArray ? array.ndim() == 1 && array.shape(0) == 0 : _sequence_size(item) == 0;
+      auto f = [&]() -> Filtration_value {
+        if (unknownEmptyWidth) return Filtration_value::inf(0);
+        if constexpr (!Filtration_value::ensures_1_criticality()) {
+          if (isArray && array.ndim() == 2 && array.shape(0) == 0) {
+            if (array.shape(1) > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+              throw std::overflow_error("Filtration parameter count exceeds int capacity.");
+            return Filtration_value::inf(static_cast<int>(array.shape(1)));
+          }
+        }
+        return _cast_to_filtration_value<Filtration_value>(item, defaultNumParam);
+      }();
+      if (!unknownEmptyWidth) {
+        if (numParam && f.num_parameters() != *numParam)
+          throw std::invalid_argument("Inconsistent number of parameters in filtration value array.");
+        numParam = f.num_parameters();
+      }
       out.push_back(std::move(f));
     });
+    // Empty lifetimes are absent, not the standalone value's default minus infinity.
+    const auto width = numParam.value_or(static_cast<std::size_t>(defaultNumParam));
+    if (width > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+      throw std::overflow_error("Filtration parameter count exceeds int capacity.");
+    for (auto &f : out)
+      if (f.num_parameters() == 0 && width != 0) f = Filtration_value::inf(static_cast<int>(width));
     return out;
   };
   auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> std::vector<Filtration_value> {
@@ -666,11 +696,7 @@ inline std::vector<Filtration_value> _cast_to_filtration_value_array(nanobind::o
     }
     return cast_as_vector();
   };
-  return detail::_dispatch_dtype(
-      values,
-      cast_first_as_tensor_then_as_vector,
-      []() -> std::vector<Filtration_value> { return {}; },
-      cast_as_vector);
+  return detail::_dispatch_dtype(values, cast_first_as_tensor_then_as_vector, cast_as_vector, cast_as_vector);
 }
 
 }  // namespace detail

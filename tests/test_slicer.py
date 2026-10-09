@@ -114,6 +114,92 @@ def test_make_filtration_non_decreasing_propagates_transitively():
     assert np.array_equal(got, expected)
 
 
+@pytest.mark.parametrize("lifetime", [[[], [0, 1]], [[0], [1, 2]]])
+def test_slicer_rejects_ragged_multicritical_corners(lifetime):
+    slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64, kcritical=True)
+    with pytest.raises(ValueError, match="Ragged array"):
+        slicer_type([[]], [0], [lifetime])
+
+    # A preceding finite lifetime must not change corner-width validation.
+    with pytest.raises(ValueError, match="Ragged array"):
+        slicer_type([[], []], [0, 0], [[[2, 3]], lifetime])
+
+    st = mp.SimplexTreeMulti(num_parameters=2, dtype=np.float64, kcritical=True)
+    with pytest.raises(ValueError, match="Ragged array"):
+        st.insert([0], lifetime)
+
+
+@pytest.mark.parametrize("kcritical", [False, True])
+@pytest.mark.parametrize("width", [2, 3])
+@pytest.mark.parametrize("empty_array", [False, True])
+def test_slicer_infers_width_after_absent_first_lifetime(kcritical, width, empty_array):
+    slicer_type = mp.Slicer(
+        return_type_only=True, dtype=np.float64, kcritical=kcritical
+    )
+    finite = np.arange(width, dtype=np.float64)
+    if kcritical:
+        finite = finite[None, :]
+    absent = np.empty((0,), dtype=np.float64) if empty_array else []
+    slicer = slicer_type([[], []], [0, 0], [absent, finite])
+
+    assert len(slicer) == 2
+    assert slicer.num_parameters == width
+    assert np.isposinf(np.asarray(slicer.get_filtration(0))).all()
+    assert np.array_equal(np.asarray(slicer.get_filtration(1)), finite)
+    finite[...] = -100
+    assert np.array_equal(
+        np.asarray(slicer.get_filtration(1)),
+        np.arange(width, dtype=np.float64)[None, :]
+        if kcritical
+        else np.arange(width, dtype=np.float64),
+    )
+
+
+def test_slicer_constructor_retains_generated_first_child():
+    later = np.asarray([3.0, 4.0])
+
+    class FirstLifetime(list):
+        def __del__(self):
+            later[:] = -100
+
+    def lifetimes():
+        yield FirstLifetime([1.0, 2.0])
+        yield later
+
+    slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64)
+    slicer = slicer_type(([] for _ in range(2)), (0 for _ in range(2)), lifetimes())
+    assert np.array_equal(np.asarray(slicer.get_filtration(0)), [1, 2])
+    assert np.array_equal(np.asarray(slicer.get_filtration(1)), [3, 4])
+    assert np.array_equal(later, [-100, -100])
+
+
+def test_slicer_shaped_empty_multicritical_lifetimes_remain_absent():
+    slicer_type = mp.Slicer(return_type_only=True, dtype=np.float64, kcritical=True)
+    slicer = slicer_type([[], []], [0, 0], np.empty((2, 0, 3), dtype=np.float64))
+    assert len(slicer) == 2
+    assert slicer.num_parameters == 3
+    for index in range(2):
+        assert np.isposinf(np.asarray(slicer.get_filtration(index))).all()
+
+    slicer = slicer_type(
+        [[], []], [0, 0], [np.empty((0, 3), dtype=np.float64), [[1, 2, 3]]]
+    )
+    assert slicer.num_parameters == 3
+    assert np.isposinf(np.asarray(slicer.get_filtration(0))).all()
+    assert np.array_equal(np.asarray(slicer.get_filtration(1)), [[1, 2, 3]])
+
+
+@pytest.mark.parametrize("kcritical", [False, True])
+def test_empty_standalone_filtration_keeps_tree_default(kcritical):
+    st = mp.SimplexTreeMulti(num_parameters=2, dtype=np.float64, kcritical=kcritical)
+    st.insert([0], [1, 2])
+    st.insert([1], [])
+    assert np.isneginf(np.asarray(st[[1]])).all()
+    st._assign_filtration(np.asarray([0], dtype=np.int32), [])
+    assert np.isneginf(np.asarray(st[[0]])).all()
+    assert st.num_parameters == 2
+
+
 def test_rank_custom():
     B = [[], [0], [0], [0], [0]]
     F = np.asarray([[0, 0], [2, 1], [1, 2], [3, 0], [0, 3]], dtype=np.uint32)
