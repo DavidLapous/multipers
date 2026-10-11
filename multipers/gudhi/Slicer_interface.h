@@ -92,7 +92,6 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = other.get_slicer();
     generatorBasis_ = other.get_generator_basis();
-    _validate_graph_shape();
   }
 
   Slicer_interface(Slicer_interface &&other) noexcept = default;
@@ -114,7 +113,6 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = other.get_slicer();
     generatorBasis_ = other.get_generator_basis();
-    _validate_graph_shape();
   }
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
@@ -125,9 +123,7 @@ class Slicer_interface {
         generatorBasis_(other.get_generator_basis()),
         presDegree_(other.get_pres_degree()),
         isMinPres_(other.is_min_pres()),
-        isMinRes_(other.is_min_res()) {
-    _validate_graph_shape();
-  }
+        isMinRes_(other.is_min_res()) {}
 
   // use Simplex_tree_multi_interface<OtherMultiFiltrationValue> instead once the weird wrapper thing is removed
   template <class OtherMultiFiltrationValue>
@@ -137,7 +133,6 @@ class Slicer_interface {
       : slicer_(), filtrationGrid_(simplexTree.filtration_grid), presDegree_(-1), isMinPres_(false), isMinRes_(false) {
     nanobind::gil_scoped_release release;
     slicer_ = Gudhi::multi_persistence::build_slicer_from_simplex_tree<Slicer_t>(simplexTree.tree);
-    _validate_graph_shape();
   }
 
   Slicer_interface(const std::string &path, int shiftDimension, bool isRivetCompatible = false, bool isReversed = false)
@@ -145,7 +140,6 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     slicer_ = Gudhi::multi_persistence::build_slicer_from_scc_file<Slicer_t>(
         path, isRivetCompatible, isReversed, shiftDimension);
-    _validate_graph_shape();
   }
 
   Slicer_interface(const std::vector<std::vector<Index>> &generator_maps,
@@ -298,7 +292,6 @@ class Slicer_interface {
         vertices.emplace_back(rowView.begin(), rowView.end());
       }
       slicer_ = Gudhi::multi_persistence::build_slicer_from_bitmap<Slicer_t>(vertices, shape);
-      _validate_graph_shape();
     }
   }
 
@@ -1084,57 +1077,13 @@ class Slicer_interface {
     nanobind::gil_scoped_release release;
     if (boundaries.size() != dimensions.size() || boundaries.size() != filValues.size())
       throw std::invalid_argument("There must be one boundary and filtration value per dimension.");
-    _validate_graph_shape(boundaries, dimensions);
-    if constexpr (std::is_arithmetic_v<std::remove_cv_t<std::remove_reference_t<decltype(filValues[0][0])>>>) {
-      Complex cpx(boundaries, dimensions, filValues);
-      slicer_ = Slicer_t(std::move(cpx));
-    } else {
-      // The upstream range constructor infers width only from the first lifetime,
-      // and drops every lifetime when that first row is empty.
-      if (!numParameters) {
-        for (std::size_t i = 0; i < filValues.size(); ++i) {
-          const auto &lifetime = filValues[i];
-          if (lifetime.size() != 0) {
-            numParameters = lifetime[0].size();
-            break;
-          }
-        }
-      }
-      const std::size_t width = numParameters.value_or(0);
-      if (width > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-        throw std::overflow_error("Filtration parameter count exceeds int capacity.");
-      typename Complex::Filtration_value_container ownedFiltrations;
-      ownedFiltrations.reserve(filValues.size());
-      for (std::size_t i = 0; i < filValues.size(); ++i) {
-        const auto &lifetime = filValues[i];
-        auto &filtration = ownedFiltrations.emplace_back(MultiFiltrationValue::inf(static_cast<int>(width)));
-        for (std::size_t corner = 0; corner < lifetime.size(); ++corner) {
-          const auto &grade = lifetime[corner];
-          if (grade.size() != width)
-            throw std::invalid_argument("Filtration values must have a common parameter count.");
-          filtration.add_generator(grade.begin(), grade.end());
-        }
-      }
-      typename Complex::Boundary_container ownedBoundaries;
-      ownedBoundaries.reserve(boundaries.size());
-      for (std::size_t i = 0; i < boundaries.size(); ++i) {
-        const auto &boundary = boundaries[i];
-        ownedBoundaries.emplace_back(boundary.begin(), boundary.end());
-      }
-      typename Complex::Dimension_container ownedDimensions(dimensions.begin(), dimensions.end());
-      Complex cpx(std::move(ownedBoundaries), std::move(ownedDimensions), std::move(ownedFiltrations));
-      slicer_ = Slicer_t(std::move(cpx));
+    for (std::size_t i = 0; i < dimensions.size(); ++i) {
+      if (!Gudhi::python::_is_and_fits_in_int<Dimension>(dimensions[i]))
+        throw std::invalid_argument("Generator dimensions must be representable in the native dimension type.");
     }
+    Complex cpx(boundaries, dimensions, filValues, numParameters);
+    slicer_ = Slicer_t(std::move(cpx));
   }
-
-  template <class B, class D>
-  static void _validate_graph_shape(const B &boundaries, const D &dimensions) {
-    if constexpr (requires { PersistenceAlgorithm::is_graph; }) {
-      if constexpr (PersistenceAlgorithm::is_graph) multipers::graph_mph0::validate_graph_shape(dimensions, boundaries);
-    }
-  }
-
-  void _validate_graph_shape() const { _validate_graph_shape(slicer_.get_boundaries(), slicer_.get_dimensions()); }
 
   template <class OtherMultiFiltrationValue, class OtherPersistenceAlgorithm>
   bool _has_same_filtration_values(
