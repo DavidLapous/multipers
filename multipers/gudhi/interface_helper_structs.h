@@ -30,11 +30,11 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 
+#include <gudhi/Simplex_tree.h>
 #include <gudhi/Slicer.h>
 #include <gudhi/Multi_persistence/utils.h>
 #include <python_interfaces/construction_utils.h>
 
-#include "ext_interface/nanobind_wrapper_types.hpp"
 #include "interface_helpers.h"
 
 namespace Gudhi {
@@ -442,18 +442,16 @@ struct Compacted_squeezed_filtration_grid {
     return usedCoordinates;
   }
 
-  template <typename Interface, typename T>
-  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(
-      multipers::nanobind_helpers::PySimplexTree<Interface, T>& simplexTree) {
-    if (simplexTree.tree.num_parameters() <= 0)
+  template <class Options>
+  static std::vector<std::vector<Index>> collect_used_squeezed_coordinates(const Simplex_tree<Options>& simplexTree) {
+    if (simplexTree.num_parameters() <= 0)
       throw std::runtime_error("Number of parameters should not be negative or zero.");
-    std::size_t numParam = simplexTree.tree.num_parameters();
+    std::size_t numParam = simplexTree.num_parameters();
     std::vector<std::vector<Index>> usedCoordinates(numParam);
     {
       nanobind::gil_scoped_release release;
-      for (auto simplex_handle : simplexTree.tree.complex_simplex_range()) {
-        auto pair = simplexTree.tree.get_simplex_and_filtration(simplex_handle);
-        const auto& f = *pair.second;
+      for (auto simplex_handle : simplexTree.complex_simplex_range()) {
+        const auto& f = simplexTree.get_filtration_value(simplex_handle);
         for (std::size_t g = 0; g < f.num_generators(); ++g) {
           for (std::size_t p = 0; p < numParam; ++p) {
             usedCoordinates[p].push_back(python::_cast_to_int<Index>(

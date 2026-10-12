@@ -15,7 +15,7 @@ def _canonical_degree_rips_simplextree(st_multi):
         return st_multi
     out = cls()
     out._copy_from_any(st_multi)
-    out.filtration_grid = st_multi.filtration_grid
+    # out.filtration_grid = st_multi.filtration_grid
     return out
 
 

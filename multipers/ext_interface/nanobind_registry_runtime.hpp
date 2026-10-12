@@ -105,18 +105,12 @@ nanobind::object build_canonical_contiguous_f64_slicer_object_from_complex(const
 }
 
 nanobind::object astype_slicer_to_template_id(const nanobind::object& source, int template_id);
-nanobind::object astype_simplextree_to_template_id(const nanobind::object& source, int template_id);
 nanobind::object astype_slicer_to_original_type(const nanobind::object& original, const nanobind::object& source);
-nanobind::object astype_simplextree_to_original_type(const nanobind::object& original, const nanobind::object& source);
 nanobind::object rewrap_slicer_output_to_original_type(const nanobind::object& original,
                                                        const nanobind::object& canonical_target,
                                                        const nanobind::object& output);
-void copy_into_canonical_contiguous_f64_slicer(const nanobind::handle& input, canonical_contiguous_f64_slicer& output);
 nanobind::object ensure_canonical_contiguous_f64_slicer_object(const nanobind::object& input);
-void copy_into_canonical_contiguous_i32_slicer(const nanobind::handle& input, canonical_contiguous_i32_slicer& output);
 nanobind::object ensure_canonical_contiguous_i32_slicer_object(const nanobind::object& input);
-void copy_into_canonical_kcontiguous_f64_slicer(const nanobind::handle& input,
-                                                canonical_kcontiguous_f64_slicer& output);
 nanobind::object ensure_canonical_kcontiguous_f64_slicer_object(const nanobind::object& input);
 
 template <typename Func>
