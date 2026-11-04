@@ -8,21 +8,20 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <gudhi/multiparameter_module_approximation.h>
+#include <gudhi/Multi_persistence/tensor_helpers.h>
+#include <gudhi/hilbert_signed_measure.h>
+#include <gudhi/rank_invariant.h>
+#include <python_interfaces/numpy_utils.h>
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "gudhi/Multi_persistence/Box.h"
 #include "gudhi/Module_interface.h"
-#include <python_interfaces/numpy_utils.h>
-#include "multi_parameter_rank_invariant/hilbert_function.h"
-#include "multi_parameter_rank_invariant/rank_invariant.h"
-#include <gudhi/multiparameter_module_approximation.h>
 #include "nanobind_array_utils.hpp"
 #include "nanobind_dense_array_utils.hpp"
 #include "nanobind_object_utils.hpp"
@@ -49,30 +48,6 @@ using multipers::nanobind_helpers::is_slicer_object;
 using multipers::nanobind_utils::owned_array;
 
 inline bool has_slicer_template_id(const nb::handle& input) { return is_slicer_object(input); }
-
-inline nb::tuple signed_measure_to_python2(const signed_measure_type& sm, size_t width) {
-  std::vector<indices_type> flat_pts(sm.first.begin(), sm.first.end());
-  // flat_pts.reserve(sm.first.size() * width);
-  // for (const auto& row : sm.first) {
-  //   flat_pts.insert(flat_pts.end(), row.begin(), row.end());
-  // }
-  std::vector<tensor_dtype> weights(sm.second.begin(), sm.second.end());
-  return nb::make_tuple(nb::cast(owned_array<indices_type>(std::move(flat_pts), {sm.first.size() / width, width})),
-                        nb::cast(owned_array<tensor_dtype>(std::move(weights), {sm.second.size()})));
-}
-
-inline nb::tuple signed_measure_to_python(
-    const std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>>& sm,
-    size_t width) {
-  std::vector<indices_type> flat_pts;
-  flat_pts.reserve(sm.first.size() * width);
-  for (const auto& row : sm.first) {
-    flat_pts.insert(flat_pts.end(), row.begin(), row.end());
-  }
-  std::vector<tensor_dtype> weights(sm.second.begin(), sm.second.end());
-  return nb::make_tuple(nb::cast(owned_array<indices_type>(std::move(flat_pts), {sm.first.size(), width})),
-                        nb::cast(owned_array<tensor_dtype>(std::move(weights), {sm.second.size()})));
-}
 
 template <typename... Ds>
 inline nb::object get_slicer_class(type_list<Ds...>,
@@ -113,98 +88,130 @@ inline nb::object get_slicer_class(type_list<Ds...>,
 
 template <typename... Ds>
 inline nb::tuple compute_hilbert_signed_measure(type_list<Ds...>,
-                                         nb::handle slicer,
-                                         std::vector<indices_type>& container,
-                                         const std::vector<indices_type>& full_shape,
-                                         const std::vector<indices_type>& degrees,
-                                         size_t width,
-                                         bool zero_pad,
-                                         indices_type n_jobs,
-                                         bool verbose,
-                                         bool ignore_inf) {
+                                                nb::handle slicer,
+                                                const std::vector<indices_type>& full_shape,
+                                                const std::vector<indices_type>& degrees,
+                                                bool zero_pad,
+                                                indices_type n_jobs,
+                                                bool verbose,
+                                                bool ignore_inf) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
+  for (const auto extent : full_shape) {
+    if (extent <= indices_type{zero_pad ? 1 : 0}) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    }
+  }
   return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
     auto& wrapper = nb::cast<typename D::interface&>(slicer);
-    signed_measure_type sm;
+    if (wrapper.get_number_of_parameters() < 2)
+      throw std::logic_error("Not implemented for " + std::to_string(wrapper.get_number_of_parameters()) +
+                             " < 2 parameters.");
+    if (full_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]]
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    Gudhi::multi_persistence::Signed_measure<indices_type, tensor_dtype> sm;
     {
-      nb::gil_scoped_release release;
-      sm = Gudhi::multiparameter::hilbert_function::get_hilbert_signed_measure(
-          wrapper.get_slicer(), container.data(), full_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
+      nanobind::gil_scoped_release release;
+      sm = Gudhi::multi_persistence::compute_hilbert_signed_measure<tensor_dtype, indices_type>(
+          wrapper.get_slicer(), full_shape, degrees, zero_pad, ignore_inf, verbose, n_jobs);
     }
-    return signed_measure_to_python2(sm, width);
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
   });
 }
 
 template <typename... Ds>
 inline nb::tuple compute_hilbert_signed_measure_sparse(type_list<Ds...>,
-                                                nb::handle slicer,
-                                                const std::vector<indices_type>& grid_shape,
-                                                const std::vector<indices_type>& degrees,
-                                                size_t width,
-                                                bool zero_pad,
-                                                indices_type n_jobs,
-                                                bool ignore_inf) {
+                                                       nb::handle slicer,
+                                                       const std::vector<indices_type>& grid_shape,
+                                                       const std::vector<indices_type>& degrees,
+                                                       bool zero_pad,
+                                                       indices_type n_jobs,
+                                                       bool verbose,
+                                                       bool ignore_inf) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
+  for (const auto extent : grid_shape) {
+    if (extent <= indices_type{zero_pad ? 1 : 0}) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid sparse Hilbert grid shape.");
+    }
+  }
   return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
     auto& wrapper = nb::cast<typename D::interface&>(slicer);
-    std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>> sm;
+    if (wrapper.get_number_of_parameters() < 2)
+      throw std::logic_error("Not implemented for " + std::to_string(wrapper.get_number_of_parameters()) +
+                             " < 2 parameters.");
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]]
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    Gudhi::multi_persistence::Signed_measure<indices_type, tensor_dtype> sm;
     {
       nb::gil_scoped_release release;
-      sm = Gudhi::multiparameter::hilbert_function::compute_hilbert_signed_measure_sparse_python(
-          wrapper.get_slicer(), grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
+      sm = Gudhi::multi_persistence::compute_sparse_hilbert_signed_measure<tensor_dtype, indices_type>(
+          wrapper.get_slicer(), grid_shape, degrees, zero_pad, ignore_inf, verbose, n_jobs);
     }
-    return signed_measure_to_python(sm, width);
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
   });
 }
 
 template <typename... Ds>
 inline nb::tuple compute_rank_tensor(type_list<Ds...>,
-                              nb::handle slicer,
-                              std::vector<tensor_dtype>& container,
-                              const std::vector<indices_type>& full_shape,
-                              const std::vector<indices_type>& degrees,
-                              size_t total,
-                              indices_type n_jobs,
-                              bool ignore_inf) {
+                                     nb::handle slicer,
+                                     const std::vector<indices_type>& grid_shape,
+                                     const std::vector<indices_type>& degrees,
+                                     indices_type n_jobs,
+                                     bool ignore_inf) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
   return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
     auto& wrapper = nb::cast<typename D::interface&>(slicer);
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid fixed rank tensor shape dispatch.");
+    }
+    std::pair<std::vector<tensor_dtype>, std::vector<indices_type>> tensor;
     {
       nb::gil_scoped_release release;
-      Gudhi::multiparameter::rank_invariant::compute_rank_invariant_python(
-          wrapper.get_slicer(), container.data(), full_shape, degrees, n_jobs, ignore_inf);
+      tensor = Gudhi::multi_persistence::compute_rank_invariant<tensor_dtype, indices_type>(
+          wrapper.get_slicer(), grid_shape, degrees, ignore_inf, n_jobs);
     }
-    return nb::make_tuple(nb::cast(owned_array<tensor_dtype>(std::move(container), {total})), nb::cast(full_shape));
+    return nanobind::make_tuple(_wrap_as_numpy_array(std::move(tensor.first), tensor.first.size()),
+                                _wrap_as_numpy_array(std::move(tensor.second), tensor.second.size()));
   });
 }
 
 template <typename... Ds>
 inline nb::tuple compute_rank_signed_measure_sparse(type_list<Ds...>,
-                                             nb::handle slicer,
-                                             const std::vector<indices_type>& grid_shape,
-                                             const std::vector<indices_type>& degrees,
-                                             size_t width,
-                                             bool zero_pad,
-                                             indices_type n_jobs,
-                                             bool ignore_inf) {
+                                                    nb::handle slicer,
+                                                    const std::vector<indices_type>& grid_shape,
+                                                    const std::vector<indices_type>& degrees,
+                                                    bool zero_pad,
+                                                    indices_type n_jobs,
+                                                    bool ignore_inf) {
   if (!has_slicer_template_id(slicer)) {
     throw std::runtime_error("Unsupported slicer type.");
   }
   return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nb::tuple {
     auto& wrapper = nb::cast<typename D::interface&>(slicer);
-    std::pair<std::vector<std::vector<indices_type>>, std::vector<tensor_dtype>> sm;
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid fixed rank tensor shape dispatch.");
+    }
+    Gudhi::multi_persistence::Signed_measure<indices_type, tensor_dtype> sm;
     {
       nb::gil_scoped_release release;
-      sm = Gudhi::multiparameter::rank_invariant::compute_rank_signed_measure_sparse_python(
-          wrapper.get_slicer(), grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
+      sm = Gudhi::multi_persistence::compute_sparse_rank_signed_measure<tensor_dtype, indices_type>(
+          wrapper.get_slicer(), grid_shape, degrees, zero_pad, ignore_inf, n_jobs);
     }
-    return signed_measure_to_python(sm, width);
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
   });
 }
 

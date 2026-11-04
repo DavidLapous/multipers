@@ -648,7 +648,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
       Signed_measure<I, U> sm;
       {
         nanobind::gil_scoped_release release;
-        sm = get_euler_signed_measure(*this, grid_shape, zero_pad, true, verbose);
+        sm = get_euler_signed_measure<I, U>(*this, grid_shape, zero_pad, true, verbose);
       }
       return nanobind::make_tuple(
           _wrap_as_numpy_array(

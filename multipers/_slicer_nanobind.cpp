@@ -30,10 +30,6 @@ using namespace nb::literals;
 
 namespace mpnb {
 
-using tensor_dtype = int32_t;
-using indices_type = int32_t;
-using signed_measure_type = std::pair<std::vector<indices_type>, std::vector<tensor_dtype>>;
-
 using multipers::nanobind_dense_utils::matrix_from_array;
 using multipers::nanobind_dense_utils::vector_from_array;
 using multipers::nanobind_helpers::SlicerDescriptorList;
@@ -138,26 +134,8 @@ NB_MODULE(_slicer_nanobind, m) {
          bool ignore_inf) {
         auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
         auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        std::vector<mpnb::indices_type> full_shape;
-        full_shape.reserve(grid_shape.size() + 1);
-        full_shape.push_back((mpnb::indices_type)degrees.size());
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        size_t width = grid_shape.size() + 1;
-        size_t total = 1;
-        for (mpnb::indices_type value : full_shape) {
-          total *= (size_t)value;
-        }
-        std::vector<mpnb::tensor_dtype> container(total, 0);
-        return mpnb::compute_hilbert_signed_measure(mpnb::SlicerDescriptorList{},
-                                                    slicer,
-                                                    container,
-                                                    full_shape,
-                                                    degrees,
-                                                    width,
-                                                    zero_pad,
-                                                    n_jobs,
-                                                    verbose,
-                                                    ignore_inf);
+        return mpnb::compute_hilbert_signed_measure(
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
       },
       "slicer"_a,
       "grid_shape"_a,
@@ -174,19 +152,20 @@ NB_MODULE(_slicer_nanobind, m) {
          nb::handle degrees_handle,
          bool zero_pad,
          mpnb::indices_type n_jobs,
-         bool ignore_inf) {
+         bool ignore_inf,
+         bool verbose) {
         auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
         auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        const size_t width = grid_shape.size() + 1;
         return mpnb::compute_hilbert_signed_measure_sparse(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, width, zero_pad, n_jobs, ignore_inf);
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
       },
       "slicer"_a,
       "grid_shape"_a,
       "degrees"_a,
       "zero_pad"_a = false,
       "n_jobs"_a = 0,
-      "ignore_inf"_a = true);
+      "ignore_inf"_a = true,
+      "verbose"_a = false);
 
   m.def(
       "_compute_rank_tensor",
@@ -197,18 +176,8 @@ NB_MODULE(_slicer_nanobind, m) {
          bool ignore_inf) {
         auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
         auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        std::vector<mpnb::indices_type> full_shape;
-        full_shape.reserve(1 + 2 * grid_shape.size());
-        full_shape.push_back((mpnb::indices_type)degrees.size());
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        full_shape.insert(full_shape.end(), grid_shape.begin(), grid_shape.end());
-        size_t total = 1;
-        for (mpnb::indices_type value : full_shape) {
-          total *= (size_t)value;
-        }
-        std::vector<mpnb::tensor_dtype> container(total, 0);
         return mpnb::compute_rank_tensor(
-            mpnb::SlicerDescriptorList{}, slicer, container, full_shape, degrees, total, n_jobs, ignore_inf);
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, n_jobs, ignore_inf);
       },
       "slicer"_a,
       "grid_shape"_a,
@@ -226,9 +195,8 @@ NB_MODULE(_slicer_nanobind, m) {
          bool ignore_inf) {
         auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
         auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        const size_t width = 1 + 2 * grid_shape.size();
         return mpnb::compute_rank_signed_measure_sparse(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, width, zero_pad, n_jobs, ignore_inf);
+            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
       },
       "slicer"_a,
       "grid_shape"_a,
