@@ -5,36 +5,27 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "ext_interface/backend_log_policy.hpp"
 #include "graph_mph0/nanobind_interface.hpp"
-#include "gudhi/Multi_persistence/Box.h"
-#include <python_interfaces/numpy_utils.h>
-#include <gudhi/multiparameter_module_approximation.h>
-#include "nanobind_dense_array_utils.hpp"
 #include "nanobind_object_utils.hpp"
 
 #include "_slicer_nanobind.h"
-#include "_slicer_algorithms_nanobind.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mpnb {
 
-using multipers::nanobind_dense_utils::matrix_from_array;
-using multipers::nanobind_dense_utils::vector_from_array;
 using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
-using multipers::nanobind_utils::cast_vector;
+using multipers::nanobind_utils::lowercase_copy;
+using multipers::nanobind_utils::numpy_dtype_name;
 
 template <typename Desc>
 inline constexpr bool is_kcritical_contiguous_f64_matrix_slicer_v =
@@ -101,9 +92,43 @@ static_assert(!std::is_void_v<KcriticalContiguousF64MatrixSlicerDesc>,
 static_assert(kcritical_contiguous_f64_matrix_slicer_desc_impl<SlicerDescriptorList>::matches == 1,
               "k-critical contiguous float64 matrix slicer template must be unique.");
 
+template <typename... Ds>
+inline nb::object get_slicer_class(type_list<Ds...>,
+                                   bool is_vineyard,
+                                   bool is_k_critical,
+                                   const nb::handle& dtype,
+                                   std::string col,
+                                   std::string pers_backend,
+                                   std::string filtration_container) {
+  std::string dtype_name = numpy_dtype_name(dtype);
+  col = lowercase_copy(std::move(col));
+  pers_backend = lowercase_copy(std::move(pers_backend));
+  filtration_container = lowercase_copy(std::move(filtration_container));
+  bool matched = false;
+  nb::object result;
+  (
+      [&]<typename D>() {
+        if (!matched && D::is_vine == is_vineyard && D::is_kcritical == is_k_critical && D::dtype_name == dtype_name &&
+            lowercase_copy(std::string(D::column_type)) == col &&
+            lowercase_copy(std::string(D::backend_type)) == pers_backend &&
+            lowercase_copy(std::string(D::filtration_container)) == filtration_container) {
+          result = nb::borrow<nb::object>(nb::type<typename D::interface>());
+          matched = true;
+        }
+      }.template operator()<Ds>(),
+      ...);
+  if (!matched) {
+    throw nb::value_error("Unimplemented slicer combination.");
+  }
+  return result;
+}
+
 }  // namespace mpnb
 
 NB_MODULE(_slicer_nanobind, m) {
+  using tensor_dtype = int32_t;
+  using indices_type = int32_t;
+
   m.doc() = "nanobind slicer bindings";
   nb::list available_slicers;
 
@@ -123,149 +148,69 @@ NB_MODULE(_slicer_nanobind, m) {
         "full_resolution"_a,
         "finite_grid_masks"_a = nb::none());
 
-  m.def(
-      "_compute_hilbert_signed_measure",
-      [](nb::handle slicer,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         bool zero_pad,
-         mpnb::indices_type n_jobs,
-         bool verbose,
-         bool ignore_inf) {
-        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
-        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        return mpnb::compute_hilbert_signed_measure(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
-      },
-      "slicer"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0,
-      "verbose"_a = false,
-      "ignore_inf"_a = true);
+  m.def("_compute_hilbert_signed_measure",
+        &mpnb::compute_hilbert_signed_measure<tensor_dtype, indices_type>,
+        "slicer"_a,
+        "grid_shape"_a,
+        "degrees"_a,
+        "zero_pad"_a = false,
+        "n_jobs"_a = 0,
+        "verbose"_a = false,
+        "ignore_inf"_a = true);
 
-  m.def(
-      "_compute_hilbert_signed_measure_sparse",
-      [](nb::handle slicer,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         bool zero_pad,
-         mpnb::indices_type n_jobs,
-         bool ignore_inf,
-         bool verbose) {
-        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
-        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        return mpnb::compute_hilbert_signed_measure_sparse(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, verbose, ignore_inf);
-      },
-      "slicer"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0,
-      "ignore_inf"_a = true,
-      "verbose"_a = false);
+  m.def("_compute_hilbert_signed_measure_sparse",
+        &mpnb::compute_hilbert_signed_measure_sparse<tensor_dtype, indices_type>,
+        "slicer"_a,
+        "grid_shape"_a,
+        "degrees"_a,
+        "zero_pad"_a = false,
+        "n_jobs"_a = 0,
+        "ignore_inf"_a = true,
+        "verbose"_a = false);
 
-  m.def(
-      "_compute_rank_tensor",
-      [](nb::handle slicer,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         mpnb::indices_type n_jobs,
-         bool ignore_inf) {
-        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
-        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        return mpnb::compute_rank_tensor(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, n_jobs, ignore_inf);
-      },
-      "slicer"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "n_jobs"_a = 0,
-      "ignore_inf"_a = true);
+  m.def("_compute_rank_tensor",
+        &mpnb::compute_rank_tensor<tensor_dtype, indices_type>,
+        "slicer"_a,
+        "grid_shape"_a,
+        "degrees"_a,
+        "n_jobs"_a = 0,
+        "ignore_inf"_a = true);
 
-  m.def(
-      "_compute_rank_signed_measure_sparse",
-      [](nb::handle slicer,
-         nb::handle grid_shape_handle,
-         nb::handle degrees_handle,
-         bool zero_pad,
-         mpnb::indices_type n_jobs,
-         bool ignore_inf) {
-        auto grid_shape = mpnb::cast_vector<mpnb::indices_type>(grid_shape_handle);
-        auto degrees = mpnb::cast_vector<mpnb::indices_type>(degrees_handle);
-        return mpnb::compute_rank_signed_measure_sparse(
-            mpnb::SlicerDescriptorList{}, slicer, grid_shape, degrees, zero_pad, n_jobs, ignore_inf);
-      },
-      "slicer"_a,
-      "grid_shape"_a,
-      "degrees"_a,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0,
-      "ignore_inf"_a = true);
+  m.def("_compute_rank_signed_measure_sparse",
+        &mpnb::compute_rank_signed_measure_sparse<tensor_dtype, indices_type>,
+        "slicer"_a,
+        "grid_shape"_a,
+        "degrees"_a,
+        "zero_pad"_a = false,
+        "n_jobs"_a = 0,
+        "ignore_inf"_a = true);
 
-  m.def(
-      "_compute_module_approximation_from_slicer",
-      [](nb::handle slicer,
-         nb::ndarray<nb::numpy, const double, nb::ndim<1>, nb::c_contig> direction,
-         double max_error,
-         nb::ndarray<nb::numpy, const double, nb::ndim<2>, nb::c_contig> box_array,
-         bool threshold,
-         bool complete,
-         bool verbose,
-         int n_jobs) {
-        if (box_array.shape(0) != 2 || (direction.shape(0) != 0 && box_array.shape(1) != direction.shape(0))) {
-          throw nb::value_error("box must have shape (2, num_parameters).");
-        }
-        auto direction_values = mpnb::vector_from_array(direction);
-        auto box_values = mpnb::matrix_from_array(box_array);
-        Gudhi::multi_persistence::Box<double> box(box_values[0], box_values[1]);
-        return mpnb::compute_module_approximation_from_slicer(mpnb::SlicerDescriptorList{},
-                                                              slicer,
-                                                              direction_values,
-                                                              max_error,
-                                                              box,
-                                                              threshold,
-                                                              complete,
-                                                              verbose,
-                                                              n_jobs);
-      },
-      "slicer"_a,
-      "direction"_a,
-      "max_error"_a,
-      "box"_a,
-      "threshold"_a = false,
-      "complete"_a = true,
-      "verbose"_a = false,
-      "n_jobs"_a = -1);
+  m.def("_compute_module_approximation_from_slicer",
+        &mpnb::compute_module_approximation_from_slicer<double>,
+        "slicer"_a,
+        "direction"_a,
+        "max_error"_a,
+        "box"_a,
+        "threshold"_a = false,
+        "complete"_a = true,
+        "verbose"_a = false,
+        "n_jobs"_a = -1);
 
-  m.def(
-      "_get_slicer_class",
-      [](bool is_vineyard,
-         bool is_k_critical,
-         nb::handle dtype,
-         std::string col,
-         std::string pers_backend,
-         std::string filtration_container) {
-        return mpnb::get_slicer_class(mpnb::SlicerDescriptorList{},
-                                      is_vineyard,
-                                      is_k_critical,
-                                      dtype,
-                                      std::move(col),
-                                      std::move(pers_backend),
-                                      std::move(filtration_container));
-      },
-      "is_vineyard"_a,
-      "is_k_critical"_a,
-      "dtype"_a,
-      "col"_a,
-      "pers_backend"_a,
-      "filtration_container"_a);
-
-  // m.def("_get_slicer_class_from_template_id", &mpnb::get_slicer_class_from_template_id, "template_id"_a);
-
-  // mpnb::bind_bitmap_builders(mpnb::SlicerDescriptorList{}, m);
+  m.def("_get_slicer_class",
+        [](bool is_vineyard,
+           bool is_k_critical,
+           nb::handle dtype,
+           std::string col,
+           std::string pers_backend,
+           std::string filtration_container) {
+          return mpnb::get_slicer_class(mpnb::SlicerDescriptorList{},
+                                        is_vineyard,
+                                        is_k_critical,
+                                        dtype,
+                                        std::move(col),
+                                        std::move(pers_backend),
+                                        std::move(filtration_container));
+        });
 
   m.attr("available_slicers") = available_slicers;
 }
