@@ -53,6 +53,10 @@ else()
   )
 endif()
 
+if(MSVC)
+  target_compile_definitions(multipers_project_options INTERFACE __TBB_NO_IMPLICIT_LINKAGE=1)
+endif()
+
 function(multipers_apply_common_build_flags target_name)
   target_link_libraries(
     ${target_name}

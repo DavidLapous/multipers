@@ -33,6 +33,14 @@ multipers_add_core_object_library(
   "${CMAKE_SOURCE_DIR}/tools/core/simplextree_core.cc"
   multipers_core_filtrations_obj
 )
+target_include_directories(multipers_core_simplextree_obj PRIVATE ${MULTIPERS_NANOBIND_INCLUDE_DIR} ${Python_INCLUDE_DIRS})
+target_link_libraries(multipers_core_simplextree_obj PRIVATE nanobind-static)
+if(NOT MSVC)
+  # -fvisibility=hidden matches nanobind's own NB_NAMESPACE hidden-visibility
+  # attribute (GCC/Clang only) and silences the resulting -Wattributes.
+  # MSVC has no equivalent flag or warning here
+  target_compile_options(multipers_core_simplextree_obj PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
+endif()
 multipers_add_core_object_library(
   multipers_core_slicer_obj1
   "${CMAKE_SOURCE_DIR}/tools/core/slicer_core1.cc"
@@ -102,6 +110,8 @@ target_link_libraries(
     multipers::backend_hera
     multipers::tbb
     multipers::openmp
+    Python::Module
+    nanobind-static
 )
 set_target_properties(multipers_core_shared PROPERTIES OUTPUT_NAME "multipers_core")
 set_target_properties(
@@ -110,6 +120,10 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${MULTIPERS_COMPILED_MODULES_DIR}"
 )
+if(APPLE)
+  # belt and braces if Python::Module doesn't add it on the CMake version
+  target_link_options(multipers_core_shared PRIVATE "LINKER:-undefined,dynamic_lookup")
+endif()
 if(WIN32)
   set_target_properties(multipers_core_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()

@@ -1,62 +1,42 @@
+#include <cstdint>
+#include <utility>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 
-#include <cstdint>
-#include <memory>
-#include <utility>
-#include <vector>
+#include <gudhi/multi_simplex_tree_helpers.h>
+#include <python_interfaces/numpy_utils.h>
 
 #include "ext_interface/nanobind_registry_helpers.hpp"
-#include "nanobind_array_utils.hpp"
-#include "nanobind_dense_array_utils.hpp"
-#include "multi_parameter_rank_invariant/function_rips.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace mpfrn {
 
-using tensor_dtype = int32_t;
-using indices_type = int32_t;
-
-using multipers::nanobind_dense_utils::cast_vector_from_array;
-using multipers::nanobind_helpers::is_simplextree_object;
 using multipers::nanobind_helpers::visit_simplextree_wrapper;
-using multipers::nanobind_helpers::visit_const_simplextree_wrapper;
-using multipers::nanobind_utils::owned_array;
 
-using degree_rips_interface = Gudhi::multiparameter::function_rips::interface_multi;
+using value_type = typename Gudhi::multi_persistence::Simplex_tree_std::Filtration_value;
+using flat_multifiltration = multipers::tmp_interface::Degree_rips_bifiltration<value_type>;
+using degree_rips_interface = Gudhi::multi_persistence::Multi_simplex_tree_interface<flat_multifiltration>;
 
-template <typename Func>
-decltype(auto) visit_simplextree(const nb::handle& simplextree, Func&& func) {
-  if (!is_simplextree_object(simplextree)) {
-    throw nb::type_error("Expected a multipers SimplexTreeMulti.");
+template <typename simplex_tree_type>
+inline void get_degree_rips_st_python(const char *buffer_start,
+                                      const std::size_t buffer_size,
+                                      simplex_tree_type &st_multi_python_container,
+                                      nb::ndarray<const int32_t, nb::ndim<1>, nb::c_contig> degrees) {
+  typename simplex_tree_type::Base st_multi;
+  {
+    nanobind::gil_scoped_release release;
+    Gudhi::multi_persistence::Simplex_tree_std st_std;
+    st_std.deserialize(buffer_start, buffer_size);
+    if (st_std.dimension() != 1)
+      throw std::invalid_argument("only works for 1-dimensional simplex trees.");
+    st_multi = Gudhi::multi_persistence::build_degree_filtration<typename simplex_tree_type::Base>(st_std,
+                                                                                                   Numpy_span(degrees));
   }
-  return visit_const_simplextree_wrapper(simplextree, std::forward<Func>(func));
-}
-
-inline indices_type grid_rows(const nb::handle& simplextree) {
-  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
-    nb::ndarray<> axis = nb::cast<nb::ndarray<>>(wrapper.filtration_grid[0]);
-    return static_cast<indices_type>(axis.shape(0));
-  });
-}
-
-inline indices_type num_parameters(const nb::handle& simplextree) {
-  return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
-    return static_cast<indices_type>(wrapper.tree.num_parameters());
-  });
-}
-
-inline std::vector<indices_type> flatten_points(const std::vector<std::vector<indices_type>>& points,
-                                                size_t num_columns) {
-  std::vector<indices_type> flat;
-  flat.reserve(points.size() * num_columns);
-  for (const auto& row : points) {
-    flat.insert(flat.end(), row.begin(), row.end());
-  }
-  return flat;
+  st_multi_python_container = std::move(st_multi);
 }
 
 }  // namespace mpfrn
@@ -66,14 +46,12 @@ NB_MODULE(_function_rips_nanobind, m) {
       "get_degree_rips",
       [](nb::object target,
          nb::ndarray<nb::numpy, const int8_t, nb::ndim<1>, nb::c_contig> gudhi_state,
-         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> degrees) -> nb::object {
-        auto degree_vector = mpfrn::cast_vector_from_array<int>(degrees);
-        mpfrn::visit_simplextree_wrapper(target, [&]<typename Desc>(auto& wrapper) {
+         nb::ndarray<const int32_t, nb::ndim<1>, nb::c_contig> degrees) -> nb::object {
+        mpfrn::visit_simplextree_wrapper(target, [&]<typename Desc>(auto &wrapper) {
           using Interface = typename Desc::interface_type;
           if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
-            nb::gil_scoped_release release;
-            Gudhi::multiparameter::function_rips::get_degree_rips_st_python(
-                reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), wrapper.tree, degree_vector);
+            mpfrn::get_degree_rips_st_python(
+                reinterpret_cast<const char *>(gudhi_state.data()), gudhi_state.shape(0), wrapper, degrees);
           } else {
             throw nb::type_error("get_degree_rips expects the canonical degree-Rips SimplexTreeMulti target.");
           }
@@ -83,85 +61,4 @@ NB_MODULE(_function_rips_nanobind, m) {
       "target"_a,
       "gudhi_state"_a,
       "degrees"_a);
-
-  m.def(
-      "function_rips_surface",
-      [](nb::object simplextree,
-         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> homological_degrees,
-         bool mobius_inversion,
-         bool zero_pad,
-         mpfrn::indices_type n_jobs) {
-        auto degree_vector = mpfrn::cast_vector_from_array<mpfrn::indices_type>(homological_degrees);
-        const auto I = mpfrn::grid_rows(simplextree);
-        const auto J = mpfrn::num_parameters(simplextree);
-        std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);
-        mpfrn::visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) {
-          using Interface = typename Desc::interface_type;
-          if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
-            nb::gil_scoped_release release;
-            Gudhi::multiparameter::function_rips::compute_function_rips_surface_python<mpfrn::tensor_dtype,
-                                                                                       mpfrn::indices_type>(
-                const_cast<Interface&>(wrapper.tree),
-                container.data(),
-                degree_vector,
-                I,
-                J,
-                mobius_inversion,
-                zero_pad,
-                n_jobs);
-          } else {
-            throw nb::type_error("function_rips_surface expects the canonical degree-Rips SimplexTreeMulti type.");
-          }
-        });
-        return mpfrn::owned_array<mpfrn::tensor_dtype>(
-            std::move(container), {degree_vector.size(), static_cast<size_t>(I), static_cast<size_t>(J)});
-      },
-      "simplextree"_a,
-      "homological_degrees"_a,
-      "mobius_inversion"_a = true,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0);
-
-  m.def(
-      "function_rips_signed_measure",
-      [](nb::object simplextree,
-         nb::ndarray<nb::numpy, const int32_t, nb::ndim<1>, nb::c_contig> homological_degrees,
-         bool mobius_inversion,
-         bool zero_pad,
-         mpfrn::indices_type n_jobs) {
-        auto degree_vector = mpfrn::cast_vector_from_array<mpfrn::indices_type>(homological_degrees);
-        const auto I = mpfrn::grid_rows(simplextree);
-        const auto J = mpfrn::num_parameters(simplextree);
-        std::vector<mpfrn::tensor_dtype> container(static_cast<size_t>(degree_vector.size()) * I * J, 0);
-        std::pair<std::vector<std::vector<mpfrn::indices_type>>, std::vector<mpfrn::tensor_dtype>> out;
-        mpfrn::visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) {
-          using Interface = typename Desc::interface_type;
-          if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
-            nb::gil_scoped_release release;
-            out = Gudhi::multiparameter::function_rips::compute_function_rips_signed_measure_python<mpfrn::tensor_dtype,
-                                                                                                    mpfrn::indices_type>(
-                const_cast<Interface&>(wrapper.tree),
-                container.data(),
-                degree_vector,
-                I,
-                J,
-                mobius_inversion,
-                zero_pad,
-                n_jobs);
-          } else {
-            throw nb::type_error(
-                "function_rips_signed_measure expects the canonical degree-Rips SimplexTreeMulti type.");
-          }
-        });
-        const size_t num_columns = out.first.empty() ? 3u : out.first.front().size();
-        auto flat_points = mpfrn::flatten_points(out.first, num_columns);
-        return nb::make_tuple(
-            mpfrn::owned_array<mpfrn::indices_type>(std::move(flat_points), {out.first.size(), num_columns}),
-            mpfrn::owned_array<mpfrn::tensor_dtype>(std::move(out.second), {out.second.size()}));
-      },
-      "simplextree"_a,
-      "homological_degrees"_a,
-      "mobius_inversion"_a = true,
-      "zero_pad"_a = false,
-      "n_jobs"_a = 0);
 }
