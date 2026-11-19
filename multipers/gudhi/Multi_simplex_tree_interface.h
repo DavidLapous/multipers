@@ -460,7 +460,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
     if (axis < 0) axis += Base::num_parameters();
     if (axis < 0 || axis >= Base::num_parameters()) throw std::invalid_argument("Axis is not a valid parameter index.");
 
-    auto cast_as_vector = [&]() -> void {
+    auto cast_as_vector = [&, this]() -> void {
       std::vector<value_type> val;
       if (!nanobind::try_cast<std::vector<value_type>>(filtration, val))
         throw std::invalid_argument("Filtration values must be either iterable[U] or ndarray[U, ndim=1].");
@@ -473,7 +473,7 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
         Gudhi::multi_persistence::fill_axis_with_lowerstar(*this, val, static_cast<std::size_t>(axis));
       }
     };
-    auto cast_first_as_tensor_then_as_vector = [&]<typename U>() -> void {
+    auto cast_first_as_tensor_then_as_vector = [&, this]<typename U>() -> void {
       if (Tensor1D<U> val; nanobind::try_cast<Tensor1D<U>>(filtration, val, false)) {
         if (val.shape(0) < Base::num_vertices())
           throw std::invalid_argument("Vertex filtration values does not have a value for every vertex.");
@@ -758,11 +758,11 @@ class Multi_simplex_tree_interface : public Simplex_tree_multi<MultiFiltrationVa
   }
 
   Simplex_handle _get_handle_from_vertices(nanobind::object simplex) const {
-    auto cast_as_iterable = [&]() -> Simplex_handle {
+    auto cast_as_iterable = [&, this]() -> Simplex_handle {
       nanobind::gil_scoped_release release;
       return Base::find(detail::as_cpp_range<Vertex_handle>(simplex));
     };
-    auto cast_first_as_tensor_then_as_iterable = [&]<typename U>() -> Simplex_handle {
+    auto cast_first_as_tensor_then_as_iterable = [&, this]<typename U>() -> Simplex_handle {
       if (Tensor1D<U> val; nanobind::try_cast<Tensor1D<U>>(simplex, val, false)) {
         nanobind::gil_scoped_release release;
         return Base::find(Numpy_span(val));
