@@ -31,8 +31,8 @@
 	branch = master
 [submodule "ext/hera"]
 	path = ext/hera
-	url = https://github.com/DavidLapous/hera.git
-	branch = little_fix
+	url = https://github.com/anigmetov/hera.git
+	branch = master
 [submodule "ext/2pac"]
 	path = ext/2pac
 	url = https://gitlab.com/flenzen/2pac
