@@ -1,6 +1,7 @@
 #ifndef MP_PY_SLICER_NANOBIND_H_INCLUDED
 #define MP_PY_SLICER_NANOBIND_H_INCLUDED
 
+#include <stdexcept>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -13,32 +14,31 @@
 #include <nanobind/operators.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
-// #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
 
+#include <gudhi/Multi_persistence/tensor_helpers.h>
+#include <gudhi/Multi_persistence/Box.h>
+#include <gudhi/multiparameter_module_approximation.h>
+#include <gudhi/Module_interface.h>
+#include <gudhi/hilbert_signed_measure.h>
+#include <gudhi/rank_invariant.h>
+#include <gudhi/interface_helper_structs.h>
+#include <python_interfaces/numpy_utils.h>
+
 #include "ext_interface/nanobind_registry_helpers.hpp"
 #include "nanobind_object_utils.hpp"
-#include "gudhi/interface_helper_structs.h"
 
 namespace mpnb {
 
 using namespace nanobind::literals;  // for the "argname"_a
-using multipers::nanobind_helpers::PySimplexTree;
-using multipers::nanobind_helpers::simplextree_wrapper_t;
 using multipers::nanobind_helpers::SimplexTreeDescriptorList;
 using multipers::nanobind_helpers::SlicerDescriptorList;
 using multipers::nanobind_helpers::type_list;
 using multipers::nanobind_utils::numpy_dtype_type;
-
-inline nanobind::ndarray<nanobind::numpy, char> wrap_native_state_bytes(std::unique_ptr<char[]> buffer,
-                                                                        std::size_t buffer_size) {
-  char* data = buffer.get();
-  nanobind::capsule owner(data, [](void* pointer) noexcept { delete[] static_cast<char*>(pointer); });
-  // The capsule owns the bytes before the fallible ndarray construction.
-  buffer.release();
-  return nanobind::ndarray<nanobind::numpy, char>(data, {buffer_size}, owner);
-}
+using multipers::nanobind_helpers::dispatch_slicer_by_template_id;
+using multipers::nanobind_helpers::is_slicer_object;
+using multipers::nanobind_utils::template_id_of;
 
 inline void bind_generator_basis(nanobind::module_& m) {
   using Generator_basis_data = Gudhi::multi_persistence::detail::Generator_basis_data;
@@ -83,7 +83,7 @@ inline void bind_generator_basis(nanobind::module_& m) {
                if (static_cast<std::size_t>(end - buffer.get()) != buffer_size)
                  throw std::runtime_error("Invalid module serialization.");
              }
-             return wrap_native_state_bytes(std::move(buffer), buffer_size);
+             return _wrap_as_numpy_array(std::move(buffer), buffer_size);
            })
       .def("__setstate__",
            [](Generator_basis_data& self, nanobind::ndarray<const char, nanobind::ndim<1>, nanobind::numpy> state) {
@@ -95,7 +95,7 @@ inline void bind_generator_basis(nanobind::module_& m) {
 template <class Target, typename Class, typename... SourceDesc1, typename... SourceDesc2>
 inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>, type_list<SourceDesc2...>) {
   // (cls.def(nanobind::init<const typename SourceDesc1::interface&>()), ...);
-  // (cls.def(nanobind::init<PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>&>()),
+  // (cls.def(nanobind::init<typename SourceDesc2::interface_type&>()),
   //  ...);
 
   using CtorFn = void (*)(Target*, PyObject*);
@@ -119,14 +119,14 @@ inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>,
                  }),
        ...);
 
-      // Pack 2: PySimplexTree<interface_type, value_type> wrapper types.
+      // Pack 2: simplex tree interface_type wrapper types.
       (t.emplace(
            (PyTypeObject*)
-               nanobind::type<PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>>()
+               nanobind::type<typename SourceDesc2::interface_type>()
                    .ptr(),
            +[](Target* self, PyObject* obj) {
-             using Wrapper = PySimplexTree<typename SourceDesc2::interface_type, typename SourceDesc2::value_type>;
-             Wrapper& b = *nanobind::inst_ptr<Wrapper>(obj);
+             using Interface = typename SourceDesc2::interface_type;
+             Interface& b = *nanobind::inst_ptr<Interface>(obj);
              new (self) Target(b);
            }),
        ...);
@@ -144,7 +144,7 @@ inline void bind_from_slicer_constructors(Class& cls, type_list<SourceDesc1...>,
 
 // template <typename Class, typename... SourceDesc>
 // inline void bind_from_simplex_tree_constructors(Class& cls, type_list<SourceDesc...>) {
-//   (cls.def(nanobind::init<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>()),
+//   (cls.def(nanobind::init<typename SourceDesc::interface_type&>()),
 //    ...);
 // }
 
@@ -193,12 +193,12 @@ inline void bind_slicer_eq(Class& cls, type_list<SourceDesc...>) {
 // inline void bind_from_simplex_tree_copy(Class& cls, type_list<SourceDesc...>) {
 //   (cls.def(
 //        "_copy_from_any",
-//        nanobind::overload_cast<PySimplexTree<typename SourceDesc::interface_type, typename SourceDesc::value_type>&>(
+//        nanobind::overload_cast<typename SourceDesc::interface_type>&>(
 //            &Target::template copy<typename SourceDesc::filtration_type>)),
 //    ...);
 // }
 
-template <class Slicer, typename Desc, typename Class>
+template <class Slicer, typename Class>
 inline void bind_slicer_constructors(Class& cls) {
   using T = typename Slicer::value_type;
   using Tensor2D = nanobind::ndarray<const T, nanobind::ndim<2>>;
@@ -217,33 +217,12 @@ inline void bind_slicer_constructors(Class& cls) {
           "is_reversed"_a = false);
 
   // from containers
-  cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                         nanobind::ndarray<const std::int32_t, nanobind::ndim<1>, nanobind::any_contig>,
-                         nanobind::iterable>(),
+  cls.def(nanobind::init<std::vector<std::vector<typename Slicer::Index>>,
+                         std::vector<typename Slicer::Dimension>,
+                         nanobind::object>(),
           "generator_maps"_a,
-          "generator_dimensions"_a.noconvert(),
-          "filtration_values"_a)
-      .def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                          nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
-                          nanobind::iterable>(),
-           "generator_maps"_a,
-           "generator_dimensions"_a,
-           "filtration_values"_a);
-  if constexpr (Desc::is_kcritical) {
-    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                           const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<std::vector<typename Slicer::value_type>>>&>(),
-            "generator_maps"_a,
-            "generator_dimensions"_a,
-            "filtration_values"_a);
-  } else {
-    cls.def(nanobind::init<const std::vector<std::vector<typename Slicer::Index>>&,
-                           const std::vector<typename Slicer::Index>&,
-                           const std::vector<std::vector<typename Slicer::value_type>>&>(),
-            "generator_maps"_a,
-            "generator_dimensions"_a,
-            "filtration_values"_a);
-  }
+          "generator_dimensions"_a,
+          "filtration_values"_a);
 
   // flat containers
   cls.def(nanobind::init<nanobind::ndarray<const std::int64_t, nanobind::ndim<1>, nanobind::any_contig>,
@@ -281,7 +260,7 @@ inline void bind_slicer_dunders(Class& cls) {
              }
              return nanobind::make_tuple(Slicer::SERIALIZATION_VERSION,
                                          self.get_filtration_grid(),
-                                         wrap_native_state_bytes(std::move(buffer), buffer_size));
+                                         _wrap_as_numpy_array(std::move(buffer), buffer_size));
            })
       .def("__setstate__", [](Slicer& self, nanobind::tuple state) {
         new (&self) Slicer(Gudhi::multi_persistence::deserialize_slicer_from_python<Slicer>(state));
@@ -452,7 +431,7 @@ inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_sl
   static constexpr PyType_Slot type_slots[] = {{82, nullptr}, {0, nullptr}};
   auto cls = nanobind::class_<Slicer>(m, Desc::python_name.data(), nanobind::type_slots(type_slots));
 
-  bind_slicer_constructors<Slicer, Desc>(cls);
+  bind_slicer_constructors<Slicer>(cls);
   bind_slicer_dunders<Slicer>(cls);
   bind_slicer_properties<Slicer, Desc>(cls);
   bind_slicer_modifiers<Slicer, Desc>(cls);
@@ -464,6 +443,185 @@ inline void bind_slicer_class(nanobind::module_& m, nanobind::list& available_sl
 template <typename... Desc>
 inline void bind_all_slicers(type_list<Desc...>, nanobind::module_& m, nanobind::list& available_slicers) {
   (bind_slicer_class<Desc>(m, available_slicers), ...);
+}
+
+/////////////////////// free methods
+
+inline bool has_slicer_template_id(const nanobind::handle& input) { return is_slicer_object(input); }
+
+template <typename T, typename I>
+inline nanobind::tuple compute_hilbert_signed_measure(nanobind::handle slicer,
+                                                      const std::vector<I>& grid_shape,
+                                                      const std::vector<I>& degrees,
+                                                      bool zero_pad,
+                                                      int n_jobs,
+                                                      bool verbose,
+                                                      bool ignore_inf) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  for (const auto extent : grid_shape) {
+    if (extent <= I{zero_pad ? 1 : 0}) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    }
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nanobind::tuple {
+    auto& wrapper = nanobind::cast<typename D::interface&>(slicer);
+    if (wrapper.get_number_of_parameters() < 2)
+      throw std::logic_error("Not implemented for " + std::to_string(wrapper.get_number_of_parameters()) +
+                             " < 2 parameters.");
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]]
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    Gudhi::multi_persistence::Signed_measure<I, T> sm;
+    {
+      nanobind::gil_scoped_release release;
+      sm = Gudhi::multi_persistence::compute_hilbert_signed_measure<T, I>(
+          wrapper.get_slicer(), grid_shape, degrees, zero_pad, ignore_inf, verbose, n_jobs);
+    }
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
+  });
+}
+
+template <typename T, typename I>
+inline nanobind::tuple compute_hilbert_signed_measure_sparse(nanobind::handle slicer,
+                                                             const std::vector<I>& grid_shape,
+                                                             const std::vector<I>& degrees,
+                                                             bool zero_pad,
+                                                             int n_jobs,
+                                                             bool ignore_inf,
+                                                             bool verbose) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  for (const auto extent : grid_shape) {
+    if (extent <= I{zero_pad ? 1 : 0}) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid sparse Hilbert grid shape.");
+    }
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nanobind::tuple {
+    auto& wrapper = nanobind::cast<typename D::interface&>(slicer);
+    if (wrapper.get_number_of_parameters() < 2)
+      throw std::logic_error("Not implemented for " + std::to_string(wrapper.get_number_of_parameters()) +
+                             " < 2 parameters.");
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]]
+      throw std::runtime_error("Internal error: invalid Hilbert grid shape.");
+    Gudhi::multi_persistence::Signed_measure<I, T> sm;
+    {
+      nanobind::gil_scoped_release release;
+      sm = Gudhi::multi_persistence::compute_sparse_hilbert_signed_measure<T, I>(
+          wrapper.get_slicer(), grid_shape, degrees, zero_pad, ignore_inf, verbose, n_jobs);
+    }
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
+  });
+}
+
+template <typename T, typename I>
+inline nanobind::tuple compute_rank_tensor(nanobind::handle slicer,
+                                           const std::vector<I>& grid_shape,
+                                           const std::vector<I>& degrees,
+                                           int n_jobs,
+                                           bool ignore_inf) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nanobind::tuple {
+    auto& wrapper = nanobind::cast<typename D::interface&>(slicer);
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid fixed rank tensor shape dispatch.");
+    }
+    std::pair<std::vector<T>, std::vector<I>> tensor;
+    {
+      nanobind::gil_scoped_release release;
+      tensor = Gudhi::multi_persistence::compute_rank_invariant<T, I>(
+          wrapper.get_slicer(), grid_shape, degrees, ignore_inf, n_jobs);
+    }
+    return nanobind::make_tuple(_wrap_as_numpy_array(std::move(tensor.first), tensor.first.size()),
+                                _wrap_as_numpy_array(std::move(tensor.second), tensor.second.size()));
+  });
+}
+
+template <typename T, typename I>
+inline nanobind::tuple compute_rank_signed_measure_sparse(nanobind::handle slicer,
+                                                          const std::vector<I>& grid_shape,
+                                                          const std::vector<I>& degrees,
+                                                          bool zero_pad,
+                                                          int n_jobs,
+                                                          bool ignore_inf) {
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type.");
+  }
+  return dispatch_slicer_by_template_id(template_id_of(slicer), [&]<typename D>() -> nanobind::tuple {
+    auto& wrapper = nanobind::cast<typename D::interface&>(slicer);
+    if (grid_shape.size() != wrapper.get_number_of_parameters()) [[unlikely]] {
+      throw std::runtime_error("Internal error: invalid fixed rank tensor shape dispatch.");
+    }
+    Gudhi::multi_persistence::Signed_measure<I, T> sm;
+    {
+      nanobind::gil_scoped_release release;
+      sm = Gudhi::multi_persistence::compute_sparse_rank_signed_measure<T, I>(
+          wrapper.get_slicer(), grid_shape, degrees, zero_pad, ignore_inf, n_jobs);
+    }
+    return nanobind::make_tuple(
+        _wrap_as_numpy_array(
+            std::move(sm.coordinates), sm.coordinates.size() / sm.numberOfParameters, sm.numberOfParameters),
+        _wrap_as_numpy_array(std::move(sm.values), sm.values.size()));
+  });
+}
+
+template <typename Desc, typename T>
+inline Gudhi::multi_persistence::Module_interface<T> module_approximation_from_desc(
+    typename Desc::interface& wrapper,
+    const std::vector<T>& direction,
+    T max_error,
+    nanobind::ndarray<const T, nanobind::ndim<2>, nanobind::c_contig> box_array,
+    bool threshold,
+    bool complete,
+    bool verbose,
+    int n_jobs) {
+  if constexpr (!Desc::enable_module_approximation) {
+    throw std::runtime_error("Unsupported slicer type for module approximation.");
+  } else {
+    Gudhi::multi_persistence::Module<T> mod;
+    Numpy_2d_span boxView(box_array);
+    {
+      nanobind::gil_scoped_release release;
+      mod = Gudhi::multi_persistence::multiparameter_module_approximation(
+          wrapper.get_slicer(), max_error, boxView[0], boxView[1], direction, threshold, complete, verbose, n_jobs);
+    }
+    // works because c_contig
+    std::vector<T> box(box_array.data(), box_array.data() + box_array.shape(0) * box_array.stride(0));
+    return {std::move(mod), std::move(box)};
+  }
+}
+
+template <typename T>
+inline Gudhi::multi_persistence::Module_interface<T> compute_module_approximation_from_slicer(
+    nanobind::handle slicer,
+    const std::vector<T>& direction,
+    T max_error,
+    nanobind::ndarray<const T, nanobind::ndim<2>, nanobind::c_contig> box_array,
+    bool threshold,
+    bool complete,
+    bool verbose,
+    int n_jobs) {
+  if (box_array.shape(0) != 2 || (direction.size() != 0 && box_array.shape(1) != direction.size())) {
+    throw nanobind::value_error("box must have shape (2, num_parameters).");
+  }
+  if (!has_slicer_template_id(slicer)) {
+    throw std::runtime_error("Unsupported slicer type for module approximation.");
+  }
+  return dispatch_slicer_by_template_id(
+      template_id_of(slicer), [&]<typename D>() -> Gudhi::multi_persistence::Module_interface<T> {
+        auto& wrapper = nanobind::cast<typename D::interface&>(slicer);
+        return module_approximation_from_desc<D, T>(
+            wrapper, direction, max_error, box_array, threshold, complete, verbose, n_jobs);
+      });
 }
 
 }  // namespace mpnb
