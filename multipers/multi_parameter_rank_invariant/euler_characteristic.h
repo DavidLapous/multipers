@@ -4,9 +4,8 @@
 #include <vector>
 #include <utility>  // std::pair
 
-#include "../gudhi/Simplex_tree_multi_interface.h"
+#include "../gudhi/Multi_simplex_tree_interface.h"
 #include "../tensor/tensor.h"
-#include "persistence_slices.h"
 
 
 namespace Gudhi::multiparameter::euler_characteristic{
@@ -14,7 +13,7 @@ namespace Gudhi::multiparameter::euler_characteristic{
 
 template<typename Filtration, typename dtype=int, typename index_type=std::uint16_t>
 void get_euler_surface(
-	python_interface::Simplex_tree_multi_interface<Filtration, typename Filtration::value_type> &st_multi,
+	Gudhi::multi_persistence::Multi_simplex_tree_interface<Filtration> &st_multi,
 	const tensor::static_tensor_view<dtype, index_type>& out, // assumes its a zero tensor
 	bool mobius_inversion,
 	bool zero_pad
@@ -39,7 +38,7 @@ void get_euler_surface(
 
 template<typename Filtration, typename dtype=int, typename indices_type=uint16_t>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_euler_signed_measure(
-	python_interface::Simplex_tree_multi_interface<Filtration, typename Filtration::value_type>& st_multi, 
+	Gudhi::multi_persistence::Multi_simplex_tree_interface<Filtration>& st_multi, 
 	dtype* data_ptr, 
 	std::vector<indices_type> grid_shape,
 	bool zero_pad,
@@ -63,33 +62,6 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> get_euler_
 	}
 	return raw_signed_measure;
 }
-
-
-template<typename Filtration, typename dtype, typename indices_type, typename ... Args>
-void get_euler_surface_python(
-	const intptr_t simplextree_ptr, 
-	dtype* data_ptr, 
-	const std::vector<indices_type> grid_shape,
-	bool mobius_inversion=false, 
-	bool zero_pad = false, 
-	bool verbose=false){
-	auto &st_multi = get_simplextree_from_pointer<python_interface::interface_multi<Filtration>>(simplextree_ptr);
-	tensor::static_tensor_view<dtype, indices_type> container(data_ptr,grid_shape); // assumes its a zero tensor
-	if (verbose){
-		std::cout << "Container shape : ";
-		for (auto r : container.get_resolution()) std::cout << r << ", ";
-		std::cout << "\nContainer size : " << container.size();
-		std::cout << "\nComputing Euler Characteristic ...";
-	}
-	get_euler_surface(st_multi,container,mobius_inversion, zero_pad);
-	if (verbose){
-		std::cout << "Done." << std::endl;
-	}
-	return;
-}
-
-
-
 
 
 } // namespace rank_invariant

@@ -2,11 +2,13 @@
 
 #include <oneapi/tbb/enumerable_thread_specific.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_sort.h>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
 
-#include "../gudhi/Simplex_tree_multi_interface.h"
+#include "../gudhi/Multi_simplex_tree_interface.h"
+#include "../gudhi/Persistence_slices_interface.h"
 #include "../tensor/tensor.h"
 #include "persistence_slices.h"
 
@@ -14,17 +16,16 @@ namespace Gudhi {
 namespace multiparameter {
 namespace function_rips {
 
-using value_type = typename python_interface::interface_std::Filtration_value;
-// using _multifiltration = multipers::tmp_interface::Filtration_value<value_type>;
+using value_type = typename multi_persistence::Simplex_tree_std::Filtration_value;
 using flat_multifiltration = multipers::tmp_interface::Degree_rips_bifiltration<value_type>;
 using _multifiltration = multipers::tmp_interface::Degree_rips_bifiltration<value_type>;
-using _multi_st = python_interface::Simplex_tree_multi_interface<flat_multifiltration>;
-using flat_multi_st = python_interface::Simplex_tree_multi_interface<flat_multifiltration>;
+using _multi_st = Gudhi::multi_persistence::Multi_simplex_tree_interface<flat_multifiltration>;
+using flat_multi_st = Gudhi::multi_persistence::Multi_simplex_tree_interface<flat_multifiltration>;
 using mult_opt = Gudhi::multi_persistence::Simplex_tree_options_multidimensional_filtration<flat_multifiltration>;
 using interface_multi = _multi_st;
 
 std::pair<std::map<value_type, unsigned int>, std::vector<value_type>> inline radius_to_coordinate(
-    Simplex_tree_std &st) {
+    Simplex_tree_std_float &st) {
   unsigned int count = 0;
   std::map<value_type, unsigned int> out;
   std::vector<value_type> filtration_values;
@@ -45,7 +46,7 @@ std::pair<std::map<value_type, unsigned int>, std::vector<value_type>> inline ra
 // axis is the rips, and the others are the filtrations of the node at each
 // degree in degrees Assumes that the degrees are sorted, and unique
 // also return max_degree,filtration_values
-inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st, const std::vector<int> &degrees) {
+inline flat_multi_st::Base get_degree_filtrations(multi_persistence::Simplex_tree_std &st, const std::vector<int> &degrees) {
   constexpr const bool verbose = false;
   using filtration_lists = std::vector<std::vector<value_type>>;
 
@@ -55,7 +56,7 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
   unsigned int num_degrees = degrees.size();
   // puts the st filtration in axis 0 + fitrations for each degrees afterward
   flat_multifiltration default_f(static_cast<int>(num_degrees), 0);
-  flat_multi_st st_multi(Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0));
+  flat_multi_st::Base st_multi = Gudhi::multi_persistence::make_multi_dimensional<mult_opt>(st, default_f, 0);
 
   // preprocess
   filtration_lists edge_filtration_of_nodes(st.num_vertices());
@@ -158,7 +159,7 @@ inline flat_multi_st get_degree_filtrations(python_interface::interface_std &st,
 }
 
 // assumes that the degree is 1
-inline void fill_st_slice(Simplex_tree_std &st_container, flat_multi_st &degree_rips_st, int degree) {
+inline void fill_st_slice(Simplex_tree_std_float &st_container, flat_multi_st &degree_rips_st, int degree) {
   auto sh_std = st_container.complex_simplex_range().begin();
   auto sh_multi = degree_rips_st.complex_simplex_range().begin();
   auto sh_end = st_container.complex_simplex_range().end();
@@ -183,10 +184,10 @@ inline void compute_2d_function_rips(
 
   // inits default simplextrees
   // copies the st_multi to a standard 1-pers simplextree, and puts its filtration values to 0 for all.
-  Simplex_tree_std _st(
+  Simplex_tree_std_float _st(
       st_multi,
-      []([[maybe_unused]] const flat_multifiltration &f) -> Simplex_tree_std::Filtration_value { return 0.; });
-  tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree(_st);
+      []([[maybe_unused]] const flat_multifiltration &f) -> Simplex_tree_std_float::Filtration_value { return 0.; });
+  tbb::enumerable_thread_specific<Simplex_tree_std_float> thread_simplex_tree(_st);
   int max_simplex_dimension = *std::max_element(degrees.begin(), degrees.end()) + 1;
   tbb::parallel_for(0, J, [&](index_type function_value) {
     auto &st_std = thread_simplex_tree.local();
@@ -255,18 +256,14 @@ inline void get_degree_rips_st_python(const char *buffer_start,
                                       const std::size_t buffer_size,
                                       simplex_tree_type &st_multi_python_container,
                                       const std::vector<int> &degrees) {
-  python_interface::interface_std st_std;
-  st_std.deserialize(buffer_start, buffer_size);
-  auto st_multi = get_degree_filtrations(st_std, degrees);
+  flat_multi_st::Base st_multi;
+  {
+    nanobind::gil_scoped_release release;
+    multi_persistence::Simplex_tree_std st_std;
+    st_std.deserialize(buffer_start, buffer_size);
+    st_multi = get_degree_filtrations(st_std, degrees);
+  }
   st_multi_python_container = std::move(st_multi);
-}
-
-inline void get_degree_rips_st_python(const char *buffer_start,
-                                      const std::size_t buffer_size,
-                                      const intptr_t st_multi_ptr,
-                                      const std::vector<int> &degrees) {
-  auto &st_multi_python_container = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
-  get_degree_rips_st_python(buffer_start, buffer_size, st_multi_python_container, degrees);
 }
 
 template <typename dtype, typename indices_type>
@@ -292,19 +289,6 @@ void compute_function_rips_surface_python(interface_multi &st_multi,
 }
 
 template <typename dtype, typename indices_type>
-void compute_function_rips_surface_python(const intptr_t st_multi_ptr,
-                                          dtype *data_ptr,
-                                          const std::vector<indices_type> degrees,
-                                          indices_type I,
-                                          indices_type J,
-                                          const bool mobius_inversion = false,
-                                          const bool zero_pad = false,
-                                          indices_type n_jobs = 0) {
-  auto &st_multi = python_interface::get_simplextree_from_pointer<flat_multi_st>(st_multi_ptr);
-  compute_function_rips_surface_python(st_multi, data_ptr, degrees, I, J, mobius_inversion, zero_pad, n_jobs);
-}
-
-template <typename dtype, typename indices_type>
 std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_function_rips_signed_measure_python(
     interface_multi &st_multi,
     dtype *data_ptr,
@@ -326,21 +310,6 @@ std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_fu
   arena.execute([&] { compute_2d_function_rips(st_multi, container, degrees, I, J, mobius_inversion, zero_pad); });
   if (mobius_inversion) container.differentiate(2);  // degree,x axis (already inversed), y axis
   return container.sparsify();
-}
-
-template <typename dtype, typename indices_type>
-std::pair<std::vector<std::vector<indices_type>>, std::vector<dtype>> compute_function_rips_signed_measure_python(
-    const intptr_t st_multi_ptr,
-    dtype *data_ptr,
-    const std::vector<indices_type> degrees,
-    indices_type I,
-    indices_type J,
-    const bool mobius_inversion = false,
-    const bool zero_pad = false,
-    indices_type n_jobs = 0) {
-  auto &st_multi = python_interface::get_simplextree_from_pointer<interface_multi>(st_multi_ptr);
-  return compute_function_rips_signed_measure_python(
-      st_multi, data_ptr, degrees, I, J, mobius_inversion, zero_pad, n_jobs);
 }
 
 }  // namespace function_rips

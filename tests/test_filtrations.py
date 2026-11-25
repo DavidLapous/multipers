@@ -157,7 +157,12 @@ def _python_coredelaunay_reference(
             ),
             axis=-1,
         )
-        simplex_tree_multi.insert_batch(vertex_array.T, filtrations)
+        def simp(fil):
+            order = np.argsort(fil[:, 1])
+            sorted_arr = fil[order]
+            _, first_idx = np.unique(sorted_arr[:, 0], return_index=True)
+            return sorted_arr[first_idx]
+        simplex_tree_multi.insert_batch(vertex_array.T, [simp(f) for f in filtrations])
 
     return simplex_tree_multi
 

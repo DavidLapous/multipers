@@ -3,7 +3,6 @@
 #include <nanobind/stl/vector.h>
 
 #include <cstdint>
-#include <memory>
 #include <utility>
 #include <vector>
 
@@ -38,14 +37,14 @@ decltype(auto) visit_simplextree(const nb::handle& simplextree, Func&& func) {
 
 inline indices_type grid_rows(const nb::handle& simplextree) {
   return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
-    nb::ndarray<> axis = nb::cast<nb::ndarray<>>(wrapper.filtration_grid[0]);
+    nb::ndarray<> axis = nb::cast<nb::ndarray<>>(wrapper.get_filtration_grid()[0]);
     return static_cast<indices_type>(axis.shape(0));
   });
 }
 
 inline indices_type num_parameters(const nb::handle& simplextree) {
   return visit_simplextree(simplextree, [&]<typename Desc>(const auto& wrapper) -> indices_type {
-    return static_cast<indices_type>(wrapper.tree.num_parameters());
+    return static_cast<indices_type>(wrapper.num_parameters());
   });
 }
 
@@ -71,9 +70,8 @@ NB_MODULE(_function_rips_nanobind, m) {
         mpfrn::visit_simplextree_wrapper(target, [&]<typename Desc>(auto& wrapper) {
           using Interface = typename Desc::interface_type;
           if constexpr (std::is_same_v<Interface, mpfrn::degree_rips_interface>) {
-            nb::gil_scoped_release release;
             Gudhi::multiparameter::function_rips::get_degree_rips_st_python(
-                reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), wrapper.tree, degree_vector);
+                reinterpret_cast<const char*>(gudhi_state.data()), gudhi_state.shape(0), wrapper, degree_vector);
           } else {
             throw nb::type_error("get_degree_rips expects the canonical degree-Rips SimplexTreeMulti target.");
           }
@@ -101,7 +99,7 @@ NB_MODULE(_function_rips_nanobind, m) {
             nb::gil_scoped_release release;
             Gudhi::multiparameter::function_rips::compute_function_rips_surface_python<mpfrn::tensor_dtype,
                                                                                        mpfrn::indices_type>(
-                const_cast<Interface&>(wrapper.tree),
+                const_cast<Interface&>(wrapper),
                 container.data(),
                 degree_vector,
                 I,
@@ -140,7 +138,7 @@ NB_MODULE(_function_rips_nanobind, m) {
             nb::gil_scoped_release release;
             out = Gudhi::multiparameter::function_rips::compute_function_rips_signed_measure_python<mpfrn::tensor_dtype,
                                                                                                     mpfrn::indices_type>(
-                const_cast<Interface&>(wrapper.tree),
+                const_cast<Interface&>(wrapper),
                 container.data(),
                 degree_vector,
                 I,
